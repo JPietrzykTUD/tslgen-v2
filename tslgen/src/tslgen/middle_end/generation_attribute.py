@@ -3,11 +3,11 @@ import re
 from typing import Optional, List, Pattern, ClassVar
 
 
-from tslgen.backend.backend_pass import BackendPass
+from tslgen.core.passes import MiddleEndPass
 from tslgen.ir.primitive_ir import Primitive
 from tslgen.src.tslgen.ir.signature_ir import ConcreteSignatureAttribute
 
-class GenerationPrimitiveAttributeRewrite(BackendPass):
+class GenerationPrimitiveAttributeRewrite(MiddleEndPass):
     REGEX_ATTRIBUTE: ClassVar[Pattern[str]] = re.compile(
         r'tslgen<primitive>\(\s*(?P<attribute_name>\w+),\s*(?P<attribute_value>\w+)\s*\)',
         re.DOTALL

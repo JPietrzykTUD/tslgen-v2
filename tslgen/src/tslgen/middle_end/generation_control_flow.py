@@ -1,9 +1,8 @@
 import codon
 import re
-from typing import ClassVar, Pattern, Tuple
-from enum import Enum, auto
+from typing import ClassVar, Pattern
 
-from tslgen.backend.backend_pass import BackendPass
+from tslgen.core.passes import MiddleEndPass
 from tslgen.ir.primitive_ir import Primitive
 from tslgen.utils.string_utils import extract_braced, skip_whitespace
 
@@ -31,7 +30,7 @@ class StringBoolEvaluator:
         return TriBool.TRUE if result else TriBool.FALSE
 
 
-class GenerationControlFlowRewrite(BackendPass):
+class GenerationControlFlowRewrite(MiddleEndPass):
     REGEX_IF: ClassVar[Pattern[str]] = re.compile(
         r'if<compile>\((?P<condition>.*?)\)\s*\{',
         re.DOTALL,
@@ -44,12 +43,14 @@ class GenerationControlFlowRewrite(BackendPass):
         r'else\s*\{',
         re.DOTALL,
     )
-    string_bool_evaluator: StringBoolEvaluator = StringBoolEvaluator()
+    STRING_BOOL_EVALUATOR: StringBoolEvaluator = StringBoolEvaluator()
 
     def lower(self, source: Primitive) -> Primitive:
+        if source.stages_resolved.get(self.__class__.__name__, False):
+            return source
         text = source.implementation
 
-        fully_resolved = TriBool.TRUE
+        fully_resolved = True
 
         while match_if := self.REGEX_IF.search(text):
             chain_start = match_if.start()
@@ -62,7 +63,7 @@ class GenerationControlFlowRewrite(BackendPass):
             if_open_brace_index = match_if.end() - 1
             if_text, if_close_brace_index = extract_braced(text, if_open_brace_index)
 
-            check_if_result = self.string_bool_evaluator(if_condition)
+            check_if_result = self.STRING_BOOL_EVALUATOR(if_condition)
             if check_if_result == TriBool.TRUE:
                 selected_text = if_text
                 decidable = True
@@ -79,9 +80,15 @@ class GenerationControlFlowRewrite(BackendPass):
                 else_if_text, else_if_close_brace_index = extract_braced(text, else_if_open_brace_index)
 
 
-                if selected_text is None and self.string_bool_evaluator(else_if_condition) == TriBool.TRUE:
-                    selected_text = else_if_text
-                    decidable = True
+                if selected_text is None:
+                    else_if_result = self.STRING_BOOL_EVALUATOR(else_if_condition)
+                    if else_if_result == TriBool.TRUE:
+                        selected_text = else_if_text
+                        decidable = True
+                    elif else_if_result == TriBool.FALSE:
+                        decidable = True
+                    elif else_if_result == TriBool.UNKNOWN:
+                        pass
                 
                 chain_end = else_if_close_brace_index
                 pos = skip_whitespace(text, chain_end + 1)
@@ -100,7 +107,7 @@ class GenerationControlFlowRewrite(BackendPass):
             text = text[:chain_start] + replacement_text + text[chain_end + 1:]
 
             if not decidable:
-                fully_resolved = TriBool.FALSE
+                fully_resolved = False
         
         source.implementation = text
         
