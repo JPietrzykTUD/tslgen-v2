@@ -1,0 +1,409 @@
+prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
+  brief_description "[Example: avx512 + si8]: Contiguously store the active 8-bit integers in \"a\" (those with their respective bit set in writemask \"k\") to unaligned memory at \"base_addr\"."
+  operation "[Example: avx512 + si8]: size := 8\nm := base_addr\nFOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tMEM[m+size-1:m] := a[i+7:i]\n\t\tm := m + size\n\tFI\nENDFOR"
+  tests:
+    - {test_name "compress_store_u32_zero", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "compress_store_u32_all", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
+    - {test_name "compress_store_u32_single_lsb", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 1], expected [10, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "compress_store_u32_single_msb", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 128], expected [17, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "compress_store_u32_alternating", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 170], expected [11, 13, 15, 17, 0, 0, 0, 0]}}
+    - {test_name "compress_store_u32_front_half", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 15], expected [10, 11, 12, 13, 0, 0, 0, 0]}}
+    - {test_name "compress_store_u32_back_half", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 240], expected [14, 15, 16, 17, 0, 0, 0, 0]}}
+    - {test_name "compress_store_u32_pairs", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 204], expected [12, 13, 16, 17, 0, 0, 0, 0]}}
+    - {test_name "compress_store_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 65535], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "compress_store_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 0], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "compress_store_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 65535], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "compress_store_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 0], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "compress_store_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 255], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "compress_store_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "compress_store_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 255], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "compress_store_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "compress_store_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], 15], expected [1, 2, 3, 4]}}
+    - {test_name "compress_store_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], 0], expected [0, 0, 0, 0]}}
+    - {test_name "compress_store_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 3], expected [1, 2]}}
+    - {test_name "compress_store_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], 0], expected [0, 0]}}
+    - {test_name "compress_store_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 3], expected [1, 2]}}
+    - {test_name "compress_store_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], 0], expected [0, 0]}}
+    - {test_name "compress_store_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], 15], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {test_name "compress_store_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], 0], expected [0, 0, 0, 0]}}
+    - {test_name "compress_store_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], 3], expected [1.0, -2.0]}}
+    - {test_name "compress_store_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], 0], expected [0, 0]}}
+  impls:
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512_vbmi2, avx512f]
+          avx2_vl:
+            idqword [avx512f, avx512vl, avx]
+            bword   [avx512_vbmi2, avx512f, avx512vl, avx]
+          sse_vl:
+            idqword [avx512f, avx512vl, sse, sse2]
+            bword   [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+            type<alias>(SignedBase, type<signed_of>(BaseT))
+            intrin_macro<mask_compressstoreu, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              cast<reinterpret>(SignedBase *, ptr),
+              m,
+              a
+            );
+          """
+      f?:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+            intrin_macro<mask_compressstoreu>(
+              ptr,
+              m,
+              a
+            );
+          """
+    sve:
+      [?i32, ?i64, f32, f64]:
+        requires [sve]
+        implementation:
+          tsil """
+            type<alias>(IndexBase, type<unsigned_of>(BaseT))
+            type<alias>(IndexVec, type<vector::transform_extension<IndexBase>>)
+            var<const_infer>(packed, intrin_macro<svcompact>(m, a))
+            var<const_infer>(active_count, call<primitive=mask_population_count[Vec]>(m))
+            var<const_infer>(indices, call<primitive=sequence[IndexVec]>())
+            var<const_infer>(limit, call<primitive=set1[IndexVec]>(cast<static>(IndexBase, active_count)))
+            var<const_infer>(store_mask, call<primitive=less_than[IndexVec]>(indices, limit))
+            call<primitive=store[Vec] attrs[aligned=false]>(store_mask, ptr, packed);
+          """
+    [avx2, sse, neon, sve]:
+      arith:
+        requires:
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
+          sve [sve]
+        implementation:
+          tsil """
+               var<const_infer>(imask, call<primitive=to_integral[Vec]>(m)) 
+               var<const_infer>(data_array, call<primitive=to_array[Vec]>(a)) 
+               var<infer>(offset, 0)
+               loop<range>(i, 0, value<vector::length>, 1) {
+                if(((imask >> i) & 1) != 0){
+                  *ptr_add_mut(ptr, offset) = data_array[i];
+                  offset += 1;
+                }
+              }
+            """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+               var<infer>(offset, 0) 
+               loop<range>(i, 0, value<vector::length>, 1) {
+                if(details::mask_test<Vec>(m, i)){
+                  *ptr_add_mut(ptr, offset) = a[i];
+                  offset += 1;
+                }
+              }
+            """
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+              if(m){
+                *ptr = a;
+              }
+            """
+prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
+  brief_description "Loads contiguous data using a mask."
+  operation ""
+  tests:
+    - {test_name "expand_load_u32_zero", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "expand_load_u32_all", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
+    - {test_name "expand_load_u32_single_lsb", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 1], expected [10, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "expand_load_u32_single_msb", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 128], expected [0, 0, 0, 0, 0, 0, 0, 10]}}
+    - {test_name "expand_load_u32_alternating", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 170], expected [0, 10, 0, 11, 0, 12, 0, 13]}}
+    - {test_name "expand_load_u32_front_half", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 15], expected [10, 11, 12, 13, 0, 0, 0, 0]}}
+    - {test_name "expand_load_u32_back_half", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 240], expected [0, 0, 0, 0, 10, 11, 12, 13]}}
+    - {test_name "expand_load_u32_pairs", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 204], expected [0, 0, 10, 11, 0, 0, 12, 13]}}
+    - {test_name "expand_load_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 65535], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "expand_load_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 0], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "expand_load_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 65535], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "expand_load_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 0], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "expand_load_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 255], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "expand_load_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "expand_load_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 255], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "expand_load_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "expand_load_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], 15], expected [1, 2, 3, 4]}}
+    - {test_name "expand_load_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], 0], expected [0, 0, 0, 0]}}
+    - {test_name "expand_load_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 3], expected [1, 2]}}
+    - {test_name "expand_load_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], 0], expected [0, 0]}}
+    - {test_name "expand_load_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 3], expected [1, 2]}}
+    - {test_name "expand_load_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], 0], expected [0, 0]}}
+    - {test_name "expand_load_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], 15], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {test_name "expand_load_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], 0], expected [0, 0, 0, 0]}}
+    - {test_name "expand_load_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], 3], expected [1.0, -2.0]}}
+    - {test_name "expand_load_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], 0], expected [0, 0]}}
+  impls:
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512_vbmi2, avx512f]
+          avx2_vl:
+            idqword [avx512f, avx512vl, avx]
+            bword   [avx512_vbmi2, avx512f, avx512vl, avx]
+          sse_vl:
+            idqword [avx512f, avx512vl, sse, sse2]
+            bword   [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+            type<alias>(SignedBase, type<signed_of>(BaseT))
+            emit_return(
+              intrin_macro<mask_expandloadu, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                call<primitive=set_zero[Vec]>(),
+                m,
+                cast<reinterpret>(SignedBase const *, ptr)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<mask_expandloadu>(
+                call<primitive=set_zero[Vec]>(),
+                m,
+                ptr
+              )
+            );
+          """
+    [avx2, sse, neon, sve]:
+      arith:
+        requires:
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
+          sve [sve]
+        implementation:
+          tsil """
+               var<const_infer>(imask, call<primitive=to_integral[Vec]>(m)) 
+               var<infer>(data_array, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+               var<infer>(offset, 0) 
+               loop<range>(i, 0, value<vector::length>, 1)  {
+                if(((imask >> i) & 1) != 0) {
+                  data_array[i] = *ptr_add(ptr, offset);
+                  offset += 1;
+                }
+              }
+               emit_return(call<primitive=from_array[Vec]>(data_array));
+            """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+               var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+               var<infer>(offset, 0) 
+               loop<range>(i, 0, value<vector::length>, 1)  {
+                if(details::mask_test<Vec>(m, i)) {
+                  result[i] = *ptr_add(ptr, offset);
+                  offset += 1;
+                }
+              }
+               emit_return(call<primitive=from_array[Vec]>(result)) ;
+            """
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+               if(m) {
+                 emit_return(*ptr);
+               } else {
+                 emit_return(cast<static>(type<vector::base>, 0));
+               }
+            """
+prim<v:=ptr+> load_convert_up(ptr):
+  brief_description "Loads and widens elements."
+  operation ""
+  generic_params:
+    ToType {kind simd_type}
+  tests:
+    - {test_name "load_convert_up_i8_to_i16_basic", extension "avx2", type "si8", to_type "si16", case {inputs [[-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]}}
+    - {test_name "load_convert_up_i8_to_i16_edge", extension "avx2", type "si8", to_type "si16", case {inputs [[-128, -127, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 127]], expected [-128, -127, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 127]}}
+    - {test_name "load_convert_up_i8_to_i32_basic", extension "avx2", type "si8", to_type "si32", case {inputs [[-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]], expected [-5, -4, -3, -2, -1, 0, 1, 2]}}
+    - {test_name "load_convert_up_i8_to_i32_edge", extension "avx2", type "si8", to_type "si32", case {inputs [[-128, -127, -1, 0, 1, 2, 3, 127]], expected [-128, -127, -1, 0, 1, 2, 3, 127]}}
+    - {test_name "load_convert_up_i8_to_i64_basic", extension "avx2", type "si8", to_type "si64", case {inputs [[-3, -2, -1, 0, 1, 2, 3, 4]], expected [-3, -2, -1, 0]}}
+    - {test_name "load_convert_up_i8_to_i64_edge", extension "avx2", type "si8", to_type "si64", case {inputs [[-128, -1, 0, 127]], expected [-128, -1, 0, 127]}}
+    - {test_name "load_convert_up_i16_to_i32_basic", extension "avx2", type "si16", to_type "si32", case {inputs [[-300, -200, -100, -50, -1, 0, 1, 50, 100, 200, 300, 400, 500, 600, 700, 800]], expected [-300, -200, -100, -50, -1, 0, 1, 50]}}
+    - {test_name "load_convert_up_i16_to_i32_edge", extension "avx2", type "si16", to_type "si32", case {inputs [[-32768, -32767, -1, 0, 1, 2, 3, 32767]], expected [-32768, -32767, -1, 0, 1, 2, 3, 32767]}}
+    - {test_name "load_convert_up_i16_to_i64_basic", extension "avx2", type "si16", to_type "si64", case {inputs [[-8, -7, -6, -5, -4, -3, -2, -1]], expected [-8, -7, -6, -5]}}
+    - {test_name "load_convert_up_i16_to_i64_edge", extension "avx2", type "si16", to_type "si64", case {inputs [[-32768, -1, 0, 32767]], expected [-32768, -1, 0, 32767]}}
+    - {test_name "load_convert_up_ui8_basic", extension "avx2", type "ui8", to_type "ui16", case {inputs [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "load_convert_up_ui8_edge", extension "avx2", type "ui8", to_type "ui16", case {inputs [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {test_name "load_convert_up_ui8_to_ui32_basic", extension "avx2", type "ui8", to_type "ui32", case {inputs [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "load_convert_up_ui8_to_ui32_edge", extension "avx2", type "ui8", to_type "ui32", case {inputs [0, 255, 1, 254, 2, 253, 3, 252], expected [0, 255, 1, 254, 2, 253, 3, 252]}}
+    - {test_name "load_convert_up_ui8_to_ui64_basic", extension "avx2", type "ui8", to_type "ui64", case {inputs [1, 2, 3, 4, 5, 6, 7, 8], expected [1, 2, 3, 4]}}
+    - {test_name "load_convert_up_ui8_to_ui64_edge", extension "avx2", type "ui8", to_type "ui64", case {inputs [0, 255, 1, 254], expected [0, 255, 1, 254]}}
+    - {test_name "load_convert_up_ui16_basic", extension "avx2", type "ui16", to_type "ui32", case {inputs [1, 2, 3, 4, 5, 6, 7, 8], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "load_convert_up_ui16_edge", extension "avx2", type "ui16", to_type "ui32", case {inputs [0, 1, 65535, 65534, 2, 3, 4, 5], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {test_name "load_convert_up_ui16_to_ui64_basic", extension "avx2", type "ui16", to_type "ui64", case {inputs [1, 2, 3, 4, 5, 6, 7, 8], expected [1, 2, 3, 4]}}
+    - {test_name "load_convert_up_ui16_to_ui64_edge", extension "avx2", type "ui16", to_type "ui64", case {inputs [0, 1, 65535, 65534], expected [0, 1, 65535, 65534]}}
+    - {test_name "load_convert_up_ui32_basic", extension "avx2", type "ui32", to_type "ui64", case {inputs [1, 2, 3, 4], expected [1, 2, 3, 4]}}
+    - {test_name "load_convert_up_ui32_edge", extension "avx2", type "ui32", to_type "ui64", case {inputs [0, 1, 4294967295, 4294967294], expected [0, 1, 4294967295, 4294967294]}}
+    - {test_name "load_convert_up_si32_basic", extension "avx2", type "si32", to_type "si64", case {inputs [1, 2, 3, 4], expected [1, 2, 3, 4]}}
+    - {test_name "load_convert_up_si32_edge", extension "avx2", type "si32", to_type "si64", case {inputs [0, -1, -2147483648, 2147483647], expected [0, -1, -2147483648, 2147483647]}}
+    - {test_name "load_convert_up_f32_to_f64_basic", extension "avx2", type "f32", to_type "f64", case {inputs [1.5, -2.5, 3.25, -4.75, 5.5, -6.5, 7.75, -8.25], expected [1.5, -2.5, 3.25, -4.75]}}
+    - {test_name "load_convert_up_f32_to_f64_edge", extension "avx2", type "f32", to_type "f64", case {inputs [0.0, -0.0, 16777216.0, -16777216.0, 1.0, -1.0, 2.0, -2.0], expected [0.0, -0.0, 16777216.0, -16777216.0]}}
+  impls:
+    avx512:
+      arith:
+        requires [avx512f, avx]
+        implementation:
+          tsil """
+               type<alias>(LoadVec, type<vector::as_extension<avx2>>)
+               emit_return(
+                 call<primitive=cast[LoadVec, ToType]>(
+                   call<primitive=load[LoadVec] attrs[aligned=false]>(ptr)
+                 )
+               );
+            """
+    [avx2, avx2_vl]:
+      arith:
+        requires:
+          avx2 [avx2]
+          avx2_vl [avx512f, avx512vl, avx]
+        implementation:
+          tsil """
+               type<alias>(LoadVec, type<vector::as_extension<sse>>)
+               emit_return(
+                 call<primitive=cast[LoadVec, ToType]>(
+                   call<primitive=load[LoadVec] attrs[aligned=false]>(ptr)
+                 )
+               );
+            """
+    sve:
+      si8:
+        requires [sve]
+        to_type:
+          si16:
+            implementation:
+              tsil """
+                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
+                   emit_return(intrin_macro<svld1sb suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                """
+          si32:
+            implementation:
+              tsil """
+                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
+                   emit_return(intrin_macro<svld1sb suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                """
+          si64:
+            implementation:
+              tsil """
+                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
+                   emit_return(intrin_macro<svld1sb suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                """
+      ui8:
+        requires [sve]
+        to_type:
+          ui16:
+            implementation:
+              tsil """
+                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
+                   emit_return(intrin_macro<svld1ub suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                """
+          ui32:
+            implementation:
+              tsil """
+                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
+                   emit_return(intrin_macro<svld1ub suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                """
+          ui64:
+            implementation:
+              tsil """
+                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
+                   emit_return(intrin_macro<svld1ub suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                """
+      si16:
+        requires [sve]
+        to_type:
+          si32:
+            implementation:
+              tsil """
+                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
+                   emit_return(intrin_macro<svld1sh suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                """
+          si64:
+            implementation:
+              tsil """
+                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
+                   emit_return(intrin_macro<svld1sh suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                """
+      ui16:
+        requires [sve]
+        to_type:
+          ui32:
+            implementation:
+              tsil """
+                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
+                   emit_return(intrin_macro<svld1uh suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                """
+          ui64:
+            implementation:
+              tsil """
+                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
+                   emit_return(intrin_macro<svld1uh suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                """
+      si32:
+        requires [sve]
+        to_type:
+          si64:
+            implementation:
+              tsil """
+                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
+                   emit_return(intrin_macro<svld1sw suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                """
+      ui32:
+        requires [sve]
+        to_type:
+          ui64:
+            implementation:
+              tsil """
+                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
+                   emit_return(intrin_macro<svld1uw suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                """
+    [sse, sse_vl, neon, sve, generic, oneAPIfpga, scalar]:
+      arith:
+        requires:
+          sse [sse2]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+          neon [neon]
+          sve [sve]
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+          scalar []
+        implementation:
+          tsil """
+               type<alias>(OutVec, ToType)
+               type<alias>(OutBase, type<generic_base>(ToType))
+               var<infer>(out, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()))
+               loop<range>(i, 0, value<generic_length>(OutVec), 1)  {
+                out[i] = cast<static>(OutBase, *ptr_add(ptr, i));
+              }
+               emit_return(call<primitive=from_array[OutVec]>(out)) ;
+            """

@@ -1,0 +1,12 @@
+language cpp:
+  s8 {type "int8_t"}
+  s16 {type "int16_t"}
+  s32 {type "int32_t"}
+  s64 {type "int64_t"}
+  u8 {type "uint8_t"}
+  u16 {type "uint16_t"}
+  u32 {type "uint32_t"}
+  u64 {type "uint64_t"}
+  f32 {type "float"}
+  f64 {type "double"}
+  ptr {type "void *"}

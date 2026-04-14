@@ -1,0 +1,488 @@
+prim<s:=m> to_integral(mask):
+  brief_description "[Example: sse + si8]: Create mask from the most significant bit of each 8-bit element in \"a\", and store the result in \"dst\"."
+  operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[j] := a[i+7]\nENDFOR\ndst[MAX:16] := 0"
+  tests:
+    - {test_name "to_integral_ui8_basic", extension "avx512", type "ui8", case {inputs [12297829382473034410], expected 12297829382473034410}}
+    - {test_name "to_integral_ui8_edge", extension "avx512", type "ui8", case {inputs [18446744073709551615], expected 18446744073709551615}}
+    - {test_name "to_integral_si8_basic", extension "avx512", type "si8", case {inputs [12297829382473034410], expected 12297829382473034410}}
+    - {test_name "to_integral_si8_edge", extension "avx512", type "si8", case {inputs [18446744073709551615], expected 18446744073709551615}}
+    - {test_name "to_integral_ui16_basic", extension "avx512", type "ui16", case {inputs [2863311530], expected 2863311530}}
+    - {test_name "to_integral_ui16_edge", extension "avx512", type "ui16", case {inputs [4294967295], expected 4294967295}}
+    - {test_name "to_integral_si16_basic", extension "avx512", type "si16", case {inputs [2863311530], expected 2863311530}}
+    - {test_name "to_integral_si16_edge", extension "avx512", type "si16", case {inputs [4294967295], expected 4294967295}}
+    - {test_name "to_integral_ui32_basic", extension "avx512", type "ui32", case {inputs [43690], expected 43690}}
+    - {test_name "to_integral_ui32_edge", extension "avx512", type "ui32", case {inputs [65535], expected 65535}}
+    - {test_name "to_integral_si32_basic", extension "avx512", type "si32", case {inputs [43690], expected 43690}}
+    - {test_name "to_integral_si32_edge", extension "avx512", type "si32", case {inputs [65535], expected 65535}}
+    - {test_name "to_integral_f32_basic", extension "avx512", type "f32", case {inputs [43690], expected 43690}}
+    - {test_name "to_integral_f32_edge", extension "avx512", type "f32", case {inputs [65535], expected 65535}}
+    - {test_name "to_integral_ui64_basic", extension "avx512", type "ui64", case {inputs [170], expected 170}}
+    - {test_name "to_integral_ui64_edge", extension "avx512", type "ui64", case {inputs [255], expected 255}}
+    - {test_name "to_integral_si64_basic", extension "avx512", type "si64", case {inputs [170], expected 170}}
+    - {test_name "to_integral_si64_edge", extension "avx512", type "si64", case {inputs [255], expected 255}}
+    - {test_name "to_integral_f64_basic", extension "avx512", type "f64", case {inputs [170], expected 170}}
+    - {test_name "to_integral_f64_edge", extension "avx512", type "f64", case {inputs [255], expected 255}}
+  impls:
+    [avx512, avx2_vl, sse_vl]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil "emit_return(mask);"
+    avx2:
+      ?i8:
+        requires [avx, avx2]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm256_movemask_epi8>(mask)));"
+      ?i16:
+        requires [avx2]
+        implementation:
+          tsil """
+               var<const_infer>(packed, intrin<_mm256_packs_epi16>(mask, intrin<_mm256_setzero_si256>())) 
+               var<const_infer>(mm, intrin<_mm256_movemask_epi8>(packed)) 
+               var<const_infer>(low, cast<static>(type<vector::imask>, (mm & 0xFF))) 
+               var<const_infer>(high, cast<static>(type<vector::imask>, ((mm >> 16) & 0xFF))) 
+               emit_return(cast<static>(type<vector::imask>, (low | (high << 8)))) ;
+            """
+      f32:
+        requires [avx]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm256_movemask_ps>(mask)));"
+      ?i32:
+        requires [avx]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm256_movemask_ps>(intrin<_mm256_castsi256_ps>(mask))));"
+      ?i64:
+        requires [avx]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm256_movemask_pd>(intrin<_mm256_castsi256_pd>(mask))));"
+      f64:
+        requires [avx]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm256_movemask_pd>(mask)));"
+    sse:
+      ?i8:
+        requires [sse, sse2]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm_movemask_epi8>(mask)));"
+      ?i16:
+        requires [sse2]
+        implementation:
+          tsil """
+               var<const_infer>(packed, intrin<_mm_packs_epi16>(mask, intrin<_mm_setzero_si128>())) 
+               emit_return(cast<static>(type<vector::imask>, intrin<_mm_movemask_epi8>(packed))) ;
+            """
+      f32:
+        requires [sse]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm_movemask_ps>(mask)));"
+      ?i32:
+        requires [sse, sse2]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm_movemask_ps>(intrin<_mm_castsi128_ps>(mask))));"
+      ?i64:
+        requires [sse, sse2]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm_movemask_pd>(intrin<_mm_castsi128_pd>(mask))));"
+      f64:
+        requires [sse, sse2]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm_movemask_pd>(mask)));"
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil """
+               type<alias>(ImaskT, type<vector::imask>) 
+              ImaskT result = 0;
+              const  type<size>  mask_bits = value<size_of>(type<vector::imask>) * 8;
+               loop<range>(i, 0, value<vector::length>, 1)  {
+                if (i < mask_bits && details::mask_test<Vec>(mask, i)) {
+                  result |= cast<static>(ImaskT, 1) << i;
+                }
+              }
+               emit_return(result) ;
+            """
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+              if (mask) {
+                emit_return(1);
+              } else {
+                emit_return(0);
+              }
+            """
+    generic:
+      arith:
+        requires []
+        implementation:
+          tsil """
+               type<alias>(ImaskT, type<vector::imask>) 
+              ImaskT result = 0;
+              const  type<size>  mask_bits = value<size_of>(type<vector::imask>) * 8;
+               loop<range>(i, 0, value<vector::length>, 1)  {
+                if (i < mask_bits && details::mask_test<Vec>(mask, i)) {
+                  result |= cast<static>(ImaskT, 1) << i;
+                }
+              }
+               emit_return(result) ;
+            """
+prim<v:=m> to_vector(mask):
+  brief_description "[Example: avx512 + si8]: Broadcast 8-bit integer \"a\" to all elements of \"dst\" using zeromask \"k\" (elements are zeroed out when the corresponding mask bit is not set)."
+  operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[7:0]\n\tELSE\n\t\tdst[i+7:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
+  tests:
+    - {test_name "to_vector_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [43690], expected [0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255]}}
+    - {test_name "to_vector_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [65535], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
+    - {test_name "to_vector_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [43690], expected [0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1]}}
+    - {test_name "to_vector_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [65535], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {test_name "to_vector_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [170], expected [0, 65535, 0, 65535, 0, 65535, 0, 65535]}}
+    - {test_name "to_vector_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [255], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
+    - {test_name "to_vector_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [170], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
+    - {test_name "to_vector_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [255], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {test_name "to_vector_ui32_basic", type "ui32", lane_set "lanes_i32", lanes 4, case {inputs [10], expected [0, 4294967295, 0, 4294967295]}}
+    - {test_name "to_vector_ui32_edge", type "ui32", lane_set "lanes_i32", lanes 4, case {inputs [15], expected [4294967295, 4294967295, 4294967295, 4294967295]}}
+    - {test_name "to_vector_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10], expected [0, -1, 0, -1]}}
+    - {test_name "to_vector_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [15], expected [-1, -1, -1, -1]}}
+    - {test_name "to_vector_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10], expected [0.0, NAN, 0.0, NAN]}}
+    - {test_name "to_vector_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [15], expected [NAN, NAN, NAN, NAN]}}
+    - {test_name "to_vector_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [2], expected [0, 18446744073709551615]}}
+    - {test_name "to_vector_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [3], expected [18446744073709551615, 18446744073709551615]}}
+    - {test_name "to_vector_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [2], expected [0, -1]}}
+    - {test_name "to_vector_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [3], expected [-1, -1]}}
+    - {test_name "to_vector_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [2], expected [0.0, NAN]}}
+    - {test_name "to_vector_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [3], expected [NAN, NAN]}}
+  impls:
+    avx512:
+      [ ?i32, ?i64 ]:
+        requires [avx512f]
+        implementation:
+          tsil "emit_return(intrin_macro<maskz_set1, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(mask, -1));"
+      [ ?i8, ?i16 ]:
+        requires [avx512bw, avx512f]
+        implementation:
+          tsil "emit_return(intrin_macro<maskz_set1, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(mask, -1));"
+      f32:
+        requires [avx512f]
+        implementation:
+          tsil """
+              var<const_infer>(bits, intrin_macro<maskz_set1, suffix=tslgen<intrin>(suffix, si32)>(mask, -1))
+              emit_return(cast<bitcast>(type<vector::register>, bits));
+            """
+      f64:
+        requires [avx512f]
+        implementation:
+          tsil """
+              var<const_infer>(bits, intrin_macro<maskz_set1, suffix=tslgen<intrin>(suffix, si64)>(mask, -1))
+              emit_return(cast<bitcast>(type<vector::register>, bits));
+            """
+    [avx2_vl, sse_vl]:
+      arith:
+        requires:
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+              emit_return(
+                call<primitive=mov attrs[mask=zero]>(
+                  mask,
+                  call<primitive=set1[Vec]>(value<mask::lane::all_true>)
+                )
+              );
+            """
+    avx2:
+      arith:
+        requires [avx]
+        implementation:
+          tsil "emit_return(mask);"
+    sse:
+      arith:
+        requires [sse2]
+        implementation:
+          tsil "emit_return(mask);"
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil "emit_return(mask);"
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(mask);"
+    generic:
+      arith:
+        requires []
+        implementation:
+          tsil """
+               type<alias>(T, type<vector::register>) 
+               type<alias>(BaseT, type<vector::base>) 
+              T result{};
+              BaseT true_val = cast<static>(
+                BaseT,
+                cast<static>(type<unsigned_of>(BaseT), cast<static>(type<ui64>, 0xFFFFFFFFFFFFFFFF))
+              );
+              if<compile>( type<is_same>(BaseT, f32) ) {
+                 var<const_infer>(bits32, cast<static>(type<ui32>, 0xFFFFFFFF)) 
+                true_val = *cast<reinterpret>(BaseT const *, &bits32);
+              }
+              if<compile>( type<is_same>(BaseT, f64) ) {
+                 var<const_infer>(bits64, cast<static>(type<ui64>, 0xFFFFFFFFFFFFFFFF)) 
+                true_val = *cast<reinterpret>(BaseT const *, &bits64);
+              }
+               loop<range>(i, 0, value<vector::length>, 1)  {
+                if (details::mask_test<Vec>(mask, i)) {
+                  result[i] = true_val;
+                } else {
+                  result[i] = cast<static>(BaseT, 0);
+                }
+              }
+               emit_return(result) ;
+            """
+prim<m:=s> to_mask(mask):
+  brief_description "Forms a mask type from an integral mask scalar."
+  operation ""
+  tests:
+    - {test_name "to_mask_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [170], expected 170}}
+    - {test_name "to_mask_ui8_edge", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [9223372036854775809], expected 9223372036854775809}}
+    - {test_name "to_mask_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [43690], expected 43690}}
+    - {test_name "to_mask_ui16_edge", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [2147483649], expected 2147483649}}
+    - {test_name "to_mask_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [43690], expected 43690}}
+    - {test_name "to_mask_ui32_edge", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [32769], expected 32769}}
+    - {test_name "to_mask_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [170], expected 170}}
+    - {test_name "to_mask_ui64_edge", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [129], expected 129}}
+  impls:
+    avx512:
+      arith:
+        requires [avx512f]
+        implementation:
+          tsil "emit_return(mask);"
+    [avx2_vl, sse_vl]:
+      arith:
+        requires:
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil "emit_return(mask);"
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+              type<alias>(BaseT, type<vector::base>)
+              type<alias>(UnsignedT, type<unsigned_of>(BaseT))
+              type<alias>(UVec, type<vector::transform_extension<UnsignedT>>)
+              var<infer>(tmp, call<primitive=to_array[UVec]>(call<primitive=set_zero[UVec]>()));
+              const type<size> mask_period = cast<static>(type<size>, 16 / value<size_of>(BaseT));
+              loop<range>(i, 0, value<vector::length>, 1) {
+                const type<size> bit_idx = i % mask_period;
+                tmp[i] = cast<static>(UnsignedT, (mask >> bit_idx) & 1);
+              }
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>())
+              var<const_infer>(vec, intrin_macro<svld1, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT))>(pg, tmp.data()))
+              emit_return(intrin_macro<svcmpne_n, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT))>(pg, vec, cast<static>(UnsignedT, 0)));
+            """
+    avx2:
+      ?i8:
+        requires [avx, avx2]
+        implementation:
+          tsil """
+              var<const_infer>(permute_vec, intrin<_mm256_set_epi64x>(0x303030303030303, 0x202020202020202, 0x101010101010101, 0x0))
+              var<const_infer>(data_vec, intrin<_mm256_set1_epi32>(cast<static>(si32, mask)))
+              var<const_infer>(shuffled_vec, intrin<_mm256_shuffle_epi8>(data_vec, permute_vec))
+              var<const_infer>(and_vec, intrin<_mm256_set1_epi64x>(cast<static>(si64, cast<static>(ui64, 0x8040201008040201))))
+              var<const_infer>(and_shuffled_vec, intrin<_mm256_and_si256>(shuffled_vec, and_vec))
+              emit_return(intrin<_mm256_cmpeq_epi8>(and_shuffled_vec, and_vec));
+            """
+      [ ?i16, ?i32, ?i64 ]:
+        requires [avx, avx2]
+        implementation:
+          tsil """
+              type<alias>(BaseT, type<vector::base>)
+              var<typed>(array_type<BaseT, value<vector::length>>, and_values, value<array_uninit>)
+              loop<range>(i, 0, value<vector::length>, 1) {
+                var<const_infer>(bit, cast<static>(type<ui64>, 1) << i)
+                and_values[i] = cast<static>(BaseT, bit);
+              }
+              var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()))
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(BaseT, mask)))
+              var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec))
+              emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
+            """
+      f32:
+        requires [avx, avx2]
+        implementation:
+          tsil """
+              var<const_infer>(and_vec, intrin<_mm256_set_epi64x>(0x8000000040, 0x2000000010, 0x800000004, 0x200000001))
+              var<const_infer>(data_vec, intrin<_mm256_set1_epi32>(cast<static>(si32, mask)))
+              var<const_infer>(anded_vec, intrin<_mm256_and_si256>(data_vec, and_vec))
+              emit_return(intrin<_mm256_castsi256_ps>(intrin<_mm256_cmpeq_epi32>(anded_vec, and_vec)));
+            """
+      f64:
+        requires [avx, avx2]
+        implementation:
+          tsil """
+              var<const_infer>(and_vec, intrin<_mm256_set_epi64x>(cast<static>(si64, cast<static>(ui64, 0x8)), cast<static>(si64, cast<static>(ui64, 0x4)), cast<static>(si64, cast<static>(ui64, 0x2)), cast<static>(si64, cast<static>(ui64, 0x1))))
+              var<const_infer>(data_vec, intrin<_mm256_set1_epi64x>(cast<static>(si64, mask)))
+              var<const_infer>(anded_vec, intrin<_mm256_and_si256>(data_vec, and_vec))
+              emit_return(intrin<_mm256_castsi256_pd>(intrin<_mm256_cmpeq_epi64>(anded_vec, and_vec)));
+            """
+    sse:
+      ?i8:
+        requires [sse, sse2]
+        implementation:
+          tsil """
+              var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+              loop<range>(i, 0, value<vector::length>, 1) {
+                if (((mask >> i) & 1) != 0) {
+                  values[i] = value<mask::lane::all_true>;
+                }
+              }
+              emit_return(call<primitive=from_array[Vec]>(values));
+            """
+      [ ?i16, ?i32 ]:
+        requires [sse, sse2]
+        implementation:
+          tsil """
+              type<alias>(BaseT, type<vector::base>)
+              var<typed>(array_type<BaseT, value<vector::length>>, and_values, value<array_uninit>)
+              loop<range>(i, 0, value<vector::length>, 1) {
+                var<const_infer>(bit, cast<static>(type<ui64>, 1) << i)
+                and_values[i] = cast<static>(BaseT, bit);
+              }
+              var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()))
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(BaseT, mask)))
+              var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec))
+              emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
+            """
+      ?i64:
+        requires [sse, sse2, sse4_1]
+        implementation:
+          tsil """
+              type<alias>(BaseT, type<vector::base>)
+              var<typed>(array_type<BaseT, value<vector::length>>, and_values, value<array_uninit>)
+              loop<range>(i, 0, value<vector::length>, 1) {
+                var<const_infer>(bit, cast<static>(type<ui64>, 1) << i)
+                and_values[i] = cast<static>(BaseT, bit);
+              }
+              var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()))
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(BaseT, mask)))
+              var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec))
+              emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
+            """
+      f32:
+        requires [sse, sse2]
+        implementation:
+          tsil """
+              var<const_infer>(and_vec, intrin<_mm_set_epi32>(0x8, 0x4, 0x2, 0x1))
+              var<const_infer>(data_vec, intrin<_mm_set1_epi32>(cast<static>(si32, mask)))
+              var<const_infer>(anded_vec, intrin<_mm_and_si128>(data_vec, and_vec))
+              emit_return(intrin<_mm_castsi128_ps>(intrin<_mm_cmpeq_epi32>(anded_vec, and_vec)));
+            """
+      f64:
+        requires [sse, sse2, sse4_1]
+        implementation:
+          tsil """
+              var<const_infer>(and_vec, intrin<_mm_set_epi64x>(cast<static>(si64, cast<static>(ui64, 0x2)), cast<static>(si64, cast<static>(ui64, 0x1))))
+              var<const_infer>(data_vec, intrin<_mm_set1_epi64x>(cast<static>(si64, mask)))
+              var<const_infer>(anded_vec, intrin<_mm_and_si128>(data_vec, and_vec))
+              emit_return(intrin<_mm_castsi128_pd>(intrin<_mm_cmpeq_epi64>(anded_vec, and_vec)));
+            """
+    neon:
+      ?i8:
+        requires [neon]
+        implementation:
+          tsil """
+              var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+              loop<range>(i, 0, value<vector::length>, 1) {
+                if (((mask >> i) & 1) != 0) {
+                  values[i] = value<mask::lane::all_true>;
+                }
+              }
+              emit_return(call<primitive=from_array[Vec]>(values));
+            """
+      ?i16:
+        requires [neon]
+        implementation:
+          tsil """
+              var<const_infer>(and_vec, call<primitive=set[Vec]>(0x80, 0x40, 0x20, 0x10, 0x8, 0x4, 0x2, 0x1))
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(mask))
+              var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec))
+              emit_return(intrin<vceqq_?i?>(anded_vec, and_vec));
+            """
+      ?i32:
+        requires [neon]
+        implementation:
+          tsil """
+              var<const_infer>(and_vec, call<primitive=set[Vec]>(0x8, 0x4, 0x2, 0x1))
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(mask))
+              var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec))
+              emit_return(intrin<vceqq_?i?>(anded_vec, and_vec));
+            """
+      ?i64:
+        requires [neon]
+        implementation:
+          tsil """
+              var<const_infer>(and_vec, call<primitive=set[Vec]>(0x2, 0x1))
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(mask))
+              var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec))
+              emit_return(intrin<vceqq_?i?>(anded_vec, and_vec));
+            """
+      f32:
+        requires [neon]
+        implementation:
+          tsil """
+              type<alias>(Base, type<select>(type<is_same>(type<vector::base>, f32), si32, type<vector::base>))
+              var<typed>(array_type<Base, value<vector::length>>, values, value<array_uninit>)
+              loop<range>(i, 0, value<vector::length>, 1) {
+                if (((mask >> i) & 1) != 0) {
+                  values[i] = cast<static>(Base, -1);
+                } else {
+                  values[i] = cast<static>(Base, 0);
+                }
+              }
+              type<alias>(MaskVec, type<vector::transform<Base>>)
+              var<infer>(tmp, call<primitive=load[MaskVec] attrs[aligned=false]>(values.data()))
+              emit_return(call<primitive=reinterpret[MaskVec, Vec]>(tmp));
+            """
+      f64:
+        requires [neon]
+        implementation:
+          tsil """
+              type<alias>(Base, type<select>(type<is_same>(type<vector::base>, f64), si64, type<vector::base>))
+              var<typed>(array_type<Base, value<vector::length>>, values, value<array_uninit>)
+              loop<range>(i, 0, value<vector::length>, 1) {
+                if (((mask >> i) & 1) != 0) {
+                  values[i] = cast<static>(Base, -1);
+                } else {
+                  values[i] = cast<static>(Base, 0);
+                }
+              }
+              type<alias>(MaskVec, type<vector::transform<Base>>)
+              var<infer>(tmp, call<primitive=load[MaskVec] attrs[aligned=false]>(values.data()))
+              emit_return(call<primitive=reinterpret[MaskVec, Vec]>(tmp));
+            """
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return((mask & 1) != 0);"
+    generic:
+      arith:
+        requires []
+        implementation:
+          tsil """
+              type<alias>(MaskT, type<vector::mask>)
+              MaskT result = mask<zero>();
+              const type<size> mask_bits = value<size_of>(type<vector::imask>) * 8;
+              loop<unroll>(value<vector::length>)
+              loop<range>(i, 0, value<vector::length>, 1) {
+                if (i < mask_bits && (((mask >> i) & cast<static>(type<vector::imask>, 1)) != 0)) {
+                  mask<set:1>(result, i);
+                }
+              }
+              emit_return(result);
+            """

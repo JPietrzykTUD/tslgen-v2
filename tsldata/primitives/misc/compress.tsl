@@ -1,0 +1,214 @@
+prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
+  brief_description "[Example: avx512 + si8]: Contiguously store the active 8-bit integers in \"a\" (those with their respective bit set in zeromask \"k\") to \"dst\", and set the remaining elements to zero."
+  operation "[Example: avx512 + si8]: size := 8\nm := 0\nFOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[m+size-1:m] := a[i+7:i]\n\t\tm := m + size\n\tFI\nENDFOR\ndst[511:m] := 0\ndst[MAX:512] := 0"
+  tests:
+    - {test_name "compress_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [2, 4, 6, 8, 10, 12, 14, 16, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "compress_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "compress_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]], expected [-2, -4, -6, -8, -10, -12, -14, -16, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "compress_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]], expected [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]}}
+    - {test_name "compress_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8]], expected [2, 4, 6, 8, 0, 0, 0, 0]}}
+    - {test_name "compress_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "compress_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-2, -4, -6, -8, 0, 0, 0, 0]}}
+    - {test_name "compress_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
+    - {test_name "compress_ui32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8]], expected [2, 4, 6, 8, 0, 0, 0, 0]}}
+    - {test_name "compress_ui32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "compress_si32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-2, -4, -6, -8, 0, 0, 0, 0]}}
+    - {test_name "compress_si32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
+    - {test_name "compress_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 4, case {inputs [10, [1, 2, 3, 4]], expected [2, 4, 0, 0]}}
+    - {test_name "compress_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 4, case {inputs [15, [1, 2, 3, 4]], expected [1, 2, 3, 4]}}
+    - {test_name "compress_si64_basic", type "si64", lane_set "lanes_i64", lanes 4, case {inputs [10, [-1, -2, -3, -4]], expected [-2, -4, 0, 0]}}
+    - {test_name "compress_si64_edge", type "si64", lane_set "lanes_i64", lanes 4, case {inputs [15, [-1, -2, -3, -4]], expected [-1, -2, -3, -4]}}
+    - {test_name "compress_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, 2.0, 3.0, 4.0]], expected [2.0, 4.0, 0.0, 0.0]}}
+    - {test_name "compress_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [15, [1.0, 2.0, 3.0, 4.0]], expected [1.0, 2.0, 3.0, 4.0]}}
+    - {test_name "compress_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [2, [1.0, 2.0]], expected [2.0, 0.0]}}
+    - {test_name "compress_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [3, [1.0, 2.0]], expected [1.0, 2.0]}}
+  impls:
+    avx512:
+      ?i?:
+        requires:
+          idqword [avx512f]
+          bword [avx512_vbmi2, avx512f]
+        implementation:
+          tsil """
+              emit_return(
+                intrin_macro<maskz_compress, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                  mask,
+                  data
+                )
+              );
+            """
+      f?:
+        requires [avx512f]
+        implementation:
+          tsil """
+              emit_return(
+                intrin_macro<maskz_compress>(
+                  mask,
+                  data
+                )
+              );
+            """
+    [avx2, avx2_vl]:
+      ?i8:
+        requires:
+          avx2 [avx512_vbmi2, avx512f, avx512vl, avx2]
+          avx2_vl [avx512_vbmi2, avx512f, avx512vl, avx]
+        implementation:
+          tsil """
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              emit_return(
+                intrin_macro<maskz_compress, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                  cast<static>(ui32, imask),
+                  data
+                )
+              );
+            """
+      ?i16:
+        requires:
+          avx2 [avx512_vbmi2, avx512f, avx512vl, avx2]
+          avx2_vl [avx512_vbmi2, avx512f, avx512vl, avx]
+        implementation:
+          tsil """
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              emit_return(
+                intrin_macro<maskz_compress, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                  cast<static>(ui16, imask),
+                  data
+                )
+              );
+            """
+      [?i32, ?i64]:
+        requires:
+          avx2 [avx512f, avx512vl, avx2]
+          avx2_vl [avx512f, avx512vl, avx]
+        implementation:
+          tsil """
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              emit_return(
+                intrin_macro<maskz_compress, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                  cast<static>(ui8, imask),
+                  data
+                )
+              );
+            """
+      f?:
+        requires:
+          avx2 [avx512f, avx512vl, avx]
+          avx2_vl [avx512f, avx512vl, avx]
+        implementation:
+          tsil """
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              emit_return(
+                intrin_macro<maskz_compress>(
+                  cast<static>(ui8, imask),
+                  data
+                )
+              );
+            """
+    [sse, sse_vl]:
+      ?i8:
+        requires:
+          sse [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
+          sse_vl [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              emit_return(
+                intrin_macro<maskz_compress, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                  cast<static>(ui16, imask),
+                  data
+                )
+              );
+            """
+      [?i16, ?i32, ?i64]:
+        requires:
+          sse [avx512f, avx512vl, sse, sse2]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              emit_return(
+                intrin_macro<maskz_compress, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                  cast<static>(ui8, imask),
+                  data
+                )
+              );
+            """
+      f?:
+        requires:
+          sse:
+            f32 [avx512f, avx512vl, sse]
+            f64 [avx512f, avx512vl, sse, sse2]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              emit_return(
+                intrin_macro<maskz_compress>(
+                  cast<static>(ui8, imask),
+                  data
+                )
+              );
+            """
+    sve:
+      [?i32, ?i64, f32, f64]:
+        requires [sve]
+        implementation:
+          tsil """
+              type<alias>(IndexBase, type<unsigned_of>(BaseT))
+              type<alias>(IndexVec, type<vector::transform_extension<IndexBase>>)
+              var<const_infer>(packed, intrin_macro<svcompact>(mask, data))
+              var<const_infer>(active_count, call<primitive=mask_population_count[Vec]>(mask))
+              var<const_infer>(indices, call<primitive=sequence[IndexVec]>())
+              var<const_infer>(limit, call<primitive=set1[IndexVec]>(cast<static>(IndexBase, active_count)))
+              var<const_infer>(keep_mask, call<primitive=less_than[IndexVec]>(indices, limit))
+              emit_return(call<primitive=mov attrs[mask=zero]>(keep_mask, packed));
+            """
+      [?i8, ?i16]:
+        requires [sve]
+        implementation:
+          tsil """
+              var<const_infer>(values, call<primitive=to_array[Vec]>(data))
+              var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+              var<infer>(out_idx, 0)
+              loop<unroll>(value<vector::length>)
+              loop<range>(i, 0, value<vector::length>, 1) {
+                if (mask<test>(mask, i)) {
+                  result[out_idx] = values[i];
+                  out_idx = out_idx + 1;
+                }
+              }
+              emit_return(call<primitive=from_array[Vec]>(result));
+            """
+    [avx2, sse, neon, generic, oneAPIfpga]:
+      arith:
+        requires:
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+              var<const_infer>(values, call<primitive=to_array[Vec]>(data))
+              var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+              var<infer>(out_idx, 0)
+              loop<unroll>(value<vector::length>)
+              loop<range>(i, 0, value<vector::length>, 1) {
+                if (mask<test>(mask, i)) {
+                  result[out_idx] = values[i];
+                  out_idx = out_idx + 1;
+                }
+              }
+              emit_return(call<primitive=from_array[Vec]>(result));
+            """
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+              if (mask) {
+                return data;
+              }
+              return cast<static>(type<vector::base>, 0);
+            """

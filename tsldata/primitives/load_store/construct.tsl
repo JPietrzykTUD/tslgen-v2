@@ -1,0 +1,486 @@
+prim<v:=s> set1(value):
+  brief_description "[Example: sse + si8]: Broadcast 8-bit integer \"a\" to all elements of \"dst\". This intrinsic may generate \"vpbroadcastb\"."
+  operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[i+7:i] := a[7:0]\nENDFOR"
+  tests:
+    - {test_name "set1_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [7], expected [7, 7, 7, 7, 7, 7, 7, 7]}}
+    - {test_name "set1_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [-1], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {test_name "set1_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [3], expected [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]}}
+    - {test_name "set1_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [85], expected [85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85, 85]}}
+    - {test_name "set1_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [2], expected [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]}}
+    - {test_name "set1_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [-3], expected [-3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3]}}
+    - {test_name "set1_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [3], expected [3, 3, 3, 3, 3, 3, 3, 3]}}
+    - {test_name "set1_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [21845], expected [21845, 21845, 21845, 21845, 21845, 21845, 21845, 21845]}}
+    - {test_name "set1_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [2], expected [2, 2, 2, 2, 2, 2, 2, 2]}}
+    - {test_name "set1_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [-3], expected [-3, -3, -3, -3, -3, -3, -3, -3]}}
+    - {test_name "set1_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [3], expected [3, 3]}}
+    - {test_name "set1_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [6148914691236517205], expected [6148914691236517205, 6148914691236517205]}}
+    - {test_name "set1_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [2], expected [2, 2]}}
+    - {test_name "set1_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [-3], expected [-3, -3]}}
+    - {test_name "set1_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [2.0], expected [2.0, 2.0, 2.0, 2.0]}}
+    - {test_name "set1_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [-1.0], expected [-1.0, -1.0, -1.0, -1.0]}}
+    - {test_name "set1_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [2.0], expected [2.0, 2.0]}}
+    - {test_name "set1_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [-1.0], expected [-1.0, -1.0]}}
+  impls:
+    avx512:
+      ?i?:
+        requires [avx512f]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<set1, suffix=tslgen<intrin>(suffix, si?)>(
+                value
+              )
+            );
+          """
+      f?:
+        requires [avx512f]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<set1>(value)
+            );
+          """
+    [avx2, sse]:
+      ?i?:
+        requires:
+          avx2 [avx]
+          sse [sse, sse2]
+        implementation:
+          tsil """
+            if<generation>(type.is_same(BaseT, si64) || type.is_same(BaseT, ui64)) {
+              // in 8byte path
+              emit_return(
+                intrin_macro<set1, suffix="epi64x">(value)
+              );
+            } else<generation> {
+              emit_return(
+                intrin_macro<set1, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                  value
+                )
+              );
+            }
+          """
+      f?:
+        requires:
+          avx2 [avx]
+          sse [sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<set1>(value)
+            );
+          """
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<vdupq_n>(value)
+            );
+          """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<svdup_n>(value)
+            );
+          """
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(value);"
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+              var<typed>(array_type<type<vector::base>, value<vector::length>, value<vector::alignment>>, result_arr, value<array_uninit>)
+              loop<unroll>(value<vector::length>) 
+              loop<range>(i, 0, value<vector::length>, 1)  {
+                result_arr[i] = value;
+              }
+               emit_return(result_arr) ;
+            """
+
+prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
+  brief_description "Partially override a vector with a single value."
+  operation ""
+  tests:
+    - {test_name "masked_set1_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 200], expected [0, 200, 2, 200, 4, 200, 6, 200, 8, 200, 10, 200, 12, 200, 14, 200]}}
+    - {test_name "masked_set1_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 200], expected [200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200]}}
+    - {test_name "masked_set1_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], -5], expected [0, -5, 2, -5, 4, -5, 6, -5, 8, -5, 10, -5, 12, -5, 14, -5]}}
+    - {test_name "masked_set1_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], -5], expected [-5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5, -5]}}
+    - {test_name "masked_set1_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7], 50000], expected [0, 50000, 2, 50000, 4, 50000, 6, 50000]}}
+    - {test_name "masked_set1_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [255, [0, 1, 2, 3, 4, 5, 6, 7], 50000], expected [50000, 50000, 50000, 50000, 50000, 50000, 50000, 50000]}}
+    - {test_name "masked_set1_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7], -1234], expected [0, -1234, 2, -1234, 4, -1234, 6, -1234]}}
+    - {test_name "masked_set1_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [255, [0, 1, 2, 3, 4, 5, 6, 7], -1234], expected [-1234, -1234, -1234, -1234, -1234, -1234, -1234, -1234]}}
+    - {test_name "masked_set1_ui32_basic", type "ui32", lane_set "lanes_i32", lanes 4, case {inputs [10, [0, 1, 2, 3], 3000000000], expected [0, 3000000000, 2, 3000000000]}}
+    - {test_name "masked_set1_ui32_edge", type "ui32", lane_set "lanes_i32", lanes 4, case {inputs [15, [0, 1, 2, 3], 3000000000], expected [3000000000, 3000000000, 3000000000, 3000000000]}}
+    - {test_name "masked_set1_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [0, 1, 2, 3], -123456], expected [0, -123456, 2, -123456]}}
+    - {test_name "masked_set1_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [15, [0, 1, 2, 3], -123456], expected [-123456, -123456, -123456, -123456]}}
+    - {test_name "masked_set1_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, -2.0, 3.5, -4.5], 1.5], expected [1.0, 1.5, 3.5, 1.5]}}
+    - {test_name "masked_set1_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [15, [1.0, -2.0, 3.5, -4.5], 1.5], expected [1.5, 1.5, 1.5, 1.5]}}
+    - {test_name "masked_set1_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [2, [0, 1], 1000000000000], expected [0, 1000000000000]}}
+    - {test_name "masked_set1_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [3, [0, 1], 1000000000000], expected [1000000000000, 1000000000000]}}
+    - {test_name "masked_set1_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [2, [0, 1], -500000000000], expected [0, -500000000000]}}
+    - {test_name "masked_set1_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [3, [0, 1], -500000000000], expected [-500000000000, -500000000000]}}
+    - {test_name "masked_set1_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [2, [1.0, -2.0], -2.25], expected [1.0, -2.25]}}
+    - {test_name "masked_set1_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [3, [1.0, -2.0], -2.25], expected [-2.25, -2.25]}}
+  impls:
+    avx512:
+      arith:
+        requires [avx512f]
+        implementation:
+          tsil """
+               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask)) 
+               var<infer>(values, call<primitive=to_array[Vec]>(data)) 
+               loop<range>(i, 0, value<vector::length>, 1)  {
+                if (((imask >> i) & 1) != 0) {
+                  values[i] = scalar;
+                }
+              }
+               emit_return(call<primitive=load[Vec] attrs[aligned=false]>(values.data())) ;
+            """
+    avx2:
+      arith:
+        requires [avx2]
+        implementation:
+          tsil """
+               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask)) 
+               var<infer>(values, call<primitive=to_array[Vec]>(data)) 
+               loop<range>(i, 0, value<vector::length>, 1)  {
+                if (((imask >> i) & 1) != 0) {
+                  values[i] = scalar;
+                }
+              }
+               emit_return(call<primitive=load[Vec] attrs[aligned=false]>(values.data())) ;
+            """
+    sse:
+      arith:
+        requires [sse2]
+        implementation:
+          tsil """
+               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask)) 
+               var<infer>(values, call<primitive=to_array[Vec]>(data)) 
+               loop<range>(i, 0, value<vector::length>, 1)  {
+                if (((imask >> i) & 1) != 0) {
+                  values[i] = scalar;
+                }
+              }
+               emit_return(call<primitive=load[Vec] attrs[aligned=false]>(values.data())) ;
+            """
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil """
+               emit_return(
+                 call<primitive=blend attrs[mask=pass_through]>(
+                   mask,
+                   data,
+                   call<primitive=set1[Vec]>(scalar)
+                 )
+               );
+            """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+               emit_return(
+                 intrin_macro<svdup_n, post=m>(
+                   data,
+                   mask,
+                   scalar
+                 )
+               );
+            """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+               type<alias>(T, type<vector::register>) 
+              T result;
+               loop<range>(i, 0, value<vector::length>, 1)  {
+                result[i] = data[i];
+                if (details::mask_test<Vec>(mask, i)) {
+                  result[i] = scalar;
+                }
+              }
+               emit_return(result) ;
+            """
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+               if(mask) {
+                 emit_return(scalar);
+               } else {
+                 emit_return(data);
+               }
+            """
+prim<v:=()>[value=zero] set_zero():
+  brief_description "[Example: sse + si8]: Return vector of type __m128i with all elements set to zero."
+  operation "[Example: sse + si8]: dst[MAX:0] := 0"
+  tests:
+    - {test_name "set_zero_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "set_zero_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "set_zero_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "set_zero_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "set_zero_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "set_zero_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "set_zero_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "set_zero_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "set_zero_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "set_zero_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "set_zero_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 0]}}
+    - {test_name "set_zero_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 0]}}
+    - {test_name "set_zero_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 0]}}
+    - {test_name "set_zero_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 0]}}
+    - {test_name "set_zero_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {test_name "set_zero_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {test_name "set_zero_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [], expected [0.0, 0.0]}}
+    - {test_name "set_zero_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [], expected [0.0, 0.0]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::base>, 0));"
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<init_register>(result_arr)
+            emit_return(result_arr);
+          """
+    [avx512, avx2, sse]:
+      ?i?:
+        requires:
+          avx512 [avx512f]
+          avx2 [avx]
+          sse [sse, sse2]    
+        implementation:
+          tsil """
+              emit_return(
+                intrin_macro<setzero, suffix=tslgen<intrin>(suffix, "stream"), prefix=tslgen<intrin>(prefix)>()
+              );
+            """
+      f?:
+        requires:
+          avx512 [avx512f]
+          avx2 [avx]
+          sse:
+            f32 [sse]
+            f64 [sse, sse2]
+        implementation:
+          tsil """
+              emit_return(
+                intrin_macro<setzero, suffix=tslgen<intrin>(suffix), prefix=tslgen<intrin>(prefix)>()
+              );
+            """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+            var<const_infer>(undef, call<primitive=set_undef[Vec]>())
+            emit_return(
+              call<primitive=binary_xor>(undef, undef)
+            );
+          """
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil """
+            var<const_infer>(undef, call<primitive=set_undef[Vec]>())
+            emit_return(
+              call<primitive=binary_xor>(undef, undef)
+            );
+          """
+
+prim<v:=()>[value=undef] set_undef():
+  brief_description "[Example: sse + si8]: Return vector of type __m128i with undefined elements."
+  operation ""
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+              var<typed>(type<vector::base>, result, value<uninit>)
+              emit_return(result);
+            """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+              var<typed>(array_type<type<vector::base>, value<vector::length>, value<vector::alignment>>, result, value<array_uninit>)
+              emit_return(result);
+            """
+    avx512:
+      ?i?:
+        requires [avx512f]
+        implementation:
+          tsil "emit_return(intrin<_mm512_undefined_epi32>());"
+      f?:
+        requires [avx512f]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<undefined, suffix=tslgen<intrin>(suffix), prefix=tslgen<intrin>(prefix)>()
+            );
+          """
+    [avx2, sse]:
+      ?i?:
+        requires:
+          avx2 [avx]
+          sse [sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<undefined, suffix=tslgen<intrin>(suffix, "stream"), prefix=tslgen<intrin>(prefix)>()
+            );
+          """
+      f?:
+        requires:
+          avx2 [avx]
+          sse:
+            f32 [sse]
+            f64 [sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<undefined, suffix=tslgen<intrin>(suffix), prefix=tslgen<intrin>(prefix)>()
+            );
+          """
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil """
+              type<alias>(Value, type<vector::register>) 
+              Value value;
+              emit_return(value);
+            """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<svundef, suffix=tslgen<intrin>(suffix)>()
+            );
+          """
+
+prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
+  brief_description "[Example: sse + si8]: Set packed 8-bit integers in \"dst\" with the supplied values."
+  operation "[Example: sse + si8]: dst[7:0] := e0\ndst[15:8] := e1\ndst[23:16] := e2\ndst[31:24] := e3\ndst[39:32] := e4\ndst[47:40] := e5\ndst[55:48] := e6\ndst[63:56] := e7\ndst[71:64] := e8\ndst[79:72] := e9\ndst[87:80] := e10\ndst[95:88] := e11\ndst[103:96] := e12\ndst[111:104] := e13\ndst[119:112] := e14\ndst[127:120] := e15"
+  tests:
+    - {test_name "set_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [0, 1, 2, 3, 4, 5, 6, 7], expected [7, 6, 5, 4, 3, 2, 1, 0]}}
+    - {test_name "set_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [-1, 0, 1, -2, 2, -3, 3, -4], expected [-4, 3, -3, 2, -2, 1, 0, -1]}}
+    - {test_name "set_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], expected [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]}}
+    - {test_name "set_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], expected [5, 4, 3, 2, 254, 255, 1, 0, 5, 4, 3, 2, 254, 255, 1, 0]}}
+    - {test_name "set_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], expected [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]}}
+    - {test_name "set_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], expected [126, 2, -2, 1, 127, -128, -1, 0, 126, 2, -2, 1, 127, -128, -1, 0]}}
+    - {test_name "set_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [1, 2, 3, 4, 5, 6, 7, 8], expected [8, 7, 6, 5, 4, 3, 2, 1]}}
+    - {test_name "set_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [0, 1, 65535, 65534, 2, 3, 4, 5], expected [5, 4, 3, 2, 65534, 65535, 1, 0]}}
+    - {test_name "set_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [1, 2, 3, 4, 5, 6, 7, 8], expected [8, 7, 6, 5, 4, 3, 2, 1]}}
+    - {test_name "set_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [0, -1, -32768, 32767, 1, -2, 2, 32766], expected [32766, 2, -2, 1, 32767, -32768, -1, 0]}}
+    - {test_name "set_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [1, 2], expected [2, 1]}}
+    - {test_name "set_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [0, 1], expected [1, 0]}}
+    - {test_name "set_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [1, 2], expected [2, 1]}}
+    - {test_name "set_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [0, -1], expected [-1, 0]}}
+    - {test_name "set_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [1.0, -2.0, 3.5, -4.5], expected [-4.5, 3.5, -2.0, 1.0]}}
+    - {test_name "set_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [0.0, -0.0, INFINITY, "-INFINITY"], expected ["-INFINITY", INFINITY, -0.0, 0.0]}}
+    - {test_name "set_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [1.0, -2.0], expected [-2.0, 1.0]}}
+    - {test_name "set_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [0.0, -0.0], expected [-0.0, 0.0]}}
+  impls:
+    avx512:
+      ?i?:
+        requires [avx512f]
+        implementation:
+          tsil """
+            if<generation>(type.is_same(BaseT, si64) || type.is_same(BaseT, ui64)) {
+              emit_return(
+                intrin_macro<set, suffix="epi64">(args...)
+              );
+            } else<generation> {
+              emit_return(
+                intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(args...)
+              );
+            }
+          """
+      f?:
+        requires [avx512f]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<set>(args...)
+            );
+          """
+    [avx2, sse]:
+      ?i?:
+        requires:
+          avx2 [avx]
+          sse [sse, sse2]
+        implementation:
+          tsil """
+            if<generation>(type.is_same(BaseT, si64) || type.is_same(BaseT, ui64)) {
+              emit_return(
+                intrin_macro<set, suffix="epi64x">(args...)
+              );
+            } else<generation> {
+              emit_return(
+                intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(args...)
+              );
+            }
+          """
+      f?:
+        requires:
+          avx2 [avx]
+          sse [sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<set>(args...)
+            );
+          """
+    [neon, sve, generic, oneAPIfpga]:
+      arith:
+        requires:
+          neon [neon]
+          sve [sve]
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+               var<const_infer>(zero, call<primitive=set_zero[Vec]>())
+               var<infer>(data, call<primitive=to_array[Vec]>(zero))
+               loop<range>(i, 0, value<vector::length>, 1)  {
+                data[i] = cast<static>(type<vector::base>, args[value<vector::length> - 1 - i]);
+              }
+               emit_return(call<primitive=load[Vec] attrs[aligned=false]>(data.data())) ;
+            """
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(pack<first>(args...));"

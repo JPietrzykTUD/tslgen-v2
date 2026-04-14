@@ -1,0 +1,413 @@
+template alloc:
+  description "Allocate memory."
+  shape "(scalar) -> ptr"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template alloc_aligned:
+  description "Allocate aligned memory."
+  shape "(scalar, scalar) -> ptr"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template between_inclusive:
+  description "Between-inclusive comparison."
+  shape "(vector, vector, vector) -> mask"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_between:
+  description "Masked range comparison."
+  shape "(mask, vector, vector, vector) -> mask"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template binary:
+  description "Binary operation."
+  shape "(vector, vector) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template binary_scalar:
+  description "Binary scalar operation."
+  shape "(vector, scalar) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template binary_scalar_imask:
+  description "Binary scalar imask operation."
+  shape "(mask, scalar) -> mask"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template binary_scalar_reduce:
+  description "Binary scalar reduce."
+  shape "(vector, scalar) -> scalar"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template compare:
+  description "Vector comparison."
+  shape "(vector, vector) -> mask"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template compare_zero:
+  description "Compare-to-zero."
+  shape "(vector) -> mask"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template compress_store:
+  description "Compress store."
+  shape "(mask, ptr, vector) -> void"
+  required_fields ["op", "aligned"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template convert:
+  description "Convert vector."
+  shape "(vector) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template convert_down:
+  description "Convert down."
+  shape "(vector, imm) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template convert_up:
+  description "Convert up."
+  shape "(vector, imm) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template custom_sequence:
+  description "Custom sequence."
+  shape "(scalar, scalar) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template extract:
+  description "Extract a smaller vector from a larger one."
+  shape "(vector, scalar) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template dealloc:
+  description "Deallocate memory."
+  shape "(ptr) -> void"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template expand:
+  description "Expand."
+  shape "(mask, vector) -> vector"
+  required_fields ["op"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template expand_load:
+  description "Expand load."
+  shape "(mask, ptr) -> vector"
+  required_fields ["op", "aligned"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template expand_load_merge:
+  description "Expand load merge."
+  shape "(mask, ptr, vector) -> vector"
+  required_fields ["op", "aligned"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template extract_value:
+  description "Extract element."
+  shape "(vector) -> scalar"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template gather:
+  description "Gather."
+  shape "(ptr, index, imm) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template load:
+  description "Load."
+  shape "(ptr) -> vector"
+  required_fields ["aligned"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template load_mask:
+  description "Load mask."
+  shape "(ptr) -> mask"
+  required_fields ["aligned", "packed"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template load_scalar:
+  description "Load scalar."
+  shape "(ptr) -> scalar"
+  required_fields ["aligned"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template load_convert_up:
+  description "Load convert up."
+  shape "(ptr) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template mask_binary:
+  description "Mask binary operation."
+  shape "(mask, mask) -> mask"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template mask_set:
+  description "Mask constant."
+  shape "() -> mask"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template mask_unary:
+  description "Mask unary operation."
+  shape "(mask) -> mask"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template mask_to_scalar:
+  description "Mask to scalar."
+  shape "(mask) -> scalar"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template mask_to_vector:
+  description "Mask to vector."
+  shape "(mask) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template imask_binary:
+  description "Imask binary operation."
+  shape "(scalar, scalar) -> scalar"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template imask_ternary:
+  description "Imask ternary operation."
+  shape "(scalar, scalar, scalar) -> scalar"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_binary:
+  description "Masked binary."
+  shape "(mask, vector, vector) -> vector"
+  required_fields ["mask"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_ternary:
+  description "Masked ternary."
+  shape "(mask, vector, vector, vector) -> vector"
+  required_fields ["mask"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_binary_scalar:
+  description "Masked binary scalar."
+  shape "(mask, vector, imm) -> vector"
+  required_fields ["mask"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_binary_scalar_imm:
+  description "Masked binary scalar (immediate)."
+  shape "(mask, vector, imm) -> vector"
+  required_fields ["mask"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_compare:
+  description "Masked comparison."
+  shape "(mask, vector, vector) -> mask"
+  required_fields ["mask"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_gather:
+  description "Masked gather."
+  shape "(mask, ptr, index, imm) -> vector"
+  required_fields ["mask"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_gather_merge:
+  description "Masked gather merge."
+  shape "(mask, ptr, index, vector, imm) -> vector"
+  required_fields ["mask"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_load:
+  description "Masked load."
+  shape "(mask, ptr) -> vector"
+  required_fields ["mask", "aligned"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_load_merge:
+  description "Masked load merge."
+  shape "(mask, ptr, vector) -> vector"
+  required_fields ["mask", "aligned"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_reduce:
+  description "Masked reduce returning a mask."
+  shape "(mask, vector) -> mask"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_reduce_scalar:
+  description "Masked reduce returning an arithmetic scalar."
+  shape "(mask, vector) -> scalar"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_scatter:
+  description "Masked scatter."
+  shape "(mask, ptr, index, vector, imm) -> void"
+  required_fields ["mask"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_store:
+  description "Masked store."
+  shape "(mask, ptr, vector) -> void"
+  required_fields ["mask", "aligned"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template store_mask:
+  description "Store mask."
+  shape "(ptr, mask) -> void"
+  required_fields ["aligned", "packed"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template store_scalar:
+  description "Store scalar."
+  shape "(ptr, scalar) -> void"
+  required_fields ["aligned"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template masked_unary:
+  description "Masked unary (op=pack|expand|keep)."
+  shape "(mask, vector) -> vector"
+  required_fields ["mask"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template memcpy:
+  description "Memcpy."
+  shape "(ptr, ptr, scalar, imm) -> void"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template ostream:
+  description "Stream output."
+  shape "(ostream, vector, scalar) -> ostream"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template pack:
+  description "Pack."
+  shape "(mask, vector) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template reduce:
+  description "Reduce."
+  shape "(vector) -> scalar"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template reinterpret:
+  description "Reinterpret vector."
+  shape "(vector) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template scatter:
+  description "Scatter."
+  shape "(ptr, index, vector, imm) -> void"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template sequence:
+  description "Sequence."
+  shape "() -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template set:
+  description "Counted repeated scalar splat."
+  shape "(scalar...) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template set1:
+  description "Scalar splat."
+  shape "(scalar) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template set_undef:
+  description "Set undefined."
+  shape "() -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template set_zero:
+  description "Set zero."
+  shape "() -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template shuffle:
+  description "Shuffle."
+  shape "(vector, vector, index) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template scalar_to_mask:
+  description "Scalar to mask."
+  shape "(scalar) -> mask"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template store:
+  description "Store."
+  shape "(ptr, vector) -> void"
+  required_fields ["aligned"]
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template to_array:
+  description "To array."
+  shape "(vector) -> array<scalar>"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template from_array:
+  description "From array."
+  shape "(array<scalar>) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template insert:
+  description "Insert smaller vector into vector."
+  shape "(vector, vector, index) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template unary:
+  description "Unary operation."
+  shape "(vector) -> vector"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template unary_imask:
+  description "Unary imask."
+  shape "(mask) -> mask"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]
+
+template unary_scalar:
+  description "Unary scalar."
+  shape "(scalar) -> scalar"
+  required_fields []
+  optional_fields ["intrinsic", "implementation", "requires", "note"]

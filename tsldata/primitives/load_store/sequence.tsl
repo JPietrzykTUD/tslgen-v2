@@ -1,0 +1,392 @@
+prim<v:=sequence> sequence():
+  brief_description "Creates a sequence [0..SIMD-Reg-Element-Count]."
+  operation ""
+  tests:
+    - {test_name "sequence_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {test_name "sequence_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {test_name "sequence_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {test_name "sequence_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {test_name "sequence_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {test_name "sequence_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {test_name "sequence_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {test_name "sequence_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {test_name "sequence_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {test_name "sequence_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {test_name "sequence_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 1]}}
+    - {test_name "sequence_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 1]}}
+    - {test_name "sequence_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 1]}}
+    - {test_name "sequence_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 1]}}
+  impls:
+    avx512:
+      ?i8:
+        requires [avx512f]
+        implementation:
+          tsil """
+            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            emit_return(
+              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                cast<static>(IntrinBase, 63), cast<static>(IntrinBase, 62), cast<static>(IntrinBase, 61), cast<static>(IntrinBase, 60),
+                cast<static>(IntrinBase, 59), cast<static>(IntrinBase, 58), cast<static>(IntrinBase, 57), cast<static>(IntrinBase, 56),
+                cast<static>(IntrinBase, 55), cast<static>(IntrinBase, 54), cast<static>(IntrinBase, 53), cast<static>(IntrinBase, 52),
+                cast<static>(IntrinBase, 51), cast<static>(IntrinBase, 50), cast<static>(IntrinBase, 49), cast<static>(IntrinBase, 48),
+                cast<static>(IntrinBase, 47), cast<static>(IntrinBase, 46), cast<static>(IntrinBase, 45), cast<static>(IntrinBase, 44),
+                cast<static>(IntrinBase, 43), cast<static>(IntrinBase, 42), cast<static>(IntrinBase, 41), cast<static>(IntrinBase, 40),
+                cast<static>(IntrinBase, 39), cast<static>(IntrinBase, 38), cast<static>(IntrinBase, 37), cast<static>(IntrinBase, 36),
+                cast<static>(IntrinBase, 35), cast<static>(IntrinBase, 34), cast<static>(IntrinBase, 33), cast<static>(IntrinBase, 32),
+                cast<static>(IntrinBase, 31), cast<static>(IntrinBase, 30), cast<static>(IntrinBase, 29), cast<static>(IntrinBase, 28),
+                cast<static>(IntrinBase, 27), cast<static>(IntrinBase, 26), cast<static>(IntrinBase, 25), cast<static>(IntrinBase, 24),
+                cast<static>(IntrinBase, 23), cast<static>(IntrinBase, 22), cast<static>(IntrinBase, 21), cast<static>(IntrinBase, 20),
+                cast<static>(IntrinBase, 19), cast<static>(IntrinBase, 18), cast<static>(IntrinBase, 17), cast<static>(IntrinBase, 16),
+                cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
+                cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
+                cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
+                cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
+              )
+            );
+          """
+      ?i16:
+        requires [avx512f]
+        implementation:
+          tsil """
+            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            emit_return(
+              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                cast<static>(IntrinBase, 31), cast<static>(IntrinBase, 30), cast<static>(IntrinBase, 29), cast<static>(IntrinBase, 28),
+                cast<static>(IntrinBase, 27), cast<static>(IntrinBase, 26), cast<static>(IntrinBase, 25), cast<static>(IntrinBase, 24),
+                cast<static>(IntrinBase, 23), cast<static>(IntrinBase, 22), cast<static>(IntrinBase, 21), cast<static>(IntrinBase, 20),
+                cast<static>(IntrinBase, 19), cast<static>(IntrinBase, 18), cast<static>(IntrinBase, 17), cast<static>(IntrinBase, 16),
+                cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
+                cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
+                cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
+                cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
+              )
+            );
+          """
+      ?i32:
+        requires [avx512f]
+        implementation:
+          tsil """
+            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            emit_return(
+              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
+                cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
+                cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
+                cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
+              )
+            );
+          """
+      ?i64:
+        requires [avx512f]
+        implementation:
+          tsil """
+            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            emit_return(
+              intrin_macro<set, suffix="epi64">(
+                cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
+                cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
+              )
+            );
+          """
+      f32:
+        requires [avx512f]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<set>(
+                cast<static>(type<vector::base>, 15), cast<static>(type<vector::base>, 14), cast<static>(type<vector::base>, 13), cast<static>(type<vector::base>, 12),
+                cast<static>(type<vector::base>, 11), cast<static>(type<vector::base>, 10), cast<static>(type<vector::base>, 9), cast<static>(type<vector::base>, 8),
+                cast<static>(type<vector::base>, 7), cast<static>(type<vector::base>, 6), cast<static>(type<vector::base>, 5), cast<static>(type<vector::base>, 4),
+                cast<static>(type<vector::base>, 3), cast<static>(type<vector::base>, 2), cast<static>(type<vector::base>, 1), cast<static>(type<vector::base>, 0)
+              )
+            );
+          """
+      f64:
+        requires [avx512f]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<set>(
+                cast<static>(type<vector::base>, 7), cast<static>(type<vector::base>, 6), cast<static>(type<vector::base>, 5), cast<static>(type<vector::base>, 4),
+                cast<static>(type<vector::base>, 3), cast<static>(type<vector::base>, 2), cast<static>(type<vector::base>, 1), cast<static>(type<vector::base>, 0)
+              )
+            );
+          """
+    [avx2, avx2_vl]:
+      ?i8:
+        requires:
+          avx2 [avx]
+          avx2_vl [avx]
+        implementation:
+          tsil """
+            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            emit_return(
+              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                cast<static>(IntrinBase, 31), cast<static>(IntrinBase, 30), cast<static>(IntrinBase, 29), cast<static>(IntrinBase, 28),
+                cast<static>(IntrinBase, 27), cast<static>(IntrinBase, 26), cast<static>(IntrinBase, 25), cast<static>(IntrinBase, 24),
+                cast<static>(IntrinBase, 23), cast<static>(IntrinBase, 22), cast<static>(IntrinBase, 21), cast<static>(IntrinBase, 20),
+                cast<static>(IntrinBase, 19), cast<static>(IntrinBase, 18), cast<static>(IntrinBase, 17), cast<static>(IntrinBase, 16),
+                cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
+                cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
+                cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
+                cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
+              )
+            );
+          """
+      ?i16:
+        requires:
+          avx2 [avx]
+          avx2_vl [avx]
+        implementation:
+          tsil """
+            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            emit_return(
+              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
+                cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
+                cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
+                cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
+              )
+            );
+          """
+      ?i32:
+        requires:
+          avx2 [avx]
+          avx2_vl [avx]
+        implementation:
+          tsil """
+            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            emit_return(
+              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
+                cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
+              )
+            );
+          """
+      ?i64:
+        requires:
+          avx2 [avx]
+          avx2_vl [avx]
+        implementation:
+          tsil """
+            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            emit_return(
+              intrin_macro<set, suffix="epi64x">(
+                cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
+              )
+            );
+          """
+      f32:
+        requires:
+          avx2 [avx]
+          avx2_vl [avx]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<set>(
+                cast<static>(type<vector::base>, 7), cast<static>(type<vector::base>, 6), cast<static>(type<vector::base>, 5), cast<static>(type<vector::base>, 4),
+                cast<static>(type<vector::base>, 3), cast<static>(type<vector::base>, 2), cast<static>(type<vector::base>, 1), cast<static>(type<vector::base>, 0)
+              )
+            );
+          """
+      f64:
+        requires:
+          avx2 [avx]
+          avx2_vl [avx]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<set>(
+                cast<static>(type<vector::base>, 3), cast<static>(type<vector::base>, 2), cast<static>(type<vector::base>, 1), cast<static>(type<vector::base>, 0)
+              )
+            );
+          """
+    [sse, sse_vl]:
+      ?i8:
+        requires:
+          sse [sse, sse2]
+          sse_vl [sse, sse2]
+        implementation:
+          tsil """
+            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            emit_return(
+              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
+                cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
+                cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
+                cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
+              )
+            );
+          """
+      ?i16:
+        requires:
+          sse [sse, sse2]
+          sse_vl [sse, sse2]
+        implementation:
+          tsil """
+            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            emit_return(
+              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
+                cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
+              )
+            );
+          """
+      ?i32:
+        requires:
+          sse [sse, sse2]
+          sse_vl [sse, sse2]
+        implementation:
+          tsil """
+            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            emit_return(
+              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
+              )
+            );
+          """
+      ?i64:
+        requires:
+          sse [sse, sse2]
+          sse_vl [sse, sse2]
+        implementation:
+          tsil """
+            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            emit_return(
+              intrin_macro<set, suffix="epi64x">(
+                cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
+              )
+            );
+          """
+      f32:
+        requires:
+          sse [sse, sse2]
+          sse_vl [sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<set>(
+                cast<static>(type<vector::base>, 3), cast<static>(type<vector::base>, 2), cast<static>(type<vector::base>, 1), cast<static>(type<vector::base>, 0)
+              )
+            );
+          """
+      f64:
+        requires:
+          sse [sse, sse2]
+          sse_vl [sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<set>(
+                cast<static>(type<vector::base>, 1), cast<static>(type<vector::base>, 0)
+              )
+            );
+          """
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<svindex>(
+                cast<static>(type<vector::base>, 0),
+                cast<static>(type<vector::base>, 1)
+              )
+            );
+          """
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+            loop<range>(i, 0, value<vector::length>, 1) {
+              result[i] = cast<static>(type<vector::base>, i);
+            }
+            emit_return(call<primitive=from_array[Vec]>(result));
+          """
+    [neon, generic, oneAPIfpga]:
+      arith:
+        requires:
+          neon [neon]
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+            loop<range>(i, 0, value<vector::length>, 1) {
+              result[i] = cast<static>(type<vector::base>, i);
+            }
+            emit_return(call<primitive=from_array[Vec]>(result));
+          """
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::base>, 0));"
+
+prim<v:=(s,s)> custom_sequence(start, stepwidth):
+  brief_description "Creates a sequence with start and stepwidth."
+  operation ""
+  tests:
+    - {test_name "custom_sequence_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [5, 3], expected [5, 8, 11, 14, 17, 20, 23, 26]}}
+    - {test_name "custom_sequence_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [-5, 2], expected [-5, -3, -1, 1, 3, 5, 7, 9]}}
+    - {test_name "custom_sequence_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31]}}
+    - {test_name "custom_sequence_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [2, 3], expected [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47]}}
+    - {test_name "custom_sequence_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31]}}
+    - {test_name "custom_sequence_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [-3, -1], expected [-3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16, -17, -18]}}
+    - {test_name "custom_sequence_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15]}}
+    - {test_name "custom_sequence_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [2, 3], expected [2, 5, 8, 11, 14, 17, 20, 23]}}
+    - {test_name "custom_sequence_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15]}}
+    - {test_name "custom_sequence_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [-3, -1], expected [-3, -4, -5, -6, -7, -8, -9, -10]}}
+    - {test_name "custom_sequence_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [1, 2], expected [1, 3]}}
+    - {test_name "custom_sequence_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [2, 3], expected [2, 5]}}
+    - {test_name "custom_sequence_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [1, 2], expected [1, 3]}}
+    - {test_name "custom_sequence_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [-3, -1], expected [-3, -4]}}
+  impls:
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<svindex>(start, stepwidth)
+            );
+          """
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+            var<infer>(current, start)
+            loop<range>(i, 0, value<vector::length>, 1) {
+              result[i] = current;
+              current = details::arith_add(current, stepwidth);
+            }
+            emit_return(call<primitive=from_array[Vec]>(result));
+          """
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          avx2 [avx]
+          avx2_vl [avx]
+          sse [sse, sse2]
+          sse_vl [sse, sse2]
+          neon [neon]
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+            var<infer>(current, start)
+            loop<range>(i, 0, value<vector::length>, 1) {
+              result[i] = current;
+              current = details::arith_add(current, stepwidth);
+            }
+            emit_return(call<primitive=from_array[Vec]>(result));
+          """
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(start);"

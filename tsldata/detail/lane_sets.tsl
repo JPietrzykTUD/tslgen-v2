@@ -1,0 +1,23 @@
+lane_set lanes_i8:
+  lanes [16, 32, 64]
+  types [si8, ui8]
+
+lane_set lanes_i16:
+  lanes [8, 16, 32]
+  types [si16, ui16]
+
+lane_set lanes_i32:
+  lanes [4, 8, 16]
+  types [si32, ui32]
+
+lane_set lanes_i64:
+  lanes [2, 4, 8]
+  types [si64, ui64]
+
+lane_set lanes_f32:
+  lanes [4, 8, 16]
+  types [f32]
+
+lane_set lanes_f64:
+  lanes [2, 4, 8]
+  types [f64]

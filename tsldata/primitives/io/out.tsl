@@ -1,0 +1,86 @@
+description "Input/Output primitives"
+
+prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
+  brief_description "Writes a vector register to an output stream."
+  operation ""
+  tests:
+    - {test_name "to_ostream_u32_bin_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 0], expected "00000000000000000000000000000111|00000000000000000000000000000110|00000000000000000000000000000101|00000000000000000000000000000100|00000000000000000000000000000011|00000000000000000000000000000010|00000000000000000000000000000001|00000000000000000000000000000000|\n"}}
+    - {test_name "to_ostream_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 0], expected "00010000|00001111|00001110|00001101|00001100|00001011|00001010|00001001|00001000|00000111|00000110|00000101|00000100|00000011|00000010|00000001|\n"}}
+    - {test_name "to_ostream_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 0], expected "00000101|00000100|00000011|00000010|11111110|11111111|00000001|00000000|00000101|00000100|00000011|00000010|11111110|11111111|00000001|00000000|\n"}}
+    - {test_name "to_ostream_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 0], expected "00010000|00001111|00001110|00001101|00001100|00001011|00001010|00001001|00001000|00000111|00000110|00000101|00000100|00000011|00000010|00000001|\n"}}
+    - {test_name "to_ostream_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 0], expected "01111110|00000010|11111110|00000001|01111111|10000000|11111111|00000000|01111110|00000010|11111110|00000001|01111111|10000000|11111111|00000000|\n"}}
+    - {test_name "to_ostream_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 0], expected "0000000000001000|0000000000000111|0000000000000110|0000000000000101|0000000000000100|0000000000000011|0000000000000010|0000000000000001|\n"}}
+    - {test_name "to_ostream_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 0], expected "0000000000000101|0000000000000100|0000000000000011|0000000000000010|1111111111111110|1111111111111111|0000000000000001|0000000000000000|\n"}}
+    - {test_name "to_ostream_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 0], expected "0000000000001000|0000000000000111|0000000000000110|0000000000000101|0000000000000100|0000000000000011|0000000000000010|0000000000000001|\n"}}
+    - {test_name "to_ostream_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 0], expected "0111111111111110|0000000000000010|1111111111111110|0000000000000001|0111111111111111|1000000000000000|1111111111111111|0000000000000000|\n"}}
+    - {test_name "to_ostream_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], 0], expected "00000000000000000000000000000100|00000000000000000000000000000011|00000000000000000000000000000010|00000000000000000000000000000001|\n"}}
+    - {test_name "to_ostream_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], 0], expected "01111111111111111111111111111111|10000000000000000000000000000000|11111111111111111111111111111111|00000000000000000000000000000000|\n"}}
+    - {test_name "to_ostream_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 0], expected "0000000000000000000000000000000000000000000000000000000000000010|0000000000000000000000000000000000000000000000000000000000000001|\n"}}
+    - {test_name "to_ostream_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], 0], expected "0000000000000000000000000000000000000000000000000000000000000001|0000000000000000000000000000000000000000000000000000000000000000|\n"}}
+    - {test_name "to_ostream_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 0], expected "0000000000000000000000000000000000000000000000000000000000000010|0000000000000000000000000000000000000000000000000000000000000001|\n"}}
+    - {test_name "to_ostream_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], 0], expected "1111111111111111111111111111111111111111111111111111111111111111|0000000000000000000000000000000000000000000000000000000000000000|\n"}}
+    - {test_name "to_ostream_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, 2.0, 3.0, 4.0], 0], expected "00000000000000000000000000000100|00000000000000000000000000000011|00000000000000000000000000000010|00000000000000000000000000000001|\n"}}
+    - {test_name "to_ostream_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, 1.0, 2.0, 255.0], 0], expected "00000000000000000000000011111111|00000000000000000000000000000010|00000000000000000000000000000001|00000000000000000000000000000000|\n"}}
+    - {test_name "to_ostream_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, 2.0], 0], expected "0000000000000000000000000000000000000000000000000000000000000010|0000000000000000000000000000000000000000000000000000000000000001|\n"}}
+    - {test_name "to_ostream_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, 255.0], 0], expected "0000000000000000000000000000000000000000000000000000000011111111|0000000000000000000000000000000000000000000000000000000000000000|\n"}}
+  impls:
+    [avx512, avx2, sse, sve, generic, oneAPIfpga]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          avx2 [avx]
+          sse [sse2]
+          sve [sve]
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+               type<alias>(cast_type, type<vector::base>) 
+               var<const_infer>(arr, call<primitive=to_array[Vec]>(data)) 
+               var<const_infer>(ostream_mod, cast<static>( si32 , ostream_modifier)) 
+               loop<range>(idx, 0, value<vector::length>, 1)  {
+                if(ostream_mod == modifier::BIN) {
+                   io<write_bin>(out, value<size_of>(type<vector::base>)*8, cast<static>( ui64 , arr[(value<vector::length>-1)-idx])) ;
+                } else {
+                  if(ostream_mod == modifier::HEX) {
+                     io<write_base>(out, 16, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                  } else if(ostream_mod == modifier::DEC) {
+                     io<write_base>(out, 10, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                  } else if(ostream_mod == modifier::OCT) {
+                     io<write_base>(out, 8, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                  } else {
+                     io<write_base>(out, 10, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                  }
+                }
+                 io<write>(out, "|") ;
+              }
+               io<endl>(out) ;
+               emit_return(out) ;
+            """
+    neon:
+      si64:
+        requires [neon]
+        implementation:
+          tsil """
+               type<alias>(cast_type, type<vector::base>) 
+               var<const_infer>(arr, call<primitive=to_array[Vec]>(data)) 
+               var<const_infer>(ostream_mod, cast<static>( si32 , ostream_modifier)) 
+               loop<range>(idx, 0, value<vector::length>, 1)  {
+                if(ostream_mod == modifier::BIN) {
+                   io<write_bin>(out, value<size_of>(type<vector::base>)*8, cast<static>( ui64 , arr[(value<vector::length>-1)-idx])) ;
+                } else {
+                  if(ostream_mod == modifier::HEX) {
+                     io<write_base>(out, 16, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                  } else if(ostream_mod == modifier::DEC) {
+                     io<write_base>(out, 10, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                  } else if(ostream_mod == modifier::OCT) {
+                     io<write_base>(out, 8, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                  } else {
+                     io<write_base>(out, 10, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                  }
+                }
+                 io<write>(out, "|") ;
+              }
+               io<endl>(out) ;
+               emit_return(out) ;
+            """

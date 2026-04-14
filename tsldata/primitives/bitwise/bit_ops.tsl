@@ -1,0 +1,1820 @@
+description "Bit manipulation primitives (partial conversion)."
+prim<v:=(v,v)> binary_and(left, right):
+  brief_description "[Example: sse + si8]: Compute the bitwise AND of 128 bits (representing integer data) in \"a\" and \"b\", and store the result in \"dst\"."
+  operation "[Example: sse + si8]: dst[127:0] := (a[127:0] AND b[127:0])"
+  tests:
+    - {test_name "binary_and_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [983055, 50529027, 286331153, 33818120, 0, 0, 1431655765, 16843009]}}
+    - {test_name "binary_and_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 0, 0, 0, 0, 2147483647, 0, 2]}}
+    - {test_name "binary_and_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, 0, 1, 2147483647, -2147483648, 305419896, -305419897], [-1, 1, -1, 2, 2147483647, -1, -1431655766, 1431655765]], expected [-1, 0, 0, 0, 2147483647, -2147483648, 35652136, 1161888005]}}
+    - {test_name "binary_and_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2147483648, 2147483647, 0, 1, -2, 123456789, -123456789], [0, -1, 0, -1, -1, -1, -1, -1]], expected [0, -2147483648, 0, 0, 1, -2, 123456789, -123456789]}}
+    - {test_name "binary_and_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "binary_and_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {test_name "binary_and_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "binary_and_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {test_name "binary_and_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "binary_and_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {test_name "binary_and_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "binary_and_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {test_name "binary_and_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
+    - {test_name "binary_and_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [0, 1]}}
+    - {test_name "binary_and_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
+    - {test_name "binary_and_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [0, -1]}}
+    - {test_name "binary_and_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {test_name "binary_and_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
+    - {test_name "binary_and_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, -2.0]}}
+    - {test_name "binary_and_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
+  impls:
+    scalar:
+      ?i?:
+        requires []
+        implementation:
+          tsil "emit_return(left & right);"
+      f?:
+        requires []
+        implementation:
+          tsil """
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left));
+              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right));
+              var<const_infer>(ures, ua & ub);
+              emit_return(call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(ures));
+            """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+              var<init_register>(result)
+              loop<unroll>(value<vector::length>) 
+              loop<range>(i, 0, value<vector::length>, 1)  {
+                result[i] = call<primitive=@self[type<vector::as_extension<scalar>>]>(left[i], right[i]);
+              }
+              emit_return(result);
+            """
+    avx512:
+      ?i?:
+        requires [avx512f]
+        implementation:
+          tsil """
+            emit_return(intrin_macro<and, suffix=tslgen<intrin>(suffix, "stream")>(left, right));
+          """
+      f?:
+        requires [avx512f]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<si64>, Vec]>(
+                intrin_macro<and, suffix=tslgen<intrin>(suffix, "stream")>(
+                  call<primitive=reinterpret[Vec, Vec<si64>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<si64>]>(right)
+                )
+              )
+            );
+          """
+    avx2:
+      ?i?:
+        requires:
+          avx2 [avx, avx2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<and, suffix=tslgen<intrin>(suffix, "stream")>(left, right)
+            );
+          """
+      f?:
+        requires:
+          avx2 [avx]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<and>(left, right)
+            );
+          """
+    sse:
+      ?i?:
+        requires:
+          sse [sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<and, suffix=tslgen<intrin>(suffix, "stream")>(left, right)
+            );
+          """
+      f?:
+        requires:
+          f32 [sse]
+          f64 [sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<and>(left, right)
+            );
+          """
+    neon:
+      ?i?:
+        requires [neon]
+        implementation:
+          tsil "emit_return(intrin_macro<vandq>(left, right));"
+      f?:
+        requires [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<vandq, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT))>(
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right)
+                )
+              )
+            );
+          """
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil "emit_return(intrin_macro<svand, post=x>(call<primitive=mask_true[Vec]>(), left, right));"
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<svand, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT)), post=x>(
+                  call<primitive=mask_true[Vec]>(),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right)
+                )
+              )
+            );
+          """
+
+prim<v:=(v,v)> binary_andnot(left, right):
+  brief_description "[Example: sse + si8]: Compute the bitwise AND-NOT of 128 bits in \"left\" and \"right\", and store the result in \"dst\"."
+  operation "[Example: sse + si8]: dst[127:0] := ((NOT left[127:0]) AND right[127:0])"
+  tests:
+    - {test_name "binary_andnot_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "binary_andnot_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[4294967295, 4294967295, 4294967295, 4294967295, 0, 1, 2, 3], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 5, 6, 5, 8]}}
+    - {test_name "binary_andnot_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], [1, -2, 3, -4, 5, -6, 7, -8]], expected [1, -2, 3, -4, 5, -6, 7, -8]}}
+    - {test_name "binary_andnot_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -1, -1, -1, 0, 1, -2, 3], [1, -2, 3, -4, 5, -6, 7, -8]], expected [0, 0, 0, 0, 5, -6, 1, -8]}}
+    - {test_name "binary_andnot_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, 0.0, 0.0, 0.0], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {test_name "binary_andnot_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, 0.0], [1.0, -2.0]], expected [1.0, -2.0]}}
+  impls:
+    scalar:
+      ?i?:
+        requires []
+        implementation:
+          tsil "emit_return((~left) & right);"
+      f?:
+        requires []
+        implementation:
+          tsil """
+            var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left));
+            var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right));
+            var<const_infer>(ures, (~ua) & ub);
+            emit_return(call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(ures));
+          """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<init_register>(result)
+            loop<unroll>(value<vector::length>)
+            loop<range>(i, 0, value<vector::length>, 1)  {
+              result[i] = call<primitive=@self[type<vector::as_extension<scalar>>]>(left[i], right[i]);
+            }
+            emit_return(result);
+          """
+    avx512:
+      ?i?:
+        requires [avx512f]
+        implementation:
+          tsil """
+            emit_return(intrin_macro<andnot, suffix=tslgen<intrin>(suffix, "stream")>(left, right));
+          """
+      f?:
+        requires [avx512f]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<andnot>(left, right)
+            );
+          """
+    avx2:
+      ?i?:
+        requires:
+          avx2 [avx, avx2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<andnot, suffix=tslgen<intrin>(suffix, "stream")>(left, right)
+            );
+          """
+      f?:
+        requires:
+          avx2 [avx]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<andnot>(left, right)
+            );
+          """
+    sse:
+      ?i?:
+        requires:
+          sse [sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<andnot, suffix=tslgen<intrin>(suffix, "stream")>(left, right)
+            );
+          """
+      f?:
+        requires:
+          f32 [sse]
+          f64 [sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<andnot>(left, right)
+            );
+          """
+    neon:
+      ?i?:
+        requires [neon]
+        implementation:
+          tsil "emit_return(intrin_macro<vbicq>(right, left));"
+      f?:
+        requires [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<vbicq, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT))>(
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left)
+                )
+              )
+            );
+          """
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil "emit_return(intrin_macro<svbic, post=x>(call<primitive=mask_true[Vec]>(), right, left));"
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<svbic, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT)), post=x>(
+                  call<primitive=mask_true[Vec]>(),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left)
+                )
+              )
+            );
+          """
+
+prim<v:=(v,v)> binary_or(left, right):
+  brief_description "[Example: sse + si8]: Compute the bitwise OR of 128 bits (representing integer data) in \"a\" and \"b\", and store the result in \"dst\"."
+  operation "[Example: sse + si8]: dst[127:0] := (a[127:0] OR b[127:0])"
+  tests:
+    - {test_name "binary_or_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [268374015, 1061109567, 1431655765, 524246911, 2147483647, 1, 2147483647, 252645135]}}
+    - {test_name "binary_or_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 123, 2147483647, 1, 2147483647, 2147483647, 1, 3]}}
+    - {test_name "binary_or_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "binary_or_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {test_name "binary_or_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "binary_or_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {test_name "binary_or_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "binary_or_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {test_name "binary_or_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "binary_or_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {test_name "binary_or_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [1, 2, 3, 4]}}
+    - {test_name "binary_or_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [0, -1, -2147483648, 2147483647]}}
+    - {test_name "binary_or_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
+    - {test_name "binary_or_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [0, 1]}}
+    - {test_name "binary_or_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
+    - {test_name "binary_or_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [0, -1]}}
+    - {test_name "binary_or_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {test_name "binary_or_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
+    - {test_name "binary_or_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, -2.0]}}
+    - {test_name "binary_or_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
+  impls:
+    scalar:
+      ?i?:
+        requires []
+        implementation:
+          tsil "emit_return(left | right);"
+      f?:
+        requires []
+        implementation:
+          tsil """
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left));
+              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right));
+              var<const_infer>(ures, ua | ub);
+              emit_return(call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(ures));
+            """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+              var<init_register>(result)
+              loop<unroll>(value<vector::length>) 
+              loop<range>(i, 0, value<vector::length>, 1)  {
+                result[i] = call<primitive=@self[type<vector::as_extension<scalar>>]>(left[i], right[i]);
+              }
+              emit_return(result);
+            """
+    avx512:
+      ?i?:
+        requires [avx512f]
+        implementation:
+          tsil """
+            emit_return(intrin_macro<or, suffix=tslgen<intrin>(suffix, "stream")>(left, right));
+          """
+      f?:
+        requires [avx512f]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<si64>, Vec]>(
+                intrin_macro<or, suffix=tslgen<intrin>(suffix, "stream")>(
+                  call<primitive=reinterpret[Vec, Vec<si64>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<si64>]>(right)
+                )
+              )
+            );
+          """
+    avx2:
+      ?i?:
+        requires:
+          avx2 [avx, avx2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<or, suffix=tslgen<intrin>(suffix, "stream")>(left, right)
+            );
+          """
+      f?:
+        requires:
+          avx2 [avx]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<or>(left, right)
+            );
+          """
+    sse:
+      ?i?:
+        requires:
+          sse [sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<or, suffix=tslgen<intrin>(suffix, "stream")>(left, right)
+            );
+          """
+      f?:
+        requires:
+          f32 [sse]
+          f64 [sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<or>(left, right)
+            );
+          """
+    neon:
+      ?i?:
+        requires [neon]
+        implementation:
+          tsil "emit_return(intrin_macro<vorrq>(left, right));"
+      f?:
+        requires [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<vorrq, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT))>(
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right)
+                )
+              )
+            );
+          """
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil "emit_return(intrin_macro<svorr, post=x>(call<primitive=mask_true[Vec]>(), left, right));"
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<svorr, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT)), post=x>(
+                  call<primitive=mask_true[Vec]>(),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right)
+                )
+              )
+            );
+          """
+
+prim<v:=(v,v)> binary_xor(left, right):
+  brief_description "[Example: sse + si8]: Compute the bitwise XOR of 128 bits (representing integer data) in \"a\" and \"b\", and store the result in \"dst\"."
+  operation "[Example: sse + si8]: dst[127:0] := (a[127:0] XOR b[127:0])"
+  tests:
+    - {test_name "binary_xor_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [267390960, 1010580540, 1145324612, 490428791, 2147483647, 1, 715827882, 235802126]}}
+    - {test_name "binary_xor_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 123, 2147483647, 1, 2147483647, 0, 1, 1]}}
+    - {test_name "binary_xor_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "binary_xor_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "binary_xor_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "binary_xor_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "binary_xor_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "binary_xor_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "binary_xor_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "binary_xor_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "binary_xor_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [0, 0, 0, 0]}}
+    - {test_name "binary_xor_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [0, 0, 0, 0]}}
+    - {test_name "binary_xor_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {test_name "binary_xor_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [0, 0]}}
+    - {test_name "binary_xor_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {test_name "binary_xor_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [0, 0]}}
+    - {test_name "binary_xor_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {test_name "binary_xor_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {test_name "binary_xor_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
+    - {test_name "binary_xor_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, 0.0]}}
+  impls:
+    scalar:
+      ?i?:
+        requires []
+        implementation:
+          tsil "emit_return(left ^ right);"
+      f?:
+        requires []
+        implementation:
+          tsil """
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left));
+              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right));
+              var<const_infer>(ures, ua ^ ub);
+              emit_return(call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(ures));
+            """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+              var<init_register>(result)
+              loop<unroll>(value<vector::length>) 
+              loop<range>(i, 0, value<vector::length>, 1)  {
+                result[i] = call<primitive=@self[type<vector::as_extension<scalar>>]>(left[i], right[i]);
+              }
+              emit_return(result);
+            """
+    avx512:
+      ?i?:
+        requires [avx512f]
+        implementation:
+          tsil """
+            emit_return(intrin_macro<xor, suffix=tslgen<intrin>(suffix, "stream")>(left, right));
+          """
+      f?:
+        requires [avx512f]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<si64>, Vec]>(
+                intrin_macro<xor, suffix=tslgen<intrin>(suffix, "stream")>(
+                  call<primitive=reinterpret[Vec, Vec<si64>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<si64>]>(right)
+                )
+              )
+            );
+          """
+    avx2:
+      ?i?:
+        requires:
+          avx2 [avx, avx2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<xor, suffix=tslgen<intrin>(suffix, "stream")>(left, right)
+            );
+          """
+      f?:
+        requires:
+          avx2 [avx]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<xor>(left, right)
+            );
+          """
+    sse:
+      ?i?:
+        requires:
+          sse [sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<xor, suffix=tslgen<intrin>(suffix, "stream")>(left, right)
+            );
+          """
+      f?:
+        requires:
+          f32 [sse]
+          f64 [sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<xor>(left, right)
+            );
+          """
+    neon:
+      ?i?:
+        requires [neon]
+        implementation:
+          tsil "emit_return(intrin_macro<veorq>(left, right));"
+      f?:
+        requires [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<veorq, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT))>(
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right)
+                )
+              )
+            );
+          """
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil "emit_return(intrin_macro<sveor, post=x>(call<primitive=mask_true[Vec]>(), left, right));"
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<sveor, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT)), post=x>(
+                  call<primitive=mask_true[Vec]>(),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right)
+                )
+              )
+            );
+          """
+
+prim<v:=v> inv(data):
+  brief_description "Bitwise inversion of vector register."
+  operation "[Example: sse + si8]: dst[127:0] := (NOT data[127:0])"
+  tests:
+    - {test_name "inv_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4294967295, 2863311530, 1431655765, 2147483648]], expected [4294967295, 4294967294, 4294967293, 4294967292, 0, 1431655765, 2863311530, 2147483647]}}
+    - {test_name "inv_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[305419896, 252645135, 4042322160, 0, 1, 4294967294, 2147483647, 2147483648]], expected [3989547399, 4042322160, 252645135, 4294967295, 4294967294, 1, 2147483648, 2147483647]}}
+    - {test_name "inv_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [254, 253, 252, 251, 250, 249, 248, 247, 246, 245, 244, 243, 242, 241, 240, 239]}}
+    - {test_name "inv_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [255, 254, 0, 1, 253, 252, 251, 250, 255, 254, 0, 1, 253, 252, 251, 250]}}
+    - {test_name "inv_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16, -17]}}
+    - {test_name "inv_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [-1, 0, 127, -128, -2, 1, -3, -127, -1, 0, 127, -128, -2, 1, -3, -127]}}
+    - {test_name "inv_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [65534, 65533, 65532, 65531, 65530, 65529, 65528, 65527]}}
+    - {test_name "inv_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [65535, 65534, 0, 1, 65533, 65532, 65531, 65530]}}
+    - {test_name "inv_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [-2, -3, -4, -5, -6, -7, -8, -9]}}
+    - {test_name "inv_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [-1, 0, 32767, -32768, -2, 1, -3, -32767]}}
+    - {test_name "inv_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4]], expected [-2, -3, -4, -5]}}
+    - {test_name "inv_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647]], expected [-1, 0, 2147483647, -2147483648]}}
+    - {test_name "inv_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [18446744073709551614, 18446744073709551613]}}
+    - {test_name "inv_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1]], expected [18446744073709551615, 18446744073709551614]}}
+    - {test_name "inv_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [-2, -3]}}
+    - {test_name "inv_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1]], expected [-1, 0]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(value<mask::lane::all_true>)));"
+    [generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+          avx512 [avx512f]
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
+          sve [sve]
+        implementation:
+          tsil "emit_return(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(value<mask::lane::all_true>)));"
+
+prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
+  brief_description "Masked bitwise AND with zeroing."
+  operation "For each lane: if mask bit is set, compute left AND right; otherwise write zero."
+  tests:
+    - {test_name "binary_and_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 2, 0, 4, 0, 2, 0, 0]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            if (mask) {
+              emit_return(call<primitive=binary_and>(left, right));
+            }
+            emit_return(call<primitive=set_zero[Vec]>());
+          """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<init_register>(result)
+            loop<unroll>(value<vector::length>)
+            loop<range>(i, 0, value<vector::length>, 1) {
+              if (mask<test>(mask, i)) {
+                result[i] = call<primitive=binary_and[type<vector::as_extension<scalar>>]>(left[i], right[i]);
+              } else {
+                result[i] = call<primitive=set_zero[type<vector::as_extension<scalar>>]>();
+              }
+            }
+            emit_return(result);
+          """
+    [avx512, avx2_vl, sse_vl]:
+      idqword:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<maskz_and, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                mask, left, right
+              )
+            );
+          """
+      bword:
+        requires:
+          avx512 [avx512f, avx512bw]
+          avx2_vl [avx512f, avx512vl, avx512bw, avx]
+          sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=zero]>(
+                mask,
+                call<primitive=binary_and>(left, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512 [avx512f, avx512dq]
+          avx2_vl [avx512f, avx512vl, avx512dq, avx]
+          sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<maskz_and>(mask, left, right)
+            );
+          """
+    [avx2, sse, neon]:
+      arith:
+        requires:
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
+          sse:
+            ?i? [sse, sse2]
+            f32 [sse]
+            f64 [sse, sse2]
+          neon [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=zero]>(
+                mask,
+                call<primitive=binary_and>(left, right)
+              )
+            );
+          """
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<svand, post=z>(mask, left, right)
+            );
+          """
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<svand, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT)), post=z>(
+                  mask,
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right)
+                )
+              )
+            );
+          """
+
+prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
+  brief_description "Masked bitwise AND with pass-through from left."
+  operation "For each lane: if mask bit is set, compute left AND right; otherwise keep left."
+  tests:
+    - {test_name "binary_and_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 2, 3, 4, 5, 2, 7, 0]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            if (mask) {
+              emit_return(call<primitive=binary_and>(left, right));
+            }
+            emit_return(left);
+          """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<init_register>(result)
+            loop<unroll>(value<vector::length>)
+            loop<range>(i, 0, value<vector::length>, 1) {
+              if (mask<test>(mask, i)) {
+                result[i] = call<primitive=binary_and[type<vector::as_extension<scalar>>]>(left[i], right[i]);
+              } else {
+                result[i] = left[i];
+              }
+            }
+            emit_return(result);
+          """
+    [avx512, avx2_vl, sse_vl]:
+      idqword:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<mask_and, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                left, mask, left, right
+              )
+            );
+          """
+      bword:
+        requires:
+          avx512 [avx512f, avx512bw]
+          avx2_vl [avx512f, avx512vl, avx512bw, avx]
+          sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                left,
+                call<primitive=binary_and>(left, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512 [avx512f, avx512dq]
+          avx2_vl [avx512f, avx512vl, avx512dq, avx]
+          sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<mask_and>(left, mask, left, right)
+            );
+          """
+    [avx2, sse, neon]:
+      arith:
+        requires:
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
+          sse:
+            ?i? [sse, sse2]
+            f32 [sse]
+            f64 [sse, sse2]
+          neon [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                left,
+                call<primitive=binary_and>(left, right)
+              )
+            );
+          """
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<svand, post=m>(mask, left, right)
+            );
+          """
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<svand, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT)), post=m>(
+                  mask,
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right)
+                )
+              )
+            );
+          """
+
+prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
+  brief_description "Masked bitwise AND-NOT with zeroing."
+  operation "For each lane: if mask bit is set, compute (NOT left) AND right; otherwise write zero."
+  tests:
+    - {test_name "binary_andnot_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 5, 0, 1, 0, 1, 0, 1]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            if (mask) {
+              emit_return(call<primitive=binary_andnot>(left, right));
+            }
+            emit_return(call<primitive=set_zero[Vec]>());
+          """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<init_register>(result)
+            loop<unroll>(value<vector::length>)
+            loop<range>(i, 0, value<vector::length>, 1) {
+              if (mask<test>(mask, i)) {
+                result[i] = call<primitive=binary_andnot[type<vector::as_extension<scalar>>]>(left[i], right[i]);
+              } else {
+                result[i] = call<primitive=set_zero[type<vector::as_extension<scalar>>]>();
+              }
+            }
+            emit_return(result);
+          """
+    [avx512, avx2_vl, sse_vl]:
+      idqword:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<maskz_andnot, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                mask, left, right
+              )
+            );
+          """
+      bword:
+        requires:
+          avx512 [avx512f, avx512bw]
+          avx2_vl [avx512f, avx512vl, avx512bw, avx]
+          sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=zero]>(
+                mask,
+                call<primitive=binary_andnot>(left, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512 [avx512f, avx512dq]
+          avx2_vl [avx512f, avx512vl, avx512dq, avx]
+          sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<maskz_andnot>(mask, left, right)
+            );
+          """
+    [avx2, sse, neon]:
+      arith:
+        requires:
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
+          sse:
+            ?i? [sse, sse2]
+            f32 [sse]
+            f64 [sse, sse2]
+          neon [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=zero]>(
+                mask,
+                call<primitive=binary_andnot>(left, right)
+              )
+            );
+          """
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<svbic, post=z>(mask, right, left)
+            );
+          """
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<svbic, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT)), post=z>(
+                  mask,
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left)
+                )
+              )
+            );
+          """
+
+prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
+  brief_description "Masked bitwise AND-NOT with pass-through from left."
+  operation "For each lane: if mask bit is set, compute (NOT left) AND right; otherwise keep left."
+  tests:
+    - {test_name "binary_andnot_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 5, 3, 1, 5, 1, 7, 1]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            if (mask) {
+              emit_return(call<primitive=binary_andnot>(left, right));
+            }
+            emit_return(left);
+          """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<init_register>(result)
+            loop<unroll>(value<vector::length>)
+            loop<range>(i, 0, value<vector::length>, 1) {
+              if (mask<test>(mask, i)) {
+                result[i] = call<primitive=binary_andnot[type<vector::as_extension<scalar>>]>(left[i], right[i]);
+              } else {
+                result[i] = left[i];
+              }
+            }
+            emit_return(result);
+          """
+    [avx512, avx2_vl, sse_vl]:
+      idqword:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<mask_andnot, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                left, mask, left, right
+              )
+            );
+          """
+      bword:
+        requires:
+          avx512 [avx512f, avx512bw]
+          avx2_vl [avx512f, avx512vl, avx512bw, avx]
+          sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                left,
+                call<primitive=binary_andnot>(left, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512 [avx512f, avx512dq]
+          avx2_vl [avx512f, avx512vl, avx512dq, avx]
+          sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<mask_andnot>(left, mask, left, right)
+            );
+          """
+    [avx2, sse, neon, sve]:
+      arith:
+        requires:
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
+          sse:
+            ?i? [sse, sse2]
+            f32 [sse]
+            f64 [sse, sse2]
+          neon [neon]
+          sve [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                left,
+                call<primitive=binary_andnot>(left, right)
+              )
+            );
+          """
+
+prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
+  brief_description "Masked bitwise OR with zeroing."
+  operation "For each lane: if mask bit is set, compute left OR right; otherwise write zero."
+  tests:
+    - {test_name "binary_or_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 7, 0, 5, 0, 7, 0, 9]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            if (mask) {
+              emit_return(call<primitive=binary_or>(left, right));
+            }
+            emit_return(call<primitive=set_zero[Vec]>());
+          """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<init_register>(result)
+            loop<unroll>(value<vector::length>)
+            loop<range>(i, 0, value<vector::length>, 1) {
+              if (mask<test>(mask, i)) {
+                result[i] = call<primitive=binary_or[type<vector::as_extension<scalar>>]>(left[i], right[i]);
+              } else {
+                result[i] = call<primitive=set_zero[type<vector::as_extension<scalar>>]>();
+              }
+            }
+            emit_return(result);
+          """
+    [avx512, avx2_vl, sse_vl]:
+      idqword:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<maskz_or, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                mask, left, right
+              )
+            );
+          """
+      bword:
+        requires:
+          avx512 [avx512f, avx512bw]
+          avx2_vl [avx512f, avx512vl, avx512bw, avx]
+          sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=zero]>(
+                mask,
+                call<primitive=binary_or>(left, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512 [avx512f, avx512dq]
+          avx2_vl [avx512f, avx512vl, avx512dq, avx]
+          sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<maskz_or>(mask, left, right)
+            );
+          """
+    [avx2, sse, neon]:
+      arith:
+        requires:
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
+          sse:
+            ?i? [sse, sse2]
+            f32 [sse]
+            f64 [sse, sse2]
+          neon [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=zero]>(
+                mask,
+                call<primitive=binary_or>(left, right)
+              )
+            );
+          """
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<svorr, post=z>(mask, left, right)
+            );
+          """
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<svorr, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT)), post=z>(
+                  mask,
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right)
+                )
+              )
+            );
+          """
+
+prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
+  brief_description "Masked bitwise OR with pass-through from left."
+  operation "For each lane: if mask bit is set, compute left OR right; otherwise keep left."
+  tests:
+    - {test_name "binary_or_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 7, 3, 5, 5, 7, 7, 9]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            if (mask) {
+              emit_return(call<primitive=binary_or>(left, right));
+            }
+            emit_return(left);
+          """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<init_register>(result)
+            loop<unroll>(value<vector::length>)
+            loop<range>(i, 0, value<vector::length>, 1) {
+              if (mask<test>(mask, i)) {
+                result[i] = call<primitive=binary_or[type<vector::as_extension<scalar>>]>(left[i], right[i]);
+              } else {
+                result[i] = left[i];
+              }
+            }
+            emit_return(result);
+          """
+    [avx512, avx2_vl, sse_vl]:
+      idqword:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<mask_or, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                left, mask, left, right
+              )
+            );
+          """
+      bword:
+        requires:
+          avx512 [avx512f, avx512bw]
+          avx2_vl [avx512f, avx512vl, avx512bw, avx]
+          sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                left,
+                call<primitive=binary_or>(left, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512 [avx512f, avx512dq]
+          avx2_vl [avx512f, avx512vl, avx512dq, avx]
+          sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<mask_or>(left, mask, left, right)
+            );
+          """
+    [avx2, sse, neon]:
+      arith:
+        requires:
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
+          sse:
+            ?i? [sse, sse2]
+            f32 [sse]
+            f64 [sse, sse2]
+          neon [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                left,
+                call<primitive=binary_or>(left, right)
+              )
+            );
+          """
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<svorr, post=m>(mask, left, right)
+            );
+          """
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<svorr, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT)), post=m>(
+                  mask,
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right)
+                )
+              )
+            );
+          """
+
+prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
+  brief_description "Masked bitwise XOR with zeroing."
+  operation "For each lane: if mask bit is set, compute left XOR right; otherwise write zero."
+  tests:
+    - {test_name "binary_xor_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 5, 0, 1, 0, 5, 0, 9]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            if (mask) {
+              emit_return(call<primitive=binary_xor>(left, right));
+            }
+            emit_return(call<primitive=set_zero[Vec]>());
+          """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<init_register>(result)
+            loop<unroll>(value<vector::length>)
+            loop<range>(i, 0, value<vector::length>, 1) {
+              if (mask<test>(mask, i)) {
+                result[i] = call<primitive=binary_xor[type<vector::as_extension<scalar>>]>(left[i], right[i]);
+              } else {
+                result[i] = call<primitive=set_zero[type<vector::as_extension<scalar>>]>();
+              }
+            }
+            emit_return(result);
+          """
+    [avx512, avx2_vl, sse_vl]:
+      idqword:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<maskz_xor, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                mask, left, right
+              )
+            );
+          """
+      bword:
+        requires:
+          avx512 [avx512f, avx512bw]
+          avx2_vl [avx512f, avx512vl, avx512bw, avx]
+          sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=zero]>(
+                mask,
+                call<primitive=binary_xor>(left, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512 [avx512f, avx512dq]
+          avx2_vl [avx512f, avx512vl, avx512dq, avx]
+          sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<maskz_xor>(mask, left, right)
+            );
+          """
+    [avx2, sse, neon]:
+      arith:
+        requires:
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
+          sse:
+            ?i? [sse, sse2]
+            f32 [sse]
+            f64 [sse, sse2]
+          neon [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=zero]>(
+                mask,
+                call<primitive=binary_xor>(left, right)
+              )
+            );
+          """
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<sveor, post=z>(mask, left, right)
+            );
+          """
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<sveor, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT)), post=z>(
+                  mask,
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right)
+                )
+              )
+            );
+          """
+
+prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
+  brief_description "Masked bitwise XOR with pass-through from left."
+  operation "For each lane: if mask bit is set, compute left XOR right; otherwise keep left."
+  tests:
+    - {test_name "binary_xor_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 5, 3, 1, 5, 5, 7, 9]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            if (mask) {
+              emit_return(call<primitive=binary_xor>(left, right));
+            }
+            emit_return(left);
+          """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<init_register>(result)
+            loop<unroll>(value<vector::length>)
+            loop<range>(i, 0, value<vector::length>, 1) {
+              if (mask<test>(mask, i)) {
+                result[i] = call<primitive=binary_xor[type<vector::as_extension<scalar>>]>(left[i], right[i]);
+              } else {
+                result[i] = left[i];
+              }
+            }
+            emit_return(result);
+          """
+    [avx512, avx2_vl, sse_vl]:
+      idqword:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<mask_xor, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                left, mask, left, right
+              )
+            );
+          """
+      bword:
+        requires:
+          avx512 [avx512f, avx512bw]
+          avx2_vl [avx512f, avx512vl, avx512bw, avx]
+          sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                left,
+                call<primitive=binary_xor>(left, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512 [avx512f, avx512dq]
+          avx2_vl [avx512f, avx512vl, avx512dq, avx]
+          sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<mask_xor>(left, mask, left, right)
+            );
+          """
+    [avx2, sse, neon]:
+      arith:
+        requires:
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
+          sse:
+            ?i? [sse, sse2]
+            f32 [sse]
+            f64 [sse, sse2]
+          neon [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                left,
+                call<primitive=binary_xor>(left, right)
+              )
+            );
+          """
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<sveor, post=m>(mask, left, right)
+            );
+          """
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<sveor, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT)), post=m>(
+                  mask,
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(right)
+                )
+              )
+            );
+          """
+
+prim<v:=(m,v)>[mask=zero] inv(mask, data):
+  brief_description "Masked bitwise inversion with zeroing."
+  operation "For each lane: if mask bit is set, compute NOT data; otherwise write zero."
+  tests:
+    - {test_name "inv_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 4294967294, 0, 4294967292, 0, 4294967290, 0, 4294967288]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            if (mask) {
+              emit_return(
+                call<primitive=binary_xor>(
+                  data,
+                  call<primitive=set1[Vec]>(value<mask::lane::all_true>)
+                )
+              );
+            }
+            emit_return(call<primitive=set_zero[Vec]>());
+          """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<init_register>(result)
+            loop<unroll>(value<vector::length>)
+            loop<range>(i, 0, value<vector::length>, 1) {
+              if (mask<test>(mask, i)) {
+                result[i] = call<primitive=binary_xor[type<vector::as_extension<scalar>>]>(
+                  data[i],
+                  call<primitive=set1[type<vector::as_extension<scalar>>]>(value<mask::lane::all_true>)
+                );
+              } else {
+                result[i] = call<primitive=set_zero[type<vector::as_extension<scalar>>]>();
+              }
+            }
+            emit_return(result);
+          """
+    [avx512, avx2_vl, sse_vl]:
+      idqword:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<maskz_xor, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                mask,
+                data,
+                call<primitive=set1[Vec]>(value<mask::lane::all_true>)
+              )
+            );
+          """
+      bword:
+        requires:
+          avx512 [avx512f, avx512bw]
+          avx2_vl [avx512f, avx512vl, avx512bw, avx]
+          sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=zero]>(
+                mask,
+                call<primitive=inv>(data)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512 [avx512f, avx512dq]
+          avx2_vl [avx512f, avx512vl, avx512dq, avx]
+          sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<maskz_xor>(
+                mask,
+                data,
+                call<primitive=set1[Vec]>(value<mask::lane::all_true>)
+              )
+            );
+          """
+    [avx2, sse, neon]:
+      arith:
+        requires:
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
+          sse:
+            ?i? [sse, sse2]
+            f32 [sse]
+            f64 [sse, sse2]
+          neon [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=zero]>(
+                mask,
+                call<primitive=inv>(data)
+              )
+            );
+          """
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<sveor, post=z>(
+                mask,
+                data,
+                call<primitive=set1[Vec]>(value<mask::lane::all_true>)
+              )
+            );
+          """
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<sveor, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT)), post=z>(
+                  mask,
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(data),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(
+                    call<primitive=set1[Vec]>(value<mask::lane::all_true>)
+                  )
+                )
+              )
+            );
+          """
+
+prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
+  brief_description "Masked bitwise inversion with pass-through from input."
+  operation "For each lane: if mask bit is set, compute NOT data; otherwise keep data."
+  tests:
+    - {test_name "inv_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 4294967294, 2, 4294967292, 4, 4294967290, 6, 4294967288]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            if (mask) {
+              emit_return(
+                call<primitive=binary_xor>(
+                  data,
+                  call<primitive=set1[Vec]>(value<mask::lane::all_true>)
+                )
+              );
+            }
+            emit_return(data);
+          """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<init_register>(result)
+            loop<unroll>(value<vector::length>)
+            loop<range>(i, 0, value<vector::length>, 1) {
+              if (mask<test>(mask, i)) {
+                result[i] = call<primitive=binary_xor[type<vector::as_extension<scalar>>]>(
+                  data[i],
+                  call<primitive=set1[type<vector::as_extension<scalar>>]>(value<mask::lane::all_true>)
+                );
+              } else {
+                result[i] = data[i];
+              }
+            }
+            emit_return(result);
+          """
+    [avx512, avx2_vl, sse_vl]:
+      idqword:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<mask_xor, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                data,
+                mask,
+                data,
+                call<primitive=set1[Vec]>(value<mask::lane::all_true>)
+              )
+            );
+          """
+      bword:
+        requires:
+          avx512 [avx512f, avx512bw]
+          avx2_vl [avx512f, avx512vl, avx512bw, avx]
+          sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                data,
+                call<primitive=inv>(data)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512 [avx512f, avx512dq]
+          avx2_vl [avx512f, avx512vl, avx512dq, avx]
+          sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<mask_xor>(
+                data,
+                mask,
+                data,
+                call<primitive=set1[Vec]>(value<mask::lane::all_true>)
+              )
+            );
+          """
+    [avx2, sse, neon]:
+      arith:
+        requires:
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
+          sse:
+            ?i? [sse, sse2]
+            f32 [sse]
+            f64 [sse, sse2]
+          neon [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                data,
+                call<primitive=inv>(data)
+              )
+            );
+          """
+    sve:
+      ?i?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<sveor, post=m>(
+                mask,
+                data,
+                call<primitive=set1[Vec]>(value<mask::lane::all_true>)
+              )
+            );
+          """
+      f?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<sveor, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT)), post=m>(
+                  mask,
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(data),
+                  call<primitive=reinterpret[Vec, Vec<type<unsigned_of>(BaseT)>]>(
+                    call<primitive=set1[Vec]>(value<mask::lane::all_true>)
+                  )
+                )
+              )
+            );
+          """

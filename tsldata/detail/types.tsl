@@ -1,0 +1,27 @@
+types:
+  si8 {types [si8]}
+  si16 {types [si16]}
+  si32 {types [si32]}
+  si64 {types [si64]}
+  ui8 {types [ui8]}
+  ui16 {types [ui16]}
+  ui32 {types [ui32]}
+  ui64 {types [ui64]}
+  ?i8 {types [si8, ui8]}
+  ?i16 {types [si16, ui16]}
+  ?i32 {types [si32, ui32]}
+  ?i64 {types [si64, ui64]}
+  si? {types [si8, si16, si32, si64]}
+  ui? {types [ui8, ui16, ui32, ui64]}
+  ?i? {types [si8, si16, si32, si64, ui8, ui16, ui32, ui64]}
+  f? {types [f32, f64]}
+  f32 {types [f32]}
+  f64 {types [f64]}
+  bword {types [si8, ui8, si16, ui16]}
+  idqword {types [si32, ui32, si64, ui64]}
+  fdqword {types [f32, f64]}
+  arith {types [si8, si16, si32, si64, ui8, ui16, ui32, ui64, f32, f64]}
+  dqword {types [si32, ui32, si64, ui64, f32, f64]}
+  dword {types [si32, ui32, f32]}
+  qword {types [si64, ui64, f64]}
+  ptr {types [ptr]}

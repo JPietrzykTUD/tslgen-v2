@@ -1,0 +1,242 @@
+prim<s[]:=v> to_array(data):
+  brief_description "Stores SIMD register to array."
+  operation ""
+  tests:
+    - {test_name "to_array_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {test_name "to_array_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, 0, 1, -2, 2, -3, 3, -4]], expected [-1, 0, 1, -2, 2, -3, 3, -4]}}
+    - {test_name "to_array_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "to_array_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {test_name "to_array_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "to_array_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {test_name "to_array_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "to_array_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {test_name "to_array_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "to_array_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {test_name "to_array_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [1, 2]}}
+    - {test_name "to_array_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1]], expected [0, 1]}}
+    - {test_name "to_array_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [1, 2]}}
+    - {test_name "to_array_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1]], expected [0, -1]}}
+    - {test_name "to_array_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {test_name "to_array_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
+    - {test_name "to_array_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
+    - {test_name "to_array_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0]], expected [0.0, -0.0]}}
+  impls:
+    avx512:
+      ?i?:
+        requires:
+          si8 [avx512bw, avx512f]
+          ui8 [avx512bw, avx512f]
+          si16 [avx512bw, avx512f]
+          ui16 [avx512bw, avx512f]
+          si32 [avx512f]
+          ui32 [avx512f]
+          si64 [avx512f]
+          ui64 [avx512f]
+        implementation:
+          tsil """
+               var<typed>(array_type<type<vector::base>, value<vector::length>, value<vector::alignment>>, tmp, value<array_uninit>) 
+              call<primitive=store>(assume_aligned<value<vector::alignment>>(tmp.data()), a);
+               emit_return(tmp) ;
+            """
+      f?:
+        requires [avx512f]
+        implementation:
+          tsil """
+               var<typed>(array_type<type<vector::base>, value<vector::length>, value<vector::alignment>>, tmp, value<array_uninit>) 
+              call<primitive=store>(assume_aligned<value<vector::alignment>>(tmp.data()), a);
+               emit_return(tmp) ;
+            """
+    avx2:
+      ?i?:
+        requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx], ui32 [avx], si64 [avx], ui64 [avx]}
+        implementation:
+          tsil """
+               var<typed>(array_type<type<vector::base>, value<vector::length>, value<vector::alignment>>, tmp, value<array_uninit>) 
+              call<primitive=store>(assume_aligned<value<vector::alignment>>(tmp.data()), a);
+               emit_return(tmp) ;
+            """
+      f?:
+        requires [avx]
+        implementation:
+          tsil """
+               var<typed>(array_type<type<vector::base>, value<vector::length>, value<vector::alignment>>, tmp, value<array_uninit>) 
+              call<primitive=store>(assume_aligned<value<vector::alignment>>(tmp.data()), a);
+               emit_return(tmp) ;
+            """
+    sse:
+      ?i?:
+        requires [sse, sse2]
+        implementation:
+          tsil """
+               var<typed>(array_type<type<vector::base>, value<vector::length>, value<vector::alignment>>, tmp, value<array_uninit>) 
+              call<primitive=store>(assume_aligned<value<vector::alignment>>(tmp.data()), a);
+               emit_return(tmp) ;
+            """
+      f?:
+        requires {f32 [sse], f64 [sse, sse2]}
+        implementation:
+          tsil """
+               var<typed>(array_type<type<vector::base>, value<vector::length>, value<vector::alignment>>, tmp, value<array_uninit>) 
+              call<primitive=store>(assume_aligned<value<vector::alignment>>(tmp.data()), a);
+               emit_return(tmp) ;
+            """
+    neon:
+      ?i?:
+        requires [neon]
+        implementation:
+          tsil """
+               var<typed>(array_type<type<vector::base>, value<vector::length>, value<vector::alignment>>, tmp, value<array_uninit>) 
+              call<primitive=store>(assume_aligned<value<vector::alignment>>(tmp.data()), a);
+               emit_return(tmp) ;
+            """
+      f?:
+        requires [neon]
+        implementation:
+          tsil """
+               var<typed>(array_type<type<vector::base>, value<vector::length>, value<vector::alignment>>, tmp, value<array_uninit>) 
+              call<primitive=store>(assume_aligned<value<vector::alignment>>(tmp.data()), a);
+               emit_return(tmp) ;
+            """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+               var<typed>(array_type<type<vector::base>, value<vector::length>, value<vector::alignment>>, tmp, value<array_uninit>) 
+              svbool_t pg = intrin<svptrue_b8>();
+              if<generation>(value<size_of>(type<vector::base>) == 2) { pg = intrin<svptrue_b16>(); }
+              else if<generation>(value<size_of>(type<vector::base>) == 4) { pg = intrin<svptrue_b32>(); }
+              else if<generation>(value<size_of>(type<vector::base>) == 8) { pg = intrin<svptrue_b64>(); }
+              intrin<svst1>(pg, tmp.data(), a);
+               emit_return(tmp) ;
+            """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil "emit_return(a);"
+    scalar:
+      ?i?:
+        requires []
+        implementation:
+          tsil """
+               var<typed>(array_type<type<vector::base>, value<vector::length>>, temp, value<array_uninit>) 
+              temp.fill(a);
+               emit_return(temp) ;
+            """
+      f?:
+        requires []
+        implementation:
+          tsil """
+               var<typed>(array_type<type<vector::base>, value<vector::length>>, temp, value<array_uninit>) 
+              temp.fill(a);
+               emit_return(temp) ;
+            """
+prim<v:=s[]> from_array(data):
+  brief_description "Loads SIMD register from array."
+  operation ""
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(data[0]);"
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil "emit_return(call<primitive=load[Vec] attrs[aligned=false]>(data.data()));"
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil "emit_return(intrin<svld1>(call<primitive=mask_true[Vec]>(), data.data()));"
+    [sse, avx2, avx512, neon]:
+      arith:
+        requires:
+          sse [sse]
+          avx2 [avx]
+          avx512 [avx512f]
+          neon [neon]
+        implementation:
+          tsil "emit_return(call<primitive=load[Vec] attrs[aligned=false]>(data.data()));"
+prim<s:=v[idx]> extract_value(a):
+  brief_description "Extracts a value at a given index."
+  operation ""
+  generic_params:
+    Index {kind int, default 0}
+  tests:
+    - {test_name "extract_value_u32_idx0", type "ui32", lane_set "lanes_i32", lanes 8, index 0, case {inputs [[10, 20, 30, 40, 50, 60, 70, 80]], expected 10}}
+    - {test_name "extract_value_u32_idx7", type "ui32", lane_set "lanes_i32", lanes 8, index 7, case {inputs [[10, 20, 30, 40, 50, 60, 70, 80]], expected 80}}
+    - {test_name "extract_value_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, index 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 1}}
+    - {test_name "extract_value_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, index 15, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected 5}}
+    - {test_name "extract_value_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, index 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 1}}
+    - {test_name "extract_value_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, index 15, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected 126}}
+    - {test_name "extract_value_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, index 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 1}}
+    - {test_name "extract_value_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, index 7, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected 5}}
+    - {test_name "extract_value_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, index 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 1}}
+    - {test_name "extract_value_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, index 7, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected 32766}}
+    - {test_name "extract_value_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, index 0, case {inputs [[1, 2, 3, 4]], expected 1}}
+    - {test_name "extract_value_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, index 3, case {inputs [[0, -1, -2147483648, 2147483647]], expected 2147483647}}
+    - {test_name "extract_value_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, index 0, case {inputs [[1, 2]], expected 1}}
+    - {test_name "extract_value_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, index 1, case {inputs [[0, 1]], expected 1}}
+    - {test_name "extract_value_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, index 0, case {inputs [[1, 2]], expected 1}}
+    - {test_name "extract_value_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, index 1, case {inputs [[0, -1]], expected -1}}
+    - {test_name "extract_value_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, index 0, case {inputs [[1.0, -2.0, 3.5, -4.5]], expected 1.0}}
+    - {test_name "extract_value_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, index 3, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected "-INFINITY"}}
+    - {test_name "extract_value_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, index 0, case {inputs [[1.0, -2.0]], expected 1.0}}
+    - {test_name "extract_value_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, index 1, case {inputs [[0.0, -0.0]], expected -0.0}}
+  impls:
+    avx512:
+      arith:
+        requires [avx512f]
+        implementation:
+          tsil """
+               var<const_infer>(arr, call<primitive=to_array[Vec]>(a)) 
+               emit_return(arr[cast<static>(type<size>, Index)]) ;
+            """
+    avx2:
+      arith:
+        requires [avx]
+        implementation:
+          tsil """
+               var<const_infer>(arr, call<primitive=to_array[Vec]>(a)) 
+               emit_return(arr[cast<static>(type<size>, Index)]) ;
+            """
+    sse:
+      arith:
+        requires [sse]
+        implementation:
+          tsil """
+               var<const_infer>(arr, call<primitive=to_array[Vec]>(a)) 
+               emit_return(arr[cast<static>(type<size>, Index)]) ;
+            """
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil "emit_return(intrin_macro<vgetq_lane suffix=tslgen<intrin>(suffix) immediate(1)=Index>(a, Index));"
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+               var<const_infer>(arr, call<primitive=to_array[Vec]>(a))
+               emit_return(arr[cast<static>(type<size>, Index)]) ;
+            """
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil "emit_return(a[cast<static>(type<size>, Index)]);"
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(a);"

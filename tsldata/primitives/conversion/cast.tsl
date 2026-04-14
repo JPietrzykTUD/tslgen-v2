@@ -1,0 +1,924 @@
+description "Type cast operations"
+prim<v:=v>[cast=reinterpret] reinterpret(data):
+  brief_description "[Example: sse + f32]: Cast vector of type __m128 to type __m128i. This intrinsic is only used for compilation and does not generate any instructions, thus it has zero latency."
+  operation ""
+  generic_params:
+    ToType {kind simd_type}
+  tests:
+    - {test_name "reinterpret_i32_to_u32_basic", type "si32", lane_set "lanes_i32", lanes 8, to_type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "reinterpret_i32_to_f32_bits", type "si32", lane_set "lanes_i32", lanes 8, to_type "f32", case {inputs [[1065353216, -1082130432, 1056964608, -1090519040, 1073741824, 1077936128, 1082130432, 1048576000]], expected [1.0, -1.0, 0.5, -0.5, 2.0, 3.0, 4.0, 0.25]}}
+    - {test_name "reinterpret_u32_to_f32_bits", type "ui32", lane_set "lanes_i32", lanes 8, to_type "f32", case {inputs [[0, 2147483648, 1069547520, 3223322624, 1077936128, 1082130432, 1048576000, 1061158912]], expected [0.0, -0.0, 1.5, -2.5, 3.0, 4.0, 0.25, 0.75]}}
+    - {test_name "reinterpret_f32_to_u32_special", type "f32", lane_set "lanes_f32", lanes 8, to_type "ui32", case {inputs [[0.0, 1.0, -1.0, 1.40129846e-45, "INFINITY", "-INFINITY", 3.4028235e38, -3.4028235e38]], expected [0, 1065353216, 3212836864, 1, 2139095040, 4286578688, 2139095039, 4286578687]}}
+    - {test_name "reinterpret_i64_to_f64_bits", type "si64", lane_set "lanes_i64", lanes 4, to_type "f64", case {inputs [[4607182418800017408, -4611686018427387904, 4602678819172646912, 4613937818241073152]], expected [1.0, -2.0, 0.5, 3.0]}}
+    - {test_name "reinterpret_u64_to_f64_bits", type "ui64", lane_set "lanes_i64", lanes 4, to_type "f64", case {inputs [[0, 9223372036854775808, 4607182418800017408, 13835058055282163712]], expected [0.0, -0.0, 1.0, -2.0]}}
+    - {test_name "reinterpret_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, to_type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "reinterpret_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, to_type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {test_name "reinterpret_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, to_type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "reinterpret_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, to_type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {test_name "reinterpret_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, to_type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "reinterpret_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, to_type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {test_name "reinterpret_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, to_type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "reinterpret_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, to_type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {test_name "reinterpret_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, to_type "f64", case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
+    - {test_name "reinterpret_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, to_type "f64", case {inputs [[0.0, -0.0]], expected [0.0, -0.0]}}
+  impls:
+    [avx512, avx2, sse]:
+      f?:
+        requires:
+          avx512 [avx512f]
+          avx2 [avx]
+          sse [sse, sse2]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<bitcast>(type<generic_register>(ToType), data));"
+          f?:
+            implementation:
+              tsil "emit_return(cast<bitcast>(type<generic_register>(ToType), intrin_macro<cast infix=tslgen<intrin>(suffix) infix_sep=\"\" suffix=tslgen<intrin>(suffix, ToType)>(data)));"
+          ?i?:
+            implementation:
+              tsil "emit_return(cast<bitcast>(type<generic_register>(ToType), intrin_macro<cast infix=tslgen<intrin>(suffix) infix_sep=\"\" suffix=tslgen<intrin>(suffix, \"stream\")>(data)));"
+      ?i?:
+        requires:
+          avx512 [avx512f]
+          avx2 [avx]
+          sse [sse, sse2]
+        ToType:
+          ?i?:
+            implementation:
+              tsil "emit_return(cast<bitcast>(type<generic_register>(ToType), data));"
+          f?:
+            implementation:
+              tsil "emit_return(cast<bitcast>(type<generic_register>(ToType), intrin_macro<cast infix=tslgen<intrin>(suffix, \"stream\") infix_sep=\"\" suffix=tslgen<intrin>(suffix, ToType)>(data)));"
+    neon:
+      ?i?:
+        requires [neon]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<bitcast>(type<generic_register>(ToType), data));"
+          arith:
+            implementation:
+              tsil "emit_return(cast<bitcast>(type<generic_register>(ToType), intrin_macro<vreinterpretq infix=to_type_suffix suffix=tslgen<intrin>(suffix)>(data)));"
+      f?:
+        requires [neon]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<bitcast>(type<generic_register>(ToType), data));"
+          arith:
+            implementation:
+              tsil "emit_return(cast<bitcast>(type<generic_register>(ToType), intrin_macro<vreinterpretq infix=to_type_suffix suffix=tslgen<intrin>(suffix)>(data)));"
+    sve:
+      ?i?:
+        requires [sve]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(data);"
+          "*":
+            implementation:
+              tsil "emit_return(intrin_macro<svreinterpret infix=to_type_suffix suffix=tslgen<intrin>(suffix)>(data));"
+      f?:
+        requires [sve]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(data);"
+          "*":
+            implementation:
+              tsil "emit_return(intrin_macro<svreinterpret infix=to_type_suffix suffix=tslgen<intrin>(suffix)>(data));"
+    [generic, oneAPIfpga, scalar]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+          scalar []
+        ToType:
+          arith:
+            implementation:
+              tsil "emit_return(cast<bitcast>(type<generic_register>(ToType), data));"
+prim<v:=v>[cast=convert] cast(data):
+  brief_description """
+      Casts a SIMD register to another type (same register width). If size of FromType < size of ToType, data will be lost.
+      Example given: 128-bit wide registers --> 4 32-bit lanes or 2 64-bit lanes.
+      i32 -> f32: [1,2,3,4] -> [1.0f, 2.0f, 3.0f, 4.0f]
+      i32 -> f64: [1,2,3,4] -> [1.0f, 2.0f]
+      f64 -> i32: [1.0f, 2.0f] -> [1, 2, 0, 0]
+    """
+  operation ""
+  generic_params:
+    ToType {kind simd_type}
+  tests:
+    - {test_name "cast_i32_to_f32_basic", type "si32", lane_set "lanes_i32", lanes 8, to_type "f32", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8]], expected [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0]}}
+    - {test_name "cast_i32_to_f32_edge", type "si32", lane_set "lanes_i32", lanes 8, to_type "f32", case {inputs [[0, 2147483647, -2147483648, 123456, -123456, 42, -42, 1000]], expected [0.0, 2147483647.0, -2147483648.0, 123456.0, -123456.0, 42.0, -42.0, 1000.0]}}
+    - {test_name "cast_u32_to_f32_basic", type "ui32", lane_set "lanes_i32", lanes 8, to_type "f32", case {inputs [[0, 1, 2, 3, 1000, 123456, 2147483647, 42]], expected [0.0, 1.0, 2.0, 3.0, 1000.0, 123456.0, 2147483648.0, 42.0]}}
+    - {test_name "cast_i32_to_f64_basic_128b", extension "sse", type "si32", lane_set "lanes_i32", lanes 4, to_type "f64", case {inputs [[1, 2, 3, 4]], expected [1.0, 2.0]}}
+    - {test_name "cast_i32_to_f64_basic_256b", extension "avx2", type "si32", lane_set "lanes_i32", lanes 8, to_type "f64", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1.0, 2.0, 3.0, 4.0]}}
+    - {test_name "cast_i32_to_f64_basic_512b", extension "avx512", type "si32", lane_set "lanes_i32", lanes 16, to_type "f64", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]}}
+    - {test_name "cast_i8_to_i16_basic_256b", extension "avx2", type "si8", lane_set "lanes_i8", lanes 32, to_type "si16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31]], expected [0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15]}}
+    - {test_name "cast_u8_to_u32_basic_256b", extension "avx2", type "ui8", lane_set "lanes_i8", lanes 32, to_type "ui32", case {inputs [[0, 255, 1, 254, 2, 253, 3, 252, 4, 251, 5, 250, 6, 249, 7, 248, 8, 247, 9, 246, 10, 245, 11, 244, 12, 243, 13, 242, 14, 241, 15, 240]], expected [0, 255, 1, 254, 2, 253, 3, 252]}}
+    - {test_name "cast_u8_to_u64_basic_256b", extension "avx2", type "ui8", lane_set "lanes_i8", lanes 32, to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]], expected [0, 1, 2, 3]}}
+    - {test_name "cast_i16_to_i32_basic_256b", extension "avx2", type "si16", lane_set "lanes_i16", lanes 16, to_type "si32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {test_name "cast_u16_to_u64_basic_256b", extension "avx2", type "ui16", lane_set "lanes_i16", lanes 16, to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], expected [0, 1, 2, 3]}}
+    - {test_name "cast_u32_to_u64_basic_256b", extension "avx2", type "ui32", lane_set "lanes_i32", lanes 8, to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 1, 2, 3]}}
+    - {test_name "cast_i8_to_i16_basic_512b", extension "avx512", type "si8", lane_set "lanes_i8", lanes 64, to_type "si16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, -40, -41, -42, -43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, -56, -57, -58, -59, 60, 61, 62, 63]], expected [0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31]}}
+    - {test_name "cast_u8_to_u32_basic_512b", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, to_type "ui32", case {inputs [[0, 255, 1, 254, 2, 253, 3, 252, 4, 251, 5, 250, 6, 249, 7, 248, 8, 247, 9, 246, 10, 245, 11, 244, 12, 243, 13, 242, 14, 241, 15, 240, 16, 239, 17, 238, 18, 237, 19, 236, 20, 235, 21, 234, 22, 233, 23, 232, 24, 231, 25, 230, 26, 229, 27, 228, 28, 227, 29, 226, 30, 225, 31, 224]], expected [0, 255, 1, 254, 2, 253, 3, 252, 4, 251, 5, 250, 6, 249, 7, 248]}}
+    - {test_name "cast_u8_to_u64_basic_512b", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {test_name "cast_i16_to_i32_basic_512b", extension "avx512", type "si16", lane_set "lanes_i16", lanes 32, to_type "si32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31]], expected [0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15]}}
+    - {test_name "cast_u16_to_u64_basic_512b", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {test_name "cast_u32_to_u64_basic_512b", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {test_name "cast_i32_to_f32_rounding", type "si32", lane_set "lanes_i32", lanes 8, to_type "f32", case {inputs [[16777215, 16777216, 16777217, -16777215, -16777216, -16777217, 0, 1]], expected [16777215.0, 16777216.0, 16777216.0, -16777215.0, -16777216.0, -16777216.0, 0.0, 1.0]}}
+    - {test_name "cast_i64_to_f64_basic", type "si64", lane_set "lanes_i64", lanes 4, to_type "f64", case {inputs [[-7, -1, 0, 1]], expected [-7.0, -1.0, 0.0, 1.0]}}
+    - {test_name "cast_u64_to_f64_basic", type "ui64", lane_set "lanes_i64", lanes 4, to_type "f64", case {inputs [[0, 1, 2, 3]], expected [0.0, 1.0, 2.0, 3.0]}}
+    - {test_name "cast_f64_to_i32_basic_128b", extension "sse", type "f64", lane_set "lanes_f64", lanes 2, to_type "si32", case {inputs [[1.0, 2.0]], expected [1, 2, 0, 0]}}
+    - {test_name "cast_f64_to_i32_basic_256b", extension "avx2", type "f64", lane_set "lanes_f64", lanes 4, to_type "si32", case {inputs [[1.0, 2.0, 3.0, 4.0]], expected [1, 2, 3, 4, 0, 0, 0, 0]}}
+    - {test_name "cast_f64_to_i32_basic_512b", extension "avx512", type "f64", lane_set "lanes_f64", lanes 8, to_type "si32", case {inputs [[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]], expected [1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "cast_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, to_type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "cast_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, to_type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {test_name "cast_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, to_type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "cast_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, to_type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {test_name "cast_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, to_type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "cast_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, to_type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {test_name "cast_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, to_type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "cast_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, to_type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {test_name "cast_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, to_type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {test_name "cast_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, to_type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
+    - {test_name "cast_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, to_type "f64", case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
+    - {test_name "cast_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, to_type "f64", case {inputs [[0.0, -0.0]], expected [0.0, -0.0]}}
+  impls:
+    avx512:
+      ?i8:
+        requires [avx512f]
+        ToType:
+          ?i16:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_cvtepi8_epi16>(call<primitive=extract[Vec, avx2, 0]>(data))));
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_cvtepu8_epi16>(call<primitive=extract[Vec, avx2, 0]>(data))));
+                  }
+                """
+          ?i32:
+            implementation:
+              tsil """
+                  emit_return(call<primitive=cast[type<vector::as_extension<avx2>>, ToType]>(call<primitive=extract[Vec, avx2, 0]>(data)));
+                """
+          ?i64:
+            implementation:
+              tsil """
+                  emit_return(call<primitive=cast[type<vector::as_extension<avx2>>, ToType]>(call<primitive=extract[Vec, avx2, 0]>(data)));
+                """
+      ?i16:
+        requires [avx512f, avx512dq]
+        ToType:
+          ?i32:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_cvtepi16_epi32>(call<primitive=extract[Vec, avx2, 0]>(data))));
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_cvtepu16_epi32>(call<primitive=extract[Vec, avx2, 0]>(data))));
+                  }
+                """
+          ?i64:
+            implementation:
+              tsil """
+                  emit_return(call<primitive=cast[type<vector::as_extension<avx2>>, ToType]>(call<primitive=extract[Vec, avx2, 0]>(data)));
+                """
+      f32:
+        requires [avx512f, avx512dq]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), data));"
+          ?i32:
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin_macro<cvt infix=tslgen<intrin>(suffix) infix_sep=\"\" suffix=tslgen<intrin>(suffix, ToType)>(intrin<_mm512_roundscale_ps>(data, value<mm_fround_to_zero>))));"
+          ?i64:
+            implementation:
+              tsil """
+                   var<const_infer>(tmp, intrin<_mm512_castps512_ps256>(intrin<_mm512_roundscale_ps>(data, value<mm_fround_to_zero>))) 
+                   emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin_macro<cvt infix=tslgen<intrin>(suffix) infix_sep="" suffix=tslgen<intrin>(suffix, ToType)>(tmp))) ;
+                """
+      f64:
+        requires [avx512f, avx512dq]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), data));"
+          ?i64:
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin_macro<cvt infix=tslgen<intrin>(suffix) infix_sep=\"\" suffix=tslgen<intrin>(suffix, ToType)>(intrin<_mm512_roundscale_pd>(data, value<mm_fround_to_zero>))));"
+          ?i32:
+            implementation:
+              tsil """
+                   var<const_infer>(temp, intrin_macro<cvt infix=tslgen<intrin>(suffix) infix_sep="" suffix=tslgen<intrin>(suffix, ToType)>(intrin<_mm512_roundscale_pd>(data, value<mm_fround_to_zero>))) 
+                   emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_zextsi256_si512>(temp))) ;
+                """
+      ?i32:
+        requires [avx512f, avx512dq]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), data));"
+          ?i64:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_cvtepi32_epi64>(call<primitive=extract[Vec, avx2, 0]>(data))));
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_cvtepu32_epi64>(call<primitive=extract[Vec, avx2, 0]>(data))));
+                  }
+                """
+          f32:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_cvtepi32_ps>(data)));
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_cvtepu32_ps>(data)));
+                  }
+                """
+          f64:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_cvtepi32_pd>(intrin<_mm512_castsi512_si256>(data))));
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_cvtepu32_pd>(intrin<_mm512_castsi512_si256>(data))));
+                  }
+                """
+      ?i64:
+        requires [avx512f, avx512dq]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), data));"
+          f32:
+            implementation:
+              tsil """
+                   if<compile>(type<is_signed>(type<vector::base>)) {
+                     var<const_infer>(tmp, intrin<_mm512_cvtepi64_ps>(data)) 
+                     emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_zextps256_ps512>(tmp))) ;
+                   } else {
+                     var<const_infer>(tmp, intrin<_mm512_cvtepu64_ps>(data)) 
+                     emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_zextps256_ps512>(tmp))) ;
+                   }
+                """
+          f64:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_cvtepi64_pd>(data)));
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm512_cvtepu64_pd>(data)));
+                  }
+                """
+    avx2:
+      ?i8:
+        requires [avx2]
+        ToType:
+          ?i16:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepi8_epi16>(call<primitive=extract[Vec, sse, 0]>(data))));
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepu8_epi16>(call<primitive=extract[Vec, sse, 0]>(data))));
+                  }
+                """
+          ?i32:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepi8_epi32>(call<primitive=extract[Vec, sse, 0]>(data))));
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepu8_epi32>(call<primitive=extract[Vec, sse, 0]>(data))));
+                  }
+                """
+          ?i64:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepi8_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepu8_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
+                  }
+                """
+      ?i16:
+        requires [avx2]
+        ToType:
+          ?i32:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepi16_epi32>(call<primitive=extract[Vec, sse, 0]>(data))));
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepu16_epi32>(call<primitive=extract[Vec, sse, 0]>(data))));
+                  }
+                """
+          ?i64:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepi16_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepu16_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
+                  }
+                """
+      f32:
+        requires [avx2]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), data));"
+          ?i32:
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin_macro<cvt infix=tslgen<intrin>(suffix) infix_sep=\"\" suffix=tslgen<intrin>(suffix, ToType)>(intrin<_mm256_round_ps>(data, value<mm_fround_to_zero>))));"
+          "*":
+            implementation:
+              tsil "emit_return(call<primitive=reinterpret[Vec, ToType]>(data));"
+      f64:
+        requires [avx2]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), data));"
+          ?i64:
+            implementation:
+              tsil """
+                   var<const_infer>(temp, intrin<_mm_cvtps_epi32>(intrin<_mm_round_ps>(intrin<_mm256_cvtpd_ps>(intrin<_mm256_round_pd>(data, value<mm_fround_to_zero>)), value<mm_fround_to_zero>))) 
+                   emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepi32_epi64>(temp))) ;
+                """
+          si32:
+            implementation:
+              tsil """
+                   var<const_infer>(temp, intrin_macro<cvt infix=tslgen<intrin>(suffix) infix_sep="" suffix=tslgen<intrin>(suffix, ToType)>(intrin<_mm256_round_pd>(data, value<mm_fround_to_zero>))) 
+                   emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_zextsi128_si256>(temp))) ;
+                """
+          "*":
+            implementation:
+              tsil "emit_return(call<primitive=reinterpret[Vec, ToType]>(data));"
+      ?i32:
+        requires [avx2]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), data));"
+          ?i64:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepi32_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepu32_epi64>(call<primitive=extract[Vec, sse, 0]>(data))));
+                  }
+                """
+          f32:
+            implementation:
+              tsil """
+                  if<compile>( type<is_same>(type<vector::base>, si32) ) {
+                     emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepi32_ps>(data))) ;
+                  } else {
+                     var<const_infer>(output, intrin<_mm256_cvtepi32_ps>(data)) 
+                     var<const_infer>(mask, intrin<_mm256_srai_epi32>(data, 31)) 
+                     var<const_infer>(correction, intrin<_mm256_castsi256_ps>(intrin<_mm256_and_si256>(mask, intrin<_mm256_set1_epi32>(cast<static>( si32 , 0x4f800000))))) 
+                     emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_add_ps>(output, correction))) ;
+                  }
+                """
+          f64:
+            implementation:
+              tsil """
+                  if<compile>( type<is_same>(type<vector::base>, si32) ) {
+                     emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_cvtepi32_pd>(intrin<_mm256_castsi256_si128>(data)))) ;
+                  } else {
+                     var<const_infer>(output, intrin<_mm256_cvtepi32_pd>(intrin<_mm256_castsi256_si128>(data))) 
+                     var<const_infer>(mask, intrin<_mm_srai_epi32>(intrin<_mm256_castsi256_si128>(data), 31)) 
+                     var<infer>(correction, intrin<_mm256_castsi256_pd>(intrin<_mm256_cvtepi32_epi64>(mask))) 
+                    correction = intrin<_mm256_mul_pd>(correction, intrin<_mm256_set1_pd>(4294967296.0));
+                     emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_add_pd>(output, correction))) ;
+                  }
+                """
+          "*":
+            implementation:
+              tsil "emit_return(call<primitive=reinterpret[Vec, ToType]>(data));"
+      ?i64:
+        requires [avx2]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), data));"
+          f64:
+            implementation:
+              tsil """
+                  if<compile>( type<is_same>(type<vector::base>, si64) ) {
+                     var<const_infer>(magic_i_lo, intrin<_mm256_set1_epi64x>(0x4330000000000000)) 
+                     var<const_infer>(magic_i_hi32, intrin<_mm256_set1_epi64x>(0x4530000080000000)) 
+                     var<const_infer>(magic_i_all, intrin<_mm256_set1_epi64x>(0x4530000080100000)) 
+                     var<const_infer>(magic_d_all, intrin<_mm256_castsi256_pd>(magic_i_all)) 
+                     var<const_infer>(v_lo, intrin<_mm256_blend_epi32>(magic_i_lo, data, 0b01010101)) 
+                     var<infer>(v_hi, intrin<_mm256_srli_epi64>(data, 32)) 
+                    v_hi = intrin<_mm256_xor_si256>(v_hi, magic_i_hi32);
+                     var<const_infer>(v_hi_dbl, intrin<_mm256_sub_pd>(intrin<_mm256_castsi256_pd>(v_hi), magic_d_all)) 
+                     emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_add_pd>(v_hi_dbl, intrin<_mm256_castsi256_pd>(v_lo)))) ;
+                  } else {
+                     var<const_infer>(magic_i_lo, intrin<_mm256_set1_epi64x>(0x4330000000000000)) 
+                     var<const_infer>(magic_i_hi32, intrin<_mm256_set1_epi64x>(0x4530000000000000)) 
+                     var<const_infer>(magic_i_all, intrin<_mm256_set1_epi64x>(0x4530000000100000)) 
+                     var<const_infer>(magic_d_all, intrin<_mm256_castsi256_pd>(magic_i_all)) 
+                     var<const_infer>(v_lo, intrin<_mm256_blend_epi32>(magic_i_lo, data, 0b01010101)) 
+                     var<infer>(v_hi, intrin<_mm256_srli_epi64>(data, 32)) 
+                    v_hi = intrin<_mm256_xor_si256>(v_hi, magic_i_hi32);
+                     var<const_infer>(v_hi_dbl, intrin<_mm256_sub_pd>(intrin<_mm256_castsi256_pd>(v_hi), magic_d_all)) 
+                     emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm256_add_pd>(v_hi_dbl, intrin<_mm256_castsi256_pd>(v_lo)))) ;
+                  }
+                """
+          "*":
+            implementation:
+              tsil "emit_return(call<primitive=reinterpret[Vec, ToType]>(data));"
+    sse:
+      f32:
+        requires [sse2]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), data));"
+          f64:
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtps_pd>(data)));"
+          ?i32:
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin_macro<cvt infix=tslgen<intrin>(suffix) infix_sep=\"\" suffix=tslgen<intrin>(suffix, ToType)>(intrin<_mm_round_ps>(data, value<mm_fround_to_zero>))));"
+          "*":
+            implementation:
+              tsil "emit_return(call<primitive=reinterpret[Vec, ToType]>(data));"
+      f64:
+        requires [sse2]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), data));"
+          ?i64:
+            implementation:
+              tsil """
+                   var<const_infer>(temp, intrin<_mm_cvtps_epi32>(intrin<_mm_round_ps>(intrin<_mm_cvtpd_ps>(intrin<_mm_round_pd>(data, value<mm_fround_to_zero>)), value<mm_fround_to_zero>))) 
+                   emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepi32_epi64>(temp))) ;
+                """
+          si32:
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin_macro<cvt infix=tslgen<intrin>(suffix) infix_sep=\"\" suffix=tslgen<intrin>(suffix, ToType)>(intrin<_mm_round_pd>(data, value<mm_fround_to_zero>))));"
+          "*":
+            implementation:
+              tsil "emit_return(call<primitive=reinterpret[Vec, ToType]>(data));"
+      ?i32:
+        requires [sse2]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), data));"
+          ?i64:
+            implementation:
+              tsil """
+                  if<compile>( type<is_same>(type<vector::base>, si32) ) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepi32_epi64>(data))) ;
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepu32_epi64>(data))) ;
+                  }
+                """
+          f32:
+            implementation:
+              tsil """
+                  if<compile>( type<is_same>(type<vector::base>, si32) ) {
+                     emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepi32_ps>(data))) ;
+                  } else {
+                     var<const_infer>(temp, intrin<_mm_cvtepi32_ps>(data)) 
+                     var<const_infer>(mask, intrin<_mm_srai_epi32>(data, 31)) 
+                     var<const_infer>(correction, intrin<_mm_castsi128_ps>(intrin<_mm_and_si128>(mask, intrin<_mm_set1_epi32>(cast<static>( si32 , 0x4f800000))))) 
+                     emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_add_ps>(temp, correction))) ;
+                  }
+                """
+          f64:
+            implementation:
+              tsil """
+                  if<compile>( type<is_same>(type<vector::base>, si32) ) {
+                     emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepi32_pd>(data))) ;
+                  } else {
+                     var<const_infer>(output, intrin<_mm_cvtepi32_pd>(data)) 
+                     var<const_infer>(mask, intrin<_mm_srai_epi32>(data, 31)) 
+                     var<infer>(correction, intrin<_mm_cvtepi32_pd>(mask)) 
+                    correction = intrin<_mm_mul_pd>(correction, intrin<_mm_set1_pd>(4294967296.0));
+                     emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_add_pd>(output, correction))) ;
+                  }
+                """
+          "*":
+            implementation:
+              tsil "emit_return(call<primitive=reinterpret[Vec, ToType]>(data));"
+      ?i64:
+        requires [sse2]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), data));"
+          f64:
+            implementation:
+              tsil """
+                  if<compile>( type<is_same>(type<vector::base>, si64) ) {
+                     var<infer>(x_h, intrin<_mm_srai_epi32>(data, 16)) 
+                    x_h = intrin<_mm_blend_epi16>(x_h, intrin<_mm_setzero_si128>(), 0x33);
+                    x_h = intrin<_mm_add_epi64>(x_h, intrin<_mm_castpd_si128>(intrin<_mm_set1_pd>(442721857769029238784.)));
+                     var<const_infer>(x_l, intrin<_mm_blend_epi16>(data, intrin<_mm_castpd_si128>(intrin<_mm_set1_pd>(cast<static>( f64 , cast<static>( ui64 , 0x0010000000000000)))), 0x88)) 
+                     var<const_infer>(f, intrin<_mm_sub_pd>(intrin<_mm_castsi128_pd>(x_h), intrin<_mm_set1_pd>(442726361368656609280.))) 
+                     emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_add_pd>(f, intrin<_mm_castsi128_pd>(x_l)))) ;
+                  } else {
+                     var<infer>(x_h, intrin<_mm_srli_epi64>(data, 32)) 
+                    x_h = intrin<_mm_or_si128>(x_h, intrin<_mm_castpd_si128>(intrin<_mm_set1_pd>(19342813113834066795298816.)));
+                     var<const_infer>(x_l, intrin<_mm_blend_epi16>(data, intrin<_mm_castpd_si128>(intrin<_mm_set1_pd>(cast<static>( f64 , cast<static>( ui64 , 0x0010000000000000)))), 0xcc)) 
+                     var<const_infer>(f, intrin<_mm_sub_pd>(intrin<_mm_castsi128_pd>(x_h), intrin<_mm_set1_pd>(19342813118337666422669312.))) 
+                     emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_add_pd>(f, intrin<_mm_castsi128_pd>(x_l)))) ;
+                  }
+                """
+          "*":
+            implementation:
+              tsil "emit_return(call<primitive=reinterpret[Vec, ToType]>(data));"
+      ?i8:
+        requires [sse4_1]
+        ToType:
+          ?i16:
+            implementation:
+              tsil """
+                  if<compile>( type<is_same>(type<vector::base>, si8) ) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepi8_epi16>(data))) ;
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepu8_epi16>(data))) ;
+                  }
+                """
+          ?i32:
+            implementation:
+              tsil """
+                  if<compile>( type<is_same>(type<vector::base>, si8) ) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepi8_epi32>(data))) ;
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepu8_epi32>(data))) ;
+                  }
+                """
+          ?i64:
+            implementation:
+              tsil """
+                  if<compile>( type<is_same>(type<vector::base>, si8) ) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepi8_epi64>(data))) ;
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepu8_epi64>(data))) ;
+                  }
+                """
+      ?i16:
+        requires [sse4_1]
+        ToType:
+          ?i32:
+            implementation:
+              tsil """
+                  if<compile>( type<is_same>(type<vector::base>, si16) ) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepi16_epi32>(data))) ;
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepu16_epi32>(data))) ;
+                  }
+                """
+          ?i64:
+            implementation:
+              tsil """
+                  if<compile>( type<is_same>(type<vector::base>, si16) ) {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepi16_epi64>(data))) ;
+                  } else {
+                    emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin<_mm_cvtepu16_epi64>(data))) ;
+                  }
+                """
+    neon:
+      ?i8:
+        requires [neon]
+        ToType:
+          ?i16:
+            implementation:
+              tsil """
+                  var<infer>(in_arr, call<primitive=to_array[Vec]>(data))
+                  var<infer>(result, call<primitive=to_array[ToType]>(call<primitive=set_zero[ToType]>()))
+                  loop<unroll>(value<generic_length>(ToType))
+                  loop<range>(i, 0, value<generic_length>(ToType), 1) {
+                    result[i] = cast<static>(type<generic_base>(ToType), in_arr[i]);
+                  }
+                  emit_return(call<primitive=from_array[ToType]>(result));
+                """
+          ?i32:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    type<alias>(StepBase, type<signed_of>(type<ui16>))
+                    type<alias>(StepVec, type<vector::transform_extension<StepBase>>)
+                    emit_return(call<primitive=cast[StepVec, ToType]>(call<primitive=cast[Vec, StepVec]>(data)));
+                  } else {
+                    type<alias>(StepBase, type<ui16>)
+                    type<alias>(StepVec, type<vector::transform_extension<StepBase>>)
+                    emit_return(call<primitive=cast[StepVec, ToType]>(call<primitive=cast[Vec, StepVec]>(data)));
+                  }
+                """
+          ?i64:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    type<alias>(StepBase, type<signed_of>(type<ui16>))
+                    type<alias>(StepVec, type<vector::transform_extension<StepBase>>)
+                    emit_return(call<primitive=cast[StepVec, ToType]>(call<primitive=cast[Vec, StepVec]>(data)));
+                  } else {
+                    type<alias>(StepBase, type<ui16>)
+                    type<alias>(StepVec, type<vector::transform_extension<StepBase>>)
+                    emit_return(call<primitive=cast[StepVec, ToType]>(call<primitive=cast[Vec, StepVec]>(data)));
+                  }
+                """
+      ?i16:
+        requires [neon]
+        ToType:
+          ?i32:
+            implementation:
+              tsil """
+                  var<infer>(in_arr, call<primitive=to_array[Vec]>(data))
+                  var<infer>(result, call<primitive=to_array[ToType]>(call<primitive=set_zero[ToType]>()))
+                  loop<unroll>(value<generic_length>(ToType))
+                  loop<range>(i, 0, value<generic_length>(ToType), 1) {
+                    result[i] = cast<static>(type<generic_base>(ToType), in_arr[i]);
+                  }
+                  emit_return(call<primitive=from_array[ToType]>(result));
+                """
+          ?i64:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    type<alias>(StepBase, type<signed_of>(type<ui32>))
+                    type<alias>(StepVec, type<vector::transform_extension<StepBase>>)
+                    emit_return(call<primitive=cast[StepVec, ToType]>(call<primitive=cast[Vec, StepVec]>(data)));
+                  } else {
+                    type<alias>(StepBase, type<ui32>)
+                    type<alias>(StepVec, type<vector::transform_extension<StepBase>>)
+                    emit_return(call<primitive=cast[StepVec, ToType]>(call<primitive=cast[Vec, StepVec]>(data)));
+                  }
+                """
+      f32:
+        requires [neon]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(data);"
+          ?i32:
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin_macro<vcvtq infix=tslgen<intrin>(suffix, ToType) suffix=tslgen<intrin>(suffix)>(data)));"
+          f64:
+            implementation:
+              tsil """
+                  var<infer>(in_arr, call<primitive=to_array[Vec]>(data))
+                  var<infer>(result, call<primitive=to_array[ToType]>(call<primitive=set_zero[ToType]>()))
+                  loop<unroll>(value<generic_length>(ToType))
+                  loop<range>(i, 0, value<generic_length>(ToType), 1) {
+                    result[i] = cast<static>(type<generic_base>(ToType), in_arr[i]);
+                  }
+                  emit_return(call<primitive=from_array[ToType]>(result));
+                """
+          "*":
+            implementation:
+              tsil "emit_return(call<primitive=reinterpret[Vec, ToType]>(data));"
+      f64:
+        requires [neon]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(data);"
+          ?i64:
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin_macro<vcvtq infix=tslgen<intrin>(suffix, ToType) suffix=tslgen<intrin>(suffix)>(data)));"
+          "*":
+            implementation:
+              tsil "emit_return(call<primitive=reinterpret[Vec, ToType]>(data));"
+      ?i32:
+        requires [neon]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(data);"
+          f32:
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin_macro<vcvtq infix=tslgen<intrin>(suffix, ToType) suffix=tslgen<intrin>(suffix)>(data)));"
+          ?i64:
+            implementation:
+              tsil """
+                  var<infer>(in_arr, call<primitive=to_array[Vec]>(data))
+                  var<infer>(result, call<primitive=to_array[ToType]>(call<primitive=set_zero[ToType]>()))
+                  loop<unroll>(value<generic_length>(ToType))
+                  loop<range>(i, 0, value<generic_length>(ToType), 1) {
+                    result[i] = cast<static>(type<generic_base>(ToType), in_arr[i]);
+                  }
+                  emit_return(call<primitive=from_array[ToType]>(result));
+                """
+          "*":
+            implementation:
+              tsil "emit_return(call<primitive=reinterpret[Vec, ToType]>(data));"
+      ?i64:
+        requires [neon]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(data);"
+          f64:
+            implementation:
+              tsil "emit_return(cast<reinterpret>(type<generic_register>(ToType), intrin_macro<vcvtq infix=tslgen<intrin>(suffix, ToType) suffix=tslgen<intrin>(suffix)>(data)));"
+          "*":
+            implementation:
+              tsil "emit_return(call<primitive=reinterpret[Vec, ToType]>(data));"
+    sve:
+      ?i8:
+        requires [sve]
+        ToType:
+          ?i16:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(intrin<svunpklo_s16>(data));
+                  } else {
+                    type<alias>(UBase, type<unsigned_of>(type<vector::base>))
+                    type<alias>(UVec, type<vector::transform_extension<UBase>>)
+                    var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+                    emit_return(intrin<svunpklo_u16>(udata));
+                  }
+                """
+          ?i32:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    type<alias>(StepBase, type<signed_of>(type<ui16>))
+                    type<alias>(StepVec, type<vector::transform_extension<StepBase>>)
+                    emit_return(call<primitive=cast[StepVec, ToType]>(intrin<svunpklo_s16>(data)));
+                  } else {
+                    type<alias>(UBase, type<unsigned_of>(type<vector::base>))
+                    type<alias>(UVec, type<vector::transform_extension<UBase>>)
+                    type<alias>(StepBase, type<ui16>)
+                    type<alias>(StepVec, type<vector::transform_extension<StepBase>>)
+                    var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+                    emit_return(call<primitive=cast[StepVec, ToType]>(intrin<svunpklo_u16>(udata)));
+                  }
+                """
+          ?i64:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    type<alias>(StepBase, type<signed_of>(type<ui16>))
+                    type<alias>(StepVec, type<vector::transform_extension<StepBase>>)
+                    emit_return(call<primitive=cast[StepVec, ToType]>(intrin<svunpklo_s16>(data)));
+                  } else {
+                    type<alias>(UBase, type<unsigned_of>(type<vector::base>))
+                    type<alias>(UVec, type<vector::transform_extension<UBase>>)
+                    type<alias>(StepBase, type<ui16>)
+                    type<alias>(StepVec, type<vector::transform_extension<StepBase>>)
+                    var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+                    emit_return(call<primitive=cast[StepVec, ToType]>(intrin<svunpklo_u16>(udata)));
+                  }
+                """
+      ?i16:
+        requires [sve]
+        ToType:
+          ?i32:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(intrin<svunpklo_s32>(data));
+                  } else {
+                    type<alias>(UBase, type<unsigned_of>(type<vector::base>))
+                    type<alias>(UVec, type<vector::transform_extension<UBase>>)
+                    var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+                    emit_return(intrin<svunpklo_u32>(udata));
+                  }
+                """
+          ?i64:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    type<alias>(StepBase, type<signed_of>(type<ui32>))
+                    type<alias>(StepVec, type<vector::transform_extension<StepBase>>)
+                    emit_return(call<primitive=cast[StepVec, ToType]>(intrin<svunpklo_s32>(data)));
+                  } else {
+                    type<alias>(UBase, type<unsigned_of>(type<vector::base>))
+                    type<alias>(UVec, type<vector::transform_extension<UBase>>)
+                    type<alias>(StepBase, type<ui32>)
+                    type<alias>(StepVec, type<vector::transform_extension<StepBase>>)
+                    var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+                    emit_return(call<primitive=cast[StepVec, ToType]>(intrin<svunpklo_u32>(udata)));
+                  }
+                """
+      f32:
+        requires [sve]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(data);"
+          f64:
+            implementation:
+              tsil "emit_return(intrin_macro<svcvt infix=tslgen<intrin>(suffix, ToType) suffix=tslgen<intrin>(suffix) post=z>(call<primitive=mask_true[Vec]>(), data));"
+          ?i32:
+            implementation:
+              tsil "emit_return(intrin_macro<svcvt infix=tslgen<intrin>(suffix, ToType) suffix=tslgen<intrin>(suffix) post=x>(call<primitive=mask_true[Vec]>(), data));"
+          ?i64:
+            implementation:
+              tsil "emit_return(intrin_macro<svcvt infix=tslgen<intrin>(suffix, ToType) suffix=tslgen<intrin>(suffix) post=z>(call<primitive=mask_true[Vec]>(), data));"
+      f64:
+        requires [sve]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(data);"
+          ?i32:
+            implementation:
+              tsil """
+                  svbool_t pg64 = intrin<svptrue_b64>();
+                  auto tmp = intrin_macro<svcvt infix=tslgen<intrin>(suffix, ToType) suffix=tslgen<intrin>(suffix) post=z>(pg64, data);
+                  svbool_t pg32 = intrin<svptrue_b32>();
+                  svuint32_t idx = intrin<svindex_u32>(0, 1);
+                  svbool_t even = intrin<svcmpeq_n_u32>(pg32, intrin<svand_n_u32_x>(pg32, idx, 1), 0);
+                  auto packed = intrin_macro<svcompact suffix=tslgen<intrin>(suffix, ToType)>(even, tmp);
+                  auto out_lanes = value<generic_runtime_length>(ToType);
+                  svbool_t out_pg = intrin<svwhilelt_b32>(cast<static>( type<size> , 0), out_lanes);
+                   emit_return(intrin<svsel>(out_pg, packed, intrin_macro<svdup suffix=tslgen<intrin>(suffix, ToType)>(0))) ;
+                """
+          ?i64:
+            implementation:
+              tsil "emit_return(intrin_macro<svcvt infix=tslgen<intrin>(suffix, ToType) suffix=tslgen<intrin>(suffix) post=x>(call<primitive=mask_true[Vec]>(), data));"
+      ?i32:
+        requires [sve]
+        ToType:
+          "==":
+            implementation:
+              tsil "emit_return(data);"
+          ?i64:
+            implementation:
+              tsil """
+                  if<compile>(type<is_signed>(type<vector::base>)) {
+                    emit_return(intrin<svunpklo_s64>(data));
+                  } else {
+                    type<alias>(UBase, type<unsigned_of>(type<vector::base>))
+                    type<alias>(UVec, type<vector::transform_extension<UBase>>)
+                    var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+                    emit_return(intrin<svunpklo_u64>(udata));
+                  }
+                """
+          f32:
+            implementation:
+              tsil "emit_return(intrin_macro<svcvt infix=tslgen<intrin>(suffix, ToType) suffix=tslgen<intrin>(suffix) post=x>(call<primitive=mask_true[Vec]>(), data));"
+          f64:
+            implementation:
+              tsil "emit_return(intrin_macro<svcvt infix=tslgen<intrin>(suffix, ToType) suffix=tslgen<intrin>(suffix) post=z>(call<primitive=mask_true[Vec]>(), data));"
+      ?i64:
+        requires [sve]
+        ToType:
+          "==":
+            implementation: 
+              tsil "emit_return(data);"
+          f32:
+            implementation:
+              tsil """
+                  svbool_t pg64 = intrin<svptrue_b64>();
+                  auto tmp = intrin_macro<svcvt infix=tslgen<intrin>(suffix, ToType) suffix=tslgen<intrin>(suffix) post=z>(pg64, data);
+                  svbool_t pg32 = intrin<svptrue_b32>();
+                  svuint32_t idx = intrin<svindex_u32>(0, 1);
+                  svbool_t even = intrin<svcmpeq_n_u32>(pg32, intrin<svand_n_u32_x>(pg32, idx, 1), 0);
+                  auto packed = intrin_macro<svcompact suffix=tslgen<intrin>(suffix, ToType)>(even, tmp);
+                  auto out_lanes = value<generic_runtime_length>(ToType);
+                  svbool_t out_pg = intrin<svwhilelt_b32>(cast<static>( type<size> , 0), out_lanes);
+                  emit_return(intrin<svsel>(out_pg, packed, intrin_macro<svdup suffix=tslgen<intrin>(suffix, ToType)>(0))) ;
+                """
+          f64:
+            implementation:
+              tsil "emit_return(intrin_macro<svcvt infix=tslgen<intrin>(suffix, ToType) suffix=tslgen<intrin>(suffix) post=x>(call<primitive=mask_true[Vec]>(), data));"
+    scalar:
+      arith:
+        requires []
+        ToType:
+          arith:
+            implementation:
+              tsil """
+                  var<infer>(in_arr, call<primitive=to_array[Vec]>(data))
+                  var<infer>(result, call<primitive=to_array[ToType]>(call<primitive=set_zero[ToType]>()))
+                  result[0] = cast<static>(type<generic_base>(ToType), in_arr[0]);
+                  emit_return(call<primitive=from_array[ToType]>(result)) ;
+                """
+    generic:
+      arith:
+        requires []
+        ToType:
+          arith:
+            implementation:
+              tsil """
+                  var<infer>(in_arr, call<primitive=to_array[Vec]>(data))
+                  var<infer>(result, call<primitive=to_array[ToType]>(call<primitive=set_zero[ToType]>()))
+                  loop<unroll>(value<generic_length>(ToType)) 
+                  loop<range>(i, 0, value<generic_length>(ToType), 1)  {
+                   if (i < value<vector::length>) {
+                      result[i] = cast<static>(type<generic_base>(ToType), in_arr[i]);
+                    }
+                  }
+                  emit_return(call<primitive=from_array[ToType]>(result)) ;
+                """

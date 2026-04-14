@@ -1,0 +1,233 @@
+description "Bit-counting operations"
+prim<v:=v> popcnt(data):
+  brief_description "[Example: sse + si8]: Count the number of logical 1 bits in packed 8-bit integers in \"a\", and store the results in \"dst\"."
+  operation "[Example: sse + si8]: DEFINE POPCNT(a) {\n\tcount := 0\n\tDO WHILE a > 0\n\t\tcount += a[0]\n\t\ta >>= 1\n\tOD\n\tRETURN count\n}\nFOR j := 0 to 15\n\ti := j*8\n\tdst[i+7:i] := POPCNT(a[i+7:i])\nENDFOR\ndst[MAX:128] := 0"
+  tests:
+    - {test_name "popcnt_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 3, 7, 15, 255, 256, 4294967295]], expected [0, 1, 2, 3, 4, 8, 1, 32]}}
+    - {test_name "popcnt_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1431655765, 2863311530, 0, 2147483648, 2147483647, 4294967295, 4294967294, 1]], expected [16, 16, 0, 1, 31, 32, 31, 1]}}
+    - {test_name "popcnt_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1]}}
+    - {test_name "popcnt_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 8, 7, 1, 2, 1, 2, 0, 1, 8, 7, 1, 2, 1, 2]}}
+    - {test_name "popcnt_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1]}}
+    - {test_name "popcnt_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 8, 1, 7, 1, 7, 1, 6, 0, 8, 1, 7, 1, 7, 1, 6]}}
+    - {test_name "popcnt_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 1, 2, 1, 2, 2, 3, 1]}}
+    - {test_name "popcnt_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 16, 15, 1, 2, 1, 2]}}
+    - {test_name "popcnt_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 1, 2, 1, 2, 2, 3, 1]}}
+    - {test_name "popcnt_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 16, 1, 15, 1, 15, 1, 14]}}
+    - {test_name "popcnt_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4]], expected [1, 1, 2, 1]}}
+    - {test_name "popcnt_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647]], expected [0, 32, 1, 31]}}
+    - {test_name "popcnt_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [1, 1]}}
+    - {test_name "popcnt_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1]], expected [0, 1]}}
+    - {test_name "popcnt_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [1, 1]}}
+    - {test_name "popcnt_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1]], expected [0, 64]}}
+  impls:
+    [avx512, avx2_vl, sse_vl]:
+      [?i8, ?i16]:
+        requires:
+          avx512  [avx512_bitalg, avx512f]
+          avx2_vl [avx512_bitalg, avx512f, avx512vl, avx]
+          sse_vl  [avx512_bitalg, avx512f, avx512vl, sse]
+        implementation:
+          tsil "emit_return(intrin_macro<popcnt, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(data));"
+      [?i32, ?i64]:
+        requires:
+          avx512  [avx512_vpopcntdq, avx512f]
+          avx2_vl [avx512_vpopcntdq, avx512f, avx512vl, avx]
+          sse_vl  [avx512_vpopcntdq, avx512f, avx512vl, sse]
+        implementation:
+          tsil "emit_return(intrin_macro<popcnt, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(data));"
+    neon:
+      ?i8:
+        requires [neon]
+        implementation:
+          tsil "emit_return(intrin_macro<vcntq>(data));"
+    sve:
+      ui?:
+        requires [sve]
+        implementation:
+          tsil "emit_return(intrin_macro<svcnt, post=x>(call<primitive=mask_true[Vec]>(), data));"
+      si?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<svcnt, post=x>(call<primitive=mask_true[Vec]>(), data)
+              )
+            );
+          """
+    [avx2, sse, neon, generic, oneAPIfpga]:
+      ?i?:
+        requires:
+          avx2 [avx]
+          sse [sse2]
+          neon [neon]
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+               var<infer>(data_arr, call<primitive=to_array[Vec]>(data)) 
+               loop<unroll>(value<vector::length>)
+               loop<range>(i, 0, value<vector::length>, 1)  {
+                data_arr[i] = cast<static>(type<vector::base>, details::popcount<type<vector::base>, type<vector::offset_base>>(data_arr[i]));
+              }
+               emit_return(call<primitive=from_array[Vec]>(data_arr)) ;
+            """
+    scalar:
+      ?i?:
+        requires []
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::base>, details::popcount<type<vector::base>, type<vector::offset_base>>(data)));"
+prim<s:=s> lzc_scalar(data):
+  brief_description "Counts leading zeros (scalar)."
+  operation ""
+  impls:
+    [scalar, generic]:
+      ?i?:
+        requires:
+          scalar []
+          generic []
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::base>, details::clz<type<vector::base>, type<vector::offset_base>>(data)));"
+      f?:
+        requires:
+          scalar []
+          generic []
+        implementation:
+          tsil """
+               type<alias>(BaseT, type<vector::base>) 
+               type<alias>(UnsignedT, type<select>(type<is_same>(BaseT, f32), ui32, ui64)) 
+              UnsignedT bits{};
+               mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data), value<size_of>(BaseT)) ;
+               emit_return(cast<static>(BaseT, details::clz<UnsignedT, type<vector::offset_base>>(bits))) ;
+            """
+    oneAPIfpga:
+      ?i?:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::base>, details::clz_recursive<type<vector::base>, type<vector::offset_base>::apply>(data)));"
+    oneAPIfpgaRTL:
+      ?i?:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::base>, details::clz_recursive<type<vector::base>, type<vector::offset_base>::apply>(data)));"
+prim<v:=v> lzc(data):
+  brief_description "Counts leading zeros (vector)."
+  operation ""
+  tests:
+    - {test_name "lzc_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4, 8, 16, 32]], expected [32, 31, 30, 30, 29, 28, 27, 26]}}
+    - {test_name "lzc_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[2147483648, 2147483647, 1073741824, 536870912, 0, 4294967295, 268435456, 134217728]], expected [0, 1, 1, 2, 32, 0, 3, 4]}}
+    - {test_name "lzc_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, -1, -2, -4, -8]], expected [32, 31, 30, 30, 0, 0, 0, 0]}}
+    - {test_name "lzc_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-2147483648, -1073741824, 1073741824, 536870912, 268435456, 134217728, 1, 0]], expected [0, 0, 1, 2, 3, 4, 31, 32]}}
+    - {test_name "lzc_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [7, 6, 6, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4, 3]}}
+    - {test_name "lzc_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [8, 7, 0, 0, 6, 6, 5, 5, 8, 7, 0, 0, 6, 6, 5, 5]}}
+    - {test_name "lzc_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [7, 6, 6, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4, 3]}}
+    - {test_name "lzc_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [8, 0, 0, 1, 7, 0, 6, 1, 8, 0, 0, 1, 7, 0, 6, 1]}}
+    - {test_name "lzc_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [15, 14, 14, 13, 13, 13, 13, 12]}}
+    - {test_name "lzc_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [16, 15, 0, 0, 14, 14, 13, 13]}}
+    - {test_name "lzc_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [15, 14, 14, 13, 13, 13, 13, 12]}}
+    - {test_name "lzc_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [16, 0, 0, 1, 15, 0, 14, 1]}}
+    - {test_name "lzc_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [63, 62]}}
+    - {test_name "lzc_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1]], expected [64, 63]}}
+    - {test_name "lzc_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [63, 62]}}
+    - {test_name "lzc_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1]], expected [64, 0]}}
+  impls:
+    [avx512, avx2_vl, sse_vl]:
+      [?i32, ?i64]:
+        requires:
+          avx512 [avx512cd, avx512f]
+          avx2_vl [avx512cd, avx512f, avx512vl, avx]
+          sse_vl [avx512cd, avx512f, avx512vl, sse]
+        implementation:
+          tsil "emit_return(intrin_macro<lzcnt, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(data));"
+    neon:
+      [si8, si16, si32, ui8, ui16, ui32]:
+        requires [neon]
+        implementation:
+          tsil "emit_return(intrin_macro<vclzq>(data));"
+    sve:
+      ui?:
+        requires [sve]
+        implementation:
+          tsil "emit_return(intrin_macro<svclz, post=x>(call<primitive=mask_true[Vec]>(), data));"
+      si?:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=reinterpret[Vec<type<unsigned_of>(BaseT)>, Vec]>(
+                intrin_macro<svclz, post=x>(call<primitive=mask_true[Vec]>(), data)
+              )
+            );
+          """
+    [avx512, avx2, sse, neon, scalar, generic]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          avx2 [avx]
+          sse [sse2]
+          neon [neon]
+          scalar []
+          generic []
+        implementation:
+          tsil """
+               var<infer>(data_arr, call<primitive=to_array[Vec]>(data)) 
+               loop<unroll>(value<vector::length>)
+               loop<range>(i, 0, value<vector::length>, 1)  {
+                data_arr[i] = call<primitive=lzc_scalar[type<vector::as_extension<scalar>>]>(data_arr[i]);
+              }
+               emit_return(call<primitive=from_array[Vec]>(data_arr)) ;
+            """
+    [oneAPIfpga, oneAPIfpgaRTL]:
+      ?i?:
+        requires:
+          oneAPIfpga [oneAPIfpgaDev]
+          oneAPIfpgaRTL [oneAPIfpgaDev]
+        implementation:
+          tsil """
+               var<infer>(data_arr, call<primitive=to_array[Vec]>(data)) 
+               loop<unroll>(value<vector::length>)
+               loop<range>(i, 0, value<vector::length>, 1)  {
+                data_arr[i] = cast<static>(type<vector::base>, details::clz_recursive<type<vector::base>, type<vector::offset_base>::apply>(data_arr[i]));
+              }
+               emit_return(call<primitive=from_array[Vec]>(data_arr)) ;
+            """
+prim<s:=m> lzc_imask(value):
+  brief_description "Counts leading zeros in an imask."
+  operation ""
+  impls:
+    [avx512, avx2, sse, neon, scalar, generic]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          avx2 [avx]
+          sse [sse]
+          neon [neon]
+          scalar []
+          generic []
+        implementation:
+          tsil "emit_return(details::clz(call<primitive=to_integral[Vec]>(value)));"
+    [oneAPIfpga, oneAPIfpgaRTL]:
+      ?i?:
+        requires:
+          oneAPIfpga [oneAPIfpgaDev]
+          oneAPIfpgaRTL [oneAPIfpgaDev]
+        implementation:
+          tsil "emit_return(details::clz_recursive<type<vector::imask>, type<intrin<vector::imask>>::apply>(call<primitive=to_integral[Vec]>(value)));"
+prim<s:=m> tzc(value):
+  brief_description "Counts trailing zeros in an imask."
+  operation ""
+  tests:
+    - {test_name "tzc_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, expected_rule "tzc", case {inputs [8], expected 3}}
+    - {test_name "tzc_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, expected_rule "tzc", case {inputs [0], expected 32}}
+  impls:
+    [avx512, avx2, sse, neon, scalar, generic]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          avx2 [avx]
+          sse [sse]
+          neon [neon]
+          scalar []
+          generic []
+        implementation:
+          tsil "emit_return(details::ctz(call<primitive=to_integral[Vec]>(value)));"

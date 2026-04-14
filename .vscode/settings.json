@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^cd /workspaces/py-bench && python tests/test-timing\\.py$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

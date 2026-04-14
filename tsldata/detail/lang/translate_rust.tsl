@@ -1,0 +1,750 @@
+translation rust:
+  preamble """  #![allow(non_upper_case_globals)]
+  #![allow(unused_parens)]
+  #[cfg(feature = "std")]
+  extern crate std;
+  #[cfg(feature = "alloc")]
+  extern crate alloc;
+  use core::marker::PhantomData;
+  pub struct Simd<T, Ext>(PhantomData<(T, Ext)>);
+  pub trait SimdVector {
+    type BaseType: Copy + Default + 'static;
+    type RegisterType;
+    type MaskType;
+    type MaskUnderlyingType: Copy;
+    type ImaskType: Copy;
+    type OffsetBaseType: Copy;
+    type TransformExtension<T>;
+    const LANES: usize;
+    const ALIGN: usize;
+    const SIZE_B: usize;
+    const MASK_VECTOR_LOADABLE: bool;
+  }
+  pub trait ExtRegisterParam: SimdVector {
+    type RegisterParam<'a>;
+    fn to_register_param<'a>(value: &'a Self::RegisterType) -> Self::RegisterParam<'a>;
+  }
+  pub trait ExtToArrayParam: ExtRegisterParam + detail::ToArrayImpl {
+    fn to_array_param(value: Self::RegisterParam<'_>) -> <Self as detail::ToArrayImpl>::ReturnType;
+    fn to_array_ref(value: &Self::RegisterType) -> <Self as detail::ToArrayImpl>::ReturnType {
+      Self::to_array_param(Self::to_register_param(value))
+    }
+  }
+  pub struct Sse;
+  pub struct SseVl;
+  pub struct Avx2;
+  pub struct Avx2Vl;
+  pub struct Avx512;
+  pub struct Generic<const BITS: usize>;
+  pub struct OneAPIfpga<const BITS: usize>;
+  pub struct Scalar;
+  pub trait TslTypeInfo {
+    const IS_SIGNED: bool;
+    const IS_INTEGRAL: bool;
+  }
+  macro_rules! impl_tsl_type_info {
+    ($ty:ty, $signed:expr, $integral:expr) => {
+      impl TslTypeInfo for $ty {
+        const IS_SIGNED: bool = $signed;
+        const IS_INTEGRAL: bool = $integral;
+      }
+    };
+  }
+  impl_tsl_type_info!(i8, true, true);
+  impl_tsl_type_info!(i16, true, true);
+  impl_tsl_type_info!(i32, true, true);
+  impl_tsl_type_info!(i64, true, true);
+  impl_tsl_type_info!(u8, false, true);
+  impl_tsl_type_info!(u16, false, true);
+  impl_tsl_type_info!(u32, false, true);
+  impl_tsl_type_info!(u64, false, true);
+  impl_tsl_type_info!(f32, true, false);
+  impl_tsl_type_info!(f64, true, false);
+  pub mod modifier {
+    pub const BIN: i32 = 0;
+    pub const HEX: i32 = 1;
+    pub const DEC: i32 = 2;
+    pub const OCT: i32 = 3;
+  }
+  pub trait TslUnsigned {
+    type Unsigned: Copy + Default + 'static;
+  }
+  macro_rules! impl_tsl_unsigned {
+    ($ty:ty, $unsigned:ty) => {
+      impl TslUnsigned for $ty {
+        type Unsigned = $unsigned;
+      }
+    };
+  }
+  impl_tsl_unsigned!(i8, u8);
+  impl_tsl_unsigned!(i16, u16);
+  impl_tsl_unsigned!(i32, u32);
+  impl_tsl_unsigned!(i64, u64);
+  impl_tsl_unsigned!(u8, u8);
+  impl_tsl_unsigned!(u16, u16);
+  impl_tsl_unsigned!(u32, u32);
+  impl_tsl_unsigned!(u64, u64);
+  impl_tsl_unsigned!(f32, u32);
+  impl_tsl_unsigned!(f64, u64);
+  pub type TypeUnsignedOf<T> = <T as TslUnsigned>::Unsigned;
+  pub trait TslSigned {
+    type Signed;
+  }
+  macro_rules! impl_tsl_signed {
+    ($ty:ty, $signed:ty) => {
+      impl TslSigned for $ty {
+        type Signed = $signed;
+      }
+    };
+  }
+  impl_tsl_signed!(i8, i8);
+  impl_tsl_signed!(i16, i16);
+  impl_tsl_signed!(i32, i32);
+  impl_tsl_signed!(i64, i64);
+  impl_tsl_signed!(u8, i8);
+  impl_tsl_signed!(u16, i16);
+  impl_tsl_signed!(u32, i32);
+  impl_tsl_signed!(u64, i64);
+  impl_tsl_signed!(f32, i32);
+  impl_tsl_signed!(f64, i64);
+  pub type TypeSignedOf<T> = <T as TslSigned>::Signed;
+  pub trait TslImask {
+    type Imask;
+  }
+  macro_rules! impl_tsl_imask {
+    ($ty:ty, $imask:ty) => {
+      impl TslImask for $ty {
+        type Imask = $imask;
+      }
+    };
+  }
+  impl_tsl_imask!(i8, u8);
+  impl_tsl_imask!(u8, u8);
+  impl_tsl_imask!(i16, u16);
+  impl_tsl_imask!(u16, u16);
+  impl_tsl_imask!(i32, u32);
+  impl_tsl_imask!(u32, u32);
+  impl_tsl_imask!(i64, u64);
+  impl_tsl_imask!(u64, u64);
+  impl_tsl_imask!(f32, u32);
+  impl_tsl_imask!(f64, u64);
+  pub type TypeImaskOf<T> = <T as TslImask>::Imask;
+  pub trait TslMaskWord: Copy + Default + 'static {
+    fn one_bits() -> Self;
+    fn is_nonzero(self) -> bool;
+  }
+  macro_rules! impl_tsl_mask_word {
+    ($ty:ty) => {
+      impl TslMaskWord for $ty {
+        #[inline]
+        fn one_bits() -> Self { !0 }
+        #[inline]
+        fn is_nonzero(self) -> bool { self != 0 }
+      }
+    };
+  }
+  macro_rules! impl_tsl_mask_word_float {
+    ($ty:ty, $bits:ty) => {
+      impl TslMaskWord for $ty {
+        #[inline]
+        fn one_bits() -> Self { <$ty>::from_bits(<$bits>::MAX) }
+        #[inline]
+        fn is_nonzero(self) -> bool { self != 0.0 }
+      }
+    };
+  }
+  impl_tsl_mask_word!(i8);
+  impl_tsl_mask_word!(i16);
+  impl_tsl_mask_word!(i32);
+  impl_tsl_mask_word!(i64);
+  impl_tsl_mask_word!(u8);
+  impl_tsl_mask_word!(u16);
+  impl_tsl_mask_word!(u32);
+  impl_tsl_mask_word!(u64);
+  impl_tsl_mask_word_float!(f32, u32);
+  impl_tsl_mask_word_float!(f64, u64);
+  pub trait TslMaskLaneValue: Copy + Default + 'static {
+    fn all_true() -> Self;
+    fn all_false() -> Self {
+      Self::default()
+    }
+  }
+  macro_rules! impl_tsl_mask_lane_value_int {
+    ($ty:ty) => {
+      impl TslMaskLaneValue for $ty {
+        #[inline]
+        fn all_true() -> Self { !0 }
+      }
+    };
+  }
+  macro_rules! impl_tsl_mask_lane_value_float {
+    ($ty:ty, $bits:ty) => {
+      impl TslMaskLaneValue for $ty {
+        #[inline]
+        fn all_true() -> Self { <$ty>::from_bits(<$bits>::MAX) }
+      }
+    };
+  }
+  impl_tsl_mask_lane_value_int!(i8);
+  impl_tsl_mask_lane_value_int!(i16);
+  impl_tsl_mask_lane_value_int!(i32);
+  impl_tsl_mask_lane_value_int!(i64);
+  impl_tsl_mask_lane_value_int!(u8);
+  impl_tsl_mask_lane_value_int!(u16);
+  impl_tsl_mask_lane_value_int!(u32);
+  impl_tsl_mask_lane_value_int!(u64);
+  impl_tsl_mask_lane_value_float!(f32, u32);
+  impl_tsl_mask_lane_value_float!(f64, u64);
+  pub trait TslArith: Copy {
+    fn add(a: Self, b: Self) -> Self;
+    fn sub(a: Self, b: Self) -> Self;
+    fn mul(a: Self, b: Self) -> Self;
+    fn div(a: Self, b: Self) -> Self;
+    fn rem(a: Self, b: Self) -> Self;
+    fn shl(a: Self, b: Self) -> Self;
+    fn shr(a: Self, b: Self) -> Self;
+  }
+  macro_rules! impl_tsl_arith_int {
+    ($ty:ty) => {
+      impl TslArith for $ty {
+        #[inline]
+        fn add(a: Self, b: Self) -> Self { a.wrapping_add(b) }
+        #[inline]
+        fn sub(a: Self, b: Self) -> Self { a.wrapping_sub(b) }
+        #[inline]
+        fn mul(a: Self, b: Self) -> Self { a.wrapping_mul(b) }
+        #[inline]
+        fn div(a: Self, b: Self) -> Self { a / b }
+        #[inline]
+        fn rem(a: Self, b: Self) -> Self { a % b }
+        #[inline]
+        fn shl(a: Self, b: Self) -> Self { a.wrapping_shl(b as u32) }
+        #[inline]
+        fn shr(a: Self, b: Self) -> Self { a.wrapping_shr(b as u32) }
+      }
+    };
+  }
+  macro_rules! impl_tsl_arith_float {
+    ($ty:ty) => {
+      impl TslArith for $ty {
+        #[inline]
+        fn add(a: Self, b: Self) -> Self { a + b }
+        #[inline]
+        fn sub(a: Self, b: Self) -> Self { a - b }
+        #[inline]
+        fn mul(a: Self, b: Self) -> Self { a * b }
+        #[inline]
+        fn div(a: Self, b: Self) -> Self { a / b }
+        #[inline]
+        fn rem(a: Self, b: Self) -> Self { a % b }
+        #[inline]
+        fn shl(a: Self, _b: Self) -> Self { a }
+        #[inline]
+        fn shr(a: Self, _b: Self) -> Self { a }
+      }
+    };
+  }
+  impl_tsl_arith_int!(i8);
+  impl_tsl_arith_int!(u8);
+  impl_tsl_arith_int!(i16);
+  impl_tsl_arith_int!(u16);
+  impl_tsl_arith_int!(i32);
+  impl_tsl_arith_int!(u32);
+  impl_tsl_arith_int!(i64);
+  impl_tsl_arith_int!(u64);
+  impl_tsl_arith_float!(f32);
+  impl_tsl_arith_float!(f64);
+  #[inline]
+  pub fn arith_add<T: TslArith>(a: T, b: T) -> T { T::add(a, b) }
+  #[inline]
+  pub fn arith_sub<T: TslArith>(a: T, b: T) -> T { T::sub(a, b) }
+  #[inline]
+  pub fn arith_mul<T: TslArith>(a: T, b: T) -> T { T::mul(a, b) }
+  #[inline]
+  pub fn arith_div<T: TslArith>(a: T, b: T) -> T { T::div(a, b) }
+  #[inline]
+  pub fn arith_rem<T: TslArith>(a: T, b: T) -> T { T::rem(a, b) }
+  #[inline]
+  pub fn arith_shl<T: TslArith>(a: T, b: T) -> T { T::shl(a, b) }
+  #[inline]
+  pub fn arith_shr<T: TslArith>(a: T, b: T) -> T { T::shr(a, b) }
+  pub struct TypeSelect<const COND: bool, Then, Else>(PhantomData<(Then, Else)>);
+  pub trait TypeSelectImpl {
+    type Type;
+  }
+  impl<Then, Else> TypeSelectImpl for TypeSelect<true, Then, Else> {
+    type Type = Then;
+  }
+  impl<Then, Else> TypeSelectImpl for TypeSelect<false, Then, Else> {
+    type Type = Else;
+  }
+  pub type TypeSelectOf<const COND: bool, Then, Else> =
+    <TypeSelect<COND, Then, Else> as TypeSelectImpl>::Type;
+  pub fn type_is_same<T: 'static, U: 'static>() -> bool {
+    core::any::TypeId::of::<T>() == core::any::TypeId::of::<U>()
+  }
+  pub fn type_is_signed<T: TslTypeInfo>() -> bool {
+    T::IS_SIGNED
+  }
+  pub fn type_is_integral<T: TslTypeInfo>() -> bool {
+    T::IS_INTEGRAL
+  }
+  macro_rules! cast_from_impl {
+    ($name:ident, $from:ty, [$($to:ty),+]) => {
+      fn $name<U: Copy + 'static>(v: $from) -> U {
+        $(if type_is_same::<U, $to>() {
+          let r: $to = v as $to;
+          return unsafe { core::mem::transmute_copy(&r) };
+        })+
+        panic!("unsupported cast");
+      }
+    };
+  }
+  cast_from_impl!(cast_from_i8, i8, [i8, u8, i16, u16, i32, u32, i64, u64, f32, f64]);
+  cast_from_impl!(cast_from_u8, u8, [i8, u8, i16, u16, i32, u32, i64, u64, f32, f64]);
+  cast_from_impl!(cast_from_i16, i16, [i8, u8, i16, u16, i32, u32, i64, u64, f32, f64]);
+  cast_from_impl!(cast_from_u16, u16, [i8, u8, i16, u16, i32, u32, i64, u64, f32, f64]);
+  cast_from_impl!(cast_from_i32, i32, [i8, u8, i16, u16, i32, u32, i64, u64, f32, f64]);
+  cast_from_impl!(cast_from_u32, u32, [i8, u8, i16, u16, i32, u32, i64, u64, f32, f64]);
+  cast_from_impl!(cast_from_i64, i64, [i8, u8, i16, u16, i32, u32, i64, u64, f32, f64]);
+  cast_from_impl!(cast_from_u64, u64, [i8, u8, i16, u16, i32, u32, i64, u64, f32, f64]);
+  cast_from_impl!(cast_from_f32, f32, [i8, u8, i16, u16, i32, u32, i64, u64, f32, f64]);
+  cast_from_impl!(cast_from_f64, f64, [i8, u8, i16, u16, i32, u32, i64, u64, f32, f64]);
+  pub fn cast_value<T: Copy + 'static, U: Copy + 'static>(value: T) -> U {
+    if type_is_same::<T, i8>() {
+      let v = unsafe { core::mem::transmute_copy::<T, i8>(&value) };
+      return cast_from_i8::<U>(v);
+    }
+    if type_is_same::<T, u8>() {
+      let v = unsafe { core::mem::transmute_copy::<T, u8>(&value) };
+      return cast_from_u8::<U>(v);
+    }
+    if type_is_same::<T, i16>() {
+      let v = unsafe { core::mem::transmute_copy::<T, i16>(&value) };
+      return cast_from_i16::<U>(v);
+    }
+    if type_is_same::<T, u16>() {
+      let v = unsafe { core::mem::transmute_copy::<T, u16>(&value) };
+      return cast_from_u16::<U>(v);
+    }
+    if type_is_same::<T, i32>() {
+      let v = unsafe { core::mem::transmute_copy::<T, i32>(&value) };
+      return cast_from_i32::<U>(v);
+    }
+    if type_is_same::<T, u32>() {
+      let v = unsafe { core::mem::transmute_copy::<T, u32>(&value) };
+      return cast_from_u32::<U>(v);
+    }
+    if type_is_same::<T, i64>() {
+      let v = unsafe { core::mem::transmute_copy::<T, i64>(&value) };
+      return cast_from_i64::<U>(v);
+    }
+    if type_is_same::<T, u64>() {
+      let v = unsafe { core::mem::transmute_copy::<T, u64>(&value) };
+      return cast_from_u64::<U>(v);
+    }
+    if type_is_same::<T, f32>() {
+      let v = unsafe { core::mem::transmute_copy::<T, f32>(&value) };
+      return cast_from_f32::<U>(v);
+    }
+    if type_is_same::<T, f64>() {
+      let v = unsafe { core::mem::transmute_copy::<T, f64>(&value) };
+      return cast_from_f64::<U>(v);
+    }
+    panic!("unsupported cast");
+  }
+  fn saturating_from_i128<U: Copy + 'static>(v: i128) -> U {
+    if type_is_same::<U, i8>() {
+      let r = v.clamp(i8::MIN as i128, i8::MAX as i128) as i8;
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, u8>() {
+      let r = if v < 0 { 0 } else if v > u8::MAX as i128 { u8::MAX } else { v as u8 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, i16>() {
+      let r = v.clamp(i16::MIN as i128, i16::MAX as i128) as i16;
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, u16>() {
+      let r = if v < 0 { 0 } else if v > u16::MAX as i128 { u16::MAX } else { v as u16 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, i32>() {
+      let r = v.clamp(i32::MIN as i128, i32::MAX as i128) as i32;
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, u32>() {
+      let r = if v < 0 { 0 } else if v > u32::MAX as i128 { u32::MAX } else { v as u32 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, i64>() {
+      let r = v.clamp(i64::MIN as i128, i64::MAX as i128) as i64;
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, u64>() {
+      let r = if v < 0 { 0 } else if v > u64::MAX as i128 { u64::MAX } else { v as u64 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, f32>() {
+      let r = v as f32;
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, f64>() {
+      let r = v as f64;
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    panic!("unsupported saturating cast");
+  }
+  fn saturating_from_u128<U: Copy + 'static>(v: u128) -> U {
+    if type_is_same::<U, i8>() {
+      let r = if v > i8::MAX as u128 { i8::MAX } else { v as i8 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, u8>() {
+      let r = if v > u8::MAX as u128 { u8::MAX } else { v as u8 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, i16>() {
+      let r = if v > i16::MAX as u128 { i16::MAX } else { v as i16 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, u16>() {
+      let r = if v > u16::MAX as u128 { u16::MAX } else { v as u16 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, i32>() {
+      let r = if v > i32::MAX as u128 { i32::MAX } else { v as i32 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, u32>() {
+      let r = if v > u32::MAX as u128 { u32::MAX } else { v as u32 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, i64>() {
+      let r = if v > i64::MAX as u128 { i64::MAX } else { v as i64 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, u64>() {
+      let r = if v > u64::MAX as u128 { u64::MAX } else { v as u64 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, f32>() {
+      let r = v as f32;
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, f64>() {
+      let r = v as f64;
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    panic!("unsupported saturating cast");
+  }
+  fn saturating_from_f64<U: Copy + 'static>(v: f64) -> U {
+    if type_is_same::<U, i8>() {
+      let r = if v.is_nan() { 0 } else if v < i8::MIN as f64 { i8::MIN } else if v > i8::MAX as f64 { i8::MAX } else { v as i8 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, u8>() {
+      let r = if v.is_nan() || v < 0.0 { 0 } else if v > u8::MAX as f64 { u8::MAX } else { v as u8 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, i16>() {
+      let r = if v.is_nan() { 0 } else if v < i16::MIN as f64 { i16::MIN } else if v > i16::MAX as f64 { i16::MAX } else { v as i16 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, u16>() {
+      let r = if v.is_nan() || v < 0.0 { 0 } else if v > u16::MAX as f64 { u16::MAX } else { v as u16 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, i32>() {
+      let r = if v.is_nan() { 0 } else if v < i32::MIN as f64 { i32::MIN } else if v > i32::MAX as f64 { i32::MAX } else { v as i32 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, u32>() {
+      let r = if v.is_nan() || v < 0.0 { 0 } else if v > u32::MAX as f64 { u32::MAX } else { v as u32 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, i64>() {
+      let r = if v.is_nan() { 0 } else if v < i64::MIN as f64 { i64::MIN } else if v > i64::MAX as f64 { i64::MAX } else { v as i64 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, u64>() {
+      let r = if v.is_nan() || v < 0.0 { 0 } else if v > u64::MAX as f64 { u64::MAX } else { v as u64 };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, f32>() {
+      let r = if v.is_nan() {
+        f32::NAN
+      } else if v > f32::MAX as f64 {
+        f32::MAX
+      } else if v < -(f32::MAX as f64) {
+        -f32::MAX
+      } else {
+        v as f32
+      };
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    if type_is_same::<U, f64>() {
+      let r = v;
+      return unsafe { core::mem::transmute_copy(&r) };
+    }
+    panic!("unsupported saturating cast");
+  }
+  pub fn saturating_cast_value<T: Copy + 'static, U: Copy + 'static>(value: T) -> U {
+    if type_is_same::<T, i8>() {
+      let v = unsafe { core::mem::transmute_copy::<T, i8>(&value) };
+      return saturating_from_i128::<U>(v as i128);
+    }
+    if type_is_same::<T, u8>() {
+      let v = unsafe { core::mem::transmute_copy::<T, u8>(&value) };
+      return saturating_from_u128::<U>(v as u128);
+    }
+    if type_is_same::<T, i16>() {
+      let v = unsafe { core::mem::transmute_copy::<T, i16>(&value) };
+      return saturating_from_i128::<U>(v as i128);
+    }
+    if type_is_same::<T, u16>() {
+      let v = unsafe { core::mem::transmute_copy::<T, u16>(&value) };
+      return saturating_from_u128::<U>(v as u128);
+    }
+    if type_is_same::<T, i32>() {
+      let v = unsafe { core::mem::transmute_copy::<T, i32>(&value) };
+      return saturating_from_i128::<U>(v as i128);
+    }
+    if type_is_same::<T, u32>() {
+      let v = unsafe { core::mem::transmute_copy::<T, u32>(&value) };
+      return saturating_from_u128::<U>(v as u128);
+    }
+    if type_is_same::<T, i64>() {
+      let v = unsafe { core::mem::transmute_copy::<T, i64>(&value) };
+      return saturating_from_i128::<U>(v as i128);
+    }
+    if type_is_same::<T, u64>() {
+      let v = unsafe { core::mem::transmute_copy::<T, u64>(&value) };
+      return saturating_from_u128::<U>(v as u128);
+    }
+    if type_is_same::<T, f32>() {
+      let v = unsafe { core::mem::transmute_copy::<T, f32>(&value) };
+      return saturating_from_f64::<U>(v as f64);
+    }
+    if type_is_same::<T, f64>() {
+      let v = unsafe { core::mem::transmute_copy::<T, f64>(&value) };
+      return saturating_from_f64::<U>(v);
+    }
+    panic!("unsupported saturating cast");
+  }
+  #[inline]
+  pub fn idx_offset<T: Copy + 'static>(idx: T, scale: i32) -> usize {
+    let idx_i64: i64 = cast_value::<T, i64>(idx);
+    (idx_i64 * scale as i64) as usize
+  }
+  #[inline]
+  pub fn ptr_add<T>(ptr: *const T, offset: usize) -> *const T {
+    unsafe { ptr.add(offset) }
+  }
+  #[inline]
+  pub fn ptr_add_mut<T>(ptr: *mut T, offset: usize) -> *mut T {
+    unsafe { ptr.add(offset) }
+  }
+  #[inline]
+  pub fn bit_cast<T: Copy, U>(value: T) -> U {
+    unsafe { core::mem::transmute_copy(&value) }
+  }
+  #[inline]
+  pub unsafe fn assume_aligned<const ALIGN: usize, P>(ptr: P) -> P {
+    let _ = ALIGN;
+    ptr
+  }
+  pub trait TslOffset {
+    fn from_u32(value: u32) -> Self;
+  }
+  impl TslOffset for i32 {
+    fn from_u32(value: u32) -> Self {
+      value as i32
+    }
+  }
+  impl TslOffset for i16 {
+    fn from_u32(value: u32) -> Self {
+      value as i16
+    }
+  }
+  impl TslOffset for i8 {
+    fn from_u32(value: u32) -> Self {
+      value as i8
+    }
+  }
+  impl TslOffset for u32 {
+    fn from_u32(value: u32) -> Self {
+      value
+    }
+  }
+  impl TslOffset for u16 {
+    fn from_u32(value: u32) -> Self {
+      value as u16
+    }
+  }
+  impl TslOffset for u8 {
+    fn from_u32(value: u32) -> Self {
+      value as u8
+    }
+  }
+  impl TslOffset for i64 {
+    fn from_u32(value: u32) -> Self {
+      value as i64
+    }
+  }
+  impl TslOffset for u64 {
+    fn from_u32(value: u32) -> Self {
+      value as u64
+    }
+  }
+  pub trait TslInt {
+    fn to_u128(self) -> u128;
+    fn bits() -> u32;
+  }
+  impl TslInt for i8 {
+    fn to_u128(self) -> u128 {
+      self as u8 as u128
+    }
+    fn bits() -> u32 {
+      8
+    }
+  }
+  impl TslInt for u8 {
+    fn to_u128(self) -> u128 {
+      self as u128
+    }
+    fn bits() -> u32 {
+      8
+    }
+  }
+  impl TslInt for i16 {
+    fn to_u128(self) -> u128 {
+      self as u16 as u128
+    }
+    fn bits() -> u32 {
+      16
+    }
+  }
+  impl TslInt for u16 {
+    fn to_u128(self) -> u128 {
+      self as u128
+    }
+    fn bits() -> u32 {
+      16
+    }
+  }
+  impl TslInt for i32 {
+    fn to_u128(self) -> u128 {
+      self as u32 as u128
+    }
+    fn bits() -> u32 {
+      32
+    }
+  }
+  impl TslInt for u32 {
+    fn to_u128(self) -> u128 {
+      self as u128
+    }
+    fn bits() -> u32 {
+      32
+    }
+  }
+  impl TslInt for i64 {
+    fn to_u128(self) -> u128 {
+      self as u64 as u128
+    }
+    fn bits() -> u32 {
+      64
+    }
+  }
+  impl TslInt for u64 {
+    fn to_u128(self) -> u128 {
+      self as u128
+    }
+    fn bits() -> u32 {
+      64
+    }
+  }
+"""
+  call "crate::tsl::{name}({args})"
+  call_primitive "crate::tsl::{name}::{func}{template}({args})"
+  type_is_same "crate::tsl::type_is_same::<{lhs}, {rhs}>()"
+  type_is_signed "crate::tsl::type_is_signed::<{type}>()"
+  type_is_integral "crate::tsl::type_is_integral::<{type}>()"
+  type_unsigned_of "crate::tsl::TypeUnsignedOf::<{type}>"
+  type_signed_of "crate::tsl::TypeSignedOf::<{type}>"
+  type_select "crate::tsl::TypeSelectOf::<{cond}, {then}, {else_}>"
+  type_imask_of "crate::tsl::TypeImaskOf::<{type}>"
+  type_alias "type {name} = {type};"
+  type_size "usize"
+  type_generic_base "crate::tsl::TslGenericBase<{type}>"
+  type_generic_register "crate::tsl::TslGenericRegister<{type}>"
+  array_type "[{type}; {size}]"
+  array_type_aligned "crate::tsl::Aligned::<{ {align} }, [{type}; {size}]>"
+  type_vector_base "Self::BaseType"
+  type_vector_register "Self::RegisterType"
+  type_vector_mask "Self::MaskType"
+  type_vector_mask_underlying "Self::MaskUnderlyingType"
+  type_vector_imask "Self::ImaskType"
+  type_vector_offset_base "Self::OffsetBaseType"
+  type_vector_transform "Self::TransformExtension<{type}>"
+  type_vector_as_extension "super::Simd<{base}, {ext}>"
+  algo_max_element "crate::tsl::algo::max_element({ptr}, {len})"
+  algo_min_element "crate::tsl::algo::min_element({ptr}, {len})"
+  algo_swap "core::mem::swap({a}, {b})"
+  pack_first "{arg}"
+  seq_type "tsl_seq_type!({type}, {args})"
+  seq_make "tsl_seq_make!({type}, {count})"
+  var_infer "let mut {name} = {value};"
+  var_const_infer "let {name} = {value};"
+  var_typed "let mut {name}: {type} = {value};"
+  var_const_typed "let {name}: {type} = {value};"
+  var_array_uninit "#[allow(invalid_value, unused_mut)] let mut {name}: {type} = unsafe { core::mem::MaybeUninit::<{type}>::uninit().assume_init() };"
+  var_uninit "#[allow(invalid_value, unused_mut)] let mut {name}: {type} = unsafe { core::mem::MaybeUninit::<{type}>::uninit().assume_init() };"
+  var_init_register "let mut {name} = alloc::vec![Self::BaseType::default(); Self::LANES];"
+  flow_if_static "if {cond}"
+  flow_else_if_static "else if {cond}"
+  flow_if_runtime "if {cond}"
+  flow_else_if_runtime "else if {cond}"
+  loop_unroll "// unroll {count}"
+  loop_range "for {var} in ({start}..{end}).step_by({step})"
+  cast_static "({expr} as {type})"
+  cast_saturating "crate::tsl::saturating_cast_value::<_, {type}>({expr})"
+  cast_reinterpret "crate::tsl::bit_cast::<_, {type}>({expr})"
+  cast_bitcast "crate::tsl::bit_cast::<_, {type}>({expr})"
+  cast_const "({expr} as {type})"
+  cast_dynamic "({expr} as {type})"
+  mem_copy "crate::tsl::mem_copy({dst}, {src}, {count})"
+  mem_set "crate::tsl::mem_set({ptr}, {value}, {count})"
+  mem_alloc "crate::tsl::mem_alloc({count})"
+  mem_alloc_aligned "crate::tsl::mem_alloc_aligned({align}, {count})"
+  mem_free "crate::tsl::mem_free({ptr})"
+  io_get_flags "crate::tsl::io_get_flags({out})"
+  io_set_flags "crate::tsl::io_set_flags({out}, {flags})"
+  io_set_base "crate::tsl::io_set_base({out}, {base})"
+  io_set_width "crate::tsl::io_set_width({out}, {width})"
+  io_write "crate::tsl::io_write({out}, {expr})"
+  io_write_base "tsl_io_write_base!({out}, {base}, {width}, {value})"
+  io_write_bin "tsl_io_write_bin!({out}, {bits}, {value})"
+  io_endl "crate::tsl::io_endl({out})"
+  emit_return "return {value}"
+  value_vector_length "Self::LANES"
+  value_vector_alignment "Self::ALIGN"
+  value_vector_size_B "Self::SIZE_B"
+  value_vector_mask_vector_loadable "Self::MASK_VECTOR_LOADABLE"
+  value_size_of "core::mem::size_of::<{type}>()"
+  value_size_of_expr "core::mem::size_of_val(&{expr})"
+  value_pack_size "tsl_pack_size!({expr})"
+  value_generic_length "<{type} as SimdVector>::LANES"
+  value_generic_runtime_length "<{type} as SimdVector>::LANES"
+  value_cmp_eq_oq "core::arch::x86_64::_CMP_EQ_OQ"
+  value_cmp_gt_oq "core::arch::x86_64::_CMP_GT_OQ"
+  value_cmp_ge_oq "core::arch::x86_64::_CMP_GE_OQ"
+  value_cmp_lt_oq "core::arch::x86_64::_CMP_LT_OQ"
+  value_cmp_le_oq "core::arch::x86_64::_CMP_LE_OQ"
+  value_cmp_neq_uq "core::arch::x86_64::_CMP_NEQ_UQ"
+  value_mm_fround_to_zero "core::arch::x86_64::_MM_FROUND_TO_ZERO"
+  value_array_uninit "{ #[allow(invalid_value)] unsafe { core::mem::MaybeUninit::<{type}>::uninit().assume_init() } }"
+  value_uninit "{ #[allow(invalid_value)] unsafe { core::mem::MaybeUninit::uninit().assume_init() } }"
+  value_uninit_typed "{ #[allow(invalid_value)] unsafe { core::mem::MaybeUninit::<{type}>::uninit().assume_init() } }"

@@ -1,0 +1,380 @@
+prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
+  brief_description "Bitwise AND on masks."
+  operation ""
+  tests:
+    - {test_name "mask_and_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [170, 204], expected 136}}
+    - {test_name "mask_and_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [43690, 52428], expected 34952}}
+    - {test_name "mask_and_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [43690, 52428], expected 34952}}
+    - {test_name "mask_and_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [170, 204], expected 136}}
+  impls:
+    [avx512, sve]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          sve [sve]
+        implementation:
+          tsil "emit_return(mask_a & mask_b);"
+    avx2_vl:
+      arith:
+        requires [avx2, avx512f, avx512vl]
+        implementation:
+          tsil "emit_return(mask_a & mask_b);"
+    sse_vl:
+      arith:
+        requires [sse2, avx512f, avx512vl]
+        implementation:
+          tsil "emit_return(mask_a & mask_b);"
+    avx2:
+      arith:
+        requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
+        implementation:
+          tsil "emit_return(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
+    sse:
+      arith:
+        requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2], ui64 [sse, sse2], f32 [sse], f64 [sse, sse2]}
+        implementation:
+          tsil "emit_return(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil "emit_return(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(mask_a & mask_b);"
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+              type<alias>(MaskT, type<vector::mask>)
+              MaskT result = mask<zero>();
+              loop<unroll>(value<vector::length>)
+              loop<range>(i, 0, value<vector::length>, 1) {
+                if (mask<test>(mask_a, i) && mask<test>(mask_b, i)) {
+                  mask<set>(result, i, true);
+                }
+              }
+              emit_return(result);
+            """
+prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
+  brief_description "Bitwise OR on masks."
+  operation ""
+  tests:
+    - {test_name "mask_or_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [170, 204], expected 238}}
+    - {test_name "mask_or_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [43690, 52428], expected 61166}}
+    - {test_name "mask_or_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [43690, 52428], expected 61166}}
+    - {test_name "mask_or_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [170, 204], expected 238}}
+  impls:
+    [avx512, sve]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          sve [sve]
+        implementation:
+          tsil "emit_return(mask_a | mask_b);"
+    avx2_vl:
+      arith:
+        requires [avx2, avx512f, avx512vl]
+        implementation:
+          tsil "emit_return(mask_a | mask_b);"
+    sse_vl:
+      arith:
+        requires [sse2, avx512f, avx512vl]
+        implementation:
+          tsil "emit_return(mask_a | mask_b);"
+    avx2:
+      arith:
+        requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
+        implementation:
+          tsil "emit_return(call<primitive=binary_or[Vec]>(mask_a, mask_b));"
+    sse:
+      arith:
+        requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2], ui64 [sse, sse2], f32 [sse], f64 [sse, sse2]}
+        implementation:
+          tsil "emit_return(call<primitive=binary_or[Vec]>(mask_a, mask_b));"
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil "emit_return(call<primitive=binary_or[Vec]>(mask_a, mask_b));"
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(mask_a | mask_b);"
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+              type<alias>(MaskT, type<vector::mask>)
+              MaskT result = mask<zero>();
+              loop<unroll>(value<vector::length>)
+              loop<range>(i, 0, value<vector::length>, 1) {
+                if (mask<test>(mask_a, i) || mask<test>(mask_b, i)) {
+                  mask<set>(result, i, true);
+                }
+              }
+              emit_return(result);
+            """
+prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
+  brief_description "Bitwise XOR on masks."
+  operation ""
+  tests:
+    - {test_name "mask_xor_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [170, 204], expected 102}}
+    - {test_name "mask_xor_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [43690, 52428], expected 26214}}
+    - {test_name "mask_xor_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [43690, 52428], expected 26214}}
+    - {test_name "mask_xor_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [170, 204], expected 102}}
+  impls:
+    [avx512, sve]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          sve [sve]
+        implementation:
+          tsil "emit_return(mask_a ^ mask_b);"
+    avx2_vl:
+      arith:
+        requires [avx2, avx512f, avx512vl]
+        implementation:
+          tsil "emit_return(mask_a ^ mask_b);"
+    sse_vl:
+      arith:
+        requires [sse2, avx512f, avx512vl]
+        implementation:
+          tsil "emit_return(mask_a ^ mask_b);"
+    avx2:
+      arith:
+        requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
+        implementation:
+          tsil "emit_return(call<primitive=binary_xor[Vec]>(mask_a, mask_b));"
+    sse:
+      arith:
+        requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2], ui64 [sse, sse2], f32 [sse], f64 [sse, sse2]}
+        implementation:
+          tsil "emit_return(call<primitive=binary_xor[Vec]>(mask_a, mask_b));"
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil "emit_return(call<primitive=binary_xor[Vec]>(mask_a, mask_b));"
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(mask_a ^ mask_b);"
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+              type<alias>(MaskT, type<vector::mask>)
+              MaskT result = mask<zero>();
+              loop<unroll>(value<vector::length>)
+              loop<range>(i, 0, value<vector::length>, 1) {
+                if (mask<test>(mask_a, i) != mask<test>(mask_b, i)) {
+                  mask<set>(result, i, true);
+                }
+              }
+              emit_return(result);
+            """
+prim<m:=m> mask_binary_not(mask):
+  brief_description "Bitwise NOT on masks."
+  operation ""
+  tests:
+    - {test_name "mask_not_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [170], expected 18446744073709551445}}
+    - {test_name "mask_not_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [43690], expected 4294923605}}
+    - {test_name "mask_not_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [43690], expected 21845}}
+    - {test_name "mask_not_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [170], expected 85}}
+    - {test_name "mask_not_ui8_edge", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [0], expected 18446744073709551615}}
+    - {test_name "mask_not_ui16_edge", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [0], expected 4294967295}}
+    - {test_name "mask_not_ui32_edge", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [0], expected 65535}}
+    - {test_name "mask_not_ui64_edge", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [0], expected 255}}
+  impls:
+    [avx512, sve]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          sve [sve]
+        implementation:
+          tsil "emit_return(~mask);"
+    avx2_vl:
+      arith:
+        requires [avx2, avx512f, avx512vl]
+        implementation:
+          tsil "emit_return(~mask);"
+    sse_vl:
+      arith:
+        requires [sse2, avx512f, avx512vl]
+        implementation:
+          tsil "emit_return(~mask);"
+    avx2:
+      arith:
+        requires [avx, avx2]
+        implementation:
+          tsil "emit_return(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
+    sse:
+      arith:
+        requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2, sse4_1], ui64 [sse, sse2, sse4_1], f32 [sse, sse2], f64 [sse, sse2, sse4_1]}
+        implementation:
+          tsil "emit_return(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil "emit_return(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(!mask);"
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+              type<alias>(MaskT, type<vector::mask>)
+              MaskT result = mask<zero>();
+              loop<unroll>(value<vector::length>)
+              loop<range>(i, 0, value<vector::length>, 1) {
+                if (!mask<test>(mask, i)) {
+                  mask<set>(result, i, true);
+                }
+              }
+              emit_return(result);
+            """
+prim<s:=m> mask_population_count(mask):
+  brief_description "Counts bits set in a mask scalar."
+  operation ""
+  tests:
+    - {test_name "mask_popcnt_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, expected_rule "popcnt", case {inputs [12297829382473034410], expected 32}}
+    - {test_name "mask_popcnt_ui8_edge", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, expected_rule "popcnt", case {inputs [18446744073709551615], expected 64}}
+    - {test_name "mask_popcnt_ui8_zero", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, expected_rule "popcnt", case {inputs [0], expected 0}}
+    - {test_name "mask_popcnt_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, expected_rule "popcnt", case {inputs [2863311530], expected 16}}
+    - {test_name "mask_popcnt_ui16_edge", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, expected_rule "popcnt", case {inputs [4294967295], expected 32}}
+    - {test_name "mask_popcnt_ui16_zero", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, expected_rule "popcnt", case {inputs [0], expected 0}}
+    - {test_name "mask_popcnt_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, expected_rule "popcnt", case {inputs [43690], expected 8}}
+    - {test_name "mask_popcnt_ui32_edge", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, expected_rule "popcnt", case {inputs [65535], expected 16}}
+    - {test_name "mask_popcnt_ui32_zero", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, expected_rule "popcnt", case {inputs [0], expected 0}}
+    - {test_name "mask_popcnt_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, expected_rule "popcnt", case {inputs [170], expected 4}}
+    - {test_name "mask_popcnt_ui64_edge", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, expected_rule "popcnt", case {inputs [255], expected 8}}
+    - {test_name "mask_popcnt_ui64_zero", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, expected_rule "popcnt", case {inputs [0], expected 0}}
+  impls:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
+          scalar []
+        implementation:
+          tsil """
+            var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+            emit_return(
+              cast<static>(
+                type<vector::imask>,
+                details::popcount<type<vector::imask>, type<vector::imask>>(imask)
+              )
+            );
+          """
+    sve:
+      ?i8:
+        requires [sve]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<svcntp_b8>(call<primitive=mask_true[Vec]>(), mask)));"
+      ?i16:
+        requires [sve]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<svcntp_b16>(call<primitive=mask_true[Vec]>(), mask)));"
+      ?i32:
+        requires [sve]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
+      ?i64:
+        requires [sve]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
+      f32:
+        requires [sve]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
+      f64:
+        requires [sve]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::imask>, intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
+    [generic, oneAPIfpga]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+              type<alias>(CountT, type<vector::imask>)
+              CountT count = cast<static>(CountT, 0);
+              loop<unroll>(value<vector::length>)
+              loop<range>(i, 0, value<vector::length>, 1) {
+                if (mask<test>(mask, i)) {
+                  count = count + cast<static>(CountT, 1);
+                }
+              }
+              emit_return(count);
+            """
+prim<m:=(m,s)> shift_right_imask(data, shift):
+  brief_description "Arithmetic shift of an imask to the right by n bits."
+  operation ""
+  generic_params:
+    PreserveSign:
+      kind bool
+      default true
+  impls:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, scalar, generic, oneAPIfpga]:
+      ?i?:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx]
+          sse [sse]
+          neon [neon]
+          sve [sve]
+          scalar []
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+          if<compile>(( type<is_signed>(type<vector::imask>) ) && (!PreserveSign)) {
+             emit_return(cast<static>(type<vector::imask>, cast<static>(type<unsigned_of>(type<vector::imask>), data) >> shift));
+          } else {
+             emit_return(data >> shift) ;
+          }
+            """
+      f?:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx]
+          sse [sse]
+          neon [neon]
+          sve [sve]
+          scalar []
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+           emit_return(data >> cast<static>(type<vector::imask>, shift)) ;
+            """

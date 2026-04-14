@@ -1,0 +1,1389 @@
+description "Range compare operations"
+
+prim<m:=(v,v,v)> between_inclusive(x, left, right):
+  brief_description "Checks if the values of \"x\" are within an inclusive range (left <= x <= right)."
+  operation "FOR j := 0 to N-1\n\tresult[j] := ( left[j] <= x[j] && x[j] <= right[j] ) ? all_true : 0\nENDFOR"
+  tests:
+    - {test_name "between_inclusive_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 2, 4, 0, 7, 7, 9], [1, 3, 3, 4, 5, 7, 8, 10]], expected [4294967295, 4294967295, 4294967295, 4294967295, 4294967295, 0, 4294967295, 0]}}
+    - {test_name "between_inclusive_si32_mixed", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -3, -4, 5, 6, 7, 8], [-1, -3, -2, -5, 5, 7, 7, 9], [0, -2, -2, -4, 5, 7, 8, 9]], expected [-1, -1, 0, -1, -1, 0, -1, 0]}}
+    - {test_name "between_inclusive_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -3.0, 3.0, -5.0], [1.0, -2.0, 4.0, -4.0]], expected [NAN, NAN, NAN, 0.0]}}
+    - {test_name "between_inclusive_f32_nan_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -1.0, 0.0], [1.0, 0.0, 0.0, INFINITY]], expected [0.0, NAN, NAN, NAN]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return((left <= x) && (x <= right));"
+    generic:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+    oneAPIfpga:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+    oneAPIfpgaRTL:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512f, avx512bw]
+          avx2_vl:
+            idqword [avx2, avx512f, avx512vl]
+            bword   [avx2, avx512f, avx512vl, avx512bw]
+          sse_vl:
+            idqword [sse2, avx512f, avx512vl]
+            bword   [sse2, avx512f, avx512vl, avx512bw]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512  [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl  [sse2, avx512f, avx512vl]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+    avx2:
+      ?i?:
+        requires [avx2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+      f?:
+        requires [avx]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+    sse:
+      ?i?:
+        requires:
+          [si8, si16, si32, ui8, ui16, ui32] [sse2]
+          si64 [sse4_2]
+          ui64 [sse2, sse4_1]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+      f32:
+        requires [sse]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+      f64:
+        requires [sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+
+prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
+  brief_description "Checks if the values of \"x\" are within a left-inclusive range (left <= x < right)."
+  operation "FOR j := 0 to N-1\n\tresult[j] := ( left[j] <= x[j] && x[j] < right[j] ) ? all_true : 0\nENDFOR"
+  tests:
+    - {test_name "between_left_inclusive_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 2, 4, 0, 7, 7, 9], [1, 3, 3, 4, 5, 7, 8, 10]], expected [0, 4294967295, 0, 0, 0, 0, 4294967295, 0]}}
+    - {test_name "between_left_inclusive_si32_mixed", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -3, -4, 5, 6, 7, 8], [-1, -3, -3, -5, 5, 5, 7, 7], [0, -2, -2, -4, 5, 7, 8, 8]], expected [-1, 0, -1, 0, 0, -1, -1, 0]}}
+    - {test_name "between_left_inclusive_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -3.0, 3.5, -5.0], [2.0, -2.0, 4.0, -4.0]], expected [NAN, 0.0, NAN, NAN]}}
+    - {test_name "between_left_inclusive_f32_nan_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -1.0, 0.0], [1.0, 1.0, 0.0, INFINITY]], expected [0.0, NAN, 0.0, 0.0]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return((left <= x) && (x < right));"
+    generic:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+    oneAPIfpga:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+    oneAPIfpgaRTL:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512f, avx512bw]
+          avx2_vl:
+            idqword [avx2, avx512f, avx512vl]
+            bword   [avx2, avx512f, avx512vl, avx512bw]
+          sse_vl:
+            idqword [sse2, avx512f, avx512vl]
+            bword   [sse2, avx512f, avx512vl, avx512bw]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512  [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl  [sse2, avx512f, avx512vl]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+    avx2:
+      ?i?:
+        requires [avx2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+      f?:
+        requires [avx]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+    sse:
+      ?i?:
+        requires:
+          [si8, si16, si32, ui8, ui16, ui32] [sse2]
+          si64 [sse4_2]
+          ui64 [sse2, sse4_1]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+      f32:
+        requires [sse]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+      f64:
+        requires [sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than_or_equal>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+
+prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
+  brief_description "Checks if the values of \"x\" are within a right-inclusive range (left < x <= right)."
+  operation "FOR j := 0 to N-1\n\tresult[j] := ( left[j] < x[j] && x[j] <= right[j] ) ? all_true : 0\nENDFOR"
+  tests:
+    - {test_name "between_right_inclusive_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 2, 4, 0, 7, 7, 9], [1, 3, 3, 4, 5, 7, 8, 10]], expected [0, 0, 4294967295, 0, 4294967295, 0, 0, 0]}}
+    - {test_name "between_right_inclusive_si32_mixed", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -3, -4, 5, 6, 7, 8], [-1, -3, -3, -5, 5, 5, 7, 7], [0, -2, -2, -4, 5, 7, 8, 8]], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
+    - {test_name "between_right_inclusive_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -3.0, 3.5, -5.0], [2.0, -2.0, 4.0, -4.5]], expected [0.0, NAN, 0.0, NAN]}}
+    - {test_name "between_right_inclusive_f32_nan_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, -1.0, -1.0, 0.0], [1.0, 0.0, 0.0, INFINITY]], expected [0.0, NAN, NAN, NAN]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return((left < x) && (x <= right));"
+    generic:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+    oneAPIfpga:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+    oneAPIfpgaRTL:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512f, avx512bw]
+          avx2_vl:
+            idqword [avx2, avx512f, avx512vl]
+            bword   [avx2, avx512f, avx512vl, avx512bw]
+          sse_vl:
+            idqword [sse2, avx512f, avx512vl]
+            bword   [sse2, avx512f, avx512vl, avx512bw]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512  [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl  [sse2, avx512f, avx512vl]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+    avx2:
+      ?i?:
+        requires [avx2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+      f?:
+        requires [avx]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+    sse:
+      ?i?:
+        requires:
+          [si8, si16, si32, ui8, ui16, ui32] [sse2]
+          si64 [sse4_2]
+          ui64 [sse2, sse4_1]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+      f32:
+        requires [sse]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+      f64:
+        requires [sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than_or_equal>(x, right)
+              )
+            );
+          """
+
+prim<m:=(v,v,v)> between_exclusive(x, left, right):
+  brief_description "Checks if the values of \"x\" are within an exclusive range (left < x < right)."
+  operation "FOR j := 0 to N-1\n\tresult[j] := ( left[j] < x[j] && x[j] < right[j] ) ? all_true : 0\nENDFOR"
+  tests:
+    - {test_name "between_exclusive_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5, 7, 7, 9], [3, 4, 5, 5, 7, 8, 9, 10]], expected [4294967295, 4294967295, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
+    - {test_name "between_exclusive_si32_mixed", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -3, -4, 5, 6, 7, 8], [-2, -3, -4, -5, 4, 6, 6, 8], [0, -1, -2, -4, 6, 7, 8, 9]], expected [-1, -1, -1, 0, -1, 0, -1, 0]}}
+    - {test_name "between_exclusive_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [0.0, -3.0, 3.0, -5.0], [2.0, -1.0, 4.0, -4.5]], expected [NAN, NAN, NAN, 0.0]}}
+    - {test_name "between_exclusive_f32_nan_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, -1.0, -1.0, 0.0], [1.0, 1.0, 1.0, INFINITY]], expected [0.0, NAN, NAN, 0.0]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return((left < x) && (x < right));"
+    generic:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+    oneAPIfpga:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+    oneAPIfpgaRTL:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512f, avx512bw]
+          avx2_vl:
+            idqword [avx2, avx512f, avx512vl]
+            bword   [avx2, avx512f, avx512vl, avx512bw]
+          sse_vl:
+            idqword [sse2, avx512f, avx512vl]
+            bword   [sse2, avx512f, avx512vl, avx512bw]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512  [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl  [sse2, avx512f, avx512vl]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+    avx2:
+      ?i?:
+        requires [avx2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+      f?:
+        requires [avx]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+    sse:
+      ?i?:
+        requires:
+          [si8, si16, si32, ui8, ui16, ui32] [sse2]
+          si64 [sse4_2]
+          ui64 [sse2, sse4_1]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+      f32:
+        requires [sse]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+      f64:
+        requires [sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                call<primitive=less_than>(left, x),
+                call<primitive=less_than>(x, right)
+              )
+            );
+          """
+
+prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
+  brief_description "Checks if the values of \"x\" are within an inclusive range only on active lanes of \"mask\", clearing inactive lanes in the result."
+  operation "FOR j := 0 to N-1\n\tresult[j] := ( mask[j] && left[j] <= x[j] && x[j] <= right[j] ) ? all_true : 0\nENDFOR"
+  tests:
+    - {test_name "between_inclusive_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [85, [1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 2, 4, 0, 7, 7, 9], [1, 3, 3, 4, 5, 7, 8, 10]], expected [4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
+    - {test_name "between_inclusive_mask_si32_mixed", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [170, [-1, -2, -3, -4, 5, 6, 7, 8], [-1, -3, -2, -5, 5, 7, 7, 9], [0, -2, -2, -4, 5, 7, 8, 9]], expected [0, -1, 0, -1, 0, 0, 0, 0]}}
+    - {test_name "between_inclusive_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -3.0, 3.0, -5.0], [1.0, -2.0, 4.0, -4.0]], expected [0.0, NAN, 0.0, 0.0]}}
+    - {test_name "between_inclusive_mask_f32_nan_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [6, [NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -1.0, 0.0], [1.0, 0.0, 0.0, INFINITY]], expected [0.0, NAN, NAN, 0.0]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=between_inclusive[Vec]>(x, left, right)
+              )
+            );
+          """
+    generic:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_inclusive>(x, left, right)
+              )
+            );
+          """
+    oneAPIfpga:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_inclusive>(x, left, right)
+              )
+            );
+          """
+    oneAPIfpgaRTL:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_inclusive>(x, left, right)
+              )
+            );
+          """
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512f, avx512bw]
+          avx2_vl:
+            idqword [avx2, avx512f, avx512vl]
+            bword   [avx2, avx512f, avx512vl, avx512bw]
+          sse_vl:
+            idqword [sse2, avx512f, avx512vl]
+            bword   [sse2, avx512f, avx512vl, avx512bw]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_inclusive>(x, left, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512  [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl  [sse2, avx512f, avx512vl]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_inclusive>(x, left, right)
+              )
+            );
+          """
+    avx2:
+      ?i?:
+        requires [avx2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_inclusive>(x, left, right)
+              )
+            );
+          """
+      f?:
+        requires [avx]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_inclusive>(x, left, right)
+              )
+            );
+          """
+    sse:
+      ?i?:
+        requires:
+          [si8, si16, si32, ui8, ui16, ui32] [sse2]
+          si64 [sse4_2]
+          ui64 [sse2, sse4_1]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_inclusive>(x, left, right)
+              )
+            );
+          """
+      f32:
+        requires [sse]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_inclusive>(x, left, right)
+              )
+            );
+          """
+      f64:
+        requires [sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_inclusive>(x, left, right)
+              )
+            );
+          """
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_inclusive>(x, left, right)
+              )
+            );
+          """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_inclusive>(x, left, right)
+              )
+            );
+          """
+
+prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
+  brief_description "Checks if the values of \"x\" are within a left-inclusive range only on active lanes of \"mask\", clearing inactive lanes in the result."
+  operation "FOR j := 0 to N-1\n\tresult[j] := ( mask[j] && left[j] <= x[j] && x[j] < right[j] ) ? all_true : 0\nENDFOR"
+  tests:
+    - {test_name "between_left_inclusive_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 2, 4, 0, 7, 7, 9], [1, 3, 3, 4, 5, 7, 8, 10]], expected [0, 4294967295, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "between_left_inclusive_mask_si32_mixed", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [85, [-1, -2, -3, -4, 5, 6, 7, 8], [-1, -3, -3, -5, 5, 5, 7, 7], [0, -2, -2, -4, 5, 7, 8, 8]], expected [-1, 0, -1, 0, 0, 0, -1, 0]}}
+    - {test_name "between_left_inclusive_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -3.0, 3.5, -5.0], [2.0, -2.0, 4.0, -4.0]], expected [0.0, 0.0, 0.0, NAN]}}
+    - {test_name "between_left_inclusive_mask_f32_nan_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [6, [NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -1.0, 0.0], [1.0, 1.0, 0.0, INFINITY]], expected [0.0, NAN, 0.0, 0.0]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=between_left_inclusive[Vec]>(x, left, right)
+              )
+            );
+          """
+    generic:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_left_inclusive>(x, left, right)
+              )
+            );
+          """
+    oneAPIfpga:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_left_inclusive>(x, left, right)
+              )
+            );
+          """
+    oneAPIfpgaRTL:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_left_inclusive>(x, left, right)
+              )
+            );
+          """
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512f, avx512bw]
+          avx2_vl:
+            idqword [avx2, avx512f, avx512vl]
+            bword   [avx2, avx512f, avx512vl, avx512bw]
+          sse_vl:
+            idqword [sse2, avx512f, avx512vl]
+            bword   [sse2, avx512f, avx512vl, avx512bw]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_left_inclusive>(x, left, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512  [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl  [sse2, avx512f, avx512vl]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_left_inclusive>(x, left, right)
+              )
+            );
+          """
+    avx2:
+      ?i?:
+        requires [avx2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_left_inclusive>(x, left, right)
+              )
+            );
+          """
+      f?:
+        requires [avx]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_left_inclusive>(x, left, right)
+              )
+            );
+          """
+    sse:
+      ?i?:
+        requires:
+          [si8, si16, si32, ui8, ui16, ui32] [sse2]
+          si64 [sse4_2]
+          ui64 [sse2, sse4_1]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_left_inclusive>(x, left, right)
+              )
+            );
+          """
+      f32:
+        requires [sse]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_left_inclusive>(x, left, right)
+              )
+            );
+          """
+      f64:
+        requires [sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_left_inclusive>(x, left, right)
+              )
+            );
+          """
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_left_inclusive>(x, left, right)
+              )
+            );
+          """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_left_inclusive>(x, left, right)
+              )
+            );
+          """
+
+prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
+  brief_description "Checks if the values of \"x\" are within a right-inclusive range only on active lanes of \"mask\", clearing inactive lanes in the result."
+  operation "FOR j := 0 to N-1\n\tresult[j] := ( mask[j] && left[j] < x[j] && x[j] <= right[j] ) ? all_true : 0\nENDFOR"
+  tests:
+    - {test_name "between_right_inclusive_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [85, [1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 2, 4, 0, 7, 7, 9], [1, 3, 3, 4, 5, 7, 8, 10]], expected [0, 0, 4294967295, 0, 4294967295, 0, 0, 0]}}
+    - {test_name "between_right_inclusive_mask_si32_mixed", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [170, [-1, -2, -3, -4, 5, 6, 7, 8], [-1, -3, -3, -5, 5, 5, 7, 7], [0, -2, -2, -4, 5, 7, 8, 8]], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
+    - {test_name "between_right_inclusive_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -3.0, 3.5, -5.0], [2.0, -2.0, 4.0, -4.5]], expected [0.0, NAN, 0.0, NAN]}}
+    - {test_name "between_right_inclusive_mask_f32_nan_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [6, [NAN, 0.0, -0.0, INFINITY], [NAN, -1.0, -1.0, 0.0], [1.0, 0.0, 0.0, INFINITY]], expected [0.0, NAN, NAN, 0.0]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=between_right_inclusive[Vec]>(x, left, right)
+              )
+            );
+          """
+    generic:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_right_inclusive>(x, left, right)
+              )
+            );
+          """
+    oneAPIfpga:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_right_inclusive>(x, left, right)
+              )
+            );
+          """
+    oneAPIfpgaRTL:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_right_inclusive>(x, left, right)
+              )
+            );
+          """
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512f, avx512bw]
+          avx2_vl:
+            idqword [avx2, avx512f, avx512vl]
+            bword   [avx2, avx512f, avx512vl, avx512bw]
+          sse_vl:
+            idqword [sse2, avx512f, avx512vl]
+            bword   [sse2, avx512f, avx512vl, avx512bw]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_right_inclusive>(x, left, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512  [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl  [sse2, avx512f, avx512vl]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_right_inclusive>(x, left, right)
+              )
+            );
+          """
+    avx2:
+      ?i?:
+        requires [avx2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_right_inclusive>(x, left, right)
+              )
+            );
+          """
+      f?:
+        requires [avx]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_right_inclusive>(x, left, right)
+              )
+            );
+          """
+    sse:
+      ?i?:
+        requires:
+          [si8, si16, si32, ui8, ui16, ui32] [sse2]
+          si64 [sse4_2]
+          ui64 [sse2, sse4_1]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_right_inclusive>(x, left, right)
+              )
+            );
+          """
+      f32:
+        requires [sse]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_right_inclusive>(x, left, right)
+              )
+            );
+          """
+      f64:
+        requires [sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_right_inclusive>(x, left, right)
+              )
+            );
+          """
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_right_inclusive>(x, left, right)
+              )
+            );
+          """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_right_inclusive>(x, left, right)
+              )
+            );
+          """
+
+prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
+  brief_description "Checks if the values of \"x\" are within an exclusive range only on active lanes of \"mask\", clearing inactive lanes in the result."
+  operation "FOR j := 0 to N-1\n\tresult[j] := ( mask[j] && left[j] < x[j] && x[j] < right[j] ) ? all_true : 0\nENDFOR"
+  tests:
+    - {test_name "between_exclusive_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5, 7, 7, 9], [3, 4, 5, 5, 7, 8, 9, 10]], expected [0, 4294967295, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "between_exclusive_mask_si32_mixed", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [85, [-1, -2, -3, -4, 5, 6, 7, 8], [-2, -3, -4, -5, 4, 6, 6, 8], [0, -1, -2, -4, 6, 7, 8, 9]], expected [-1, 0, -1, 0, -1, 0, -1, 0]}}
+    - {test_name "between_exclusive_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [5, [1.0, -2.0, 3.5, -4.5], [0.0, -3.0, 3.0, -5.0], [2.0, -1.0, 4.0, -4.5]], expected [NAN, 0.0, NAN, 0.0]}}
+    - {test_name "between_exclusive_mask_f32_nan_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [6, [NAN, 0.0, -0.0, INFINITY], [NAN, -1.0, -1.0, 0.0], [1.0, 1.0, 1.0, INFINITY]], expected [0.0, NAN, NAN, 0.0]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=between_exclusive[Vec]>(x, left, right)
+              )
+            );
+          """
+    generic:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_exclusive>(x, left, right)
+              )
+            );
+          """
+    oneAPIfpga:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_exclusive>(x, left, right)
+              )
+            );
+          """
+    oneAPIfpgaRTL:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_exclusive>(x, left, right)
+              )
+            );
+          """
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512f, avx512bw]
+          avx2_vl:
+            idqword [avx2, avx512f, avx512vl]
+            bword   [avx2, avx512f, avx512vl, avx512bw]
+          sse_vl:
+            idqword [sse2, avx512f, avx512vl]
+            bword   [sse2, avx512f, avx512vl, avx512bw]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_exclusive>(x, left, right)
+              )
+            );
+          """
+      f?:
+        requires:
+          avx512  [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl  [sse2, avx512f, avx512vl]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_exclusive>(x, left, right)
+              )
+            );
+          """
+    avx2:
+      ?i?:
+        requires [avx2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_exclusive>(x, left, right)
+              )
+            );
+          """
+      f?:
+        requires [avx]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_exclusive>(x, left, right)
+              )
+            );
+          """
+    sse:
+      ?i?:
+        requires:
+          [si8, si16, si32, ui8, ui16, ui32] [sse2]
+          si64 [sse4_2]
+          ui64 [sse2, sse4_1]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_exclusive>(x, left, right)
+              )
+            );
+          """
+      f32:
+        requires [sse]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_exclusive>(x, left, right)
+              )
+            );
+          """
+      f64:
+        requires [sse2]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_exclusive>(x, left, right)
+              )
+            );
+          """
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_exclusive>(x, left, right)
+              )
+            );
+          """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mask_binary_and>(
+                mask,
+                call<primitive=between_exclusive>(x, left, right)
+              )
+            );
+          """

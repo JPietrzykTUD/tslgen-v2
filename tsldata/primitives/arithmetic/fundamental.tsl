@@ -1,0 +1,636 @@
+description "Fundamental arithmetic operations"
+prim<v:=(v,v)> add(left, right):
+  brief_description "[Example: sse + si8]: Add packed 8-bit integers in \"a\" and \"b\", and store the results in \"dst\"."
+  operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[i+7:i] := a[i+7:i] + b[i+7:i]\nENDFOR"
+  tests:
+    - {test_name "add_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [9, 9, 9, 9, 9, 9, 9, 9]}}
+    - {test_name "add_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[0, -1, 2147483647, -2147483647, 100, -100, 123456, -123456], [0, 1, -1, 1, -100, 100, -123456, 123456]], expected [0, 0, 2147483646, -2147483646, 0, 0, 0, 0]}}
+    - {test_name "add_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [9, 9, 9, 9, 9, 9, 9, 9]}}
+    - {test_name "add_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 1000, 65535, 123456, 42, 2147483647, 4000000000], [0, 0, 2000, 1, 1111, 58, 1, 1000]], expected [0, 1, 3000, 65536, 124567, 100, 2147483648, 4000001000]}}
+    - {test_name "add_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {test_name "add_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 2, 254, 252, 4, 6, 8, 10, 0, 2, 254, 252, 4, 6, 8, 10]}}
+    - {test_name "add_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {test_name "add_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -2, 0, -2, 2, -4, 4, -4, 0, -2, 0, -2, 2, -4, 4, -4]}}
+    - {test_name "add_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {test_name "add_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 2, 65534, 65532, 4, 6, 8, 10]}}
+    - {test_name "add_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {test_name "add_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -2, 0, -2, 2, -4, 4, -4]}}
+    - {test_name "add_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [2, 4]}}
+    - {test_name "add_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [0, 2]}}
+    - {test_name "add_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [2, 4]}}
+    - {test_name "add_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [0, -2]}}
+    - {test_name "add_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [2.0, -4.0, 7.0, -9.0]}}
+    - {test_name "add_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
+    - {test_name "add_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [2.0, -4.0]}}
+    - {test_name "add_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(left + right);"
+    [generic, oneAPIfpga, oneAPIfpgaRTL]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+          oneAPIfpgaRTL [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<init_register>(result)
+            loop<unroll>(value<vector::length>)
+            loop<range>(i, 0, value<vector::length>, 1) {
+              result[i] = call<primitive=@self[type<vector::as_extension<scalar>>]>(left[i], right[i]);
+            }
+            emit_return(result);
+          """
+    avx512:
+      ?i?:
+        requires:
+          idqword [avx512f]
+          bword   [avx512f, avx512bw]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<
+                add,
+                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))
+              >(left, right)
+            );
+          """
+      f?:
+        requires [avx512f]
+        implementation:
+          tsil "emit_return(intrin_macro<add>(left, right));"
+    avx2:
+      ?i?:
+        requires [avx, avx2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<
+                add,
+                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))
+              >(left, right)
+            );
+          """
+      f?:
+        requires [avx]
+        implementation:
+          tsil "emit_return(intrin_macro<add>(left, right));"
+    sse:
+      ?i?:
+        requires [sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<
+                add,
+                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))
+              >(left, right)
+            );
+          """
+      f32:
+        requires [sse]
+        implementation:
+          tsil "emit_return(intrin_macro<add>(left, right));"
+      f64:
+        requires [sse2]
+        implementation:
+          tsil "emit_return(intrin_macro<add>(left, right));"
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil "emit_return(intrin_macro<vaddq>(left, right));"
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil "emit_return(intrin_macro<svadd, post=x>(call<primitive=mask_true[Vec]>(), left, right));"
+prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
+  brief_description "[Example: avx512 + si8]: Add packed 8-bit integers in \"a\" and \"b\", and store the results in \"dst\" using zeromask \"k\" (elements are zeroed when the corresponding mask bit is not set)."
+  operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i] + b[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
+  tests:
+    - {test_name "add_maskz_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80]], expected [0, 22, 0, 44, 0, 66, 0, 88]}}
+    - {test_name "add_maskz_i32_zero", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [0, [9, 8, 7, 6, 5, 4, 3, 2], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "add_maskz_i32_all", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80]], expected [11, 22, 33, 44, 55, 66, 77, 88]}}
+    - {test_name "add_maskz_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [0, 3, 0, 5, 0, 7, 0, 9, 0, 11, 0, 13, 0, 15, 0, 17]}}
+    - {test_name "add_maskz_ui8_zero", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [0, [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "add_maskz_ui8_all", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            if (mask) {
+              emit_return(call<primitive=add>(left, right));
+            }
+            emit_return(call<primitive=set_zero[Vec]>());
+          """
+    [generic, oneAPIfpga, oneAPIfpgaRTL]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+          oneAPIfpgaRTL [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=zero]>(
+                mask,
+                call<primitive=add>(left, right)
+              )
+            );
+          """
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512f, avx512bw]
+          avx2_vl:
+            idqword [avx2, avx512f, avx512vl]
+            bword   [avx2, avx512f, avx512vl, avx512bw]
+          sse_vl:
+            idqword [sse2, avx512f, avx512vl]
+            bword   [sse2, avx512f, avx512vl, avx512bw]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<
+                maskz_add,
+                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))
+              >(mask, left, right)
+            );
+          """
+      f?:
+        requires:
+          avx512  [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl  [sse2, avx512f, avx512vl]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<maskz_add>(mask, left, right)
+            );
+          """
+    [avx2, sse, neon]:
+      arith:
+        requires:
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
+          sse:
+            ?i? [sse2]
+            f32 [sse]
+            f64 [sse2]
+          neon [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=zero]>(
+                mask,
+                call<primitive=add>(left, right)
+              )
+            );
+          """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil "emit_return(intrin_macro<svadd, post=z>(mask, left, right));"
+prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
+  brief_description "[Example: avx512 + si8]: Add packed 8-bit integers in \"a\" and \"b\", and store the results in \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
+  operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i] + b[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := src[i+7:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
+  tests:
+    - {test_name "add_mask_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80]], expected [1, 22, 3, 44, 5, 66, 7, 88]}}
+    - {test_name "add_mask_i32_zero", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [0, [9, 8, 7, 6, 5, 4, 3, 2], [1, 2, 3, 4, 5, 6, 7, 8]], expected [9, 8, 7, 6, 5, 4, 3, 2]}}
+    - {test_name "add_mask_i32_all", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80]], expected [11, 22, 33, 44, 55, 66, 77, 88]}}
+    - {test_name "add_mask_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [1, 3, 3, 5, 5, 7, 7, 9, 9, 11, 11, 13, 13, 15, 15, 17]}}
+    - {test_name "add_mask_ui8_zero", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [0, [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {test_name "add_mask_ui8_all", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            if (mask) {
+              emit_return(call<primitive=add>(left, right));
+            }
+            emit_return(left);
+          """
+    [generic, oneAPIfpga, oneAPIfpgaRTL]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+          oneAPIfpgaRTL [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                left,
+                call<primitive=add>(left, right)
+              )
+            );
+          """
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512f, avx512bw]
+          avx2_vl:
+            idqword [avx2, avx512f, avx512vl]
+            bword   [avx2, avx512f, avx512vl, avx512bw]
+          sse_vl:
+            idqword [sse2, avx512f, avx512vl]
+            bword   [sse2, avx512f, avx512vl, avx512bw]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<
+                mask_add,
+                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))
+              >(left, mask, left, right)
+            );
+          """
+      f?:
+        requires:
+          avx512  [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl  [sse2, avx512f, avx512vl]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<mask_add>(left, mask, left, right)
+            );
+          """
+    [avx2, sse, neon]:
+      arith:
+        requires:
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
+          sse:
+            ?i? [sse2]
+            f32 [sse]
+            f64 [sse2]
+          neon [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                left,
+                call<primitive=add>(left, right)
+              )
+            );
+          """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil "emit_return(intrin_macro<svadd, post=m>(mask, left, right));"
+prim<v:=(v,v)> sub(left, right):
+  brief_description "[Example: sse + si8]: Subtract packed 8-bit integers in \"b\" from packed 8-bit integers in \"a\", and store the results in \"dst\"."
+  operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[i+7:i] := a[i+7:i] - b[i+7:i]\nENDFOR"
+  tests:
+    - {test_name "sub_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[9, 8, 7, 6, 5, 4, 3, 2], [1, 2, 3, 4, 5, 6, 7, 8]], expected [8, 6, 4, 2, 0, -2, -4, -6]}}
+    - {test_name "sub_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[2147483647, -2147483647, 0, -1, 1, 123456, -123456, 42], [0, -1, 1, -1, -1, 1, -1, 1]], expected [2147483647, -2147483646, -1, 0, 2, 123455, -123455, 41]}}
+    - {test_name "sub_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[9, 8, 7, 6, 5, 4, 3, 2], [1, 2, 3, 4, 5, 1, 2, 1]], expected [8, 6, 4, 2, 0, 3, 1, 1]}}
+    - {test_name "sub_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[2147483648, 4000000000, 65536, 123456, 100, 1, 0, 500], [1, 1000, 1, 1111, 0, 0, 0, 500]], expected [2147483647, 3999999000, 65535, 122345, 100, 1, 0, 0]}}
+    - {test_name "sub_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "sub_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "sub_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "sub_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "sub_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "sub_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "sub_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "sub_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "sub_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {test_name "sub_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [0, 0]}}
+    - {test_name "sub_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {test_name "sub_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [0, 0]}}
+    - {test_name "sub_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {test_name "sub_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, 0.0, NAN, NAN]}}
+    - {test_name "sub_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
+    - {test_name "sub_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, 0.0]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(left - right);"
+    [generic, oneAPIfpga, oneAPIfpgaRTL]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+          oneAPIfpgaRTL [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            var<init_register>(result)
+            loop<unroll>(value<vector::length>)
+            loop<range>(i, 0, value<vector::length>, 1) {
+              result[i] = call<primitive=@self[type<vector::as_extension<scalar>>]>(left[i], right[i]);
+            }
+            emit_return(result);
+          """
+    avx512:
+      ?i?:
+        requires:
+          idqword [avx512f]
+          bword   [avx512f, avx512bw]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<
+                sub,
+                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))
+              >(left, right)
+            );
+          """
+      f?:
+        requires [avx512f]
+        implementation:
+          tsil "emit_return(intrin_macro<sub>(left, right));"
+    avx2:
+      ?i?:
+        requires [avx, avx2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<
+                sub,
+                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))
+              >(left, right)
+            );
+          """
+      f?:
+        requires [avx]
+        implementation:
+          tsil "emit_return(intrin_macro<sub>(left, right));"
+    sse:
+      ?i?:
+        requires [sse2]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<
+                sub,
+                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))
+              >(left, right)
+            );
+          """
+      f32:
+        requires [sse]
+        implementation:
+          tsil "emit_return(intrin_macro<sub>(left, right));"
+      f64:
+        requires [sse2]
+        implementation:
+          tsil "emit_return(intrin_macro<sub>(left, right));"
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil "emit_return(intrin_macro<vsubq>(left, right));"
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil "emit_return(intrin_macro<svsub, post=x>(call<primitive=mask_true[Vec]>(), left, right));"
+prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
+  brief_description "[Example: avx512 + si8]: Subtract packed 8-bit integers in \"b\" from packed 8-bit integers in \"a\", and store the results in \"dst\" using zeromask \"k\" (elements are zeroed when the corresponding mask bit is not set)."
+  operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i] - b[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := 0\n\tFI\t\nENDFOR\ndst[MAX:512] := 0"
+  tests:
+    - {test_name "sub_maskz_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [85, [10, 20, 30, 40, 50, 60, 70, 80], [1, 2, 3, 4, 5, 6, 7, 8]], expected [9, 0, 27, 0, 45, 0, 63, 0]}}
+    - {test_name "sub_maskz_i32_zero", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [0, [10, 20, 30, 40, 50, 60, 70, 80], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "sub_maskz_i32_all", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [255, [10, 20, 30, 40, 50, 60, 70, 80], [1, 2, 3, 4, 5, 6, 7, 8]], expected [9, 18, 27, 36, 45, 54, 63, 72]}}
+    - {test_name "sub_maskz_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [204, [100, 200, 300, 400, 500, 600, 700, 800], [10, 20, 30, 40, 50, 60, 70, 80]], expected [0, 0, 270, 360, 0, 0, 630, 720]}}
+    - {test_name "sub_maskz_ui16_zero", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [0, [100, 200, 300, 400, 500, 600, 700, 800], [10, 20, 30, 40, 50, 60, 70, 80]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "sub_maskz_ui16_all", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [255, [100, 200, 300, 400, 500, 600, 700, 800], [10, 20, 30, 40, 50, 60, 70, 80]], expected [90, 180, 270, 360, 450, 540, 630, 720]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            if (mask) {
+              emit_return(call<primitive=sub>(left, right));
+            }
+            emit_return(call<primitive=set_zero[Vec]>());
+          """
+    [generic, oneAPIfpga, oneAPIfpgaRTL]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+          oneAPIfpgaRTL [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=zero]>(
+                mask,
+                call<primitive=sub>(left, right)
+              )
+            );
+          """
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512f, avx512bw]
+          avx2_vl:
+            idqword [avx2, avx512f, avx512vl]
+            bword   [avx2, avx512f, avx512vl, avx512bw]
+          sse_vl:
+            idqword [sse2, avx512f, avx512vl]
+            bword   [sse2, avx512f, avx512vl, avx512bw]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<
+                maskz_sub,
+                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))
+              >(mask, left, right)
+            );
+          """
+      f?:
+        requires:
+          avx512  [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl  [sse2, avx512f, avx512vl]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<maskz_sub>(mask, left, right)
+            );
+          """
+    [avx2, sse, neon]:
+      arith:
+        requires:
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
+          sse:
+            ?i? [sse2]
+            f32 [sse]
+            f64 [sse2]
+          neon [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=zero]>(
+                mask,
+                call<primitive=sub>(left, right)
+              )
+            );
+          """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil "emit_return(intrin_macro<svsub, post=z>(mask, left, right));"
+prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
+  brief_description "[Example: avx512 + si8]: Subtract packed 8-bit integers in \"b\" from packed 8-bit integers in \"a\", and store the results in \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
+  operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i] - b[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := src[i+7:i]\n\tFI\t\nENDFOR\ndst[MAX:512] := 0"
+  tests:
+    - {test_name "sub_mask_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [85, [10, 20, 30, 40, 50, 60, 70, 80], [1, 2, 3, 4, 5, 6, 7, 8]], expected [9, 20, 27, 40, 45, 60, 63, 80]}}
+    - {test_name "sub_mask_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [204, [100, 200, 300, 400, 500, 600, 700, 800], [10, 20, 30, 40, 50, 60, 70, 80]], expected [100, 200, 270, 360, 500, 600, 630, 720]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil """
+            if (mask) {
+              emit_return(call<primitive=sub>(left, right));
+            }
+            emit_return(left);
+          """
+    [generic, oneAPIfpga, oneAPIfpgaRTL]:
+      arith:
+        requires:
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+          oneAPIfpgaRTL [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                left,
+                call<primitive=sub>(left, right)
+              )
+            );
+          """
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword   [avx512f, avx512bw]
+          avx2_vl:
+            idqword [avx2, avx512f, avx512vl]
+            bword   [avx2, avx512f, avx512vl, avx512bw]
+          sse_vl:
+            idqword [sse2, avx512f, avx512vl]
+            bword   [sse2, avx512f, avx512vl, avx512bw]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<
+                mask_sub,
+                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))
+              >(left, mask, left, right)
+            );
+          """
+      f?:
+        requires:
+          avx512  [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl  [sse2, avx512f, avx512vl]
+        implementation:
+          tsil """
+            emit_return(
+              intrin_macro<mask_sub>(left, mask, left, right)
+            );
+          """
+    [avx2, sse, neon]:
+      arith:
+        requires:
+          avx2:
+            ?i? [avx, avx2]
+            f? [avx]
+          sse:
+            ?i? [sse2]
+            f32 [sse]
+            f64 [sse2]
+          neon [neon]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                left,
+                call<primitive=sub>(left, right)
+              )
+            );
+          """
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil "emit_return(intrin_macro<svsub, post=m>(mask, left, right));"
+prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
+  brief_description "Blends two registers or adds right and adder depending on mask."
+  operation ""
+  tests:
+    - {test_name "blend_add_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [11, 2, 31, 4, 51, 6, 71, 8, 91, 10, 111, 12, 131, 14, 151, 16]}}
+    - {test_name "blend_add_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {test_name "blend_add_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [11, -2, 31, -4, 51, -6, 71, -8, 91, -10, 111, -12, 131, -14, 151, -16]}}
+    - {test_name "blend_add_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]}}
+    - {test_name "blend_add_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [11, 2, 31, 4, 51, 6, 71, 8]}}
+    - {test_name "blend_add_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "blend_add_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [11, -2, 31, -4, 51, -6, 71, -8]}}
+    - {test_name "blend_add_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
+    - {test_name "blend_add_ui32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [11, 2, 31, 4, 51, 6, 71, 8]}}
+    - {test_name "blend_add_ui32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {test_name "blend_add_si32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [11, -2, 31, -4, 51, -6, 71, -8]}}
+    - {test_name "blend_add_si32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [10, 20, 30, 40, 50, 60, 70, 80], [1, 1, 1, 1, 1, 1, 1, 1]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
+    - {test_name "blend_add_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 4, case {inputs [10, [1, 2, 3, 4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [11, 2, 31, 4]}}
+    - {test_name "blend_add_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 4, case {inputs [15, [1, 2, 3, 4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [1, 2, 3, 4]}}
+    - {test_name "blend_add_si64_basic", type "si64", lane_set "lanes_i64", lanes 4, case {inputs [10, [-1, -2, -3, -4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [11, -2, 31, -4]}}
+    - {test_name "blend_add_si64_edge", type "si64", lane_set "lanes_i64", lanes 4, case {inputs [15, [-1, -2, -3, -4], [10, 20, 30, 40], [1, 1, 1, 1]], expected [-1, -2, -3, -4]}}
+  impls:
+    [scalar, generic, oneAPIfpga, oneAPIfpgaRTL, avx512, avx2_vl, sse_vl, avx2, sse, neon, sve]:
+      arith:
+        requires:
+          scalar []
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+          oneAPIfpgaRTL [oneAPIfpgaDev]
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx, avx2]
+          sse [sse2]
+          neon [neon]
+          sve [sve]
+        implementation:
+          tsil """
+            emit_return(
+              call<primitive=mov attrs[mask=pass_through]>(
+                mask,
+                call<primitive=add>(right, adder),
+                left
+              )
+            );
+          """

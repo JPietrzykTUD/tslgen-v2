@@ -1,0 +1,23 @@
+{
+  "name": "Granforge Demo Environment",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "runArgs": ["--privileged"],
+  "remoteUser": "root",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-python.python",
+        "ms-vscode.cmake-tools",
+        "ms-vscode.cpptools-extension-pack",
+        "GitHub.copilot",
+        "DBTUD.tslgen-edit",
+        "mohsen1.prettify-json",
+        "openai.chatgpt"
+      ]
+    }
+  }
+}

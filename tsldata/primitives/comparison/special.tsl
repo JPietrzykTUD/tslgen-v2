@@ -1,0 +1,140 @@
+description "Special operations"
+prim<m:=v>[value=zero] unequal_zero(data):
+  brief_description "Returns a mask with lanes set where the input is not zero."
+  operation ""
+  tests:
+    - {test_name "unequal_zero_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "unequal_zero_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 0, 1, 0, 0]], expected [0, 0, 0, 0, 0, 4294967295, 0, 0]}}
+    - {test_name "unequal_zero_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
+    - {test_name "unequal_zero_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 255, 255, 255, 255, 255, 255, 255, 0, 255, 255, 255, 255, 255, 255, 255]}}
+    - {test_name "unequal_zero_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {test_name "unequal_zero_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -1, -1, -1, -1, -1, -1, 0, -1, -1, -1, -1, -1, -1, -1]}}
+    - {test_name "unequal_zero_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
+    - {test_name "unequal_zero_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
+    - {test_name "unequal_zero_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {test_name "unequal_zero_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -1, -1, -1, -1, -1, -1]}}
+    - {test_name "unequal_zero_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4]], expected [-1, -1, -1, -1]}}
+    - {test_name "unequal_zero_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647]], expected [0, -1, -1, -1]}}
+    - {test_name "unequal_zero_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [18446744073709551615, 18446744073709551615]}}
+    - {test_name "unequal_zero_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1]], expected [0, 18446744073709551615]}}
+    - {test_name "unequal_zero_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [-1, -1]}}
+    - {test_name "unequal_zero_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1]], expected [0, -1]}}
+    - {test_name "unequal_zero_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5]], expected [NAN, NAN, NAN, NAN]}}
+    - {test_name "unequal_zero_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY]], expected [NAN, 0.0, 0.0, NAN]}}
+    - {test_name "unequal_zero_f32_nan_only", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, NAN, NAN, NAN]], expected [NAN, NAN, NAN, NAN]}}
+    - {test_name "unequal_zero_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0]], expected [NAN, NAN]}}
+    - {test_name "unequal_zero_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[NAN, 0.0]], expected [NAN, 0.0]}}
+    - {test_name "unequal_zero_f64_nan_only", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[NAN, NAN]], expected [NAN, NAN]}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
+    generic:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
+    oneAPIfpga:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil "emit_return(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
+    [avx512, avx2_vl, sse_vl]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil "emit_return(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
+    avx2:
+      arith:
+        requires [avx2]
+        implementation:
+          tsil "emit_return(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
+    sse:
+      arith:
+        requires [sse2]
+        implementation:
+          tsil "emit_return(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil "emit_return(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil "emit_return(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
+
+prim<s:=(v,s)> count_matches(data, value):
+  brief_description "Counts number of matches of a chosen value within a vector register."
+  operation ""
+  tests:
+    - {test_name "count_matches_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 2, 1, 2, 4, 2], 2], expected 4}}
+    - {test_name "count_matches_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], 1], expected 0}}
+    - {test_name "count_matches_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 3], expected 1}}
+    - {test_name "count_matches_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 85], expected 0}}
+    - {test_name "count_matches_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 2], expected 1}}
+    - {test_name "count_matches_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], -3], expected 0}}
+    - {test_name "count_matches_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 3], expected 1}}
+    - {test_name "count_matches_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 21845], expected 0}}
+    - {test_name "count_matches_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 2], expected 1}}
+    - {test_name "count_matches_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], -3], expected 0}}
+    - {test_name "count_matches_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], 2], expected 1}}
+    - {test_name "count_matches_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], -3], expected 0}}
+    - {test_name "count_matches_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 3], expected 0}}
+    - {test_name "count_matches_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], 6148914691236517205], expected 0}}
+    - {test_name "count_matches_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 2], expected 1}}
+    - {test_name "count_matches_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], -3], expected 0}}
+    - {test_name "count_matches_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], 2.0], expected 0}}
+    - {test_name "count_matches_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], -1.0], expected 0}}
+    - {test_name "count_matches_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], 2.0], expected 0}}
+    - {test_name "count_matches_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], -1.0], expected 0}}
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+    generic:
+      arith:
+        requires []
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+    oneAPIfpga:
+      arith:
+        requires [oneAPIfpgaDev]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+    [avx512, avx2_vl, sse_vl]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+    avx2:
+      arith:
+        requires [avx2]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+    sse:
+      arith:
+        requires [sse2]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+    neon:
+      arith:
+        requires [neon]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+    sve:
+      arith:
+        requires [sve]
+        implementation:
+          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
