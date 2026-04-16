@@ -5,6 +5,7 @@ from typing import Pattern, ClassVar
 
 from tslgen.core.passes import MiddleEndPass
 from tslgen.ir.primitive_ir import Primitive
+from tslgen.src.tslgen.core.context import GenerationContext
 from tslgen.src.tslgen.frontend.general.generation_control_flow import StringBoolEvaluator
 from tslgen.core.types import ALLOWED_CONCRETE_TYPES, size_bits
 
@@ -26,7 +27,7 @@ class GenerationPrimitiveTypeCtxTypeRewrite(MiddleEndPass):
     )
 
     @codon.jit
-    def lower(self, source: Primitive) -> Primitive:
+    def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         if source.stages_resolved.get(self.__class__.__name__, False):
             return source
         text = source.implementation
@@ -50,7 +51,7 @@ class GenerationPrimitiveTypeTraitRewrite(MiddleEndPass):
     )
 
     @codon.jit
-    def lower(self, source: Primitive) -> Primitive:
+    def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         if source.stages_resolved.get(self.__class__.__name__, False):
             return source
         text = source.implementation
@@ -66,13 +67,13 @@ class GenerationPrimitiveTypeTraitRewrite(MiddleEndPass):
             replacement: str | None = None
             if type_name in ALLOWED_CONCRETE_TYPES:
                 if trait_name == "signed":
-                    replacement = "True" if (type_name.startswith("si") or type_name.startswith("f")) else "False"
+                    replacement = "true" if (type_name.startswith("si") or type_name.startswith("f")) else "false"
                 elif trait_name == "unsigned":
-                    replacement = "True" if type_name.startswith("ui") else "False"
+                    replacement = "true" if type_name.startswith("ui") else "false"
                 elif trait_name == "float":
-                    replacement = "True" if type_name.startswith("f") else "False"
+                    replacement = "true" if type_name.startswith("f") else "false"
                 elif trait_name == "integral":
-                    replacement = "True" if (type_name.startswith("ui") or type_name.startswith("si")) else "False"
+                    replacement = "true" if (type_name.startswith("ui") or type_name.startswith("si")) else "false"
                 else:
                     raise ValueError(f"Unknown trait '{trait_name}' in type trait replacement.")
             if replacement is not None:
@@ -91,7 +92,7 @@ class GenerationPrimitiveTypeIsSameRewrite(MiddleEndPass):
     )
 
     @codon.jit
-    def lower(self, source: Primitive) -> Primitive:
+    def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         if source.stages_resolved.get(self.__class__.__name__, False):
             return source
         text = source.implementation
@@ -106,7 +107,7 @@ class GenerationPrimitiveTypeIsSameRewrite(MiddleEndPass):
             if left not in ALLOWED_CONCRETE_TYPES or right not in ALLOWED_CONCRETE_TYPES:
                 fully_resolved = False
                 continue
-            replacement = "True" if left == right else "False"
+            replacement = "true" if left == right else "false"
             text = text[:start_pos] + replacement + text[end_pos:]
 
         source.implementation = text
@@ -121,7 +122,7 @@ class GenerationPrimitiveTypeSizeRewrite(MiddleEndPass):
     )
 
     @codon.jit
-    def lower(self, source: Primitive) -> Primitive:
+    def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
 
         while match := self.REGEX_TYPE_SIZE.search(text):
             start_pos = match.start()
@@ -157,7 +158,7 @@ class GenerationPrimitiveTypeTransformRewrite(MiddleEndPass):
     )
 
     @codon.jit
-    def lower(self, source: Primitive) -> Primitive:
+    def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         if source.stages_resolved.get(self.__class__.__name__, False):
             return source
         text = source.implementation
@@ -217,7 +218,7 @@ class GenerationPrimitiveTypeSelectRewrite(MiddleEndPass):
     )
     STRING_BOOL_EVALUATOR: StringBoolEvaluator = StringBoolEvaluator()
 
-    def lower(self, source: Primitive) -> Primitive:
+    def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         if source.stages_resolved.get(self.__class__.__name__, False):
             return source
         text = source.implementation

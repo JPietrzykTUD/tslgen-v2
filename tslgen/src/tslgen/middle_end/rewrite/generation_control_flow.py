@@ -4,13 +4,14 @@ from typing import ClassVar, Pattern
 
 from tslgen.core.passes import MiddleEndPass
 from tslgen.ir.primitive_ir import Primitive
+from tslgen.src.tslgen.core.context import GenerationContext
 from tslgen.utils.string_utils import extract_braced, skip_whitespace
 
 from tslgen.utils.type_utils import TriBool
 
 class StringBoolEvaluator:
     ALLOWED: ClassVar[Pattern[str]] = re.compile(
-        r'^(?:True|False|&&|\|\||\(|\)|\s+)+$',
+        r'^(?:true|false|&&|\|\||\(|\)|\s+)+$',
         re.DOTALL
     )
 
@@ -23,7 +24,7 @@ class StringBoolEvaluator:
             return TriBool.UNKNOWN
         
         result = eval(
-            expr.replace("&&", " and ").replace("||", " or "),
+            expr.replace("&&", " and ").replace("||", " or ").replace("true", "True").replace("false", "False"),
             {"__builtins__": {}},
             {},
         )
@@ -45,7 +46,7 @@ class GenerationControlFlowRewrite(MiddleEndPass):
     )
     STRING_BOOL_EVALUATOR: StringBoolEvaluator = StringBoolEvaluator()
 
-    def lower(self, source: Primitive) -> Primitive:
+    def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         if source.stages_resolved.get(self.__class__.__name__, False):
             return source
         text = source.implementation

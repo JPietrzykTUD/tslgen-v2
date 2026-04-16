@@ -1,10 +1,14 @@
 from dataclasses import dataclass
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, get_args
 from pathlib import Path
+import networkx as nx
 
 from tslgen.core.types import ConcreteType
+from tslgen.ir.primitive_ir import Primitive
+
 
 type SupportedLanguage = Literal['cpp', 'rust']
+ALLOWED_LANGUAGES = frozenset(get_args(SupportedLanguage.__value__))
 type GenerationGoal = Literal["parse", "generate-tsl", "generate-tests"]
 
 PIPELINE_ORDER: tuple[GenerationGoal, ...] = (
@@ -36,6 +40,10 @@ class GlobalContext:
     # if none: use all available languages
     relevant_languages: Optional[List[SupportedLanguage]]
     generation_goal: List[GenerationGoal]
+    thread_count: int
 
 
-
+@dataclass
+class GenerationContext:
+    ordered_primitives: List[Primitive]
+    dependency_graph: nx.DiGraph

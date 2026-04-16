@@ -1,5 +1,4 @@
-from typing import Literal, get_args
-import Optional
+from typing import Literal, get_args, Optional
 
 type ConcreteType = Literal["ui8", "ui16", "ui32", "ui64", "si8", "si16", "si32", "si64", "f32", "f64"]
 ALLOWED_CONCRETE_TYPES = frozenset(get_args(ConcreteType.__value__))

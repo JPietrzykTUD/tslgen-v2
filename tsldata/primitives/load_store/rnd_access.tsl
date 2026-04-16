@@ -29,31 +29,31 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
         requires [avx512f]
         implementation:
           tsil """
-            type<alias>(SignedBase, type<signed_of>(BaseT))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_macro<i32gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=1>(
+                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_macro<i32gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=2>(
+                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=2>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_macro<i32gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=4>(
+                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=4>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_macro<i32gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=8>(
+                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=8>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   8
@@ -62,8 +62,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-                loop<range>(i, 0, value<vector::length>, 1) {
-                  result[i] = *cast<reinterpret>(type<vector::base> const *, ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[i], scale)));
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
+                  result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
                 emit_return(call<primitive=from_array[Vec]>(result));
               }
@@ -73,31 +73,31 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
         requires [avx512f]
         implementation:
           tsil """
-            type<alias>(SignedBase, type<signed_of>(BaseT))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_macro<i64gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=1>(
+                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_macro<i64gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=2>(
+                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=2>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_macro<i64gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=4>(
+                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=4>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_macro<i64gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=8>(
+                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=8>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   8
@@ -106,8 +106,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-                loop<range>(i, 0, value<vector::length>, 1) {
-                  result[i] = *cast<reinterpret>(type<vector::base> const *, ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[i], scale)));
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
+                  result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
                 emit_return(call<primitive=from_array[Vec]>(result));
               }
@@ -119,28 +119,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_macro<i32gather, immediate(2)=1>(
+                emit_return(intrin_compose<i32gather, immediate(2)=1>(
                   index,
                   base_ptr,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_macro<i32gather, immediate(2)=2>(
+                emit_return(intrin_compose<i32gather, immediate(2)=2>(
                   index,
                   base_ptr,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_macro<i32gather, immediate(2)=4>(
+                emit_return(intrin_compose<i32gather, immediate(2)=4>(
                   index,
                   base_ptr,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_macro<i32gather, immediate(2)=8>(
+                emit_return(intrin_compose<i32gather, immediate(2)=8>(
                   index,
                   base_ptr,
                   8
@@ -149,8 +149,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-                loop<range>(i, 0, value<vector::length>, 1) {
-                  result[i] = *cast<reinterpret>(type<vector::base> const *, ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[i], scale)));
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
+                  result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
                 emit_return(call<primitive=from_array[Vec]>(result));
               }
@@ -162,28 +162,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_macro<i64gather, immediate(2)=1>(
+                emit_return(intrin_compose<i64gather, immediate(2)=1>(
                   index,
                   base_ptr,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_macro<i64gather, immediate(2)=2>(
+                emit_return(intrin_compose<i64gather, immediate(2)=2>(
                   index,
                   base_ptr,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_macro<i64gather, immediate(2)=4>(
+                emit_return(intrin_compose<i64gather, immediate(2)=4>(
                   index,
                   base_ptr,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_macro<i64gather, immediate(2)=8>(
+                emit_return(intrin_compose<i64gather, immediate(2)=8>(
                   index,
                   base_ptr,
                   8
@@ -192,8 +192,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-                loop<range>(i, 0, value<vector::length>, 1) {
-                  result[i] = *cast<reinterpret>(type<vector::base> const *, ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[i], scale)));
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
+                  result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
                 emit_return(call<primitive=from_array[Vec]>(result));
               }
@@ -206,31 +206,31 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           avx2_vl [avx, avx2]
         implementation:
           tsil """
-            type<alias>(SignedBase, type<signed_of>(BaseT))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_macro<i32gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=1>(
+                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_macro<i32gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=2>(
+                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=2>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_macro<i32gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=4>(
+                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=4>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_macro<i32gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=8>(
+                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=8>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   8
@@ -239,8 +239,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-                loop<range>(i, 0, value<vector::length>, 1) {
-                  result[i] = *cast<reinterpret>(type<vector::base> const *, ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[i], scale)));
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
+                  result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
                 emit_return(call<primitive=from_array[Vec]>(result));
               }
@@ -252,31 +252,31 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           avx2_vl [avx, avx2]
         implementation:
           tsil """
-            type<alias>(SignedBase, type<signed_of>(BaseT))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_macro<i64gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=1>(
+                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_macro<i64gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=2>(
+                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=2>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_macro<i64gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=4>(
+                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=4>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_macro<i64gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(2)=8>(
+                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=8>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   8
@@ -285,8 +285,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-                loop<range>(i, 0, value<vector::length>, 1) {
-                  result[i] = *cast<reinterpret>(type<vector::base> const *, ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[i], scale)));
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
+                  result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
                 emit_return(call<primitive=from_array[Vec]>(result));
               }
@@ -300,28 +300,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_macro<i32gather, immediate(2)=1>(
+                emit_return(intrin_compose<i32gather, immediate(2)=1>(
                   base_ptr,
                   index,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_macro<i32gather, immediate(2)=2>(
+                emit_return(intrin_compose<i32gather, immediate(2)=2>(
                   base_ptr,
                   index,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_macro<i32gather, immediate(2)=4>(
+                emit_return(intrin_compose<i32gather, immediate(2)=4>(
                   base_ptr,
                   index,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_macro<i32gather, immediate(2)=8>(
+                emit_return(intrin_compose<i32gather, immediate(2)=8>(
                   base_ptr,
                   index,
                   8
@@ -330,8 +330,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-                loop<range>(i, 0, value<vector::length>, 1) {
-                  result[i] = *cast<reinterpret>(type<vector::base> const *, ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[i], scale)));
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
+                  result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
                 emit_return(call<primitive=from_array[Vec]>(result));
               }
@@ -345,28 +345,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_macro<i64gather, immediate(2)=1>(
+                emit_return(intrin_compose<i64gather, immediate(2)=1>(
                   base_ptr,
                   index,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_macro<i64gather, immediate(2)=2>(
+                emit_return(intrin_compose<i64gather, immediate(2)=2>(
                   base_ptr,
                   index,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_macro<i64gather, immediate(2)=4>(
+                emit_return(intrin_compose<i64gather, immediate(2)=4>(
                   base_ptr,
                   index,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_macro<i64gather, immediate(2)=8>(
+                emit_return(intrin_compose<i64gather, immediate(2)=8>(
                   base_ptr,
                   index,
                   8
@@ -375,8 +375,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-                loop<range>(i, 0, value<vector::length>, 1) {
-                  result[i] = *cast<reinterpret>(type<vector::base> const *, ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[i], scale)));
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
+                  result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
                 emit_return(call<primitive=from_array[Vec]>(result));
               }
@@ -398,8 +398,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
             var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-            loop<range>(i, 0, value<vector::length>, 1) {
-              result[i] = *cast<reinterpret>(type<vector::base> const *, ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[i], scale)));
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
+              result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale)));
             }
             emit_return(call<primitive=from_array[Vec]>(result));
           """
@@ -412,8 +412,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
             var<const_infer>(
               ptr,
               cast<reinterpret>(
-                type<vector::base> const *,
-                ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[0], scale))
+                type<generation>(base::in) const *,
+                ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[0], scale))
               )
             )
             emit_return(*ptr);
@@ -451,10 +451,10 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
         requires [avx512f]
         implementation:
           tsil """
-            type<alias>(SignedBase, type<signed_of>(BaseT))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_macro<mask_i32gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=1>(
+                emit_return(intrin_compose<mask_i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1>(
                   source,
                   mask,
                   index,
@@ -463,7 +463,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               2 => {
-                emit_return(intrin_macro<mask_i32gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=2>(
+                emit_return(intrin_compose<mask_i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=2>(
                   source,
                   mask,
                   index,
@@ -472,7 +472,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               4 => {
-                emit_return(intrin_macro<mask_i32gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=4>(
+                emit_return(intrin_compose<mask_i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=4>(
                   source,
                   mask,
                   index,
@@ -481,7 +481,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               8 => {
-                emit_return(intrin_macro<mask_i32gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=8>(
+                emit_return(intrin_compose<mask_i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=8>(
                   source,
                   mask,
                   index,
@@ -492,9 +492,9 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<infer>(result, call<primitive=to_array[Vec]>(source))
-                loop<range>(i, 0, value<vector::length>, 1) {
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (details::mask_test<Vec>(mask, i)) {
-                    result[i] = *cast<reinterpret>(type<vector::base> const *, ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[i], scale)));
+                    result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale)));
                   }
                 }
                 emit_return(call<primitive=from_array[Vec]>(result));
@@ -505,10 +505,10 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
         requires [avx512f]
         implementation:
           tsil """
-            type<alias>(SignedBase, type<signed_of>(BaseT))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_macro<mask_i64gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=1>(
+                emit_return(intrin_compose<mask_i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1>(
                   source,
                   mask,
                   index,
@@ -517,7 +517,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               2 => {
-                emit_return(intrin_macro<mask_i64gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=2>(
+                emit_return(intrin_compose<mask_i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=2>(
                   source,
                   mask,
                   index,
@@ -526,7 +526,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               4 => {
-                emit_return(intrin_macro<mask_i64gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=4>(
+                emit_return(intrin_compose<mask_i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=4>(
                   source,
                   mask,
                   index,
@@ -535,7 +535,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               8 => {
-                emit_return(intrin_macro<mask_i64gather, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=8>(
+                emit_return(intrin_compose<mask_i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=8>(
                   source,
                   mask,
                   index,
@@ -546,9 +546,9 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<infer>(result, call<primitive=to_array[Vec]>(source))
-                loop<range>(i, 0, value<vector::length>, 1) {
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (details::mask_test<Vec>(mask, i)) {
-                    result[i] = *cast<reinterpret>(type<vector::base> const *, ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[i], scale)));
+                    result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale)));
                   }
                 }
                 emit_return(call<primitive=from_array[Vec]>(result));
@@ -561,7 +561,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_macro<mask_i32gather, immediate(4)=1>(
+                emit_return(intrin_compose<mask_i32gather, immediate(4)=1>(
                   source,
                   mask,
                   index,
@@ -570,7 +570,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               2 => {
-                emit_return(intrin_macro<mask_i32gather, immediate(4)=2>(
+                emit_return(intrin_compose<mask_i32gather, immediate(4)=2>(
                   source,
                   mask,
                   index,
@@ -579,7 +579,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               4 => {
-                emit_return(intrin_macro<mask_i32gather, immediate(4)=4>(
+                emit_return(intrin_compose<mask_i32gather, immediate(4)=4>(
                   source,
                   mask,
                   index,
@@ -588,7 +588,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               8 => {
-                emit_return(intrin_macro<mask_i32gather, immediate(4)=8>(
+                emit_return(intrin_compose<mask_i32gather, immediate(4)=8>(
                   source,
                   mask,
                   index,
@@ -599,9 +599,9 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<infer>(result, call<primitive=to_array[Vec]>(source))
-                loop<range>(i, 0, value<vector::length>, 1) {
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (details::mask_test<Vec>(mask, i)) {
-                    result[i] = *cast<reinterpret>(type<vector::base> const *, ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[i], scale)));
+                    result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale)));
                   }
                 }
                 emit_return(call<primitive=from_array[Vec]>(result));
@@ -614,7 +614,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_macro<mask_i64gather, immediate(4)=1>(
+                emit_return(intrin_compose<mask_i64gather, immediate(4)=1>(
                   source,
                   mask,
                   index,
@@ -623,7 +623,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               2 => {
-                emit_return(intrin_macro<mask_i64gather, immediate(4)=2>(
+                emit_return(intrin_compose<mask_i64gather, immediate(4)=2>(
                   source,
                   mask,
                   index,
@@ -632,7 +632,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               4 => {
-                emit_return(intrin_macro<mask_i64gather, immediate(4)=4>(
+                emit_return(intrin_compose<mask_i64gather, immediate(4)=4>(
                   source,
                   mask,
                   index,
@@ -641,7 +641,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               8 => {
-                emit_return(intrin_macro<mask_i64gather, immediate(4)=8>(
+                emit_return(intrin_compose<mask_i64gather, immediate(4)=8>(
                   source,
                   mask,
                   index,
@@ -652,9 +652,9 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<infer>(result, call<primitive=to_array[Vec]>(source))
-                loop<range>(i, 0, value<vector::length>, 1) {
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (details::mask_test<Vec>(mask, i)) {
-                    result[i] = *cast<reinterpret>(type<vector::base> const *, ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[i], scale)));
+                    result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale)));
                   }
                 }
                 emit_return(call<primitive=from_array[Vec]>(result));
@@ -677,9 +677,9 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
             var<infer>(result, call<primitive=to_array[Vec]>(source))
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (details::mask_test<Vec>(mask, i)) {
-                result[i] = *cast<reinterpret>(type<vector::base> const *, ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[i], scale)));
+                result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale)));
               }
             }
             emit_return(call<primitive=from_array[Vec]>(result));
@@ -694,8 +694,8 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
               var<const_infer>(
                 ptr,
                 cast<reinterpret>(
-                  type<vector::base> const *,
-                  ptr_add(cast<reinterpret>(type<ui8> const *, base_ptr), idx_offset(idx_array[0], scale))
+                  type<generation>(base::in) const *,
+                  ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[0], scale))
                 )
               )
               emit_return(*ptr);
@@ -736,10 +736,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            type<alias>(SignedBase, type<signed_of>(BaseT))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
             switch<compile>(scale) {
               1 => {
-                intrin_macro<i32scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(3)=1>(
+                intrin_compose<i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=1>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -748,7 +748,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               2 => {
-                intrin_macro<i32scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(3)=2>(
+                intrin_compose<i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=2>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -757,7 +757,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               4 => {
-                intrin_macro<i32scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(3)=4>(
+                intrin_compose<i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=4>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -766,7 +766,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               8 => {
-                intrin_macro<i32scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(3)=8>(
+                intrin_compose<i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=8>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -777,8 +777,8 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
               _ => {
                 var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                loop<range>(i, 0, value<vector::length>, 1) {
-                  *cast<reinterpret>(type<vector::base> *, ptr_add_mut(cast<reinterpret>(type<ui8> *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
+                  *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
                 }
               }
             }
@@ -790,10 +790,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            type<alias>(SignedBase, type<signed_of>(BaseT))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
             switch<compile>(scale) {
               1 => {
-                intrin_macro<i64scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(3)=1>(
+                intrin_compose<i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=1>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -802,7 +802,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               2 => {
-                intrin_macro<i64scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(3)=2>(
+                intrin_compose<i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=2>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -811,7 +811,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               4 => {
-                intrin_macro<i64scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(3)=4>(
+                intrin_compose<i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=4>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -820,7 +820,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               8 => {
-                intrin_macro<i64scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(3)=8>(
+                intrin_compose<i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=8>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -831,8 +831,8 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
               _ => {
                 var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                loop<range>(i, 0, value<vector::length>, 1) {
-                  *cast<reinterpret>(type<vector::base> *, ptr_add_mut(cast<reinterpret>(type<ui8> *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
+                  *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
                 }
               }
             }
@@ -846,7 +846,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                intrin_macro<i32scatter, immediate(3)=1>(
+                intrin_compose<i32scatter, immediate(3)=1>(
                   base_ptr,
                   index,
                   a,
@@ -855,7 +855,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               2 => {
-                intrin_macro<i32scatter, immediate(3)=2>(
+                intrin_compose<i32scatter, immediate(3)=2>(
                   base_ptr,
                   index,
                   a,
@@ -864,7 +864,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               4 => {
-                intrin_macro<i32scatter, immediate(3)=4>(
+                intrin_compose<i32scatter, immediate(3)=4>(
                   base_ptr,
                   index,
                   a,
@@ -873,7 +873,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               8 => {
-                intrin_macro<i32scatter, immediate(3)=8>(
+                intrin_compose<i32scatter, immediate(3)=8>(
                   base_ptr,
                   index,
                   a,
@@ -884,8 +884,8 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
               _ => {
                 var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                loop<range>(i, 0, value<vector::length>, 1) {
-                  *cast<reinterpret>(type<vector::base> *, ptr_add_mut(cast<reinterpret>(type<ui8> *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
+                  *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
                 }
               }
             }
@@ -899,7 +899,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                intrin_macro<i64scatter, immediate(3)=1>(
+                intrin_compose<i64scatter, immediate(3)=1>(
                   base_ptr,
                   index,
                   a,
@@ -908,7 +908,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               2 => {
-                intrin_macro<i64scatter, immediate(3)=2>(
+                intrin_compose<i64scatter, immediate(3)=2>(
                   base_ptr,
                   index,
                   a,
@@ -917,7 +917,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               4 => {
-                intrin_macro<i64scatter, immediate(3)=4>(
+                intrin_compose<i64scatter, immediate(3)=4>(
                   base_ptr,
                   index,
                   a,
@@ -926,7 +926,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               8 => {
-                intrin_macro<i64scatter, immediate(3)=8>(
+                intrin_compose<i64scatter, immediate(3)=8>(
                   base_ptr,
                   index,
                   a,
@@ -937,8 +937,8 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
               _ => {
                 var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                loop<range>(i, 0, value<vector::length>, 1) {
-                  *cast<reinterpret>(type<vector::base> *, ptr_add_mut(cast<reinterpret>(type<ui8> *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
+                  *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
                 }
               }
             }
@@ -959,8 +959,8 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           tsil """
             var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-            loop<range>(i, 0, value<vector::length>, 1) {
-              *cast<reinterpret>(type<vector::base> *, ptr_add_mut(cast<reinterpret>(type<ui8> *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
+              *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
             }
           """
     scalar:
@@ -972,8 +972,8 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
             var<infer>(
               ptr,
               cast<reinterpret>(
-                type<vector::base> *,
-                ptr_add_mut(cast<reinterpret>(type<ui8> *, base_ptr), idx_offset(idx_array[0], scale))
+                type<generation>(base::in) *,
+                ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[0], scale))
               )
             )
             *ptr = a;
@@ -1014,10 +1014,10 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            type<alias>(SignedBase, type<signed_of>(BaseT))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
             switch<compile>(scale) {
               1 => {
-                intrin_macro<mask_i32scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=1>(
+                intrin_compose<mask_i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1027,7 +1027,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               2 => {
-                intrin_macro<mask_i32scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=2>(
+                intrin_compose<mask_i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=2>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1037,7 +1037,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               4 => {
-                intrin_macro<mask_i32scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=4>(
+                intrin_compose<mask_i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=4>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1047,7 +1047,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               8 => {
-                intrin_macro<mask_i32scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=8>(
+                intrin_compose<mask_i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=8>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1059,9 +1059,9 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
-                loop<range>(i, 0, value<vector::length>, 1) {
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (details::mask_test<Vec>(mask, i)) {
-                    *cast<reinterpret>(type<vector::base> *, ptr_add_mut(cast<reinterpret>(type<ui8> *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
+                    *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
                   }
                 }
               }
@@ -1074,10 +1074,10 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            type<alias>(SignedBase, type<signed_of>(BaseT))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
             switch<compile>(scale) {
               1 => {
-                intrin_macro<mask_i64scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=1>(
+                intrin_compose<mask_i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1087,7 +1087,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               2 => {
-                intrin_macro<mask_i64scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=2>(
+                intrin_compose<mask_i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=2>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1097,7 +1097,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               4 => {
-                intrin_macro<mask_i64scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=4>(
+                intrin_compose<mask_i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=4>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1107,7 +1107,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               8 => {
-                intrin_macro<mask_i64scatter, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)), immediate(4)=8>(
+                intrin_compose<mask_i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=8>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1119,9 +1119,9 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
-                loop<range>(i, 0, value<vector::length>, 1) {
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (details::mask_test<Vec>(mask, i)) {
-                    *cast<reinterpret>(type<vector::base> *, ptr_add_mut(cast<reinterpret>(type<ui8> *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
+                    *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
                   }
                 }
               }
@@ -1136,7 +1136,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           tsil """
             switch<compile>(scale) {
               1 => {
-                intrin_macro<mask_i32scatter, immediate(4)=1>(
+                intrin_compose<mask_i32scatter, immediate(4)=1>(
                   base_ptr,
                   mask,
                   index,
@@ -1146,7 +1146,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               2 => {
-                intrin_macro<mask_i32scatter, immediate(4)=2>(
+                intrin_compose<mask_i32scatter, immediate(4)=2>(
                   base_ptr,
                   mask,
                   index,
@@ -1156,7 +1156,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               4 => {
-                intrin_macro<mask_i32scatter, immediate(4)=4>(
+                intrin_compose<mask_i32scatter, immediate(4)=4>(
                   base_ptr,
                   mask,
                   index,
@@ -1166,7 +1166,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               8 => {
-                intrin_macro<mask_i32scatter, immediate(4)=8>(
+                intrin_compose<mask_i32scatter, immediate(4)=8>(
                   base_ptr,
                   mask,
                   index,
@@ -1178,9 +1178,9 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
-                loop<range>(i, 0, value<vector::length>, 1) {
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (details::mask_test<Vec>(mask, i)) {
-                    *cast<reinterpret>(type<vector::base> *, ptr_add_mut(cast<reinterpret>(type<ui8> *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
+                    *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
                   }
                 }
               }
@@ -1195,7 +1195,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           tsil """
             switch<compile>(scale) {
               1 => {
-                intrin_macro<mask_i64scatter, immediate(4)=1>(
+                intrin_compose<mask_i64scatter, immediate(4)=1>(
                   base_ptr,
                   mask,
                   index,
@@ -1205,7 +1205,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               2 => {
-                intrin_macro<mask_i64scatter, immediate(4)=2>(
+                intrin_compose<mask_i64scatter, immediate(4)=2>(
                   base_ptr,
                   mask,
                   index,
@@ -1215,7 +1215,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               4 => {
-                intrin_macro<mask_i64scatter, immediate(4)=4>(
+                intrin_compose<mask_i64scatter, immediate(4)=4>(
                   base_ptr,
                   mask,
                   index,
@@ -1225,7 +1225,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               8 => {
-                intrin_macro<mask_i64scatter, immediate(4)=8>(
+                intrin_compose<mask_i64scatter, immediate(4)=8>(
                   base_ptr,
                   mask,
                   index,
@@ -1237,9 +1237,9 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               _ => {
                 var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
                 var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
-                loop<range>(i, 0, value<vector::length>, 1) {
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (details::mask_test<Vec>(mask, i)) {
-                    *cast<reinterpret>(type<vector::base> *, ptr_add_mut(cast<reinterpret>(type<ui8> *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
+                    *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
                   }
                 }
               }
@@ -1261,9 +1261,9 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
             var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (details::mask_test<Vec>(mask, i)) {
-                *cast<reinterpret>(type<vector::base> *, ptr_add_mut(cast<reinterpret>(type<ui8> *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
+                *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
               }
             }
           """
@@ -1277,8 +1277,8 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               var<infer>(
                 ptr,
                 cast<reinterpret>(
-                  type<vector::base> *,
-                  ptr_add_mut(cast<reinterpret>(type<ui8> *, base_ptr), idx_offset(idx_array[0], scale))
+                  type<generation>(base::in) *,
+                  ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[0], scale))
                 )
               )
               *ptr = a;

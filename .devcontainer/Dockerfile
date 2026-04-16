@@ -42,7 +42,7 @@ RUN set -eux; \
     rustup --version; \
     rustup component add rustfmt clippy
 
-RUN /opt/venv/bin/pip install --no-cache-dir prompt_toolkit lark jinja2 mkdocs-material codon-jit numpy xxhash cyclopts && \
+RUN /opt/venv/bin/pip install --no-cache-dir prompt_toolkit lark jinja2 mkdocs-material codon-jit numpy xxhash cyclopts networkx psutil && \
     /opt/venv/bin/pip install "mkdocstrings[python]" mkdocs-git-revision-date-localized-plugin
 RUN yes | /bin/bash -c "$(curl -fsSL https://exaloop.io/install.sh)"
 

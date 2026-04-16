@@ -1,11 +1,12 @@
 import codon
 from typing import List
+from tslgen.src.tslgen.core.context import GenerationContext
 import xxhash
 
 from tslgen.core.passes import MiddleEndPass, ImplementationRewritePassState
-from tslgen.middle_end.generation_attribute import GenerationPrimitiveAttributeRewrite
-from tslgen.middle_end.generation_control_flow import GenerationControlFlowRewrite
-from tslgen.middle_end.generation_type import (
+from tslgen.middle_end.rewrite.generation_attribute import GenerationPrimitiveAttributeRewrite
+from tslgen.middle_end.rewrite.generation_control_flow import GenerationControlFlowRewrite
+from tslgen.middle_end.rewrite.generation_type import (
     GenerationPrimitiveTypeCtxTypeRewrite,
     GenerationPrimitiveTypeTraitRewrite,
     GenerationPrimitiveTypeIsSameRewrite,
@@ -37,12 +38,12 @@ class GenerationPass(MiddleEndPass):
             for rewrite_pass in self.rewrite_pipeline
         ]
 
-    def lower(self, source: Primitive) -> Primitive:
+    def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         # The order of these passes is important. For example, we need to resolve attributes before we can evaluate control flow conditions that may depend on those attributes.
         while True:
             current_pass_state: List[ImplementationRewritePassState] = []
             for rewrite_pass in self.rewrite_pipeline:
-                source = rewrite_pass.lower(source)
+                source = rewrite_pass.lower(source, gen_ctx)
                 current_pass_state.append(
                     ImplementationRewritePassState(
                         rewriter=rewrite_pass.__class__.__name__,

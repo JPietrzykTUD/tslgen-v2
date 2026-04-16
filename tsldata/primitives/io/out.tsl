@@ -35,21 +35,21 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-               type<alias>(cast_type, type<vector::base>) 
+               let<type>(cast_type, type<generation>(base::in)) 
                var<const_infer>(arr, call<primitive=to_array[Vec]>(data)) 
                var<const_infer>(ostream_mod, cast<static>( si32 , ostream_modifier)) 
-               loop<range>(idx, 0, value<vector::length>, 1)  {
+               loop<range>(idx, 0, value<generation>(vector::length), 1)  {
                 if(ostream_mod == modifier::BIN) {
-                   io<write_bin>(out, value<size_of>(type<vector::base>)*8, cast<static>( ui64 , arr[(value<vector::length>-1)-idx])) ;
+                   io<write_bin>(out, value<generation>(type::size_bytes(type<generation>(base::in)))*8, cast<static>( ui64 , arr[(value<generation>(vector::length)-1)-idx])) ;
                 } else {
                   if(ostream_mod == modifier::HEX) {
-                     io<write_base>(out, 16, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                     io<write_base>(out, 16, value<generation>(type::size_bytes(type<generation>(base::in)))*8, cast<static>(cast_type, arr[(value<generation>(vector::length)-1)-idx])) ;
                   } else if(ostream_mod == modifier::DEC) {
-                     io<write_base>(out, 10, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                     io<write_base>(out, 10, value<generation>(type::size_bytes(type<generation>(base::in)))*8, cast<static>(cast_type, arr[(value<generation>(vector::length)-1)-idx])) ;
                   } else if(ostream_mod == modifier::OCT) {
-                     io<write_base>(out, 8, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                     io<write_base>(out, 8, value<generation>(type::size_bytes(type<generation>(base::in)))*8, cast<static>(cast_type, arr[(value<generation>(vector::length)-1)-idx])) ;
                   } else {
-                     io<write_base>(out, 10, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                     io<write_base>(out, 10, value<generation>(type::size_bytes(type<generation>(base::in)))*8, cast<static>(cast_type, arr[(value<generation>(vector::length)-1)-idx])) ;
                   }
                 }
                  io<write>(out, "|") ;
@@ -62,21 +62,21 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
         requires [neon]
         implementation:
           tsil """
-               type<alias>(cast_type, type<vector::base>) 
+               let<type>(cast_type, type<generation>(base::in)) 
                var<const_infer>(arr, call<primitive=to_array[Vec]>(data)) 
                var<const_infer>(ostream_mod, cast<static>( si32 , ostream_modifier)) 
-               loop<range>(idx, 0, value<vector::length>, 1)  {
+               loop<range>(idx, 0, value<generation>(vector::length), 1)  {
                 if(ostream_mod == modifier::BIN) {
-                   io<write_bin>(out, value<size_of>(type<vector::base>)*8, cast<static>( ui64 , arr[(value<vector::length>-1)-idx])) ;
+                   io<write_bin>(out, value<generation>(type::size_bytes(type<generation>(base::in)))*8, cast<static>( ui64 , arr[(value<generation>(vector::length)-1)-idx])) ;
                 } else {
                   if(ostream_mod == modifier::HEX) {
-                     io<write_base>(out, 16, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                     io<write_base>(out, 16, value<generation>(type::size_bytes(type<generation>(base::in)))*8, cast<static>(cast_type, arr[(value<generation>(vector::length)-1)-idx])) ;
                   } else if(ostream_mod == modifier::DEC) {
-                     io<write_base>(out, 10, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                     io<write_base>(out, 10, value<generation>(type::size_bytes(type<generation>(base::in)))*8, cast<static>(cast_type, arr[(value<generation>(vector::length)-1)-idx])) ;
                   } else if(ostream_mod == modifier::OCT) {
-                     io<write_base>(out, 8, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                     io<write_base>(out, 8, value<generation>(type::size_bytes(type<generation>(base::in)))*8, cast<static>(cast_type, arr[(value<generation>(vector::length)-1)-idx])) ;
                   } else {
-                     io<write_base>(out, 10, value<size_of>(type<vector::base>)*8, cast<static>(cast_type, arr[(value<vector::length>-1)-idx])) ;
+                     io<write_base>(out, 10, value<generation>(type::size_bytes(type<generation>(base::in)))*8, cast<static>(cast_type, arr[(value<generation>(vector::length)-1)-idx])) ;
                   }
                 }
                  io<write>(out, "|") ;

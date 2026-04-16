@@ -22,9 +22,9 @@ prim<v:=sequence> sequence():
         requires [avx512f]
         implementation:
           tsil """
-            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
             emit_return(
-              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                 cast<static>(IntrinBase, 63), cast<static>(IntrinBase, 62), cast<static>(IntrinBase, 61), cast<static>(IntrinBase, 60),
                 cast<static>(IntrinBase, 59), cast<static>(IntrinBase, 58), cast<static>(IntrinBase, 57), cast<static>(IntrinBase, 56),
                 cast<static>(IntrinBase, 55), cast<static>(IntrinBase, 54), cast<static>(IntrinBase, 53), cast<static>(IntrinBase, 52),
@@ -48,9 +48,9 @@ prim<v:=sequence> sequence():
         requires [avx512f]
         implementation:
           tsil """
-            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
             emit_return(
-              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                 cast<static>(IntrinBase, 31), cast<static>(IntrinBase, 30), cast<static>(IntrinBase, 29), cast<static>(IntrinBase, 28),
                 cast<static>(IntrinBase, 27), cast<static>(IntrinBase, 26), cast<static>(IntrinBase, 25), cast<static>(IntrinBase, 24),
                 cast<static>(IntrinBase, 23), cast<static>(IntrinBase, 22), cast<static>(IntrinBase, 21), cast<static>(IntrinBase, 20),
@@ -66,9 +66,9 @@ prim<v:=sequence> sequence():
         requires [avx512f]
         implementation:
           tsil """
-            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
             emit_return(
-              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                 cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
                 cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
@@ -80,9 +80,9 @@ prim<v:=sequence> sequence():
         requires [avx512f]
         implementation:
           tsil """
-            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
             emit_return(
-              intrin_macro<set, suffix="epi64">(
+              intrin_compose<set, suffix="epi64">(
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
@@ -93,11 +93,11 @@ prim<v:=sequence> sequence():
         implementation:
           tsil """
             emit_return(
-              intrin_macro<set>(
-                cast<static>(type<vector::base>, 15), cast<static>(type<vector::base>, 14), cast<static>(type<vector::base>, 13), cast<static>(type<vector::base>, 12),
-                cast<static>(type<vector::base>, 11), cast<static>(type<vector::base>, 10), cast<static>(type<vector::base>, 9), cast<static>(type<vector::base>, 8),
-                cast<static>(type<vector::base>, 7), cast<static>(type<vector::base>, 6), cast<static>(type<vector::base>, 5), cast<static>(type<vector::base>, 4),
-                cast<static>(type<vector::base>, 3), cast<static>(type<vector::base>, 2), cast<static>(type<vector::base>, 1), cast<static>(type<vector::base>, 0)
+              intrin_compose<set>(
+                cast<static>(type<generation>(base::in), 15), cast<static>(type<generation>(base::in), 14), cast<static>(type<generation>(base::in), 13), cast<static>(type<generation>(base::in), 12),
+                cast<static>(type<generation>(base::in), 11), cast<static>(type<generation>(base::in), 10), cast<static>(type<generation>(base::in), 9), cast<static>(type<generation>(base::in), 8),
+                cast<static>(type<generation>(base::in), 7), cast<static>(type<generation>(base::in), 6), cast<static>(type<generation>(base::in), 5), cast<static>(type<generation>(base::in), 4),
+                cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
             );
           """
@@ -106,9 +106,9 @@ prim<v:=sequence> sequence():
         implementation:
           tsil """
             emit_return(
-              intrin_macro<set>(
-                cast<static>(type<vector::base>, 7), cast<static>(type<vector::base>, 6), cast<static>(type<vector::base>, 5), cast<static>(type<vector::base>, 4),
-                cast<static>(type<vector::base>, 3), cast<static>(type<vector::base>, 2), cast<static>(type<vector::base>, 1), cast<static>(type<vector::base>, 0)
+              intrin_compose<set>(
+                cast<static>(type<generation>(base::in), 7), cast<static>(type<generation>(base::in), 6), cast<static>(type<generation>(base::in), 5), cast<static>(type<generation>(base::in), 4),
+                cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
             );
           """
@@ -119,9 +119,9 @@ prim<v:=sequence> sequence():
           avx2_vl [avx]
         implementation:
           tsil """
-            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
             emit_return(
-              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                 cast<static>(IntrinBase, 31), cast<static>(IntrinBase, 30), cast<static>(IntrinBase, 29), cast<static>(IntrinBase, 28),
                 cast<static>(IntrinBase, 27), cast<static>(IntrinBase, 26), cast<static>(IntrinBase, 25), cast<static>(IntrinBase, 24),
                 cast<static>(IntrinBase, 23), cast<static>(IntrinBase, 22), cast<static>(IntrinBase, 21), cast<static>(IntrinBase, 20),
@@ -139,9 +139,9 @@ prim<v:=sequence> sequence():
           avx2_vl [avx]
         implementation:
           tsil """
-            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
             emit_return(
-              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                 cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
                 cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
@@ -155,9 +155,9 @@ prim<v:=sequence> sequence():
           avx2_vl [avx]
         implementation:
           tsil """
-            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
             emit_return(
-              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
@@ -169,9 +169,9 @@ prim<v:=sequence> sequence():
           avx2_vl [avx]
         implementation:
           tsil """
-            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
             emit_return(
-              intrin_macro<set, suffix="epi64x">(
+              intrin_compose<set, suffix="epi64x">(
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
             );
@@ -183,9 +183,9 @@ prim<v:=sequence> sequence():
         implementation:
           tsil """
             emit_return(
-              intrin_macro<set>(
-                cast<static>(type<vector::base>, 7), cast<static>(type<vector::base>, 6), cast<static>(type<vector::base>, 5), cast<static>(type<vector::base>, 4),
-                cast<static>(type<vector::base>, 3), cast<static>(type<vector::base>, 2), cast<static>(type<vector::base>, 1), cast<static>(type<vector::base>, 0)
+              intrin_compose<set>(
+                cast<static>(type<generation>(base::in), 7), cast<static>(type<generation>(base::in), 6), cast<static>(type<generation>(base::in), 5), cast<static>(type<generation>(base::in), 4),
+                cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
             );
           """
@@ -196,8 +196,8 @@ prim<v:=sequence> sequence():
         implementation:
           tsil """
             emit_return(
-              intrin_macro<set>(
-                cast<static>(type<vector::base>, 3), cast<static>(type<vector::base>, 2), cast<static>(type<vector::base>, 1), cast<static>(type<vector::base>, 0)
+              intrin_compose<set>(
+                cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
             );
           """
@@ -208,9 +208,9 @@ prim<v:=sequence> sequence():
           sse_vl [sse, sse2]
         implementation:
           tsil """
-            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
             emit_return(
-              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                 cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
                 cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
@@ -224,9 +224,9 @@ prim<v:=sequence> sequence():
           sse_vl [sse, sse2]
         implementation:
           tsil """
-            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
             emit_return(
-              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
@@ -238,9 +238,9 @@ prim<v:=sequence> sequence():
           sse_vl [sse, sse2]
         implementation:
           tsil """
-            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
             emit_return(
-              intrin_macro<set, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
             );
@@ -251,9 +251,9 @@ prim<v:=sequence> sequence():
           sse_vl [sse, sse2]
         implementation:
           tsil """
-            type<alias>(IntrinBase, type<signed_of>(BaseT))
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
             emit_return(
-              intrin_macro<set, suffix="epi64x">(
+              intrin_compose<set, suffix="epi64x">(
                 cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
             );
@@ -265,8 +265,8 @@ prim<v:=sequence> sequence():
         implementation:
           tsil """
             emit_return(
-              intrin_macro<set>(
-                cast<static>(type<vector::base>, 3), cast<static>(type<vector::base>, 2), cast<static>(type<vector::base>, 1), cast<static>(type<vector::base>, 0)
+              intrin_compose<set>(
+                cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
             );
           """
@@ -277,8 +277,8 @@ prim<v:=sequence> sequence():
         implementation:
           tsil """
             emit_return(
-              intrin_macro<set>(
-                cast<static>(type<vector::base>, 1), cast<static>(type<vector::base>, 0)
+              intrin_compose<set>(
+                cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
             );
           """
@@ -288,9 +288,9 @@ prim<v:=sequence> sequence():
         implementation:
           tsil """
             emit_return(
-              intrin_macro<svindex>(
-                cast<static>(type<vector::base>, 0),
-                cast<static>(type<vector::base>, 1)
+              intrin_compose<svindex>(
+                cast<static>(type<generation>(base::in), 0),
+                cast<static>(type<generation>(base::in), 1)
               )
             );
           """
@@ -299,8 +299,8 @@ prim<v:=sequence> sequence():
         implementation:
           tsil """
             var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-            loop<range>(i, 0, value<vector::length>, 1) {
-              result[i] = cast<static>(type<vector::base>, i);
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
+              result[i] = cast<static>(type<generation>(base::in), i);
             }
             emit_return(call<primitive=from_array[Vec]>(result));
           """
@@ -313,8 +313,8 @@ prim<v:=sequence> sequence():
         implementation:
           tsil """
             var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-            loop<range>(i, 0, value<vector::length>, 1) {
-              result[i] = cast<static>(type<vector::base>, i);
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
+              result[i] = cast<static>(type<generation>(base::in), i);
             }
             emit_return(call<primitive=from_array[Vec]>(result));
           """
@@ -322,7 +322,7 @@ prim<v:=sequence> sequence():
       arith:
         requires []
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, 0));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), 0));"
 
 prim<v:=(s,s)> custom_sequence(start, stepwidth):
   brief_description "Creates a sequence with start and stepwidth."
@@ -349,7 +349,7 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<svindex>(start, stepwidth)
+              intrin_compose<svindex>(start, stepwidth)
             );
           """
       f?:
@@ -358,7 +358,7 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
           tsil """
             var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
             var<infer>(current, start)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = current;
               current = details::arith_add(current, stepwidth);
             }
@@ -379,7 +379,7 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
           tsil """
             var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
             var<infer>(current, start)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = current;
               current = details::arith_add(current, stepwidth);
             }

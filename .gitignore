@@ -1,3 +1,4 @@
 /tslgen/src/tsl_gen.egg-info
 __pycache__/
 /**/__pycache__/
+/**/*.egg-info/

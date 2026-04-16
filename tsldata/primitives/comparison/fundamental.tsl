@@ -36,10 +36,10 @@ prim<m:=(v,v)> equal(left, right):
         requires []
         implementation:
           tsil """
-            type<alias>(MaskT, type<vector::mask>)
+            let<type>(MaskT, type<generation>(vector::mask))
             MaskT result = mask<zero>();
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] == right[i]) {
                 mask<set:1>(result, i);
               }
@@ -51,12 +51,12 @@ prim<m:=(v,v)> equal(left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            type<alias>(RegisterT, type<vector::register>)
+            let<type>(RegisterT, type<generation>(vector::register))
             RegisterT result{};
-            var<const_infer>(true_value, value<mask::lane::all_true>);
-            var<const_infer>(false_value, value<mask::lane::all_false>);
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            var<const_infer>(true_value, value<generation>(mask::lane::all_true));
+            var<const_infer>(false_value, value<generation>(mask::lane::all_false));
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] == right[i]) ? true_value : false_value;
             }
             emit_return(result);
@@ -76,7 +76,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmpeq, post=mask>(left, right)
+              intrin_compose<cmpeq, post=mask>(left, right)
             );
           """
       f?:
@@ -87,7 +87,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmp, post=mask>(left, right, _CMP_EQ_OQ)
+              intrin_compose<cmp, post=mask>(left, right, _CMP_EQ_OQ)
             );
           """
     avx2:
@@ -96,9 +96,9 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<
+              intrin_compose<
                 cmpeq,
-                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))
+                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
               >(left, right)
             );
           """
@@ -107,7 +107,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmp>(left, right, _CMP_EQ_OQ)
+              intrin_compose<cmp>(left, right, _CMP_EQ_OQ)
             );
           """
     sse:
@@ -118,9 +118,9 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<
+              intrin_compose<
                 cmpeq,
-                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))
+                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
               >(left, right)
             );
           """
@@ -131,7 +131,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmpeq>(left, right)
+              intrin_compose<cmpeq>(left, right)
             );
           """    
     neon:
@@ -139,7 +139,7 @@ prim<m:=(v,v)> equal(left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(intrin_macro<vceqq>(left, right));
+            emit_return(intrin_compose<vceqq>(left, right));
           """
     sve:
       arith:
@@ -147,7 +147,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<svcmpeq>(
+              intrin_compose<svcmpeq>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -190,10 +190,10 @@ prim<m:=(v,v)> nequal(left, right):
         requires []
         implementation:
           tsil """
-            type<alias>(MaskT, type<vector::mask>)
+            let<type>(MaskT, type<generation>(vector::mask))
             MaskT result = mask<zero>();
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] != right[i]) {
                 mask<set:1>(result, i);
               }
@@ -205,12 +205,12 @@ prim<m:=(v,v)> nequal(left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            type<alias>(RegisterT, type<vector::register>)
+            let<type>(RegisterT, type<generation>(vector::register))
             RegisterT result{};
-            var<const_infer>(true_value, value<mask::lane::all_true>);
-            var<const_infer>(false_value, value<mask::lane::all_false>);
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            var<const_infer>(true_value, value<generation>(mask::lane::all_true));
+            var<const_infer>(false_value, value<generation>(mask::lane::all_false));
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] != right[i]) ? true_value : false_value;
             }
             emit_return(result);
@@ -230,7 +230,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmpneq, post=mask>(left, right)
+              intrin_compose<cmpneq, post=mask>(left, right)
             );
           """
       f?:
@@ -241,7 +241,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmp, post=mask>(left, right, _CMP_NEQ_UQ)
+              intrin_compose<cmp, post=mask>(left, right, _CMP_NEQ_UQ)
             );
           """
     avx2:
@@ -261,7 +261,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmp>(left, right, _CMP_NEQ_UQ)
+              intrin_compose<cmp>(left, right, _CMP_NEQ_UQ)
             );
           """
     sse:
@@ -285,7 +285,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmp>(left, right, _CMP_NEQ_UQ)
+              intrin_compose<cmp>(left, right, _CMP_NEQ_UQ)
             );
           """
     neon:
@@ -301,7 +301,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<svcmpne>(
+              intrin_compose<svcmpne>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -342,10 +342,10 @@ prim<m:=(v,v)> less_than(left, right):
         requires []
         implementation:
           tsil """
-            type<alias>(MaskT, type<vector::mask>)
+            let<type>(MaskT, type<generation>(vector::mask))
             MaskT result = mask<zero>();
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] < right[i]) {
                 mask<set:1>(result, i);
               }
@@ -357,12 +357,12 @@ prim<m:=(v,v)> less_than(left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            type<alias>(RegisterT, type<vector::register>)
+            let<type>(RegisterT, type<generation>(vector::register))
             RegisterT result{};
-            var<const_infer>(true_value, value<mask::lane::all_true>);
-            var<const_infer>(false_value, value<mask::lane::all_false>);
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            var<const_infer>(true_value, value<generation>(mask::lane::all_true));
+            var<const_infer>(false_value, value<generation>(mask::lane::all_false));
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] < right[i]) ? true_value : false_value;
             }
             emit_return(result);
@@ -382,7 +382,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmplt, post=mask>(left, right)
+              intrin_compose<cmplt, post=mask>(left, right)
             );
           """
       f?:
@@ -393,42 +393,42 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmp, post=mask>(left, right, _CMP_LT_OQ)
+              intrin_compose<cmp, post=mask>(left, right, _CMP_LT_OQ)
             );
           """
     avx2:
       si?:
         requires [avx, avx2]
         implementation:
-          tsil "emit_return(intrin_macro<cmpgt>(right, left));"
+          tsil "emit_return(intrin_compose<cmpgt>(right, left));"
       f?:
         requires [avx]
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmp>(left, right, _CMP_LT_OQ)
+              intrin_compose<cmp>(left, right, _CMP_LT_OQ)
             );
           """
       ui?:
         requires [avx2]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x80)))
-            if<generation>(type.is_same(BaseT, ui8)) {
-              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x80));
+            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)))
+            if<generation>(type::is_same(type<generation>(base::in), ui8)) {
+              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
             } else<generation> {
-              if<generation>(type.is_same(BaseT, ui16)) {
-                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x8000));
+              if<generation>(type::is_same(type<generation>(base::in), ui16)) {
+                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000));
               } else<generation> {
-                if<generation>(type.is_same(BaseT, ui32)) {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x80000000));
+                if<generation>(type::is_same(type<generation>(base::in), ui32)) {
+                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000));
                 } else<generation> {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x8000000000000000));
+                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000));
                 }
               }
             }
             emit_return(
-              intrin_macro<cmpgt, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              intrin_compose<cmpgt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                 call<primitive=binary_xor>(right, sign_bit),
                 call<primitive=binary_xor>(left, sign_bit)
               )
@@ -438,41 +438,41 @@ prim<m:=(v,v)> less_than(left, right):
       [si8, si16, si32]:
         requires [sse, sse2]
         implementation:
-          tsil "emit_return(intrin_macro<cmplt>(left, right));"
+          tsil "emit_return(intrin_compose<cmplt>(left, right));"
       si64:
         requires [sse4_2]
         implementation:
           tsil """
-            emit_return(intrin_macro<cmpgt>(right, left));
+            emit_return(intrin_compose<cmpgt>(right, left));
           """
       f?:
         requires:
           f32 [sse]
           f64 [sse2]
         implementation:
-          tsil "emit_return(intrin_macro<cmplt>(left, right));"
+          tsil "emit_return(intrin_compose<cmplt>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
           ui64              [sse2, sse4_2]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x80)))
-            if<generation>(type.is_same(BaseT, ui8)) {
-              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x80));
+            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)))
+            if<generation>(type::is_same(type<generation>(base::in), ui8)) {
+              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
             } else<generation> {
-              if<generation>(type.is_same(BaseT, ui16)) {
-                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x8000));
+              if<generation>(type::is_same(type<generation>(base::in), ui16)) {
+                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000));
               } else<generation> {
-                if<generation>(type.is_same(BaseT, ui32)) {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x80000000));
+                if<generation>(type::is_same(type<generation>(base::in), ui32)) {
+                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000));
                 } else<generation> {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x8000000000000000));
+                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000));
                 }
               }
             }
             emit_return(
-              intrin_macro<cmpgt, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              intrin_compose<cmpgt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                 call<primitive=binary_xor>(right, sign_bit),
                 call<primitive=binary_xor>(left, sign_bit)
               )
@@ -482,14 +482,14 @@ prim<m:=(v,v)> less_than(left, right):
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin_macro<vcltq>(left, right));"
+          tsil "emit_return(intrin_compose<vcltq>(left, right));"
     sve:
       arith:
         requires [sve]
         implementation:
           tsil """
             emit_return(
-              intrin_macro<svcmplt>(
+              intrin_compose<svcmplt>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -530,10 +530,10 @@ prim<m:=(v,v)> greater_than(left, right):
         requires []
         implementation:
           tsil """
-            type<alias>(MaskT, type<vector::mask>)
+            let<type>(MaskT, type<generation>(vector::mask))
             MaskT result = mask<zero>();
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] > right[i]) {
                 mask<set:1>(result, i);
               }
@@ -545,12 +545,12 @@ prim<m:=(v,v)> greater_than(left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            type<alias>(RegisterT, type<vector::register>)
+            let<type>(RegisterT, type<generation>(vector::register))
             RegisterT result{};
-            var<const_infer>(true_value, value<mask::lane::all_true>);
-            var<const_infer>(false_value, value<mask::lane::all_false>);
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            var<const_infer>(true_value, value<generation>(mask::lane::all_true));
+            var<const_infer>(false_value, value<generation>(mask::lane::all_false));
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] > right[i]) ? true_value : false_value;
             }
             emit_return(result);
@@ -570,7 +570,7 @@ prim<m:=(v,v)> greater_than(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmpgt, post=mask>(left, right)
+              intrin_compose<cmpgt, post=mask>(left, right)
             );
           """
       f?:
@@ -581,42 +581,42 @@ prim<m:=(v,v)> greater_than(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmp, post=mask>(left, right, _CMP_GT_OQ)
+              intrin_compose<cmp, post=mask>(left, right, _CMP_GT_OQ)
             );
           """
     avx2:
       si?:
         requires [avx, avx2]
         implementation:
-          tsil "emit_return(intrin_macro<cmpgt>(left, right));"
+          tsil "emit_return(intrin_compose<cmpgt>(left, right));"
       f?:
         requires [avx]
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmp>(left, right, _CMP_GT_OQ)
+              intrin_compose<cmp>(left, right, _CMP_GT_OQ)
             );
           """
       ui?:
         requires [avx2]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x80)))
-            if<generation>(type.is_same(BaseT, ui8)) {
-              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x80));
+            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)))
+            if<generation>(type::is_same(type<generation>(base::in), ui8)) {
+              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
             } else<generation> {
-              if<generation>(type.is_same(BaseT, ui16)) {
-                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x8000));
+              if<generation>(type::is_same(type<generation>(base::in), ui16)) {
+                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000));
               } else<generation> {
-                if<generation>(type.is_same(BaseT, ui32)) {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x80000000));
+                if<generation>(type::is_same(type<generation>(base::in), ui32)) {
+                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000));
                 } else<generation> {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x8000000000000000));
+                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000));
                 }
               }
             }
             emit_return(
-              intrin_macro<cmpgt, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              intrin_compose<cmpgt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                 call<primitive=binary_xor>(left, sign_bit),
                 call<primitive=binary_xor>(right, sign_bit)
               )
@@ -626,41 +626,41 @@ prim<m:=(v,v)> greater_than(left, right):
       [si8, si16, si32]:
         requires [sse, sse2]
         implementation:
-          tsil "emit_return(intrin_macro<cmpgt>(left, right));"
+          tsil "emit_return(intrin_compose<cmpgt>(left, right));"
       si64:
         requires [sse4_2]
         implementation:
           tsil """
-            emit_return(intrin_macro<cmpgt>(left, right));
+            emit_return(intrin_compose<cmpgt>(left, right));
           """
       f?:
         requires:
           f32 [sse]
           f64 [sse2]
         implementation:
-          tsil "emit_return(intrin_macro<cmpgt>(left, right));"
+          tsil "emit_return(intrin_compose<cmpgt>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
           ui64              [sse2, sse4_2]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x80)))
-            if<generation>(type.is_same(BaseT, ui8)) {
-              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x80));
+            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)))
+            if<generation>(type::is_same(type<generation>(base::in), ui8)) {
+              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
             } else<generation> {
-              if<generation>(type.is_same(BaseT, ui16)) {
-                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x8000));
+              if<generation>(type::is_same(type<generation>(base::in), ui16)) {
+                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000));
               } else<generation> {
-                if<generation>(type.is_same(BaseT, ui32)) {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x80000000));
+                if<generation>(type::is_same(type<generation>(base::in), ui32)) {
+                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000));
                 } else<generation> {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<vector::base>, 0x8000000000000000));
+                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000));
                 }
               }
             }
             emit_return(
-              intrin_macro<cmpgt, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              intrin_compose<cmpgt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                 call<primitive=binary_xor>(left, sign_bit),
                 call<primitive=binary_xor>(right, sign_bit)
               )
@@ -670,14 +670,14 @@ prim<m:=(v,v)> greater_than(left, right):
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin_macro<vcgtq>(left, right));"
+          tsil "emit_return(intrin_compose<vcgtq>(left, right));"
     sve:
       arith:
         requires [sve]
         implementation:
           tsil """
             emit_return(
-              intrin_macro<svcmpgt>(
+              intrin_compose<svcmpgt>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -718,10 +718,10 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         requires []
         implementation:
           tsil """
-            type<alias>(MaskT, type<vector::mask>)
+            let<type>(MaskT, type<generation>(vector::mask))
             MaskT result = mask<zero>();
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] <= right[i]) {
                 mask<set:1>(result, i);
               }
@@ -733,12 +733,12 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            type<alias>(RegisterT, type<vector::register>)
+            let<type>(RegisterT, type<generation>(vector::register))
             RegisterT result{};
-            var<const_infer>(true_value, value<mask::lane::all_true>);
-            var<const_infer>(false_value, value<mask::lane::all_false>);
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            var<const_infer>(true_value, value<generation>(mask::lane::all_true));
+            var<const_infer>(false_value, value<generation>(mask::lane::all_false));
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] <= right[i]) ? true_value : false_value;
             }
             emit_return(result);
@@ -758,7 +758,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmple, post=mask>(left, right)
+              intrin_compose<cmple, post=mask>(left, right)
             );
           """
       f?:
@@ -769,7 +769,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmp, post=mask>(left, right, _CMP_LE_OQ)
+              intrin_compose<cmp, post=mask>(left, right, _CMP_LE_OQ)
             );
           """
     avx2:
@@ -789,7 +789,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmp>(left, right, _CMP_LE_OQ)
+              intrin_compose<cmp>(left, right, _CMP_LE_OQ)
             );
           """
     sse:
@@ -811,7 +811,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           f32 [sse]
           f64 [sse2]
         implementation:
-          tsil "emit_return(intrin_macro<cmple>(left, right));"
+          tsil "emit_return(intrin_compose<cmple>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
@@ -829,14 +829,14 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin_macro<vcleq>(left, right));"
+          tsil "emit_return(intrin_compose<vcleq>(left, right));"
     sve:
       arith:
         requires [sve]
         implementation:
           tsil """
             emit_return(
-              intrin_macro<svcmple>(
+              intrin_compose<svcmple>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -877,10 +877,10 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         requires []
         implementation:
           tsil """
-            type<alias>(MaskT, type<vector::mask>)
+            let<type>(MaskT, type<generation>(vector::mask))
             MaskT result = mask<zero>();
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] >= right[i]) {
                 mask<set:1>(result, i);
               }
@@ -892,12 +892,12 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            type<alias>(RegisterT, type<vector::register>)
+            let<type>(RegisterT, type<generation>(vector::register))
             RegisterT result{};
-            var<const_infer>(true_value, value<mask::lane::all_true>);
-            var<const_infer>(false_value, value<mask::lane::all_false>);
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            var<const_infer>(true_value, value<generation>(mask::lane::all_true));
+            var<const_infer>(false_value, value<generation>(mask::lane::all_false));
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] >= right[i]) ? true_value : false_value;
             }
             emit_return(result);
@@ -917,7 +917,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmpge, post=mask>(left, right)
+              intrin_compose<cmpge, post=mask>(left, right)
             );
           """
       f?:
@@ -928,7 +928,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmp, post=mask>(left, right, _CMP_GE_OQ)
+              intrin_compose<cmp, post=mask>(left, right, _CMP_GE_OQ)
             );
           """   
     avx2:
@@ -948,7 +948,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<cmp>(left, right, _CMP_GE_OQ)
+              intrin_compose<cmp>(left, right, _CMP_GE_OQ)
             );
           """
     sse:
@@ -970,7 +970,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           f32 [sse]
           f64 [sse2]
         implementation:
-          tsil "emit_return(intrin_macro<cmpge>(left, right));"
+          tsil "emit_return(intrin_compose<cmpge>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
@@ -988,14 +988,14 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin_macro<vcgeq>(left, right));"
+          tsil "emit_return(intrin_compose<vcgeq>(left, right));"
     sve:
       arith:
         requires [sve]
         implementation:
           tsil """
             emit_return(
-              intrin_macro<svcmpge>(
+              intrin_compose<svcmpge>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -1028,10 +1028,10 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         requires []
         implementation:
           tsil """
-            type<alias>(MaskT, type<vector::mask>)
+            let<type>(MaskT, type<generation>(vector::mask))
             MaskT result = mask<zero>();
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] == right[i]) && 
                 (mask<test>(mask, i))
@@ -1046,12 +1046,12 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            type<alias>(RegisterT, type<vector::register>)
+            let<type>(RegisterT, type<generation>(vector::register))
             RegisterT result{};
-            var<const_infer>(true_value, value<mask::lane::all_true>);
-            var<const_infer>(false_value, value<mask::lane::all_false>);
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            var<const_infer>(true_value, value<generation>(mask::lane::all_true));
+            var<const_infer>(false_value, value<generation>(mask::lane::all_false));
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] == right[i]) &&
                 (mask<test>(mask,i))
@@ -1074,9 +1074,9 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<
+              intrin_compose<
                 mask_cmpeq,
-                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)),
+                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
                 post=mask
               >(mask, left, right)
             );
@@ -1089,7 +1089,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<mask_cmp, post=mask>(
+              intrin_compose<mask_cmp, post=mask>(
                 mask,
                 left,
                 right,
@@ -1165,7 +1165,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<svcmpeq>(
+              intrin_compose<svcmpeq>(
                 mask,
                 left, right
               )
@@ -1198,10 +1198,10 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         requires []
         implementation:
           tsil """
-            type<alias>(MaskT, type<vector::mask>)
+            let<type>(MaskT, type<generation>(vector::mask))
             MaskT result = mask<zero>();
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] != right[i]) &&
                 (mask<test>(mask, i))
@@ -1216,12 +1216,12 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            type<alias>(RegisterT, type<vector::register>)
+            let<type>(RegisterT, type<generation>(vector::register))
             RegisterT result{};
-            var<const_infer>(true_value, value<mask::lane::all_true>);
-            var<const_infer>(false_value, value<mask::lane::all_false>);
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            var<const_infer>(true_value, value<generation>(mask::lane::all_true));
+            var<const_infer>(false_value, value<generation>(mask::lane::all_false));
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] != right[i]) &&
                 (mask<test>(mask, i))
@@ -1244,9 +1244,9 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<
+              intrin_compose<
                 mask_cmpneq,
-                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)),
+                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
                 post=mask
               >(mask, left, right)
             );
@@ -1259,7 +1259,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<mask_cmp, post=mask>(
+              intrin_compose<mask_cmp, post=mask>(
                 mask,
                 left,
                 right,
@@ -1335,7 +1335,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<svcmpne>(
+              intrin_compose<svcmpne>(
                 mask,
                 left, right
               )
@@ -1368,10 +1368,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         requires []
         implementation:
           tsil """
-            type<alias>(MaskT, type<vector::mask>)
+            let<type>(MaskT, type<generation>(vector::mask))
             MaskT result = mask<zero>();
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] < right[i]) &&
                 (mask<test>(mask, i))
@@ -1386,12 +1386,12 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            type<alias>(RegisterT, type<vector::register>)
+            let<type>(RegisterT, type<generation>(vector::register))
             RegisterT result{};
-            var<const_infer>(true_value, value<mask::lane::all_true>);
-            var<const_infer>(false_value, value<mask::lane::all_false>);
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            var<const_infer>(true_value, value<generation>(mask::lane::all_true));
+            var<const_infer>(false_value, value<generation>(mask::lane::all_false));
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] < right[i]) &&
                 (mask<test>(mask, i))
@@ -1414,9 +1414,9 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<
+              intrin_compose<
                 mask_cmplt,
-                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)),
+                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
                 post=mask
               >(mask, left, right)
             );
@@ -1429,7 +1429,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<mask_cmp, post=mask>(
+              intrin_compose<mask_cmp, post=mask>(
                 mask,
                 left,
                 right,
@@ -1505,7 +1505,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<svcmplt>(
+              intrin_compose<svcmplt>(
                 mask,
                 left, right
               )
@@ -1538,10 +1538,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         requires []
         implementation:
           tsil """
-            type<alias>(MaskT, type<vector::mask>)
+            let<type>(MaskT, type<generation>(vector::mask))
             MaskT result = mask<zero>();
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] > right[i]) &&
                 (mask<test>(mask, i))
@@ -1556,12 +1556,12 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            type<alias>(RegisterT, type<vector::register>)
+            let<type>(RegisterT, type<generation>(vector::register))
             RegisterT result{};
-            var<const_infer>(true_value, value<mask::lane::all_true>);
-            var<const_infer>(false_value, value<mask::lane::all_false>);
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            var<const_infer>(true_value, value<generation>(mask::lane::all_true));
+            var<const_infer>(false_value, value<generation>(mask::lane::all_false));
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] > right[i]) &&
                 (mask<test>(mask, i))
@@ -1584,9 +1584,9 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<
+              intrin_compose<
                 mask_cmpgt,
-                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)),
+                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
                 post=mask
               >(mask, left, right)
             );
@@ -1599,7 +1599,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<mask_cmp, post=mask>(
+              intrin_compose<mask_cmp, post=mask>(
                 mask,
                 left,
                 right,
@@ -1675,7 +1675,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<svcmpgt>(
+              intrin_compose<svcmpgt>(
                 mask,
                 left, right
               )
@@ -1708,10 +1708,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         requires []
         implementation:
           tsil """
-            type<alias>(MaskT, type<vector::mask>)
+            let<type>(MaskT, type<generation>(vector::mask))
             MaskT result = mask<zero>();
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] <= right[i]) &&
                 (mask<test>(mask, i))
@@ -1726,12 +1726,12 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            type<alias>(RegisterT, type<vector::register>)
+            let<type>(RegisterT, type<generation>(vector::register))
             RegisterT result{};
-            var<const_infer>(true_value, value<mask::lane::all_true>);
-            var<const_infer>(false_value, value<mask::lane::all_false>);
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            var<const_infer>(true_value, value<generation>(mask::lane::all_true));
+            var<const_infer>(false_value, value<generation>(mask::lane::all_false));
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] <= right[i]) &&
                 (mask<test>(mask, i))
@@ -1754,9 +1754,9 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<
+              intrin_compose<
                 mask_cmple,
-                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)),
+                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
                 post=mask
               >(mask, left, right)
             );
@@ -1769,7 +1769,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<mask_cmp, post=mask>(
+              intrin_compose<mask_cmp, post=mask>(
                 mask,
                 left,
                 right,
@@ -1845,7 +1845,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<svcmple>(
+              intrin_compose<svcmple>(
                 mask,
                 left, right
               )
@@ -1878,10 +1878,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         requires []
         implementation:
           tsil """
-            type<alias>(MaskT, type<vector::mask>)
+            let<type>(MaskT, type<generation>(vector::mask))
             MaskT result = mask<zero>();
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] >= right[i]) &&
                 (mask<test>(mask, i))
@@ -1896,12 +1896,12 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            type<alias>(RegisterT, type<vector::register>)
+            let<type>(RegisterT, type<generation>(vector::register))
             RegisterT result{};
-            var<const_infer>(true_value, value<mask::lane::all_true>);
-            var<const_infer>(false_value, value<mask::lane::all_false>);
-            loop<unroll>(value<vector::length>)
-            loop<range>(i, 0, value<vector::length>, 1) {
+            var<const_infer>(true_value, value<generation>(mask::lane::all_true));
+            var<const_infer>(false_value, value<generation>(mask::lane::all_false));
+            loop<unroll>(value<generation>(vector::length))
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] >= right[i]) &&
                 (mask<test>(mask, i))
@@ -1924,9 +1924,9 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<
+              intrin_compose<
                 mask_cmpge,
-                suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT)),
+                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
                 post=mask
               >(mask, left, right)
             );
@@ -1939,7 +1939,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<mask_cmp, post=mask>(
+              intrin_compose<mask_cmp, post=mask>(
                 mask,
                 left,
                 right,
@@ -2015,7 +2015,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<svcmpge>(
+              intrin_compose<svcmpge>(
                 mask,
                 left, right
               )

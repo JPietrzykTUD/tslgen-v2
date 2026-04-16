@@ -43,8 +43,8 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
             bword   [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            type<alias>(SignedBase, type<signed_of>(BaseT))
-            intrin_macro<mask_compressstoreu, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
+            intrin_compose<mask_compressstoreu, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
               cast<reinterpret>(SignedBase *, ptr),
               m,
               a
@@ -57,7 +57,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            intrin_macro<mask_compressstoreu>(
+            intrin_compose<mask_compressstoreu>(
               ptr,
               m,
               a
@@ -68,9 +68,9 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
         requires [sve]
         implementation:
           tsil """
-            type<alias>(IndexBase, type<unsigned_of>(BaseT))
-            type<alias>(IndexVec, type<vector::transform_extension<IndexBase>>)
-            var<const_infer>(packed, intrin_macro<svcompact>(m, a))
+            let<type>(IndexBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
+            let<type>(IndexVec, type<generation>(vector::transform_extension(IndexBase)))
+            var<const_infer>(packed, intrin_compose<svcompact>(m, a))
             var<const_infer>(active_count, call<primitive=mask_population_count[Vec]>(m))
             var<const_infer>(indices, call<primitive=sequence[IndexVec]>())
             var<const_infer>(limit, call<primitive=set1[IndexVec]>(cast<static>(IndexBase, active_count)))
@@ -89,7 +89,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
                var<const_infer>(imask, call<primitive=to_integral[Vec]>(m)) 
                var<const_infer>(data_array, call<primitive=to_array[Vec]>(a)) 
                var<infer>(offset, 0)
-               loop<range>(i, 0, value<vector::length>, 1) {
+               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if(((imask >> i) & 1) != 0){
                   *ptr_add_mut(ptr, offset) = data_array[i];
                   offset += 1;
@@ -104,7 +104,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
         implementation:
           tsil """
                var<infer>(offset, 0) 
-               loop<range>(i, 0, value<vector::length>, 1) {
+               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if(details::mask_test<Vec>(m, i)){
                   *ptr_add_mut(ptr, offset) = a[i];
                   offset += 1;
@@ -165,9 +165,9 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
             bword   [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            type<alias>(SignedBase, type<signed_of>(BaseT))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
             emit_return(
-              intrin_macro<mask_expandloadu, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+              intrin_compose<mask_expandloadu, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                 call<primitive=set_zero[Vec]>(),
                 m,
                 cast<reinterpret>(SignedBase const *, ptr)
@@ -182,7 +182,7 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
         implementation:
           tsil """
             emit_return(
-              intrin_macro<mask_expandloadu>(
+              intrin_compose<mask_expandloadu>(
                 call<primitive=set_zero[Vec]>(),
                 m,
                 ptr
@@ -201,7 +201,7 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
                var<const_infer>(imask, call<primitive=to_integral[Vec]>(m)) 
                var<infer>(data_array, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
                var<infer>(offset, 0) 
-               loop<range>(i, 0, value<vector::length>, 1)  {
+               loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 if(((imask >> i) & 1) != 0) {
                   data_array[i] = *ptr_add(ptr, offset);
                   offset += 1;
@@ -218,7 +218,7 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
           tsil """
                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
                var<infer>(offset, 0) 
-               loop<range>(i, 0, value<vector::length>, 1)  {
+               loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 if(details::mask_test<Vec>(m, i)) {
                   result[i] = *ptr_add(ptr, offset);
                   offset += 1;
@@ -234,7 +234,7 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
                if(m) {
                  emit_return(*ptr);
                } else {
-                 emit_return(cast<static>(type<vector::base>, 0));
+                 emit_return(cast<static>(type<generation>(base::in), 0));
                }
             """
 prim<v:=ptr+> load_convert_up(ptr):
@@ -275,7 +275,7 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires [avx512f, avx]
         implementation:
           tsil """
-               type<alias>(LoadVec, type<vector::as_extension<avx2>>)
+               let<type>(LoadVec, type<backend>(vector::as_extension(avx2)))
                emit_return(
                  call<primitive=cast[LoadVec, ToType]>(
                    call<primitive=load[LoadVec] attrs[aligned=false]>(ptr)
@@ -289,7 +289,7 @@ prim<v:=ptr+> load_convert_up(ptr):
           avx2_vl [avx512f, avx512vl, avx]
         implementation:
           tsil """
-               type<alias>(LoadVec, type<vector::as_extension<sse>>)
+               let<type>(LoadVec, type<backend>(vector::as_extension(sse)))
                emit_return(
                  call<primitive=cast[LoadVec, ToType]>(
                    call<primitive=load[LoadVec] attrs[aligned=false]>(ptr)
@@ -303,20 +303,20 @@ prim<v:=ptr+> load_convert_up(ptr):
           si16:
             implementation:
               tsil """
-                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
-                   emit_return(intrin_macro<svld1sb suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
+                   emit_return(intrin_compose<svld1sb suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           si32:
             implementation:
               tsil """
-                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
-                   emit_return(intrin_macro<svld1sb suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
+                   emit_return(intrin_compose<svld1sb suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           si64:
             implementation:
               tsil """
-                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
-                   emit_return(intrin_macro<svld1sb suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
+                   emit_return(intrin_compose<svld1sb suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
       ui8:
         requires [sve]
@@ -324,20 +324,20 @@ prim<v:=ptr+> load_convert_up(ptr):
           ui16:
             implementation:
               tsil """
-                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
-                   emit_return(intrin_macro<svld1ub suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
+                   emit_return(intrin_compose<svld1ub suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           ui32:
             implementation:
               tsil """
-                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
-                   emit_return(intrin_macro<svld1ub suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
+                   emit_return(intrin_compose<svld1ub suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           ui64:
             implementation:
               tsil """
-                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
-                   emit_return(intrin_macro<svld1ub suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
+                   emit_return(intrin_compose<svld1ub suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
       si16:
         requires [sve]
@@ -345,14 +345,14 @@ prim<v:=ptr+> load_convert_up(ptr):
           si32:
             implementation:
               tsil """
-                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
-                   emit_return(intrin_macro<svld1sh suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
+                   emit_return(intrin_compose<svld1sh suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           si64:
             implementation:
               tsil """
-                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
-                   emit_return(intrin_macro<svld1sh suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
+                   emit_return(intrin_compose<svld1sh suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
       ui16:
         requires [sve]
@@ -360,14 +360,14 @@ prim<v:=ptr+> load_convert_up(ptr):
           ui32:
             implementation:
               tsil """
-                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
-                   emit_return(intrin_macro<svld1uh suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
+                   emit_return(intrin_compose<svld1uh suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           ui64:
             implementation:
               tsil """
-                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
-                   emit_return(intrin_macro<svld1uh suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
+                   emit_return(intrin_compose<svld1uh suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
       si32:
         requires [sve]
@@ -375,8 +375,8 @@ prim<v:=ptr+> load_convert_up(ptr):
           si64:
             implementation:
               tsil """
-                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
-                   emit_return(intrin_macro<svld1sw suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
+                   emit_return(intrin_compose<svld1sw suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
       ui32:
         requires [sve]
@@ -384,8 +384,8 @@ prim<v:=ptr+> load_convert_up(ptr):
           ui64:
             implementation:
               tsil """
-                   type<alias>(OutVec, type<vector::transform_extension<type<generic_base>(ToType)>>)
-                   emit_return(intrin_macro<svld1uw suffix=tslgen<intrin>(suffix, ToType)>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
+                   emit_return(intrin_compose<svld1uw suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
     [sse, sse_vl, neon, sve, generic, oneAPIfpga, scalar]:
       arith:
@@ -399,10 +399,10 @@ prim<v:=ptr+> load_convert_up(ptr):
           scalar []
         implementation:
           tsil """
-               type<alias>(OutVec, ToType)
-               type<alias>(OutBase, type<generic_base>(ToType))
+               let<type>(OutVec, ToType)
+               let<type>(OutBase, type<generation>(base::generic(ToType)))
                var<infer>(out, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()))
-               loop<range>(i, 0, value<generic_length>(OutVec), 1)  {
+               loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1)  {
                 out[i] = cast<static>(OutBase, *ptr_add(ptr, i));
               }
                emit_return(call<primitive=from_array[OutVec]>(out)) ;

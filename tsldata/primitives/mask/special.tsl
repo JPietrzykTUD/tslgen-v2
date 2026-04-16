@@ -25,7 +25,7 @@ prim<s:=(s,s)> test_mask(mask, position):
           generic []
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::imask>, (mask >> position) & cast<static>(type<vector::imask>, 1)));"
+          tsil "emit_return(cast<static>(type<generation>(vector::imask), (mask >> position) & cast<static>(type<generation>(vector::imask), 1)));"
 prim<s:=(s,s,s)> insert_mask(mask_a, mask_b, position):
   brief_description "Merges two masks at a runtime position."
   operation ""

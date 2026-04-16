@@ -5,6 +5,7 @@ from typing import Optional, List, Pattern, ClassVar
 
 from tslgen.core.passes import MiddleEndPass
 from tslgen.ir.primitive_ir import Primitive
+from tslgen.src.tslgen.core.context import GenerationContext
 from tslgen.src.tslgen.ir.signature_ir import ConcreteSignatureAttribute
 
 class GenerationPrimitiveAttributeRewrite(MiddleEndPass):
@@ -14,7 +15,7 @@ class GenerationPrimitiveAttributeRewrite(MiddleEndPass):
     )
 
     @codon.jit
-    def lower(self, source: Primitive) -> Primitive:
+    def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         attributes: List[Optional[ConcreteSignatureAttribute]] = source.signature.attributes
         text = source.implementation
         while match := self.REGEX_ATTRIBUTE.search(text):

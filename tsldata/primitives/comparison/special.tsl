@@ -99,17 +99,17 @@ prim<s:=(v,s)> count_matches(data, value):
       arith:
         requires []
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     generic:
       arith:
         requires []
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     [avx512, avx2_vl, sse_vl]:
       arith:
         requires:
@@ -117,24 +117,24 @@ prim<s:=(v,s)> count_matches(data, value):
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     avx2:
       arith:
         requires [avx2]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     sse:
       arith:
         requires [sse2]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     neon:
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     sve:
       arith:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"

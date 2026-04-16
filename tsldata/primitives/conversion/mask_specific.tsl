@@ -35,70 +35,70 @@ prim<s:=m> to_integral(mask):
       ?i8:
         requires [avx, avx2]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm256_movemask_epi8>(mask)));"
+          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_epi8>(mask)));"
       ?i16:
         requires [avx2]
         implementation:
           tsil """
                var<const_infer>(packed, intrin<_mm256_packs_epi16>(mask, intrin<_mm256_setzero_si256>())) 
                var<const_infer>(mm, intrin<_mm256_movemask_epi8>(packed)) 
-               var<const_infer>(low, cast<static>(type<vector::imask>, (mm & 0xFF))) 
-               var<const_infer>(high, cast<static>(type<vector::imask>, ((mm >> 16) & 0xFF))) 
-               emit_return(cast<static>(type<vector::imask>, (low | (high << 8)))) ;
+               var<const_infer>(low, cast<static>(type<generation>(vector::imask), (mm & 0xFF))) 
+               var<const_infer>(high, cast<static>(type<generation>(vector::imask), ((mm >> 16) & 0xFF))) 
+               emit_return(cast<static>(type<generation>(vector::imask), (low | (high << 8)))) ;
             """
       f32:
         requires [avx]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm256_movemask_ps>(mask)));"
+          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_ps>(mask)));"
       ?i32:
         requires [avx]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm256_movemask_ps>(intrin<_mm256_castsi256_ps>(mask))));"
+          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_ps>(intrin<_mm256_castsi256_ps>(mask))));"
       ?i64:
         requires [avx]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm256_movemask_pd>(intrin<_mm256_castsi256_pd>(mask))));"
+          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_pd>(intrin<_mm256_castsi256_pd>(mask))));"
       f64:
         requires [avx]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm256_movemask_pd>(mask)));"
+          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_pd>(mask)));"
     sse:
       ?i8:
         requires [sse, sse2]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm_movemask_epi8>(mask)));"
+          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_epi8>(mask)));"
       ?i16:
         requires [sse2]
         implementation:
           tsil """
                var<const_infer>(packed, intrin<_mm_packs_epi16>(mask, intrin<_mm_setzero_si128>())) 
-               emit_return(cast<static>(type<vector::imask>, intrin<_mm_movemask_epi8>(packed))) ;
+               emit_return(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_epi8>(packed))) ;
             """
       f32:
         requires [sse]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm_movemask_ps>(mask)));"
+          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_ps>(mask)));"
       ?i32:
         requires [sse, sse2]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm_movemask_ps>(intrin<_mm_castsi128_ps>(mask))));"
+          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_ps>(intrin<_mm_castsi128_ps>(mask))));"
       ?i64:
         requires [sse, sse2]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm_movemask_pd>(intrin<_mm_castsi128_pd>(mask))));"
+          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_pd>(intrin<_mm_castsi128_pd>(mask))));"
       f64:
         requires [sse, sse2]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::imask>, intrin<_mm_movemask_pd>(mask)));"
+          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_pd>(mask)));"
     neon:
       arith:
         requires [neon]
         implementation:
           tsil """
-               type<alias>(ImaskT, type<vector::imask>) 
+               let<type>(ImaskT, type<generation>(vector::imask)) 
               ImaskT result = 0;
-              const  type<size>  mask_bits = value<size_of>(type<vector::imask>) * 8;
-               loop<range>(i, 0, value<vector::length>, 1)  {
+              const  type<backend>(size_t)  mask_bits = value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8;
+               loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 if (i < mask_bits && details::mask_test<Vec>(mask, i)) {
                   result |= cast<static>(ImaskT, 1) << i;
                 }
@@ -121,10 +121,10 @@ prim<s:=m> to_integral(mask):
         requires []
         implementation:
           tsil """
-               type<alias>(ImaskT, type<vector::imask>) 
+               let<type>(ImaskT, type<generation>(vector::imask)) 
               ImaskT result = 0;
-              const  type<size>  mask_bits = value<size_of>(type<vector::imask>) * 8;
-               loop<range>(i, 0, value<vector::length>, 1)  {
+              const  type<backend>(size_t)  mask_bits = value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8;
+               loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 if (i < mask_bits && details::mask_test<Vec>(mask, i)) {
                   result |= cast<static>(ImaskT, 1) << i;
                 }
@@ -160,24 +160,24 @@ prim<v:=m> to_vector(mask):
       [ ?i32, ?i64 ]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin_macro<maskz_set1, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(mask, -1));"
+          tsil "emit_return(intrin_compose<maskz_set1, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(mask, -1));"
       [ ?i8, ?i16 ]:
         requires [avx512bw, avx512f]
         implementation:
-          tsil "emit_return(intrin_macro<maskz_set1, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(mask, -1));"
+          tsil "emit_return(intrin_compose<maskz_set1, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(mask, -1));"
       f32:
         requires [avx512f]
         implementation:
           tsil """
-              var<const_infer>(bits, intrin_macro<maskz_set1, suffix=tslgen<intrin>(suffix, si32)>(mask, -1))
-              emit_return(cast<bitcast>(type<vector::register>, bits));
+              var<const_infer>(bits, intrin_compose<maskz_set1, suffix=value<backend>(intrin::suffix(si32))>(mask, -1))
+              emit_return(cast<bitcast>(type<generation>(vector::register), bits));
             """
       f64:
         requires [avx512f]
         implementation:
           tsil """
-              var<const_infer>(bits, intrin_macro<maskz_set1, suffix=tslgen<intrin>(suffix, si64)>(mask, -1))
-              emit_return(cast<bitcast>(type<vector::register>, bits));
+              var<const_infer>(bits, intrin_compose<maskz_set1, suffix=value<backend>(intrin::suffix(si64))>(mask, -1))
+              emit_return(cast<bitcast>(type<generation>(vector::register), bits));
             """
     [avx2_vl, sse_vl]:
       arith:
@@ -189,7 +189,7 @@ prim<v:=m> to_vector(mask):
               emit_return(
                 call<primitive=mov attrs[mask=zero]>(
                   mask,
-                  call<primitive=set1[Vec]>(value<mask::lane::all_true>)
+                  call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
                 )
               );
             """
@@ -218,26 +218,24 @@ prim<v:=m> to_vector(mask):
         requires []
         implementation:
           tsil """
-               type<alias>(T, type<vector::register>) 
-               type<alias>(BaseT, type<vector::base>) 
+               let<type>(T, type<generation>(vector::register)) 
               T result{};
-              BaseT true_val = cast<static>(
-                BaseT,
-                cast<static>(type<unsigned_of>(BaseT), cast<static>(type<ui64>, 0xFFFFFFFFFFFFFFFF))
+              type<generation>(base::in) true_val = cast<static>(type<generation>(base::in),
+                cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF))
               );
-              if<compile>( type<is_same>(BaseT, f32) ) {
-                 var<const_infer>(bits32, cast<static>(type<ui32>, 0xFFFFFFFF)) 
-                true_val = *cast<reinterpret>(BaseT const *, &bits32);
+              if<compile>( value<generation>(type::is_same(type<generation>(base::in), f32)) ) {
+                 var<const_infer>(bits32, cast<static>(type<backend>(scalar::ui32), 0xFFFFFFFF)) 
+                true_val = *cast<reinterpret>(type<generation>(base::in) const *, &bits32);
               }
-              if<compile>( type<is_same>(BaseT, f64) ) {
-                 var<const_infer>(bits64, cast<static>(type<ui64>, 0xFFFFFFFFFFFFFFFF)) 
-                true_val = *cast<reinterpret>(BaseT const *, &bits64);
+              if<compile>( value<generation>(type::is_same(type<generation>(base::in), f64)) ) {
+                 var<const_infer>(bits64, cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)) 
+                true_val = *cast<reinterpret>(type<generation>(base::in) const *, &bits64);
               }
-               loop<range>(i, 0, value<vector::length>, 1)  {
+               loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 if (details::mask_test<Vec>(mask, i)) {
                   result[i] = true_val;
                 } else {
-                  result[i] = cast<static>(BaseT, 0);
+                  result[i] = cast<static>(type<generation>(base::in), 0);
                 }
               }
                emit_return(result) ;
@@ -272,18 +270,17 @@ prim<m:=s> to_mask(mask):
         requires [sve]
         implementation:
           tsil """
-              type<alias>(BaseT, type<vector::base>)
-              type<alias>(UnsignedT, type<unsigned_of>(BaseT))
-              type<alias>(UVec, type<vector::transform_extension<UnsignedT>>)
+              let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+              let<type>(UVec, type<generation>(vector::transform_extension(UnsignedT)))
               var<infer>(tmp, call<primitive=to_array[UVec]>(call<primitive=set_zero[UVec]>()));
-              const type<size> mask_period = cast<static>(type<size>, 16 / value<size_of>(BaseT));
-              loop<range>(i, 0, value<vector::length>, 1) {
-                const type<size> bit_idx = i % mask_period;
+              const type<backend>(size_t) mask_period = cast<static>(type<backend>(size_t), 16 / value<generation>(type::size_bytes(type<generation>(base::in))));
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
+                const type<backend>(size_t) bit_idx = i % mask_period;
                 tmp[i] = cast<static>(UnsignedT, (mask >> bit_idx) & 1);
               }
               var<const_infer>(pg, call<primitive=mask_true[Vec]>())
-              var<const_infer>(vec, intrin_macro<svld1, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT))>(pg, tmp.data()))
-              emit_return(intrin_macro<svcmpne_n, suffix=tslgen<intrin>(suffix, type<unsigned_of>(BaseT))>(pg, vec, cast<static>(UnsignedT, 0)));
+              var<const_infer>(vec, intrin_compose<svld1, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))>(pg, tmp.data()))
+              emit_return(intrin_compose<svcmpne_n, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))>(pg, vec, cast<static>(UnsignedT, 0)));
             """
     avx2:
       ?i8:
@@ -301,14 +298,13 @@ prim<m:=s> to_mask(mask):
         requires [avx, avx2]
         implementation:
           tsil """
-              type<alias>(BaseT, type<vector::base>)
-              var<typed>(array_type<BaseT, value<vector::length>>, and_values, value<array_uninit>)
-              loop<range>(i, 0, value<vector::length>, 1) {
-                var<const_infer>(bit, cast<static>(type<ui64>, 1) << i)
-                and_values[i] = cast<static>(BaseT, bit);
+              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array))
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
+                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i)
+                and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()))
-              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(BaseT, mask)))
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)))
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec))
               emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
             """
@@ -336,9 +332,9 @@ prim<m:=s> to_mask(mask):
         implementation:
           tsil """
               var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-              loop<range>(i, 0, value<vector::length>, 1) {
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (((mask >> i) & 1) != 0) {
-                  values[i] = value<mask::lane::all_true>;
+                  values[i] = value<generation>(mask::lane::all_true);
                 }
               }
               emit_return(call<primitive=from_array[Vec]>(values));
@@ -347,14 +343,13 @@ prim<m:=s> to_mask(mask):
         requires [sse, sse2]
         implementation:
           tsil """
-              type<alias>(BaseT, type<vector::base>)
-              var<typed>(array_type<BaseT, value<vector::length>>, and_values, value<array_uninit>)
-              loop<range>(i, 0, value<vector::length>, 1) {
-                var<const_infer>(bit, cast<static>(type<ui64>, 1) << i)
-                and_values[i] = cast<static>(BaseT, bit);
+              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array))
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
+                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i)
+                and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()))
-              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(BaseT, mask)))
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)))
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec))
               emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
             """
@@ -362,14 +357,13 @@ prim<m:=s> to_mask(mask):
         requires [sse, sse2, sse4_1]
         implementation:
           tsil """
-              type<alias>(BaseT, type<vector::base>)
-              var<typed>(array_type<BaseT, value<vector::length>>, and_values, value<array_uninit>)
-              loop<range>(i, 0, value<vector::length>, 1) {
-                var<const_infer>(bit, cast<static>(type<ui64>, 1) << i)
-                and_values[i] = cast<static>(BaseT, bit);
+              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array))
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
+                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i)
+                and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()))
-              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(BaseT, mask)))
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)))
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec))
               emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
             """
@@ -397,9 +391,9 @@ prim<m:=s> to_mask(mask):
         implementation:
           tsil """
               var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-              loop<range>(i, 0, value<vector::length>, 1) {
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (((mask >> i) & 1) != 0) {
-                  values[i] = value<mask::lane::all_true>;
+                  values[i] = value<generation>(mask::lane::all_true);
                 }
               }
               emit_return(call<primitive=from_array[Vec]>(values));
@@ -435,16 +429,16 @@ prim<m:=s> to_mask(mask):
         requires [neon]
         implementation:
           tsil """
-              type<alias>(Base, type<select>(type<is_same>(type<vector::base>, f32), si32, type<vector::base>))
-              var<typed>(array_type<Base, value<vector::length>>, values, value<array_uninit>)
-              loop<range>(i, 0, value<vector::length>, 1) {
+              let<type>(Base, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), si32, type<generation>(base::in))))
+              var<typed>(array_type<Base, value<generation>(vector::length)>, values, value<backend>(uninit::array))
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (((mask >> i) & 1) != 0) {
                   values[i] = cast<static>(Base, -1);
                 } else {
                   values[i] = cast<static>(Base, 0);
                 }
               }
-              type<alias>(MaskVec, type<vector::transform<Base>>)
+              let<type>(MaskVec, type<generation>(vector::transform(Base)))
               var<infer>(tmp, call<primitive=load[MaskVec] attrs[aligned=false]>(values.data()))
               emit_return(call<primitive=reinterpret[MaskVec, Vec]>(tmp));
             """
@@ -452,16 +446,16 @@ prim<m:=s> to_mask(mask):
         requires [neon]
         implementation:
           tsil """
-              type<alias>(Base, type<select>(type<is_same>(type<vector::base>, f64), si64, type<vector::base>))
-              var<typed>(array_type<Base, value<vector::length>>, values, value<array_uninit>)
-              loop<range>(i, 0, value<vector::length>, 1) {
+              let<type>(Base, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f64)), si64, type<generation>(base::in))))
+              var<typed>(array_type<Base, value<generation>(vector::length)>, values, value<backend>(uninit::array))
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (((mask >> i) & 1) != 0) {
                   values[i] = cast<static>(Base, -1);
                 } else {
                   values[i] = cast<static>(Base, 0);
                 }
               }
-              type<alias>(MaskVec, type<vector::transform<Base>>)
+              let<type>(MaskVec, type<generation>(vector::transform(Base)))
               var<infer>(tmp, call<primitive=load[MaskVec] attrs[aligned=false]>(values.data()))
               emit_return(call<primitive=reinterpret[MaskVec, Vec]>(tmp));
             """
@@ -475,12 +469,12 @@ prim<m:=s> to_mask(mask):
         requires []
         implementation:
           tsil """
-              type<alias>(MaskT, type<vector::mask>)
+              let<type>(MaskT, type<generation>(vector::mask))
               MaskT result = mask<zero>();
-              const type<size> mask_bits = value<size_of>(type<vector::imask>) * 8;
-              loop<unroll>(value<vector::length>)
-              loop<range>(i, 0, value<vector::length>, 1) {
-                if (i < mask_bits && (((mask >> i) & cast<static>(type<vector::imask>, 1)) != 0)) {
+              const type<backend>(size_t) mask_bits = value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8;
+              loop<unroll>(value<generation>(vector::length))
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
+                if (i < mask_bits && (((mask >> i) & cast<static>(type<generation>(vector::imask), 1)) != 0)) {
                   mask<set:1>(result, i);
                 }
               }

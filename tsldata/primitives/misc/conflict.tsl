@@ -25,7 +25,7 @@ prim<v:=v> conflict(data):
         implementation:
           tsil """
               emit_return(
-                intrin_macro<conflict, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                intrin_compose<conflict, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                   data
                 )
               );
@@ -38,7 +38,7 @@ prim<v:=v> conflict(data):
         implementation:
           tsil """
               emit_return(
-                intrin_macro<conflict, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                intrin_compose<conflict, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                   data
                 )
               );
@@ -51,7 +51,7 @@ prim<v:=v> conflict(data):
         implementation:
           tsil """
               emit_return(
-                intrin_macro<conflict, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+                intrin_compose<conflict, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                   data
                 )
               );
@@ -70,17 +70,17 @@ prim<v:=v> conflict(data):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              type<alias>(ConflictT, type<size>)
+              let<type>(ConflictT, type<backend>(size_t))
               var<const_infer>(values, call<primitive=to_array[Vec]>(data))
               var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-              loop<range>(idx, 1, value<vector::length>, 1) {
+              loop<range>(idx, 1, value<generation>(vector::length), 1) {
                 ConflictT conflict = cast<static>(ConflictT, 0);
                 loop<range>(cur, 0, idx, 1) {
-                  if ((cur < (value<size_of>(type<vector::base>) * 8)) && (values[idx] == values[cur])) {
+                  if ((cur < (value<generation>(type::size_bytes(type<generation>(base::in))) * 8)) && (values[idx] == values[cur])) {
                     conflict |= (cast<static>(ConflictT, 1) << cur);
                   }
                 }
-                result[idx] = cast<static>(type<vector::base>, conflict);
+                result[idx] = cast<static>(type<generation>(base::in), conflict);
               }
               emit_return(call<primitive=from_array[Vec]>(result));
             """
@@ -88,7 +88,7 @@ prim<v:=v> conflict(data):
       ?i?:
         requires []
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, 0));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), 0));"
 prim<m:=(m,v)> conflict_free(mask, data):
   brief_description "Checks whether all active elements are unique and returns the semantic mask of conflict-free lanes."
   operation ""

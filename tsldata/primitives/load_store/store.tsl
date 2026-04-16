@@ -36,8 +36,8 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(data))
-            loop<unroll>(value<vector::length>) 
-            loop<range>(idx, 0, value<vector::length>, 1)  {
+            loop<unroll>(value<generation>(vector::length)) 
+            loop<range>(idx, 0, value<generation>(vector::length), 1)  {
               *ptr_add_mut(ptr, idx) = values[idx];
             }
           """
@@ -51,14 +51,14 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
           sse_vl [sse, sse2]
         implementation:
           tsil """
-            if<generation>(tslgen<primitive>(attribute, aligned)) {
-              intrin_macro<store, suffix=tslgen<intrin>(suffix, "stream"), prefix=tslgen<intrin>(prefix)>(
-                cast<reinterpret>(type<vector::register> *, assume_aligned<value<vector::alignment>>(ptr)),
+            if<generation>(value<generation>(primitive::attribute(aligned))) {
+              intrin_compose<store, suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)>(
+                cast<reinterpret>(type<generation>(vector::register) *, assume_aligned<value<generation>(vector::alignment)>(ptr)),
                 data
               );
             } else<generation> {
-              intrin_macro<storeu, suffix=tslgen<intrin>(suffix, "stream"), prefix=tslgen<intrin>(prefix)>(
-                cast<reinterpret>(type<vector::register> *, ptr),
+              intrin_compose<storeu, suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)>(
+                cast<reinterpret>(type<generation>(vector::register) *, ptr),
                 data
               );
             }
@@ -72,13 +72,13 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
           sse_vl [sse]
         implementation:
           tsil """
-            if<generation>(tslgen<primitive>(attribute, aligned)) {
-              intrin_macro<store>(
-                assume_aligned<value<vector::alignment>>(ptr),
+            if<generation>(value<generation>(primitive::attribute(aligned))) {
+              intrin_compose<store>(
+                assume_aligned<value<generation>(vector::alignment)>(ptr),
                 data
               );
             } else<generation> {
-              intrin_macro<storeu>(
+              intrin_compose<storeu>(
                 ptr,
                 data
               );
@@ -89,13 +89,13 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
         requires [neon]
         implementation:
           tsil """
-              if<generation>(tslgen<primitive>(attribute, aligned)) {
-                intrin_macro<vst1q>(
-                  assume_aligned<value<vector::alignment>>(ptr),
+              if<generation>(value<generation>(primitive::attribute(aligned))) {
+                intrin_compose<vst1q>(
+                  assume_aligned<value<generation>(vector::alignment)>(ptr),
                   data
                 );
               } else<generation> {
-                intrin_macro<vst1q>(
+                intrin_compose<vst1q>(
                   ptr,
                   data
                 );
@@ -106,14 +106,14 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
         requires [sve]
         implementation:
           tsil """
-              if<generation>(tslgen<primitive>(attribute, aligned)) {
-                intrin_macro<svst1>(
+              if<generation>(value<generation>(primitive::attribute(aligned))) {
+                intrin_compose<svst1>(
                   call<primitive=mask_true[Vec]>(),
-                  assume_aligned<value<vector::alignment>>(ptr),
+                  assume_aligned<value<generation>(vector::alignment)>(ptr),
                   data
                 );
               } else<generation> {
-                intrin_macro<svst1>(
+                intrin_compose<svst1>(
                   call<primitive=mask_true[Vec]>(),
                   ptr,
                   data
@@ -123,8 +123,8 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
 prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
   param_types:
     ptr:
-      "if packed=true" "type<vector::imask> *"
-      "if packed=false" "type<vector::mask_underlying_t> *"
+      "if packed=true" "type<generation>(vector::imask) *"
+      "if packed=false" "type<generation>(vector::mask_underlying_t) *"
   brief_description "Stores a mask to aligned memory."
   operation ""
   tests:
@@ -174,13 +174,13 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
         requires []
         implementation:
           tsil """
-            if<generation>(tslgen<primitive>(attribute, packed)) {
+            if<generation>(value<generation>(primitive::attribute(packed))) {
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
               *ptr = imask;
             } else<generation> {
-              type<alias>(MaskWord, type<vector::mask_underlying_t>)
+              let<type>(MaskWord, type<generation>(vector::mask_underlying_t))
               if (mask) {
-                *ptr = cast<static>(MaskWord, cast<static>(type<ui64>, 0xFFFFFFFFFFFFFFFF));
+                *ptr = cast<static>(MaskWord, cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF));
               } else {
                 *ptr = cast<static>(MaskWord, 0);
               }
@@ -193,16 +193,16 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              if<generation>(tslgen<primitive>(attribute, packed)) {
+              if<generation>(value<generation>(primitive::attribute(packed))) {
                 var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
                 *ptr = imask;
               } else<generation> {
-                type<alias>(MaskWord, type<vector::mask_underlying_t>)
+                let<type>(MaskWord, type<generation>(vector::mask_underlying_t))
                 const MaskWord one_bits = cast<static>(
                   MaskWord,
-                  cast<static>(type<ui64>, 0xFFFFFFFFFFFFFFFF)
+                  cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)
                 );
-                loop<range>(i, 0, value<vector::length>, 1) {
+                loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (details::mask_test<Vec>(mask, i)) {
                     *ptr_add_mut(ptr, i) = one_bits;
                   } else {
@@ -232,13 +232,13 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
           neon [neon]
         implementation:
           tsil """
-            if<generation>(tslgen<primitive>(attribute, packed)) {
+            if<generation>(value<generation>(primitive::attribute(packed))) {
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
               *ptr = imask;
             } else<generation> {
-              type<alias>(MaskVec, type<vector::transform<type<vector::mask_underlying_t>>>)
+              let<type>(MaskVec, type<generation>(vector::transform(type<generation>(vector::mask_underlying_t))))
               var<const_infer>(mask_vec, call<primitive=reinterpret[Vec, MaskVec]>(mask))
-              call<primitive=store[MaskVec] attrs[aligned=tslgen<primitive>(attribute, aligned)]>(ptr, mask_vec);
+              call<primitive=store[MaskVec] attrs[aligned=value<generation>(primitive::attribute(aligned))]>(ptr, mask_vec);
             }
           """
     sve:
@@ -246,29 +246,29 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
         requires [sve]
         implementation:
           tsil """
-            if<generation>(tslgen<primitive>(attribute, packed)) {
-              var<const_infer>(lanes, value<vector::length>)
+            if<generation>(value<generation>(primitive::attribute(packed))) {
+              var<const_infer>(lanes, value<generation>(vector::length))
               var<const_infer>(nbytes, ((lanes + 7) >> 3))
-              var<const_infer>(bytes, cast<reinterpret>(type<ui8> *, ptr))
+              var<const_infer>(bytes, cast<reinterpret>(type<backend>(scalar::ui8) *, ptr))
 
               loop<range>(i, 0, nbytes, 1) {
-                *ptr_add_mut(bytes, i) = cast<static>(type<ui8>, 0);
+                *ptr_add_mut(bytes, i) = cast<static>(type<backend>(scalar::ui8), 0);
               }
 
               loop<range>(lane, 0, lanes, 1) {
                 if (details::mask_test<Vec>(mask, lane)) {
                   *ptr_add_mut(bytes, lane >> 3) =
                     *ptr_add(bytes, lane >> 3) |
-                    cast<static>(type<ui8>, (1 << (lane & 7)));
+                    cast<static>(type<backend>(scalar::ui8), (1 << (lane & 7)));
                 }
               }
             } else<generation> {
-              type<alias>(MaskWord, type<vector::mask_underlying_t>)
+              let<type>(MaskWord, type<generation>(vector::mask_underlying_t))
               const MaskWord one_bits = cast<static>(
                 MaskWord,
-                cast<static>(type<ui64>, 0xFFFFFFFFFFFFFFFF)
+                cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)
               );
-              loop<range>(i, 0, value<vector::length>, 1) {
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (details::mask_test<Vec>(mask, i)) {
                   *ptr_add_mut(ptr, i) = one_bits;
                 } else {
@@ -370,7 +370,7 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-            loop<range>(i, 0, value<vector::length>, 1)  {
+            loop<range>(i, 0, value<generation>(vector::length), 1)  {
               if (details::mask_test<Vec>(mask, i)) {
                 *ptr_add_mut(ptr, i) = data[i];
               }
@@ -390,8 +390,8 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
             bword   [avx512f, avx512vl, avx512bw, sse, sse2]
         implementation:
           tsil """
-            type<alias>(SignedBase, type<signed_of>(BaseT));
-            intrin_macro<mask_storeu, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            intrin_compose<mask_storeu, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
               cast<reinterpret>(SignedBase *, ptr),
               mask,
               data
@@ -401,10 +401,10 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
         requires [avx512f]
         implementation:
           tsil """
-            if<generation>(tslgen<primitive>(attribute, aligned)) {
-              emit_return(intrin_macro<mask_store>(ptr, mask, data));
+            if<generation>(value<generation>(primitive::attribute(aligned))) {
+              emit_return(intrin_compose<mask_store>(ptr, mask, data));
             } else<generation> {
-              emit_return(intrin_macro<mask_storeu>(ptr, mask, data));
+              emit_return(intrin_compose<mask_storeu>(ptr, mask, data));
             }
           """
     [avx2, sse, neon]:
@@ -415,9 +415,9 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
           neon [neon]
         implementation:
           tsil """
-              var<const_infer>(mem_vec, call<primitive=load[Vec] attrs[aligned=tslgen<primitive>(attribute, aligned)]>(ptr));
+              var<const_infer>(mem_vec, call<primitive=load[Vec] attrs[aligned=value<generation>(primitive::attribute(aligned))]>(ptr));
               var<const_infer>(blend_vec, call<primitive=blend>(mask, mem_vec, data));
-              call<primitive=store attrs[aligned=tslgen<primitive>(attribute, aligned)]>(
+              call<primitive=store attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
                 ptr,
                 blend_vec
               );
@@ -427,14 +427,14 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
         requires [sve]
         implementation:
           tsil """
-            if<generation>(tslgen<primitive>(attribute, aligned)) {
-              intrin_macro<svst1>(
+            if<generation>(value<generation>(primitive::attribute(aligned))) {
+              intrin_compose<svst1>(
                 mask,
-                assume_aligned<value<vector::alignment>>(ptr),
+                assume_aligned<value<generation>(vector::alignment)>(ptr),
                 data
               );
             } else<generation> {
-              intrin_macro<svst1>(
+              intrin_compose<svst1>(
                 mask,
                 ptr,
                 data

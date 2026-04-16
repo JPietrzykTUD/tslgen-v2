@@ -14,7 +14,7 @@ prim<m:=()>[value=zero] mask_false():
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::mask>, 0));"
+          tsil "emit_return(cast<static>(type<generation>(vector::mask), 0));"
     [avx2, sse, neon]:
       arith:
         requires:
@@ -59,7 +59,7 @@ prim<m:=()>[value=all] mask_true():
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::mask>, cast<static>(type<ui64>, 0xFFFFFFFFFFFFFFFF)));"
+          tsil "emit_return(cast<static>(type<generation>(vector::mask), cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)));"
     [avx2, sse, neon]:
       arith:
         requires:
@@ -70,7 +70,7 @@ prim<m:=()>[value=all] mask_true():
             f32 [sse]
           neon [neon]
         implementation:
-          tsil "emit_return(call<primitive=set1[Vec]>(value<mask::lane::all_true>));"
+          tsil "emit_return(call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true)));"
     sve:
       ?i8  {intrinsic "intrin<svptrue_b8>()", requires [sve]}
       ?i16 {intrinsic "intrin<svptrue_b16>()", requires [sve]}
@@ -90,10 +90,10 @@ prim<m:=()>[value=all] mask_true():
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              type<alias>(MaskT, type<vector::mask>)
+              let<type>(MaskT, type<generation>(vector::mask))
               MaskT result = mask<zero>();
-              loop<unroll>(value<vector::length>)
-              loop<range>(i, 0, value<vector::length>, 1) {
+              loop<unroll>(value<generation>(vector::length))
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
                 mask<set:1>(result, i);
               }
               emit_return(result);

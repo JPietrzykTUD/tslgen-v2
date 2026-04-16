@@ -1,21 +1,26 @@
-from typing import Protocol
+from typing import List, Optional, Protocol
 from dataclasses import dataclass
 
 from tslgen.ir.primitive_ir import Primitive
 
+from tslgen.core.context import GlobalContext, GenerationContext
+
 class BackendPass(Protocol):
-    def lower(self, source: Primitive) -> Primitive:
+    def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         ...
 
 
 class MiddleEndPass(Protocol):
-    def lower(self, source: Primitive) -> Primitive:
+    def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         ...
 
+class MiddleEndFilterPass(Protocol):
+    def filter(self, source: Primitive, ctx: GlobalContext, gen_ctx: GenerationContext) -> Optional[Primitive]:
+        ...
 
 class FrontendPass(Protocol):
     # Todo: what type is source?
-    def lower(self, source) -> Primitive:
+    def parse(self, source, ctx: GlobalContext) -> List[Primitive]:
         ...
     
 

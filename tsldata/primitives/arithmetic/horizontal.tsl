@@ -16,25 +16,25 @@ prim<s:=v> hadd(vec):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, intrin_macro<svaddv>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<svaddv>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_macro<svaddv>(call<primitive=mask_true[Vec]>(), vec));"
+          tsil "emit_return(intrin_compose<svaddv>(call<primitive=mask_true[Vec]>(), vec));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, intrin_macro<reduce_add, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<reduce_add, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(vec)));"
       f?:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin_macro<reduce_add>(vec));"
+          tsil "emit_return(intrin_compose<reduce_add>(vec));"
     [avx2_vl, sse_vl]:
       [si16, ui16]:
         requires [avx512bw, avx512vl]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, intrin_macro<reduce_add, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<reduce_add, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(vec)));"
     avx2:
       [si32, ui32]:
         requires [avx2]
@@ -45,7 +45,7 @@ prim<s:=v> hadd(vec):
             var<infer>(temp, intrin<_mm_add_epi32>(lo, hi))
             temp = intrin<_mm_add_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_add_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            emit_return(cast<static>(type<vector::base>, intrin<_mm_cvtsi128_si32>(temp)));
+            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       [si64, ui64]:
         requires [avx2]
@@ -55,7 +55,7 @@ prim<s:=v> hadd(vec):
             var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1))
             var<infer>(temp, intrin<_mm_add_epi64>(lo, hi))
             temp = intrin<_mm_add_epi64>(temp, intrin<_mm_unpackhi_epi64>(temp, temp));
-            emit_return(cast<static>(type<vector::base>, intrin<_mm_cvtsi128_si64>(temp)));
+            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       f32:
         requires [avx2]
@@ -82,10 +82,9 @@ prim<s:=v> hadd(vec):
         requires [avx2]
         implementation:
           tsil """
-            type<alias>(BaseT, type<vector::base>)
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            BaseT result = cast<static>(BaseT, 0);
-            loop<range>(i, 0, value<vector::length>, 1) {
+            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result = details::arith_add(result, values[i]);
             }
             emit_return(result);
@@ -98,14 +97,14 @@ prim<s:=v> hadd(vec):
             var<infer>(temp, vec)
             temp = intrin<_mm_add_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_add_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            emit_return(cast<static>(type<vector::base>, intrin<_mm_cvtsi128_si32>(temp)));
+            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       [si64, ui64]:
         requires [sse2]
         implementation:
           tsil """
             var<infer>(temp, intrin<_mm_add_epi64>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)))
-            emit_return(cast<static>(type<vector::base>, intrin<_mm_cvtsi128_si64>(temp)));
+            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       f32:
         requires [sse2]
@@ -127,10 +126,9 @@ prim<s:=v> hadd(vec):
         requires [sse2]
         implementation:
           tsil """
-            type<alias>(BaseT, type<vector::base>)
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            BaseT result = cast<static>(BaseT, 0);
-            loop<range>(i, 0, value<vector::length>, 1) {
+            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result = details::arith_add(result, values[i]);
             }
             emit_return(result);
@@ -148,10 +146,9 @@ prim<s:=v> hadd(vec):
           sve [sve]
         implementation:
           tsil """
-            type<alias>(BaseT, type<vector::base>)
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            BaseT result = cast<static>(BaseT, 0);
-            loop<range>(i, 0, value<vector::length>, 1) {
+            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               result = details::arith_add(result, values[i]);
             }
             emit_return(result);
@@ -172,25 +169,25 @@ prim<s:=v> hmax(vec):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, intrin_macro<svmaxv>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<svmaxv>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_macro<svmaxv>(call<primitive=mask_true[Vec]>(), vec));"
+          tsil "emit_return(intrin_compose<svmaxv>(call<primitive=mask_true[Vec]>(), vec));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, intrin_macro<reduce_max>(vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<reduce_max>(vec)));"
       f?:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin_macro<reduce_max>(vec));"
+          tsil "emit_return(intrin_compose<reduce_max>(vec));"
     [avx2_vl, sse_vl]:
       [si16, ui16]:
         requires [avx512bw, avx512vl]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, intrin_macro<reduce_max>(vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<reduce_max>(vec)));"
     avx2:
       si32:
         requires [avx2]
@@ -201,7 +198,7 @@ prim<s:=v> hmax(vec):
             var<infer>(temp, intrin<_mm_max_epi32>(lo, hi))
             temp = intrin<_mm_max_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_max_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            emit_return(cast<static>(type<vector::base>, intrin<_mm_cvtsi128_si32>(temp)));
+            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       ui32:
         requires [avx2]
@@ -212,7 +209,7 @@ prim<s:=v> hmax(vec):
             var<infer>(temp, intrin<_mm_max_epu32>(lo, hi))
             temp = intrin<_mm_max_epu32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_max_epu32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            emit_return(cast<static>(type<vector::base>, intrin<_mm_cvtsi128_si32>(temp)));
+            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       f32:
         requires [avx2]
@@ -239,11 +236,10 @@ prim<s:=v> hmax(vec):
         requires [avx2]
         implementation:
           tsil """
-            type<alias>(BaseT, type<vector::base>)
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            BaseT result = cast<static>(BaseT, 0);
-            type<size> found = 0;
-            loop<range>(i, 0, value<vector::length>, 1) {
+            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
+            type<backend>(size_t) found = 0;
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (found == 0) {
                 result = values[i];
                 found = 1;
@@ -274,11 +270,10 @@ prim<s:=v> hmax(vec):
         requires [sse2]
         implementation:
           tsil """
-            type<alias>(BaseT, type<vector::base>)
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            BaseT result = cast<static>(BaseT, 0);
-            type<size> found = 0;
-            loop<range>(i, 0, value<vector::length>, 1) {
+            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
+            type<backend>(size_t) found = 0;
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (found == 0) {
                 result = values[i];
                 found = 1;
@@ -303,7 +298,7 @@ prim<s:=v> hmax(vec):
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
             var<infer>(result, values[0])
-            loop<range>(i, 1, value<vector::length>, 1) {
+            loop<range>(i, 1, value<generation>(vector::length), 1) {
               if (values[i] > result) {
                 result = values[i];
               }
@@ -326,25 +321,25 @@ prim<s:=v> hmin(vec):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, intrin_macro<svminv>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<svminv>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_macro<svminv>(call<primitive=mask_true[Vec]>(), vec));"
+          tsil "emit_return(intrin_compose<svminv>(call<primitive=mask_true[Vec]>(), vec));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, intrin_macro<reduce_min>(vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<reduce_min>(vec)));"
       f?:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin_macro<reduce_min>(vec));"
+          tsil "emit_return(intrin_compose<reduce_min>(vec));"
     [avx2_vl, sse_vl]:
       [si16, ui16]:
         requires [avx512bw, avx512vl]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, intrin_macro<reduce_min>(vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<reduce_min>(vec)));"
     avx2:
       si32:
         requires [avx2]
@@ -355,7 +350,7 @@ prim<s:=v> hmin(vec):
             var<infer>(temp, intrin<_mm_min_epi32>(lo, hi))
             temp = intrin<_mm_min_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_min_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            emit_return(cast<static>(type<vector::base>, intrin<_mm_cvtsi128_si32>(temp)));
+            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       ui32:
         requires [avx2]
@@ -366,7 +361,7 @@ prim<s:=v> hmin(vec):
             var<infer>(temp, intrin<_mm_min_epu32>(lo, hi))
             temp = intrin<_mm_min_epu32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_min_epu32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            emit_return(cast<static>(type<vector::base>, intrin<_mm_cvtsi128_si32>(temp)));
+            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       f32:
         requires [avx2]
@@ -393,11 +388,10 @@ prim<s:=v> hmin(vec):
         requires [avx2]
         implementation:
           tsil """
-            type<alias>(BaseT, type<vector::base>)
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            BaseT result = cast<static>(BaseT, 0);
-            type<size> found = 0;
-            loop<range>(i, 0, value<vector::length>, 1) {
+            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
+            type<backend>(size_t) found = 0;
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (found == 0) {
                 result = values[i];
                 found = 1;
@@ -428,11 +422,10 @@ prim<s:=v> hmin(vec):
         requires [sse2]
         implementation:
           tsil """
-            type<alias>(BaseT, type<vector::base>)
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            BaseT result = cast<static>(BaseT, 0);
-            type<size> found = 0;
-            loop<range>(i, 0, value<vector::length>, 1) {
+            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
+            type<backend>(size_t) found = 0;
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (found == 0) {
                 result = values[i];
                 found = 1;
@@ -457,7 +450,7 @@ prim<s:=v> hmin(vec):
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
             var<infer>(result, values[0])
-            loop<range>(i, 1, value<vector::length>, 1) {
+            loop<range>(i, 1, value<generation>(vector::length), 1) {
               if (values[i] < result) {
                 result = values[i];
               }
@@ -478,25 +471,25 @@ prim<s:=(m,v)> hadd(mask, vec):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, intrin_macro<svaddv>(mask, vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<svaddv>(mask, vec)));"
       f?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_macro<svaddv>(mask, vec));"
+          tsil "emit_return(intrin_compose<svaddv>(mask, vec));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, intrin_macro<mask_reduce_add, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(mask, vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<mask_reduce_add, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(mask, vec)));"
       f?:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin_macro<mask_reduce_add>(mask, vec));"
+          tsil "emit_return(intrin_compose<mask_reduce_add>(mask, vec));"
     [avx2_vl, sse_vl]:
       [si16, ui16]:
         requires [avx512bw, avx512vl]
         implementation:
-          tsil "emit_return(cast<static>(type<vector::base>, intrin_macro<mask_reduce_add, suffix=tslgen<intrin>(suffix, type<signed_of>(BaseT))>(mask, vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<mask_reduce_add, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(mask, vec)));"
     [avx2, sse]:
       [si32, ui32, f32, f64]:
         requires:
@@ -517,11 +510,10 @@ prim<s:=(m,v)> hadd(mask, vec):
           sve [sve]
         implementation:
           tsil """
-            type<alias>(BaseT, type<vector::base>)
             var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            BaseT result = cast<static>(BaseT, 0);
-            loop<range>(i, 0, value<vector::length>, 1) {
+            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 result = details::arith_add(result, values[i]);
               }
@@ -545,9 +537,9 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             if (mask_scalar == 0) {
-              emit_return(cast<static>(type<vector::base>, 0));
+              emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<vector::base>, intrin_macro<svmaxv>(mask, vec)));
+            emit_return(cast<static>(type<generation>(base::in), intrin_compose<svmaxv>(mask, vec)));
           """
       f?:
         requires [sve]
@@ -555,9 +547,9 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             if (mask_scalar == 0) {
-              emit_return(cast<static>(type<vector::base>, 0));
+              emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(intrin_macro<svmaxv>(mask, vec));
+            emit_return(intrin_compose<svmaxv>(mask, vec));
           """
     avx512:
       [si32, ui32, si64, ui64]:
@@ -566,9 +558,9 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             if (mask_scalar == 0) {
-              emit_return(cast<static>(type<vector::base>, 0));
+              emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<vector::base>, intrin_macro<mask_reduce_max>(mask, vec)));
+            emit_return(cast<static>(type<generation>(base::in), intrin_compose<mask_reduce_max>(mask, vec)));
           """
       f?:
         requires [avx512f]
@@ -576,9 +568,9 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             if (mask_scalar == 0) {
-              emit_return(cast<static>(type<vector::base>, 0));
+              emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(intrin_macro<mask_reduce_max>(mask, vec));
+            emit_return(intrin_compose<mask_reduce_max>(mask, vec));
           """
     [avx2_vl, sse_vl]:
       [si16, ui16]:
@@ -587,9 +579,9 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             if (mask_scalar == 0) {
-              emit_return(cast<static>(type<vector::base>, 0));
+              emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<vector::base>, intrin_macro<mask_reduce_max>(mask, vec)));
+            emit_return(cast<static>(type<generation>(base::in), intrin_compose<mask_reduce_max>(mask, vec)));
           """
     [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
       arith:
@@ -604,12 +596,11 @@ prim<s:=(m,v)> hmax(mask, vec):
           sve [sve]
         implementation:
           tsil """
-            type<alias>(BaseT, type<vector::base>)
             var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            BaseT result = cast<static>(BaseT, 0);
-            type<size> found = 0;
-            loop<range>(i, 0, value<vector::length>, 1) {
+            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
+            type<backend>(size_t) found = 0;
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 if (found == 0) {
                   result = values[i];
@@ -638,9 +629,9 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             if (mask_scalar == 0) {
-              emit_return(cast<static>(type<vector::base>, 0));
+              emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<vector::base>, intrin_macro<svminv>(mask, vec)));
+            emit_return(cast<static>(type<generation>(base::in), intrin_compose<svminv>(mask, vec)));
           """
       f?:
         requires [sve]
@@ -648,9 +639,9 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             if (mask_scalar == 0) {
-              emit_return(cast<static>(type<vector::base>, 0));
+              emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(intrin_macro<svminv>(mask, vec));
+            emit_return(intrin_compose<svminv>(mask, vec));
           """
     avx512:
       [si32, ui32, si64, ui64]:
@@ -659,9 +650,9 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             if (mask_scalar == 0) {
-              emit_return(cast<static>(type<vector::base>, 0));
+              emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<vector::base>, intrin_macro<mask_reduce_min>(mask, vec)));
+            emit_return(cast<static>(type<generation>(base::in), intrin_compose<mask_reduce_min>(mask, vec)));
           """
       f?:
         requires [avx512f]
@@ -669,9 +660,9 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             if (mask_scalar == 0) {
-              emit_return(cast<static>(type<vector::base>, 0));
+              emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(intrin_macro<mask_reduce_min>(mask, vec));
+            emit_return(intrin_compose<mask_reduce_min>(mask, vec));
           """
     [avx2_vl, sse_vl]:
       [si16, ui16]:
@@ -680,9 +671,9 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             if (mask_scalar == 0) {
-              emit_return(cast<static>(type<vector::base>, 0));
+              emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<vector::base>, intrin_macro<mask_reduce_min>(mask, vec)));
+            emit_return(cast<static>(type<generation>(base::in), intrin_compose<mask_reduce_min>(mask, vec)));
           """
     [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
       arith:
@@ -697,12 +688,11 @@ prim<s:=(m,v)> hmin(mask, vec):
           sve [sve]
         implementation:
           tsil """
-            type<alias>(BaseT, type<vector::base>)
             var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            BaseT result = cast<static>(BaseT, 0);
-            type<size> found = 0;
-            loop<range>(i, 0, value<vector::length>, 1) {
+            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
+            type<backend>(size_t) found = 0;
+            loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 if (found == 0) {
                   result = values[i];

@@ -16,3 +16,6 @@ class IsaExtension:
     mask_width: MaskWidth
     mask_vector_loadable: bool
     runtime_length: bool
+
+    def mangle(self) -> str:
+        return f"{self.vendor}::{self.name}({self.vector_length_bits}b)"
