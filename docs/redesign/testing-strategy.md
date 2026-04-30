@@ -264,7 +264,9 @@ generation:
 - CLI combined report/write tests for `--coverage-report` with `--output-root`,
   including repeated writes and `--no-skip-unchanged`.
 - C++ naming tests for function names, parameter names, invalid identifiers, and
-  golden declaration output.
+  golden declaration output. Milestone 26 covers the scalar `binary`
+  `si32`/`ui32` declaration slice and rejects invalid names rather than
+  sanitizing them.
 - TSIL mini-lowering tests with one supported tiny form and nearby unsupported
   forms.
 - C++ body rendering tests proving bodies consume lowered data rather than raw

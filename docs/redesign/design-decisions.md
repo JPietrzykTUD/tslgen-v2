@@ -704,3 +704,44 @@ Consequences:
 - HTML report stdout is not interleaved with write summaries.
 - CLI stream behavior is now a regression-tested contract before broader CLI
   compatibility work.
+
+## ADR-022: C++ Declaration Naming Is Narrow And Diagnostic-Only
+
+Status: Accepted for the Milestone 26 slice
+
+Context:
+
+Milestone 22 introduced a production-shaped C++ declaration section for scalar
+`binary` `si32` candidates. Milestone 26 expands that declaration slice to
+`ui32` and needs the generated function and parameter names to be contractual
+before future body rendering depends on them.
+
+Considered alternatives:
+
+- Sanitize unsupported characters into generated C++ identifiers.
+- Introduce a broad ABI-level mangling policy before wrappers, overloads, and
+  attributes are modeled.
+- Keep the current declaration slice narrow and reject invalid names with
+  diagnostics.
+
+Decision:
+
+For the current C++ declaration slice, derive function names as
+`<emitted_primitive_name>_<type_tag>` and preserve TSL parameter names. The
+derived function name and every parameter name must already be valid non-keyword
+C++ identifiers. Invalid names produce structured diagnostics; the renderer does
+not sanitize or mangle names.
+
+Rationale:
+
+The redesign does not yet model wrappers, overload sets, attribute-driven ABI
+forms, or body rendering. A conservative diagnostic-only policy keeps current
+golden output deterministic without freezing a broad future C++ ABI.
+
+Consequences:
+
+- The C++ golden declaration slice now covers `si32` and `ui32`.
+- Future wrapper, overload, extension, and attribute naming must define their
+  own backend-owned contract before generating output.
+- Body rendering may reuse this naming contract only for the same supported
+  scalar declaration slice.

@@ -294,21 +294,28 @@ tags, template names, and escaped opaque TSIL payload text. This slice does not
 lower TSIL, evaluate backend translations, render full backend templates, or
 produce final SIMD implementation code.
 
-Milestone 22 expands the C++ `generated` artifact with a narrow
+Milestone 22 expanded the C++ `generated` artifact with a narrow
 production-shaped declaration section for selected scalar `binary` candidates
-with signature `v:=(v,v)` and type tag `si32`. The declaration section is
+with signature `v:=(v,v)` and type tag `si32`. Milestone 26 extends that same
+slice to selected scalar `binary` candidates with type tag `ui32`, mapping
+`si32` to `std::int32_t` and `ui32` to `std::uint32_t`. The declaration section is
 derived from typed candidate, signature, and implementation-spec metadata; it
 does not consume parser trees, does not lower TSIL, and does not treat opaque
 TSIL payload text as generated C++ statements. Selected candidates outside this
 slice are rejected with `TSL-CPP-RENDER-DECLARATION-UNSUPPORTED` rather than
 silently omitted or rendered as misleading code.
 
-Milestone 26 must make C++ declaration naming contractual before the declaration
-slice expands. The current naming shape is `<emitted_primitive_name>_<type_tag>`
-for supported scalar declarations, and parameter names are derived from TSL
-primitive parameter names only when they are valid C++ identifiers. Later
-attribute, extension, overload, and wrapper naming must be documented before it
-becomes generated output.
+The C++ declaration naming contract for this slice is intentionally narrow.
+Function names are derived as `<emitted_primitive_name>_<type_tag>`, and the
+derived name must already be a valid, non-keyword C++ identifier. Parameter
+names are preserved from the TSL primitive declaration; for `v:=(v,v)`, the
+supported production declaration expects valid C++ parameter identifiers such as
+`left` and `right`. The renderer does not sanitize, rename, or mangle invalid
+names. Invalid function names produce
+`TSL-CPP-RENDER-DECLARATION-FUNCTION-NAME`, and invalid parameter names produce
+`TSL-CPP-RENDER-DECLARATION-PARAMETER-NAME`. Attribute, extension, overload,
+wrapper, and body naming remain deferred until those output forms become
+supported slices.
 
 Milestone 28 is the first permitted C++ body-rendering milestone. It may render
 only a tiny scalar body whose semantics come from accepted lowered data. Raw

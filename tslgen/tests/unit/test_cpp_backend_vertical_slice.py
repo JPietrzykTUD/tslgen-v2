@@ -12,6 +12,10 @@ from _helpers import assert_diagnostic
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
 from tslgen.analysis.selection import SelectionRequest, plan_selection
 from tslgen.backends.cpp.backend import CppBackend
+from tslgen.backends.cpp.naming import (
+    cpp_production_function_name,
+    cpp_production_parameter_names,
+)
 from tslgen.config.model import SourceConfig
 from tslgen.domain.backends import ArtifactSpec, BackendManifest, BackendManifestSet
 from tslgen.domain.catalog import Catalog, build_catalog
@@ -25,6 +29,17 @@ from tslgen.validation.reference_rules import ReferenceValidatedCatalog, validat
 
 
 SIMPLE_PRIMITIVE = """prim<v:=(v,v)> slice_add(left, right):
+  tests []
+  impls:
+    scalar:
+      ?i32:
+        requires [sse]
+        implementation:
+          tsil "emit_return(left + right);"
+"""
+
+
+SI32_ONLY_PRIMITIVE = """prim<v:=(v,v)> slice_add(left, right):
   tests []
   impls:
     scalar:
@@ -43,6 +58,17 @@ UNSUPPORTED_DECLARATION_PRIMITIVE = """prim<v:=()> slice_zero():
         requires []
         implementation:
           tsil "emit_return(0);"
+"""
+
+
+INVALID_PARAMETER_PRIMITIVE = """prim<v:=(v,v)> slice_add(class, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires [sse]
+        implementation:
+          tsil "emit_return(class + right);"
 """
 
 
@@ -167,10 +193,11 @@ def manifest_set(*, artifact_kind: str = "generated") -> BackendManifestSet:
 
 def render_simple_fixture(
     *,
+    primitive_text: str = SIMPLE_PRIMITIVE,
     selection_backend: str | None = "cpp",
     artifact_kind: str = "generated",
 ):
-    referenced = catalog_with_primitive(SIMPLE_PRIMITIVE)
+    referenced = catalog_with_primitive(primitive_text)
     selection = candidate_selection_for(referenced, backend=selection_backend)
     artifact_plan = build_artifact_plan(
         manifest_set(artifact_kind=artifact_kind),
@@ -200,6 +227,42 @@ def artifact_plan_for_selection(
     return artifact_plan.unwrap()
 
 
+class CppNamingTests(unittest.TestCase):
+    def test_production_function_name_uses_primitive_and_type_tag(self) -> None:
+        name = cpp_production_function_name("slice_add", "ui32")
+
+        self.assertTrue(name.is_ok, name.diagnostics)
+        self.assertEqual(name.unwrap(), "slice_add_ui32")
+
+    def test_production_parameter_names_preserve_signature_names(self) -> None:
+        names = cpp_production_parameter_names(("left", "right"))
+
+        self.assertTrue(names.is_ok, names.diagnostics)
+        self.assertEqual(names.unwrap(), ("left", "right"))
+
+    def test_invalid_function_name_is_diagnostic(self) -> None:
+        name = cpp_production_function_name("slice-add", "ui32")
+
+        self.assertFalse(name.is_ok)
+        assert_diagnostic(
+            self,
+            name.diagnostics[0],
+            code="TSL-CPP-RENDER-DECLARATION-FUNCTION-NAME",
+            severity="error",
+        )
+
+    def test_invalid_parameter_name_is_diagnostic(self) -> None:
+        names = cpp_production_parameter_names(("class", "right"))
+
+        self.assertFalse(names.is_ok)
+        assert_diagnostic(
+            self,
+            names.diagnostics[0],
+            code="TSL-CPP-RENDER-DECLARATION-PARAMETER-NAME",
+            severity="error",
+        )
+
+
 class CppBackendVerticalSliceTests(unittest.TestCase):
     def test_renders_minimal_cpp_generated_artifact(self) -> None:
         result = render_simple_fixture()
@@ -222,12 +285,30 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
         self.assertEqual(artifact.metadata["backend_id"], "cpp")
         self.assertEqual(artifact.metadata["required_flags"], ("sse",))
         self.assertEqual(artifact.metadata["target_extensions"], ("scalar",))
+        self.assertEqual(artifact.metadata["candidate_count"], 2)
         self.assertIn("namespace production", artifact.content)
         self.assertIn(
             "inline std::int32_t slice_add_si32(std::int32_t left, "
             "std::int32_t right);",
             artifact.content,
         )
+        self.assertIn(
+            "inline std::uint32_t slice_add_ui32(std::uint32_t left, "
+            "std::uint32_t right);",
+            artifact.content,
+        )
+
+    def test_original_scalar_binary_si32_declaration_remains_stable(self) -> None:
+        result = render_simple_fixture(primitive_text=SI32_ONLY_PRIMITIVE)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = result.unwrap().artifacts_by_path["generated.hpp"]
+        self.assertIn(
+            "inline std::int32_t slice_add_si32(std::int32_t left, "
+            "std::int32_t right);",
+            artifact.content,
+        )
+        self.assertNotIn("slice_add_ui32", artifact.content)
 
     def test_rendering_is_deterministic(self) -> None:
         first = render_simple_fixture()
@@ -310,6 +391,17 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             self,
             result.diagnostics[0],
             code="TSL-CPP-RENDER-DECLARATION-UNSUPPORTED",
+            severity="error",
+        )
+
+    def test_diagnoses_invalid_declaration_parameter_name(self) -> None:
+        result = render_simple_fixture(primitive_text=INVALID_PARAMETER_PRIMITIVE)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-DECLARATION-PARAMETER-NAME",
             severity="error",
         )
 

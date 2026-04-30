@@ -594,7 +594,8 @@ under an explicit `--output-root`, and all writes still go through
 
 ## OQ-020: What Is The C++ Function And Parameter Naming Contract?
 
-Status: Open - scheduled for Milestone 26
+Status: Answered for the Milestone 26 declaration slice; broader C++ ABI naming
+remains open.
 
 Why it matters:
 
@@ -602,12 +603,20 @@ Milestone 22 emits C++ scalar declarations. As declaration coverage expands,
 function names and parameter names become observable generated output and golden
 compatibility points.
 
-Possible answers:
+Decision:
 
-- Use `<emitted_primitive_name>_<type_tag>` with original TSL parameter names.
+For the current C++ production declaration slice, function names are
+`<emitted_primitive_name>_<type_tag>`. Parameter names are preserved from the TSL
+primitive declaration. The renderer accepts only names that are already valid
+non-keyword C++ identifiers and emits structured diagnostics for invalid
+function or parameter names; it does not sanitize or mangle names.
+
+Possible future answers:
+
 - Introduce a backend-specific name mangling policy for attributes, extensions,
-  and overloads.
-- Defer complex cases and support only identifiers that are already valid C++.
+  overloads, wrappers, and public ABI forms.
+- Add overload-safe names once overload and wrapper generation are in scope.
+- Preserve the narrow diagnostic-only policy for all production-shaped output.
 
 Required evidence:
 
@@ -617,9 +626,9 @@ Required evidence:
 
 Implementation blocked:
 
-Milestone 26 is blocked until this is documented for the expanded declaration
-slice. Body rendering should not proceed before the naming contract is stable
-for its supported slice.
+Not for Milestone 26. Milestone 28 body rendering can proceed for the same
+supported declaration slice. Broader generated C++ ABI naming remains blocked
+until the corresponding output form is selected and documented.
 
 ## OQ-021: What Is The First Safe TSIL Mini-Lowering Subset?
 
@@ -998,3 +1007,7 @@ long as they avoid unrelated corpus churn.
   - report-only: report on stdout
   - write-only: write report on stdout
   - report + write: report on stdout, write report on stderr
+
+## Follow-up from Milestone 26 review
+
+- Keep broader C++ ABI naming, wrappers, overloads, and attribute-sensitive names explicitly deferred until their own reviewed slice.

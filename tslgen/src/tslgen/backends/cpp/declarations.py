@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import re
 
 from tslgen.analysis.candidates import ImplementationCandidate
 from tslgen.core.diagnostics import Diagnostic, has_errors, sort_diagnostics
 from tslgen.core.result import Result
 
+from .naming import cpp_production_function_name, cpp_production_parameter_names
 
-_CPP_IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 _CPP_TYPE_BY_TAG = {
     "si32": "std::int32_t",
+    "ui32": "std::uint32_t",
 }
 
 
@@ -102,34 +102,32 @@ def _declaration_for_candidate(
     if not supported:
         return Result.failure((_unsupported_declaration_diagnostic(candidate),))
 
-    function_name = f"{candidate.emitted_primitive_name}_{candidate.type_tag}"
-    declaration_parameters = candidate.variant.source.declaration.parameters
-    parameter_names = tuple(parameter.name for parameter in declaration_parameters)
-    invalid_names = tuple(
-        name for name in (function_name, *parameter_names) if not _is_cpp_identifier(name)
+    location = candidate.variant.source.declaration.source_span.location
+    function_name = cpp_production_function_name(
+        candidate.emitted_primitive_name,
+        candidate.type_tag,
+        location=location,
     )
-    if invalid_names:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-CPP-RENDER-DECLARATION-NAME",
-                    f"C++ production declaration slice cannot render candidate "
-                    f"{candidate.candidate_id!r}; invalid C++ identifier(s): "
-                    f"{', '.join(repr(name) for name in invalid_names)}",
-                    location=candidate.variant.source.declaration.source_span.location,
-                ),
-            )
-        )
+    declaration_parameters = candidate.variant.source.declaration.parameters
+    parameter_names = cpp_production_parameter_names(
+        (parameter.name for parameter in declaration_parameters),
+        location=location,
+    )
+    naming_diagnostics = sort_diagnostics(
+        (*function_name.diagnostics, *parameter_names.diagnostics)
+    )
+    if has_errors(naming_diagnostics):
+        return Result.failure(naming_diagnostics)
 
     type_name = _CPP_TYPE_BY_TAG[candidate.type_tag]
     return Result.ok(
         CppFunctionDeclaration(
             candidate_id=candidate.candidate_id,
             return_type=type_name,
-            function_name=function_name,
+            function_name=function_name.unwrap(),
             parameters=tuple(
                 CppParameterDeclaration(type_name=type_name, name=parameter_name)
-                for parameter_name in parameter_names
+                for parameter_name in parameter_names.unwrap()
             ),
         )
     )
@@ -140,7 +138,7 @@ def _unsupported_declaration_diagnostic(
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-CPP-RENDER-DECLARATION-UNSUPPORTED",
-        "C++ production declaration slice supports only scalar binary si32 "
+        "C++ production declaration slice supports only scalar binary si32/ui32 "
         f"candidates; candidate {candidate.candidate_id!r} has template "
         f"{candidate.template_name!r}, signature "
         f"{candidate.variant.source.signature.normalized!r}, target extension "
@@ -148,7 +146,3 @@ def _unsupported_declaration_diagnostic(
         f"{candidate.source_extension!r}, and type tag {candidate.type_tag!r}",
         location=candidate.variant.source.declaration.source_span.location,
     )
-
-
-def _is_cpp_identifier(value: str) -> bool:
-    return _CPP_IDENTIFIER_RE.fullmatch(value) is not None
