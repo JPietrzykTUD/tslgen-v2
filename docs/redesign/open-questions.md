@@ -385,17 +385,21 @@ No for Milestones 16 through 23. Public API polish is blocked until Milestone 24
 
 ## OQ-015: Should Dependency Closure Remain Primitive-Name Based?
 
-Status: Open - scheduled for Milestone 19
+Status: Resolved in Milestone 19 for the current typed-opaque lowering slice.
 
 Why it matters:
 
 The accepted dependency closure is intentionally conservative and primitive-name based. Real backend generation may need dependency edges between selected implementation candidates, lowered calls, or backend-specific render jobs.
 
-Possible answers:
+Decision:
 
-- Keep primitive-name closure and document it as the stable behavior.
-- Add candidate-specific dependency closure after lowering exposes call targets.
-- Add backend render-job dependencies only when backend artifacts require it.
+- Keep the Milestone 9 primitive-name closure as the stable broad dependency
+  model.
+- Add a candidate-specific closure layer for references that resolve to exactly
+  one selected implementation candidate from already accepted metadata.
+- Preserve primitive-name fallback entries, with warning diagnostics, for
+  ambiguous, missing, or lowering-dependent references.
+- Defer backend render-job dependencies until backend artifacts require them.
 
 Required evidence:
 
@@ -403,9 +407,13 @@ Required evidence:
 - Lowering results from Milestone 18.
 - Backend rendering needs from Milestone 22.
 
-Implementation blocked:
+Resolution notes:
 
-Milestone 19 is blocked on enough lowering evidence to avoid guessing. Milestone 16 and Milestone 17 are not blocked.
+Milestone 18 established a typed-opaque lowering boundary, so Milestone 19 does
+not treat conservative `call<primitive=...>` text extraction as final TSIL
+semantics. Exact selected type tags may narrow candidate edges; generic
+arguments such as `[Vec]` and `type<backend>(...)` remain unsupported for
+candidate-specific resolution until semantic lowering exists.
 
 ## OQ-016: How Far Should Implementation Specs Be Promoted From Raw Catalog Values?
 
@@ -596,5 +604,12 @@ Milestone 22 is blocked until Milestones 18 through 20 are accepted and OQ-004 i
 
 ## Follow-up from Milestone 18 review
 
-- Align the `domain-model.md` lowering snippet with the implementation field name `LoweringPlan.input_set`, or mark the snippet as conceptual.
-- Keep Milestone 19 from treating conservative TSIL text extraction as final TSIL semantics unless the lowering boundary explicitly supports it.
+- Addressed in Milestone 19: aligned the `domain-model.md` lowering snippet
+  with the implementation field name `LoweringPlan.input_set`.
+- Addressed in Milestone 19: candidate-specific dependency closure preserves
+  primitive-level fallbacks for generic or lowering-dependent TSIL references
+  instead of treating conservative text extraction as final semantics.
+
+## Follow-up from Milestone 19 review
+
+- When Milestone 20 promotes implementation specs, keep dependency reference attributes and body payload access behind typed spec objects instead of reaching deeper into raw implementation metadata.

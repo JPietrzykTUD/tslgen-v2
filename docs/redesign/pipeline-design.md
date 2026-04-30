@@ -222,16 +222,21 @@ Inputs:
 
 Outputs:
 
-- Expanded selection request or selection result including dependencies.
+- Primitive-name dependency closure.
+- Candidate-specific dependency closure when references resolve unambiguously.
+- Primitive-level fallback names for unresolved candidate-specific edges.
 - Dependency diagnostics.
 
 Processing:
 
-- Parse/model primitive calls from implementation bodies.
+- Conservatively model explicit primitive calls from implementation bodies.
 - Resolve `@self` references against the current primitive variant.
-- Resolve generic type/extension dependency arguments.
-- Add support primitives required by selected primitives.
-- Re-run selection or mark required candidates depending on implementation strategy.
+- Resolve exact selected-candidate type tags where they identify one target
+  candidate.
+- Preserve generic or lowering-dependent type/extension dependency arguments as
+  unsupported candidate-specific edges until semantic TSIL lowering exists.
+- Mark support primitives required by selected primitives for later selection or
+  generation stages.
 
 Validation:
 

@@ -319,6 +319,42 @@ Invariants:
 - Each selected implementation has a resolved template and concrete type tag.
 - Unsupported backend or missing language maps are diagnostics, not renderer surprises.
 
+## Dependency Analysis Model
+
+Milestone 9 keeps the required dependency closure at primitive-name granularity.
+Milestone 19 adds an optional candidate-specific layer that is still derived
+from the accepted dependency graph and selected implementation candidates:
+
+```python
+@dataclass(frozen=True, slots=True)
+class CandidateDependencyEdge:
+    source_candidate_id: str
+    target_candidate_id: str
+    reference: DependencyReference
+
+@dataclass(frozen=True, slots=True)
+class CandidateDependencyIssue:
+    source_candidate_id: str
+    target_primitive_name: PrimitiveName
+    reason: Literal["ambiguous", "missing", "unsupported"]
+    candidate_ids: tuple[str, ...]
+
+@dataclass(frozen=True, slots=True)
+class CandidateDependencyClosure:
+    required_candidate_ids: tuple[str, ...]
+    required_primitive_names: tuple[PrimitiveName, ...]
+    fallback_primitive_names: tuple[PrimitiveName, ...]
+```
+
+Invariants:
+
+- Candidate-specific edges are emitted only for uniquely resolved target
+  candidates.
+- Ambiguous, missing, or lowering-dependent target references remain explicit
+  fallback primitive names.
+- Dependency extraction remains conservative until TSIL lowering has a semantic
+  representation of calls.
+
 ## Lowering And IR Model
 
 The redesign should introduce IR only when a milestone needs it. The expected layers are:
@@ -362,7 +398,7 @@ class LoweringInput:
 @dataclass(frozen=True, slots=True)
 class LoweringPlan:
     request: LoweringRequest
-    inputs: tuple[LoweringInput, ...]
+    input_set: LoweringInputSet
     implementations: tuple[LoweredImplementation, ...]
 ```
 
@@ -374,7 +410,9 @@ Invariants:
   backend code without a later lowering slice.
 - Generation-time branch markers are represented at the lowering boundary even
   before they are evaluated.
-- Dependency references are extracted from parsed TSIL, not just backend text.
+- Future semantic dependency references are extracted from parsed TSIL, not just
+  backend text; Milestones 9 and 19 retain conservative marker extraction until
+  a TSIL AST exists.
 - Backend translation maps consume semantic operation identifiers.
 - Backend-specific syntax enters through backend lowerers.
 

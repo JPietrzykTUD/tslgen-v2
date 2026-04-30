@@ -212,6 +212,17 @@ unplanned primitive names so a later pipeline stage can re-run selection with an
 expanded request. Unknown dependency primitive names and non-trivial dependency
 cycles are diagnostics.
 
+Milestone 19 adds a candidate-specific dependency closure layer on top of the
+Milestone 9 primitive graph. Candidate-specific edges are created only when the
+existing selected-candidate metadata identifies exactly one target candidate. An
+exact concrete dependency type argument, such as `[si32]`, may narrow target
+candidates by selected type tag. Generic or lowering-dependent arguments, such
+as `[Vec]` or `type<backend>(...)`, are not treated as semantic TSIL and remain
+unsupported for candidate-specific resolution until a later lowering milestone.
+Ambiguous, missing, or unsupported target candidate resolutions are structured
+warning diagnostics; the closure preserves the referenced primitive name as a
+primitive-level fallback instead of silently selecting an implementation.
+
 ## Lowering Behavior
 
 Implementation bodies may be:
