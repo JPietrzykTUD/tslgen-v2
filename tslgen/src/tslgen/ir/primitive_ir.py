@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Dict
 
-from tslgen.frontend.parser  import Span
+from tslgen.frontend.helpers  import Span
 from tslgen.core.types import ConcreteType, MaskRepresentation, MaskWidth
 from tslgen.ir.isa_ir import IsaExtension
 from tslgen.ir.signature_ir import Signature

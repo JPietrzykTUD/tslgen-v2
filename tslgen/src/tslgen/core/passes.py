@@ -22,7 +22,9 @@ class FrontendPass(Protocol):
     # Todo: what type is source?
     def parse(self, source, ctx: GlobalContext) -> List[Primitive]:
         ...
-    
+
+class ParsePass(Protocol):
+    def parse(self, )
 
 @dataclass
 class ImplementationRewritePassState:

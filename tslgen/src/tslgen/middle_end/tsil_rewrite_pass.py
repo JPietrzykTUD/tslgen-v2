@@ -4,9 +4,9 @@ from tslgen.src.tslgen.core.context import GenerationContext
 import xxhash
 
 from tslgen.core.passes import MiddleEndPass, ImplementationRewritePassState
-from tslgen.middle_end.rewrite.generation_attribute import GenerationPrimitiveAttributeRewrite
-from tslgen.middle_end.rewrite.generation_control_flow import GenerationControlFlowRewrite
-from tslgen.middle_end.rewrite.generation_type import (
+from tslgen.src.tslgen.middle_end.rewrite.old.generation_attribute import GenerationPrimitiveAttributeRewrite
+from tslgen.src.tslgen.middle_end.rewrite.old.generation_control_flow import GenerationControlFlowRewrite
+from tslgen.src.tslgen.middle_end.rewrite.old.generation_type import (
     GenerationPrimitiveTypeCtxTypeRewrite,
     GenerationPrimitiveTypeTraitRewrite,
     GenerationPrimitiveTypeIsSameRewrite,

@@ -1,10 +1,9 @@
-from dataclasses import dataclass
+from typing import List, Optional, Protocol
 
-@dataclass(frozen=True)
-class Span:
-    start_pos: int
-    end_pos: int
-    line: int
-    column: int
-    end_line: int
-    end_column: int
+from tslgen.core.context import GlobalContext
+from tslgen.core.passes import FrontendPass
+from tslgen.ir.primitive_ir import Primitive
+
+class ParserPass(FrontendPass):
+    def parse(self, source, ctx: GlobalContext) -> List[Primitive]:
+        pass
