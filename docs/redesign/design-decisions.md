@@ -409,3 +409,48 @@ Consequences:
 - Full C++ specialization/wrapper rendering remains deferred.
 - Backend mismatch is diagnosed by the renderer before artifact content is
   produced.
+
+## ADR-015: Post-Milestone-15 Work Establishes Boundaries Before Broad Generation
+
+Status: Accepted
+
+Context:
+
+Milestones 1 through 15 establish parsing, catalog modeling, validation,
+selection, dependency discovery, backend manifests, summary rendering, CLI/API
+integration, Rust summary rendering, and coverage reporting. The remaining
+risks are not one large code-generation task; they are boundary questions around
+filesystem writing, production test planning, lowering, dependency precision,
+implementation specification typing, validation scope, report artifacts, and
+public API shape.
+
+Considered alternatives:
+
+- Start broad C++ or Rust code generation immediately.
+- Combine artifact writing, lowering, generated tests, report files, and CLI
+  compatibility into one milestone.
+- Add small boundary milestones before broad backend rendering.
+
+Decision:
+
+The post-Milestone-15 roadmap establishes reviewable boundaries first:
+artifact writing, production test-source planning, lowering/TSIL strategy,
+candidate-specific dependency closure, implementation spec promotion, validation
+baseline/quarantine, then one narrow production-shaped backend rendering slice.
+Report files and public API polish follow those foundations.
+
+Rationale:
+
+Broad generation would otherwise force renderers to absorb filesystem safety,
+TSIL semantics, dependency extraction, test planning, report writing, and API
+decisions at once. Keeping these concerns separate preserves the clean-room
+architecture and gives each future executor a thin vertical slice with clear
+tests.
+
+Consequences:
+
+- Milestone 16 is the recommended next executor milestone.
+- Full backend completeness remains deliberately deferred until the prerequisites
+  are accepted.
+- API and CLI expansion must expose only capabilities implemented by earlier
+  milestones.

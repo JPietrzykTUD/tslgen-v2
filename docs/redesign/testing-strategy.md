@@ -36,10 +36,16 @@ tslgen/
       test_selection.py
       test_dependencies.py
       test_artifacts.py
+      test_artifact_writer.py
+      test_testgen_planning.py
+      test_lowering.py
+      test_reporting.py
     integration/
       test_pipeline_catalog.py
       test_pipeline_cpp_slice.py
+      test_artifact_writer_pipeline.py
       test_cli.py
+      test_validation_baseline.py
     regression/
       test_tsldata_parse.py
       test_signature_resolution_legacy_observed.py
@@ -65,6 +71,9 @@ Unit tests should cover:
 - Feature requirement normalization.
 - Selection candidate ordering.
 - Artifact writer behavior.
+- Production test-source declaration normalization and planning.
+- Lowering request/result construction and unsupported-payload diagnostics.
+- Report rendering without filesystem side effects.
 
 Unit tests should not:
 
@@ -144,10 +153,12 @@ These can be written with Hypothesis if adopted, or as small generated test loop
 
 Golden tests should start small:
 
-- One simple C++ primitive artifact, such as a binary operation for scalar or generic.
+- One simple C++ primitive artifact, such as a binary operation for scalar or
+  generic, after Milestone 22 expands beyond summary artifacts.
 - One masked primitive artifact once mask semantics are implemented.
 - One load/store artifact with `aligned` wildcard expansion.
-- One test source artifact.
+- One production test source artifact after Milestone 17 establishes test-source
+  planning and a rendering slice exists.
 - One diagnostic report snapshot for a representative invalid fixture.
 
 Golden update policy:
@@ -166,6 +177,71 @@ Golden harness helpers should:
 - Stay in test infrastructure; production renderers must not depend on golden
   test helpers.
 
+## Artifact Writer Tests
+
+Milestone 16 introduces the first accepted filesystem mutation boundary. Tests
+for that milestone must use temporary directories and assert:
+
+- Absolute artifact paths, parent traversal, duplicate paths, and paths outside
+  the output root are rejected before writing.
+- First writes create parent directories and produce deterministic `written`
+  records.
+- Repeated writes with identical content produce `skipped_unchanged` records
+  when skip-unchanged is enabled.
+- Changed content rewrites the file and updates the digest.
+- Dry-run reports match the planned mutation statuses without touching files.
+- Write reports sort paths and diagnostics deterministically.
+
+No renderer test should need to touch the real filesystem. Rendering tests
+should produce `ArtifactSet` values; writer tests should consume them.
+
+## Production Test-Source Planning Tests
+
+Milestone 17 tests should distinguish generated production tests from tests of
+the generator itself. They should assert:
+
+- TSL `tests` declarations normalize into typed declaration objects.
+- Plans filter by primitive, type, extension, backend, and selected candidate.
+- Unsupported declaration shapes produce diagnostics rather than being ignored.
+- Planned test artifact descriptors have stable logical paths and metadata.
+- The golden harness can snapshot plans without becoming a production planning
+  dependency.
+
+Compiler invocation, runtime execution, hardware autodetection, and broad
+generated test framework behavior remain out of scope until explicitly
+milestoned.
+
+## Lowering Tests
+
+Milestone 18 tests should prove the boundary before proving full TSIL semantics.
+They should assert:
+
+- Lowering requests are built from selected implementation candidates and typed
+  context, not raw catalog dictionaries.
+- Unsupported or deferred payloads return diagnostics with stable codes and
+  source context when available.
+- If a minimal TSIL subset is parsed, unsupported constructs fail explicitly.
+- Generation-time conditions such as `if<generation>(...)` are represented and,
+  if implemented, evaluated in lowering rather than rendering.
+- Lowering results are deterministic for identical candidate input.
+
+Dependency and backend tests may consume lowered outputs only for the supported
+slice. They must not rescan raw implementation payloads to bypass lowering.
+
+## Validation Baseline Tests
+
+Milestone 21 should make the broad check surface explicit. If a validation
+script or command is added, tests should assert:
+
+- The documented command succeeds in the dev container for the production
+  package and accepted tests.
+- Exploratory or quarantined modules are not imported by public API, CLI, or
+  accepted pipeline tests.
+- Validation does not require network access, host CPU features, compiler
+  availability, or generated-output churn.
+- Failures distinguish production regressions from intentionally unsupported
+  sketches.
+
 ## Integration Tests
 
 Integration tests should cover:
@@ -175,6 +251,8 @@ Integration tests should cover:
 - Catalog validation over selected `tsldata/` files.
 - Selection request to candidate set.
 - Candidate set to minimal backend artifact.
+- Rendered artifact set to write report using a temporary output root.
+- Test-source planning from selected catalog/test declarations.
 - CLI with explicit flags and temp output.
 
 Integration tests should use temporary directories for writes and explicit CPU flags.
@@ -200,7 +278,10 @@ Determinism tests should assert:
 - Same input paths in different order produce the same catalog ordering where order is semantic or sorted.
 - Same selection request produces identical candidate identities.
 - Same backend plan renders identical artifact content.
-- Same artifact set writes identical digest maps.
+- Same artifact set writes identical write reports and digest maps.
+- Same production test-source request produces identical test artifact
+  descriptors.
+- Same lowering input produces identical lowered results or diagnostics.
 - Parallel-enabled stages produce identical outputs with one worker and multiple workers.
 
 ## Test Fixtures
@@ -245,6 +326,14 @@ Backend milestones:
 
 - Representative template coverage, not exhaustive template count.
 - Golden coverage for stable generated artifacts.
+
+Post-Milestone-15 milestones:
+
+- Writer path-safety and skip-unchanged coverage before any CLI writes files.
+- Generated test-source planning coverage before generated tests are rendered or
+  executed.
+- Lowering boundary diagnostics before broad TSIL parsing.
+- Validation baseline coverage before claiming repository-wide checks.
 
 ## Review Expectations
 

@@ -25,6 +25,8 @@ tslgen/
       sources.py
       manifests.py
       artifacts.py
+      artifact_writer.py
+      write_report.py
     syntax/
       ast.py
       lexer.py
@@ -54,6 +56,7 @@ tslgen/
       selection.py
       requirements.py
     lowering/
+      model.py
       tsil_ast.py
       tsil_parser.py
       semantic_ir.py
@@ -74,11 +77,19 @@ tslgen/
       template_engine.py
       render_plan.py
       text.py
+    testgen/
+      declarations.py
+      planner.py
+      artifacts.py
     reporting/
       coverage.py
+      artifacts.py
+      html.py
     pipeline/
       stages.py
       runner.py
+    tooling/
+      validation.py
     testing/
       golden.py
       fixtures.py
@@ -100,7 +111,8 @@ flowchart LR
     Pipeline --> Backends[backends]
     Pipeline --> Rendering[rendering]
     Pipeline --> Reporting[reporting]
-    Pipeline --> Artifacts[artifact writer]
+    Pipeline --> ArtifactWriter[artifact writer]
+    Pipeline --> TestGen[test-source planning]
 
     Syntax --> Core[core]
     Domain --> Core
@@ -111,6 +123,9 @@ flowchart LR
     Backends --> Domain
     Backends --> Lowering
     Backends --> Rendering
+    TestGen --> Domain
+    TestGen --> Analysis
+    TestGen --> IO
     Reporting --> Analysis
     Reporting --> Domain
     Reporting --> IO
@@ -126,7 +141,10 @@ Rules:
 - `analysis` produces expanded variants, dependencies, requirement decisions, and selections.
 - `lowering` consumes selected implementation bodies and translation maps.
 - `backends` consume typed plans and produce artifacts.
-- `io` owns filesystem loading and artifact writing.
+- `testgen` plans generated production test sources; it is separate from the
+  repository's own test harness.
+- `io` owns filesystem loading, manifest loading, artifact path validation, and
+  artifact writing.
 - `cli` owns argparse/cyclopts behavior, environment reads, and process exits.
 
 ## Module Responsibilities
@@ -172,14 +190,18 @@ Responsibilities:
 - Resolve input paths.
 - Load source documents as text.
 - Load YAML or other manifests through typed schemas.
-- Write artifact sets.
-- Produce write reports.
+- Model artifacts and artifact plans.
+- Validate artifact output paths before writing.
+- Write artifact sets under an explicit output root.
+- Compare content digests for skip-unchanged behavior.
+- Produce deterministic write reports, including dry-run reports.
 
 Does not:
 
 - Validate primitive semantics.
 - Render text.
 - Read CPU flags.
+- Decide which artifacts should exist.
 
 ### `syntax`
 
@@ -257,10 +279,12 @@ Semantic lowering from implementation body to backend-neutral or backend-ready I
 
 Responsibilities:
 
-- Parse TSIL bodies.
-- Analyze primitive calls and dependencies.
-- Evaluate generation-time expressions.
-- Apply translation maps.
+- Accept selected implementation candidates through typed lowering requests.
+- Parse TSIL bodies when a supported subset has been chosen.
+- Represent unsupported or deferred implementation payloads explicitly.
+- Analyze primitive calls and dependencies when enough semantics are available.
+- Evaluate generation-time expressions such as `if<generation>(...)`.
+- Apply translation maps where that belongs before backend rendering.
 - Produce lowered body objects.
 
 Does not:
@@ -268,6 +292,7 @@ Does not:
 - Choose target extensions.
 - Load files.
 - Write artifacts.
+- Render final backend text.
 
 ### `backends`
 
@@ -279,12 +304,15 @@ Responsibilities:
 - Plan wrappers, primaries, specializations, tests, traits, and support metadata.
 - Render artifacts through template engines or structured emitters.
 - Report required flags and artifact metadata.
+- Consume lowered implementation inputs for production-shaped output once the
+  lowering boundary supports the selected slice.
 
 Does not:
 
 - Re-parse source files.
 - Make selection decisions based on CPU flags.
 - Own output paths.
+- Evaluate generation-time TSIL conditions in template rendering.
 
 ### `rendering`
 
@@ -300,6 +328,26 @@ Does not:
 
 - Know target hardware semantics.
 
+### `testgen`
+
+Production test-source planning and, later, rendering.
+
+Responsibilities:
+
+- Normalize supported TSL `tests` declarations into typed test declarations.
+- Validate test declarations against known primitives, types, extensions, and
+  backend capabilities.
+- Produce deterministic test artifact descriptors for selected primitives and
+  candidates.
+- Keep generated production test sources separate from the repository's unit and
+  golden tests.
+
+Does not:
+
+- Invoke compilers or run generated tests.
+- Own the repository's test harness.
+- Write generated test files directly.
+
 ### `reporting`
 
 Pure report construction over accepted pipeline outputs.
@@ -310,6 +358,8 @@ Responsibilities:
   coverage.
 - Produce deterministic structured report values.
 - Serialize report values to deterministic JSON.
+- Optionally render report artifacts, such as JSON, text, or HTML, without
+  writing them directly.
 
 Does not:
 
@@ -327,6 +377,9 @@ Responsibilities:
 - Enforce validation gates.
 - Return structured results.
 - Keep stage inputs and outputs inspectable.
+- Optionally orchestrate test-source planning, lowering, rendering, reporting,
+  and artifact writing only when the corresponding configuration requests those
+  capabilities.
 
 Does not:
 
@@ -344,12 +397,19 @@ def load_catalog(config: SourceConfig) -> CatalogResult: ...
 def validate_catalog(catalog: Catalog) -> ValidationResult: ...
 def plan_generation(catalog: Catalog, request: SelectionRequest) -> PlanResult: ...
 def render_artifacts(plan: BackendPlan) -> ArtifactResult: ...
-def write_artifacts(artifacts: ArtifactSet, output_root: Path) -> WriteReport: ...
+def write_artifacts(
+    artifacts: ArtifactSet,
+    output_root: Path,
+    options: ArtifactWriteOptions,
+) -> WriteReport: ...
+def plan_tests(catalog: Catalog, request: TestPlanRequest) -> TestPlanResult: ...
 def run_pipeline(config: PipelineConfig) -> PipelineResult: ...
 def coverage_report(result: PipelineResult) -> PipelineCoverageReport: ...
 ```
 
-These functions should be stable enough for tests and external tools.
+These functions are the long-term facade. Milestone 24 decides which post-15
+helpers are public API, including whether coverage/reporting is re-exported
+through `tslgen.api`.
 
 ### CLI
 
@@ -367,6 +427,8 @@ The following should remain private or replaceable:
 - Backend-specific whitespace formatting helpers.
 - Hardware detection implementation.
 - Golden fixture organization.
+- Exploratory modules that are quarantined from the production validation
+  baseline.
 
 ## Extension Points
 
@@ -379,6 +441,8 @@ The following should remain private or replaceable:
 | New hardware extension | Add extension metadata, type/lane/test support, backend policy tests. |
 | New lowering operation | Add TSIL parser node, semantic IR, backend translation entries, tests. |
 | New artifact type | Extend artifact model and writer policy explicitly. |
+| New generated test kind | Add test declaration model, test plan descriptor, renderer, and tests. |
+| New report format | Add pure report renderer and route its artifact through the writer. |
 
 ## Pure Computation And Side Effects
 
@@ -387,7 +451,7 @@ Side-effect boundaries:
 - `io.sources` reads source files.
 - `io.manifests` reads manifests.
 - `config.hardware` may read host hardware.
-- `io.artifacts` writes files.
+- `io.artifact_writer` writes files and produces write reports.
 - `cli` prints diagnostics and exits.
 
 Pure stages:
@@ -396,11 +460,23 @@ Pure stages:
 - Validation.
 - Expansion.
 - Selection.
-- Dependency analysis when TSIL bodies are provided as strings.
-- Lowering.
+- Dependency analysis.
+- Lowering, including generation-time condition evaluation.
 - Planning.
 - Rendering.
 - Reporting.
+- Production test-source planning.
+
+## Exploratory-Code Quarantine
+
+Code that is kept as a sketch or experiment must be clearly outside the
+production validation baseline until it is accepted by a milestone. Quarantined
+code may be read as design evidence, but production entry points, public API
+functions, and tests for accepted milestones must not import it accidentally.
+
+Milestone 21 is responsible for documenting the validation command surface and
+any quarantine markers or package boundaries needed to keep broad validation
+reliable.
 
 ## Sketch Assessment
 

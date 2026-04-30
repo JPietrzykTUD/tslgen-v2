@@ -229,6 +229,14 @@ The new system must separate:
 
 Immediate values (`sImm`) and generic parameters must be explicit model data during lowering, not string-only conventions.
 
+Milestone 18 is the next boundary for lowering. It must not attempt broad code
+generation. It must either keep implementation payloads typed-but-opaque with
+explicit unsupported diagnostics, or parse one minimal TSIL subset backed by a
+small fixture. Generation-time branches such as `if<generation>(...)` belong in
+lowering, where they can be evaluated against typed generation context before
+backend rendering. Template renderers must not evaluate those conditions by
+string rewriting.
+
 ## Rendering Behavior
 
 Rendering receives a backend plan and produces artifacts. Rendering must not perform selection, parse source files, read CPU flags, or write files.
@@ -255,6 +263,12 @@ target/source extensions, type tags, template names, and escaped opaque TSIL
 payload text. This slice does not lower TSIL, evaluate Rust translation maps,
 render full Rust templates, invoke Cargo, or produce final Rust SIMD
 implementation code.
+
+The next production-shaped backend rendering slice must wait until artifact
+writing, lowering, dependency semantics, and implementation spec promotion have
+clear boundaries. It should target one backend and one narrow primitive/template
+class, and it should produce diagnostics for unsupported selected candidates
+rather than silently skipping them.
 
 Public pipeline rendering dispatches through an explicit backend renderer
 registry. Generic pipeline code builds backend-neutral artifact plans and asks
@@ -301,17 +315,23 @@ The artifact writer:
 
 - Resolves output paths relative to an explicit root.
 - Sorts artifacts deterministically.
-- Rejects duplicate logical target paths.
+- Rejects absolute paths, parent traversal, duplicate logical target paths, and
+  any path that would escape the output root.
 - Computes SHA-256 digests.
 - Creates parent directories.
-- Skips writing unchanged files.
-- Reports written paths, skipped paths, and digest map.
+- Skips writing unchanged files when skip-unchanged behavior is enabled.
+- Supports dry-run mode that reports planned writes without mutating the
+  filesystem.
+- Reports written paths, skipped paths, failed paths, would-write paths, and a
+  digest map.
 
 Artifact writing is the only generation stage that mutates the filesystem.
+Rendering and reporting must produce in-memory artifacts; they must not write
+files directly.
 
 ## Test Generation Behavior
 
-Test planning must:
+Production test-source planning must:
 
 - Select tests relevant to generated primitive implementations.
 - Filter unsupported backend/extension/type combinations.
@@ -319,8 +339,13 @@ Test planning must:
 - Apply mask resize rules and no-repeat mask rules from the test manifest.
 - Skip templates that cannot be tested for runtime-lane targets when documented by manifest.
 - Produce deterministic test variants.
+- Produce artifact descriptors or plans before any generated test text is
+  rendered.
+- Emit diagnostics for unsupported TSL `tests` declaration shapes.
 
-Test rendering must be backend-specific but data-driven.
+Test rendering must be backend-specific but data-driven. Compiler invocation,
+runtime execution, and generated-test framework orchestration are separate
+future concerns.
 
 ## CLI Behavior
 
@@ -377,7 +402,8 @@ The Milestone 15 report model summarizes:
 Structured JSON report output must be deterministic for identical pipeline
 outputs. The Milestone 15 slice produces report values and JSON text in memory
 only; report file writing, HTML parity with legacy reports, CI upload, and
-production documentation generation remain deferred.
+production documentation generation remain deferred. Future report files or HTML
+must be modeled as artifacts and written through the artifact writer boundary.
 
 ## Determinism Requirements
 

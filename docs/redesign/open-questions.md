@@ -68,6 +68,8 @@ entries when artifact specs are known.
 
 ## OQ-003: What Is The Explicit Policy For List-Backed Implementation Variants?
 
+Status: Open - scheduled for Milestone 20
+
 Why it matters:
 
 Some legacy selection paths accept list-backed implementation entries and select the first dict. This is likely accidental or underspecified.
@@ -87,9 +89,11 @@ Required evidence:
 
 Implementation blocked:
 
-Selection of ambiguous variants is blocked. Basic selection for simple map variants is not blocked.
+Selection of ambiguous variants is blocked. Basic selection for simple map variants is not blocked. Milestone 20 is the next decision point because implementation spec promotion must decide whether list-backed variants are supported, rejected, or diagnosed.
 
 ## OQ-004: How Much Byte-For-Byte Output Compatibility Is Required?
+
+Status: Open - required before broad backend rendering
 
 Why it matters:
 
@@ -109,9 +113,12 @@ Required evidence:
 
 Implementation blocked:
 
-Backend golden milestone is blocked until policy is chosen. Earlier model/parser milestones are not blocked.
+Milestone 22 backend rendering expansion is blocked until this is narrowed for
+the selected slice. Earlier boundary milestones are not blocked.
 
 ## OQ-005: What Is The Long-Term TSIL Grammar And Semantics?
+
+Status: Open - scoped by Milestone 18
 
 Why it matters:
 
@@ -131,7 +138,7 @@ Required evidence:
 
 Implementation blocked:
 
-Dependency and lowering milestones are partially blocked. Catalog milestones are not blocked.
+Dependency and lowering milestones are partially blocked. Catalog milestones are not blocked. Milestone 18 is the next decision point and must either choose a minimal TSIL subset or document an explicit typed-opaque lowering boundary with unsupported diagnostics.
 
 ## OQ-006: How Should Generic/Sized Extensions Be Represented?
 
@@ -236,7 +243,7 @@ Current status:
 - Milestone 15 implements lightweight in-memory coverage summaries and
   deterministic JSON report text.
 - Legacy-style generated documentation, report files, and HTML report parity
-  remain deferred under this question.
+  remain deferred under this question and are scheduled for Milestone 23.
 
 ## OQ-010: What Backends Are First-Class For The First Release?
 
@@ -293,6 +300,8 @@ Not for early catalog construction. Stronger validation is blocked.
 
 ## OQ-012: What Is The Error Policy For Unknown Extra Fields?
 
+Status: Open - scheduled for Milestone 20
+
 Why it matters:
 
 TSL data may include backend- or future-specific fields. Strict rejection improves safety but may block extensibility.
@@ -311,6 +320,155 @@ Required evidence:
 Implementation blocked:
 
 Validation strictness is partially blocked. Catalog can preserve extra fields now.
+
+## OQ-013: Should Artifact Writing Be A Separate Boundary From Rendering?
+
+Status: Answered
+
+Why it matters:
+
+The accepted backend slices render in-memory artifacts only. Writing files introduces path safety, skip-unchanged behavior, dry-run behavior, and filesystem errors. Mixing those concerns into renderers would make backend behavior harder to test and review.
+
+Decision:
+
+Artifact writing is a dedicated I/O boundary scheduled for Milestone 16. Renderers produce artifacts; the writer validates paths, compares digests, creates directories, writes files, and returns deterministic write reports.
+
+Possible answers:
+
+- Keep writing inside renderers.
+- Write artifacts through a separate filesystem writer.
+- Delay writing until full backend generation.
+
+Required evidence:
+
+- Milestones 10, 11, and 14 already produce artifact descriptors and in-memory rendered artifacts.
+- Milestone 13 CLI/API integration intentionally does not write output files.
+- Milestone 15 reporting is pure and does not write report files.
+
+Implementation blocked:
+
+No. Milestone 16 can proceed using already-rendered artifacts and temporary-directory tests.
+
+## OQ-014: Should Reporting Be Exposed Through `tslgen.api`?
+
+Status: Open - scheduled for Milestone 24
+
+Why it matters:
+
+Milestone 15 added reporting helpers, but the current public API pipeline result does not expose reporting as a first-class API capability. Exposing it too early could freeze unstable report models; hiding it too long encourages callers to import internal modules.
+
+Possible answers:
+
+- Expose a stable `coverage_report(...)` helper through `tslgen.api`.
+- Keep reporting under `tslgen.reporting` until report artifacts are implemented.
+- Expose reporting only through a higher-level pipeline option.
+
+Required evidence:
+
+- API caller needs after Milestones 16 through 23.
+- Whether report artifacts become part of normal generation output.
+- Stability of coverage/report fields after backend rendering expands.
+
+Implementation blocked:
+
+No for Milestones 16 through 23. Public API polish is blocked until Milestone 24.
+
+## OQ-015: Should Dependency Closure Remain Primitive-Name Based?
+
+Status: Open - scheduled for Milestone 19
+
+Why it matters:
+
+The accepted dependency closure is intentionally conservative and primitive-name based. Real backend generation may need dependency edges between selected implementation candidates, lowered calls, or backend-specific render jobs.
+
+Possible answers:
+
+- Keep primitive-name closure and document it as the stable behavior.
+- Add candidate-specific dependency closure after lowering exposes call targets.
+- Add backend render-job dependencies only when backend artifacts require it.
+
+Required evidence:
+
+- Dependency markers and call forms in implementation payloads.
+- Lowering results from Milestone 18.
+- Backend rendering needs from Milestone 22.
+
+Implementation blocked:
+
+Milestone 19 is blocked on enough lowering evidence to avoid guessing. Milestone 16 and Milestone 17 are not blocked.
+
+## OQ-016: How Far Should Implementation Specs Be Promoted From Raw Catalog Values?
+
+Status: Open - scheduled for Milestone 20
+
+Why it matters:
+
+Milestones through 15 still allow some implementation metadata to travel as raw catalog values. Selection, lowering, dependency discovery, and backend rendering need stable typed semantics, but over-modeling unused fields would create premature architecture.
+
+Possible answers:
+
+- Promote only fields required by selection, lowering, dependency discovery, and the next backend slice.
+- Fully model all implementation fields now.
+- Keep raw values and add access helpers.
+
+Required evidence:
+
+- Fields consumed by candidate selection.
+- Lowering and dependency needs from Milestones 18 and 19.
+- Real `tsldata/` examples, especially list-backed variants and unknown extra fields.
+
+Implementation blocked:
+
+Milestone 20 is blocked on Milestones 18 and 19. Broad backend rendering is blocked until the needed implementation spec subset is typed.
+
+## OQ-017: What Belongs In The Production Validation Baseline Versus Exploratory Quarantine?
+
+Status: Open - scheduled for Milestone 21
+
+Why it matters:
+
+The repository contains accepted redesign code, exploratory sketches, legacy evidence, generated data, and tests. Future agents need a validation command that catches production regressions without being derailed by intentionally incomplete sketches.
+
+Possible answers:
+
+- Treat only documented production packages and tests as validation targets.
+- Bring all exploratory code under the same validation baseline.
+- Move or mark exploratory code so production imports cannot depend on it accidentally.
+
+Required evidence:
+
+- Current package layout under `tslgen/`.
+- Import graph of accepted implementation modules.
+- Existing test and tool configuration in the dev container.
+
+Implementation blocked:
+
+No for Milestones 16 through 20. Broad validation claims are blocked until Milestone 21.
+
+## OQ-018: Which Backend Rendering Slice Should Follow Summary Artifacts?
+
+Status: Open - scheduled for Milestone 22
+
+Why it matters:
+
+Milestones 11 and 14 render deterministic summary artifacts, not production C++ or Rust code. The first production-shaped rendering slice must be small enough to review and must not bypass lowering, dependency, or implementation-spec boundaries.
+
+Possible answers:
+
+- C++ first for one simple primitive/template class.
+- Rust first for one simple primitive/template class.
+- Defer production-shaped rendering until TSIL and implementation specs are more complete.
+
+Required evidence:
+
+- Lowering boundary result from Milestone 18.
+- Dependency decision from Milestone 19.
+- Typed implementation spec subset from Milestone 20.
+- Output compatibility policy from OQ-004.
+
+Implementation blocked:
+
+Milestone 22 is blocked until Milestones 18 through 20 are accepted and OQ-004 is narrowed enough for the chosen slice.
 
 ## Follow-ups from Milestone 2 review
 
@@ -407,12 +565,13 @@ Validation strictness is partially blocked. Catalog can preserve extra fields no
 
 ## Follow-ups from Milestone 15 review
 
-- Run a planner pass to define the post-Milestone-15 roadmap before implementation continues.
-- Decide whether reporting should be re-exported through `tslgen.api`, for example as `coverage_report(...)`.
-- Clarify future milestones for:
-  - artifact writing
-  - skip-unchanged writer behavior
-  - full lowering
-  - production test generation from TSL `tests` declarations
-  - legacy-style HTML/report output
-  - broad validation cleanup / exploratory-code quarantine
+- Addressed by the post-Milestone-15 roadmap in `docs/redesign/implementation-roadmap.md`.
+- Reporting exposure through `tslgen.api` remains open and is scheduled for Milestone 24.
+- Artifact writing and skip-unchanged behavior are scheduled for Milestone 16.
+- Production test-source planning from TSL `tests` declarations is scheduled for Milestone 17.
+- Full lowering and TSIL strategy are scheduled for Milestone 18.
+- Candidate-specific dependency closure is scheduled for Milestone 19.
+- Implementation spec promotion is scheduled for Milestone 20.
+- Broad validation cleanup and exploratory-code quarantine are scheduled for Milestone 21.
+- Backend rendering expansion is scheduled for Milestone 22.
+- Legacy-style report and HTML output are scheduled for Milestone 23.
