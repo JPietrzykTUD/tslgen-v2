@@ -307,3 +307,10 @@ Validation strictness is partially blocked. Catalog can preserve extra fields no
 ## Follow-up from Milestone 7 review
 
 - During Milestone 8, promote implementation metadata out of generic catalog values only as concrete selection needs become clear.
+
+## Follow-ups from Milestone 8 review
+
+- Define the authoritative source of known backend IDs before backend-manifest work.
+- Add focused tests for unknown backend diagnostics.
+- Add focused tests for malformed or missing implementation body diagnostics.
+- Continue promoting implementation specs out of raw catalog values only as later stages require them.

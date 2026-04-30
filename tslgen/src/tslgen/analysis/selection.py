@@ -275,7 +275,7 @@ def _implementation_plans_for_variant(
     plans: list[VariantImplementationPlan] = []
     for extension_selector_text, extension_value in impls.items():
         extension_names = _selector_items(extension_selector_text)
-        if not (set(extension_names) & allowed_extensions):
+        if not _matches_allowed_extension(catalog, extension_names, allowed_extensions):
             continue
         type_map = _as_map(extension_value)
         if type_map is None:
@@ -659,6 +659,34 @@ def _selector_base_name(selector_item: str) -> str:
 
 def _selector_contains(selector: str, known_names: Container[str]) -> bool:
     return any(item in known_names for item in _selector_items(selector))
+
+
+def _matches_allowed_extension(
+    catalog: Catalog,
+    selector_names: tuple[str, ...],
+    allowed_extensions: frozenset[str],
+) -> bool:
+    selector_set = frozenset(selector_names)
+    return any(
+        fallback_extension in selector_set
+        for extension_name in allowed_extensions
+        for fallback_extension in _extension_fallback_chain(catalog, extension_name)
+    )
+
+
+def _extension_fallback_chain(catalog: Catalog, extension_name: str) -> tuple[str, ...]:
+    chain: list[str] = []
+    seen: set[str] = set()
+    current_name: str | None = extension_name
+    while current_name is not None and current_name not in seen:
+        seen.add(current_name)
+        extension = catalog.extensions_by_name.get(current_name)
+        if extension is None:
+            break
+        chain.append(current_name)
+        inherited = extension.fields.get("inherits")
+        current_name = inherited if isinstance(inherited, str) else None
+    return tuple(chain)
 
 
 def _unknown_selector_items(

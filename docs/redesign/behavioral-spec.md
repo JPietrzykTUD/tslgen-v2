@@ -178,6 +178,16 @@ The selector must:
 - Apply backend support and CPU feature requirements.
 - Emit diagnostics for ambiguous or malformed implementation maps.
 
+Milestone 8 candidate selection treats implementation payload fields as opaque
+metadata. It may carry a TSIL payload, intrinsic payload, or future
+backend-specific payload without parsing or rendering it. Backend filtering is
+limited to explicit extension metadata in this slice: a backend entry with
+`supported false` excludes the candidate, while richer backend manifest policy is
+deferred. When a request supplies CPU flags, implementation-level required flags
+must be satisfied by the normalized request flags; when no CPU flags are
+supplied, required flags remain candidate metadata for a later target-support
+policy.
+
 ## Dependency Behavior
 
 TSIL bodies can call other primitives with syntax such as:
