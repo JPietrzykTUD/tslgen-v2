@@ -325,6 +325,34 @@ The artifact writer:
 - Reports written paths, skipped paths, failed paths, would-write paths, and a
   digest map.
 
+Write reports use these per-artifact statuses:
+
+- `would_write`: the artifact content would be written in dry-run mode.
+- `written`: the artifact content was written or rewritten.
+- `skipped_unchanged`: the target file already contained the artifact content
+  and skip-unchanged behavior was enabled.
+- `failed`: the artifact was not written because path validation, conflict
+  detection, or filesystem I/O failed.
+
+Non-dry-run reports must not contain `would_write` records. If planning errors
+abort a non-dry-run write before otherwise safe artifacts are written, those
+artifacts are reported as `failed`.
+
+The writer emits deterministic diagnostics for:
+
+- `TSL-ARTIFACT-WRITE-UNSAFE-PATH`: a logical path is absolute, contains parent
+  traversal, follows an existing symlink outside the output root, or otherwise
+  cannot be resolved safely under the output root.
+- `TSL-ARTIFACT-WRITE-DUPLICATE-TARGET`: multiple artifacts resolve to the same
+  output target.
+- `TSL-ARTIFACT-WRITE-ROOT-CONFLICT`: the output root exists but is not a
+  directory.
+- `TSL-ARTIFACT-WRITE-TARGET-CONFLICT`: the target path is a directory or an
+  existing parent path is not a directory.
+- `TSL-ARTIFACT-WRITE-IO`: directory creation or file writing failed.
+- `TSL-ARTIFACT-WRITE-ABORTED`: an otherwise writable artifact was not written
+  because the write plan contained errors.
+
 Artifact writing is the only generation stage that mutates the filesystem.
 Rendering and reporting must produce in-memory artifacts; they must not write
 files directly.

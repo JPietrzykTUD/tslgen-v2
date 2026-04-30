@@ -349,6 +349,13 @@ Implementation blocked:
 
 No. Milestone 16 can proceed using already-rendered artifacts and temporary-directory tests.
 
+Current status:
+
+- Milestone 16 adds the dedicated writer boundary with dry-run,
+  skip-unchanged, path-safety, and deterministic write-report behavior.
+- CLI compatibility and output-mode UX remain deferred to the later API/CLI
+  hardening milestone.
+
 ## OQ-014: Should Reporting Be Exposed Through `tslgen.api`?
 
 Status: Open - scheduled for Milestone 24
@@ -575,3 +582,7 @@ Milestone 22 is blocked until Milestones 18 through 20 are accepted and OQ-004 i
 - Broad validation cleanup and exploratory-code quarantine are scheduled for Milestone 21.
 - Backend rendering expansion is scheduled for Milestone 22.
 - Legacy-style report and HTML output are scheduled for Milestone 23.
+
+## Follow-up from Milestone 16 review
+
+- Keep API/CLI exposure of artifact writing deferred until its own milestone, preserving the dedicated writer boundary.
