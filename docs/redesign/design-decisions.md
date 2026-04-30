@@ -230,7 +230,7 @@ Consequences:
 
 ## ADR-009: TSIL Needs A Semantic Boundary
 
-Status: Proposed
+Status: Accepted for the first lowering slice; full TSIL grammar remains open
 
 Context:
 
@@ -246,6 +246,13 @@ Decision:
 
 Introduce a TSIL semantic boundary before implementing broad lowering. Early milestones may store TSIL as text, but dependency and lowering milestones should parse TSIL into a model.
 
+Milestone 18 decision:
+
+Use a typed-opaque lowering boundary before parsing TSIL broadly. The boundary
+classifies selected implementation payloads and returns explicit unsupported
+diagnostics for semantic lowering. It records generation-time branch markers so
+future lowering slices, not renderers, own `if<generation>(...)` evaluation.
+
 Rationale:
 
 String rewrites are brittle, but a full TSIL compiler is too large for the first milestone.
@@ -255,6 +262,8 @@ Consequences:
 - Early catalog milestones can defer TSIL parsing.
 - Dependency extraction should be designed to migrate from conservative parser to full TSIL AST.
 - Lowering tests need focused fixtures.
+- Production-shaped renderers must not treat opaque TSIL payload text as
+  lowered backend code.
 
 ## ADR-010: Variant Selection Policy Must Be Explicit
 

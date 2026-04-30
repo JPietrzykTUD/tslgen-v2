@@ -118,7 +118,7 @@ the selected slice. Earlier boundary milestones are not blocked.
 
 ## OQ-005: What Is The Long-Term TSIL Grammar And Semantics?
 
-Status: Open - scoped by Milestone 18
+Status: Resolved for the Milestone 18 first slice; open for long-term grammar
 
 Why it matters:
 
@@ -128,7 +128,7 @@ Possible answers:
 
 - Formalize TSIL grammar before backend work.
 - Implement a minimal parser for dependency extraction first.
-- Defer full TSIL semantics until after first backend slice.
+- Defer full TSIL semantics behind a typed-opaque lowering boundary.
 
 Required evidence:
 
@@ -138,7 +138,10 @@ Required evidence:
 
 Implementation blocked:
 
-Dependency and lowering milestones are partially blocked. Catalog milestones are not blocked. Milestone 18 is the next decision point and must either choose a minimal TSIL subset or document an explicit typed-opaque lowering boundary with unsupported diagnostics.
+Milestone 18 selected an explicit typed-opaque lowering boundary with
+unsupported diagnostics. Full TSIL grammar and semantic lowering remain open for
+later lowering and production-rendering milestones; broad backend rendering must
+not claim TSIL has been lowered until that future parser/model exists.
 
 ## OQ-006: How Should Generic/Sized Extensions Be Represented?
 
@@ -590,3 +593,8 @@ Milestone 22 is blocked until Milestones 18 through 20 are accepted and OQ-004 i
 ## Follow-up from Milestone 17 review
 
 - Add broader tests for `to_type` / `to_extension` planning metadata when the next testgen slice starts using those fields semantically.
+
+## Follow-up from Milestone 18 review
+
+- Align the `domain-model.md` lowering snippet with the implementation field name `LoweringPlan.input_set`, or mark the snippet as conceptual.
+- Keep Milestone 19 from treating conservative TSIL text extraction as final TSIL semantics unless the lowering boundary explicitly supports it.

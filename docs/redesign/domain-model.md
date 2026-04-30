@@ -336,8 +336,44 @@ class LoweredBody:
     dependencies: tuple[PrimitiveDependency, ...]
 ```
 
+Milestone 18 introduces the first concrete lowering boundary as typed-opaque
+models:
+
+```python
+@dataclass(frozen=True, slots=True)
+class LoweringRequest:
+    strategy: Literal["typed_opaque"]
+    backend_id: BackendId | None
+    generation_context: GenerationContext
+
+@dataclass(frozen=True, slots=True)
+class ClassifiedPayload:
+    body_kind: str
+    classification: Literal["tsil", "intrinsic", "backend_specific", "opaque"]
+    raw_payload: CatalogValue
+    text: str | None
+    has_generation_condition: bool
+
+@dataclass(frozen=True, slots=True)
+class LoweringInput:
+    candidate: SelectedImplementation
+    payload: ClassifiedPayload
+
+@dataclass(frozen=True, slots=True)
+class LoweringPlan:
+    request: LoweringRequest
+    inputs: tuple[LoweringInput, ...]
+    implementations: tuple[LoweredImplementation, ...]
+```
+
 Invariants:
 
+- Lowering inputs are built from selected implementation candidates, not parser
+  trees or raw source files.
+- Opaque TSIL text is not a lowered body and must not be rendered as production
+  backend code without a later lowering slice.
+- Generation-time branch markers are represented at the lowering boundary even
+  before they are evaluated.
 - Dependency references are extracted from parsed TSIL, not just backend text.
 - Backend translation maps consume semantic operation identifiers.
 - Backend-specific syntax enters through backend lowerers.

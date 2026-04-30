@@ -237,6 +237,15 @@ lowering, where they can be evaluated against typed generation context before
 backend rendering. Template renderers must not evaluate those conditions by
 string rewriting.
 
+Milestone 18 chooses the typed-opaque strategy for the first lowering boundary.
+Lowering input preparation consumes selected implementation candidates and
+classifies payloads as TSIL, intrinsic, backend-specific, or opaque metadata.
+TSIL payloads must be text; malformed TSIL payload shapes are diagnostics.
+Generation-time branch markers such as `if<generation>(...)` are represented on
+the classified payload, but are not evaluated yet. Semantic lowering currently
+returns explicit unsupported diagnostics for non-empty candidate inputs instead
+of pretending opaque payload text is backend-neutral IR.
+
 ## Rendering Behavior
 
 Rendering receives a backend plan and produces artifacts. Rendering must not perform selection, parse source files, read CPU flags, or write files.

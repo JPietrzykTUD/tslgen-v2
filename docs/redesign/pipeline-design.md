@@ -283,6 +283,14 @@ Side effects:
 
 - None.
 
+Milestone 18 establishes the first lowering boundary without full TSIL parsing.
+The current lowering stage consumes `CandidateSelection`, builds deterministic
+typed lowering inputs, records the generation context where
+`if<generation>(...)` evaluation will live, classifies implementation payloads,
+and emits structured unsupported diagnostics for semantic lowering. It does not
+produce backend-neutral statements for TSIL, apply translation maps, or render
+backend text.
+
 ## Stage 9: Backend Planning
 
 Inputs:
