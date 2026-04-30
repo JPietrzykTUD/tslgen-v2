@@ -232,7 +232,8 @@ def _dependencies_for_candidate(
     body = candidate.implementation.body
     if body.kind != "tsil":
         return Result.ok(CandidateDependencies(candidate=candidate, references=()))
-    if not isinstance(body.payload, str):
+    payload = body.text
+    if payload is None:
         return Result.failure(
             (
                 Diagnostic.error(
@@ -246,7 +247,7 @@ def _dependencies_for_candidate(
 
     diagnostics: list[Diagnostic] = []
     references: list[DependencyReference] = []
-    for segment in _primitive_call_segments(body.payload):
+    for segment in _primitive_call_segments(payload):
         parsed = _parse_dependency_reference(candidate, segment)
         diagnostics.extend(parsed.diagnostics)
         if not parsed.is_ok:

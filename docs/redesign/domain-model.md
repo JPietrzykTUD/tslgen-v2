@@ -252,39 +252,45 @@ Invariants:
 
 ```python
 @dataclass(frozen=True, slots=True)
+class ImplementationSelector:
+    kind: Literal["extension", "type_group"]
+    raw: str
+    names: tuple[str, ...]
+
+@dataclass(frozen=True, slots=True)
+class ImplementationBody:
+    kind: str
+    payload: CatalogValue
+    source_span: SourceSpan
+
+@dataclass(frozen=True, slots=True)
 class ImplementationSpec:
-    declared_target: ExtensionName
-    source_extensions: tuple[ExtensionName, ...]
-    categories: tuple[ImplementationCategory, ...]
-    source: SourceSpan
-
-@dataclass(frozen=True, slots=True)
-class ImplementationCategory:
-    type_selector: TypeSelector
-    variants: tuple[ImplementationVariant, ...]
-
-@dataclass(frozen=True, slots=True)
-class ImplementationVariant:
+    extension_selector: ImplementationSelector
+    type_selector: ImplementationSelector
     body: ImplementationBody
-    requires: RequirementExpression
-    backend_policy: BackendPolicy
-    conversion_branches: tuple[ConversionBranch, ...]
+    source_span: SourceSpan
+    requires_value: CatalogValue | None
     fields: FrozenMap[str, CatalogValue]
+    extra_fields: FrozenMap[str, CatalogValue]
 ```
 
 Invariants:
 
-- Type selectors must resolve to at least one concrete type tag or produce a diagnostic.
-- Requirement expressions normalize through the flag catalog.
-- Backend policy must be evaluated before rendering.
-- Variant selection policy must be explicit. "First dict wins" is not acceptable as hidden behavior.
-
-Implementation bodies:
-
-- `IntrinsicBody`
-- `TsilBody`
-- `BackendSpecificBody`
-- `CompositeBody`
+- Implementation specs are immutable values promoted from primitive `impls`
+  fields before selection planning and candidate selection consume selected
+  branches.
+- Promotion may be selector-aware; unsupported unselected branches are deferred
+  instead of making the whole primitive invalid.
+- Selectors preserve raw text and normalized selector names.
+- Implementation bodies expose classification and text-payload accessors while
+  preserving the opaque catalog payload for future lowering.
+- `requires_value` remains structurally preserved for the existing flag and
+  selector normalization rules.
+- Unknown extra fields remain preserved as `extra_fields` so future milestones
+  can type them without losing source data.
+- Selected list-backed implementation variants are diagnostics until an
+  explicit variant policy is accepted. "First dict wins" is rejected hidden
+  behavior.
 
 ## Selection Model
 
@@ -310,7 +316,7 @@ class SelectedImplementation:
     source_extension: ExtensionName
     type_tag: TypeTag
     required_flags: tuple[FeatureFlag, ...]
-    implementation: ImplementationVariant
+    implementation: ImplementationSpec
 ```
 
 Invariants:

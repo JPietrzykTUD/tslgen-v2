@@ -164,7 +164,7 @@ def _candidate_diagnostics(
                 )
             )
         body = candidate.implementation.body
-        if body.kind != "tsil" or not isinstance(body.payload, str):
+        if body.kind != "tsil" or body.text is None:
             diagnostics.append(
                 Diagnostic.error(
                     "TSL-RUST-RENDER-CANDIDATE-BODY",

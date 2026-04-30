@@ -10,31 +10,11 @@ from tslgen.core.diagnostics import Diagnostic, has_errors, sort_diagnostics
 from tslgen.core.frozen_map import FrozenMap
 from tslgen.core.result import Result
 from tslgen.domain.catalog import Catalog
+from tslgen.domain.implementations import (
+    ImplementationSpec,
+    implementation_specs_from_primitive,
+)
 from tslgen.domain.values import CatalogMap, CatalogValue
-
-
-@dataclass(frozen=True, slots=True)
-class OpaqueImplementationBody:
-    kind: str
-    payload: CatalogValue
-
-    def __post_init__(self) -> None:
-        if not self.kind:
-            raise ValueError("implementation body kind must be non-empty")
-
-
-@dataclass(frozen=True, slots=True)
-class ImplementationMetadata:
-    extension_selector: str
-    type_selector: str
-    fields: CatalogMap
-    body: OpaqueImplementationBody
-
-    def __post_init__(self) -> None:
-        if not self.extension_selector:
-            raise ValueError("implementation extension selector must be non-empty")
-        if not self.type_selector:
-            raise ValueError("implementation type selector must be non-empty")
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +29,7 @@ class ImplementationCandidate:
     source_extension: str
     type_tag: str
     required_flags: tuple[FeatureFlag, ...]
-    implementation: ImplementationMetadata
+    implementation: ImplementationSpec
 
     def __post_init__(self) -> None:
         if not self.candidate_id:
@@ -78,8 +58,8 @@ class ImplementationCandidate:
             self.type_tag,
             tuple(flag.name for flag in self.required_flags),
             self.variant.variant_id,
-            self.implementation.extension_selector,
-            self.implementation.type_selector,
+            self.implementation.extension_selector.raw,
+            self.implementation.type_selector.raw,
             self.implementation.body.kind,
         )
 
@@ -144,103 +124,101 @@ def _candidates_for_variant(
     plan: SelectionPlan,
     implementation_plans: dict[tuple[str, str, str], VariantImplementationPlan],
 ) -> Result[tuple[ImplementationCandidate, ...]]:
-    impls = _as_map(variant.source.declaration.fields.get("impls"))
-    if impls is None:
+    planned_selector_keys = frozenset(
+        (implementation_plan.extension_selector.raw, implementation_plan.type_selector.raw)
+        for implementation_plan in implementation_plans.values()
+        if implementation_plan.variant_id == variant.variant_id
+    )
+    if not planned_selector_keys:
+        if plan.allowed_extensions:
+            return Result.failure((_no_candidate_diagnostic(variant),))
         return Result.ok(())
 
-    diagnostics: list[Diagnostic] = []
+    specs_result = implementation_specs_from_primitive(
+        variant.source.declaration,
+        include_extension_selector=lambda selector: any(
+            extension_selector == selector.raw
+            for extension_selector, _ in planned_selector_keys
+        ),
+        include_type_selector=lambda extension_selector, type_selector: (
+            extension_selector.raw,
+            type_selector.raw,
+        )
+        in planned_selector_keys,
+    )
+    diagnostics = list(specs_result.diagnostics)
+    if not specs_result.is_ok:
+        return Result.failure(diagnostics)
+
+    specs = specs_result.unwrap().specs
+    if not specs:
+        return Result.ok(())
+
     candidates: list[ImplementationCandidate] = []
-    for extension_selector, extension_value in impls.items():
+    for spec in specs:
         source_extensions = _source_extensions_by_target(
             catalog,
-            _selector_items(extension_selector),
+            spec.extension_selector.names,
             plan.allowed_extensions,
         )
         if not source_extensions:
             continue
 
-        type_map = _as_map(extension_value)
-        if type_map is None:
-            diagnostics.append(
-                _implementation_shape_diagnostic(
-                    variant,
-                    "implementation extension selector",
-                    extension_selector,
-                )
+        implementation_plan = implementation_plans.get(
+            (
+                variant.variant_id,
+                spec.extension_selector.raw,
+                spec.type_selector.raw,
             )
+        )
+        if implementation_plan is None:
             continue
 
-        for type_selector, implementation_value in type_map.items():
-            implementation_map = _as_map(implementation_value)
-            if implementation_map is None:
-                diagnostics.append(
-                    _ambiguous_or_shape_diagnostic(
-                        variant,
-                        implementation_value,
-                        type_selector,
-                    )
-                )
+        for target_extension, source_extension in source_extensions:
+            if not _supports_backend(catalog, target_extension, plan.request.backend):
                 continue
-
-            implementation_plan = implementation_plans.get(
-                (variant.variant_id, extension_selector, type_selector)
+            type_tags = _expand_selector_type_tags(
+                catalog,
+                implementation_plan.type_selector.names,
             )
-            if implementation_plan is None:
-                continue
-
-            metadata = _implementation_metadata(
-                variant,
-                extension_selector,
-                type_selector,
-                implementation_map,
-            )
-            diagnostics.extend(metadata.diagnostics)
-            if not metadata.is_ok:
-                continue
-
-            for target_extension, source_extension in source_extensions:
-                if not _supports_backend(catalog, target_extension, plan.request.backend):
-                    continue
-                type_tags = _expand_selector_type_tags(
+            for type_tag in type_tags:
+                required_flags = _matching_required_flags(
                     catalog,
-                    implementation_plan.type_selector.names,
+                    implementation_plan.requirements,
+                    target_extension=target_extension,
+                    source_extension=source_extension,
+                    type_tag=type_tag,
                 )
-                for type_tag in type_tags:
-                    required_flags = _matching_required_flags(
-                        catalog,
-                        implementation_plan.requirements,
+                if not _supports_required_flags(plan, required_flags):
+                    continue
+                candidates.append(
+                    _candidate(
+                        variant=variant,
+                        plan=plan,
                         target_extension=target_extension,
                         source_extension=source_extension,
                         type_tag=type_tag,
+                        required_flags=required_flags,
+                        spec=spec,
                     )
-                    if not _supports_required_flags(plan, required_flags):
-                        continue
-                    candidates.append(
-                        _candidate(
-                            variant=variant,
-                            plan=plan,
-                            target_extension=target_extension,
-                            source_extension=source_extension,
-                            type_tag=type_tag,
-                            required_flags=required_flags,
-                            metadata=metadata.unwrap(),
-                        )
-                    )
+                )
 
     if plan.allowed_extensions and not candidates and not diagnostics:
-        diagnostics.append(
-            Diagnostic.error(
-                "TSL-CANDIDATE-NONE",
-                f"primitive variant {variant.variant_id!r} has no implementation "
-                "candidate for the requested selector constraints",
-                location=variant.source.declaration.source_span.location,
-            )
-        )
+        diagnostics.append(_no_candidate_diagnostic(variant))
 
     ordered = sort_diagnostics(diagnostics)
     if has_errors(ordered):
         return Result.failure(ordered)
     return Result.ok(tuple(candidates), diagnostics=ordered)
+
+
+def _no_candidate_diagnostic(variant: PrimitiveVariant) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CANDIDATE-NONE",
+        f"primitive variant {variant.variant_id!r} has no implementation "
+        "candidate for the requested selector constraints",
+        location=variant.source.declaration.source_span.location,
+    )
 
 
 def _candidate(
@@ -251,7 +229,7 @@ def _candidate(
     source_extension: str,
     type_tag: str,
     required_flags: tuple[FeatureFlag, ...],
-    metadata: ImplementationMetadata,
+    spec: ImplementationSpec,
 ) -> ImplementationCandidate:
     emitted_primitive_name = variant.primitive_name
     source_primitive_name = variant.primitive_name
@@ -262,7 +240,7 @@ def _candidate(
         source_extension=source_extension,
         type_tag=type_tag,
         required_flags=required_flags,
-        metadata=metadata,
+        spec=spec,
     )
     return ImplementationCandidate(
         candidate_id=candidate_id,
@@ -275,7 +253,7 @@ def _candidate(
         source_extension=source_extension,
         type_tag=type_tag,
         required_flags=required_flags,
-        implementation=metadata,
+        implementation=spec,
     )
 
 
@@ -287,81 +265,16 @@ def _candidate_id(
     source_extension: str,
     type_tag: str,
     required_flags: tuple[FeatureFlag, ...],
-    metadata: ImplementationMetadata,
+    spec: ImplementationSpec,
 ) -> str:
     flags = "+".join(flag.name for flag in required_flags) or "none"
     backend_name = backend if backend is not None else "any"
     return (
         f"{variant.variant_id}|backend={backend_name}|target={target_extension}"
         f"|source={source_extension}|type={type_tag}|flags={flags}"
-        f"|impl={metadata.extension_selector}/{metadata.type_selector}"
-        f"/{metadata.body.kind}"
+        f"|impl={spec.extension_selector.raw}/{spec.type_selector.raw}"
+        f"/{spec.body.kind}"
     )
-
-
-def _implementation_metadata(
-    variant: PrimitiveVariant,
-    extension_selector: str,
-    type_selector: str,
-    implementation_map: CatalogMap,
-) -> Result[ImplementationMetadata]:
-    body_result = _implementation_body(variant, implementation_map)
-    if not body_result.is_ok:
-        return Result.failure(body_result.diagnostics)
-    return Result.ok(
-        ImplementationMetadata(
-            extension_selector=extension_selector,
-            type_selector=type_selector,
-            fields=implementation_map,
-            body=body_result.unwrap(),
-        ),
-        diagnostics=body_result.diagnostics,
-    )
-
-
-def _implementation_body(
-    variant: PrimitiveVariant,
-    implementation_map: CatalogMap,
-) -> Result[OpaqueImplementationBody]:
-    body_value = implementation_map.get("implementation")
-    if body_value is None:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-CANDIDATE-BODY-MISSING",
-                    f"primitive {variant.primitive_name!r} implementation is missing "
-                    "an 'implementation' body",
-                    location=variant.source.declaration.source_span.location,
-                ),
-            )
-        )
-
-    body_map = _as_map(body_value)
-    if body_map is None or len(body_map) == 0:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-CANDIDATE-BODY-SHAPE",
-                    f"primitive {variant.primitive_name!r} implementation body must "
-                    "be a non-empty field map",
-                    location=variant.source.declaration.source_span.location,
-                ),
-            )
-        )
-    if len(body_map) > 1:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-CANDIDATE-BODY-AMBIGUOUS",
-                    f"primitive {variant.primitive_name!r} implementation body has "
-                    "multiple payload fields",
-                    location=variant.source.declaration.source_span.location,
-                ),
-            )
-        )
-
-    kind, payload = next(iter(body_map.items()))
-    return Result.ok(OpaqueImplementationBody(kind=kind, payload=payload))
 
 
 def _source_extensions_by_target(
@@ -558,38 +471,6 @@ def _selector_base_name(selector_item: str) -> str:
     if "<" in selector_item and selector_item.endswith(">"):
         return selector_item.split("<", 1)[0]
     return selector_item
-
-
-def _ambiguous_or_shape_diagnostic(
-    variant: PrimitiveVariant,
-    value: CatalogValue,
-    selector: str,
-) -> Diagnostic:
-    if isinstance(value, tuple):
-        return Diagnostic.error(
-            "TSL-CANDIDATE-AMBIGUOUS-IMPLEMENTATION",
-            f"primitive {variant.primitive_name!r} has list-backed implementation "
-            f"variants for selector {selector!r}; selection policy is unresolved",
-            location=variant.source.declaration.source_span.location,
-        )
-    return _implementation_shape_diagnostic(
-        variant,
-        "implementation type selector",
-        selector,
-    )
-
-
-def _implementation_shape_diagnostic(
-    variant: PrimitiveVariant,
-    context: str,
-    selector: str,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-CANDIDATE-IMPLEMENTATION-SHAPE",
-        f"primitive {variant.primitive_name!r} has unsupported {context} "
-        f"shape for selector {selector!r}",
-        location=variant.source.declaration.source_span.location,
-    )
 
 
 def _as_map(value: CatalogValue | None) -> CatalogMap | None:

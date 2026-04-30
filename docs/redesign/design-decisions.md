@@ -267,7 +267,7 @@ Consequences:
 
 ## ADR-010: Variant Selection Policy Must Be Explicit
 
-Status: Proposed
+Status: Accepted
 
 Context:
 
@@ -289,8 +289,11 @@ Hidden selection makes output difficult to reason about and test.
 
 Consequences:
 
-- Initial implementation may diagnose unsupported ambiguous variants.
-- An open question tracks the exact policy.
+- Milestone 20 diagnoses unsupported selected list-backed implementation
+  variants at the implementation-spec boundary while deferring unselected
+  branches.
+- A future milestone may add an explicit list-variant policy, but it must not
+  silently choose the first entry.
 
 ## ADR-011: Golden Compatibility Is Behavioral, Not Structural
 

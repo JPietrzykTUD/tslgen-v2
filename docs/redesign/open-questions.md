@@ -68,7 +68,7 @@ entries when artifact specs are known.
 
 ## OQ-003: What Is The Explicit Policy For List-Backed Implementation Variants?
 
-Status: Open - scheduled for Milestone 20
+Status: Narrowed in Milestone 20; broad support remains open.
 
 Why it matters:
 
@@ -87,9 +87,14 @@ Required evidence:
 - Identify whether generated outputs depend on ordering.
 - Ask domain owners for intended semantics.
 
-Implementation blocked:
+Resolution notes:
 
-Selection of ambiguous variants is blocked. Basic selection for simple map variants is not blocked. Milestone 20 is the next decision point because implementation spec promotion must decide whether list-backed variants are supported, rejected, or diagnosed.
+Milestone 20 rejects selected list-backed implementation variants with
+structured implementation-spec diagnostics and does not preserve hidden
+first-dict-wins behavior. Selector-aware promotion defers unsupported
+list-backed branches that are irrelevant to the current request, so they do not
+block valid selected branches. Broad support for list-backed variants remains
+open until a predicate or priority policy is designed.
 
 ## OQ-004: How Much Byte-For-Byte Output Compatibility Is Required?
 
@@ -417,17 +422,22 @@ candidate-specific resolution until semantic lowering exists.
 
 ## OQ-016: How Far Should Implementation Specs Be Promoted From Raw Catalog Values?
 
-Status: Open - scheduled for Milestone 20
+Status: Resolved in Milestone 20 for the currently consumed implementation
+metadata.
 
 Why it matters:
 
 Milestones through 15 still allow some implementation metadata to travel as raw catalog values. Selection, lowering, dependency discovery, and backend rendering need stable typed semantics, but over-modeling unused fields would create premature architecture.
 
-Possible answers:
+Decision:
 
-- Promote only fields required by selection, lowering, dependency discovery, and the next backend slice.
-- Fully model all implementation fields now.
-- Keep raw values and add access helpers.
+- Promote only selected fields required by accepted selection planning,
+  candidate selection, dependency discovery, lowering input preparation,
+  coverage reporting, and summary backend rendering.
+- Preserve unknown extra implementation fields as typed `extra_fields` on the
+  implementation spec rather than discarding them or interpreting them early.
+- Diagnose selected list-backed implementation variants until an explicit
+  variant policy is accepted; do not preserve hidden first-dict-wins behavior.
 
 Required evidence:
 
@@ -435,9 +445,13 @@ Required evidence:
 - Lowering and dependency needs from Milestones 18 and 19.
 - Real `tsldata/` examples, especially list-backed variants and unknown extra fields.
 
-Implementation blocked:
+Resolution notes:
 
-Milestone 20 is blocked on Milestones 18 and 19. Broad backend rendering is blocked until the needed implementation spec subset is typed.
+Milestone 20 introduced selector-aware `ImplementationSelector`,
+`ImplementationBody`, and `ImplementationSpec` promotion. Broad backend
+rendering remains blocked on future lowering and implementation semantics, but
+accepted downstream stages now consume typed implementation specs for selected
+fields they already use.
 
 ## OQ-017: What Belongs In The Production Validation Baseline Versus Exploratory Quarantine?
 
@@ -613,3 +627,7 @@ Milestone 22 is blocked until Milestones 18 through 20 are accepted and OQ-004 i
 ## Follow-up from Milestone 19 review
 
 - When Milestone 20 promotes implementation specs, keep dependency reference attributes and body payload access behind typed spec objects instead of reaching deeper into raw implementation metadata.
+
+## Follow-up from Milestone 20 review
+
+- Carry the selector-aware current-corpus probe into Milestone 21’s validation baseline so scalar-only `blend` and related selector-aware implementation-spec behavior remain protected.

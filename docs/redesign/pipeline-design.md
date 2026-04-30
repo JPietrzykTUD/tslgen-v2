@@ -197,10 +197,12 @@ Processing:
 3. Resolve extension fallback chains.
 4. Filter primitive variants by requested primitive names and templates.
 5. Resolve implementation entries by target extension and fallback source extension.
-6. Expand type categories.
-7. Normalize and test feature requirements.
-8. Apply backend support policy.
-9. Produce stable candidate identities.
+6. Promote selected implementation-shaped catalog values into typed
+   implementation specs; defer unsupported unselected branches.
+7. Expand type categories.
+8. Normalize and test feature requirements.
+9. Apply backend support policy.
+10. Produce stable candidate identities.
 
 Error handling:
 

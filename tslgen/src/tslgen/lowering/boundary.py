@@ -185,8 +185,8 @@ def lower_candidates(
 
 def _classify_payload(candidate: ImplementationCandidate) -> Result[ClassifiedPayload]:
     body = candidate.implementation.body
-    classification = _classification_for_body_kind(body.kind)
-    if body.kind == "tsil" and not isinstance(body.payload, str):
+    text = body.text
+    if body.kind == "tsil" and text is None:
         return Result.failure(
             (
                 Diagnostic.error(
@@ -198,29 +198,18 @@ def _classify_payload(candidate: ImplementationCandidate) -> Result[ClassifiedPa
             )
         )
 
-    text = body.payload if isinstance(body.payload, str) else None
     return Result.ok(
         ClassifiedPayload(
             body_kind=body.kind,
-            classification=classification,
+            classification=body.classification,
             raw_payload=body.payload,
             text=text,
             has_generation_condition=(
-                isinstance(body.payload, str)
-                and _GENERATION_CONDITION_MARKER in body.payload
+                text is not None
+                and _GENERATION_CONDITION_MARKER in text
             ),
         )
     )
-
-
-def _classification_for_body_kind(body_kind: str) -> PayloadClassification:
-    if body_kind == "tsil":
-        return "tsil"
-    if body_kind in {"intrin", "intrinsic", "intrin_compose"}:
-        return "intrinsic"
-    if body_kind in {"c", "c17", "cpp", "rust"}:
-        return "backend_specific"
-    return "opaque"
 
 
 def _unsupported_payload_diagnostic(item: LoweringInput) -> Diagnostic:

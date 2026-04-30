@@ -15,6 +15,7 @@ from tslgen.core.diagnostics import Diagnostic, has_errors, sort_diagnostics
 from tslgen.core.frozen_map import FrozenMap
 from tslgen.core.result import Result
 from tslgen.domain.catalog import Catalog
+from tslgen.domain.implementations import implementation_specs_from_primitive
 from tslgen.domain.values import CatalogMap, CatalogValue
 from tslgen.validation.reference_rules import ReferenceValidatedCatalog
 
@@ -267,65 +268,54 @@ def _implementation_plans_for_variant(
     flag_catalog: FlagCatalog,
     allowed_extensions: frozenset[str],
 ) -> Result[tuple[VariantImplementationPlan, ...]]:
-    impls = _as_map(variant.source.declaration.fields.get("impls"))
-    if impls is None:
+    specs_result = implementation_specs_from_primitive(
+        variant.source.declaration,
+        include_extension_selector=lambda selector: _matches_allowed_extension(
+            catalog,
+            selector.names,
+            allowed_extensions,
+        ),
+    )
+    diagnostics = list(specs_result.diagnostics)
+    if not specs_result.is_ok:
+        return Result.failure(diagnostics)
+
+    specs = specs_result.unwrap().specs
+    if not specs:
         return Result.ok(())
 
-    diagnostics: list[Diagnostic] = []
     plans: list[VariantImplementationPlan] = []
-    for extension_selector_text, extension_value in impls.items():
-        extension_names = _selector_items(extension_selector_text)
+    for spec in specs:
+        extension_names = spec.extension_selector.names
         if not _matches_allowed_extension(catalog, extension_names, allowed_extensions):
             continue
-        type_map = _as_map(extension_value)
-        if type_map is None:
-            diagnostics.append(
-                _shape_diagnostic(
-                    variant,
-                    "implementation extension selector",
-                    extension_selector_text,
-                )
-            )
-            continue
-        extension_selector = SelectorPlan(
-            kind="extension",
-            raw=extension_selector_text,
-            names=extension_names,
+        requirements = _requirements_for_implementation(
+            variant,
+            catalog,
+            flag_catalog,
+            extension_names,
+            spec.type_selector.names,
+            spec.requires_value,
         )
-        for type_selector_text, implementation_value in type_map.items():
-            implementation_map = _as_map(implementation_value)
-            if implementation_map is None:
-                diagnostics.append(
-                    _shape_diagnostic(
-                        variant,
-                        "implementation type selector",
-                        type_selector_text,
-                    )
-                )
-                continue
-            requirements = _requirements_for_implementation(
-                variant,
-                catalog,
-                flag_catalog,
-                extension_names,
-                _selector_items(type_selector_text),
-                implementation_map.get("requires"),
+        diagnostics.extend(requirements.diagnostics)
+        if not requirements.is_ok:
+            continue
+        plans.append(
+            VariantImplementationPlan(
+                variant_id=variant.variant_id,
+                extension_selector=SelectorPlan(
+                    kind="extension",
+                    raw=spec.extension_selector.raw,
+                    names=spec.extension_selector.names,
+                ),
+                type_selector=SelectorPlan(
+                    kind="type_group",
+                    raw=spec.type_selector.raw,
+                    names=spec.type_selector.names,
+                ),
+                requirements=requirements.unwrap(),
             )
-            diagnostics.extend(requirements.diagnostics)
-            if not requirements.is_ok:
-                continue
-            plans.append(
-                VariantImplementationPlan(
-                    variant_id=variant.variant_id,
-                    extension_selector=extension_selector,
-                    type_selector=SelectorPlan(
-                        kind="type_group",
-                        raw=type_selector_text,
-                        names=_selector_items(type_selector_text),
-                    ),
-                    requirements=requirements.unwrap(),
-                )
-            )
+        )
 
     ordered = sort_diagnostics(diagnostics)
     if has_errors(ordered):

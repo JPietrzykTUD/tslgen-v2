@@ -5,8 +5,7 @@ import unittest
 
 from _helpers import assert_diagnostic
 from tslgen.analysis.candidates import select_implementation_candidates
-from tslgen.analysis.expansion import expand_variants
-from tslgen.analysis.selection import SelectionPlan, SelectionRequest, plan_selection
+from tslgen.analysis.selection import SelectionRequest, plan_selection
 from tslgen.config.model import SourceConfig
 from tslgen.domain.catalog import Catalog, build_catalog
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
@@ -155,7 +154,7 @@ class ImplementationCandidateSelectionTests(unittest.TestCase):
                 ("scalar", "scalar", "si32", "tsil"),
             ),
         )
-        self.assertEqual(candidates[0].implementation.body.payload, "emit_return(left + right);")
+        self.assertEqual(candidates[0].implementation.body.text, "emit_return(left + right);")
 
     def test_selects_avx_and_sse_candidates_from_normalized_flags(self) -> None:
         result = selection_for(
@@ -290,26 +289,19 @@ class ImplementationCandidateSelectionTests(unittest.TestCase):
         - {implementation {tsil "emit_return(right);"}}
 """
         )
-        expanded = expand_variants(referenced)
-        self.assertTrue(expanded.is_ok, expanded.diagnostics)
-        plan = SelectionPlan(
-            request=SelectionRequest(
+        result = plan_selection(
+            referenced,
+            SelectionRequest(
                 primitive_names=("ambiguous_add",),
                 extension_names=("scalar",),
                 include_support_extensions=False,
             ),
-            variants=expanded.unwrap().variants,
-            allowed_extensions=("scalar",),
-            normalized_cpu_flags=(),
-            implementation_plans=(),
         )
-
-        result = select_implementation_candidates(plan, referenced.catalog)
 
         self.assertFalse(result.is_ok)
         self.assertEqual(
             [diagnostic.code for diagnostic in result.diagnostics],
-            ["TSL-CANDIDATE-AMBIGUOUS-IMPLEMENTATION"],
+            ["TSL-IMPLEMENTATION-SPEC-LIST-VARIANTS"],
         )
 
     def test_candidate_selection_output_is_deterministic(self) -> None:

@@ -69,7 +69,7 @@ def _render_generated_module(job: RustRenderJob) -> str:
 
 def _candidate_lines(candidate: ImplementationCandidate) -> tuple[str, ...]:
     body = candidate.implementation.body
-    payload = body.payload if isinstance(body.payload, str) else ""
+    payload = body.text or ""
     required_flags = _csv(tuple(flag.name for flag in candidate.required_flags))
     return (
         "    PrimitiveCandidate {",

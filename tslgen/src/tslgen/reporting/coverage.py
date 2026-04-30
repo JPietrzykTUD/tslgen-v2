@@ -638,8 +638,7 @@ def _diagnostic_counts(
 
 
 def _has_body(candidate: ImplementationCandidate) -> bool:
-    body = candidate.implementation.body
-    return bool(body.kind) and body.payload is not None
+    return candidate.implementation.body.has_payload
 
 
 def _backend_name(backend: str | None) -> str:

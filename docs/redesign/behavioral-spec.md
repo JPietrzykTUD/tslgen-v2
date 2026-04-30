@@ -188,6 +188,19 @@ must be satisfied by the normalized request flags; when no CPU flags are
 supplied, required flags remain candidate metadata for a later target-support
 policy.
 
+Milestone 20 promotes selected implementation-shaped catalog data into typed
+implementation specs before selection planning and candidate selection consume
+it. Promotion is selector-aware: unsupported branches that are not relevant to
+the current request are deferred and must not block valid selected branches. A
+branch that is selected or otherwise needed is promoted into an implementation
+spec or produces a structured diagnostic. The promoted spec covers extension
+selector, type selector, `requires` value, implementation body kind, opaque
+payload, and preserved extra fields. Downstream dependency discovery, lowering
+input preparation, coverage reporting, and summary backend renderers consume
+the typed implementation body rather than walking implementation dictionaries.
+List-backed implementation variants remain unsupported when selected and
+produce deterministic diagnostics until an explicit variant policy is accepted.
+
 ## Dependency Behavior
 
 TSIL bodies can call other primitives with syntax such as:
