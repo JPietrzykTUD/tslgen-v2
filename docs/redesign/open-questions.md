@@ -288,3 +288,10 @@ Validation strictness is partially blocked. Catalog can preserve extra fields no
 - Revisit whether catalog construction should remain in `domain` or move to a boundary/conversion module if the strict target-architecture dependency rule becomes important.
 - Add focused tests for duplicate fields inside extension, template, and primitive bodies if duplicate fields are intended to remain structural errors.
 - Watch repeated nested field representation: tuple-grouped repeated fields may need a richer representation if occurrence identity matters during later validation.
+
+## Follow-ups from Milestone 5 review
+
+- Add focused tests for invalid signature syntax with source locations.
+- Add direct tests for `v:=sequence` parameter-count behavior.
+- Clarify whether repeated declaration parameters must include `...`.
+- Treat the signature rule table as typed behavioral data; consider moving it to a typed manifest once rule churn slows.

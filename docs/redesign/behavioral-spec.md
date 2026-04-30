@@ -74,12 +74,15 @@ Signatures are normalized by removing whitespace. A signature plus attributes re
 | `v:=v` | `cast=reinterpret` | `reinterpret` |
 | `v:=(m,v)` | `mask=zero, op=expand` | `expand` |
 | `v:=(m,v)` | `mask=zero, op=pack` | `pack` |
+| `v:=(m,v)` | `mask=zero, op` omitted or `op=keep` | `masked_unary` |
 | `v:=()` | `value=undef` | `set_undef` |
 | `v:=()` | otherwise valid | `set_zero` |
 | `v:=ptr` | `aligned=true|false` | `load` |
 | `void:=(ptr,v)` | `aligned=true|false` | `store` |
 | `v:=(v,sImm)` | `cast=convert, direction=up` | `convert_up` |
 | `v:=(v,sImm)` | `cast=convert, direction=down` | `convert_down` |
+| `m:=(m,v,v,v)` | `mask=zero` or `mask=pass_through` when provided | `masked_between` |
+| `v:=sequence` | declared as `sequence()` with no runtime parameters | `sequence` |
 | `ptr:=(s)` | none | `alloc` |
 
 The full resolution table is grounded in `frozen/generator_specs/signatures.yaml`.
