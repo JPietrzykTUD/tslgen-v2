@@ -668,3 +668,7 @@ decisions.
 ## Follow-up from Milestone 22 review
 
 - When the C++ declaration slice expands, document the function naming and parameter naming contract explicitly in the behavioral spec.
+
+## Follow-up from Milestone 23 review
+
+- When reporting is exposed through API/CLI, keep HTML generation pure and route any writes through `io.artifact_writer`.
