@@ -303,3 +303,7 @@ Validation strictness is partially blocked. Catalog can preserve extra fields no
 - Add a focused test for all-unknown selectors in unambiguously extension-keyed `requires` maps.
 - Revisit conservative `requires` validation once flags and implementation specs are typed.
 - Decide whether `ReferenceValidatedCatalog` should remain a marker-only pipeline gate or gain stronger typed invariants in later stages.
+
+## Follow-up from Milestone 7 review
+
+- During Milestone 8, promote implementation metadata out of generic catalog values only as concrete selection needs become clear.
