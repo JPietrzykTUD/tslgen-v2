@@ -267,8 +267,9 @@ generation:
   golden declaration output. Milestone 26 covers the scalar `binary`
   `si32`/`ui32` declaration slice and rejects invalid names rather than
   sanitizing them.
-- TSIL mini-lowering tests with one supported tiny form and nearby unsupported
-  forms.
+- TSIL mini-lowering tests for the direct parameter-add return form
+  `emit_return(<parameter> + <parameter>);`, plus malformed return forms,
+  unknown operands, generation-time branches, and typed-opaque fallback.
 - C++ body rendering tests proving bodies consume lowered data rather than raw
   TSIL text.
 - Generated production test rendering golden tests over `TestSourcePlan` values.

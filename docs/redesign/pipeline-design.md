@@ -306,6 +306,13 @@ stage with the exact accepted input grammar, lowered representation, and
 unsupported diagnostics. Any later body renderer consumes this lowered output,
 not raw TSIL payload text.
 
+Milestone 27 selects one form: direct parameter-add returns shaped as
+`emit_return(<parameter> + <parameter>);`. Lowering produces backend-neutral
+parameter-reference, binary-expression, and return-statement values for that
+shape only. The stage still diagnoses all other TSIL, malformed nearby
+`emit_return(...)` forms, generation-time branches, and non-TSIL payloads before
+rendering can consume them.
+
 ## Stage 9: Backend Planning
 
 Inputs:

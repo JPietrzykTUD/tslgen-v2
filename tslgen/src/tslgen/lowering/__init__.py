@@ -8,6 +8,9 @@ from tslgen.lowering.boundary import (
     LoweringInputSet,
     LoweringPlan,
     LoweringRequest,
+    TsilBinaryExpression,
+    TsilParameterReference,
+    TsilReturnStatement,
     lower_candidates,
     prepare_lowering_inputs,
 )
@@ -20,6 +23,9 @@ __all__ = [
     "LoweringInputSet",
     "LoweringPlan",
     "LoweringRequest",
+    "TsilBinaryExpression",
+    "TsilParameterReference",
+    "TsilReturnStatement",
     "lower_candidates",
     "prepare_lowering_inputs",
 ]

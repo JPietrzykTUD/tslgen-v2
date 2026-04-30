@@ -132,8 +132,7 @@ claim byte-for-byte compatibility with legacy generated headers.
 
 ## OQ-005: What Is The Long-Term TSIL Grammar And Semantics?
 
-Status: Resolved for the Milestone 18 first slice; open for Milestone 27 and
-long-term grammar
+Status: Narrowed through Milestone 27; broad TSIL grammar remains open
 
 Why it matters:
 
@@ -154,10 +153,10 @@ Required evidence:
 Implementation blocked:
 
 Milestone 18 selected an explicit typed-opaque lowering boundary with
-unsupported diagnostics. Milestone 27 is the next planned mini-lowering decision
-point. Full TSIL grammar and semantic lowering remain open for later lowering
-and production-rendering milestones; broad backend rendering must not claim TSIL
-has been lowered until that future parser/model exists.
+unsupported diagnostics. Milestone 27 adds a mini-lowered direct parameter-add
+return form. Full TSIL grammar and semantic lowering remain open for later
+lowering and production-rendering milestones; broad backend rendering must not
+claim TSIL has been lowered until that future parser/model exists.
 
 ## OQ-006: How Should Generic/Sized Extensions Be Represented?
 
@@ -632,7 +631,7 @@ until the corresponding output form is selected and documented.
 
 ## OQ-021: What Is The First Safe TSIL Mini-Lowering Subset?
 
-Status: Open - scheduled for Milestone 27
+Status: Answered for the Milestone 27 mini-lowering slice
 
 Why it matters:
 
@@ -641,12 +640,19 @@ unsupported diagnostics for semantic lowering. Real body rendering requires at
 least one lowered TSIL form, but broad TSIL parsing is too large for one
 milestone.
 
-Possible answers:
+Decision:
 
-- Parse and lower one expression/return-like TSIL fixture.
-- Parse only dependency/call expressions first.
-- Keep typed-opaque lowering and document a blocker if no safe subset is
-  justified.
+Parse and lower only direct parameter-add returns shaped as
+`emit_return(<parameter> + <parameter>);`. Both operands must resolve to
+declared primitive parameter names. The lowered result is a backend-neutral
+return statement with a binary `+` expression over parameter references.
+
+Deferred answers:
+
+- Full expression parsing.
+- Dependency/call expression lowering.
+- Generation-time branch evaluation.
+- Translation-map and backend-specific lowering.
 
 Required evidence:
 
@@ -656,8 +662,9 @@ Required evidence:
 
 Implementation blocked:
 
-Milestone 27 is blocked on selecting a tiny subset or documenting why the
-subset is unsafe. Milestone 28 body rendering is blocked on the result.
+Not for Milestone 27. Milestone 28 may render a C++ scalar body only from this
+mini-lowered form. Broader body rendering remains blocked on future TSIL grammar
+and semantic lowering work.
 
 ## OQ-022: What Is The First C++ Body Rendering Contract?
 
@@ -1011,3 +1018,7 @@ long as they avoid unrelated corpus churn.
 ## Follow-up from Milestone 26 review
 
 - Keep broader C++ ABI naming, wrappers, overloads, and attribute-sensitive names explicitly deferred until their own reviewed slice.
+
+## Follow-up from Milestone 27 review
+
+- Keep Milestone 28 constrained to consuming the lowered model; C++ body rendering must not rescan raw TSIL payload text.

@@ -745,3 +745,42 @@ Consequences:
   own backend-owned contract before generating output.
 - Body rendering may reuse this naming contract only for the same supported
   scalar declaration slice.
+
+## ADR-023: First TSIL Mini-Lowering Form Is Direct Parameter Addition Return
+
+Status: Accepted for the Milestone 27 slice
+
+Context:
+
+Milestone 18 kept lowering typed-opaque because TSIL includes calls, loops,
+generation-time expressions, intrinsic composition, casts, and backend
+translation hooks. Milestone 27 needs one safe form before C++ body rendering
+can consume lowered data without reading raw TSIL text.
+
+Considered alternatives:
+
+- Keep all TSIL typed-opaque and block body rendering again.
+- Parse a general expression grammar.
+- Lower one exact direct-return expression over declared parameters.
+
+Decision:
+
+Support only TSIL shaped as `emit_return(<parameter> + <parameter>);`, where both
+operands name parameters declared by the selected primitive. Lowering produces
+backend-neutral parameter-reference, binary-expression, and return-statement
+values. Nearby return forms, unknown operands, generation-time branches, calls,
+loops, intrinsics, casts, and backend-specific payloads remain diagnostics.
+
+Rationale:
+
+The form is evidenced by scalar arithmetic data and is small enough to review.
+It gives the next C++ body-rendering milestone semantic input without treating
+opaque TSIL text as backend code or committing to a full TSIL parser.
+
+Consequences:
+
+- `mini_tsil` becomes the default lowering strategy for selected candidates.
+- `typed_opaque` remains available for the explicit unsupported Milestone 18
+  behavior.
+- Future lowering milestones must grow the lowering-owned TSIL model rather than
+  letting renderers rescan raw payload text.

@@ -11,6 +11,9 @@ from tslgen.domain.catalog import Catalog, build_catalog
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
 from tslgen.lowering import (
     LoweringRequest,
+    TsilBinaryExpression,
+    TsilParameterReference,
+    TsilReturnStatement,
     lower_candidates,
     prepare_lowering_inputs,
 )
@@ -127,6 +130,33 @@ prim<v:=(v,v)> lower_generation(left, right):
         implementation:
           tsil "if<generation>(value<generation>(vector::length) > 4) { emit_return(left); }"
 
+prim<v:=(v,v)> lower_subtract(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(left - right);"
+
+prim<v:=(v,v)> lower_bad_return(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(left +);"
+
+prim<v:=(v,v)> lower_unknown_name(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(left + missing);"
+
 prim<v:=(v,v)> lower_intrinsic(left, right):
   tests []
   impls:
@@ -195,7 +225,7 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(lowering_input.payload.classification, "tsil")
         self.assertTrue(lowering_input.payload.has_generation_condition)
 
-    def test_reports_unsupported_tsil_without_silently_lowering(self) -> None:
+    def test_lowers_direct_parameter_add_return(self) -> None:
         referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
         selection = candidate_selection_for(
             referenced,
@@ -209,16 +239,49 @@ class LoweringBoundaryTests(unittest.TestCase):
 
         result = lower_candidates(selection, LoweringRequest(backend_id="cpp"))
 
+        self.assertTrue(result.is_ok, result.diagnostics)
+        plan = result.unwrap()
+        self.assertEqual(plan.request.strategy, "mini_tsil")
+        self.assertEqual(len(plan.implementations), 1)
+        implementation = plan.implementations[0]
+        self.assertEqual(implementation.status, "lowered")
+        self.assertEqual(implementation.candidate_id, selection.candidates[0].candidate_id)
+        self.assertEqual(
+            implementation.statements,
+            (
+                TsilReturnStatement(
+                    TsilBinaryExpression(
+                        operator="+",
+                        left=TsilParameterReference("left"),
+                        right=TsilParameterReference("right"),
+                    )
+                ),
+            ),
+        )
+
+    def test_typed_opaque_strategy_still_reports_tsil_as_unsupported(self) -> None:
+        referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
+        selection = candidate_selection_for(
+            referenced,
+            SelectionRequest(
+                backend="cpp",
+                primitive_names=("lower_add",),
+                extension_names=("scalar",),
+                include_support_extensions=False,
+            ),
+        )
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(strategy="typed_opaque", backend_id="cpp"),
+        )
+
         self.assertFalse(result.is_ok)
-        self.assertEqual(len(result.diagnostics), 1)
         assert_diagnostic(
             self,
             result.diagnostics[0],
             code="TSL-LOWER-TSIL-UNSUPPORTED",
             severity="error",
-            path="lowering-fixture.tsl",
-            line=1,
-            column=1,
         )
 
     def test_reports_generation_time_conditions_as_deferred_lowering_work(self) -> None:
@@ -245,6 +308,72 @@ class LoweringBoundaryTests(unittest.TestCase):
             severity="error",
         )
         self.assertIn("generation-time conditions", diagnostic.message)
+
+    def test_reports_unsupported_nearby_return_form(self) -> None:
+        referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
+        selection = candidate_selection_for(
+            referenced,
+            SelectionRequest(
+                backend="cpp",
+                primitive_names=("lower_subtract",),
+                extension_names=("scalar",),
+                include_support_extensions=False,
+            ),
+        )
+
+        result = lower_candidates(selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-TSIL-RETURN-SHAPE",
+            severity="error",
+        )
+
+    def test_reports_malformed_direct_return_form(self) -> None:
+        referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
+        selection = candidate_selection_for(
+            referenced,
+            SelectionRequest(
+                backend="cpp",
+                primitive_names=("lower_bad_return",),
+                extension_names=("scalar",),
+                include_support_extensions=False,
+            ),
+        )
+
+        result = lower_candidates(selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-TSIL-RETURN-SHAPE",
+            severity="error",
+        )
+
+    def test_reports_unknown_parameter_in_direct_return_form(self) -> None:
+        referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
+        selection = candidate_selection_for(
+            referenced,
+            SelectionRequest(
+                backend="cpp",
+                primitive_names=("lower_unknown_name",),
+                extension_names=("scalar",),
+                include_support_extensions=False,
+            ),
+        )
+
+        result = lower_candidates(selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-TSIL-UNKNOWN-PARAMETER",
+            severity="error",
+        )
 
     def test_classifies_and_reports_non_tsil_payloads_as_unsupported(self) -> None:
         referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
@@ -293,13 +422,32 @@ class LoweringBoundaryTests(unittest.TestCase):
             severity="error",
         )
 
+    def test_lowered_results_are_deterministic(self) -> None:
+        referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
+        selection = candidate_selection_for(
+            referenced,
+            SelectionRequest(
+                backend="cpp",
+                primitive_names=("lower_add",),
+                extension_names=("scalar",),
+                include_support_extensions=False,
+            ),
+        )
+
+        first = lower_candidates(selection)
+        second = lower_candidates(selection)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+
     def test_lowering_diagnostics_are_deterministic(self) -> None:
         referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
         selection = candidate_selection_for(
             referenced,
             SelectionRequest(
                 backend="cpp",
-                primitive_names=("lower_add", "lower_intrinsic"),
+                primitive_names=("lower_generation", "lower_intrinsic"),
                 extension_names=("scalar",),
                 include_support_extensions=False,
             ),

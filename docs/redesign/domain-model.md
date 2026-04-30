@@ -384,7 +384,7 @@ models:
 ```python
 @dataclass(frozen=True, slots=True)
 class LoweringRequest:
-    strategy: Literal["typed_opaque"]
+    strategy: Literal["mini_tsil", "typed_opaque"]
     backend_id: BackendId | None
     generation_context: GenerationContext
 
@@ -402,6 +402,20 @@ class LoweringInput:
     payload: ClassifiedPayload
 
 @dataclass(frozen=True, slots=True)
+class TsilParameterReference:
+    name: str
+
+@dataclass(frozen=True, slots=True)
+class TsilBinaryExpression:
+    operator: Literal["+"]
+    left: TsilParameterReference
+    right: TsilParameterReference
+
+@dataclass(frozen=True, slots=True)
+class TsilReturnStatement:
+    expression: TsilBinaryExpression
+
+@dataclass(frozen=True, slots=True)
 class LoweringPlan:
     request: LoweringRequest
     input_set: LoweringInputSet
@@ -416,6 +430,10 @@ Invariants:
   backend code without a later lowering slice.
 - Generation-time branch markers are represented at the lowering boundary even
   before they are evaluated.
+- Milestone 27 lowers only direct parameter-add returns shaped as
+  `emit_return(<parameter> + <parameter>);` into backend-neutral
+  `TsilReturnStatement` values. Other expression, call, branch, loop, intrinsic,
+  and backend-specific payloads remain unsupported.
 - Future semantic dependency references are extracted from parsed TSIL, not just
   backend text; Milestones 9 and 19 retain conservative marker extraction until
   a TSIL AST exists.

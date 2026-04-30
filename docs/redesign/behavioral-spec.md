@@ -270,10 +270,20 @@ the classified payload, but are not evaluated yet. Semantic lowering currently
 returns explicit unsupported diagnostics for non-empty candidate inputs instead
 of pretending opaque payload text is backend-neutral IR.
 
-Milestone 27 is the next lowering decision point. It may add one tiny
-mini-lowered TSIL form, but unsupported TSIL must remain explicit diagnostics.
-Any C++ body-rendering milestone must consume this lowered model rather than raw
-TSIL text.
+Milestone 27 adds the first mini-lowered TSIL form. The supported form is exactly
+a direct parameter-add return shaped as
+`emit_return(<parameter> + <parameter>);`, where both operands are names from
+the selected primitive declaration. This produces a backend-neutral lowered
+return statement containing a binary `+` expression over parameter references.
+The mini-lowering strategy does not parse a general expression language, does
+not evaluate generation-time branches, does not lower calls or intrinsics, and
+does not render backend text. Unsupported TSIL remains diagnostic-producing:
+unrecognized TSIL returns `TSL-LOWER-TSIL-UNSUPPORTED`, nearby unsupported or
+malformed `emit_return(...)` forms return `TSL-LOWER-TSIL-RETURN-SHAPE`, and
+unknown operand names return `TSL-LOWER-TSIL-UNKNOWN-PARAMETER`. The
+`typed_opaque` strategy remains available for callers that need the Milestone 18
+unsupported behavior. Any C++ body-rendering milestone must consume this lowered
+model rather than raw TSIL text.
 
 ## Rendering Behavior
 

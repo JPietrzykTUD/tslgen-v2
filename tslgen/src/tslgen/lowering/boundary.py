@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import Literal
 
 from tslgen.analysis.candidates import CandidateSelection, ImplementationCandidate
@@ -10,16 +11,25 @@ from tslgen.core.result import Result
 from tslgen.domain.values import CatalogValue
 
 
-type LoweringStrategy = Literal["typed_opaque"]
+type LoweringStrategy = Literal["mini_tsil", "typed_opaque"]
 type PayloadClassification = Literal[
     "tsil",
     "intrinsic",
     "backend_specific",
     "opaque",
 ]
-type LoweringStatus = Literal["unsupported"]
+type LoweringStatus = Literal["lowered", "unsupported"]
+type TsilBinaryOperator = Literal["+"]
+type TsilExpression = TsilParameterReference | TsilBinaryExpression
+type TsilStatement = TsilReturnStatement
 
 _GENERATION_CONDITION_MARKER = "if<generation>"
+_TSIL_IDENTIFIER = r"[A-Za-z_][A-Za-z0-9_]*"
+_DIRECT_PARAMETER_ADD_RETURN_RE = re.compile(
+    rf"\A\s*emit_return\(\s*({_TSIL_IDENTIFIER})\s*\+\s*"
+    rf"({_TSIL_IDENTIFIER})\s*\)\s*;\s*\Z"
+)
+_EMIT_RETURN_HEAD_RE = re.compile(r"\A\s*emit_return\s*\(")
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,11 +39,13 @@ class GenerationContext:
 
 @dataclass(frozen=True, slots=True)
 class LoweringRequest:
-    strategy: LoweringStrategy = "typed_opaque"
+    strategy: LoweringStrategy = "mini_tsil"
     backend_id: str | None = None
     generation_context: GenerationContext = field(default_factory=GenerationContext)
 
     def __post_init__(self) -> None:
+        if self.strategy not in ("mini_tsil", "typed_opaque"):
+            raise ValueError(f"unknown lowering strategy: {self.strategy!r}")
         if self.backend_id is not None and not self.backend_id:
             raise ValueError("lowering backend id must be non-empty when provided")
 
@@ -98,15 +110,61 @@ class LoweringInputSet:
 
 
 @dataclass(frozen=True, slots=True)
+class TsilParameterReference:
+    name: str
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("TSIL parameter reference name must be non-empty")
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return ("parameter", self.name)
+
+
+@dataclass(frozen=True, slots=True)
+class TsilBinaryExpression:
+    operator: TsilBinaryOperator
+    left: TsilParameterReference
+    right: TsilParameterReference
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "binary",
+            self.operator,
+            self.left.key,
+            self.right.key,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class TsilReturnStatement:
+    expression: TsilExpression
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return ("return", self.expression.key)
+
+
+@dataclass(frozen=True, slots=True)
 class LoweredImplementation:
     candidate_id: str
     status: LoweringStatus
-    statements: tuple[object, ...] = ()
+    statements: tuple[TsilStatement, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.candidate_id:
             raise ValueError("lowered implementation candidate id must be non-empty")
         object.__setattr__(self, "statements", tuple(self.statements))
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            self.candidate_id,
+            self.status,
+            tuple(statement.key for statement in self.statements),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,9 +177,7 @@ class LoweringPlan:
     )
 
     def __post_init__(self) -> None:
-        implementations = tuple(
-            sorted(self.implementations, key=lambda item: item.candidate_id)
-        )
+        implementations = tuple(sorted(self.implementations, key=lambda item: item.key))
         object.__setattr__(self, "implementations", implementations)
         object.__setattr__(
             self,
@@ -166,10 +222,31 @@ def lower_candidates(
         return Result.failure(input_set.diagnostics)
 
     lowering_inputs = input_set.unwrap()
-    diagnostics = tuple(
-        _unsupported_payload_diagnostic(item)
-        for item in lowering_inputs.inputs
-    )
+    if lowering_inputs.request.strategy == "typed_opaque":
+        unsupported_diagnostics = tuple(
+            _unsupported_payload_diagnostic(item, strategy="typed_opaque")
+            for item in lowering_inputs.inputs
+        )
+        ordered = sort_diagnostics(unsupported_diagnostics)
+        if has_errors(ordered):
+            return Result.failure(ordered)
+        return Result.ok(
+            LoweringPlan(
+                request=lowering_inputs.request,
+                input_set=lowering_inputs,
+                implementations=(),
+            ),
+            diagnostics=ordered,
+        )
+
+    diagnostics: list[Diagnostic] = []
+    implementations: list[LoweredImplementation] = []
+    for item in lowering_inputs.inputs:
+        lowered = _lower_input(item)
+        diagnostics.extend(lowered.diagnostics)
+        if lowered.is_ok:
+            implementations.append(lowered.unwrap())
+
     ordered = sort_diagnostics(diagnostics)
     if has_errors(ordered):
         return Result.failure(ordered)
@@ -177,7 +254,7 @@ def lower_candidates(
         LoweringPlan(
             request=lowering_inputs.request,
             input_set=lowering_inputs,
-            implementations=(),
+            implementations=tuple(implementations),
         ),
         diagnostics=ordered,
     )
@@ -212,13 +289,97 @@ def _classify_payload(candidate: ImplementationCandidate) -> Result[ClassifiedPa
     )
 
 
-def _unsupported_payload_diagnostic(item: LoweringInput) -> Diagnostic:
+def _lower_input(item: LoweringInput) -> Result[LoweredImplementation]:
+    if item.payload.classification != "tsil":
+        return Result.failure((_unsupported_payload_diagnostic(item),))
+    if item.payload.has_generation_condition:
+        return Result.failure((_unsupported_payload_diagnostic(item),))
+
+    statement = _direct_parameter_add_return_statement(item)
+    if not statement.is_ok:
+        return Result.failure(statement.diagnostics)
+
+    return Result.ok(
+        LoweredImplementation(
+            candidate_id=item.candidate_id,
+            status="lowered",
+            statements=(statement.unwrap(),),
+        )
+    )
+
+
+def _direct_parameter_add_return_statement(
+    item: LoweringInput,
+) -> Result[TsilReturnStatement]:
+    text = item.payload.text or ""
+    match = _DIRECT_PARAMETER_ADD_RETURN_RE.fullmatch(text)
+    if match is None:
+        if _EMIT_RETURN_HEAD_RE.match(text):
+            return Result.failure(
+                (
+                    Diagnostic.error(
+                        "TSL-LOWER-TSIL-RETURN-SHAPE",
+                        "mini TSIL lowering supports only direct parameter "
+                        "addition returns shaped as "
+                        "'emit_return(<parameter> + <parameter>);'",
+                        location=item.source_location,
+                    ),
+                )
+            )
+        return Result.failure((_unsupported_payload_diagnostic(item),))
+
+    left_name, right_name = match.groups()
+    parameter_names = tuple(
+        parameter.name
+        for parameter in item.candidate.variant.source.declaration.parameters
+    )
+    unknown_names = tuple(
+        name
+        for name in (left_name, right_name)
+        if name not in parameter_names
+    )
+    if unknown_names:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-TSIL-UNKNOWN-PARAMETER",
+                    "mini TSIL lowering can reference only declared primitive "
+                    f"parameters; unknown name(s): "
+                    f"{', '.join(repr(name) for name in unknown_names)}",
+                    location=item.source_location,
+                ),
+            )
+        )
+
+    return Result.ok(
+        TsilReturnStatement(
+            expression=TsilBinaryExpression(
+                operator="+",
+                left=TsilParameterReference(left_name),
+                right=TsilParameterReference(right_name),
+            )
+        )
+    )
+
+
+def _unsupported_payload_diagnostic(
+    item: LoweringInput,
+    *,
+    strategy: LoweringStrategy = "mini_tsil",
+) -> Diagnostic:
     if item.payload.classification == "tsil":
         code = "TSL-LOWER-TSIL-UNSUPPORTED"
-        message = (
-            f"candidate {item.candidate_id!r} has a TSIL payload; semantic "
-            "TSIL lowering is deferred by the typed-opaque strategy"
-        )
+        if strategy == "typed_opaque":
+            message = (
+                f"candidate {item.candidate_id!r} has a TSIL payload; semantic "
+                "TSIL lowering is disabled by the typed-opaque strategy"
+            )
+        else:
+            message = (
+                f"candidate {item.candidate_id!r} has a TSIL payload; semantic "
+                "TSIL lowering supports only the mini direct parameter-add return "
+                "slice"
+            )
         if item.payload.has_generation_condition:
             message += (
                 " and contains generation-time conditions that must be evaluated "
