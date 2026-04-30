@@ -59,7 +59,7 @@ The catalog must contain immutable typed objects for:
 - Flag normalization.
 - Template metadata.
 
-Catalog construction must reject or diagnose malformed structures instead of silently discarding required data. Unknown extra fields may be preserved as extension fields when they are not required for the current milestone.
+Catalog construction must reject or diagnose malformed structures instead of silently discarding required data. Unknown extra fields may be preserved as constrained catalog values when they are not required for the current milestone. Repeated keys inside nested preserved fields are structural input and must not be merged semantically during catalog construction.
 
 ## Signature And Template Resolution
 

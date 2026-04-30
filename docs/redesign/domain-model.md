@@ -68,6 +68,8 @@ Invariants:
 - Parser-private keys do not enter catalog values.
 - Order is preserved for tuples and deterministic for maps.
 - Field-level preservation does not replace typed accessors for known fields.
+- Repeated keys inside nested preserved fields are retained as grouped tuple values until
+  a later semantic stage defines whether they should merge, override, or diagnose.
 
 ### Names And IDs
 

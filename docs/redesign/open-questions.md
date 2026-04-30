@@ -275,3 +275,16 @@ Validation strictness is partially blocked. Catalog can preserve extra fields no
 - Add focused tests for invalid UTF-8 and read failure diagnostics where practical.
 - Standardize whether file-level diagnostics use synthetic locations such as `line=1, column=1` or `location=None` before CLI diagnostic rendering.
 - Clarify whether source digests are computed over normalized text or raw bytes before digest behavior becomes externally visible.
+
+## Follow-ups from Milestone 3 review
+
+- Clarify parser public API exports and keep Lark construction private. 
+- In Milestone 4, verify SyntaxNode structure is sufficient for typed catalog construction without parser-private leakage. 
+- Consider changing the corpus test to assert “all discovered files parse” without hard-coding the count, or document the count as an intentional current-corpus check.
+
+## Follow-ups from Milestone 4 review
+
+- Replace generic `CatalogEntry` with typed models for flags, language type maps, translation maps, primitive tests, and implementation specs when later milestones require semantic access to those concepts.
+- Revisit whether catalog construction should remain in `domain` or move to a boundary/conversion module if the strict target-architecture dependency rule becomes important.
+- Add focused tests for duplicate fields inside extension, template, and primitive bodies if duplicate fields are intended to remain structural errors.
+- Watch repeated nested field representation: tuple-grouped repeated fields may need a richer representation if occurrence identity matters during later validation.

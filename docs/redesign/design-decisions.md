@@ -84,6 +84,8 @@ Consequences:
 
 - Catalog construction is an explicit stage.
 - Existing TSL flexibility needs a constrained `CatalogValue` escape hatch for extra fields.
+- Repeated nested field keys may be preserved structurally in `CatalogValue` data;
+  semantic merge or ambiguity policy belongs to validation and selection stages.
 - Tests should assert object-level invariants, not raw dict keys.
 
 ## ADR-004: Diagnostics Are Structured Values
