@@ -269,3 +269,9 @@ Required evidence:
 Implementation blocked:
 
 Validation strictness is partially blocked. Catalog can preserve extra fields now.
+
+## Follow-ups from Milestone 2 review
+
+- Add focused tests for invalid UTF-8 and read failure diagnostics where practical.
+- Standardize whether file-level diagnostics use synthetic locations such as `line=1, column=1` or `location=None` before CLI diagnostic rendering.
+- Clarify whether source digests are computed over normalized text or raw bytes before digest behavior becomes externally visible.
