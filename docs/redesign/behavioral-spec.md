@@ -199,6 +199,19 @@ call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(...)
 
 The redesign should parse or model dependency references rather than rely only on regex. Dependencies affect targeted generation because support primitives must be included even when the user selected a small primitive set.
 
+Milestone 9 dependency planning conservatively discovers only explicit
+`call<primitive=...>` forms inside opaque TSIL implementation payloads. It
+recognizes primitive names, optional raw type arguments such as `[Vec]`, optional
+`attrs[...]` maps, and `@self` references resolved to the source primitive name.
+It does not parse arbitrary TSIL expressions, resolve generic type or extension
+arguments, choose dependency implementations, lower call bodies, or render code.
+The closure result contains deterministic required primitive names and the
+candidate IDs already available for those primitive names. Known dependency
+primitive names that are not present in the current candidate set are reported as
+unplanned primitive names so a later pipeline stage can re-run selection with an
+expanded request. Unknown dependency primitive names and non-trivial dependency
+cycles are diagnostics.
+
 ## Lowering Behavior
 
 Implementation bodies may be:

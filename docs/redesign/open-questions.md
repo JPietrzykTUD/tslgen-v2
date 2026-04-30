@@ -314,3 +314,9 @@ Validation strictness is partially blocked. Catalog can preserve extra fields no
 - Add focused tests for unknown backend diagnostics.
 - Add focused tests for malformed or missing implementation body diagnostics.
 - Continue promoting implementation specs out of raw catalog values only as later stages require them.
+
+## Follow-ups from Milestone 9 review
+
+- Add focused tests for malformed or incomplete dependency marker diagnostics.
+- Before dependency closure feeds artifact planning, decide whether closure should remain primitive-name based or become candidate-specific.
+- Document that current primitive-level closure conservatively unions dependencies across candidates of the same primitive, or refine it in a later integration slice.
