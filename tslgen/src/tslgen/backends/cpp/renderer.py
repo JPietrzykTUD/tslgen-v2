@@ -5,6 +5,7 @@ from tslgen.core.frozen_map import FrozenMap
 from tslgen.core.result import Result
 from tslgen.io.artifacts import Artifact, ArtifactSet, artifact_set_from_artifacts
 
+from .declarations import render_cpp_production_declarations
 from .planner import CppRenderJob, CppRenderPlan
 
 
@@ -44,6 +45,8 @@ def _render_generated_header(job: CppRenderJob) -> str:
         "",
         "#pragma once",
         "",
+        "#include <cstdint>",
+        "",
         "namespace tsl {",
         "namespace generated {",
         "",
@@ -66,6 +69,13 @@ def _render_generated_header(job: CppRenderJob) -> str:
         [
             "};",
             "",
+        ]
+    )
+    declaration_lines = render_cpp_production_declarations(job.declarations)
+    if declaration_lines:
+        lines.extend((*declaration_lines, ""))
+    lines.extend(
+        [
             "}  // namespace generated",
             "}  // namespace tsl",
             "",

@@ -10,6 +10,8 @@ from tslgen.core.result import Result
 from tslgen.domain.values import CatalogValue
 from tslgen.io.artifacts import ArtifactDescriptor, ArtifactPlan
 
+from .declarations import CppFunctionDeclaration, plan_cpp_production_declarations
+
 
 CPP_BACKEND_ID = "cpp"
 SUPPORTED_CPP_ARTIFACT_KINDS = frozenset({"generated"})
@@ -19,11 +21,14 @@ SUPPORTED_CPP_ARTIFACT_KINDS = frozenset({"generated"})
 class CppRenderJob:
     descriptor: ArtifactDescriptor
     candidates: tuple[ImplementationCandidate, ...]
+    declarations: tuple[CppFunctionDeclaration, ...] = ()
     metadata: FrozenMap[str, CatalogValue] = field(default_factory=FrozenMap.empty)
 
     def __post_init__(self) -> None:
         candidates = tuple(sorted(self.candidates, key=lambda candidate: candidate.key))
         object.__setattr__(self, "candidates", candidates)
+        declarations = tuple(sorted(self.declarations, key=lambda item: item.key))
+        object.__setattr__(self, "declarations", declarations)
 
     @property
     def key(self) -> tuple[object, ...]:
@@ -31,6 +36,7 @@ class CppRenderJob:
             self.descriptor.logical_path.as_posix(),
             self.descriptor.kind,
             tuple(candidate.key for candidate in self.candidates),
+            tuple(declaration.key for declaration in self.declarations),
         )
 
 
@@ -64,11 +70,18 @@ def plan_cpp_render_jobs(
         diagnostics.extend(_descriptor_diagnostics(descriptor))
         candidates = _descriptor_candidates(descriptor, selection, diagnostics)
         diagnostics.extend(_candidate_diagnostics(candidates))
+        declarations: tuple[CppFunctionDeclaration, ...] = ()
+        if not has_errors(diagnostics):
+            declaration_result = plan_cpp_production_declarations(candidates)
+            diagnostics.extend(declaration_result.diagnostics)
+            if declaration_result.is_ok:
+                declarations = declaration_result.unwrap()
         if not has_errors(diagnostics):
             jobs.append(
                 CppRenderJob(
                     descriptor=descriptor,
                     candidates=candidates,
+                    declarations=declarations,
                     metadata=FrozenMap(
                         {
                             "candidate_count": len(candidates),

@@ -35,6 +35,17 @@ SIMPLE_PRIMITIVE = """prim<v:=(v,v)> slice_add(left, right):
 """
 
 
+UNSUPPORTED_DECLARATION_PRIMITIVE = """prim<v:=()> slice_zero():
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(0);"
+"""
+
+
 def source_document(text: str, *, path: str = "cpp-slice-fixture.tsl") -> SourceDocument:
     return SourceDocument(
         path=Path(path),
@@ -115,12 +126,13 @@ def candidate_selection_for(
     referenced: ReferenceValidatedCatalog,
     *,
     backend: str | None = "cpp",
+    primitive_name: str = "slice_add",
 ) -> CandidateSelection:
     plan = plan_selection(
         referenced,
         SelectionRequest(
             backend=backend,
-            primitive_names=("slice_add",),
+            primitive_names=(primitive_name,),
             extension_names=("scalar",),
             cpu_flags=("sse",),
             include_support_extensions=False,
@@ -210,6 +222,12 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
         self.assertEqual(artifact.metadata["backend_id"], "cpp")
         self.assertEqual(artifact.metadata["required_flags"], ("sse",))
         self.assertEqual(artifact.metadata["target_extensions"], ("scalar",))
+        self.assertIn("namespace production", artifact.content)
+        self.assertIn(
+            "inline std::int32_t slice_add_si32(std::int32_t left, "
+            "std::int32_t right);",
+            artifact.content,
+        )
 
     def test_rendering_is_deterministic(self) -> None:
         first = render_simple_fixture()
@@ -275,6 +293,23 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             self,
             result.diagnostics[0],
             code="TSL-CPP-RENDER-UNSUPPORTED-ARTIFACT",
+            severity="error",
+        )
+
+    def test_diagnoses_candidate_outside_production_declaration_slice(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(UNSUPPORTED_DECLARATION_PRIMITIVE),
+            primitive_name="slice_zero",
+        )
+        artifact_plan = artifact_plan_for_selection(selection)
+
+        result = CppBackend().render(artifact_plan, selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-DECLARATION-UNSUPPORTED",
             severity="error",
         )
 

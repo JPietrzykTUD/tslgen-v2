@@ -508,3 +508,43 @@ Consequences:
   pipeline tests.
 - Quarantine cannot be used to exclude accepted redesigned modules merely
   because they fail validation.
+
+## ADR-017: First Production-Shaped Rendering Slice Is C++ Scalar Declarations
+
+Status: Accepted
+
+Context:
+
+The accepted C++ and Rust backend slices render deterministic summary artifacts
+from typed candidate metadata and opaque implementation payloads. Milestone 18
+keeps TSIL lowering typed-but-opaque, so rendering executable implementation
+bodies would overclaim semantics that are not available yet. Milestone 22 still
+needs a concrete step beyond summary metadata.
+
+Considered alternatives:
+
+- Render C++ implementation bodies by treating TSIL text as C++ code.
+- Start broad template rendering for a full primitive family.
+- Render one production-shaped declaration slice from typed candidate and
+  signature metadata while leaving bodies opaque.
+
+Decision:
+
+Expand only the C++ `generated` artifact with declarations for selected scalar
+`binary` candidates with signature `v:=(v,v)` and type tag `si32`. Candidates
+outside this slice are diagnostics, not silent omissions.
+
+Rationale:
+
+Function declarations are production-shaped C++ output but do not require TSIL
+semantic lowering, backend translation maps, or implementation-body rendering.
+The slice validates renderer ownership, deterministic output, unsupported-case
+diagnostics, and golden review without starting full generation.
+
+Consequences:
+
+- The C++ golden artifact now includes a declaration namespace and `<cstdint>`.
+- Full wrappers, implementations, SIMD type mapping, translation-map evaluation,
+  and Rust production-shaped rendering remain deferred.
+- Future rendering slices should continue consuming typed candidate/spec/lowering
+  objects rather than parser trees or raw catalog dictionaries.

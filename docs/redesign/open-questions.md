@@ -98,7 +98,7 @@ open until a predicate or priority policy is designed.
 
 ## OQ-004: How Much Byte-For-Byte Output Compatibility Is Required?
 
-Status: Open - required before broad backend rendering
+Status: Narrowed for Milestone 22; open for broad backend rendering
 
 Why it matters:
 
@@ -118,8 +118,15 @@ Required evidence:
 
 Implementation blocked:
 
-Milestone 22 backend rendering expansion is blocked until this is narrowed for
-the selected slice. Earlier boundary milestones are not blocked.
+Not for the Milestone 22 C++ scalar binary declaration slice. Broad backend
+rendering remains blocked until compatibility expectations are narrowed for each
+production-shaped output family.
+
+Resolution notes:
+
+Milestone 22 establishes a new narrow C++ golden baseline for scalar `binary`
+`si32` declarations. This baseline is behavioral and intentionally does not
+claim byte-for-byte compatibility with legacy generated headers.
 
 ## OQ-005: What Is The Long-Term TSIL Grammar And Semantics?
 
@@ -494,17 +501,23 @@ targeted `mypy --explicit-package-bases`, and `git diff --check`.
 
 ## OQ-018: Which Backend Rendering Slice Should Follow Summary Artifacts?
 
-Status: Open - scheduled for Milestone 22
+Status: Resolved for Milestone 22.
 
 Why it matters:
 
 Milestones 11 and 14 render deterministic summary artifacts, not production C++ or Rust code. The first production-shaped rendering slice must be small enough to review and must not bypass lowering, dependency, or implementation-spec boundaries.
 
-Possible answers:
+Considered answers:
 
 - C++ first for one simple primitive/template class.
 - Rust first for one simple primitive/template class.
 - Defer production-shaped rendering until TSIL and implementation specs are more complete.
+
+Decision:
+
+Use C++ first for one scalar `binary` `si32` declaration slice inside the
+existing `generated` artifact. Keep implementation bodies opaque and diagnose
+selected candidates outside the supported declaration slice.
 
 Required evidence:
 
@@ -515,7 +528,9 @@ Required evidence:
 
 Implementation blocked:
 
-Milestone 22 is blocked until Milestones 18 through 20 are accepted and OQ-004 is narrowed enough for the chosen slice.
+No for the selected Milestone 22 slice. Further production-shaped rendering is
+still blocked on TSIL lowering, broader type mapping, and output compatibility
+decisions.
 
 ## Follow-ups from Milestone 2 review
 
@@ -646,3 +661,7 @@ Milestone 22 is blocked until Milestones 18 through 20 are accepted and OQ-004 i
 ## Follow-up from Milestone 20 review
 
 - Carry the selector-aware current-corpus probe into Milestone 21’s validation baseline so scalar-only `blend` and related selector-aware implementation-spec behavior remain protected.
+
+## Follow-up from Milestone 22 review
+
+- When the C++ declaration slice expands, document the function naming and parameter naming contract explicitly in the behavioral spec.

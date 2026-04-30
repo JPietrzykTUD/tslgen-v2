@@ -289,6 +289,15 @@ tags, template names, and escaped opaque TSIL payload text. This slice does not
 lower TSIL, evaluate backend translations, render full backend templates, or
 produce final SIMD implementation code.
 
+Milestone 22 expands the C++ `generated` artifact with a narrow
+production-shaped declaration section for selected scalar `binary` candidates
+with signature `v:=(v,v)` and type tag `si32`. The declaration section is
+derived from typed candidate, signature, and implementation-spec metadata; it
+does not consume parser trees, does not lower TSIL, and does not treat opaque
+TSIL payload text as generated C++ statements. Selected candidates outside this
+slice are rejected with `TSL-CPP-RENDER-DECLARATION-UNSUPPORTED` rather than
+silently omitted or rendered as misleading code.
+
 The first Rust backend slice supports only the `rust` backend and `generated`
 artifact kind. It renders a deterministic Rust module-like summary artifact
 analogous to the C++ summary: selected primitive candidates, required flags,

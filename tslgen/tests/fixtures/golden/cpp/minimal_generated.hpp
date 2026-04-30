@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace tsl {
 namespace generated {
 
@@ -34,6 +36,12 @@ inline constexpr primitive_candidate primitive_candidates[] = {
     "emit_return(left + right);",
   },
 };
+
+namespace production {
+
+inline std::int32_t slice_add_si32(std::int32_t left, std::int32_t right);
+
+}  // namespace production
 
 }  // namespace generated
 }  // namespace tsl
