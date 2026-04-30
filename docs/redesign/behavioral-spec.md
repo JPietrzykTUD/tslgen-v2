@@ -129,6 +129,19 @@ Test names created from wildcard variants should receive stable suffixes when on
 - Feature requirements in implementation blocks are normalized through the flag map before support checks.
 - `scalar` and `generic` are support extensions and are included as forced extensions unless configuration explicitly changes that policy.
 
+## Reference Validation Behavior
+
+Reference validation checks that declarative names already represented by the catalog resolve to known declarations before later selection or lowering stages run.
+
+- Type group members must reference known type groups.
+- Lane set `types` entries must reference known type groups.
+- Extension inheritance, backend generation-support extension lists, and extension template filters must reference known extensions or templates.
+- Primitive test `type`, `to_type`, `lane_set`, `extension`, `to_extension`, and `template` fields must reference known catalog declarations.
+- Primitive implementation extension selectors, implementation type selectors, and structurally typed `requires` map keys must reference known extensions or type groups when the `requires` shape is unambiguous. Flag-policy-shaped `requires` keys are deferred until flag normalization is typed.
+- A validated primitive's resolved template name must still reference a known operation template.
+
+Reference validation does not yet normalize flag aliases, inspect backend language or translation maps, parse TSIL dependencies, or decide whether type, lane, extension, and template combinations are semantically compatible. Preserved nested primitive and extension fields currently retain the owning declaration span rather than per-field spans, so diagnostics for those nested references use the owning declaration location until those nested structures are promoted into typed catalog models.
+
 ## Implementation Selection Behavior
 
 Given a catalog, selection request, and backend, the selector produces an ordered set of supported implementation candidates.

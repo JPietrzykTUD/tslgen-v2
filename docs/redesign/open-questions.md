@@ -295,3 +295,11 @@ Validation strictness is partially blocked. Catalog can preserve extra fields no
 - Add direct tests for `v:=sequence` parameter-count behavior.
 - Clarify whether repeated declaration parameters must include `...`.
 - Treat the signature rule table as typed behavioral data; consider moving it to a typed manifest once rule churn slows.
+
+## Follow-ups from Milestone 6 review
+
+- Add typed flag models and flag-alias normalization before or during Milestone 7.
+- Promote primitive tests and implementation specs out of generic `CatalogValue` structures when later stages depend on them.
+- Add a focused test for all-unknown selectors in unambiguously extension-keyed `requires` maps.
+- Revisit conservative `requires` validation once flags and implementation specs are typed.
+- Decide whether `ReferenceValidatedCatalog` should remain a marker-only pipeline gate or gain stronger typed invariants in later stages.
