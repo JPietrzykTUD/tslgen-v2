@@ -668,3 +668,39 @@ Consequences:
   metadata and naming lessons from C++.
 - Legacy CLI compatibility and full report/documentation parity remain deferred
   until the narrower CLI and report contracts are stable.
+
+## ADR-021: Combined Report/Write CLI Keeps Report Stdout Parseable
+
+Status: Accepted for the Milestone 25 slice
+
+Context:
+
+Milestone 24 exposed both report printing and artifact writing through the CLI.
+Coverage reports can be machine-readable stdout, while write reports are
+human-readable summaries of filesystem effects.
+
+Considered alternatives:
+
+- Suppress write-report lines whenever a coverage report is requested.
+- Put both report content and write-report lines on stdout.
+- Keep report content on stdout and write-report lines on stderr in combined
+  report/write mode.
+
+Decision:
+
+When `--coverage-report json|html` is combined with `--output-root`, stdout is
+reserved for the requested report content and write-report lines are emitted to
+stderr. Without `--coverage-report`, write-report lines continue to use stdout.
+
+Rationale:
+
+This preserves machine-readable report output for automation while still making
+write behavior visible to users and keeping all filesystem mutation delegated to
+the artifact writer.
+
+Consequences:
+
+- JSON report stdout remains parseable when artifacts are also written.
+- HTML report stdout is not interleaved with write summaries.
+- CLI stream behavior is now a regression-tested contract before broader CLI
+  compatibility work.

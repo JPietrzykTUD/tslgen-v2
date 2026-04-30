@@ -453,6 +453,9 @@ Full legacy CLI flag parity and broader output-mode UX remain deferred.
 Milestone 25 must lock down the combined report/write contract before new CLI
 surface is added. In particular, report stdout must remain parseable when
 `--coverage-report` is combined with `--output-root`.
+The accepted contract reserves stdout for the requested report in combined
+report/write mode and emits write-report lines to stderr while still delegating
+all filesystem mutation to `io.artifact_writer`.
 
 ## Private Implementation Details
 

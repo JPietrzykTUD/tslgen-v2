@@ -505,6 +505,24 @@ diagnostics, and artifact files must be written only through the writer
 boundary. Repeated runs with and without `--no-skip-unchanged` must have
 documented write-report behavior.
 
+The combined report/write CLI contract is:
+
+- `--coverage-report json|html` without `--output-root` writes only the report
+  to stdout and does not write artifact files.
+- `--output-root` without `--coverage-report` writes already-rendered artifacts
+  through `io.artifact_writer` and writes human-readable write-report lines to
+  stdout.
+- `--coverage-report json|html --output-root <dir>` writes only the requested
+  report format to stdout, writes already-rendered artifacts through
+  `io.artifact_writer`, and writes human-readable write-report lines to stderr.
+- `--dry-run --output-root <dir>` uses the writer dry-run path, reports
+  `would_write`, and does not create or modify artifact files.
+- `--no-skip-unchanged --output-root <dir>` maps to the writer
+  `skip_unchanged=False` option, so repeated runs rewrite matching artifact
+  content instead of reporting `skipped_unchanged`.
+- `--dry-run` and `--no-skip-unchanged` without `--output-root` remain CLI
+  argument diagnostics.
+
 ## Coverage And Reporting Behavior
 
 Coverage reports are descriptive summaries over accepted pipeline outputs. They

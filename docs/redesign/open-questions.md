@@ -558,7 +558,7 @@ decisions.
 
 ## OQ-019: What Is The CLI Contract When Reports And Writes Are Requested Together?
 
-Status: Open - scheduled for Milestone 25
+Status: Answered
 
 Why it matters:
 
@@ -581,8 +581,16 @@ Required evidence:
 
 Implementation blocked:
 
-Milestone 25 is blocked on this decision. Backend rendering and lowering are not
-blocked.
+No.
+
+Decision:
+
+Milestone 25 reserves stdout for the requested coverage report when
+`--coverage-report` is combined with `--output-root`. Human-readable write-report
+lines are emitted to stderr in combined report/write mode. When no report is
+requested, write-report lines remain on stdout. Artifact files are written only
+under an explicit `--output-root`, and all writes still go through
+`io.artifact_writer`.
 
 ## OQ-020: What Is The C++ Function And Parameter Naming Contract?
 

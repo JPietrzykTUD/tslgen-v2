@@ -417,6 +417,38 @@ class ApiCliIntegrationTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["total_primitives"], 1)
             self.assertFalse((temp_path / "generated.hpp").exists())
 
+    def test_cli_prints_json_report_and_writes_artifacts_without_stdout_mix(self) -> None:
+        with TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            primitive_path = temp_path / "api_slice.tsl"
+            output_root = temp_path / "out"
+            primitive_path.write_text(SIMPLE_PRIMITIVE, encoding="utf-8")
+            manifest_path = write_cpp_manifest(temp_path)
+            stdout = StringIO()
+            stderr = StringIO()
+
+            exit_code = run_cli(
+                cli_args_for(
+                    primitive_path,
+                    manifest_path,
+                    "--coverage-report",
+                    "json",
+                    "--output-root",
+                    output_root.as_posix(),
+                ),
+                stdout=stdout,
+                stderr=stderr,
+                hardware_flags_provider=lambda: (),
+            )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["summary"]["total_primitives"], 1)
+            self.assertTrue((output_root / "generated.hpp").exists())
+            self.assertIn("written generated.hpp ", stderr.getvalue())
+            self.assertNotIn("written generated.hpp ", stdout.getvalue())
+
     def test_cli_prints_html_coverage_report_without_writing(self) -> None:
         with TemporaryDirectory() as temp:
             temp_path = Path(temp)
@@ -442,6 +474,38 @@ class ApiCliIntegrationTests(unittest.TestCase):
             self.assertEqual(stderr.getvalue(), "")
             self.assertIn("<h1>TSL Coverage Report</h1>", stdout.getvalue())
             self.assertFalse((temp_path / "generated.hpp").exists())
+
+    def test_cli_prints_html_report_and_writes_artifacts_without_stdout_mix(self) -> None:
+        with TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            primitive_path = temp_path / "api_slice.tsl"
+            output_root = temp_path / "out"
+            primitive_path.write_text(SIMPLE_PRIMITIVE, encoding="utf-8")
+            manifest_path = write_cpp_manifest(temp_path)
+            stdout = StringIO()
+            stderr = StringIO()
+
+            exit_code = run_cli(
+                cli_args_for(
+                    primitive_path,
+                    manifest_path,
+                    "--coverage-report",
+                    "html",
+                    "--output-root",
+                    output_root.as_posix(),
+                ),
+                stdout=stdout,
+                stderr=stderr,
+                hardware_flags_provider=lambda: (),
+            )
+
+            self.assertEqual(exit_code, 0)
+            html = stdout.getvalue()
+            self.assertTrue(html.startswith("<!doctype html>\n"))
+            self.assertIn("<h1>TSL Coverage Report</h1>", html)
+            self.assertTrue((output_root / "generated.hpp").exists())
+            self.assertIn("written generated.hpp ", stderr.getvalue())
+            self.assertNotIn("written generated.hpp ", html)
 
     def test_cli_writes_rendered_artifacts_through_writer(self) -> None:
         with TemporaryDirectory() as temp:
@@ -513,6 +577,72 @@ class ApiCliIntegrationTests(unittest.TestCase):
             self.assertEqual(stderr.getvalue(), "")
             self.assertFalse((output_root / "generated.hpp").exists())
             self.assertIn("would_write generated.hpp ", stdout.getvalue())
+
+    def test_cli_dry_run_with_json_report_reports_writes_on_stderr_only(self) -> None:
+        with TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            primitive_path = temp_path / "api_slice.tsl"
+            output_root = temp_path / "out"
+            primitive_path.write_text(SIMPLE_PRIMITIVE, encoding="utf-8")
+            manifest_path = write_cpp_manifest(temp_path)
+            stdout = StringIO()
+            stderr = StringIO()
+
+            exit_code = run_cli(
+                cli_args_for(
+                    primitive_path,
+                    manifest_path,
+                    "--coverage-report",
+                    "json",
+                    "--output-root",
+                    output_root.as_posix(),
+                    "--dry-run",
+                ),
+                stdout=stdout,
+                stderr=stderr,
+                hardware_flags_provider=lambda: (),
+            )
+
+            self.assertEqual(exit_code, 0)
+            json.loads(stdout.getvalue())
+            self.assertFalse((output_root / "generated.hpp").exists())
+            self.assertIn("would_write generated.hpp ", stderr.getvalue())
+            self.assertNotIn("would_write generated.hpp ", stdout.getvalue())
+
+    def test_cli_no_skip_unchanged_rewrites_existing_artifact(self) -> None:
+        with TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            primitive_path = temp_path / "api_slice.tsl"
+            output_root = temp_path / "out"
+            primitive_path.write_text(SIMPLE_PRIMITIVE, encoding="utf-8")
+            manifest_path = write_cpp_manifest(temp_path)
+            base_args = cli_args_for(
+                primitive_path,
+                manifest_path,
+                "--output-root",
+                output_root.as_posix(),
+            )
+
+            first_stdout = StringIO()
+            first_exit = run_cli(
+                base_args,
+                stdout=first_stdout,
+                stderr=StringIO(),
+                hardware_flags_provider=lambda: (),
+            )
+            second_stdout = StringIO()
+            second_exit = run_cli(
+                (*base_args, "--no-skip-unchanged"),
+                stdout=second_stdout,
+                stderr=StringIO(),
+                hardware_flags_provider=lambda: (),
+            )
+
+            self.assertEqual(first_exit, 0)
+            self.assertEqual(second_exit, 0)
+            self.assertIn("written generated.hpp ", first_stdout.getvalue())
+            self.assertIn("written generated.hpp ", second_stdout.getvalue())
+            self.assertNotIn("skipped_unchanged", second_stdout.getvalue())
 
 
 if __name__ == "__main__":

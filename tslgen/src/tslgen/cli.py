@@ -58,8 +58,10 @@ def run(
         write_report = _write_pipeline_artifacts(cli_config, result.artifacts)
         if write_report.diagnostics:
             _write_diagnostics(errors, write_report.diagnostics)
-        if cli_config.coverage_report_format is None:
-            _write_write_report(output, write_report)
+        _write_write_report(
+            output if cli_config.coverage_report_format is None else errors,
+            write_report,
+        )
         return 0 if write_report.is_ok else 1
 
     if result.artifacts is not None and cli_config.coverage_report_format is None:
