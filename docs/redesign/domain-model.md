@@ -79,6 +79,7 @@ Use small value objects or validated string aliases for:
 - `TemplateName`
 - `ExtensionName`
 - `BackendId`
+- `LanguageId`
 - `TypeTag`
 - `TypeGroupName`
 - `LaneSetName`
@@ -346,10 +347,15 @@ Invariants:
 ```python
 @dataclass(frozen=True, slots=True)
 class BackendManifest:
-    backend: BackendId
-    artifact: ArtifactSpec
-    capabilities: BackendCapabilities
-    template_strategy: TemplateStrategy
+    version: int
+    backend_id: BackendId
+    language_id: LanguageId
+    artifacts: tuple[ArtifactSpec, ...]
+    template_policy: BackendTemplatePolicy
+
+@dataclass(frozen=True, slots=True)
+class BackendManifestSet:
+    manifests: tuple[BackendManifest, ...]
 
 class Backend(Protocol):
     id: BackendId
@@ -399,6 +405,21 @@ Invariants:
 
 ```python
 @dataclass(frozen=True, slots=True)
+class ArtifactDescriptor:
+    backend_id: BackendId
+    kind: str
+    logical_path: str
+    candidate_ids: tuple[str, ...]
+    dependency_primitive_names: tuple[PrimitiveName, ...]
+    metadata: FrozenMap[str, CatalogValue]
+
+@dataclass(frozen=True, slots=True)
+class ArtifactPlan:
+    backend_id: BackendId
+    descriptors: tuple[ArtifactDescriptor, ...]
+    metadata: FrozenMap[str, CatalogValue]
+
+@dataclass(frozen=True, slots=True)
 class Artifact:
     logical_name: str
     extension: str
@@ -412,6 +433,7 @@ class ArtifactSet:
 
 Invariants:
 
+- Artifact descriptors are content-free planning values.
 - Logical name plus extension identifies a target path relative to an output root.
 - Artifact ordering is deterministic.
 - Artifact content is UTF-8 text unless a future binary artifact type is introduced explicitly.

@@ -309,3 +309,38 @@ Consequences:
 
 - Golden coverage starts with small representative primitives/backends.
 - Formatting can change intentionally with updated golden files and documented decisions.
+
+## ADR-012: Backend Manifests Are Typed Planning Inputs
+
+Status: Accepted
+
+Context:
+
+Backend behavior is evidenced by YAML manifest files and by TSL language and
+translation declarations. Artifact planning needs an authoritative backend set
+without coupling later stages to YAML dictionaries or parser trees.
+
+Considered alternatives:
+
+- Treat YAML dictionaries as backend plans.
+- Convert all backend manifest data into TSL before planning.
+- Load backend manifests into typed Python value objects.
+
+Decision:
+
+Load backend manifests into typed immutable `BackendManifest` values. The
+artifact planning stage uses a `BackendManifestSet` as the authoritative set of
+known backend IDs. A minimal manifest set may be derived from catalog data only
+when matching `language` and `translation` entries exist for the same backend ID
+and the artifact descriptor is known.
+
+Rationale:
+
+Typed manifests keep YAML at the I/O boundary while preserving a data-driven
+backend model for C++, C17, Rust, and future backends.
+
+Consequences:
+
+- YAML remains a supported interchange format, not a core architecture shape.
+- Unknown backend diagnostics are issued against the supplied manifest set.
+- Artifact descriptors remain content-free until rendering and writing stages.

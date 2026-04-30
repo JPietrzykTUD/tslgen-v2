@@ -241,6 +241,32 @@ Backend renderers must:
 - Produce stable artifact content for identical inputs.
 - Return artifact metadata such as backend, required flags, extension list, and suite count when relevant.
 
+## Backend Manifest And Artifact Planning Behavior
+
+Backend artifact planning consumes typed backend manifests, selected implementation
+candidates, and dependency closure metadata. It does not render templates, lower
+TSIL, write files, inspect host hardware, or evaluate backend runtime support.
+
+Backend manifests are declarative metadata. YAML backend manifest files may be
+loaded at the I/O boundary, but downstream planning consumes typed
+`BackendManifest` values. The authoritative backend set for artifact planning is
+the supplied `BackendManifestSet`; a minimal manifest set may be derived from
+catalog entries only when matching `language` and `translation` entries exist
+for the same backend ID.
+
+Artifact descriptors are content-free. They record logical output paths,
+artifact kind, backend/language IDs, selected candidate IDs, and primitive-level
+dependency closure names. When dependency closure is primitive-name based, the
+descriptor preserves that conservative primitive-level closure rather than
+choosing dependency implementations.
+
+Artifact plans must:
+
+- Reject unknown requested backend IDs.
+- Reject duplicate logical target paths.
+- Sort artifact descriptors deterministically.
+- Produce stable descriptor digest metadata for identical planning inputs.
+
 ## Artifact Writing Behavior
 
 The artifact writer:

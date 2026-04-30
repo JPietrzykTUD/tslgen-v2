@@ -32,9 +32,17 @@ No. Packaging and syntax choices may use Python 3.14 as the baseline. Implementa
 
 ## OQ-002: Should Backend Manifests Remain YAML?
 
+Status: Answered
+
 Why it matters:
 
 Legacy evidence stores backend behavior in YAML under `frozen/generator_specs`. The redesign can preserve YAML as a data format or move manifests into TSL/Python.
+
+Decision:
+
+Keep YAML as a supported manifest interchange format at the I/O boundary, but
+do not make YAML structures part of downstream architecture. Backend planning
+consumes typed `BackendManifest` and `BackendManifestSet` values.
 
 Possible answers:
 
@@ -44,13 +52,16 @@ Possible answers:
 
 Required evidence:
 
-- Who edits backend manifests.
-- Desired external stability.
-- Whether non-Python contributors need to add backend behavior.
+- Current C++/C17/Rust backend manifest fixtures exist under
+  `frozen/generator_specs/backend_*.yaml`.
+- Current TSL language and translation declarations expose backend IDs under
+  `tsldata/detail/lang/*.tsl`.
 
 Implementation blocked:
 
-No for early milestones. Backend manifest milestone is blocked.
+No. Milestone 10 supports YAML loading into typed manifests and can also derive
+a minimal manifest set from matching catalog `language` and `translation`
+entries when artifact specs are known.
 
 ## OQ-003: What Is The Explicit Policy For List-Backed Implementation Variants?
 
@@ -310,13 +321,26 @@ Validation strictness is partially blocked. Catalog can preserve extra fields no
 
 ## Follow-ups from Milestone 8 review
 
-- Define the authoritative source of known backend IDs before backend-manifest work.
-- Add focused tests for unknown backend diagnostics.
+- Addressed in Milestone 10: backend artifact planning treats
+  `BackendManifestSet` as the authoritative backend-ID source, with optional
+  minimal manifest derivation from matching catalog `language` and `translation`
+  entries.
+- Addressed in Milestone 10: artifact planning has focused unknown-backend
+  diagnostic tests.
 - Add focused tests for malformed or missing implementation body diagnostics.
 - Continue promoting implementation specs out of raw catalog values only as later stages require them.
 
 ## Follow-ups from Milestone 9 review
 
 - Add focused tests for malformed or incomplete dependency marker diagnostics.
-- Before dependency closure feeds artifact planning, decide whether closure should remain primitive-name based or become candidate-specific.
-- Document that current primitive-level closure conservatively unions dependencies across candidates of the same primitive, or refine it in a later integration slice.
+- Addressed in Milestone 10: artifact descriptors preserve the current
+  primitive-name closure and do not choose dependency implementations.
+- Addressed in Milestone 10: `behavioral-spec.md` documents the conservative
+  primitive-level closure boundary for artifact descriptors.
+
+## Follow-ups from Milestone 10 review
+
+- Clarify that skip-unchanged artifact writer behavior belongs to a later writer stage, not Milestone 10.
+- Add a later writer milestone/test for skip-unchanged behavior and real artifact digests.
+- Keep the actual writer boundary explicit when `io.artifacts` starts performing file writes.
+- Before Milestone 11, decide whether artifact planning should reject mismatches between backend-specific candidate selection and a different requested artifact backend.
