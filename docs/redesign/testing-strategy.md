@@ -40,12 +40,21 @@ tslgen/
       test_testgen_planning.py
       test_lowering.py
       test_reporting.py
+      test_cpp_naming.py
+      test_tsil_mini_lowering.py
+      test_cpp_body_rendering.py
+      test_testgen_rendering.py
+      test_backend_manifest_completeness.py
+      test_rust_declarations.py
+      test_dependency_reporting.py
     integration/
       test_pipeline_catalog.py
       test_pipeline_cpp_slice.py
       test_artifact_writer_pipeline.py
       test_cli.py
+      test_cli_report_write.py
       test_validation_baseline.py
+      test_corpus_hygiene.py
     regression/
       test_tsldata_parse.py
       test_signature_resolution_legacy_observed.py
@@ -74,6 +83,11 @@ Unit tests should cover:
 - Production test-source declaration normalization and planning.
 - Lowering request/result construction and unsupported-payload diagnostics.
 - Report rendering without filesystem side effects.
+- Backend-owned naming helpers and invalid-identifier diagnostics.
+- TSIL mini-lowering fixtures and unsupported-form diagnostics.
+- Body rendering helpers that consume lowered values.
+- Generated production test rendering helpers.
+- Backend manifest/language/translation consistency checks.
 
 Unit tests should not:
 
@@ -242,6 +256,26 @@ script or command is added, tests should assert:
 - Failures distinguish production regressions from intentionally unsupported
   sketches.
 
+## Post-Milestone-24 Regression Tests
+
+The next roadmap phase should add focused regression tests before broadening
+generation:
+
+- CLI combined report/write tests for `--coverage-report` with `--output-root`,
+  including repeated writes and `--no-skip-unchanged`.
+- C++ naming tests for function names, parameter names, invalid identifiers, and
+  golden declaration output.
+- TSIL mini-lowering tests with one supported tiny form and nearby unsupported
+  forms.
+- C++ body rendering tests proving bodies consume lowered data rather than raw
+  TSIL text.
+- Generated production test rendering golden tests over `TestSourcePlan` values.
+- Backend manifest/language/translation-map diagnostic tests.
+- Rust production-shaped declaration golden tests once that slice is selected.
+- Candidate-specific dependency report/API tests when those values are exposed.
+- Quarantine-retirement and corpus-hygiene tests only when those policies change
+  validation behavior.
+
 ## Validation Baseline Profile
 
 Milestone 21 establishes the local redesigned-code validation profile at
@@ -279,6 +313,8 @@ Integration tests should cover:
 - Candidate set to minimal backend artifact.
 - Rendered artifact set to write report using a temporary output root.
 - Test-source planning from selected catalog/test declarations.
+- Report printing and artifact writing in the same CLI run.
+- Lowered scalar fixture through C++ body rendering once Milestone 28 lands.
 - CLI with explicit flags and temp output.
 
 Integration tests should use temporary directories for writes and explicit CPU flags.
@@ -307,7 +343,10 @@ Determinism tests should assert:
 - Same artifact set writes identical write reports and digest maps.
 - Same production test-source request produces identical test artifact
   descriptors.
+- Same generated test-source rendering request produces identical content.
 - Same lowering input produces identical lowered results or diagnostics.
+- Same report/write CLI invocation produces identical stdout/stderr contract and
+  write-report effects.
 - Parallel-enabled stages produce identical outputs with one worker and multiple workers.
 
 ## Test Fixtures
@@ -360,6 +399,18 @@ Post-Milestone-15 milestones:
   executed.
 - Lowering boundary diagnostics before broad TSIL parsing.
 - Validation baseline coverage before claiming repository-wide checks.
+
+Post-Milestone-24 milestones:
+
+- CLI report/write interaction coverage before adding legacy compatibility
+  aliases.
+- C++ declaration naming and body golden coverage before expanding template
+  families.
+- TSIL mini-lowering coverage before any renderer consumes implementation
+  semantics.
+- Production test rendering coverage before compiler or runtime test execution.
+- Backend metadata consistency coverage before language/translation maps drive
+  broad rendering.
 
 ## Review Expectations
 

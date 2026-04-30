@@ -622,3 +622,49 @@ Consequences:
 - Default CLI behavior remains non-writing.
 - Report stdout is deterministic and does not imply report file generation.
 - Full legacy CLI compatibility and broader output UX remain deferred.
+
+## ADR-020: Post-Milestone-24 Phase Stabilizes Interfaces Before Broad Generation
+
+Status: Accepted
+
+Context:
+
+Milestones 1 through 24 establish a clean pipeline, writer boundary, reporting
+facade, test-source planning, typed-opaque lowering, candidate-specific
+dependency closure, implementation-spec promotion, validation quarantine, and
+one narrow C++ declaration slice. The remaining work includes real lowering,
+body rendering, generated tests, Rust production-shaped output, backend metadata
+completeness, and cleanup of exploratory sketches.
+
+Considered alternatives:
+
+- Start full C++ code generation immediately.
+- Start full TSIL parsing before any further rendering work.
+- Stabilize the accepted CLI/report/write contract, expand declarations and
+  naming, then add one mini-lowering and one body-rendering slice.
+
+Decision:
+
+The next roadmap phase proceeds in small reviewable slices: first lock down
+combined CLI report/write behavior, then expand C++ declarations and naming,
+then introduce one TSIL mini-lowering form, then render one C++ scalar body from
+lowered data. Production test rendering, backend manifest/language-map
+completeness, Rust declaration rendering, dependency reporting, exploratory-code
+retirement, and corpus/validation hygiene follow as separate milestones.
+
+Rationale:
+
+Broad generation would force unresolved naming, lowering, test rendering,
+backend metadata, API/reporting, and cleanup questions into one change. The
+chosen sequence protects accepted user-facing behavior first, then grows
+semantic generation only where the data model is ready.
+
+Consequences:
+
+- Milestone 25 is the recommended next executor milestone.
+- C++ body rendering is blocked on a documented naming contract and a
+  mini-lowered TSIL form.
+- Rust production-shaped rendering remains first-class but follows the backend
+  metadata and naming lessons from C++.
+- Legacy CLI compatibility and full report/documentation parity remain deferred
+  until the narrower CLI and report contracts are stable.

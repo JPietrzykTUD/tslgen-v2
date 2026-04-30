@@ -1180,9 +1180,698 @@ Dependencies on prior milestones:
 - Milestone 13 CLI/API integration.
 - Milestones 16, 17, 18, and 23 as applicable.
 
+## Milestone 25: CLI Report/Write Interaction Regression
+
+Goal:
+
+Lock down the accepted Milestone 24 CLI behavior when coverage-report output and
+artifact writing are requested together.
+
+Scope:
+
+- Add regression coverage for `--coverage-report json|html` combined with
+  `--output-root`.
+- Include `--no-skip-unchanged` and existing skip-unchanged behavior in the
+  covered matrix.
+- Document stdout/stderr behavior when both report printing and artifact writing
+  occur.
+- Verify that report printing remains pure and artifact writing still uses the
+  writer boundary.
+
+Out of scope:
+
+- New CLI flags.
+- Legacy CLI compatibility aliases.
+- Writing coverage report artifacts automatically.
+- Changing backend rendering output.
+
+Inputs:
+
+- Milestone 24 CLI/API facade.
+- Artifact writer from Milestone 16.
+- HTML/JSON report renderers from Milestones 15 and 23.
+- Existing C++ scalar declaration artifact from Milestone 22.
+
+Outputs:
+
+- Tests and documentation that define the combined report/write CLI contract.
+- Clear behavior for whether stdout contains report content, write-report lines,
+  or both.
+- Regression coverage for `--no-skip-unchanged` causing a rewrite instead of a
+  skip when output content already exists.
+
+Validation criteria:
+
+- Combined report/write CLI runs are deterministic.
+- Report output is not interleaved with human diagnostics.
+- Files are written only under `--output-root`.
+- `--dry-run` and `--no-skip-unchanged` remain invalid without `--output-root`.
+
+Tests required:
+
+- CLI integration test for `--coverage-report json --output-root`.
+- CLI integration test for `--coverage-report html --output-root`.
+- CLI integration test for repeated writes with and without
+  `--no-skip-unchanged`.
+- Assertion that write diagnostics still go to stderr and report output remains
+  parseable on stdout.
+
+Documentation updates:
+
+- Update `docs/redesign/behavioral-spec.md` with the combined CLI contract.
+- Update `docs/redesign/open-questions.md` to close or narrow the Milestone 24
+  follow-up.
+
+Review risks:
+
+- Accidentally making stdout both machine-readable report data and write-report
+  text in the same mode.
+- Bypassing `io.artifact_writer` for report/write combinations.
+- Expanding CLI scope into legacy compatibility too early.
+
+Dependencies on prior milestones:
+
+- Milestones 16, 23, and 24.
+
+## Milestone 26: C++ Declaration Slice Expansion And Naming Contract
+
+Goal:
+
+Expand the accepted C++ declaration renderer by one small signature/type slice
+and make the function and parameter naming contract explicit.
+
+Scope:
+
+- Document the C++ function naming rule for production declarations.
+- Document the parameter naming rule and invalid-identifier diagnostics.
+- Add one additional supported declaration slice, such as another scalar type
+  for `binary` or one similarly simple scalar signature.
+- Keep declarations body-free; emitted declarations must not imply TSIL lowering.
+
+Out of scope:
+
+- Function body rendering.
+- SIMD vector type mapping.
+- Wrapper generation.
+- Broad template coverage.
+- Rust production-shaped output.
+
+Inputs:
+
+- C++ declaration planner/renderer from Milestone 22.
+- Typed candidate and implementation spec metadata from Milestone 20.
+- Golden harness from Milestone 12.
+
+Outputs:
+
+- Updated C++ declaration planning policy.
+- Golden C++ artifact showing the added declaration slice.
+- Diagnostics for unsupported or invalid declaration names.
+
+Validation criteria:
+
+- Declaration output is deterministic and golden-tested.
+- Unsupported candidates remain diagnostics, not silent omissions.
+- Naming rules are documented before more generated signatures rely on them.
+- Renderer still consumes typed candidates, not parser trees or raw catalog
+  dictionaries.
+
+Tests required:
+
+- Unit tests for C++ function-name and parameter-name generation.
+- Invalid identifier diagnostic tests.
+- Golden output for the expanded declaration slice.
+- Regression test proving the original scalar `binary si32` slice remains
+  stable.
+
+Documentation updates:
+
+- Update `docs/redesign/behavioral-spec.md` with the naming contract.
+- Update `docs/redesign/open-questions.md` for C++ naming/output compatibility.
+- Update `docs/redesign/testing-strategy.md` for C++ naming golden coverage.
+
+Review risks:
+
+- Freezing a naming rule without enough evidence.
+- Treating declaration expansion as permission to render implementation bodies.
+- Introducing backend-specific naming into generic pipeline code.
+
+Dependencies on prior milestones:
+
+- Milestones 20, 22, and 24.
+
+## Milestone 27: TSIL Mini-Lowering Strategy Slice
+
+Goal:
+
+Move from typed-opaque lowering to one tiny, safe TSIL lowering form, or record a
+blocking TSIL grammar decision if no safe subset can be justified.
+
+Scope:
+
+- Select one minimal TSIL form from repository evidence.
+- Add a small TSIL AST or parsed-operation model only for that form.
+- Preserve typed-opaque diagnostics for unsupported TSIL.
+- Keep generation-time condition markers represented but do not broaden
+  expression evaluation beyond the selected subset.
+- Document how the mini-lowering slice will grow or why it remains blocked.
+
+Out of scope:
+
+- Full TSIL grammar.
+- Loop lowering.
+- Full expression/type system.
+- Backend translation-map evaluation beyond the chosen tiny form.
+- C++ or Rust body rendering.
+
+Inputs:
+
+- Typed-opaque lowering boundary from Milestone 18.
+- Implementation specs from Milestone 20.
+- Current TSIL payload examples from `tsldata/`.
+- Legacy TSIL grammar only as evidence.
+
+Outputs:
+
+- A minimal lowered representation for the selected TSIL form, or a documented
+  blocker with diagnostics.
+- Tests proving unsupported TSIL remains explicit.
+- Updated TSIL/lowering decision notes.
+
+Validation criteria:
+
+- Lowering remains pure and deterministic.
+- Lowered values are typed and do not expose parser-private structures.
+- Unsupported TSIL cannot be rendered as production code accidentally.
+- The selected subset is small enough to review independently.
+
+Tests required:
+
+- Unit tests for parsing/lowering the selected TSIL form.
+- Diagnostic tests for malformed and unsupported nearby forms.
+- Determinism tests for lowering order.
+- Regression tests for existing typed-opaque unsupported diagnostics.
+
+Documentation updates:
+
+- Update `docs/redesign/behavioral-spec.md`, `pipeline-design.md`, and
+  `domain-model.md` with the mini-lowering shape.
+- Update `docs/redesign/design-decisions.md` with the TSIL strategy refinement.
+- Update `docs/redesign/open-questions.md` to narrow the long-term TSIL
+  question.
+
+Review risks:
+
+- Letting a mini-parser become an ad hoc string-rewrite system.
+- Overfitting to one fixture in a way that blocks real TSIL later.
+- Evaluating generation-time conditions in renderers instead of lowering.
+
+Dependencies on prior milestones:
+
+- Milestones 18 and 20.
+
+## Milestone 28: C++ Scalar Body Rendering Slice
+
+Goal:
+
+Render one tiny C++ function body from the accepted mini-lowered TSIL form.
+
+Scope:
+
+- Consume the lowered result from Milestone 27 for one scalar declaration slice.
+- Emit a production-shaped inline function body for the selected C++ primitive
+  class.
+- Keep unsupported candidates as diagnostics.
+- Keep summary metadata if it is still useful, but do not let it drive body
+  semantics.
+
+Out of scope:
+
+- SIMD intrinsic rendering.
+- Wrapper generation.
+- Full translation-map support.
+- Rust body rendering.
+- Production test execution.
+
+Inputs:
+
+- C++ naming/declaration contract from Milestone 26.
+- Mini-lowered TSIL result from Milestone 27.
+- Backend manifest and artifact model.
+
+Outputs:
+
+- One deterministic C++ artifact with a real body for the supported slice.
+- Golden output for the body-rendering slice.
+- Diagnostics for candidates whose lowered form is unavailable or unsupported.
+
+Validation criteria:
+
+- Body rendering depends on lowered data, not raw TSIL text.
+- Function declarations and definitions follow the documented naming contract.
+- Unsupported candidates do not produce misleading stub bodies.
+- Generated text is deterministic.
+
+Tests required:
+
+- Unit tests for C++ body rendering helpers.
+- Golden test for the body-rendered artifact.
+- Diagnostic tests for missing lowered body and unsupported lowered operation.
+- Integration test from source fixture through lowering and rendering.
+
+Documentation updates:
+
+- Update `docs/redesign/behavioral-spec.md` with the supported C++ body slice.
+- Update `docs/redesign/pipeline-design.md` if Stage 8 to Stage 10 data changes.
+- Update `docs/redesign/open-questions.md` for remaining body-rendering gaps.
+
+Review risks:
+
+- Rendering bodies by string-splicing raw TSIL.
+- Expanding from one scalar case into broad code generation.
+- Hiding lowering failures behind empty or placeholder implementations.
+
+Dependencies on prior milestones:
+
+- Milestones 22, 26, and 27.
+
+## Milestone 29: Production Test Rendering Slice
+
+Goal:
+
+Render one narrow production test source artifact from the accepted
+test-source planning metadata without compiling or running it.
+
+Scope:
+
+- Choose one backend, preferably matching the current C++ scalar rendering
+  slice.
+- Render one deterministic test source artifact from planned test cases.
+- Include enough metadata to trace test cases to primitive, candidate, type, and
+  expected value.
+- Route any file writes through the artifact writer only in integration tests.
+
+Out of scope:
+
+- Compiler invocation.
+- Runtime test execution.
+- Full generated test framework parity.
+- Lane resizing, runtime-lane, or mask-manifest policy beyond the selected
+  fixture.
+- Rust test rendering.
+
+Inputs:
+
+- Production test-source planning from Milestone 17.
+- Golden harness from Milestone 12.
+- Artifact writer from Milestone 16.
+- C++ rendering/naming context from Milestones 26 and 28, if the test references
+  generated functions.
+
+Outputs:
+
+- A deterministic in-memory test artifact for one supported planned-test slice.
+- Golden test source output.
+- Diagnostics for planned test cases that cannot be rendered.
+
+Validation criteria:
+
+- Test rendering consumes `TestSourcePlan` or equivalent typed planning values.
+- Test rendering does not invoke compilers or inspect host hardware.
+- Unsupported test declarations are reported explicitly.
+- Golden output is small and reviewable.
+
+Tests required:
+
+- Unit tests for test rendering helpers.
+- Golden test for the produced test artifact.
+- Diagnostic tests for unsupported planned test cases.
+- Optional integration test that writes the test artifact through the writer.
+
+Documentation updates:
+
+- Update `docs/redesign/behavioral-spec.md` and `testing-strategy.md` with the
+  supported test rendering slice.
+- Update `docs/redesign/open-questions.md` for remaining generated-test policy
+  gaps.
+
+Review risks:
+
+- Confusing generated tests with repository unit tests.
+- Starting compile/run orchestration too early.
+- Recreating legacy test framework structure instead of supporting observable
+  test-source behavior.
+
+Dependencies on prior milestones:
+
+- Milestones 12, 16, 17, and 26.
+
+## Milestone 30: Backend Manifest, Language Map, And Translation Boundary Pass
+
+Goal:
+
+Tighten backend manifest completeness and clarify how language type maps and
+translation maps enter lowering and rendering.
+
+Scope:
+
+- Validate known backend IDs against supplied manifests and catalog language /
+  translation declarations.
+- Decide how much of `language` and `translation` catalog data is promoted into
+  typed backend planning models now.
+- Remove or quarantine accidental default-backend behavior that conflicts with
+  the active C++/Rust first-class policy.
+- Add diagnostics for missing language maps, translation maps, artifact specs,
+  or unsupported backend IDs.
+
+Out of scope:
+
+- Full translation-map evaluation.
+- New backend support.
+- C17 implementation.
+- Broad template rendering.
+
+Inputs:
+
+- Backend manifest models from Milestone 10.
+- Catalog language and translation entries from current TSL data.
+- Lowering strategy from Milestone 27.
+- C++/Rust first-class backend decision.
+
+Outputs:
+
+- Clear backend manifest and language/translation-map validation policy.
+- Typed models or documented deferral for language/translation data consumed by
+  later lowering/rendering slices.
+- Regression tests for missing or inconsistent backend metadata.
+
+Validation criteria:
+
+- C++ and Rust remain the active first-class backends.
+- C17 evidence does not become a current implementation target accidentally.
+- Backend completeness diagnostics are deterministic and actionable.
+- Generic pipeline code does not grow backend-specific conditional sprawl.
+
+Tests required:
+
+- Manifest/catalog consistency tests.
+- Missing language-map and missing translation-map diagnostic tests.
+- Known-backend-ID tests for C++ and Rust.
+- Regression test proving unsupported backend IDs fail before rendering.
+
+Documentation updates:
+
+- Update `docs/redesign/target-architecture.md` and `pipeline-design.md` for the
+  backend metadata boundary.
+- Update `docs/redesign/open-questions.md` around backend completeness and C17
+  deferral.
+- Update `docs/redesign/design-decisions.md` if default manifest derivation
+  policy changes.
+
+Review risks:
+
+- Reintroducing C17 as an active backend by accident.
+- Turning YAML or raw TSL maps into downstream architecture.
+- Blocking useful C++/Rust slices on full backend completeness.
+
+Dependencies on prior milestones:
+
+- Milestones 10, 18, 22, and 27.
+
+## Milestone 31: Rust Declaration Rendering Slice
+
+Goal:
+
+Add the first production-shaped Rust declaration/signature slice without Rust
+body lowering.
+
+Scope:
+
+- Select a Rust declaration or trait-function signature slice equivalent in
+  scale to the accepted C++ declaration slice.
+- Define Rust naming and parameter rules for that slice.
+- Keep TSIL payloads opaque and reject unsupported candidates with diagnostics.
+- Produce deterministic Rust golden output.
+
+Out of scope:
+
+- Rust function bodies.
+- Cargo integration.
+- Rust generated tests.
+- Full Rust wrapper/trait parity.
+- C++ renderer changes except shared naming lessons if already documented.
+
+Inputs:
+
+- Rust summary backend from Milestone 14.
+- Backend manifest/language boundary from Milestone 30, if accepted.
+- C++ naming-contract lessons from Milestone 26.
+- Implementation specs from Milestone 20.
+
+Outputs:
+
+- One Rust production-shaped declaration/signature slice.
+- Golden Rust output.
+- Diagnostics for unsupported Rust rendering inputs.
+
+Validation criteria:
+
+- Rust renderer remains behind the backend protocol.
+- Rust output does not claim lowered bodies exist.
+- The C++ renderer is not changed except for shared infrastructure that is
+  justified and tested.
+- Output is deterministic and golden-tested.
+
+Tests required:
+
+- Unit tests for Rust naming/signature helpers.
+- Golden test for the Rust declaration artifact.
+- Backend mismatch and unsupported-slice diagnostic tests.
+- Regression test for the original Rust summary output if it remains present.
+
+Documentation updates:
+
+- Update `docs/redesign/behavioral-spec.md` with the Rust declaration slice.
+- Update `docs/redesign/open-questions.md` for remaining Rust rendering gaps.
+- Update `docs/redesign/testing-strategy.md` for Rust golden expectations.
+
+Review risks:
+
+- Copying C++ assumptions into Rust where language semantics differ.
+- Starting Rust body rendering before lowering supports it.
+- Introducing shared renderer abstractions too early.
+
+Dependencies on prior milestones:
+
+- Milestones 14, 20, 26, and 30.
+
+## Milestone 32: Candidate Dependency Reporting And API Integration
+
+Goal:
+
+Expose candidate-specific dependency closure through reports and stable API
+inspection without changing dependency semantics.
+
+Scope:
+
+- Add report fields for candidate-specific dependency edges, fallbacks, and
+  unresolved issues where accepted data already exists.
+- Expose candidate dependency data through `PipelineResult` or public helpers if
+  the current result shape hides it.
+- Keep primitive-name dependency closure visible as the stable broad model.
+- Preserve deterministic JSON/HTML report ordering.
+
+Out of scope:
+
+- New dependency extraction semantics.
+- TSIL call-graph parsing.
+- Backend render-job dependency scheduling.
+- Changing selection behavior.
+
+Inputs:
+
+- Candidate-specific dependency closure from Milestone 19.
+- Reporting model from Milestones 15 and 23.
+- Public API facade from Milestone 24.
+
+Outputs:
+
+- Reports and/or API helpers that make candidate-specific dependency state
+  inspectable.
+- Golden or snapshot coverage for report serialization changes.
+- Documentation of remaining dependency integration gaps.
+
+Validation criteria:
+
+- Reports remain descriptive and do not re-run dependency analysis.
+- Candidate-specific unresolved issues remain visible instead of disappearing
+  behind primitive-level fallbacks.
+- JSON and HTML output remain deterministic.
+- Public API exposes stable values, not internal mutable structures.
+
+Tests required:
+
+- Unit tests for dependency report rows or summary fields.
+- JSON and HTML serialization tests for candidate-specific dependency data.
+- API tests for accessing the accepted dependency result.
+- Regression tests for primitive-level dependency coverage fields.
+
+Documentation updates:
+
+- Update `docs/redesign/behavioral-spec.md`, `domain-model.md`, and
+  `target-architecture.md` if result/report models change.
+- Update `docs/redesign/open-questions.md` to close or narrow dependency
+  reporting questions.
+
+Review risks:
+
+- Making report generation perform analysis.
+- Freezing unstable internal dependency classes as public API.
+- Hiding fallback primitive dependencies once candidate-specific data exists.
+
+Dependencies on prior milestones:
+
+- Milestones 19, 23, and 24.
+
+## Milestone 33: Exploratory-Code Retirement Plan
+
+Goal:
+
+Decide which quarantined exploratory code should be deleted, migrated into the
+accepted architecture, or kept quarantined with a specific future purpose.
+
+Scope:
+
+- Inventory quarantined paths from the validation profile.
+- Classify each path as delete, migrate, keep-quarantined, or convert to
+  evidence-only documentation.
+- For migrate candidates, name the architectural boundary they would enter and
+  the tests required.
+- Do not perform large deletions or migrations unless a tiny, separately
+  reviewable cleanup is explicitly in scope.
+
+Out of scope:
+
+- Broad refactoring of quarantined sketches.
+- Silent deletion of behavior evidence.
+- Changing production pipeline behavior.
+- Replacing the validation profile wholesale.
+
+Inputs:
+
+- Quarantine list from Milestone 21.
+- Current validation profile.
+- Accepted target architecture.
+
+Outputs:
+
+- A documented retirement plan for quarantined paths.
+- Updated open questions for any path that cannot be classified.
+- Optional tiny cleanup only if it is clearly documentation-only or test-only.
+
+Validation criteria:
+
+- Production code still does not import quarantined paths.
+- Classification is evidence-based, not a legacy migration map.
+- Future executors can pick one cleanup or migration slice without guessing.
+
+Tests required:
+
+- Import-boundary regression tests if quarantine markers change.
+- Validation-profile smoke test if the accepted surface changes.
+- No tests are required for a documentation-only retirement plan beyond
+  standard doc review.
+
+Documentation updates:
+
+- Update `docs/redesign/target-architecture.md` exploratory-code quarantine
+  section.
+- Update `docs/redesign/open-questions.md` with any unresolved migration
+  blockers.
+- Update `docs/redesign/design-decisions.md` if deletion or migration policy is
+  accepted.
+
+Review risks:
+
+- Turning the plan into a legacy-to-new module map.
+- Deleting useful evidence before replacement behavior is specified.
+- Keeping broken sketches forever without an explicit reason.
+
+Dependencies on prior milestones:
+
+- Milestone 21.
+
+## Milestone 34: Validation Profile Expansion And Corpus Hygiene
+
+Goal:
+
+Expand validation policy around accepted code, generated artifacts, and the
+current `tsldata/` corpus without treating corpus churn as implementation code.
+
+Scope:
+
+- Decide how dirty `tsldata/` changes are reviewed, normalized, and protected by
+  tests.
+- Add or document a validation mode that can include selected corpus checks
+  without linting TSL data as Python.
+- Decide whether generated cache files, local pycache files, and generated
+  artifacts need stronger ignore or cleanup policy.
+- Keep validation host-independent and deterministic.
+
+Out of scope:
+
+- Reformatting the entire TSL corpus.
+- Editing generated outputs without a generator milestone.
+- Broad repository cleanup unrelated to accepted validation.
+- Network-dependent CI setup.
+
+Inputs:
+
+- Milestone 21 validation profile.
+- Current dirty-worktree observations around `tsldata/`.
+- Parser/current-corpus tests from earlier milestones.
+- Artifact writer behavior from Milestone 16.
+
+Outputs:
+
+- Documented corpus hygiene policy for future milestones.
+- Optional validation-profile expansion for selected corpus checks.
+- Clear guidance on generated/cache file handling.
+
+Validation criteria:
+
+- Validation remains reproducible in the dev container.
+- Corpus checks detect parser/semantic regressions without producing output
+  churn.
+- Future agents know whether `tsldata/` edits are fixtures, source data, or
+  generated artifacts for review purposes.
+
+Tests required:
+
+- Validation-profile smoke test if the command surface changes.
+- Corpus regression tests for any newly protected TSL behavior.
+- No host hardware, compiler, or network dependence.
+
+Documentation updates:
+
+- Update `docs/redesign/testing-strategy.md` and
+  `docs/redesign/target-architecture.md` with corpus/validation policy.
+- Update `docs/redesign/open-questions.md` for remaining dirty-worktree or data
+  ownership questions.
+
+Review risks:
+
+- Treating broad dirty-worktree cleanup as part of a generator behavior slice.
+- Letting generated artifacts churn nondeterministically.
+- Making validation too broad to run reliably.
+
+Dependencies on prior milestones:
+
+- Milestone 21 and any accepted cleanup decisions from Milestone 33.
+
 ## Recommended Next Milestone
 
-Start with Milestone 16. The repository already has in-memory artifact
-descriptors and rendered summary artifacts, but no accepted filesystem
-side-effect boundary. A deterministic writer makes later report, test-source,
-and backend rendering slices reviewable without mixing rendering and file I/O.
+Start with Milestone 25. Milestone 24 exposed report printing and artifact
+writing through the CLI, and the most valuable next slice is a regression lock
+around their interaction before the roadmap moves into more semantic rendering
+work.

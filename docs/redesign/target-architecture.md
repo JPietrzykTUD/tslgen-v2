@@ -57,6 +57,7 @@ tslgen/
       requirements.py
     lowering/
       model.py
+      tsil_mini.py
       tsil_ast.py
       tsil_parser.py
       semantic_ir.py
@@ -67,10 +68,14 @@ tslgen/
       registry.py
       cpp/
         backend.py
+        bodies.py
+        declarations.py
+        naming.py
         planner.py
         renderer.py
       rust/
         backend.py
+        declarations.py
         planner.py
         renderer.py
     rendering/
@@ -80,9 +85,12 @@ tslgen/
     testgen/
       declarations.py
       planner.py
+      renderer.py
+      cpp.py
       artifacts.py
     reporting/
       coverage.py
+      dependencies.py
       artifacts.py
       html.py
     pipeline/
@@ -281,6 +289,8 @@ Responsibilities:
 
 - Accept selected implementation candidates through typed lowering requests.
 - Parse TSIL bodies when a supported subset has been chosen.
+- Keep any TSIL mini-parser behind a lowering-owned model that can grow toward a
+  full TSIL AST.
 - Represent unsupported or deferred implementation payloads explicitly.
 - Analyze primitive calls and dependencies when enough semantics are available.
 - Evaluate generation-time expressions such as `if<generation>(...)`.
@@ -306,6 +316,8 @@ Responsibilities:
 - Report required flags and artifact metadata.
 - Consume lowered implementation inputs for production-shaped output once the
   lowering boundary supports the selected slice.
+- Own backend-specific naming, parameter, and body-rendering policies for the
+  supported slice.
 
 Does not:
 
@@ -339,6 +351,7 @@ Responsibilities:
   backend capabilities.
 - Produce deterministic test artifact descriptors for selected primitives and
   candidates.
+- Render narrow generated test artifacts once a renderer slice is accepted.
 - Keep generated production test sources separate from the repository's unit and
   golden tests.
 
@@ -356,6 +369,8 @@ Responsibilities:
 
 - Summarize catalog, selection, candidate, dependency, artifact, and diagnostic
   coverage.
+- Summarize candidate-specific dependency closure when that data is exposed by
+  the accepted pipeline.
 - Produce deterministic structured report values.
 - Serialize report values to deterministic JSON.
 - Optionally render report artifacts, such as JSON, text, or HTML, without
@@ -418,6 +433,11 @@ facade. `tslgen.api.coverage_report(...)` derives a coverage report from a
 writing files; and `tslgen.api.write_artifacts(...)` delegates to
 `io.artifact_writer`.
 
+Future API additions after Milestone 24 should expose already-accepted values
+only. Milestone 32 may add candidate-specific dependency reporting helpers or
+result fields, but it must not make report generation perform dependency
+analysis.
+
 ### CLI
 
 The CLI should convert user options into `PipelineConfig`, run the pipeline, print diagnostics, write artifacts when requested, and exit with a process code.
@@ -429,6 +449,10 @@ Milestone 24 CLI options expose only already-accepted capabilities:
 `--output-root` writes already-rendered artifacts through the artifact writer,
 and `--dry-run` / `--no-skip-unchanged` refine that explicit write request.
 Full legacy CLI flag parity and broader output-mode UX remain deferred.
+
+Milestone 25 must lock down the combined report/write contract before new CLI
+surface is added. In particular, report stdout must remain parseable when
+`--coverage-report` is combined with `--output-root`.
 
 ## Private Implementation Details
 
@@ -456,6 +480,8 @@ The following should remain private or replaceable:
 | New artifact type | Extend artifact model and writer policy explicitly. |
 | New generated test kind | Add test declaration model, test plan descriptor, renderer, and tests. |
 | New report format | Add pure report renderer and route its artifact through the writer. |
+| New backend naming policy | Add backend-owned naming helper, diagnostics, and golden tests. |
+| New dependency report field | Add pure report model fields from accepted dependency results. |
 
 ## Pure Computation And Side Effects
 
@@ -514,6 +540,11 @@ baseline:
 Future cleanup may promote or remove quarantined paths, but doing so requires a
 milestone with tests and documentation. Quarantine must not be used to hide
 failures in accepted redesigned modules.
+
+Milestone 33 is responsible for deciding which quarantined paths should be
+deleted, migrated behind accepted boundaries, or kept quarantined. Milestone 34
+is responsible for broadening corpus and validation hygiene without treating
+`tsldata/` churn as incidental implementation cleanup.
 
 ## Sketch Assessment
 

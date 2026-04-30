@@ -253,6 +253,9 @@ Side effects:
 Milestone note:
 
 - A first implementation can use conservative dependency extraction for documented call syntax, but the architecture should lead toward TSIL parsing.
+- Milestone 32 may expose candidate-specific dependency closure through reports
+  and API helpers, but it must not change dependency semantics or re-run this
+  stage from reporting code.
 
 ## Stage 8: Lowering
 
@@ -297,6 +300,11 @@ typed lowering inputs, records the generation context where
 and emits structured unsupported diagnostics for semantic lowering. It does not
 produce backend-neutral statements for TSIL, apply translation maps, or render
 backend text.
+
+Milestone 27 may add one mini-lowered TSIL form. That slice should update this
+stage with the exact accepted input grammar, lowered representation, and
+unsupported diagnostics. Any later body renderer consumes this lowered output,
+not raw TSIL payload text.
 
 ## Stage 9: Backend Planning
 
@@ -344,6 +352,11 @@ test-source artifact descriptors. It is metadata-only: generated test source
 rendering, test artifact writing, compiler invocation, and test execution remain
 later stages.
 
+Milestone 30 tightens backend manifest, language-map, and translation-map
+validation before broader rendering depends on those values. Generic backend
+planning should receive typed backend metadata and must not consume YAML or raw
+catalog maps directly.
+
 ## Stage 10: Rendering
 
 Inputs:
@@ -371,6 +384,12 @@ Validation:
 Side effects:
 
 - None.
+
+Milestone 26 expands C++ declarations and documents naming. Milestone 28 may add
+one C++ scalar body-rendering path from mini-lowered TSIL. Milestone 29 may add
+one generated production test artifact. Milestone 31 may add one Rust
+production-shaped declaration/signature slice. Each of these rendering slices
+must stay backend-owned and must not perform selection, lowering, or writing.
 
 ## Stage 11: Artifact Writing
 
@@ -431,6 +450,8 @@ Generated files are produced only after rendering:
 - Rust source or test `.rs` files.
 - Optional CMake metadata such as required flags.
 - Optional coverage reports or manifests when that workflow is implemented.
+- Optional generated test-source artifacts once a test rendering slice is
+  accepted.
 
 No stage before rendering writes generated files.
 
@@ -442,7 +463,10 @@ class PipelineResult:
     diagnostics: tuple[Diagnostic, ...]
     catalog: Catalog | None
     selection: SelectionResult | None
+    dependency_closure: DependencyClosure | None
+    lowering_plan: LoweringPlan | None
     backend_plan: BackendPlan | None
+    test_source_plan: TestSourcePlan | None
     artifacts: ArtifactSet | None
     write_report: WriteReport | None
 ```
@@ -452,6 +476,9 @@ Rules:
 - If diagnostics contain errors before rendering, `artifacts` is `None`.
 - If no output root was requested, `write_report` is `None`.
 - CLI decides whether diagnostics are printed and which exit code is used.
+- Public result fields should expose only accepted stage outputs. Milestone 32
+  may add dependency-report helpers rather than expanding `PipelineResult` if
+  that is the cleaner public boundary.
 
 ## Deterministic Merge Points
 

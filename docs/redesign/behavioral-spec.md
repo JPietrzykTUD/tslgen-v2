@@ -270,6 +270,11 @@ the classified payload, but are not evaluated yet. Semantic lowering currently
 returns explicit unsupported diagnostics for non-empty candidate inputs instead
 of pretending opaque payload text is backend-neutral IR.
 
+Milestone 27 is the next lowering decision point. It may add one tiny
+mini-lowered TSIL form, but unsupported TSIL must remain explicit diagnostics.
+Any C++ body-rendering milestone must consume this lowered model rather than raw
+TSIL text.
+
 ## Rendering Behavior
 
 Rendering receives a backend plan and produces artifacts. Rendering must not perform selection, parse source files, read CPU flags, or write files.
@@ -298,6 +303,17 @@ TSIL payload text as generated C++ statements. Selected candidates outside this
 slice are rejected with `TSL-CPP-RENDER-DECLARATION-UNSUPPORTED` rather than
 silently omitted or rendered as misleading code.
 
+Milestone 26 must make C++ declaration naming contractual before the declaration
+slice expands. The current naming shape is `<emitted_primitive_name>_<type_tag>`
+for supported scalar declarations, and parameter names are derived from TSL
+primitive parameter names only when they are valid C++ identifiers. Later
+attribute, extension, overload, and wrapper naming must be documented before it
+becomes generated output.
+
+Milestone 28 is the first permitted C++ body-rendering milestone. It may render
+only a tiny scalar body whose semantics come from accepted lowered data. Raw
+opaque TSIL payload text must not be spliced into C++ bodies.
+
 The first Rust backend slice supports only the `rust` backend and `generated`
 artifact kind. It renders a deterministic Rust module-like summary artifact
 analogous to the C++ summary: selected primitive candidates, required flags,
@@ -305,6 +321,10 @@ target/source extensions, type tags, template names, and escaped opaque TSIL
 payload text. This slice does not lower TSIL, evaluate Rust translation maps,
 render full Rust templates, invoke Cargo, or produce final Rust SIMD
 implementation code.
+
+Milestone 31 may add the first Rust production-shaped declaration or signature
+slice. It must remain body-free until lowering supports Rust body semantics, and
+it must document Rust naming rules rather than copying C++ rules blindly.
 
 The next production-shaped backend rendering slice must wait until artifact
 writing, lowering, dependency semantics, and implementation spec promotion have
@@ -337,6 +357,11 @@ loaded at the I/O boundary, but downstream planning consumes typed
 the supplied `BackendManifestSet`; a minimal manifest set may be derived from
 catalog entries only when matching `language` and `translation` entries exist
 for the same backend ID.
+
+Milestone 30 must tighten this boundary before broad rendering expands. It
+should clarify which backend IDs are active, how catalog `language` and
+`translation` maps are validated against manifests, and how C17 evidence remains
+deferred unless a future decision reintroduces it.
 
 Artifact descriptors are content-free. They record logical output paths,
 artifact kind, backend/language IDs, selected candidate IDs, and primitive-level
@@ -429,6 +454,10 @@ Test rendering must be backend-specific but data-driven. Compiler invocation,
 runtime execution, and generated-test framework orchestration are separate
 future concerns.
 
+Milestone 29 may render one narrow production test source artifact from typed
+test-source planning values. It must not invoke compilers, inspect host
+hardware, or use repository unit-test helpers as production generator logic.
+
 ## CLI Behavior
 
 The CLI should support:
@@ -469,6 +498,13 @@ explicit `--output-root` is provided. `--dry-run` and `--no-skip-unchanged` are
 valid only with `--output-root`. Report printing remains pure; output writing
 continues to be routed through `io.artifact_writer`.
 
+Milestone 25 must lock down the combined `--coverage-report` and
+`--output-root` behavior. When report output is requested, stdout must remain
+machine-readable for that report format; write diagnostics must remain
+diagnostics, and artifact files must be written only through the writer
+boundary. Repeated runs with and without `--no-skip-unchanged` must have
+documented write-report behavior.
+
 ## Coverage And Reporting Behavior
 
 Coverage reports are descriptive summaries over accepted pipeline outputs. They
@@ -505,6 +541,10 @@ selection context, primitive coverage, backend coverage, diagnostics summary,
 and deferred-category sections. It does not re-run pipeline stages, write files,
 load external CSS or JavaScript, or claim full parity with legacy generated
 documentation.
+
+Milestone 32 may add candidate-specific dependency information to reports or API
+helpers. That reporting must consume existing dependency results and must not
+re-run dependency analysis or reinterpret TSIL.
 
 ## Determinism Requirements
 

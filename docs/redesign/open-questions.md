@@ -98,7 +98,8 @@ open until a predicate or priority policy is designed.
 
 ## OQ-004: How Much Byte-For-Byte Output Compatibility Is Required?
 
-Status: Narrowed for Milestone 22; open for broad backend rendering
+Status: Narrowed for Milestone 22; open for expanded declarations, body
+rendering, and broad backend rendering
 
 Why it matters:
 
@@ -118,9 +119,10 @@ Required evidence:
 
 Implementation blocked:
 
-Not for the Milestone 22 C++ scalar binary declaration slice. Broad backend
-rendering remains blocked until compatibility expectations are narrowed for each
-production-shaped output family.
+Not for the Milestone 22 C++ scalar binary declaration slice. Milestones 26 and
+28 must define golden compatibility for their expanded declaration/body slices.
+Broad backend rendering remains blocked until compatibility expectations are
+narrowed for each production-shaped output family.
 
 Resolution notes:
 
@@ -130,7 +132,8 @@ claim byte-for-byte compatibility with legacy generated headers.
 
 ## OQ-005: What Is The Long-Term TSIL Grammar And Semantics?
 
-Status: Resolved for the Milestone 18 first slice; open for long-term grammar
+Status: Resolved for the Milestone 18 first slice; open for Milestone 27 and
+long-term grammar
 
 Why it matters:
 
@@ -151,9 +154,10 @@ Required evidence:
 Implementation blocked:
 
 Milestone 18 selected an explicit typed-opaque lowering boundary with
-unsupported diagnostics. Full TSIL grammar and semantic lowering remain open for
-later lowering and production-rendering milestones; broad backend rendering must
-not claim TSIL has been lowered until that future parser/model exists.
+unsupported diagnostics. Milestone 27 is the next planned mini-lowering decision
+point. Full TSIL grammar and semantic lowering remain open for later lowering
+and production-rendering milestones; broad backend rendering must not claim TSIL
+has been lowered until that future parser/model exists.
 
 ## OQ-006: How Should Generic/Sized Extensions Be Represented?
 
@@ -232,6 +236,8 @@ Current resolution:
 - Milestone 24 adds explicit `--output-root`, `--dry-run`,
   `--no-skip-unchanged`, and `--coverage-report json|html` options for accepted
   writer and reporting capabilities.
+- Milestone 25 will lock down the combined report/write CLI contract before
+  broader output-mode UX or compatibility aliases are considered.
 - Full legacy CLI drop-in compatibility, compatibility aliases, and broader
   output-mode UX remain unresolved before replacing legacy workflows.
 
@@ -321,7 +327,7 @@ Not for early catalog construction. Stronger validation is blocked.
 
 ## OQ-012: What Is The Error Policy For Unknown Extra Fields?
 
-Status: Open - scheduled for Milestone 20
+Status: Narrowed in Milestone 20; broad strictness policy remains open
 
 Why it matters:
 
@@ -340,7 +346,9 @@ Required evidence:
 
 Implementation blocked:
 
-Validation strictness is partially blocked. Catalog can preserve extra fields now.
+Validation strictness is partially blocked. Catalog and implementation specs can
+preserve extra fields now; future milestones should type only fields needed by
+selection, lowering, rendering, test generation, or reporting.
 
 ## OQ-013: Should Artifact Writing Be A Separate Boundary From Rendering?
 
@@ -374,8 +382,9 @@ Current status:
 
 - Milestone 16 adds the dedicated writer boundary with dry-run,
   skip-unchanged, path-safety, and deterministic write-report behavior.
-- CLI compatibility and output-mode UX remain deferred to the later API/CLI
-  hardening milestone.
+- Milestone 24 exposes the writer through the API and CLI.
+- Combined report/write CLI UX is scheduled for regression lock-down in
+  Milestone 25.
 
 ## OQ-014: Should Reporting Be Exposed Through `tslgen.api`?
 
@@ -547,6 +556,289 @@ No for the selected Milestone 22 slice. Further production-shaped rendering is
 still blocked on TSIL lowering, broader type mapping, and output compatibility
 decisions.
 
+## OQ-019: What Is The CLI Contract When Reports And Writes Are Requested Together?
+
+Status: Open - scheduled for Milestone 25
+
+Why it matters:
+
+Milestone 24 added both `--coverage-report` and `--output-root`. Report output
+can be machine-readable stdout, while write reports are also currently printed
+to stdout when no report is requested. Combining both modes needs a stable
+contract before users rely on CLI output.
+
+Possible answers:
+
+- Reserve stdout for the requested report and suppress write-report lines.
+- Emit report to stdout and write-report lines to stderr.
+- Add an explicit machine-readable combined envelope.
+
+Required evidence:
+
+- Current Milestone 24 CLI behavior.
+- API/write-report structures from Milestone 16.
+- User and automation needs for report parsing.
+
+Implementation blocked:
+
+Milestone 25 is blocked on this decision. Backend rendering and lowering are not
+blocked.
+
+## OQ-020: What Is The C++ Function And Parameter Naming Contract?
+
+Status: Open - scheduled for Milestone 26
+
+Why it matters:
+
+Milestone 22 emits C++ scalar declarations. As declaration coverage expands,
+function names and parameter names become observable generated output and golden
+compatibility points.
+
+Possible answers:
+
+- Use `<emitted_primitive_name>_<type_tag>` with original TSL parameter names.
+- Introduce a backend-specific name mangling policy for attributes, extensions,
+  and overloads.
+- Defer complex cases and support only identifiers that are already valid C++.
+
+Required evidence:
+
+- Existing C++ declaration slice.
+- TSL primitive parameter names and overloaded primitive variants.
+- Expected wrapper/public API naming behavior.
+
+Implementation blocked:
+
+Milestone 26 is blocked until this is documented for the expanded declaration
+slice. Body rendering should not proceed before the naming contract is stable
+for its supported slice.
+
+## OQ-021: What Is The First Safe TSIL Mini-Lowering Subset?
+
+Status: Open - scheduled for Milestone 27
+
+Why it matters:
+
+The accepted lowering boundary is typed-opaque and intentionally returns
+unsupported diagnostics for semantic lowering. Real body rendering requires at
+least one lowered TSIL form, but broad TSIL parsing is too large for one
+milestone.
+
+Possible answers:
+
+- Parse and lower one expression/return-like TSIL fixture.
+- Parse only dependency/call expressions first.
+- Keep typed-opaque lowering and document a blocker if no safe subset is
+  justified.
+
+Required evidence:
+
+- TSIL payloads in current `tsldata/`.
+- Legacy TSIL grammar as behavior evidence.
+- Needs of the planned C++ scalar body slice.
+
+Implementation blocked:
+
+Milestone 27 is blocked on selecting a tiny subset or documenting why the
+subset is unsafe. Milestone 28 body rendering is blocked on the result.
+
+## OQ-022: What Is The First C++ Body Rendering Contract?
+
+Status: Open - scheduled for Milestone 28
+
+Why it matters:
+
+Declarations prove naming and artifact structure, but production code needs
+bodies. Rendering bodies before lowering exists would revive string-rewrite
+behavior that the redesign rejects.
+
+Possible answers:
+
+- Render one scalar body from the Milestone 27 mini-lowered TSIL form.
+- Defer all bodies until a broader TSIL expression model exists.
+- Render only stub bodies with explicit unsupported diagnostics.
+
+Required evidence:
+
+- Mini-lowering output from Milestone 27.
+- C++ declaration/naming contract from Milestone 26.
+- Golden output expectations for the selected scalar fixture.
+
+Implementation blocked:
+
+Milestone 28 is blocked on Milestones 26 and 27.
+
+## OQ-023: What Should The First Production Test Rendering Artifact Look Like?
+
+Status: Open - scheduled for Milestone 29
+
+Why it matters:
+
+Milestone 17 plans production test sources as metadata, but no generated test
+source text exists. The first rendering slice should prove the boundary without
+starting compiler or runtime orchestration.
+
+Possible answers:
+
+- Render a C++ metadata-heavy test source for the current scalar declaration/body
+  slice.
+- Render a backend-neutral test manifest artifact first.
+- Defer rendering until generated function bodies are stable.
+
+Required evidence:
+
+- Test-source planning metadata.
+- Selected backend rendering slice.
+- Legacy test behavior only as evidence for expected inputs/outputs.
+
+Implementation blocked:
+
+Milestone 29 is blocked on deciding a narrow artifact shape and supported test
+case fixture.
+
+## OQ-024: How Complete Must Backend Manifests, Language Maps, And Translation Maps Be Before Broader Rendering?
+
+Status: Open - scheduled for Milestone 30
+
+Why it matters:
+
+Backend manifests are typed, but language and translation catalog entries are
+still only partially connected to lowering and rendering. Current default
+manifest derivation also has to avoid accidentally reintroducing C17 as an
+active backend.
+
+Possible answers:
+
+- Validate manifest/backend IDs against catalog language and translation maps
+  before rendering.
+- Promote language and translation maps into typed backend planning models only
+  when a lowering slice consumes them.
+- Keep YAML manifests authoritative and treat TSL language/translation maps as
+  deferred catalog data.
+
+Required evidence:
+
+- `tsldata/detail/lang/types/types_cpp.tsl`,
+  `tsldata/detail/lang/types/types_rust.tsl`,
+  `tsldata/detail/lang/translate_cpp.tsl`, and
+  `tsldata/detail/lang/translate_rust.tsl`.
+- C++/Rust renderer needs after Milestones 27 and 28.
+- C17 deferral decision.
+
+Implementation blocked:
+
+Broader backend rendering and translation-map evaluation are blocked. Narrow
+declaration slices are not blocked.
+
+## OQ-025: What Is The First Rust Production-Shaped Rendering Slice?
+
+Status: Open - scheduled for Milestone 31
+
+Why it matters:
+
+Rust is first-class, but the accepted Rust backend still emits summary artifacts
+only. The first Rust production-shaped slice should validate the backend
+interface without duplicating C++ assumptions.
+
+Possible answers:
+
+- Render Rust function signatures for the same scalar primitive class as C++.
+- Render trait declarations first.
+- Defer Rust production-shaped output until C++ body rendering stabilizes.
+
+Required evidence:
+
+- Rust summary renderer.
+- Rust language/type map data.
+- C++ naming/declaration lessons.
+
+Implementation blocked:
+
+Milestone 31 is blocked on a selected Rust slice and any backend manifest policy
+needed from Milestone 30.
+
+## OQ-026: How Should Candidate-Specific Dependency Closure Appear In API And Reports?
+
+Status: Open - scheduled for Milestone 32
+
+Why it matters:
+
+Milestone 19 added candidate-specific dependency closure, but coverage reports
+and public API consumers still primarily see primitive-level dependency
+coverage. The extra precision should be inspectable without changing dependency
+semantics.
+
+Possible answers:
+
+- Add candidate dependency rows to coverage reports.
+- Add a public API helper for candidate dependency summaries.
+- Keep candidate dependency closure internal until backend scheduling needs it.
+
+Required evidence:
+
+- Current `DependencyClosure` result shape.
+- Reporting output from Milestones 15 and 23.
+- API facade from Milestone 24.
+
+Implementation blocked:
+
+Milestone 32 is blocked on choosing a stable report/API shape.
+
+## OQ-027: What Should Happen To Quarantined Exploratory Code?
+
+Status: Open - scheduled for Milestone 33
+
+Why it matters:
+
+The validation profile deliberately quarantines pre-redesign sketches. Leaving
+them indefinitely increases confusion, but deleting them without a plan can
+remove useful evidence or disrupt future work.
+
+Possible answers:
+
+- Delete paths that have no remaining evidence value.
+- Migrate small reusable ideas behind accepted boundaries.
+- Keep specific paths quarantined with documented reasons and future milestones.
+
+Required evidence:
+
+- Milestone 21 quarantine list.
+- Current import boundaries.
+- Any unique behavior evidence not already captured in docs or tests.
+
+Implementation blocked:
+
+No for semantic milestones. Broad repository validation expansion is blocked
+until this is planned.
+
+## OQ-028: What Is The Policy For `tsldata/` Changes And Dirty Corpus State?
+
+Status: Open - scheduled for Milestone 34
+
+Why it matters:
+
+`tsldata/` is both the source corpus and a fixture source for tests. The current
+worktree may contain broad corpus edits. Future agents need to know when TSL
+data changes are source changes, generated-output churn, or fixture updates.
+
+Possible answers:
+
+- Treat `tsldata/` as source data requiring focused behavioral review.
+- Treat selected corpus files as fixtures for current tests and defer broad
+  corpus normalization.
+- Add a separate generated-data workflow if any corpus files become generated.
+
+Required evidence:
+
+- Current dirty-worktree state.
+- Parser/current-corpus tests.
+- Authoring workflow for TSL data.
+
+Implementation blocked:
+
+Milestone 34 is blocked on this policy. Earlier semantic slices can proceed as
+long as they avoid unrelated corpus churn.
+
 ## Follow-ups from Milestone 2 review
 
 - Add focused tests for invalid UTF-8 and read failure diagnostics where practical.
@@ -643,19 +935,15 @@ decisions.
 ## Follow-ups from Milestone 15 review
 
 - Addressed by the post-Milestone-15 roadmap in `docs/redesign/implementation-roadmap.md`.
-- Reporting exposure through `tslgen.api` remains open and is scheduled for Milestone 24.
-- Artifact writing and skip-unchanged behavior are scheduled for Milestone 16.
-- Production test-source planning from TSL `tests` declarations is scheduled for Milestone 17.
-- Full lowering and TSIL strategy are scheduled for Milestone 18.
-- Candidate-specific dependency closure is scheduled for Milestone 19.
-- Implementation spec promotion is scheduled for Milestone 20.
-- Broad validation cleanup and exploratory-code quarantine are scheduled for Milestone 21.
-- Backend rendering expansion is scheduled for Milestone 22.
-- Legacy-style report and HTML output are scheduled for Milestone 23.
+- Addressed in Milestones 16 through 24: artifact writing, production
+  test-source planning, lowering boundary, candidate-specific dependency
+  closure, implementation spec promotion, validation quarantine, C++ declaration
+  rendering, HTML coverage artifacts, and API/CLI polish.
 
 ## Follow-up from Milestone 16 review
 
-- Keep API/CLI exposure of artifact writing deferred until its own milestone, preserving the dedicated writer boundary.
+- Addressed in Milestone 24: API/CLI exposure of artifact writing preserves the
+  dedicated writer boundary.
 
 ## Follow-up from Milestone 17 review
 
@@ -671,20 +959,27 @@ decisions.
 
 ## Follow-up from Milestone 19 review
 
-- When Milestone 20 promotes implementation specs, keep dependency reference attributes and body payload access behind typed spec objects instead of reaching deeper into raw implementation metadata.
+- Addressed in Milestone 20: dependency reference attributes and body payload
+  access are routed through typed implementation spec objects for accepted
+  downstream uses.
 
 ## Follow-up from Milestone 20 review
 
-- Carry the selector-aware current-corpus probe into Milestone 21’s validation baseline so scalar-only `blend` and related selector-aware implementation-spec behavior remain protected.
+- Addressed in Milestone 21: the selector-aware current-corpus probe is part of
+  the validation baseline.
 
 ## Follow-up from Milestone 22 review
 
-- When the C++ declaration slice expands, document the function naming and parameter naming contract explicitly in the behavioral spec.
+- Scheduled for Milestone 26: document the C++ function naming and parameter
+  naming contract as the declaration slice expands.
 
 ## Follow-up from Milestone 23 review
 
-- When reporting is exposed through API/CLI, keep HTML generation pure and route any writes through `io.artifact_writer`.
+- Addressed in Milestone 24: API/CLI reporting keeps HTML generation pure and
+  routes writes through `io.artifact_writer`.
 
 ## Follow-up from Milestone 24 review
 
-- Add a future CLI regression test for combining `--coverage-report` with `--output-root`, including `--no-skip-unchanged`, to lock down stdout and write-report expectations.
+- Scheduled for Milestone 25: add CLI regression coverage for combining
+  `--coverage-report` with `--output-root`, including
+  `--no-skip-unchanged`, to lock down stdout and write-report expectations.
