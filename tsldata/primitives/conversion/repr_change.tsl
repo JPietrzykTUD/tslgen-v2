@@ -8,10 +8,40 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
     override:
       tsil:
         [sse, sse_vl, avx2, avx2_vl, avx512] si32
-  generic_params:
-    ToExtension {kind simd_extension}
+  return_type:
+    extension: ToExtension
+  tests:
+    - {test_name "extract_i32_avx2_to_sse_low", extension "avx2", type "si32", lanes 8, to_extension "sse", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 0], expected [1, 2, 3, 4]}}
+    - {test_name "extract_i32_avx2_to_sse_high", extension "avx2", type "si32", lanes 8, to_extension "sse", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [5, 6, 7, 8]}}
+    - {test_name "extract_f64_avx512_to_avx2_low", extension "avx512", type "f64", lanes 8, to_extension "avx2", case {inputs [[1.0, 2.0, 3.0, 4.0, -1.0, -2.0, -3.0, -4.0], 0], expected [1.0, 2.0, 3.0, 4.0]}}
+    - {test_name "extract_f64_avx512_to_avx2_high", extension "avx512", type "f64", lanes 8, to_extension "avx2", case {inputs [[1.0, 2.0, 3.0, 4.0, -1.0, -2.0, -3.0, -4.0], 1], expected [-1.0, -2.0, -3.0, -4.0]}}
   impls:
     avx2:
+      ?i?:
+        requires [avx2]
+        ToExtension:
+          sse:
+            implementation:
+              tsil """
+                  emit_return(intrin<_mm256_extracti128_si256>(data, index));
+                """
+      f32:
+        requires [avx]
+        ToExtension:
+          sse:
+            implementation:
+              tsil """
+                  emit_return(intrin<_mm256_extractf128_ps>(data, index));
+                """
+      f64:
+        requires [avx]
+        ToExtension:
+          sse:
+            implementation:
+              tsil """
+                  emit_return(intrin<_mm256_extractf128_pd>(data, index));
+                """
+    avx2_vl:
       ?i?:
         requires [avx2]
         ToExtension:
@@ -115,26 +145,46 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
                   }
                   emit_return(call<primitive=from_array[OutVec]>(result));
                 """
-    [scalar, sse, sse_vl, avx2_vl, neon, sve]:
+    scalar:
       arith:
         requires:
           scalar []
+        ToExtension:
+          scalar:
+            implementation:
+              tsl """
+                  let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
+                  var<const_infer>(values, call<primitive=to_array[Vec]>(data));
+                  var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
+                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                  loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
+                    result[i] = values[start + i];
+                  }
+                  emit_return(call<primitive=from_array[OutVec]>(result));
+                """
+    [sse, sse_vl, avx2_vl, neon, sve]:
+      arith:
+        requires:
           sse [sse, sse2]
           sse_vl [avx512f, avx512vl, sse, sse2]
           avx2_vl [avx512f, avx512vl, avx]
           neon [neon]
           sve [sve]
-        implementation:
-          tsl """
-              let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
-              var<const_infer>(values, call<primitive=to_array[Vec]>(data));
-              var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-              var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
-              loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
-                result[i] = values[start + i];
-              }
-              emit_return(call<primitive=from_array[OutVec]>(result));
-            """
+        ToExtension:
+          where:
+            family same_as
+            width smaller_than
+            implementation:
+              tsl """
+                  let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
+                  var<const_infer>(values, call<primitive=to_array[Vec]>(data));
+                  var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
+                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                  loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
+                    result[i] = values[start + i];
+                  }
+                  emit_return(call<primitive=from_array[OutVec]>(result));
+                """
 prim<v:=(v,v,sImm)>[cast=reinterpret] insert(orig, data, index):
   brief_description "Inserts a smaller SIMD register with the same underlying base type into a larger SIMD register."
   operation ""
@@ -144,117 +194,123 @@ prim<v:=(v,v,sImm)>[cast=reinterpret] insert(orig, data, index):
     override:
       tsil:
         [sse, sse_vl, avx2, avx2_vl, avx512] si32
-  generic_params:
-    FromExtension {kind simd_extension}
+  return_type:
+    extension: ToExtension
+  tests:
+    - {test_name "insert_i32_sse_to_avx2_low", extension "sse", type "si32", lanes 4, to_extension "avx2", case {inputs [[100, 200, 300, 400, 500, 600, 700, 800], [1, 2, 3, 4], 0], expected [1, 2, 3, 4, 500, 600, 700, 800]}}
+    - {test_name "insert_i32_sse_to_avx2_high", extension "sse", type "si32", lanes 4, to_extension "avx2", case {inputs [[100, 200, 300, 400, 500, 600, 700, 800], [1, 2, 3, 4], 1], expected [100, 200, 300, 400, 1, 2, 3, 4]}}
+    - {test_name "insert_f64_avx2_to_avx512_low", extension "avx2", type "f64", lanes 4, to_extension "avx512", case {inputs [[10.0, 20.0, 30.0, 40.0, -10.0, -20.0, -30.0, -40.0], [1.0, 2.0, 3.0, 4.0], 0], expected [1.0, 2.0, 3.0, 4.0, -10.0, -20.0, -30.0, -40.0]}}
+    - {test_name "insert_f64_avx2_to_avx512_high", extension "avx2", type "f64", lanes 4, to_extension "avx512", case {inputs [[10.0, 20.0, 30.0, 40.0, -10.0, -20.0, -30.0, -40.0], [1.0, 2.0, 3.0, 4.0], 1], expected [10.0, 20.0, 30.0, 40.0, 1.0, 2.0, 3.0, 4.0]}}
   impls:
-    avx2:
+    sse:
       ?i?:
-        requires [avx2]
-        FromExtension:
-          sse:
+        ToExtension:
+          avx2:
+            requires [avx2]
             implementation:
               tsil """
                   emit_return(intrin<_mm256_inserti128_si256>(orig, data, index));
                 """
-      f32:
-        requires [avx]
-        FromExtension:
-          sse:
-            implementation:
-              tsil """
-                  emit_return(intrin<_mm256_insertf128_ps>(orig, data, index));
-                """
-      f64:
-        requires [avx]
-        FromExtension:
-          sse:
-            implementation:
-              tsil """
-                  emit_return(intrin<_mm256_insertf128_pd>(orig, data, index));
-                """
-    avx512:
-      ?i?:
-        requires [avx512f]
-        FromExtension:
-          avx2:
-            implementation:
-              tsil """
-                  emit_return(intrin<_mm512_inserti64x4>(orig, data, index));
-                """
-          sse:
+          avx512:
+            requires [avx512f]
             implementation:
               tsil """
                   emit_return(intrin<_mm512_inserti32x4>(orig, data, index));
                 """
       f32:
-        requires [avx512f]
-        FromExtension:
+        ToExtension:
           avx2:
-            requires [avx512dq]
+            requires [avx]
             implementation:
               tsil """
-                  emit_return(intrin<_mm512_insertf32x8>(orig, data, index));
+                  emit_return(intrin<_mm256_insertf128_ps>(orig, data, index));
                 """
-          sse:
+          avx512:
+            requires [avx512f]
             implementation:
               tsil """
                   emit_return(intrin<_mm512_insertf32x4>(orig, data, index));
                 """
       f64:
-        requires [avx512f]
-        FromExtension:
+        ToExtension:
           avx2:
+            requires [avx]
             implementation:
               tsil """
-                  emit_return(intrin<_mm512_insertf64x4>(orig, data, index));
+                  emit_return(intrin<_mm256_insertf128_pd>(orig, data, index));
                 """
-          sse:
-            requires [avx512dq]
+          avx512:
+            requires [avx512f, avx512dq]
             implementation:
               tsil """
                   emit_return(intrin<_mm512_insertf64x2>(orig, data, index));
                 """
+    avx2:
+      ?i?:
+        ToExtension:
+          avx512:
+            requires [avx512f]
+            implementation:
+              tsil """
+                  emit_return(intrin<_mm512_inserti64x4>(orig, data, index));
+                """
+      f32:
+        ToExtension:
+          avx512:
+            requires [avx512dq]
+            implementation:
+              tsil """
+                  emit_return(intrin<_mm512_insertf32x8>(orig, data, index));
+                """
+      f64:
+        ToExtension:
+          avx512:
+            requires [avx512f]
+            implementation:
+              tsil """
+                  emit_return(intrin<_mm512_insertf64x4>(orig, data, index));
+                """
     generic:
       arith:
         requires []
-        FromExtension:
+        ToExtension:
           where:
             family same_as
-            width smaller_than
+            width larger_than
             implementation:
               tsl """
-                  let<type>(InVec, type<generation>(vector::as_extension(FromExtension)));
-                  var<infer>(result, call<primitive=to_array[Vec]>(orig));
-                  var<const_infer>(chunk, call<primitive=to_array[InVec]>(data));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(InVec)));
-                  loop<range>(i, 0, value<generation>(generic::length(InVec)), 1) {
+                  let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
+                  var<infer>(result, call<primitive=to_array[OutVec]>(orig));
+                  var<const_infer>(chunk, call<primitive=to_array[Vec]>(data));
+                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  loop<range>(i, 0, value<generation>(vector::length), 1) {
                     result[start + i] = chunk[i];
                   }
-                  emit_return(call<primitive=from_array[Vec]>(result));
+                  emit_return(call<primitive=from_array[OutVec]>(result));
                 """
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
-        FromExtension:
+        ToExtension:
           where:
             family same_as
-            width smaller_than
+            width larger_than
             implementation:
               tsl """
-                  let<type>(InVec, type<generation>(vector::as_extension(FromExtension)));
-                  var<infer>(result, call<primitive=to_array[Vec]>(orig));
-                  var<const_infer>(chunk, call<primitive=to_array[InVec]>(data));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(InVec)));
-                  loop<range>(i, 0, value<generation>(generic::length(InVec)), 1) {
+                  let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
+                  var<infer>(result, call<primitive=to_array[OutVec]>(orig));
+                  var<const_infer>(chunk, call<primitive=to_array[Vec]>(data));
+                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  loop<range>(i, 0, value<generation>(vector::length), 1) {
                     result[start + i] = chunk[i];
                   }
-                  emit_return(call<primitive=from_array[Vec]>(result));
+                  emit_return(call<primitive=from_array[OutVec]>(result));
                 """
 prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
   brief_description "Converts one chunk of a SIMD register to a same-width register with larger-base-type lanes."
   operation ""
-  generic_params:
-    ToType {kind simd_type}
+  return_type:
+    base: ToBase
   tests:
     - {test_name "convert_up_i8_to_i16_idx1", type "si8", lane_set "lanes_i8", lanes 32, to_type "si16", index 1, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31]], expected [16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31]}}
     - {test_name "convert_up_i8_to_i32_idx0", type "si8", lane_set "lanes_i8", lanes 32, to_type "si32", index 0, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
@@ -273,20 +329,20 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
     sse:
       ?i8:
         requires [sse4_1]
-        ToType:
+        ToBase:
           ?i16:
             implementation:
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin<_mm_unpackhi_epi64>(data, data)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<_mm_unpackhi_epi64>(data, data)));
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -302,20 +358,20 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<srli suffix=si128 immediate(1)=4>(data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=4>(data, 4)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<srli suffix=si128 immediate(1)=8>(data, 8)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=8>(data, 8)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<srli suffix=si128 immediate(1)=12>(data, 12)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=12>(data, 12)));
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -331,32 +387,32 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<srli suffix=si128 immediate(1)=2>(data, 2)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=2>(data, 2)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<srli suffix=si128 immediate(1)=4>(data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=4>(data, 4)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<srli suffix=si128 immediate(1)=6>(data, 6)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=6>(data, 6)));
                     }
                     4 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<srli suffix=si128 immediate(1)=8>(data, 8)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=8>(data, 8)));
                     }
                     5 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<srli suffix=si128 immediate(1)=10>(data, 10)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=10>(data, 10)));
                     }
                     6 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<srli suffix=si128 immediate(1)=12>(data, 12)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=12>(data, 12)));
                     }
                     7 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<srli suffix=si128 immediate(1)=14>(data, 14)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=14>(data, 14)));
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -369,20 +425,20 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
       ?i16:
         requires [sse4_1]
-        ToType:
+        ToBase:
           ?i32:
             implementation:
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin<_mm_unpackhi_epi64>(data, data)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<_mm_unpackhi_epi64>(data, data)));
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -398,20 +454,20 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<srli suffix=si128 immediate(1)=4>(data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=4>(data, 4)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<srli suffix=si128 immediate(1)=8>(data, 8)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=8>(data, 8)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<srli suffix=si128 immediate(1)=12>(data, 12)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=12>(data, 12)));
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -424,20 +480,20 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
       ?i32:
         requires [sse4_1]
-        ToType:
+        ToBase:
           ?i64:
             implementation:
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin<_mm_unpackhi_epi64>(data, data)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<_mm_unpackhi_epi64>(data, data)));
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -450,20 +506,20 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
       f32:
         requires [sse2]
-        ToType:
+        ToBase:
           f64:
             implementation:
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin<_mm_movehl_ps>(data, data)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<_mm_movehl_ps>(data, data)));
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -477,14 +533,14 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
     avx2:
       ?i8:
         requires [avx2]
-        ToType:
+        ToBase:
           ?i16:
             implementation:
               tsil """
-                  if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                    emit_return(intrin<_mm256_cvtepi8_epi16>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index)));
+                  if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi8_epi16>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index))));
                   } else {
-                    emit_return(intrin<_mm256_cvtepu8_epi16>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index)));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu8_epi16>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index))));
                   }
                 """
           ?i32:
@@ -492,36 +548,36 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(intrin<_mm256_cvtepi8_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0)));
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi8_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu8_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu8_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0))));
                       }
                     }
                     1 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(intrin<_mm256_cvtepi8_epi32>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8)));
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi8_epi32>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu8_epi32>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu8_epi32>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8))));
                       }
                     }
                     2 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(intrin<_mm256_cvtepi8_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1)));
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi8_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu8_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu8_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1))));
                       }
                     }
                     3 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(intrin<_mm256_cvtepi8_epi32>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8)));
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi8_epi32>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu8_epi32>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu8_epi32>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8))));
                       }
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -537,64 +593,64 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(intrin<_mm256_cvtepi8_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0)));
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu8_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0))));
                       }
                     }
                     1 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 4)));
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 4))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 4)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 4))));
                       }
                     }
                     2 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8)));
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8))));
                       }
                     }
                     3 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 12)));
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 12))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 12)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 12))));
                       }
                     }
                     4 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(intrin<_mm256_cvtepi8_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1)));
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu8_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1))));
                       }
                     }
                     5 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 4)));
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 4))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 4)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 4))));
                       }
                     }
                     6 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8)));
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8))));
                       }
                     }
                     7 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 12)));
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 12))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 12)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 12))));
                       }
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -607,14 +663,14 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
       ?i16:
         requires [avx2]
-        ToType:
+        ToBase:
           ?i32:
             implementation:
               tsil """
-                  if<compile>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                    emit_return(intrin<_mm256_cvtepi16_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index)));
+                  if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi16_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index))));
                   } else {
-                    emit_return(intrin<_mm256_cvtepu16_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index)));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu16_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index))));
                   }
                 """
           ?i64:
@@ -622,36 +678,36 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      if<compile>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                        emit_return(intrin<_mm256_cvtepi16_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0)));
+                      if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi16_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu16_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu16_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0))));
                       }
                     }
                     1 => {
-                      if<compile>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                        emit_return(intrin<_mm256_cvtepi16_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8)));
+                      if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi16_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu16_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu16_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8))));
                       }
                     }
                     2 => {
-                      if<compile>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                        emit_return(intrin<_mm256_cvtepi16_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1)));
+                      if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi16_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu16_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu16_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1))));
                       }
                     }
                     3 => {
-                      if<compile>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                        emit_return(intrin<_mm256_cvtepi16_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8)));
+                      if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi16_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8))));
                       } else {
-                        emit_return(intrin<_mm256_cvtepu16_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu16_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8))));
                       }
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -664,44 +720,44 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
       ?i32:
         requires [avx2]
-        ToType:
+        ToBase:
           ?i64:
             implementation:
               tsil """
-                  if<compile>(value<generation>(type::is_same(type<generation>(base::in), si32))) {
-                    emit_return(intrin<_mm256_cvtepi32_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index)));
+                  if<generation>(value<generation>(type::is_same(type<generation>(base::in), si32))) {
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepi32_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index))));
                   } else {
-                    emit_return(intrin<_mm256_cvtepu32_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index)));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtepu32_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index))));
                   }
                 """
       f32:
         requires [avx]
-        ToType:
+        ToBase:
           f64:
             implementation:
               tsil """
-                  emit_return(intrin<_mm256_cvtps_pd>(intrin_compose<extractf128 suffix=ps immediate(1)=index>(data, index)));
+                  emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm256_cvtps_pd>(intrin_compose<extractf128 suffix=ps immediate(1)=index>(data, index))));
                 """
     avx512:
       ?i8:
         requires [avx512f]
-        ToType:
+        ToBase:
           ?i16:
             implementation:
               tsil """
-                  if<compile>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                    emit_return(intrin<_mm512_cvtepi8_epi16>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index)));
+                  if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepi8_epi16>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index))));
                   } else {
-                    emit_return(intrin<_mm512_cvtepu8_epi16>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index)));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepu8_epi16>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index))));
                   }
                 """
           ?i32:
             implementation:
               tsil """
-                  if<compile>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                    emit_return(intrin<_mm512_cvtepi8_epi32>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=index>(data, index)));
+                  if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepi8_epi32>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=index>(data, index))));
                   } else {
-                    emit_return(intrin<_mm512_cvtepu8_epi32>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=index>(data, index)));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepu8_epi32>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=index>(data, index))));
                   }
                 """
           ?i64:
@@ -709,64 +765,64 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      if<compile>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(intrin<_mm512_cvtepi8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0)));
+                      if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0))));
                       } else {
-                        emit_return(intrin<_mm512_cvtepu8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0))));
                       }
                     }
                     1 => {
-                      if<compile>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0), 8)));
+                      if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0), 8))));
                       } else {
-                        emit_return(intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0), 8)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0), 8))));
                       }
                     }
                     2 => {
-                      if<compile>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(intrin<_mm512_cvtepi8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=1>(data, 1)));
+                      if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=1>(data, 1))));
                       } else {
-                        emit_return(intrin<_mm512_cvtepu8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=1>(data, 1)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=1>(data, 1))));
                       }
                     }
                     3 => {
-                      if<compile>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=1>(data, 1), 8)));
+                      if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=1>(data, 1), 8))));
                       } else {
-                        emit_return(intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=1>(data, 1), 8)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=1>(data, 1), 8))));
                       }
                     }
                     4 => {
-                      if<compile>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(intrin<_mm512_cvtepi8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=2>(data, 2)));
+                      if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=2>(data, 2))));
                       } else {
-                        emit_return(intrin<_mm512_cvtepu8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=2>(data, 2)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=2>(data, 2))));
                       }
                     }
                     5 => {
-                      if<compile>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=2>(data, 2), 8)));
+                      if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=2>(data, 2), 8))));
                       } else {
-                        emit_return(intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=2>(data, 2), 8)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=2>(data, 2), 8))));
                       }
                     }
                     6 => {
-                      if<compile>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(intrin<_mm512_cvtepi8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=3>(data, 3)));
+                      if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=3>(data, 3))));
                       } else {
-                        emit_return(intrin<_mm512_cvtepu8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=3>(data, 3)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=3>(data, 3))));
                       }
                     }
                     7 => {
-                      if<compile>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=3>(data, 3), 8)));
+                      if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=3>(data, 3), 8))));
                       } else {
-                        emit_return(intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=3>(data, 3), 8)));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=3>(data, 3), 8))));
                       }
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -779,62 +835,62 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
       ?i16:
         requires [avx512f, avx512dq]
-        ToType:
+        ToBase:
           ?i32:
             implementation:
               tsil """
-                  if<compile>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                    emit_return(intrin<_mm512_cvtepi16_epi32>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index)));
+                  if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepi16_epi32>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index))));
                   } else {
-                    emit_return(intrin<_mm512_cvtepu16_epi32>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index)));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepu16_epi32>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index))));
                   }
                 """
           ?i64:
             implementation:
               tsil """
-                  if<compile>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                    emit_return(intrin<_mm512_cvtepi16_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=index>(data, index)));
+                  if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepi16_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=index>(data, index))));
                   } else {
-                    emit_return(intrin<_mm512_cvtepu16_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=index>(data, index)));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepu16_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=index>(data, index))));
                   }
                 """
       ?i32:
         requires [avx512f]
-        ToType:
+        ToBase:
           ?i64:
             implementation:
               tsil """
-                  if<compile>(value<generation>(type::is_same(type<generation>(base::in), si32))) {
-                    emit_return(intrin<_mm512_cvtepi32_epi64>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index)));
+                  if<generation>(value<generation>(type::is_same(type<generation>(base::in), si32))) {
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepi32_epi64>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index))));
                   } else {
-                    emit_return(intrin<_mm512_cvtepu32_epi64>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index)));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtepu32_epi64>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index))));
                   }
                 """
       f32:
         requires [avx512f]
-        ToType:
+        ToBase:
           f64:
             implementation:
               tsil """
-                  emit_return(intrin<_mm512_cvtps_pd>(intrin_compose<extractf32x8 suffix=ps immediate(1)=index>(data, index)));
+                  emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::transform_extension(ToBase)))), intrin<_mm512_cvtps_pd>(intrin_compose<extractf32x8 suffix=ps immediate(1)=index>(data, index))));
                 """
     neon:
       ?i8:
         requires [neon]
-        ToType:
+        ToBase:
           ?i16:
             implementation:
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
                       emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<vmovl_high suffix=value<backend>(intrin::suffix)>(data)));
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -850,20 +906,20 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=4>(data, data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=4>(data, data, 4)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=8>(data, data, 8)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=8>(data, data, 8)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=12>(data, data, 12)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=12>(data, data, 12)));
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -879,32 +935,32 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=2>(data, data, 2)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=2>(data, data, 2)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=4>(data, data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=4>(data, data, 4)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=6>(data, data, 6)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=6>(data, data, 6)));
                     }
                     4 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=8>(data, data, 8)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=8>(data, data, 8)));
                     }
                     5 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=10>(data, data, 10)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=10>(data, data, 10)));
                     }
                     6 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=12>(data, data, 12)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=12>(data, data, 12)));
                     }
                     7 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=14>(data, data, 14)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=14>(data, data, 14)));
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -917,20 +973,20 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
       ?i16:
         requires [neon]
-        ToType:
+        ToBase:
           ?i32:
             implementation:
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
                       emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<vmovl_high suffix=value<backend>(intrin::suffix)>(data)));
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -946,20 +1002,20 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=2>(data, data, 2)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=2>(data, data, 2)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=4>(data, data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=4>(data, data, 4)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=6>(data, data, 6)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=6>(data, data, 6)));
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -972,20 +1028,20 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
       ?i32:
         requires [neon]
-        ToType:
+        ToBase:
           ?i64:
             implementation:
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
                       emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<vmovl_high suffix=value<backend>(intrin::suffix)>(data)));
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -998,18 +1054,20 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
       f32:
         requires [neon]
-        ToType:
+        ToBase:
           f64:
             implementation:
               tsil """
-                  if<compile>(index == 0) {
-                    emit_return(call<primitive=cast[Vec, ToType]>(data));
-                  } else {
-                    if<compile>(index == 1) {
+                  switch<compile>(index) {
+                    0 => {
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
+                    }
+                    1 => {
                       emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vcvt_high_f64_f32>(data)));
-                    } else {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                    }
+                    _ => {
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -1023,16 +1081,16 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
     sve:
       ?i8:
         requires [sve]
-        ToType:
+        ToBase:
           ?i16:
             implementation:
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                         emit_return(intrin<svunpkhi_s16>(data));
                       } else {
                         let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
@@ -1042,8 +1100,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       }
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -1058,10 +1116,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
             implementation:
               tsil """
                   if<compile>(index == 0) {
-                    emit_return(call<primitive=cast[Vec, ToType]>(data));
+                    emit_return(call<primitive=cast[Vec, ToBase]>(data));
                   } else {
-                    let<type>(To, type<generation>(base::generic(ToType)));
-                    let<type>(OutVec, ToType);
+                    let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                    let<type>(To, type<generation>(base::generic(OutVec)));
                     var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                     var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                     var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -1075,10 +1133,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
             implementation:
               tsil """
                   if<compile>(index == 0) {
-                    emit_return(call<primitive=cast[Vec, ToType]>(data));
+                    emit_return(call<primitive=cast[Vec, ToBase]>(data));
                   } else {
-                    let<type>(To, type<generation>(base::generic(ToType)));
-                    let<type>(OutVec, ToType);
+                    let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                    let<type>(To, type<generation>(base::generic(OutVec)));
                     var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                     var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                     var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -1090,16 +1148,16 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
       ?i16:
         requires [sve]
-        ToType:
+        ToBase:
           ?i32:
             implementation:
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                         emit_return(intrin<svunpkhi_s32>(data));
                       } else {
                         let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
@@ -1109,8 +1167,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       }
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -1125,10 +1183,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
             implementation:
               tsil """
                   if<compile>(index == 0) {
-                    emit_return(call<primitive=cast[Vec, ToType]>(data));
+                    emit_return(call<primitive=cast[Vec, ToBase]>(data));
                   } else {
-                    let<type>(To, type<generation>(base::generic(ToType)));
-                    let<type>(OutVec, ToType);
+                    let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                    let<type>(To, type<generation>(base::generic(OutVec)));
                     var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                     var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                     var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -1140,16 +1198,16 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
       ?i32:
         requires [sve]
-        ToType:
+        ToBase:
           ?i64:
             implementation:
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      emit_return(call<primitive=cast[Vec, ToType]>(data));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      if<compile>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                         emit_return(intrin<svunpkhi_s64>(data));
                       } else {
                         let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
@@ -1159,8 +1217,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       }
                     }
                     _ => {
-                      let<type>(To, type<generation>(base::generic(ToType)));
-                      let<type>(OutVec, ToType);
+                      let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                      let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                       var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -1173,15 +1231,15 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
       f32:
         requires [sve]
-        ToType:
+        ToBase:
           f64:
             implementation:
               tsil """
                   if<compile>(index == 0) {
-                    emit_return(call<primitive=cast[Vec, ToType]>(data));
+                    emit_return(call<primitive=cast[Vec, ToBase]>(data));
                   } else {
-                    let<type>(To, type<generation>(base::generic(ToType)));
-                    let<type>(OutVec, ToType);
+                    let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                    let<type>(To, type<generation>(base::generic(OutVec)));
                     var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                     var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                     var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -1193,15 +1251,15 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
       ?i32:
         requires [sve]
-        ToType:
+        ToBase:
           f64:
             implementation:
               tsil """
                   if<compile>(index == 0) {
-                    emit_return(call<primitive=cast[Vec, ToType]>(data));
+                    emit_return(call<primitive=cast[Vec, ToBase]>(data));
                   } else {
-                    let<type>(To, type<generation>(base::generic(ToType)));
-                    let<type>(OutVec, ToType);
+                    let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                    let<type>(To, type<generation>(base::generic(OutVec)));
                     var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                     var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
                     var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -1223,8 +1281,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
           scalar []
         implementation:
           tsl """
-              let<type>(To, type<generation>(base::generic(ToType)));
-              let<type>(OutVec, ToType);
+              let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+              let<type>(To, type<generation>(base::generic(OutVec)));
               var<const_infer>(values, call<primitive=to_array[Vec]>(data));
               var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
               var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
@@ -1236,317 +1294,376 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
 prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
   brief_description "Converts one chunk of a same-width SIMD register with larger-base-type lanes into a zero-filled destination register (using saturation)."
   operation ""
-  generic_params:
-    FromType {kind simd_type}
+  return_type:
+    base: ToBase
   tests:
-    - {test_name "convert_down_i64_to_i32_idx0", type "si32", lane_set "lanes_i32", lanes 8, to_type "si64", index 0, case {inputs [[10, 11, 12, 13]], expected [10, 11, 12, 13, 0, 0, 0, 0]}}
-    - {test_name "convert_down_i64_to_i32_idx1", type "si32", lane_set "lanes_i32", lanes 8, to_type "si64", index 1, case {inputs [[100, 101, 102, 103]], expected [0, 0, 0, 0, 100, 101, 102, 103]}}
-    - {test_name "convert_down_u64_to_u32_idx1", type "ui32", lane_set "lanes_i32", lanes 8, to_type "ui64", index 1, case {inputs [[8, 9, 10, 11]], expected [0, 0, 0, 0, 8, 9, 10, 11]}}
-    - {test_name "convert_down_f64_to_f32_idx1", extension "avx2", type "f32", lane_set "lanes_f32", lanes 8, to_type "f64", index 1, case {inputs [[1.5, -2.25, 3.75, -4.5]], expected [0.0, 0.0, 0.0, 0.0, 1.5, -2.25, 3.75, -4.5]}}
-    - {test_name "convert_down_i64_to_i32_sat_idx0", extension "avx512", type "si32", lane_set "lanes_i32", lanes 16, to_type "si64", index 0, case {inputs [[-2147483649, -2147483648, -1, 0, 1, 2147483646, 2147483647, 2147483648]], expected [-2147483648, -2147483648, -1, 0, 1, 2147483646, 2147483647, 2147483647, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "convert_down_u64_to_u32_sat_idx1", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, to_type "ui64", index 1, case {inputs [[0, 1, 4294967294, 4294967295, 4294967296, 5000000000, 42, 999]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 4294967294, 4294967295, 4294967295, 4294967295, 42, 999]}}
-    - {test_name "convert_down_i32_to_i16_idx0", type "si16", lane_set "lanes_i16", lanes 16, to_type "si32", index 0, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "convert_down_i32_to_i16_idx1_edge", type "si16", lane_set "lanes_i16", lanes 16, to_type "si32", index 1, case {inputs [[-32768, -32767, -1, 0, 1, 32766, 32767, 12345]], expected [0, 0, 0, 0, 0, 0, 0, 0, -32768, -32767, -1, 0, 1, 32766, 32767, 12345]}}
-    - {test_name "convert_down_i32_to_i16_sat_idx0", extension "avx512", type "si16", lane_set "lanes_i16", lanes 32, to_type "si32", index 0, case {inputs [[-40000, -32768, -32767, -1, 0, 1, 32766, 32767, 32768, 40000, 123, -123, 50000, -50000, 42, -42]], expected [-32768, -32768, -32767, -1, 0, 1, 32766, 32767, 32767, 32767, 123, -123, 32767, -32768, 42, -42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "convert_down_u32_to_u16_sat_idx1", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, to_type "ui32", index 1, case {inputs [[0, 1, 65534, 65535, 65536, 70000, 42, 999, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 65534, 65535, 65535, 65535, 42, 999, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]}}
-    - {test_name "convert_down_i16_to_i8_sat_idx1", extension "avx512", type "si8", lane_set "lanes_i8", lanes 64, to_type "si16", index 1, case {inputs [[-200, -129, -128, -127, -1, 0, 1, 126, 127, 128, 200, 42, -42, 300, -300, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -128, -128, -128, -127, -1, 0, 1, 126, 127, 127, 127, 42, -42, 127, -128, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115]}}
-    - {test_name "convert_down_u16_to_u8_sat_idx0", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, to_type "ui16", index 0, case {inputs [[0, 1, 254, 255, 256, 300, 65535, 42, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123]], expected [0, 1, 254, 255, 255, 255, 255, 42, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "convert_down_i32_to_i8_sat_idx0", extension "avx512", type "si8", lane_set "lanes_i8", lanes 64, to_type "si32", index 0, case {inputs [[-200, -129, -128, -127, -1, 0, 1, 126, 127, 128, 200, 42, -42, 300, -300, 99]], expected [-128, -128, -128, -127, -1, 0, 1, 126, 127, 127, 127, 42, -42, 127, -128, 99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "convert_down_u32_to_u8_sat_idx3", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, to_type "ui32", index 3, case {inputs [[0, 1, 254, 255, 256, 300, 65535, 42, 100, 101, 102, 103, 104, 105, 106, 107]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 254, 255, 255, 255, 255, 42, 100, 101, 102, 103, 104, 105, 106, 107]}}
-    - {test_name "convert_down_i64_to_i16_sat_idx2", extension "avx512", type "si16", lane_set "lanes_i16", lanes 32, to_type "si64", index 2, case {inputs [[-40000, -32768, -32767, -1, 0, 1, 32767, 40000]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -32768, -32768, -32767, -1, 0, 1, 32767, 32767, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "convert_down_u64_to_u16_sat_idx1", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, to_type "ui64", index 1, case {inputs [[0, 1, 65534, 65535, 65536, 70000, 42, 999]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 65534, 65535, 65535, 65535, 42, 999, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "convert_down_i64_to_i8_sat_idx1", extension "avx512", type "si8", lane_set "lanes_i8", lanes 64, to_type "si64", index 1, case {inputs [[-200, -129, -128, -127, 127, 128, 200, 42]], expected [0, 0, 0, 0, 0, 0, 0, 0, -128, -128, -128, -127, 127, 127, 127, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "convert_down_u64_to_u8_sat_idx6", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, to_type "ui64", index 6, case {inputs [[0, 1, 254, 255, 256, 300, 65535, 42]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 254, 255, 255, 255, 255, 42, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "convert_down_i64_to_i32_idx0", type "si64", lane_set "lanes_i64", lanes 4, to_type "si32", index 0, case {inputs [[10, 11, 12, 13]], expected [10, 11, 12, 13, 0, 0, 0, 0]}}
+    - {test_name "convert_down_i64_to_i32_idx1", type "si64", lane_set "lanes_i64", lanes 4, to_type "si32", index 1, case {inputs [[100, 101, 102, 103]], expected [0, 0, 0, 0, 100, 101, 102, 103]}}
+    - {test_name "convert_down_u64_to_u32_idx1", type "ui64", lane_set "lanes_i64", lanes 4, to_type "ui32", index 1, case {inputs [[8, 9, 10, 11]], expected [0, 0, 0, 0, 8, 9, 10, 11]}}
+    - {test_name "convert_down_f64_to_f32_idx1", extension "avx2", type "f64", lane_set "lanes_f64", lanes 4, to_type "f32", index 1, case {inputs [[1.5, -2.25, 3.75, -4.5]], expected [0.0, 0.0, 0.0, 0.0, 1.5, -2.25, 3.75, -4.5]}}
+    - {test_name "convert_down_i64_to_i32_sat_idx0", extension "avx512", type "si64", lane_set "lanes_i64", lanes 8, to_type "si32", index 0, case {inputs [[-2147483649, -2147483648, -1, 0, 1, 2147483646, 2147483647, 2147483648]], expected [-2147483648, -2147483648, -1, 0, 1, 2147483646, 2147483647, 2147483647, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "convert_down_u64_to_u32_sat_idx1", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, to_type "ui32", index 1, case {inputs [[0, 1, 4294967294, 4294967295, 4294967296, 5000000000, 42, 999]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 4294967294, 4294967295, 4294967295, 4294967295, 42, 999]}}
+    - {test_name "convert_down_i32_to_i16_idx0", type "si32", lane_set "lanes_i32", lanes 8, to_type "si16", index 0, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "convert_down_i32_to_i16_idx1_edge", type "si32", lane_set "lanes_i32", lanes 8, to_type "si16", index 1, case {inputs [[-32768, -32767, -1, 0, 1, 32766, 32767, 12345]], expected [0, 0, 0, 0, 0, 0, 0, 0, -32768, -32767, -1, 0, 1, 32766, 32767, 12345]}}
+    - {test_name "convert_down_i32_to_i16_sat_idx0", extension "avx512", type "si32", lane_set "lanes_i32", lanes 16, to_type "si16", index 0, case {inputs [[-40000, -32768, -32767, -1, 0, 1, 32766, 32767, 32768, 40000, 123, -123, 50000, -50000, 42, -42]], expected [-32768, -32768, -32767, -1, 0, 1, 32766, 32767, 32767, 32767, 123, -123, 32767, -32768, 42, -42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "convert_down_u32_to_u16_sat_idx1", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, to_type "ui16", index 1, case {inputs [[0, 1, 65534, 65535, 65536, 70000, 42, 999, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 65534, 65535, 65535, 65535, 42, 999, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]}}
+    - {test_name "convert_down_i16_to_i8_sat_idx1", extension "avx512", type "si16", lane_set "lanes_i16", lanes 32, to_type "si8", index 1, case {inputs [[-200, -129, -128, -127, -1, 0, 1, 126, 127, 128, 200, 42, -42, 300, -300, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -128, -128, -128, -127, -1, 0, 1, 126, 127, 127, 127, 42, -42, 127, -128, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115]}}
+    - {test_name "convert_down_u16_to_u8_sat_idx0", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, to_type "ui8", index 0, case {inputs [[0, 1, 254, 255, 256, 300, 65535, 42, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123]], expected [0, 1, 254, 255, 255, 255, 255, 42, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "convert_down_i32_to_i8_sat_idx0", extension "avx512", type "si32", lane_set "lanes_i32", lanes 16, to_type "si8", index 0, case {inputs [[-200, -129, -128, -127, -1, 0, 1, 126, 127, 128, 200, 42, -42, 300, -300, 99]], expected [-128, -128, -128, -127, -1, 0, 1, 126, 127, 127, 127, 42, -42, 127, -128, 99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "convert_down_u32_to_u8_sat_idx3", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, to_type "ui8", index 3, case {inputs [[0, 1, 254, 255, 256, 300, 65535, 42, 100, 101, 102, 103, 104, 105, 106, 107]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 254, 255, 255, 255, 255, 42, 100, 101, 102, 103, 104, 105, 106, 107]}}
+    - {test_name "convert_down_i64_to_i16_sat_idx2", extension "avx512", type "si64", lane_set "lanes_i64", lanes 8, to_type "si16", index 2, case {inputs [[-40000, -32768, -32767, -1, 0, 1, 32767, 40000]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -32768, -32768, -32767, -1, 0, 1, 32767, 32767, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "convert_down_u64_to_u16_sat_idx1", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, to_type "ui16", index 1, case {inputs [[0, 1, 65534, 65535, 65536, 70000, 42, 999]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 65534, 65535, 65535, 65535, 42, 999, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "convert_down_i64_to_i8_sat_idx1", extension "avx512", type "si64", lane_set "lanes_i64", lanes 8, to_type "si8", index 1, case {inputs [[-200, -129, -128, -127, 127, 128, 200, 42]], expected [0, 0, 0, 0, 0, 0, 0, 0, -128, -128, -128, -127, 127, 127, 127, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {test_name "convert_down_u64_to_u8_sat_idx6", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, to_type "ui8", index 6, case {inputs [[0, 1, 254, 255, 256, 300, 65535, 42]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 254, 255, 255, 255, 255, 42, 0, 0, 0, 0, 0, 0, 0, 0]}}
   impls:
-    avx2:
-      f32:
-        requires [avx]
-        FromType:
-          f64:
-            implementation:
-              tsil """
-                  switch<compile>(index) {
-                    0 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, sse, 0]>(zero, intrin<_mm256_cvtpd_ps>(data)));
-                    }
-                    1 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, sse, 1]>(zero, intrin<_mm256_cvtpd_ps>(data)));
-                    }
-                    _ => {
-                      var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                      var<const_infer>(chunk, call<primitive=to_array[FromType]>(data));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-                      loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                        result[start + i] = cast<saturating>(type<generation>(base::in), chunk[i]);
-                      }
-                      emit_return(call<primitive=from_array[Vec]>(result));
-                    }
-                  }
-                """
-    avx512:
-      si8:
-        requires [avx512f]
-        FromType:
-          si16:
-            requires [avx512bw]
-            implementation:
-              tsil """
-                  switch<compile>(index) {
-                    0 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, avx2, 0]>(zero, intrin<_mm512_cvtsepi16_epi8>(data)));
-                    }
-                    1 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, avx2, 1]>(zero, intrin<_mm512_cvtsepi16_epi8>(data)));
-                    }
-                    _ => {
-                      var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                      var<const_infer>(chunk, call<primitive=to_array[FromType]>(data));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-                      loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                        result[start + i] = cast<saturating>(type<generation>(base::in), chunk[i]);
-                      }
-                      emit_return(call<primitive=from_array[Vec]>(result));
-                    }
-                  }
-                """
-          si32:
-            implementation:
-              tsil """
-                  let<type>(HalfVec, type<backend>(vector::as_extension(sse)));
-                  var<const_infer>(narrowed, intrin<_mm512_cvtsepi32_epi8>(data));
-                  var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(narrowed));
-                  var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-                  loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                    result[start + i] = narrowed_values[i];
-                  }
-                  emit_return(call<primitive=from_array[Vec]>(result));
-                """
-          si64:
-            implementation:
-              tsil """
-                  let<type>(HalfVec, type<backend>(vector::as_extension(sse)));
-                  var<const_infer>(narrowed, intrin<_mm512_cvtsepi64_epi8>(data));
-                  var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(narrowed));
-                  var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-                  loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                    result[start + i] = narrowed_values[i];
-                  }
-                  emit_return(call<primitive=from_array[Vec]>(result));
-                """
-      ui8:
-        requires [avx512f]
-        FromType:
-          ui16:
-            requires [avx512bw]
-            implementation:
-              tsil """
-                  switch<compile>(index) {
-                    0 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, avx2, 0]>(zero, intrin<_mm512_cvtusepi16_epi8>(data)));
-                    }
-                    1 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, avx2, 1]>(zero, intrin<_mm512_cvtusepi16_epi8>(data)));
-                    }
-                    _ => {
-                      var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                      var<const_infer>(chunk, call<primitive=to_array[FromType]>(data));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-                      loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                        result[start + i] = cast<saturating>(type<generation>(base::in), chunk[i]);
-                      }
-                      emit_return(call<primitive=from_array[Vec]>(result));
-                    }
-                  }
-                """
-          ui32:
-            implementation:
-              tsil """
-                  let<type>(HalfVec, type<backend>(vector::as_extension(sse)));
-                  var<const_infer>(narrowed, intrin<_mm512_cvtusepi32_epi8>(data));
-                  var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(narrowed));
-                  var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-                  loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                    result[start + i] = narrowed_values[i];
-                  }
-                  emit_return(call<primitive=from_array[Vec]>(result));
-                """
-          ui64:
-            implementation:
-              tsil """
-                  let<type>(HalfVec, type<backend>(vector::as_extension(sse)));
-                  var<const_infer>(narrowed, intrin<_mm512_cvtusepi64_epi8>(data));
-                  var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(narrowed));
-                  var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-                  loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                    result[start + i] = narrowed_values[i];
-                  }
-                  emit_return(call<primitive=from_array[Vec]>(result));
-                """
+    [sse, sse_vl]:
       si16:
-        requires [avx512f]
-        FromType:
-          si32:
+        requires:
+          sse [sse2]
+          sse_vl [sse2]
+        ToBase:
+          si8:
             implementation:
               tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
                   switch<compile>(index) {
                     0 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, avx2, 0]>(zero, intrin<_mm512_cvtsepi32_epi16>(data)));
-                    }
-                    1 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, avx2, 1]>(zero, intrin<_mm512_cvtsepi32_epi16>(data)));
+                      emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm_packs_epi16>(data, call<primitive=set_zero[Vec]>())));
                     }
                     _ => {
-                      var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                      var<const_infer>(chunk, call<primitive=to_array[FromType]>(data));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-                      loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                        result[start + i] = cast<saturating>(type<generation>(base::in), chunk[i]);
-                      }
-                      emit_return(call<primitive=from_array[Vec]>(result));
+                      emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm_packs_epi16>(call<primitive=set_zero[Vec]>(), data)));
                     }
                   }
-                """
-          si64:
-            implementation:
-              tsil """
-                  let<type>(HalfVec, type<backend>(vector::as_extension(sse)));
-                  var<const_infer>(narrowed, intrin<_mm512_cvtsepi64_epi16>(data));
-                  var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(narrowed));
-                  var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-                  loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                    result[start + i] = narrowed_values[i];
-                  }
-                  emit_return(call<primitive=from_array[Vec]>(result));
                 """
       ui16:
-        requires [avx512f]
-        FromType:
-          ui32:
+        requires:
+          sse [sse2]
+          sse_vl [sse2]
+        ToBase:
+          ui8:
             implementation:
               tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
                   switch<compile>(index) {
                     0 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, avx2, 0]>(zero, intrin<_mm512_cvtusepi32_epi16>(data)));
-                    }
-                    1 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, avx2, 1]>(zero, intrin<_mm512_cvtusepi32_epi16>(data)));
+                      emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm_packus_epi16>(data, call<primitive=set_zero[Vec]>())));
                     }
                     _ => {
-                      var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                      var<const_infer>(chunk, call<primitive=to_array[FromType]>(data));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-                      loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                        result[start + i] = cast<saturating>(type<generation>(base::in), chunk[i]);
-                      }
-                      emit_return(call<primitive=from_array[Vec]>(result));
+                      emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm_packus_epi16>(call<primitive=set_zero[Vec]>(), data)));
                     }
                   }
-                """
-          ui64:
-            implementation:
-              tsil """
-                  let<type>(HalfVec, type<backend>(vector::as_extension(sse)));
-                  var<const_infer>(narrowed, intrin<_mm512_cvtusepi64_epi16>(data));
-                  var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(narrowed));
-                  var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-                  loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                    result[start + i] = narrowed_values[i];
-                  }
-                  emit_return(call<primitive=from_array[Vec]>(result));
                 """
       si32:
-        requires [avx512f]
-        FromType:
-          si64:
+        requires:
+          sse [sse2]
+          sse_vl [sse2]
+        ToBase:
+          si16:
             implementation:
               tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
                   switch<compile>(index) {
                     0 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, avx2, 0]>(zero, intrin<_mm512_cvtsepi64_epi32>(data)));
-                    }
-                    1 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, avx2, 1]>(zero, intrin<_mm512_cvtsepi64_epi32>(data)));
+                      emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm_packs_epi32>(data, call<primitive=set_zero[Vec]>())));
                     }
                     _ => {
-                      var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                      var<const_infer>(chunk, call<primitive=to_array[FromType]>(data));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-                      loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                        result[start + i] = cast<saturating>(type<generation>(base::in), chunk[i]);
-                      }
-                      emit_return(call<primitive=from_array[Vec]>(result));
+                      emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm_packs_epi32>(call<primitive=set_zero[Vec]>(), data)));
                     }
                   }
                 """
       ui32:
-        requires [avx512f]
-        FromType:
-          ui64:
+        requires:
+          sse [sse4_1]
+          sse_vl [sse4_1]
+        ToBase:
+          ui16:
             implementation:
               tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
                   switch<compile>(index) {
                     0 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, avx2, 0]>(zero, intrin<_mm512_cvtusepi64_epi32>(data)));
-                    }
-                    1 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, avx2, 1]>(zero, intrin<_mm512_cvtusepi64_epi32>(data)));
+                      emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm_packus_epi32>(data, call<primitive=set_zero[Vec]>())));
                     }
                     _ => {
-                      var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                      var<const_infer>(chunk, call<primitive=to_array[FromType]>(data));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-                      loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                        result[start + i] = cast<saturating>(type<generation>(base::in), chunk[i]);
-                      }
-                      emit_return(call<primitive=from_array[Vec]>(result));
+                      emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm_packus_epi32>(call<primitive=set_zero[Vec]>(), data)));
                     }
                   }
                 """
-      f32:
-        requires [avx512f, avx512dq]
-        FromType:
-          f64:
+    avx2:
+      si16:
+        requires [avx2]
+        ToBase:
+          si8:
             implementation:
               tsil """
-                  switch<compile>(index) {
-                    0 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, avx2, 0]>(zero, intrin<_mm512_cvtpd_ps>(data)));
-                    }
-                    1 => {
-                      var<const_infer>(zero, call<primitive=set_zero[Vec]>());
-                      emit_return(call<primitive=insert[Vec, avx2, 1]>(zero, intrin<_mm512_cvtpd_ps>(data)));
-                    }
-                    _ => {
-                      var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-                      var<const_infer>(chunk, call<primitive=to_array[FromType]>(data));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-                      loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                        result[start + i] = cast<saturating>(type<generation>(base::in), chunk[i]);
-                      }
-                      emit_return(call<primitive=from_array[Vec]>(result));
-                    }
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm_packs_epi16>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
+                  emit_return(call<primitive=insert[ChunkVec, avx2, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+      ui16:
+        requires [avx2]
+        ToBase:
+          ui8:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm_packus_epi16>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
+                  emit_return(call<primitive=insert[ChunkVec, avx2, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+      si32:
+        requires [avx2]
+        ToBase:
+          si16:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm_packs_epi32>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
+                  emit_return(call<primitive=insert[ChunkVec, avx2, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+      ui32:
+        requires [avx2]
+        ToBase:
+          ui16:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm_packus_epi32>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
+                  emit_return(call<primitive=insert[ChunkVec, avx2, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+      f64:
+        requires [avx]
+        ToBase:
+          f32:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm256_cvtpd_ps>(data)));
+                  emit_return(call<primitive=insert[ChunkVec, avx2, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+    avx2_vl:
+      si16:
+        requires [avx2]
+        ToBase:
+          si8:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm_packs_epi16>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
+                  emit_return(call<primitive=insert[ChunkVec, avx2_vl, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+      ui16:
+        requires [avx2]
+        ToBase:
+          ui8:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm_packus_epi16>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
+                  emit_return(call<primitive=insert[ChunkVec, avx2_vl, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+      si32:
+        requires [avx2]
+        ToBase:
+          si16:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm_packs_epi32>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
+                  emit_return(call<primitive=insert[ChunkVec, avx2_vl, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+      ui32:
+        requires [avx2]
+        ToBase:
+          ui16:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm_packus_epi32>(call<primitive=extract[Vec, sse, 0]>(data), call<primitive=extract[Vec, sse, 1]>(data))));
+                  emit_return(call<primitive=insert[ChunkVec, avx2_vl, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+      f64:
+        requires [avx]
+        ToBase:
+          f32:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm256_cvtpd_ps>(data)));
+                  emit_return(call<primitive=insert[ChunkVec, avx2_vl, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+    avx512:
+      si16:
+        requires [avx512f]
+        ToBase:
+          si8:
+            requires [avx512bw]
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(avx2, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm512_cvtsepi16_epi8>(data)));
+                  emit_return(call<primitive=insert[ChunkVec, avx512, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+      si32:
+        requires [avx512f]
+        ToBase:
+          si8:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(HalfVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(narrowed, intrin<_mm512_cvtsepi32_epi8>(data));
+                  var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(cast<reinterpret>(type<generation>(register::generic(HalfVec)), narrowed)));
+                  var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
+                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  loop<range>(i, 0, value<generation>(vector::length), 1) {
+                    result[start + i] = narrowed_values[i];
                   }
+                  emit_return(call<primitive=from_array[OutVec]>(result));
+                """
+          si16:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(avx2, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm512_cvtsepi32_epi16>(data)));
+                  emit_return(call<primitive=insert[ChunkVec, avx512, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+      ui16:
+        requires [avx512f]
+        ToBase:
+          ui8:
+            requires [avx512bw]
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(avx2, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm512_cvtusepi16_epi8>(data)));
+                  emit_return(call<primitive=insert[ChunkVec, avx512, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+      ui32:
+        requires [avx512f]
+        ToBase:
+          ui8:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(HalfVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(narrowed, intrin<_mm512_cvtusepi32_epi8>(data));
+                  var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(cast<reinterpret>(type<generation>(register::generic(HalfVec)), narrowed)));
+                  var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
+                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  loop<range>(i, 0, value<generation>(vector::length), 1) {
+                    result[start + i] = narrowed_values[i];
+                  }
+                  emit_return(call<primitive=from_array[OutVec]>(result));
+                """
+          ui16:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(avx2, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm512_cvtusepi32_epi16>(data)));
+                  emit_return(call<primitive=insert[ChunkVec, avx512, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+      si64:
+        requires [avx512f]
+        ToBase:
+          si8:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(HalfVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(narrowed, intrin<_mm512_cvtsepi64_epi8>(data));
+                  var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(cast<reinterpret>(type<generation>(register::generic(HalfVec)), narrowed)));
+                  var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
+                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  loop<range>(i, 0, value<generation>(vector::length), 1) {
+                    result[start + i] = narrowed_values[i];
+                  }
+                  emit_return(call<primitive=from_array[OutVec]>(result));
+                """
+          si16:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(HalfVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(narrowed, intrin<_mm512_cvtsepi64_epi16>(data));
+                  var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(cast<reinterpret>(type<generation>(register::generic(HalfVec)), narrowed)));
+                  var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
+                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  loop<range>(i, 0, value<generation>(vector::length), 1) {
+                    result[start + i] = narrowed_values[i];
+                  }
+                  emit_return(call<primitive=from_array[OutVec]>(result));
+                """
+          si32:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(avx2, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm512_cvtsepi64_epi32>(data)));
+                  emit_return(call<primitive=insert[ChunkVec, avx512, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+      ui64:
+        requires [avx512f]
+        ToBase:
+          ui8:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(HalfVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(narrowed, intrin<_mm512_cvtusepi64_epi8>(data));
+                  var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(cast<reinterpret>(type<generation>(register::generic(HalfVec)), narrowed)));
+                  var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
+                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  loop<range>(i, 0, value<generation>(vector::length), 1) {
+                    result[start + i] = narrowed_values[i];
+                  }
+                  emit_return(call<primitive=from_array[OutVec]>(result));
+                """
+          ui16:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(HalfVec, type<generation>(vector::as_extension(sse, ToBase)));
+                  var<const_infer>(narrowed, intrin<_mm512_cvtusepi64_epi16>(data));
+                  var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(cast<reinterpret>(type<generation>(register::generic(HalfVec)), narrowed)));
+                  var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
+                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  loop<range>(i, 0, value<generation>(vector::length), 1) {
+                    result[start + i] = narrowed_values[i];
+                  }
+                  emit_return(call<primitive=from_array[OutVec]>(result));
+                """
+          ui32:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(avx2, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm512_cvtusepi64_epi32>(data)));
+                  emit_return(call<primitive=insert[ChunkVec, avx512, index]>(call<primitive=set_zero[OutVec]>(), chunk));
+                """
+      f64:
+        requires [avx512f, avx512dq]
+        ToBase:
+          f32:
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+                  let<type>(ChunkVec, type<generation>(vector::as_extension(avx2, ToBase)));
+                  var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm512_cvtpd_ps>(data)));
+                  emit_return(call<primitive=insert[ChunkVec, avx512, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
     [avx512, avx2, sse, neon, sve, generic, oneAPIfpga, scalar]:
       arith:
@@ -1561,11 +1678,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           scalar []
         implementation:
           tsl """
-              var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-              var<const_infer>(chunk, call<primitive=to_array[FromType]>(data));
-              var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(FromType)));
-              loop<range>(i, 0, value<generation>(generic::length(FromType)), 1) {
-                result[start + i] = cast<saturating>(type<generation>(base::in), chunk[i]);
+              let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)));
+              let<type>(OutBase, type<generation>(base::generic(OutVec)));
+              var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
+              var<const_infer>(chunk, call<primitive=to_array[Vec]>(data));
+              var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
+                result[start + i] = cast<saturating>(OutBase, chunk[i]);
               }
-              emit_return(call<primitive=from_array[Vec]>(result));
+              emit_return(call<primitive=from_array[OutVec]>(result));
             """

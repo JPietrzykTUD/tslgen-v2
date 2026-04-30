@@ -1,4 +1,4 @@
-import codon
+#import codon
 import re
 from typing import ClassVar, Pattern
 
@@ -15,7 +15,7 @@ class StringBoolEvaluator:
         re.DOTALL
     )
 
-    @codon.jit
+    #@codon.jit
     def check_allowed(self, expr: str) -> bool:
         return self.ALLOWED.fullmatch(expr) is not None
 

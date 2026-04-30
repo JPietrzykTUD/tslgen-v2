@@ -1,4 +1,4 @@
-import codon
+#import codon
 import re
 from typing import Optional, List, Pattern, ClassVar
 
@@ -18,7 +18,7 @@ class GenerationValueRewrite(MiddleEndPass):
         re.DOTALL
     )
 
-    @codon.jit
+    #@codon.jit
     def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         pass
 

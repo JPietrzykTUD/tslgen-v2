@@ -1,8 +1,8 @@
-import codon
+#import codon
 from typing import Tuple
 import re
 
-@codon.jit
+#@codon.jit
 def extract_braced(text: str, open_brace_index: int) -> Tuple[str, int]:
     if text[open_brace_index] != "{":
         raise ValueError("Expected '{' at open_brace_index")
@@ -20,6 +20,6 @@ def extract_braced(text: str, open_brace_index: int) -> Tuple[str, int]:
 
 REGEX_WHITESPACE = re.compile(r"\s*")
 
-@codon.jit
+#@codon.jit
 def skip_whitespace(text: str, pos: int) -> int:
     return REGEX_WHITESPACE.match(text, pos).end()

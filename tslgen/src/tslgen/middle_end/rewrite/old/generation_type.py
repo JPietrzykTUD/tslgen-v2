@@ -1,4 +1,4 @@
-import codon
+#import codon
 import re
 from typing import Pattern, ClassVar
 
@@ -26,7 +26,7 @@ class GenerationPrimitiveTypeCtxTypeRewrite(MiddleEndPass):
         re.DOTALL
     )
 
-    @codon.jit
+    #@codon.jit
     def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         if source.stages_resolved.get(self.__class__.__name__, False):
             return source
@@ -50,7 +50,7 @@ class GenerationPrimitiveTypeTraitRewrite(MiddleEndPass):
         re.DOTALL
     )
 
-    @codon.jit
+    #@codon.jit
     def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         if source.stages_resolved.get(self.__class__.__name__, False):
             return source
@@ -91,7 +91,7 @@ class GenerationPrimitiveTypeIsSameRewrite(MiddleEndPass):
         re.DOTALL
     )
 
-    @codon.jit
+    #@codon.jit
     def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         if source.stages_resolved.get(self.__class__.__name__, False):
             return source
@@ -121,7 +121,7 @@ class GenerationPrimitiveTypeSizeRewrite(MiddleEndPass):
         re.DOTALL
     )
 
-    @codon.jit
+    #@codon.jit
     def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
 
         while match := self.REGEX_TYPE_SIZE.search(text):
@@ -157,7 +157,7 @@ class GenerationPrimitiveTypeTransformRewrite(MiddleEndPass):
         re.DOTALL
     )
 
-    @codon.jit
+    #@codon.jit
     def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         if source.stages_resolved.get(self.__class__.__name__, False):
             return source

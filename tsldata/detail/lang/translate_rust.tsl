@@ -35,6 +35,7 @@ translation rust:
   pub struct Avx2;
   pub struct Avx2Vl;
   pub struct Avx512;
+  pub struct Neon;
   pub struct Generic<const BITS: usize>;
   pub struct OneAPIfpga<const BITS: usize>;
   pub struct Scalar;

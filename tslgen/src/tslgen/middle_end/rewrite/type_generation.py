@@ -1,4 +1,4 @@
-import codon
+#import codon
 import re
 from typing import Pattern, ClassVar
 
@@ -14,7 +14,7 @@ class GenerationTypeRewrite(MiddleEndPass):
         re.DOTALL
     )
 
-    @codon.jit
+    #@codon.jit
     def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         if source.stages_resolved.get(self.__class__.__name__, False):
             return source

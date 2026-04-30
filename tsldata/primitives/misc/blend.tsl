@@ -143,7 +143,12 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin<vbslq_{{value<backend>(intrin::suffix)}}>(mask, right, left));"
+          tsil """
+              let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+              var<const_infer>(mask_v, call<primitive=to_vector>(mask));
+              var<const_infer>(mask_u, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(mask_v));
+              emit_return(intrin<vbslq_{{value<backend>(intrin::suffix)}}>(mask_u, right, left));
+            """
     sve:
       arith:
         requires [sve]

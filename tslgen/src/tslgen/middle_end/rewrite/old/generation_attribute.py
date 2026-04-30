@@ -1,4 +1,4 @@
-import codon
+#import codon
 import re
 from typing import Optional, List, Pattern, ClassVar
 
@@ -14,7 +14,7 @@ class GenerationPrimitiveAttributeRewrite(MiddleEndPass):
         re.DOTALL
     )
 
-    @codon.jit
+    #@codon.jit
     def lower(self, source: Primitive, gen_ctx: GenerationContext) -> Primitive:
         attributes: List[Optional[ConcreteSignatureAttribute]] = source.signature.attributes
         text = source.implementation

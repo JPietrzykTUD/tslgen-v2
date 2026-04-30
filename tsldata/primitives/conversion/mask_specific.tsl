@@ -402,61 +402,74 @@ prim<m:=s> to_mask(mask):
         requires [neon]
         implementation:
           tsil """
-              var<const_infer>(and_vec, call<primitive=set[Vec]>(0x80, 0x40, 0x20, 0x10, 0x8, 0x4, 0x2, 0x1))
-              var<const_infer>(data_vec, call<primitive=set1[Vec]>(mask))
+              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array))
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
+                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i)
+                and_values[i] = cast<static>(type<generation>(base::in), bit);
+              }
+              var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()))
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)))
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec))
-              emit_return(intrin<vceqq_?i?>(anded_vec, and_vec));
+              emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
             """
       ?i32:
         requires [neon]
         implementation:
           tsil """
-              var<const_infer>(and_vec, call<primitive=set[Vec]>(0x8, 0x4, 0x2, 0x1))
-              var<const_infer>(data_vec, call<primitive=set1[Vec]>(mask))
+              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array))
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
+                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i)
+                and_values[i] = cast<static>(type<generation>(base::in), bit);
+              }
+              var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()))
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)))
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec))
-              emit_return(intrin<vceqq_?i?>(anded_vec, and_vec));
+              emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
             """
       ?i64:
         requires [neon]
         implementation:
           tsil """
-              var<const_infer>(and_vec, call<primitive=set[Vec]>(0x2, 0x1))
-              var<const_infer>(data_vec, call<primitive=set1[Vec]>(mask))
+              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array))
+              loop<range>(i, 0, value<generation>(vector::length), 1) {
+                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i)
+                and_values[i] = cast<static>(type<generation>(base::in), bit);
+              }
+              var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()))
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)))
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec))
-              emit_return(intrin<vceqq_?i?>(anded_vec, and_vec));
+              emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
             """
       f32:
         requires [neon]
         implementation:
           tsil """
-              let<type>(Base, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), si32, type<generation>(base::in))))
-              var<typed>(array_type<Base, value<generation>(vector::length)>, values, value<backend>(uninit::array))
+              let<type>(MaskVec, type<generation>(vector::transform_extension(type<backend>(scalar::si32))))
+              var<typed>(array_type<type<backend>(scalar::si32), value<generation>(vector::length)>, and_values, value<backend>(uninit::array))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
-                if (((mask >> i) & 1) != 0) {
-                  values[i] = cast<static>(Base, -1);
-                } else {
-                  values[i] = cast<static>(Base, 0);
-                }
+                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i)
+                and_values[i] = cast<static>(type<backend>(scalar::si32), bit);
               }
-              let<type>(MaskVec, type<generation>(vector::transform(Base)))
-              var<infer>(tmp, call<primitive=load[MaskVec] attrs[aligned=false]>(values.data()))
+              var<const_infer>(and_vec, call<primitive=load[MaskVec] attrs[aligned=false]>(and_values.data()))
+              var<const_infer>(data_vec, call<primitive=set1[MaskVec]>(cast<static>(type<backend>(scalar::si32), mask)))
+              var<const_infer>(anded_vec, call<primitive=binary_and[MaskVec]>(data_vec, and_vec))
+              var<const_infer>(tmp, call<primitive=equal[MaskVec]>(anded_vec, and_vec))
               emit_return(call<primitive=reinterpret[MaskVec, Vec]>(tmp));
             """
       f64:
         requires [neon]
         implementation:
           tsil """
-              let<type>(Base, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f64)), si64, type<generation>(base::in))))
-              var<typed>(array_type<Base, value<generation>(vector::length)>, values, value<backend>(uninit::array))
+              let<type>(MaskVec, type<generation>(vector::transform_extension(type<backend>(scalar::si64))))
+              var<typed>(array_type<type<backend>(scalar::si64), value<generation>(vector::length)>, and_values, value<backend>(uninit::array))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
-                if (((mask >> i) & 1) != 0) {
-                  values[i] = cast<static>(Base, -1);
-                } else {
-                  values[i] = cast<static>(Base, 0);
-                }
+                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i)
+                and_values[i] = cast<static>(type<backend>(scalar::si64), bit);
               }
-              let<type>(MaskVec, type<generation>(vector::transform(Base)))
-              var<infer>(tmp, call<primitive=load[MaskVec] attrs[aligned=false]>(values.data()))
+              var<const_infer>(and_vec, call<primitive=load[MaskVec] attrs[aligned=false]>(and_values.data()))
+              var<const_infer>(data_vec, call<primitive=set1[MaskVec]>(cast<static>(type<backend>(scalar::si64), mask)))
+              var<const_infer>(anded_vec, call<primitive=binary_and[MaskVec]>(data_vec, and_vec))
+              var<const_infer>(tmp, call<primitive=equal[MaskVec]>(anded_vec, and_vec))
               emit_return(call<primitive=reinterpret[MaskVec, Vec]>(tmp));
             """
     scalar:

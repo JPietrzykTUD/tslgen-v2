@@ -240,8 +240,8 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
 prim<v:=ptr+> load_convert_up(ptr):
   brief_description "Loads and widens elements."
   operation ""
-  generic_params:
-    ToType {kind simd_type}
+  return_type:
+    base: ToBase
   tests:
     - {test_name "load_convert_up_i8_to_i16_basic", extension "avx2", type "si8", to_type "si16", case {inputs [[-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]}}
     - {test_name "load_convert_up_i8_to_i16_edge", extension "avx2", type "si8", to_type "si16", case {inputs [[-128, -127, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 127]], expected [-128, -127, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 127]}}
@@ -271,121 +271,325 @@ prim<v:=ptr+> load_convert_up(ptr):
     - {test_name "load_convert_up_f32_to_f64_edge", extension "avx2", type "f32", to_type "f64", case {inputs [0.0, -0.0, 16777216.0, -16777216.0, 1.0, -1.0, 2.0, -2.0], expected [0.0, -0.0, 16777216.0, -16777216.0]}}
   impls:
     avx512:
+      si8:
+        requires [avx512f]
+        to_base:
+          si16:
+            requires [avx512bw]
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(avx2, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepi8_epi16>(loaded)));
+                """
+          si32:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(sse, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepi8_epi32>(loaded)));
+                """
+      ui8:
+        requires [avx512f]
+        to_base:
+          ui16:
+            requires [avx512bw]
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(avx2, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepu8_epi16>(loaded)));
+                """
+          ui32:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(sse, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepu8_epi32>(loaded)));
+                """
+      si16:
+        requires [avx512f]
+        to_base:
+          si32:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(avx2, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepi16_epi32>(loaded)));
+                """
+          si64:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(sse, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepi16_epi64>(loaded)));
+                """
+      ui16:
+        requires [avx512f]
+        to_base:
+          ui32:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(avx2, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepu16_epi32>(loaded)));
+                """
+          ui64:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(sse, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepu16_epi64>(loaded)));
+                """
+      si32:
+        requires [avx512f]
+        to_base:
+          si64:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(avx2, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepi32_epi64>(loaded)));
+                """
+      ui32:
+        requires [avx512f]
+        to_base:
+          ui64:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(avx2, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepu32_epi64>(loaded)));
+                """
+      f32:
+        requires [avx512f]
+        to_base:
+          f64:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(avx2, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtps_pd>(loaded)));
+                """
       arith:
         requires [avx512f, avx]
         implementation:
           tsil """
-               let<type>(LoadVec, type<backend>(vector::as_extension(avx2)))
-               emit_return(
-                 call<primitive=cast[LoadVec, ToType]>(
-                   call<primitive=load[LoadVec] attrs[aligned=false]>(ptr)
-                 )
-               );
+               let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+               let<type>(OutBase, type<generation>(base::generic(OutVec)))
+               var<infer>(out, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()))
+               loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1)  {
+                out[i] = cast<static>(OutBase, *ptr_add(ptr, i));
+              }
+               emit_return(call<primitive=from_array[OutVec]>(out)) ;
             """
     [avx2, avx2_vl]:
+      si8:
+        requires:
+          avx2 [avx2]
+          avx2_vl [avx2]
+        to_base:
+          si16:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(sse, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm256_cvtepi8_epi16>(loaded)));
+                """
+      ui8:
+        requires:
+          avx2 [avx2]
+          avx2_vl [avx2]
+        to_base:
+          ui16:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(sse, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm256_cvtepu8_epi16>(loaded)));
+                """
+      si16:
+        requires:
+          avx2 [avx2]
+          avx2_vl [avx2]
+        to_base:
+          si32:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(sse, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm256_cvtepi16_epi32>(loaded)));
+                """
+      ui16:
+        requires:
+          avx2 [avx2]
+          avx2_vl [avx2]
+        to_base:
+          ui32:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(sse, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm256_cvtepu16_epi32>(loaded)));
+                """
+      si32:
+        requires:
+          avx2 [avx2]
+          avx2_vl [avx2]
+        to_base:
+          si64:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(sse, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm256_cvtepi32_epi64>(loaded)));
+                """
+      ui32:
+        requires:
+          avx2 [avx2]
+          avx2_vl [avx2]
+        to_base:
+          ui64:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(sse, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm256_cvtepu32_epi64>(loaded)));
+                """
+      f32:
+        requires:
+          avx2 [avx]
+          avx2_vl [avx]
+        to_base:
+          f64:
+            implementation:
+              tsil """
+                   let<type>(InVec, type<generation>(vector::as_extension(sse, type<generation>(base::in))))
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   var<const_infer>(loaded, call<primitive=load[InVec] attrs[aligned=false]>(ptr))
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm256_cvtps_pd>(loaded)));
+                """
       arith:
         requires:
           avx2 [avx2]
           avx2_vl [avx512f, avx512vl, avx]
         implementation:
           tsil """
-               let<type>(LoadVec, type<backend>(vector::as_extension(sse)))
-               emit_return(
-                 call<primitive=cast[LoadVec, ToType]>(
-                   call<primitive=load[LoadVec] attrs[aligned=false]>(ptr)
-                 )
-               );
+               let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+               let<type>(OutBase, type<generation>(base::generic(OutVec)))
+               var<infer>(out, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()))
+               loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1)  {
+                out[i] = cast<static>(OutBase, *ptr_add(ptr, i));
+              }
+               emit_return(call<primitive=from_array[OutVec]>(out)) ;
             """
     sve:
       si8:
         requires [sve]
-        to_type:
+        to_base:
           si16:
             implementation:
               tsil """
-                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
-                   emit_return(intrin_compose<svld1sb suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   emit_return(intrin_compose<svld1sb suffix=value<backend>(intrin::suffix(ToBase))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           si32:
             implementation:
               tsil """
-                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
-                   emit_return(intrin_compose<svld1sb suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   emit_return(intrin_compose<svld1sb suffix=value<backend>(intrin::suffix(ToBase))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           si64:
             implementation:
               tsil """
-                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
-                   emit_return(intrin_compose<svld1sb suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   emit_return(intrin_compose<svld1sb suffix=value<backend>(intrin::suffix(ToBase))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
       ui8:
         requires [sve]
-        to_type:
+        to_base:
           ui16:
             implementation:
               tsil """
-                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
-                   emit_return(intrin_compose<svld1ub suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   emit_return(intrin_compose<svld1ub suffix=value<backend>(intrin::suffix(ToBase))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           ui32:
             implementation:
               tsil """
-                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
-                   emit_return(intrin_compose<svld1ub suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   emit_return(intrin_compose<svld1ub suffix=value<backend>(intrin::suffix(ToBase))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           ui64:
             implementation:
               tsil """
-                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
-                   emit_return(intrin_compose<svld1ub suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   emit_return(intrin_compose<svld1ub suffix=value<backend>(intrin::suffix(ToBase))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
       si16:
         requires [sve]
-        to_type:
+        to_base:
           si32:
             implementation:
               tsil """
-                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
-                   emit_return(intrin_compose<svld1sh suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   emit_return(intrin_compose<svld1sh suffix=value<backend>(intrin::suffix(ToBase))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           si64:
             implementation:
               tsil """
-                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
-                   emit_return(intrin_compose<svld1sh suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   emit_return(intrin_compose<svld1sh suffix=value<backend>(intrin::suffix(ToBase))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
       ui16:
         requires [sve]
-        to_type:
+        to_base:
           ui32:
             implementation:
               tsil """
-                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
-                   emit_return(intrin_compose<svld1uh suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   emit_return(intrin_compose<svld1uh suffix=value<backend>(intrin::suffix(ToBase))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           ui64:
             implementation:
               tsil """
-                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
-                   emit_return(intrin_compose<svld1uh suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   emit_return(intrin_compose<svld1uh suffix=value<backend>(intrin::suffix(ToBase))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
       si32:
         requires [sve]
-        to_type:
+        to_base:
           si64:
             implementation:
               tsil """
-                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
-                   emit_return(intrin_compose<svld1sw suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   emit_return(intrin_compose<svld1sw suffix=value<backend>(intrin::suffix(ToBase))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
       ui32:
         requires [sve]
-        to_type:
+        to_base:
           ui64:
             implementation:
               tsil """
-                   let<type>(OutVec, type<generation>(vector::transform_extension(type<generation>(base::generic(ToType)))))
-                   emit_return(intrin_compose<svld1uw suffix=value<backend>(intrin::suffix(ToType))>(call<primitive=mask_true[OutVec]>(), ptr));
+                   let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                   emit_return(intrin_compose<svld1uw suffix=value<backend>(intrin::suffix(ToBase))>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
     [sse, sse_vl, neon, sve, generic, oneAPIfpga, scalar]:
       arith:
@@ -399,8 +603,8 @@ prim<v:=ptr+> load_convert_up(ptr):
           scalar []
         implementation:
           tsil """
-               let<type>(OutVec, ToType)
-               let<type>(OutBase, type<generation>(base::generic(ToType)))
+               let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+               let<type>(OutBase, type<generation>(base::generic(OutVec)))
                var<infer>(out, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()))
                loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1)  {
                 out[i] = cast<static>(OutBase, *ptr_add(ptr, i));

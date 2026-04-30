@@ -139,7 +139,12 @@ prim<m:=(v,v)> equal(left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(intrin_compose<vceqq>(left, right));
+            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+            emit_return(
+              call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
+                intrin_compose<vceqq>(left, right)
+              )
+            );
           """
     sve:
       arith:
@@ -482,7 +487,14 @@ prim<m:=(v,v)> less_than(left, right):
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin_compose<vcltq>(left, right));"
+          tsil """
+            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+            emit_return(
+              call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
+                intrin_compose<vcltq>(left, right)
+              )
+            );
+          """
     sve:
       arith:
         requires [sve]
@@ -670,7 +682,14 @@ prim<m:=(v,v)> greater_than(left, right):
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin_compose<vcgtq>(left, right));"
+          tsil """
+            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+            emit_return(
+              call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
+                intrin_compose<vcgtq>(left, right)
+              )
+            );
+          """
     sve:
       arith:
         requires [sve]
@@ -829,7 +848,14 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin_compose<vcleq>(left, right));"
+          tsil """
+            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+            emit_return(
+              call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
+                intrin_compose<vcleq>(left, right)
+              )
+            );
+          """
     sve:
       arith:
         requires [sve]
@@ -988,7 +1014,14 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin_compose<vcgeq>(left, right));"
+          tsil """
+            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+            emit_return(
+              call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
+                intrin_compose<vcgeq>(left, right)
+              )
+            );
+          """
     sve:
       arith:
         requires [sve]

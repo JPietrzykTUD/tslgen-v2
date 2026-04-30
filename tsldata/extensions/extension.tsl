@@ -196,7 +196,9 @@ extension neon:
     test_suite_name "TslTests"
     test_support_header "tests/scalar_support.hpp"
   rust:
-    supported false
+    supported true
+    type_name "Neon"
+    generation_support []
   signature_support:
     exclude ["void:=(ptr,vidx,v,sImm)", "void:=(m,ptr,vidx,v,sImm)"]
   test_filter:

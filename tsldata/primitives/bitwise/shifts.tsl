@@ -537,11 +537,11 @@ prim<v:=(v,v)> shift_left(data, shift):
                   intrin<vshlq_{{ ?i? }}>(data, shift)
                 );
               } else<generation> {
-                var<const_infer>(shift_u, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(shift));
+                var<const_infer>(shift_s, call<primitive=reinterpret[Vec, Vec<type<generation>(base::signed_of(type<generation>(base::in)))>]>(shift));
                 emit_return(
                   intrin<vshlq_{{ ?i? }}>(
                     data,
-                    shift_u
+                    shift_s
                   )
                 );
               }
@@ -843,12 +843,13 @@ prim<v:=(v,sImm)> shift_right(data, shift):
               if<compile>(!PreserveSign) {
                 let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
-                emit_return(intrin<vshrq_n_{{ ui? }}>(udata, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+                var<const_infer>(ures, intrin<vshrq_n_{{ ui? }}>(udata, shift));
+                emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin<vshrq_n_{{ ?i? }}>(data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+                emit_return(intrin<vshrq_n_{{ ?i? }}>(data, shift));
               }
             } else<generation> {
-              emit_return(intrin<vshrq_n_{{ ?i? }}>(data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+              emit_return(intrin<vshrq_n_{{ ?i? }}>(data, shift));
             }
           """
       f?:
@@ -1221,19 +1222,24 @@ prim<v:=(v,s)> shift_right(data, shift):
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                 if<compile>(!PreserveSign) {
                   let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                  let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))))
+                  let<type>(SignedVec, type<generation>(vector::transform_extension(SignedT)))
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
-                  var<const_infer>(shift_s, cast<static>(si32, -shift));
-                  var<const_infer>(sh, call<primitive=set1[Vec]>(shift_s));
+                  var<const_infer>(shift_s, -cast<static>(SignedT, shift));
+                  var<const_infer>(sh, call<primitive=set1[SignedVec]>(shift_s));
                   var<const_infer>(ures, intrin<vshlq_{{ ui? }}>(udata, sh));
                   emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
                 } else<compile> {
-                  var<const_infer>(shift_s, cast<static>(si32, -shift));
+                  let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))))
+                  var<const_infer>(shift_s, -cast<static>(SignedT, shift));
                   var<const_infer>(sh, call<primitive=set1[Vec]>(shift_s));
                   emit_return(intrin<vshlq_{{ ?i? }}>(data, sh));
                 }
               } else<generation> {
-                var<const_infer>(shift_s, cast<static>(si32, -shift));
-                var<const_infer>(sh, call<primitive=set1[Vec]>(shift_s));
+                let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))))
+                let<type>(SignedVec, type<generation>(vector::transform_extension(SignedT)))
+                var<const_infer>(shift_s, -cast<static>(SignedT, shift));
+                var<const_infer>(sh, call<primitive=set1[SignedVec]>(shift_s));
                 emit_return(intrin<vshlq_{{ ?i? }}>(data, sh));
               }
             """
@@ -1469,7 +1475,9 @@ prim<v:=(v,v)> shift_right(data, shift):
                   emit_return(intrin<vshlq_{{ ?i? }}>(data, intrin<vnegq_{{ si? }}>(shift)));
                 }
               } else<generation> {
-                emit_return(intrin<vshlq_{{ ?i? }}>(data, intrin<vnegq_{{ si? }}>(shift)));
+                let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))))
+                var<const_infer>(shift_s, call<primitive=reinterpret[Vec, Vec<SignedT>]>(shift));
+                emit_return(intrin<vshlq_{{ ?i? }}>(data, intrin<vnegq_{{ si? }}>(shift_s)));
               }
             """
       f?:

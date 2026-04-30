@@ -1,0 +1,416 @@
+# Target Architecture
+
+The target architecture separates source loading, parsing, domain modeling, validation, semantic analysis, selection, lowering, backend planning, rendering, artifact writing, configuration, CLI/API boundaries, diagnostics, and tests.
+
+The package layout below is a design target. It is not a map from legacy modules.
+
+## Proposed Package Layout
+
+```text
+tslgen/
+  src/tslgen/
+    __init__.py
+    api.py
+    cli.py
+    config/
+      model.py
+      cli_adapter.py
+      hardware.py
+    core/
+      diagnostics.py
+      result.py
+      frozen_map.py
+      ordering.py
+    io/
+      sources.py
+      manifests.py
+      artifacts.py
+    syntax/
+      ast.py
+      lexer.py
+      parser.py
+      grammar/
+        tsl_data.lark
+        tsil.lark
+    domain/
+      catalog.py
+      primitives.py
+      signatures.py
+      templates.py
+      types.py
+      extensions.py
+      implementations.py
+      tests.py
+      backends.py
+    validation/
+      catalog_validator.py
+      signature_rules.py
+      attribute_rules.py
+      reference_rules.py
+      extension_rules.py
+    analysis/
+      expansion.py
+      dependencies.py
+      selection.py
+      requirements.py
+    lowering/
+      tsil_ast.py
+      tsil_parser.py
+      semantic_ir.py
+      lowerer.py
+      translations.py
+    backends/
+      base.py
+      registry.py
+      cpp/
+        backend.py
+        planner.py
+        renderer.py
+      c17/
+        backend.py
+        planner.py
+        renderer.py
+      rust/
+        backend.py
+        planner.py
+        renderer.py
+    rendering/
+      template_engine.py
+      render_plan.py
+      text.py
+    pipeline/
+      stages.py
+      runner.py
+    testing/
+      golden.py
+      fixtures.py
+```
+
+Implementation may adjust names, but it must preserve the architectural boundaries.
+
+## Dependency Direction
+
+```mermaid
+flowchart LR
+    CLI[cli/api/config] --> Pipeline[pipeline]
+    Pipeline --> IO[io]
+    Pipeline --> Syntax[syntax]
+    Pipeline --> Domain[domain]
+    Pipeline --> Validation[validation]
+    Pipeline --> Analysis[analysis]
+    Pipeline --> Lowering[lowering]
+    Pipeline --> Backends[backends]
+    Pipeline --> Rendering[rendering]
+    Pipeline --> Artifacts[artifact writer]
+
+    Syntax --> Core[core]
+    Domain --> Core
+    Validation --> Domain
+    Analysis --> Domain
+    Lowering --> Domain
+    Lowering --> Analysis
+    Backends --> Domain
+    Backends --> Lowering
+    Backends --> Rendering
+    Rendering --> Core
+    IO --> Core
+```
+
+Rules:
+
+- `domain` does not import `syntax`, `io`, `cli`, or concrete backends.
+- `validation` reads domain objects and returns diagnostics; it does not mutate the catalog.
+- `analysis` produces expanded variants, dependencies, requirement decisions, and selections.
+- `lowering` consumes selected implementation bodies and translation maps.
+- `backends` consume typed plans and produce artifacts.
+- `io` owns filesystem loading and artifact writing.
+- `cli` owns argparse/cyclopts behavior, environment reads, and process exits.
+
+## Module Responsibilities
+
+### `config`
+
+Owns explicit configuration models and adapters.
+
+Responsibilities:
+
+- CLI option parsing.
+- Environment and hardware detection adapters.
+- Default source path policies.
+- Conversion from CLI args to `PipelineConfig`.
+
+Does not:
+
+- Select implementations.
+- Parse TSL.
+- Render artifacts.
+
+### `core`
+
+Shared low-level utilities.
+
+Responsibilities:
+
+- Diagnostics.
+- Result containers.
+- Frozen maps.
+- Stable ordering helpers.
+
+Does not:
+
+- Know TSL domain concepts.
+
+### `io`
+
+Filesystem and manifest boundaries.
+
+Responsibilities:
+
+- Resolve input paths.
+- Load source documents as text.
+- Load YAML or other manifests through typed schemas.
+- Write artifact sets.
+- Produce write reports.
+
+Does not:
+
+- Validate primitive semantics.
+- Render text.
+- Read CPU flags.
+
+### `syntax`
+
+Parsing boundary for source languages.
+
+Responsibilities:
+
+- TSL grammar and parser.
+- Syntax nodes with spans.
+- Basic syntax diagnostics.
+- TSIL grammar later, when lowering milestone needs it.
+
+Does not:
+
+- Resolve signatures to templates.
+- Select implementations.
+- Generate backend text.
+
+### `domain`
+
+Core vocabulary.
+
+Responsibilities:
+
+- Typed immutable objects for catalog data.
+- Signature and shape value objects.
+- Extension/type/template/implementation/test/backend models.
+
+Does not:
+
+- Perform I/O.
+- Depend on parser-private fields.
+- Include backend rendering logic.
+
+### `validation`
+
+Semantic checks before planning.
+
+Responsibilities:
+
+- Signature and attribute validation.
+- Template required-field validation.
+- Extension inheritance validation.
+- Reference validation for type groups, lane sets, extensions, primitive calls.
+- Backend manifest validation.
+- Diagnostic creation.
+
+Does not:
+
+- Render outputs.
+- Hide invalid data by silently dropping it.
+
+### `analysis`
+
+Pure computation over validated catalog.
+
+Responsibilities:
+
+- Boolean wildcard expansion.
+- Type group expansion.
+- Feature requirement normalization.
+- Extension fallback chains.
+- Dependency discovery.
+- Selection planning and implementation candidate selection.
+
+Does not:
+
+- Read host hardware.
+- Render backend code.
+- Write outputs.
+
+### `lowering`
+
+Semantic lowering from implementation body to backend-neutral or backend-ready IR.
+
+Responsibilities:
+
+- Parse TSIL bodies.
+- Analyze primitive calls and dependencies.
+- Evaluate generation-time expressions.
+- Apply translation maps.
+- Produce lowered body objects.
+
+Does not:
+
+- Choose target extensions.
+- Load files.
+- Write artifacts.
+
+### `backends`
+
+Backend-specific planning and rendering strategy.
+
+Responsibilities:
+
+- Expose backend capabilities.
+- Plan wrappers, primaries, specializations, tests, traits, and support metadata.
+- Render artifacts through template engines or structured emitters.
+- Report required flags and artifact metadata.
+
+Does not:
+
+- Re-parse source files.
+- Make selection decisions based on CPU flags.
+- Own output paths.
+
+### `rendering`
+
+Shared rendering utilities.
+
+Responsibilities:
+
+- Template engine abstraction.
+- Whitespace/text helpers.
+- Render plan and artifact assembly helpers.
+
+Does not:
+
+- Know target hardware semantics.
+
+### `pipeline`
+
+Stage orchestration.
+
+Responsibilities:
+
+- Compose the stages.
+- Enforce validation gates.
+- Return structured results.
+- Keep stage inputs and outputs inspectable.
+
+Does not:
+
+- Hide side effects.
+- Swallow diagnostics.
+
+## Public Interfaces
+
+### API
+
+The public API should expose a small facade:
+
+```python
+def load_catalog(config: SourceConfig) -> CatalogResult: ...
+def validate_catalog(catalog: Catalog) -> ValidationResult: ...
+def plan_generation(catalog: Catalog, request: SelectionRequest) -> PlanResult: ...
+def render_artifacts(plan: BackendPlan) -> ArtifactResult: ...
+def write_artifacts(artifacts: ArtifactSet, output_root: Path) -> WriteReport: ...
+def run_pipeline(config: PipelineConfig) -> PipelineResult: ...
+```
+
+These functions should be stable enough for tests and external tools.
+
+### CLI
+
+The CLI should convert user options into `PipelineConfig`, run the pipeline, print diagnostics, write artifacts when requested, and exit with a process code.
+
+The CLI must not expose internal stage objects unless a debug command is explicitly added.
+
+## Private Implementation Details
+
+The following should remain private or replaceable:
+
+- Template engine choice.
+- Exact grammar parser library.
+- Internal IR node shapes before they stabilize.
+- Backend-specific whitespace formatting helpers.
+- Hardware detection implementation.
+- Golden fixture organization.
+
+## Extension Points
+
+| Extension Point | Mechanism |
+| --- | --- |
+| New backend | Implement `Backend` protocol and register manifest/capabilities. |
+| New TSL block | Add syntax node, catalog builder support, validation rules, and docs. |
+| New signature term | Add signature parser support and validation rules. |
+| New template | Add template metadata, signature mapping, backend rendering support, tests. |
+| New hardware extension | Add extension metadata, type/lane/test support, backend policy tests. |
+| New lowering operation | Add TSIL parser node, semantic IR, backend translation entries, tests. |
+| New artifact type | Extend artifact model and writer policy explicitly. |
+
+## Pure Computation And Side Effects
+
+Side-effect boundaries:
+
+- `io.sources` reads source files.
+- `io.manifests` reads manifests.
+- `config.hardware` may read host hardware.
+- `io.artifacts` writes files.
+- `cli` prints diagnostics and exits.
+
+Pure stages:
+
+- Catalog building from syntax nodes.
+- Validation.
+- Expansion.
+- Selection.
+- Dependency analysis when TSIL bodies are provided as strings.
+- Lowering.
+- Planning.
+- Rendering.
+
+## Sketch Assessment
+
+Promising ideas in `tslgen/`:
+
+- `tslgen/src/tslgen/core/context.py` separates global configuration from generation context.
+- `tslgen/src/tslgen/core/passes.py` uses protocols for pass boundaries.
+- `tslgen/src/tslgen/ir/primitive_ir.py` recognizes source spans and primitive scope.
+- `tslgen/src/tslgen/cli.py` has explicit hardware mode validation.
+
+Design risks in `tslgen/`:
+
+- Python `>=3.14` in `tslgen/pyproject.toml` is accepted for this redesign because the dev container has Python 3.14.4 installed; agents should still keep implementation style straightforward.
+- Imports such as `tslgen.src.tslgen...` in middle-end files indicate unstable package boundaries.
+- Many pass classes are placeholders or rely on string rewrites.
+- `networkx` appears in context but is not declared in dependencies.
+- The sketch still couples primitive IR to concrete implementation text and hardware filtering too early.
+
+Use the sketch as a source of ideas, not as the architecture.
+
+## Compatibility Boundaries
+
+Must remain compatible at the behavior level:
+
+- Parse current TSL data.
+- Resolve documented signatures/templates.
+- Respect extension/type/lane/test metadata.
+- Generate deterministic artifacts when baselines are established.
+
+Need not remain compatible:
+
+- Legacy import paths.
+- Legacy CLI wording.
+- Legacy internal object graphs.
+- Legacy accidental errors or silent skipping behavior.
