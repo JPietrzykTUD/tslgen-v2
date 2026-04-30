@@ -825,3 +825,45 @@ Consequences:
   is provided.
 - Broader body rendering remains blocked on future TSIL, type, translation-map,
   and wrapper milestones.
+
+## ADR-025: First Production Test Artifact Is Metadata-Style C++ Source
+
+Status: Accepted for the Milestone 29 slice
+
+Context:
+
+Milestone 17 introduced typed production test-source planning, and Milestone 28
+introduced one C++ scalar body-rendering slice. The first generated production
+test artifact should prove that planned test metadata can become deterministic
+source text without starting compile/run orchestration or a full generated-test
+framework.
+
+Considered alternatives:
+
+- Render executable C++ assertions immediately.
+- Render a backend-neutral manifest instead of C++ source.
+- Defer generated test artifacts until full lane and mask policy exists.
+- Render a narrow C++ metadata-style source artifact from `TestSourcePlan`.
+
+Decision:
+
+Render one deterministic C++ `production_tests` source artifact containing
+metadata records for scalar `binary` `si32`/`ui32` planned tests. Each record
+captures the test name, primitive, generated function name, candidate ID,
+extension metadata, type tag, lane metadata, input vectors, and expected vector.
+Unsupported artifact kinds, type tags, extra metadata, and case shapes are
+diagnostics.
+
+Rationale:
+
+This makes the production-test rendering boundary concrete while avoiding
+unstable lane resizing, mask handling, runtime execution, and compiler policy.
+It also keeps generated production tests separate from repository unit tests.
+
+Consequences:
+
+- The first test artifact is inspectable C++ source, not an executable test
+  harness.
+- Full assertion rendering, lane policy, mask/test-manifest policy, compile/run
+  orchestration, and Rust test rendering remain future milestones.
+- Test rendering consumes `TestSourcePlan` and does not rescan raw TSL.

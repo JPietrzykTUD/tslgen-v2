@@ -705,7 +705,7 @@ grammar, type mapping, backend translation, and wrapper policy milestones.
 
 ## OQ-023: What Should The First Production Test Rendering Artifact Look Like?
 
-Status: Open - scheduled for Milestone 29
+Status: Answered for the Milestone 29 production-test rendering slice
 
 Why it matters:
 
@@ -713,12 +713,22 @@ Milestone 17 plans production test sources as metadata, but no generated test
 source text exists. The first rendering slice should prove the boundary without
 starting compiler or runtime orchestration.
 
-Possible answers:
+Decision:
 
-- Render a C++ metadata-heavy test source for the current scalar declaration/body
-  slice.
-- Render a backend-neutral test manifest artifact first.
-- Defer rendering until generated function bodies are stable.
+Render a C++ metadata-heavy test source for the current scalar declaration/body
+slice. The artifact consumes `TestSourcePlan` and emits deterministic
+`scalar_binary_case` records for scalar `binary` `si32`/`ui32` planned tests.
+The records include test name, primitive, generated function name, candidate ID,
+extension metadata, type tag, lane metadata, input vectors, and expected vector.
+
+Deferred answers:
+
+- Executable generated assertions.
+- Lane resizing and runtime-lane policy.
+- Mask/test-manifest policy.
+- Compile/run orchestration.
+- Rust test rendering.
+- Full legacy test framework parity.
 
 Required evidence:
 
@@ -728,8 +738,9 @@ Required evidence:
 
 Implementation blocked:
 
-Milestone 29 is blocked on deciding a narrow artifact shape and supported test
-case fixture.
+Not for Milestone 29. Broader generated-test behavior remains blocked on future
+lane policy, assertion rendering, backend test harness, and execution
+milestones.
 
 ## OQ-024: How Complete Must Backend Manifests, Language Maps, And Translation Maps Be Before Broader Rendering?
 
@@ -1037,3 +1048,8 @@ long as they avoid unrelated corpus churn.
 ## Follow-up from Milestone 28 review
 
 - Add a focused future test for `TSL-CPP-RENDER-LOWERING-PARAMETER` to make the defensive diagnostic contract explicit.
+
+## Follow-ups from Milestone 29 review
+
+- Add a focused conversion-shaped test-rendering diagnostic test for `to_type` / `to_extension`.
+- Before executable generated tests, promote enough planned-case metadata to distinguish primitive/template/signature shape explicitly rather than relying on vector-count shape alone.

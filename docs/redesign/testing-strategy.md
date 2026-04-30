@@ -275,6 +275,9 @@ generation:
   parameter-add return body and diagnostics for missing or unsupported lowered
   bodies.
 - Generated production test rendering golden tests over `TestSourcePlan` values.
+  Milestone 29 covers only the C++ scalar `binary` `si32`/`ui32`
+  metadata-style test source artifact and diagnostics for unsupported test
+  artifact kinds, type tags, extra metadata, and case shapes.
 - Backend manifest/language/translation-map diagnostic tests.
 - Rust production-shaped declaration golden tests once that slice is selected.
 - Candidate-specific dependency report/API tests when those values are exposed.
@@ -347,7 +350,7 @@ Determinism tests should assert:
 - Same backend plan renders identical artifact content.
 - Same artifact set writes identical write reports and digest maps.
 - Same production test-source request produces identical test artifact
-  descriptors.
+  descriptors and, once rendered, identical test artifact content.
 - Same generated test-source rendering request produces identical content.
 - Same lowering input produces identical lowered results or diagnostics.
 - Same report/write CLI invocation produces identical stdout/stderr contract and

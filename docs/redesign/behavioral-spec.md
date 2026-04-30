@@ -479,9 +479,17 @@ Test rendering must be backend-specific but data-driven. Compiler invocation,
 runtime execution, and generated-test framework orchestration are separate
 future concerns.
 
-Milestone 29 may render one narrow production test source artifact from typed
-test-source planning values. It must not invoke compilers, inspect host
-hardware, or use repository unit-test helpers as production generator logic.
+Milestone 29 renders one narrow C++ production test source artifact from typed
+`TestSourcePlan` values. The supported artifact kind is `production_tests`; the
+supported planned cases are scalar `binary` `si32`/`ui32` metadata tests with
+two integer input vectors and one integer expected vector. The artifact is a
+deterministic C++ source file containing inspectable test-case records that
+trace each planned case to its primitive, generated function name, candidate,
+extension, type tag, lane metadata, inputs, and expected values. It does not
+emit executable assertions, invoke compilers, inspect host hardware, write
+files, or use repository unit-test helpers as production generator logic.
+Unsupported planned cases report `TSL-TEST-RENDER-*` diagnostics rather than
+being silently skipped.
 
 ## CLI Behavior
 

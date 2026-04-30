@@ -397,9 +397,11 @@ one C++ scalar body-rendering path from mini-lowered TSIL. The C++ renderer
 continues to accept selected candidates and an artifact plan, and optionally
 accepts a `LoweringPlan` for body definitions. It diagnoses missing or
 unsupported lowered data instead of lowering TSIL or rendering stubs. Milestone
-29 may add one generated production test artifact. Milestone 31 may add one Rust
-production-shaped declaration/signature slice. Each of these rendering slices
-must stay backend-owned and must not perform selection, lowering, or writing.
+29 adds one C++ generated production-test artifact from `TestSourcePlan`
+metadata. That artifact is metadata-style source, not compiled or executable
+test orchestration. Milestone 31 may add one Rust production-shaped
+declaration/signature slice. Each of these rendering slices must stay
+backend-owned and must not perform selection, lowering, execution, or writing.
 
 ## Stage 11: Artifact Writing
 
