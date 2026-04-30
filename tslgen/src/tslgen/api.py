@@ -6,7 +6,7 @@ from pathlib import Path
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
 from tslgen.analysis.dependencies import DependencyClosure, plan_dependency_closure
 from tslgen.analysis.selection import SelectionPlan, SelectionRequest, plan_selection
-from tslgen.backends.cpp.backend import CppBackend
+from tslgen.backends.registry import BackendRegistry, default_backend_registry
 from tslgen.config.model import SourceConfig
 from tslgen.core.diagnostics import Diagnostic, has_errors, sort_diagnostics
 from tslgen.domain.backends import BackendManifestSet
@@ -28,6 +28,7 @@ class PipelineConfig:
     backend_manifests: BackendManifestSet | None = None
     backend_manifest_paths: tuple[Path, ...] = ()
     render_backend: str | None = None
+    backend_registry: BackendRegistry = field(default_factory=default_backend_registry)
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -212,29 +213,11 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
         )
     artifact_plan = artifact_plan_result.unwrap()
 
-    if config.render_backend != "cpp":
-        diagnostics.append(
-            Diagnostic.error(
-                "TSL-PIPELINE-UNSUPPORTED-RENDER-BACKEND",
-                f"pipeline rendering currently supports only 'cpp', got "
-                f"{config.render_backend!r}",
-            )
-        )
-        return PipelineResult(
-            diagnostics=tuple(diagnostics),
-            sources=sources,
-            parsed=parsed,
-            catalog=catalog,
-            validated_catalog=validated,
-            reference_catalog=reference_catalog,
-            selection_plan=selection_plan,
-            candidate_selection=candidates,
-            dependency_closure=dependency_closure,
-            backend_manifests=manifests,
-            artifact_plan=artifact_plan,
-        )
-
-    rendered = CppBackend().render(artifact_plan, candidates)
+    rendered = config.backend_registry.render(
+        config.render_backend,
+        artifact_plan,
+        candidates,
+    )
     diagnostics.extend(rendered.diagnostics)
     if not rendered.is_ok:
         return PipelineResult(

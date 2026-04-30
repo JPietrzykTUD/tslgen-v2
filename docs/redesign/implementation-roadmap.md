@@ -430,6 +430,14 @@ Goal:
 
 Add the Rust backend using the established backend protocol.
 
+Milestone 14 initial slice:
+
+- Minimal Rust summary renderer for the `generated` artifact kind.
+- Golden-file coverage for one representative Rust summary artifact.
+- Backend renderer registry used by the public API for C++ and Rust dispatch.
+- No Rust SIMD lowering, template rendering engine, Cargo integration, artifact
+  writing, or production Rust code generation.
+
 Scope:
 
 - `backends/rust/*`

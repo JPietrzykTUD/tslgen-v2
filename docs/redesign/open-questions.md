@@ -387,6 +387,13 @@ Validation strictness is partially blocked. Catalog can preserve extra fields no
 
 ## Follow-ups from Milestone 13 review
 
-- Add a focused manifest-path loading/rendering test for the public API or CLI.
-- Introduce a small backend renderer dispatch mechanism during Milestone 14 instead of extending `if backend == ...` logic in `api.py`.
+- Addressed in Milestone 14: added a focused public API test that loads a Rust
+  backend manifest from a path and renders the in-memory Rust summary artifact.
+- Addressed in Milestone 14: introduced a small backend renderer registry used
+  by the public API for C++ and Rust rendering dispatch.
 - Keep output writing and skip-unchanged behavior in a later writer boundary.
+
+## Follow-ups from Milestone 14 review
+
+- Keep output writing and skip-unchanged behavior in a later writer boundary.
+- Avoid expanding the backend registry into lifecycle/plugin mechanics until a real extension need appears.

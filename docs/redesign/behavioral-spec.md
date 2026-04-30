@@ -248,12 +248,24 @@ tags, template names, and escaped opaque TSIL payload text. This slice does not
 lower TSIL, evaluate backend translations, render full backend templates, or
 produce final SIMD implementation code.
 
+The first Rust backend slice supports only the `rust` backend and `generated`
+artifact kind. It renders a deterministic Rust module-like summary artifact
+analogous to the C++ summary: selected primitive candidates, required flags,
+target/source extensions, type tags, template names, and escaped opaque TSIL
+payload text. This slice does not lower TSIL, evaluate Rust translation maps,
+render full Rust templates, invoke Cargo, or produce final Rust SIMD
+implementation code.
+
+Public pipeline rendering dispatches through an explicit backend renderer
+registry. Generic pipeline code builds backend-neutral artifact plans and asks
+the registry for the requested renderer; it must not grow backend-specific
+rendering conditionals for each new backend.
+
 Backend renderers must reject backend mismatches before producing artifacts:
 
-- A C++ renderer must reject an artifact plan or descriptor for a backend other
-  than `cpp`.
-- A C++ renderer must reject candidates selected explicitly for a different
-  backend.
+- A renderer must reject an artifact plan or descriptor for a backend other than
+  its own backend ID.
+- A renderer must reject candidates selected explicitly for a different backend.
 - Candidates without backend-specific selection metadata may be accepted by a
   renderer only when the renderer documents that generic policy.
 
