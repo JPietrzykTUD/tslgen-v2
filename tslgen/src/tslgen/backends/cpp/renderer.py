@@ -5,6 +5,7 @@ from tslgen.core.frozen_map import FrozenMap
 from tslgen.core.result import Result
 from tslgen.io.artifacts import Artifact, ArtifactSet, artifact_set_from_artifacts
 
+from .bodies import render_cpp_production_definitions
 from .declarations import render_cpp_production_declarations
 from .planner import CppRenderJob, CppRenderPlan
 
@@ -24,6 +25,7 @@ def _render_job(job: CppRenderJob) -> Artifact:
                 "artifact_kind": job.descriptor.kind,
                 "backend_id": "cpp",
                 "candidate_count": len(job.candidates),
+                "definition_count": len(job.definitions),
                 "required_flags": _required_flag_names(job.candidates),
                 "target_extensions": _target_extension_names(job.candidates),
             }
@@ -40,6 +42,7 @@ def _render_generated_header(job: CppRenderJob) -> str:
         f"// Artifact: {job.descriptor.logical_path.as_posix()}",
         f"// Artifact kind: {job.descriptor.kind}",
         f"// Candidates: {len(job.candidates)}",
+        f"// Definitions: {len(job.definitions)}",
         f"// Required flags: {required_flags}",
         f"// Target extensions: {target_extensions}",
         "",
@@ -71,9 +74,11 @@ def _render_generated_header(job: CppRenderJob) -> str:
             "",
         ]
     )
-    declaration_lines = render_cpp_production_declarations(job.declarations)
-    if declaration_lines:
-        lines.extend((*declaration_lines, ""))
+    production_lines = render_cpp_production_definitions(job.definitions)
+    if not production_lines:
+        production_lines = render_cpp_production_declarations(job.declarations)
+    if production_lines:
+        lines.extend((*production_lines, ""))
     lines.extend(
         [
             "}  // namespace generated",

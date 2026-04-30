@@ -668,7 +668,7 @@ and semantic lowering work.
 
 ## OQ-022: What Is The First C++ Body Rendering Contract?
 
-Status: Open - scheduled for Milestone 28
+Status: Answered for the Milestone 28 scalar body slice
 
 Why it matters:
 
@@ -676,11 +676,21 @@ Declarations prove naming and artifact structure, but production code needs
 bodies. Rendering bodies before lowering exists would revive string-rewrite
 behavior that the redesign rejects.
 
-Possible answers:
+Decision:
 
-- Render one scalar body from the Milestone 27 mini-lowered TSIL form.
-- Defer all bodies until a broader TSIL expression model exists.
-- Render only stub bodies with explicit unsupported diagnostics.
+Render one scalar C++ body from the Milestone 27 mini-lowered direct
+parameter-add return form. The supported output remains limited to scalar
+`binary` `si32`/`ui32` functions already covered by the declaration/naming
+contract. Body rendering consumes `LoweringPlan` data and emits `return left +
+right;`-style bodies from lowered parameter references.
+
+Deferred answers:
+
+- Broader expression rendering.
+- SIMD/vector type mapping.
+- Intrinsics and translation-map rendering.
+- Wrapper and overload body generation.
+- Rust production body rendering.
 
 Required evidence:
 
@@ -690,7 +700,8 @@ Required evidence:
 
 Implementation blocked:
 
-Milestone 28 is blocked on Milestones 26 and 27.
+Not for Milestone 28. Broader body rendering remains blocked on future TSIL
+grammar, type mapping, backend translation, and wrapper policy milestones.
 
 ## OQ-023: What Should The First Production Test Rendering Artifact Look Like?
 
@@ -1022,3 +1033,7 @@ long as they avoid unrelated corpus churn.
 ## Follow-up from Milestone 27 review
 
 - Keep Milestone 28 constrained to consuming the lowered model; C++ body rendering must not rescan raw TSIL payload text.
+
+## Follow-up from Milestone 28 review
+
+- Add a focused future test for `TSL-CPP-RENDER-LOWERING-PARAMETER` to make the defensive diagnostic contract explicit.

@@ -44,9 +44,13 @@ class CppFunctionDeclaration:
         )
 
     @property
-    def text(self) -> str:
+    def signature_text(self) -> str:
         parameters = ", ".join(parameter.text for parameter in self.parameters)
-        return f"inline {self.return_type} {self.function_name}({parameters});"
+        return f"inline {self.return_type} {self.function_name}({parameters})"
+
+    @property
+    def text(self) -> str:
+        return f"{self.signature_text};"
 
 
 def plan_cpp_production_declarations(

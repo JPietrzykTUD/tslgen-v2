@@ -327,9 +327,17 @@ names. Invalid function names produce
 wrapper, and body naming remain deferred until those output forms become
 supported slices.
 
-Milestone 28 is the first permitted C++ body-rendering milestone. It may render
-only a tiny scalar body whose semantics come from accepted lowered data. Raw
-opaque TSIL payload text must not be spliced into C++ bodies.
+Milestone 28 is the first permitted C++ body-rendering milestone. It renders
+only the scalar `binary` `si32`/`ui32` declaration slice when a supplied
+`LoweringPlan` contains the Milestone 27 mini-lowered direct parameter-add
+return statement. The generated C++ body is exactly `return <left> + <right>;`
+using validated declaration parameter names. If no lowering plan is supplied,
+the C++ renderer keeps the declaration-only behavior. If body rendering is
+requested with missing or unsupported lowered data, it reports
+`TSL-CPP-RENDER-LOWERING-MISSING`,
+`TSL-CPP-RENDER-LOWERING-UNSUPPORTED`, or
+`TSL-CPP-RENDER-LOWERING-PARAMETER` rather than emitting a stub. Raw opaque TSIL
+payload text must not be spliced into C++ bodies.
 
 The first Rust backend slice supports only the `rust` backend and `generated`
 artifact kind. It renders a deterministic Rust module-like summary artifact

@@ -21,6 +21,16 @@ from tslgen.domain.backends import ArtifactSpec, BackendManifest, BackendManifes
 from tslgen.domain.catalog import Catalog, build_catalog
 from tslgen.io.artifacts import ArtifactDescriptor, artifact_plan_from_descriptors
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
+from tslgen.lowering import (
+    LoweredImplementation,
+    LoweringPlan,
+    LoweringRequest,
+    TsilBinaryExpression,
+    TsilParameterReference,
+    TsilReturnStatement,
+    lower_candidates,
+    prepare_lowering_inputs,
+)
 from tslgen.rendering.render_plan import build_artifact_plan
 from tslgen.syntax.ast import ParsedDocumentSet
 from tslgen.syntax.parser import parse_document, parse_sources
@@ -69,6 +79,17 @@ INVALID_PARAMETER_PRIMITIVE = """prim<v:=(v,v)> slice_add(class, right):
         requires [sse]
         implementation:
           tsil "emit_return(class + right);"
+"""
+
+
+RAW_SUBTRACT_PRIMITIVE = """prim<v:=(v,v)> slice_add(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires [sse]
+        implementation:
+          tsil "emit_return(left - right);"
 """
 
 
@@ -196,6 +217,7 @@ def render_simple_fixture(
     primitive_text: str = SIMPLE_PRIMITIVE,
     selection_backend: str | None = "cpp",
     artifact_kind: str = "generated",
+    include_lowering: bool = True,
 ):
     referenced = catalog_with_primitive(primitive_text)
     selection = candidate_selection_for(referenced, backend=selection_backend)
@@ -206,7 +228,8 @@ def render_simple_fixture(
     )
     if not artifact_plan.is_ok:
         raise AssertionError(artifact_plan.diagnostics)
-    return CppBackend().render(artifact_plan.unwrap(), selection)
+    lowering_plan = lowering_plan_for(selection) if include_lowering else None
+    return CppBackend().render(artifact_plan.unwrap(), selection, lowering_plan)
 
 
 def artifact_plan_for_selection(
@@ -225,6 +248,49 @@ def artifact_plan_for_selection(
     if not artifact_plan.is_ok:
         raise AssertionError(artifact_plan.diagnostics)
     return artifact_plan.unwrap()
+
+
+def lowering_plan_for(selection: CandidateSelection) -> LoweringPlan:
+    lowered = lower_candidates(selection, LoweringRequest(backend_id="cpp"))
+    if not lowered.is_ok:
+        raise AssertionError(lowered.diagnostics)
+    return lowered.unwrap()
+
+
+def empty_lowering_plan_for(selection: CandidateSelection) -> LoweringPlan:
+    prepared = prepare_lowering_inputs(selection, LoweringRequest(backend_id="cpp"))
+    if not prepared.is_ok:
+        raise AssertionError(prepared.diagnostics)
+    return LoweringPlan(
+        request=prepared.unwrap().request,
+        input_set=prepared.unwrap(),
+        implementations=(),
+    )
+
+
+def manual_add_lowering_plan_for(selection: CandidateSelection) -> LoweringPlan:
+    prepared = prepare_lowering_inputs(selection, LoweringRequest(backend_id="cpp"))
+    if not prepared.is_ok:
+        raise AssertionError(prepared.diagnostics)
+    return LoweringPlan(
+        request=prepared.unwrap().request,
+        input_set=prepared.unwrap(),
+        implementations=(
+            LoweredImplementation(
+                candidate_id=selection.candidates[0].candidate_id,
+                status="lowered",
+                statements=(
+                    TsilReturnStatement(
+                        TsilBinaryExpression(
+                            operator="+",
+                            left=TsilParameterReference("left"),
+                            right=TsilParameterReference("right"),
+                        )
+                    ),
+                ),
+            ),
+        ),
+    )
 
 
 class CppNamingTests(unittest.TestCase):
@@ -286,29 +352,47 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
         self.assertEqual(artifact.metadata["required_flags"], ("sse",))
         self.assertEqual(artifact.metadata["target_extensions"], ("scalar",))
         self.assertEqual(artifact.metadata["candidate_count"], 2)
+        self.assertEqual(artifact.metadata["definition_count"], 2)
         self.assertIn("namespace production", artifact.content)
         self.assertIn(
-            "inline std::int32_t slice_add_si32(std::int32_t left, "
-            "std::int32_t right);",
+            "inline std::int32_t slice_add_si32(std::int32_t left, std::int32_t right) {\n"
+            "  return left + right;\n"
+            "}",
             artifact.content,
         )
         self.assertIn(
             "inline std::uint32_t slice_add_ui32(std::uint32_t left, "
-            "std::uint32_t right);",
+            "std::uint32_t right) {\n"
+            "  return left + right;\n"
+            "}",
             artifact.content,
         )
 
-    def test_original_scalar_binary_si32_declaration_remains_stable(self) -> None:
+    def test_original_scalar_binary_si32_definition_remains_stable(self) -> None:
         result = render_simple_fixture(primitive_text=SI32_ONLY_PRIMITIVE)
 
         self.assertTrue(result.is_ok, result.diagnostics)
         artifact = result.unwrap().artifacts_by_path["generated.hpp"]
         self.assertIn(
+            "inline std::int32_t slice_add_si32(std::int32_t left, std::int32_t right) {\n"
+            "  return left + right;\n"
+            "}",
+            artifact.content,
+        )
+        self.assertNotIn("slice_add_ui32", artifact.content)
+
+    def test_can_still_render_declaration_only_without_lowering_plan(self) -> None:
+        result = render_simple_fixture(include_lowering=False)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = result.unwrap().artifacts_by_path["generated.hpp"]
+        self.assertEqual(artifact.metadata["definition_count"], 0)
+        self.assertIn(
             "inline std::int32_t slice_add_si32(std::int32_t left, "
             "std::int32_t right);",
             artifact.content,
         )
-        self.assertNotIn("slice_add_ui32", artifact.content)
+        self.assertNotIn("  return left + right;", artifact.content)
 
     def test_rendering_is_deterministic(self) -> None:
         first = render_simple_fixture()
@@ -393,6 +477,64 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             code="TSL-CPP-RENDER-DECLARATION-UNSUPPORTED",
             severity="error",
         )
+
+    def test_diagnoses_missing_lowered_body_when_body_rendering_requested(self) -> None:
+        selection = candidate_selection_for(catalog_with_primitive(SI32_ONLY_PRIMITIVE))
+        artifact_plan = artifact_plan_for_selection(selection)
+
+        result = CppBackend().render(
+            artifact_plan,
+            selection,
+            empty_lowering_plan_for(selection),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-LOWERING-MISSING",
+            severity="error",
+        )
+
+    def test_diagnoses_unsupported_lowered_body(self) -> None:
+        selection = candidate_selection_for(catalog_with_primitive(SI32_ONLY_PRIMITIVE))
+        artifact_plan = artifact_plan_for_selection(selection)
+        valid_lowering = lowering_plan_for(selection)
+        unsupported_lowering = LoweringPlan(
+            request=valid_lowering.request,
+            input_set=valid_lowering.input_set,
+            implementations=(
+                LoweredImplementation(
+                    candidate_id=selection.candidates[0].candidate_id,
+                    status="unsupported",
+                ),
+            ),
+        )
+
+        result = CppBackend().render(artifact_plan, selection, unsupported_lowering)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-LOWERING-UNSUPPORTED",
+            severity="error",
+        )
+
+    def test_body_rendering_uses_lowered_model_not_raw_tsil_text(self) -> None:
+        selection = candidate_selection_for(catalog_with_primitive(RAW_SUBTRACT_PRIMITIVE))
+        artifact_plan = artifact_plan_for_selection(selection)
+
+        result = CppBackend().render(
+            artifact_plan,
+            selection,
+            manual_add_lowering_plan_for(selection),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = result.unwrap().artifacts_by_path["generated.hpp"]
+        self.assertIn("  return left + right;", artifact.content)
+        self.assertNotIn("  return left - right;", artifact.content)
 
     def test_diagnoses_invalid_declaration_parameter_name(self) -> None:
         result = render_simple_fixture(primitive_text=INVALID_PARAMETER_PRIMITIVE)

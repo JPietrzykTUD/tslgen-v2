@@ -784,3 +784,44 @@ Consequences:
   behavior.
 - Future lowering milestones must grow the lowering-owned TSIL model rather than
   letting renderers rescan raw payload text.
+
+## ADR-024: First C++ Bodies Consume Mini-Lowered Return Statements Only
+
+Status: Accepted for the Milestone 28 slice
+
+Context:
+
+Milestone 26 established the scalar C++ declaration and naming contract.
+Milestone 27 introduced one backend-neutral lowered TSIL form: a direct
+parameter-add return. The first body-rendering slice must prove rendering can
+consume lowered data without reopening raw TSIL parsing in the backend.
+
+Considered alternatives:
+
+- Keep C++ output declaration-only until broad TSIL lowering exists.
+- Render C++ bodies by reading candidate TSIL payload text.
+- Render stubs when lowering is missing.
+- Render one body form only from accepted lowered statements.
+
+Decision:
+
+Render C++ definitions only for the existing scalar `binary` `si32`/`ui32`
+declaration slice when a `LoweringPlan` contains the mini-lowered direct
+parameter-add return statement for the candidate. Missing lowered data,
+unsupported lowered status, unsupported statement shape, or lowered parameter
+references outside the declaration are diagnostics.
+
+Rationale:
+
+This keeps rendering backend-owned while preserving the lowering boundary. It
+also gives the next production test and broader C++ rendering milestones a
+concrete generated body without claiming general TSIL or SIMD semantics.
+
+Consequences:
+
+- The C++ golden artifact now contains inline function definitions for the
+  supported scalar add slice.
+- C++ rendering can still produce declaration-only output when no lowering plan
+  is provided.
+- Broader body rendering remains blocked on future TSIL, type, translation-map,
+  and wrapper milestones.

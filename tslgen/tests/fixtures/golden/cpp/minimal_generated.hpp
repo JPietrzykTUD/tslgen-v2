@@ -3,6 +3,7 @@
 // Artifact: generated.hpp
 // Artifact kind: generated
 // Candidates: 2
+// Definitions: 2
 // Required flags: sse
 // Target extensions: scalar
 
@@ -49,8 +50,13 @@ inline constexpr primitive_candidate primitive_candidates[] = {
 
 namespace production {
 
-inline std::int32_t slice_add_si32(std::int32_t left, std::int32_t right);
-inline std::uint32_t slice_add_ui32(std::uint32_t left, std::uint32_t right);
+inline std::int32_t slice_add_si32(std::int32_t left, std::int32_t right) {
+  return left + right;
+}
+
+inline std::uint32_t slice_add_ui32(std::uint32_t left, std::uint32_t right) {
+  return left + right;
+}
 
 }  // namespace production
 

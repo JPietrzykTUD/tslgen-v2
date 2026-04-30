@@ -9,7 +9,9 @@ from tslgen.core.frozen_map import FrozenMap
 from tslgen.core.result import Result
 from tslgen.domain.values import CatalogValue
 from tslgen.io.artifacts import ArtifactDescriptor, ArtifactPlan
+from tslgen.lowering import LoweringPlan
 
+from .bodies import CppFunctionDefinition, plan_cpp_production_definitions
 from .declarations import CppFunctionDeclaration, plan_cpp_production_declarations
 
 
@@ -22,6 +24,7 @@ class CppRenderJob:
     descriptor: ArtifactDescriptor
     candidates: tuple[ImplementationCandidate, ...]
     declarations: tuple[CppFunctionDeclaration, ...] = ()
+    definitions: tuple[CppFunctionDefinition, ...] = ()
     metadata: FrozenMap[str, CatalogValue] = field(default_factory=FrozenMap.empty)
 
     def __post_init__(self) -> None:
@@ -29,6 +32,8 @@ class CppRenderJob:
         object.__setattr__(self, "candidates", candidates)
         declarations = tuple(sorted(self.declarations, key=lambda item: item.key))
         object.__setattr__(self, "declarations", declarations)
+        definitions = tuple(sorted(self.definitions, key=lambda item: item.key))
+        object.__setattr__(self, "definitions", definitions)
 
     @property
     def key(self) -> tuple[object, ...]:
@@ -37,6 +42,7 @@ class CppRenderJob:
             self.descriptor.kind,
             tuple(candidate.key for candidate in self.candidates),
             tuple(declaration.key for declaration in self.declarations),
+            tuple(definition.key for definition in self.definitions),
         )
 
 
@@ -54,6 +60,7 @@ class CppRenderPlan:
 def plan_cpp_render_jobs(
     plan: ArtifactPlan,
     selection: CandidateSelection,
+    lowering_plan: LoweringPlan | None = None,
 ) -> Result[CppRenderPlan]:
     diagnostics: list[Diagnostic] = []
     if plan.backend_id != CPP_BACKEND_ID:
@@ -71,20 +78,31 @@ def plan_cpp_render_jobs(
         candidates = _descriptor_candidates(descriptor, selection, diagnostics)
         diagnostics.extend(_candidate_diagnostics(candidates))
         declarations: tuple[CppFunctionDeclaration, ...] = ()
+        definitions: tuple[CppFunctionDefinition, ...] = ()
         if not has_errors(diagnostics):
             declaration_result = plan_cpp_production_declarations(candidates)
             diagnostics.extend(declaration_result.diagnostics)
             if declaration_result.is_ok:
                 declarations = declaration_result.unwrap()
+        if not has_errors(diagnostics) and lowering_plan is not None:
+            definition_result = plan_cpp_production_definitions(
+                declarations,
+                lowering_plan,
+            )
+            diagnostics.extend(definition_result.diagnostics)
+            if definition_result.is_ok:
+                definitions = definition_result.unwrap()
         if not has_errors(diagnostics):
             jobs.append(
                 CppRenderJob(
                     descriptor=descriptor,
                     candidates=candidates,
                     declarations=declarations,
+                    definitions=definitions,
                     metadata=FrozenMap(
                         {
                             "candidate_count": len(candidates),
+                            "definition_count": len(definitions),
                             "required_flags": _required_flag_names(candidates),
                             "target_extensions": _target_extension_names(candidates),
                         }
@@ -103,6 +121,7 @@ def plan_cpp_render_jobs(
                 {
                     "backend_id": CPP_BACKEND_ID,
                     "candidate_count": sum(len(job.candidates) for job in jobs),
+                    "definition_count": sum(len(job.definitions) for job in jobs),
                     "required_flags": _required_flag_names(
                         candidate
                         for job in jobs

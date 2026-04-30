@@ -392,9 +392,12 @@ Side effects:
 
 - None.
 
-Milestone 26 expands C++ declarations and documents naming. Milestone 28 may add
-one C++ scalar body-rendering path from mini-lowered TSIL. Milestone 29 may add
-one generated production test artifact. Milestone 31 may add one Rust
+Milestone 26 expands C++ declarations and documents naming. Milestone 28 adds
+one C++ scalar body-rendering path from mini-lowered TSIL. The C++ renderer
+continues to accept selected candidates and an artifact plan, and optionally
+accepts a `LoweringPlan` for body definitions. It diagnoses missing or
+unsupported lowered data instead of lowering TSIL or rendering stubs. Milestone
+29 may add one generated production test artifact. Milestone 31 may add one Rust
 production-shaped declaration/signature slice. Each of these rendering slices
 must stay backend-owned and must not perform selection, lowering, or writing.
 

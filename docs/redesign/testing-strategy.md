@@ -271,7 +271,9 @@ generation:
   `emit_return(<parameter> + <parameter>);`, plus malformed return forms,
   unknown operands, generation-time branches, and typed-opaque fallback.
 - C++ body rendering tests proving bodies consume lowered data rather than raw
-  TSIL text.
+  TSIL text. Milestone 28 covers only the scalar `binary` `si32`/`ui32`
+  parameter-add return body and diagnostics for missing or unsupported lowered
+  bodies.
 - Generated production test rendering golden tests over `TestSourcePlan` values.
 - Backend manifest/language/translation-map diagnostic tests.
 - Rust production-shaped declaration golden tests once that slice is selected.
@@ -317,7 +319,7 @@ Integration tests should cover:
 - Rendered artifact set to write report using a temporary output root.
 - Test-source planning from selected catalog/test declarations.
 - Report printing and artifact writing in the same CLI run.
-- Lowered scalar fixture through C++ body rendering once Milestone 28 lands.
+- Lowered scalar fixture through C++ body rendering.
 - CLI with explicit flags and temp output.
 
 Integration tests should use temporary directories for writes and explicit CPU flags.
