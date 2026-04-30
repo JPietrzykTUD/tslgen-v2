@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 from io import StringIO
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
 from _helpers import assert_diagnostic
-from tslgen.api import PipelineConfig, run_pipeline
+from tslgen.api import (
+    PipelineConfig,
+    coverage_report,
+    coverage_report_html,
+    coverage_report_html_artifacts,
+    coverage_report_json,
+    run_pipeline,
+    write_artifacts,
+)
 from tslgen.cli import run as run_cli
-from tslgen.config.cli_adapter import parse_cli_config
+from tslgen.config.cli_adapter import parse_cli_config, parse_cli_invocation
 from tslgen.config.model import SourceConfig
 from tslgen.analysis.selection import SelectionRequest
 from tslgen.domain.backends import ArtifactSpec, BackendManifest, BackendManifestSet
@@ -69,6 +78,49 @@ def pipeline_config_for(primitive_path: Path) -> PipelineConfig:
         ),
         backend_manifests=cpp_manifest_set(),
         render_backend="cpp",
+    )
+
+
+def write_cpp_manifest(directory: Path) -> Path:
+    manifest_path = directory / "backend_cpp.yaml"
+    manifest_path.write_text(
+        """version: 1
+backend: cpp
+artifact:
+  name: generated
+  extension: hpp
+""",
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
+def cli_args_for(
+    primitive_path: Path,
+    manifest_path: Path,
+    *extra: str,
+) -> tuple[str, ...]:
+    source_args = tuple(
+        item
+        for path in (*BASE_SOURCE_PATHS, primitive_path)
+        for item in ("--source", path.as_posix())
+    )
+    return (
+        *source_args,
+        "--manifest",
+        manifest_path.as_posix(),
+        "--backend",
+        "cpp",
+        "--render-backend",
+        "cpp",
+        "--primitive",
+        "slice_add",
+        "--extension",
+        "scalar",
+        "--cpu-flag",
+        "sse",
+        "--no-support-extensions",
+        *extra,
     )
 
 
@@ -170,6 +222,45 @@ class ApiCliIntegrationTests(unittest.TestCase):
                 severity="error",
             )
 
+    def test_api_exposes_coverage_report_helpers(self) -> None:
+        with TemporaryDirectory() as temp:
+            primitive_path = Path(temp) / "api_slice.tsl"
+            primitive_path.write_text(SIMPLE_PRIMITIVE, encoding="utf-8")
+            result = run_pipeline(pipeline_config_for(primitive_path))
+
+            self.assertTrue(result.is_ok, result.diagnostics)
+            report = coverage_report(result)
+            report_json = coverage_report_json(report)
+            report_html = coverage_report_html(result)
+            report_artifacts = coverage_report_html_artifacts(result)
+
+            payload = json.loads(report_json)
+            self.assertEqual(payload["summary"]["total_primitives"], 1)
+            self.assertIn("<h1>TSL Coverage Report</h1>", report_html)
+            self.assertEqual(
+                tuple(
+                    artifact.logical_path.as_posix()
+                    for artifact in report_artifacts.artifacts
+                ),
+                ("reports/coverage.html",),
+            )
+
+    def test_api_write_artifacts_helper_uses_writer_boundary(self) -> None:
+        with TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            primitive_path = temp_path / "api_slice.tsl"
+            output_root = temp_path / "out"
+            primitive_path.write_text(SIMPLE_PRIMITIVE, encoding="utf-8")
+            result = run_pipeline(pipeline_config_for(primitive_path))
+
+            self.assertTrue(result.is_ok, result.diagnostics)
+            assert result.artifacts is not None
+            report = write_artifacts(result.artifacts, output_root, dry_run=True)
+
+            self.assertTrue(report.is_ok, report.diagnostics)
+            self.assertEqual(report.would_write_paths, ("generated.hpp",))
+            self.assertFalse((output_root / "generated.hpp").exists())
+
     def test_cli_parse_success_without_hardware_detection(self) -> None:
         calls = 0
 
@@ -188,6 +279,58 @@ class ApiCliIntegrationTests(unittest.TestCase):
         config = result.unwrap()
         self.assertEqual(config.source_config.explicit_paths, (Path("input.tsl"),))
         self.assertEqual(config.selection_request.cpu_flags, ("sse",))
+
+    def test_cli_invocation_parses_report_and_write_options(self) -> None:
+        result = parse_cli_invocation(
+            (
+                "--source",
+                "input.tsl",
+                "--coverage-report",
+                "html",
+                "--output-root",
+                "out",
+                "--dry-run",
+                "--no-skip-unchanged",
+            ),
+            hardware_flags_provider=lambda: (),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        config = result.unwrap()
+        self.assertEqual(config.coverage_report_format, "html")
+        self.assertEqual(config.output_root, Path("out"))
+        self.assertTrue(config.write_dry_run)
+        self.assertFalse(config.write_skip_unchanged)
+        self.assertEqual(config.pipeline_config.source_config.explicit_paths, (Path("input.tsl"),))
+
+    def test_cli_rejects_write_options_without_output_root(self) -> None:
+        result = parse_cli_invocation(
+            ("--source", "input.tsl", "--dry-run"),
+            hardware_flags_provider=lambda: (),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CLI-WRITE-OPTIONS",
+            severity="error",
+        )
+
+    def test_cli_rejects_unknown_report_format_cleanly(self) -> None:
+        result = parse_cli_invocation(
+            ("--source", "input.tsl", "--coverage-report", "xml"),
+            hardware_flags_provider=lambda: (),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CLI-ARGUMENTS",
+            severity="error",
+        )
+        self.assertIn("invalid choice", result.diagnostics[0].message)
 
     def test_cli_hardware_autodetect_is_injected(self) -> None:
         calls = 0
@@ -245,6 +388,131 @@ class ApiCliIntegrationTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertEqual(stdout.getvalue(), "")
         self.assertIn("TSL-SRC-MISSING", stderr.getvalue())
+
+    def test_cli_prints_json_coverage_report_without_writing(self) -> None:
+        with TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            primitive_path = temp_path / "api_slice.tsl"
+            primitive_path.write_text(SIMPLE_PRIMITIVE, encoding="utf-8")
+            manifest_path = write_cpp_manifest(temp_path)
+            stdout = StringIO()
+            stderr = StringIO()
+
+            exit_code = run_cli(
+                cli_args_for(
+                    primitive_path,
+                    manifest_path,
+                    "--coverage-report",
+                    "json",
+                ),
+                stdout=stdout,
+                stderr=stderr,
+                hardware_flags_provider=lambda: (),
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(stderr.getvalue(), "")
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["summary"]["total_primitives"], 1)
+            self.assertFalse((temp_path / "generated.hpp").exists())
+
+    def test_cli_prints_html_coverage_report_without_writing(self) -> None:
+        with TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            primitive_path = temp_path / "api_slice.tsl"
+            primitive_path.write_text(SIMPLE_PRIMITIVE, encoding="utf-8")
+            manifest_path = write_cpp_manifest(temp_path)
+            stdout = StringIO()
+            stderr = StringIO()
+
+            exit_code = run_cli(
+                cli_args_for(
+                    primitive_path,
+                    manifest_path,
+                    "--coverage-report",
+                    "html",
+                ),
+                stdout=stdout,
+                stderr=stderr,
+                hardware_flags_provider=lambda: (),
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(stderr.getvalue(), "")
+            self.assertIn("<h1>TSL Coverage Report</h1>", stdout.getvalue())
+            self.assertFalse((temp_path / "generated.hpp").exists())
+
+    def test_cli_writes_rendered_artifacts_through_writer(self) -> None:
+        with TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            primitive_path = temp_path / "api_slice.tsl"
+            output_root = temp_path / "out"
+            primitive_path.write_text(SIMPLE_PRIMITIVE, encoding="utf-8")
+            manifest_path = write_cpp_manifest(temp_path)
+            stdout = StringIO()
+            stderr = StringIO()
+
+            exit_code = run_cli(
+                cli_args_for(
+                    primitive_path,
+                    manifest_path,
+                    "--output-root",
+                    output_root.as_posix(),
+                ),
+                stdout=stdout,
+                stderr=stderr,
+                hardware_flags_provider=lambda: (),
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(stderr.getvalue(), "")
+            self.assertTrue((output_root / "generated.hpp").exists())
+            self.assertIn("written generated.hpp ", stdout.getvalue())
+
+            second_stdout = StringIO()
+            second_exit = run_cli(
+                cli_args_for(
+                    primitive_path,
+                    manifest_path,
+                    "--output-root",
+                    output_root.as_posix(),
+                ),
+                stdout=second_stdout,
+                stderr=StringIO(),
+                hardware_flags_provider=lambda: (),
+            )
+
+            self.assertEqual(second_exit, 0)
+            self.assertIn("skipped_unchanged generated.hpp ", second_stdout.getvalue())
+
+    def test_cli_dry_run_write_does_not_touch_output_root(self) -> None:
+        with TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            primitive_path = temp_path / "api_slice.tsl"
+            output_root = temp_path / "out"
+            primitive_path.write_text(SIMPLE_PRIMITIVE, encoding="utf-8")
+            manifest_path = write_cpp_manifest(temp_path)
+            stdout = StringIO()
+            stderr = StringIO()
+
+            exit_code = run_cli(
+                cli_args_for(
+                    primitive_path,
+                    manifest_path,
+                    "--output-root",
+                    output_root.as_posix(),
+                    "--dry-run",
+                ),
+                stdout=stdout,
+                stderr=stderr,
+                hardware_flags_provider=lambda: (),
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(stderr.getvalue(), "")
+            self.assertFalse((output_root / "generated.hpp").exists())
+            self.assertIn("would_write generated.hpp ", stdout.getvalue())
 
 
 if __name__ == "__main__":

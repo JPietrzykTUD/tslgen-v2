@@ -411,11 +411,24 @@ These functions are the long-term facade. Milestone 24 decides which post-15
 helpers are public API, including whether coverage/reporting is re-exported
 through `tslgen.api`.
 
+Milestone 24 exposes the accepted reporting and writer boundaries through this
+facade. `tslgen.api.coverage_report(...)` derives a coverage report from a
+`PipelineResult`; `coverage_report_json(...)`, `coverage_report_html(...)`, and
+`coverage_report_html_artifacts(...)` serialize or wrap that report without
+writing files; and `tslgen.api.write_artifacts(...)` delegates to
+`io.artifact_writer`.
+
 ### CLI
 
 The CLI should convert user options into `PipelineConfig`, run the pipeline, print diagnostics, write artifacts when requested, and exit with a process code.
 
 The CLI must not expose internal stage objects unless a debug command is explicitly added.
+
+Milestone 24 CLI options expose only already-accepted capabilities:
+`--coverage-report json|html` prints deterministic report output to stdout,
+`--output-root` writes already-rendered artifacts through the artifact writer,
+and `--dry-run` / `--no-skip-unchanged` refine that explicit write request.
+Full legacy CLI flag parity and broader output-mode UX remain deferred.
 
 ## Private Implementation Details
 

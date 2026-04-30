@@ -459,6 +459,16 @@ and it reports diagnostics with a nonzero exit code on errors. Full production
 CLI compatibility, output writing, skip-unchanged behavior, production test
 generation, and broad backend rendering remain deferred.
 
+Milestone 24 exposes accepted post-15 behavior through narrow API and CLI
+polish. The public API includes helpers for deriving coverage reports from a
+`PipelineResult`, serializing those reports as deterministic JSON or HTML,
+wrapping HTML reports as in-memory artifacts, and writing already-rendered
+artifacts through the accepted artifact writer. The CLI can print a JSON or HTML
+coverage report to stdout and can write already-rendered artifacts only when an
+explicit `--output-root` is provided. `--dry-run` and `--no-skip-unchanged` are
+valid only with `--output-root`. Report printing remains pure; output writing
+continues to be routed through `io.artifact_writer`.
+
 ## Coverage And Reporting Behavior
 
 Coverage reports are descriptive summaries over accepted pipeline outputs. They

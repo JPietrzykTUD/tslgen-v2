@@ -586,3 +586,39 @@ Consequences:
   report parity.
 - Any filesystem write for report artifacts must use the accepted artifact
   writer boundary.
+
+## ADR-019: API And CLI Expose Accepted Capabilities Only
+
+Status: Accepted for the Milestone 24 slice
+
+Context:
+
+The redesigned pipeline now has accepted public orchestration, reporting,
+rendered artifact values, and a safe artifact writer. The final polish milestone
+needs to make those capabilities usable without turning the CLI into a legacy
+drop-in replacement or exposing unstable internals.
+
+Considered alternatives:
+
+- Keep reporting and writing available only through implementation modules.
+- Add broad legacy-compatible CLI flags for all historical workflows.
+- Expose small API helpers and narrow CLI flags for already-accepted behavior.
+
+Decision:
+
+Expose coverage/reporting helpers and writer delegation through `tslgen.api`.
+Expose CLI report output through `--coverage-report json|html` and explicit
+artifact writing through `--output-root`, with `--dry-run` and
+`--no-skip-unchanged` applying only to that write request.
+
+Rationale:
+
+This gives API and CLI users a stable facade over the accepted pipeline while
+preserving side-effect boundaries. Reporting remains pure, and every filesystem
+write still goes through `io.artifact_writer`.
+
+Consequences:
+
+- Default CLI behavior remains non-writing.
+- Report stdout is deterministic and does not imply report file generation.
+- Full legacy CLI compatibility and broader output UX remain deferred.

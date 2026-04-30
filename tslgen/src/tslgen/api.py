@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
 from tslgen.analysis.dependencies import DependencyClosure, plan_dependency_closure
@@ -11,9 +12,20 @@ from tslgen.config.model import SourceConfig
 from tslgen.core.diagnostics import Diagnostic, has_errors, sort_diagnostics
 from tslgen.domain.backends import BackendManifestSet
 from tslgen.domain.catalog import Catalog, build_catalog
-from tslgen.io.artifacts import ArtifactPlan, ArtifactSet
+from tslgen.io.artifact_writer import write_artifacts as _write_artifacts
+from tslgen.io.artifacts import Artifact, ArtifactPlan, ArtifactSet
 from tslgen.io.manifests import load_backend_manifests
 from tslgen.io.sources import SourceSet, load_sources
+from tslgen.io.write_report import ArtifactWriteOptions, ArtifactWriteReport
+from tslgen.reporting.coverage import (
+    PipelineCoverageReport,
+    coverage_report_from_pipeline_result,
+    coverage_report_to_json,
+)
+from tslgen.reporting.html import (
+    coverage_report_html_artifact_set,
+    render_coverage_report_html,
+)
 from tslgen.rendering.render_plan import build_artifact_plan
 from tslgen.syntax.ast import ParsedDocumentSet
 from tslgen.syntax.parser import parse_sources
@@ -248,6 +260,58 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
         artifact_plan=artifact_plan,
         artifacts=rendered.unwrap(),
     )
+
+
+def coverage_report(result: PipelineResult) -> PipelineCoverageReport:
+    return coverage_report_from_pipeline_result(result)
+
+
+def coverage_report_json(
+    report_or_result: PipelineCoverageReport | PipelineResult,
+) -> str:
+    return coverage_report_to_json(_coverage_report_value(report_or_result))
+
+
+def coverage_report_html(
+    report_or_result: PipelineCoverageReport | PipelineResult,
+) -> str:
+    return render_coverage_report_html(_coverage_report_value(report_or_result))
+
+
+def coverage_report_html_artifacts(
+    report_or_result: PipelineCoverageReport | PipelineResult,
+    *,
+    logical_path: str | PurePosixPath = PurePosixPath("reports/coverage.html"),
+) -> ArtifactSet:
+    return coverage_report_html_artifact_set(
+        _coverage_report_value(report_or_result),
+        logical_path=logical_path,
+    )
+
+
+def write_artifacts(
+    artifacts: ArtifactSet | Iterable[Artifact],
+    output_root: Path,
+    *,
+    dry_run: bool = False,
+    skip_unchanged: bool = True,
+) -> ArtifactWriteReport:
+    return _write_artifacts(
+        artifacts,
+        ArtifactWriteOptions(
+            output_root=output_root,
+            dry_run=dry_run,
+            skip_unchanged=skip_unchanged,
+        ),
+    )
+
+
+def _coverage_report_value(
+    report_or_result: PipelineCoverageReport | PipelineResult,
+) -> PipelineCoverageReport:
+    if isinstance(report_or_result, PipelineCoverageReport):
+        return report_or_result
+    return coverage_report(report_or_result)
 
 
 def _resolve_manifests(

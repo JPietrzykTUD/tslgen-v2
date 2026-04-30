@@ -229,8 +229,11 @@ Current resolution:
 
 - Milestone 13 implements a clean public API plus a narrow CLI adapter over it.
 - The CLI does not promise compatibility with legacy flags or shell workflows.
-- A future CLI/writer milestone must decide output-writing behavior and any
-  compatibility aliases before replacing legacy workflows.
+- Milestone 24 adds explicit `--output-root`, `--dry-run`,
+  `--no-skip-unchanged`, and `--coverage-report json|html` options for accepted
+  writer and reporting capabilities.
+- Full legacy CLI drop-in compatibility, compatibility aliases, and broader
+  output-mode UX remain unresolved before replacing legacy workflows.
 
 ## OQ-009: Should Generated Documentation Be In Scope?
 
@@ -376,7 +379,7 @@ Current status:
 
 ## OQ-014: Should Reporting Be Exposed Through `tslgen.api`?
 
-Status: Open - scheduled for Milestone 24
+Status: Answered
 
 Why it matters:
 
@@ -396,7 +399,16 @@ Required evidence:
 
 Implementation blocked:
 
-No for Milestones 16 through 23. Public API polish is blocked until Milestone 24.
+No.
+
+Decision:
+
+Milestone 24 exposes a small stable reporting facade through `tslgen.api`.
+`coverage_report(...)` derives a report from a `PipelineResult`, and dedicated
+helpers serialize the report as deterministic JSON or HTML or wrap the HTML
+report as an in-memory `ArtifactSet`. File writes are not part of the reporting
+helpers; callers that want report or generated artifacts on disk must route the
+artifact values through the accepted writer boundary.
 
 ## OQ-015: Should Dependency Closure Remain Primitive-Name Based?
 
@@ -672,3 +684,7 @@ decisions.
 ## Follow-up from Milestone 23 review
 
 - When reporting is exposed through API/CLI, keep HTML generation pure and route any writes through `io.artifact_writer`.
+
+## Follow-up from Milestone 24 review
+
+- Add a future CLI regression test for combining `--coverage-report` with `--output-root`, including `--no-skip-unchanged`, to lock down stdout and write-report expectations.

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal, cast
 
 from tslgen.analysis.selection import SelectionRequest
 from tslgen.api import PipelineConfig
@@ -12,11 +14,42 @@ from tslgen.core.diagnostics import Diagnostic
 from tslgen.core.result import Result
 
 
+type CoverageReportFormat = Literal["json", "html"]
+
+
+@dataclass(frozen=True, slots=True)
+class CliConfig:
+    pipeline_config: PipelineConfig
+    coverage_report_format: CoverageReportFormat | None = None
+    output_root: Path | None = None
+    write_dry_run: bool = False
+    write_skip_unchanged: bool = True
+
+    def __post_init__(self) -> None:
+        if self.output_root is not None:
+            object.__setattr__(self, "output_root", Path(self.output_root))
+        if self.output_root is None and (
+            self.write_dry_run or not self.write_skip_unchanged
+        ):
+            raise ValueError("write options require an output root")
+
+
 def parse_cli_config(
     argv: Sequence[str],
     *,
     hardware_flags_provider: HardwareFlagProvider = detect_proc_cpuinfo_flags,
 ) -> Result[PipelineConfig]:
+    return parse_cli_invocation(
+        argv,
+        hardware_flags_provider=hardware_flags_provider,
+    ).map(lambda config: config.pipeline_config)
+
+
+def parse_cli_invocation(
+    argv: Sequence[str],
+    *,
+    hardware_flags_provider: HardwareFlagProvider = detect_proc_cpuinfo_flags,
+) -> Result[CliConfig]:
     parser = _argument_parser()
     try:
         namespace, unknown = parser.parse_known_args(argv)
@@ -36,6 +69,18 @@ def parse_cli_config(
                 Diagnostic.error(
                     "TSL-CLI-ARGUMENTS",
                     f"unknown command line argument(s): {' '.join(unknown)}",
+                ),
+            )
+        )
+
+    if namespace.output_root is None and (
+        namespace.dry_run or namespace.no_skip_unchanged
+    ):
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-CLI-WRITE-OPTIONS",
+                    "--dry-run and --no-skip-unchanged require --output-root",
                 ),
             )
         )
@@ -74,7 +119,22 @@ def parse_cli_config(
         backend_manifest_paths=tuple(Path(path) for path in namespace.manifest),
         render_backend=namespace.render_backend,
     )
-    return Result.ok(config)
+    return Result.ok(
+        CliConfig(
+            pipeline_config=config,
+            coverage_report_format=cast(
+                CoverageReportFormat | None,
+                namespace.coverage_report,
+            ),
+            output_root=(
+                Path(namespace.output_root)
+                if namespace.output_root is not None
+                else None
+            ),
+            write_dry_run=namespace.dry_run,
+            write_skip_unchanged=not namespace.no_skip_unchanged,
+        )
+    )
 
 
 def _argument_parser() -> argparse.ArgumentParser:
@@ -95,4 +155,8 @@ def _argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cpu-flag", action="append", default=[])
     parser.add_argument("--hardware-auto", action="store_true")
     parser.add_argument("--no-support-extensions", action="store_true")
+    parser.add_argument("--coverage-report", choices=("json", "html"))
+    parser.add_argument("--output-root")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--no-skip-unchanged", action="store_true")
     return parser
