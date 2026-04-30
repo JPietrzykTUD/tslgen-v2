@@ -108,7 +108,7 @@ Use `frozen/` only to discover required behavior. Cite concrete evidence in docs
 - Type and lane groups in `tsldata/detail/types.tsl` and `tsldata/detail/lane_sets.tsl`.
 - Template requirements in `tsldata/detail/templates.tsl`.
 - Signature resolution in `frozen/generator_specs/signatures.yaml`.
-- Backend manifest behavior in `frozen/generator_specs/backend_*.yaml`.
+- Backend manifest behavior in `frozen/generator_specs/backend_cpp.yaml` and `frozen/generator_specs/backend_rust.yaml`.
 - Output workflows in `frozen/run_all.sh`.
 
 Avoid evidence phrased as:

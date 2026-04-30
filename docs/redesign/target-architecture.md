@@ -66,10 +66,6 @@ tslgen/
         backend.py
         planner.py
         renderer.py
-      c17/
-        backend.py
-        planner.py
-        renderer.py
       rust/
         backend.py
         planner.py

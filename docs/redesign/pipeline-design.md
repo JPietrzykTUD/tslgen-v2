@@ -405,7 +405,6 @@ Backend-specific behavior must not enter:
 Generated files are produced only after rendering:
 
 - C++ headers or test `.cpp` files.
-- C17 headers.
 - Rust source or test `.rs` files.
 - Optional CMake metadata such as required flags.
 - Optional coverage reports or manifests when that workflow is implemented.

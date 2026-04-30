@@ -150,7 +150,7 @@ Status: Accepted
 
 Context:
 
-The repository supports C++, C17, and Rust, each with distinct templates and behavior. Legacy manifests map templates to Jinja filenames.
+The current redesign plan supports C++ and Rust as first-class backends. Legacy evidence also contains C17 manifests and templates, but C17 is no longer a planned implementation target for the current roadmap. Backend abstractions still need to be extensible enough for future backends.
 
 Considered alternatives:
 
@@ -310,7 +310,35 @@ Consequences:
 - Golden coverage starts with small representative primitives/backends.
 - Formatting can change intentionally with updated golden files and documented decisions.
 
-## ADR-012: Backend Manifests Are Typed Planning Inputs
+## ADR-012: C17 Is Deferred From The Current Roadmap
+
+Status: Accepted
+
+Context:
+
+Legacy evidence includes C17 manifests and templates, but the current redesign effort should focus on C++ and Rust. Supporting fewer first-class backends reduces early architecture and testing load while the core pipeline is still being established.
+
+Considered alternatives:
+
+- Keep C17 as a first-class backend alongside C++ and Rust.
+- Remove backend extensibility and specialize around C++ and Rust only.
+- Defer C17 while keeping the backend protocol extensible.
+
+Decision:
+
+Defer C17 support from the current implementation roadmap. Treat C17 files under `frozen/` and `tsldata/` as legacy evidence only unless a future decision reintroduces C17 as a target.
+
+Rationale:
+
+The core redesign needs stable parsing, catalog modeling, validation, selection, lowering, rendering, and golden testing before additional backend breadth is valuable. C++ and Rust provide enough backend diversity to validate the architecture.
+
+Consequences:
+
+- Current milestones target C++ first and Rust second.
+- C17 should not appear in package layout, required tests, or first-release backend requirements.
+- Backend interfaces should remain general enough that C17 or another backend can be added later without changing core pipeline boundaries.
+
+## ADR-013: Backend Manifests Are Typed Planning Inputs
 
 Status: Accepted
 
@@ -337,7 +365,7 @@ and the artifact descriptor is known.
 Rationale:
 
 Typed manifests keep YAML at the I/O boundary while preserving a data-driven
-backend model for C++, C17, Rust, and future backends.
+backend model for C++, Rust, and future backends.
 
 Consequences:
 

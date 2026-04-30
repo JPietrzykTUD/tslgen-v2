@@ -52,8 +52,11 @@ Possible answers:
 
 Required evidence:
 
-- Current C++/C17/Rust backend manifest fixtures exist under
-  `frozen/generator_specs/backend_*.yaml`.
+- Current C++ and Rust backend manifest fixtures exist at
+  `frozen/generator_specs/backend_cpp.yaml` and
+  `frozen/generator_specs/backend_rust.yaml`.
+- C17 manifest fixtures also exist as legacy evidence, but C17 is no longer
+  first-class in the current implementation roadmap.
 - Current TSL language and translation declarations expose backend IDs under
   `tsldata/detail/lang/*.tsl`.
 
@@ -219,11 +222,20 @@ Documentation generation is blocked. Core generation is not blocked.
 
 ## OQ-010: What Backends Are First-Class For The First Release?
 
+Status: Answered
+
 Why it matters:
 
-Evidence supports C++, C17, and Rust, but implementation priority affects architecture and test coverage.
+Evidence supports C++, Rust, and legacy C17, but implementation priority affects architecture and test coverage.
 
-Possible answers:
+Decision:
+
+C++ and Rust are first-class for the current redesign roadmap. C17 support is
+deferred and should not appear in current implementation milestones. Backend
+interfaces should remain extensible enough to add C17 later if it becomes a
+priority again.
+
+Considered answers:
 
 - C++ only first, with backend protocol ready for others.
 - C++ and Rust.
@@ -231,13 +243,14 @@ Possible answers:
 
 Required evidence:
 
-- User priorities.
+- User direction: eliminate C17 support from the plan now.
 - Existing consumer workflows.
 - Golden baseline needs.
 
 Implementation blocked:
 
-Full backend implementation priority is blocked. Backend interface design is not blocked.
+No. Milestones should target C++ first and Rust after the backend protocol is
+established. C17 is out of scope unless a new decision reintroduces it.
 
 ## OQ-011: Should Type And Template Shapes Be Parsed Or Kept As Strings Initially?
 

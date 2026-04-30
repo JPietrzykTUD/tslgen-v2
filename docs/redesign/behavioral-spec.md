@@ -29,9 +29,9 @@ Each stage receives explicit inputs and returns explicit outputs. Only source lo
 | Lane set file | Parse named lane sets with lane counts and allowed type tags. | `tsldata/detail/lane_sets.tsl` |
 | Flags file | Parse flag aliases and normalize CPU feature flags. | `tsldata/detail/flags.tsl` |
 | Template file | Parse operation templates, shape strings, required fields, and optional fields. | `tsldata/detail/templates.tsl` |
-| Language type maps | Map type tags to backend type names. | `tsldata/detail/lang/types/types_cpp.tsl`, `types_c17.tsl`, `types_rust.tsl` |
-| Translation maps | Map semantic operations to backend snippets. | `tsldata/detail/lang/translate_cpp.tsl`, `translate_rust.tsl`, `translate_c17.tsl` |
-| Backend manifests | Resolve artifact name, extension, primary templates, specialization templates, wrappers, traits, and combined templates. | `frozen/generator_specs/backend_*.yaml` |
+| Language type maps | Map type tags to backend type names. | `tsldata/detail/lang/types/types_cpp.tsl`, `types_rust.tsl` |
+| Translation maps | Map semantic operations to backend snippets. | `tsldata/detail/lang/translate_cpp.tsl`, `translate_rust.tsl` |
+| Backend manifests | Resolve artifact name, extension, primary templates, specialization templates, wrappers, traits, and combined templates. | `frozen/generator_specs/backend_cpp.yaml`, `frozen/generator_specs/backend_rust.yaml` |
 
 ## Parsing Behavior
 
@@ -298,7 +298,7 @@ Test rendering must be backend-specific but data-driven.
 
 The CLI should support:
 
-- Backend selection: C++, C17, Rust.
+- Backend selection: C++, Rust.
 - Input file selection.
 - Extension selection.
 - CPU flag injection and optional autodetection.

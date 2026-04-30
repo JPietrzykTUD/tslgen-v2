@@ -8,7 +8,7 @@ The system domain includes:
 
 - A TSL data language for primitive operations, type groups, lane sets, backend translation maps, templates, and hardware extensions.
 - Semantic validation and selection of primitive implementations by backend, extension, type, attributes, and feature requirements.
-- Deterministic generation of C++, C17, Rust, tests, support metadata, and future backend artifacts.
+- Deterministic generation of C++, Rust, tests, support metadata, and future backend artifacts.
 
 ## Redesign Policy
 
@@ -47,7 +47,7 @@ Useful legacy evidence includes:
 
 - `frozen/tsl-gen/tsl_gen/tsl_data.lark` for TSL syntax.
 - `frozen/generator_specs/signatures.yaml` for signature-to-template resolution behavior.
-- `frozen/generator_specs/backend_*.yaml` for backend manifest concepts.
+- `frozen/generator_specs/backend_cpp.yaml` and `frozen/generator_specs/backend_rust.yaml` for planned backend manifest concepts.
 - `frozen/generator_specs/wrapper_shapes.yaml` for wrapper signature behavior.
 - `frozen/generator_specs/tests.yaml` and `frozen/tsl-gen/tsl_gen/backend/tests/planner.py` for test planning behavior.
 - `frozen/run_all.sh` and `frozen/run_tests.py` for workflows and generated side effects.

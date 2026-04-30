@@ -299,7 +299,7 @@ Scope:
 
 Required tests:
 
-- Load C++, C17, and Rust manifest fixtures.
+- Load C++ and Rust manifest fixtures.
 - Reject bad manifest versions and missing fields.
 - Detect duplicate artifact targets.
 - Skip unchanged writes in temp output directories.
@@ -344,7 +344,7 @@ Out of scope:
 
 - Full wrapper parity.
 - All templates.
-- C17/Rust.
+- Rust.
 
 ## Milestone 12: Test Planning And Golden Harness
 
@@ -405,16 +405,15 @@ Out of scope:
 
 - Full `run_all.sh` replacement.
 
-## Milestone 14: Additional Backend Slices
+## Milestone 14: Rust Backend Slice
 
 Goal:
 
-Add Rust and C17 backends using the established backend protocol.
+Add the Rust backend using the established backend protocol.
 
 Scope:
 
 - `backends/rust/*`
-- `backends/c17/*`
 - Backend-specific tests and golden files.
 
 Required tests:
@@ -431,6 +430,7 @@ Validation criteria:
 Out of scope:
 
 - Full coverage of every template until prioritized.
+- C17 or other additional backend implementation.
 
 ## Milestone 15: Coverage And Reporting
 

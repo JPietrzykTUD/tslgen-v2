@@ -24,7 +24,6 @@ tslgen/
       manifests/
       golden/
         cpp/
-        c17/
         rust/
         diagnostics/
     unit/

@@ -15,7 +15,7 @@ This document defines the target domain model from first principles. Class sketc
 | Type group | A named set of type tags such as `?i?`, `arith`, `f?`, or `dqword`. |
 | Lane set | A named relation between lane counts and type tags used by tests. |
 | Extension | A hardware target or abstraction such as `sse`, `avx2`, `avx512`, `neon`, `sve`, `scalar`, or `generic`. |
-| Backend | An output language or artifact family such as C++, C17, or Rust. |
+| Backend | An output language or artifact family such as C++ or Rust. |
 | Implementation | A backend-eligible body or intrinsic choice for a primitive, target extension, type group, and requirement set. |
 | TSIL | The implementation language embedded in TSL strings. |
 | Artifact | A generated file-like output with logical name, extension, content, and metadata. |

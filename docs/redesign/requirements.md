@@ -21,7 +21,7 @@ This document extracts requirements from repository evidence. It intentionally d
 | F-013 | Discover or accept hardware flags without making pure logic read host hardware directly. | `frozen/run_all.sh`, `tslgen/src/tslgen/cli.py`, `frozen/tsl-gen/tsl_gen/frontend/selection.py` |
 | F-014 | Track primitive dependencies expressed in TSIL calls such as `call<primitive=...>` and include required dependencies for selected primitives. | TSIL bodies in `tsldata/primitives/**.tsl`, `frozen/tsl-gen/tsl_gen/resolver/render_planner.py`, `tslgen/src/tslgen/middle_end/inspect/dependencies.py` |
 | F-015 | Lower implementation bodies from TSIL-like source to backend-specific code using explicit semantic and backend translation services. | `tsldata/detail/lang/translate_cpp.tsl`, `tsldata/detail/lang/translate_rust.tsl`, implementation bodies in `tsldata/primitives/**.tsl` |
-| F-016 | Render backend artifacts for at least C++, C17, and Rust. | `frozen/generator_specs/backend_cpp.yaml`, `frozen/generator_specs/backend_c17.yaml`, `frozen/generator_specs/backend_rust.yaml`, `frozen/jinja/cpp`, `frozen/jinja/c17`, `frozen/jinja/rust` |
+| F-016 | Render backend artifacts for at least C++ and Rust. | `frozen/generator_specs/backend_cpp.yaml`, `frozen/generator_specs/backend_rust.yaml`, `frozen/jinja/cpp`, `frozen/jinja/rust` |
 | F-017 | Render test artifacts for at least C++ and Rust from TSL test cases. | `frozen/generator_specs/tests.yaml`, `frozen/jinja/cpp/tests/file.j2`, `frozen/jinja/rust/tests/file.j2` |
 | F-018 | Support wrapper shape and public function signature generation separately from implementation selection. | `frozen/generator_specs/wrapper_shapes.yaml`, `frozen/jinja/cpp/wrappers.j2`, `frozen/jinja/rust/wrappers.j2` |
 | F-019 | Write artifacts deterministically and avoid rewriting unchanged files when possible. | `frozen/tsl-gen/tsl_gen/backend/artifact_writer.py` |
@@ -40,7 +40,7 @@ This document extracts requirements from repository evidence. It intentionally d
 | D-005 | Lane sets constrain valid lane counts for concrete type groups and are used by tests. | `tsldata/detail/lane_sets.tsl`, test blocks in `tsldata/primitives/**.tsl` |
 | D-006 | Hardware extensions have metadata: vendor, family, intrinsic style, vector bits, mask representation, mask width, runtime lanes, autodetection flags, backend support, test defaults, and signature/test exclusions. | `tsldata/extensions/extension.tsl` |
 | D-007 | Mask representation and mask width affect selection, wrapper/test shaping, and generated code. | `tsldata/extensions/extension.tsl`, `frozen/generator_specs/tests.yaml` |
-| D-008 | Backends are target languages with manifests, templates, translation maps, type maps, and rendering policies. | `frozen/generator_specs/backend_*.yaml`, `tsldata/detail/lang/*.tsl` |
+| D-008 | Backends are target languages with manifests, templates, translation maps, type maps, and rendering policies. | `frozen/generator_specs/backend_cpp.yaml`, `frozen/generator_specs/backend_rust.yaml`, `tsldata/detail/lang/*.tsl` |
 | D-009 | Implementation requirements may vary by extension and type group. Nested maps in `requires` are intentional domain data, not incidental structure. | Implementation blocks in `tsldata/primitives/**.tsl` |
 | D-010 | Test cases are domain objects with primitive, template, attributes, type, target extension, lane data, inputs, expected values, and optional expected rules. | `tsldata/primitives/**.tsl`, `frozen/tsl-gen/tsl_gen/domain/tests.py` |
 | D-011 | Generated artifacts are named logical outputs with extension, content, metadata, and stable digests. | `frozen/tsl-gen/tsl_gen/backend/template_loader.py`, `frozen/tsl-gen/tsl_gen/backend/artifact_writer.py` |
@@ -65,7 +65,6 @@ This document extracts requirements from repository evidence. It intentionally d
 ## Output Requirements
 
 - C++ generation must support header-like artifacts, wrappers, specialization groups, and optional CMake metadata for required flags.
-- C17 generation must support `.h` artifacts using backend-specific primary and specialization templates.
 - Rust generation must support `.rs` artifacts, wrapper traits, specialization logic, and crate/test integration hooks.
 - Test generation must support C++ and Rust test source artifacts shaped by extension, type, lanes, runtime lane behavior, and supported implementations.
 - Output ordering must be deterministic across runs.
@@ -111,3 +110,4 @@ This document extracts requirements from repository evidence. It intentionally d
 - Allowing hidden side effects during render planning.
 - Emitting nondeterministic artifacts because of unordered maps, threads, or filesystem traversal.
 - Treating `tslgen/` sketch imports and package paths as stable architecture.
+- Treating C17 as a planned first-class backend before C++ and Rust slices are implemented and validated.
