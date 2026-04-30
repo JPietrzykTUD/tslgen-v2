@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path, PurePosixPath
 import unittest
 
-from _helpers import assert_diagnostic, fixture_path
+from _golden import (
+    assert_artifact_digest_map_stable,
+    assert_artifact_set_matches_golden,
+    golden_artifact,
+)
+from _helpers import assert_diagnostic
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
 from tslgen.analysis.selection import SelectionRequest, plan_selection
 from tslgen.backends.cpp.backend import CppBackend
@@ -109,7 +114,7 @@ def reference_validated(catalog: Catalog) -> ReferenceValidatedCatalog:
 def candidate_selection_for(
     referenced: ReferenceValidatedCatalog,
     *,
-    backend: str = "cpp",
+    backend: str | None = "cpp",
 ) -> CandidateSelection:
     plan = plan_selection(
         referenced,
@@ -148,7 +153,11 @@ def manifest_set(*, artifact_kind: str = "generated") -> BackendManifestSet:
     )
 
 
-def render_simple_fixture(*, selection_backend: str = "cpp", artifact_kind: str = "generated"):
+def render_simple_fixture(
+    *,
+    selection_backend: str | None = "cpp",
+    artifact_kind: str = "generated",
+):
     referenced = catalog_with_primitive(SIMPLE_PRIMITIVE)
     selection = candidate_selection_for(referenced, backend=selection_backend)
     artifact_plan = build_artifact_plan(
@@ -161,17 +170,43 @@ def render_simple_fixture(*, selection_backend: str = "cpp", artifact_kind: str 
     return CppBackend().render(artifact_plan.unwrap(), selection)
 
 
+def artifact_plan_for_selection(
+    selection: CandidateSelection,
+    *,
+    plan_backend: str = "cpp",
+    descriptor_backend: str = "cpp",
+):
+    descriptor = ArtifactDescriptor(
+        backend_id=descriptor_backend,
+        kind="generated",
+        logical_path=PurePosixPath("generated.hpp"),
+        candidate_ids=tuple(candidate.candidate_id for candidate in selection.candidates),
+    )
+    artifact_plan = artifact_plan_from_descriptors(plan_backend, (descriptor,))
+    if not artifact_plan.is_ok:
+        raise AssertionError(artifact_plan.diagnostics)
+    return artifact_plan.unwrap()
+
+
 class CppBackendVerticalSliceTests(unittest.TestCase):
     def test_renders_minimal_cpp_generated_artifact(self) -> None:
         result = render_simple_fixture()
 
         self.assertTrue(result.is_ok, result.diagnostics)
         artifact_set = result.unwrap()
-        artifact = artifact_set.artifacts_by_path["generated.hpp"]
-        golden = fixture_path("golden", "cpp", "minimal_generated.hpp").read_text(
-            encoding="utf-8"
+        assert_artifact_set_matches_golden(
+            self,
+            artifact_set,
+            (
+                golden_artifact(
+                    "generated.hpp",
+                    "golden",
+                    "cpp",
+                    "minimal_generated.hpp",
+                ),
+            ),
         )
-        self.assertEqual(artifact.content, golden)
+        artifact = artifact_set.artifacts_by_path["generated.hpp"]
         self.assertEqual(artifact.metadata["backend_id"], "cpp")
         self.assertEqual(artifact.metadata["required_flags"], ("sse",))
         self.assertEqual(artifact.metadata["target_extensions"], ("scalar",))
@@ -183,6 +218,43 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
         self.assertTrue(first.is_ok, first.diagnostics)
         self.assertTrue(second.is_ok, second.diagnostics)
         self.assertEqual(first.unwrap(), second.unwrap())
+        assert_artifact_digest_map_stable(self, first.unwrap(), second.unwrap())
+
+    def test_accepts_generic_backend_none_candidates(self) -> None:
+        result = render_simple_fixture(selection_backend=None)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = result.unwrap().artifacts_by_path["generated.hpp"]
+        self.assertEqual(artifact.metadata["backend_id"], "cpp")
+        self.assertIn('"slice_add"', artifact.content)
+
+    def test_diagnoses_non_cpp_artifact_plan(self) -> None:
+        selection = candidate_selection_for(catalog_with_primitive(SIMPLE_PRIMITIVE))
+        artifact_plan = artifact_plan_for_selection(selection, plan_backend="rust")
+
+        result = CppBackend().render(artifact_plan, selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-BACKEND",
+            severity="error",
+        )
+
+    def test_diagnoses_non_cpp_descriptor(self) -> None:
+        selection = candidate_selection_for(catalog_with_primitive(SIMPLE_PRIMITIVE))
+        artifact_plan = artifact_plan_for_selection(selection, descriptor_backend="rust")
+
+        result = CppBackend().render(artifact_plan, selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-BACKEND",
+            severity="error",
+        )
 
     def test_diagnoses_backend_mismatched_candidates(self) -> None:
         result = render_simple_fixture(selection_backend="rust")

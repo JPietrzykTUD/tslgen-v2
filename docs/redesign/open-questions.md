@@ -362,6 +362,14 @@ Validation strictness is partially blocked. Catalog can preserve extra fields no
 
 ## Follow-ups from Milestone 11 review
 
-- Add a regression test proving generic `backend=None` candidates are accepted by the C++ renderer.
-- Add focused tests for non-`cpp` artifact plan and descriptor rejection.
+- Addressed in Milestone 12: added a regression test proving generic
+  `backend=None` candidates are accepted by the C++ renderer.
+- Addressed in Milestone 12: added focused tests for non-`cpp` artifact plan
+  and descriptor rejection.
 - Keep the future artifact writer as a separate I/O boundary, not an expansion of the renderer.
+
+## Follow-ups from Milestone 12 review
+
+- Create or rename a future milestone for production test-source planning from TSL `tests` declarations.
+- Move the older broad Milestone 12 test-planning bullets into that future test-generation milestone so future agents do not treat them as already satisfied.
+- Keep artifact writing and skip-unchanged behavior out of the golden harness and in a future writer boundary.

@@ -156,6 +156,16 @@ Golden update policy:
 - Mention the design decision or requirement update in the change.
 - Keep golden inputs small enough that diffs are readable.
 
+Golden harness helpers should:
+
+- Compare rendered artifacts by logical path.
+- Use exact content comparison unless a specific normalization policy is
+  documented for that fixture.
+- Assert deterministic artifact digest maps when a render path is expected to
+  be stable.
+- Stay in test infrastructure; production renderers must not depend on golden
+  test helpers.
+
 ## Integration Tests
 
 Integration tests should cover:

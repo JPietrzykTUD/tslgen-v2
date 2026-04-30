@@ -352,6 +352,16 @@ Goal:
 
 Plan and render representative tests from TSL test cases.
 
+Milestone 12 initial slice:
+
+- Reusable golden-file harness.
+- Rendered-artifact comparison helpers.
+- Artifact digest determinism helpers.
+- Regression coverage for accepted C++ backend-slice diagnostics.
+
+Full production test-source planning from TSL `tests` declarations is deferred
+to a later test-generation slice.
+
 Scope:
 
 - `domain/tests.py`
