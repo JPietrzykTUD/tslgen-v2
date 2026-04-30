@@ -352,6 +352,33 @@ and it reports diagnostics with a nonzero exit code on errors. Full production
 CLI compatibility, output writing, skip-unchanged behavior, production test
 generation, and broad backend rendering remain deferred.
 
+## Coverage And Reporting Behavior
+
+Coverage reports are descriptive summaries over accepted pipeline outputs. They
+must consume structured catalog, selection, candidate-selection, dependency,
+artifact-plan, rendered-artifact, and diagnostic values that already exist in a
+pipeline result or equivalent stage outputs. Report generation must not parse raw
+TSL, re-run validation, re-run selection, render artifacts, inspect host
+hardware, or mutate pipeline results.
+
+The Milestone 15 report model summarizes:
+
+- Catalog primitive rows, including declaration count and candidate coverage.
+- Selection context, including requested backend/extensions and allowed
+  extensions.
+- Candidate body coverage, using implementation bodies as opaque metadata.
+- Primitive dependency closure coverage, including unplanned primitive names.
+- Backend summary-rendering coverage, including planned and rendered artifact
+  counts.
+- Diagnostic counts grouped by severity and code.
+- Deferred categories such as artifact writing, TSIL lowering, production test
+  generation, and full template rendering.
+
+Structured JSON report output must be deterministic for identical pipeline
+outputs. The Milestone 15 slice produces report values and JSON text in memory
+only; report file writing, HTML parity with legacy reports, CI upload, and
+production documentation generation remain deferred.
+
 ## Determinism Requirements
 
 The following must be stable:
@@ -366,6 +393,7 @@ The following must be stable:
 - Artifact ordering.
 - Diagnostic ordering.
 - Digest maps.
+- Coverage report row and JSON key ordering.
 
 Parallel stages may exist only if they merge results through stable keys.
 

@@ -231,6 +231,13 @@ Implementation blocked:
 
 Documentation generation is blocked. Core generation is not blocked.
 
+Current status:
+
+- Milestone 15 implements lightweight in-memory coverage summaries and
+  deterministic JSON report text.
+- Legacy-style generated documentation, report files, and HTML report parity
+  remain deferred under this question.
+
 ## OQ-010: What Backends Are First-Class For The First Release?
 
 Status: Answered
@@ -397,3 +404,15 @@ Validation strictness is partially blocked. Catalog can preserve extra fields no
 
 - Keep output writing and skip-unchanged behavior in a later writer boundary.
 - Avoid expanding the backend registry into lifecycle/plugin mechanics until a real extension need appears.
+
+## Follow-ups from Milestone 15 review
+
+- Run a planner pass to define the post-Milestone-15 roadmap before implementation continues.
+- Decide whether reporting should be re-exported through `tslgen.api`, for example as `coverage_report(...)`.
+- Clarify future milestones for:
+  - artifact writing
+  - skip-unchanged writer behavior
+  - full lowering
+  - production test generation from TSL `tests` declarations
+  - legacy-style HTML/report output
+  - broad validation cleanup / exploratory-code quarantine

@@ -465,6 +465,16 @@ Goal:
 
 Produce implementation coverage reports from the typed catalog and selection logic.
 
+Milestone 15 initial slice:
+
+- In-memory coverage report model over existing pipeline/stage outputs.
+- Deterministic JSON serialization for report values.
+- Primitive, candidate, dependency-closure, backend artifact, and diagnostic
+  count summaries.
+- Public reporting helper that accepts the existing pipeline result shape.
+- No report file writing, HTML report generation, CI integration, or CLI report
+  flag.
+
 Scope:
 
 - Reporting models.

@@ -74,6 +74,8 @@ tslgen/
       template_engine.py
       render_plan.py
       text.py
+    reporting/
+      coverage.py
     pipeline/
       stages.py
       runner.py
@@ -97,6 +99,7 @@ flowchart LR
     Pipeline --> Lowering[lowering]
     Pipeline --> Backends[backends]
     Pipeline --> Rendering[rendering]
+    Pipeline --> Reporting[reporting]
     Pipeline --> Artifacts[artifact writer]
 
     Syntax --> Core[core]
@@ -108,6 +111,10 @@ flowchart LR
     Backends --> Domain
     Backends --> Lowering
     Backends --> Rendering
+    Reporting --> Analysis
+    Reporting --> Domain
+    Reporting --> IO
+    Reporting --> Core
     Rendering --> Core
     IO --> Core
 ```
@@ -293,6 +300,23 @@ Does not:
 
 - Know target hardware semantics.
 
+### `reporting`
+
+Pure report construction over accepted pipeline outputs.
+
+Responsibilities:
+
+- Summarize catalog, selection, candidate, dependency, artifact, and diagnostic
+  coverage.
+- Produce deterministic structured report values.
+- Serialize report values to deterministic JSON.
+
+Does not:
+
+- Re-run parsing, validation, selection, rendering, or dependency discovery.
+- Write report files.
+- Change pipeline behavior based on coverage findings.
+
 ### `pipeline`
 
 Stage orchestration.
@@ -322,6 +346,7 @@ def plan_generation(catalog: Catalog, request: SelectionRequest) -> PlanResult: 
 def render_artifacts(plan: BackendPlan) -> ArtifactResult: ...
 def write_artifacts(artifacts: ArtifactSet, output_root: Path) -> WriteReport: ...
 def run_pipeline(config: PipelineConfig) -> PipelineResult: ...
+def coverage_report(result: PipelineResult) -> PipelineCoverageReport: ...
 ```
 
 These functions should be stable enough for tests and external tools.
@@ -375,6 +400,7 @@ Pure stages:
 - Lowering.
 - Planning.
 - Rendering.
+- Reporting.
 
 ## Sketch Assessment
 
