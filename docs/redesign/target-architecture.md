@@ -474,9 +474,33 @@ production validation baseline until it is accepted by a milestone. Quarantined
 code may be read as design evidence, but production entry points, public API
 functions, and tests for accepted milestones must not import it accidentally.
 
-Milestone 21 is responsible for documenting the validation command surface and
-any quarantine markers or package boundaries needed to keep broad validation
-reliable.
+Milestone 21 defines the validation profile in `tslgen.tooling.validation`.
+The accepted production validation surface currently includes the public API and
+CLI adapters, accepted `analysis`, `backends`, `config`, `domain`, `io`,
+`lowering`, `rendering`, `reporting`, `syntax`, `testgen`, `validation`, and
+accepted core foundation files.
+
+The following paths are explicitly quarantined from the production validation
+baseline:
+
+- `tslgen/src/tslgen/frontend`: pre-redesign parser sketch; the accepted parser
+  boundary is `tslgen.syntax`.
+- `tslgen/src/tslgen/ir`: early primitive/signature sketch not used by the
+  accepted domain, candidate, and lowering models.
+- `tslgen/src/tslgen/middle_end`: legacy-shaped rewrite/filter sketch with
+  unstable imports and incomplete TSIL semantics.
+- `tslgen/src/tslgen/utils`: helpers used by quarantined sketches.
+- `tslgen/src/tslgen/core/context.py`, `core/passes.py`, and `core/types.py`:
+  early sketches outside the accepted Milestone 1 core foundation.
+- `tslgen/tests/backend` and `tslgen/tests/test_timing.py`: pre-redesign sketch
+  tests outside the accepted unit baseline.
+- `frozen/`: legacy evidence only.
+- `tsldata/`: read-only corpus fixtures exercised by tests, not Python tooling
+  targets.
+
+Future cleanup may promote or remove quarantined paths, but doing so requires a
+milestone with tests and documentation. Quarantine must not be used to hide
+failures in accepted redesigned modules.
 
 ## Sketch Assessment
 

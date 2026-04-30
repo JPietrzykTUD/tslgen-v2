@@ -466,3 +466,45 @@ Consequences:
   are accepted.
 - API and CLI expansion must expose only capabilities implemented by earlier
   milestones.
+
+## ADR-016: Validation Baseline Quarantines Exploratory Sketches
+
+Status: Accepted
+
+Context:
+
+Milestones 1 through 20 have accepted a redesigned pipeline surface, but the
+repository still contains pre-redesign sketches under `frontend`, `ir`,
+`middle_end`, `utils`, and early core files. Broad package validation fails on
+these sketches because some files are syntactically incomplete or import
+unstable `tslgen.src.tslgen` paths. Future agents still need a reliable command
+that catches regressions in accepted code.
+
+Considered alternatives:
+
+- Require every historical sketch to pass the same validation profile.
+- Delete exploratory paths during the validation milestone.
+- Define a production validation profile and quarantine unsupported sketches.
+
+Decision:
+
+Define a local redesigned-code validation profile in `tslgen.tooling.validation`.
+The profile includes accepted redesigned modules and unit tests, current-corpus
+probes, targeted compile/lint/type checks, and `git diff --check`. Exploratory
+sketches are documented as quarantined until a future milestone promotes or
+removes them.
+
+Rationale:
+
+Validation should be strict for accepted architecture without spending this
+milestone refactoring or deleting unrelated sketches. Explicit quarantine keeps
+unsupported code visible and prevents accidental broad-validation claims.
+
+Consequences:
+
+- Future review packets can run
+  `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`.
+- Quarantined paths must not be imported by public API, CLI, or accepted
+  pipeline tests.
+- Quarantine cannot be used to exclude accepted redesigned modules merely
+  because they fail validation.

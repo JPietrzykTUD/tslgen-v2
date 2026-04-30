@@ -455,17 +455,24 @@ fields they already use.
 
 ## OQ-017: What Belongs In The Production Validation Baseline Versus Exploratory Quarantine?
 
-Status: Open - scheduled for Milestone 21
+Status: Resolved for the Milestone 21 baseline.
 
 Why it matters:
 
 The repository contains accepted redesign code, exploratory sketches, legacy evidence, generated data, and tests. Future agents need a validation command that catches production regressions without being derailed by intentionally incomplete sketches.
 
-Possible answers:
+Considered answers:
 
 - Treat only documented production packages and tests as validation targets.
 - Bring all exploratory code under the same validation baseline.
 - Move or mark exploratory code so production imports cannot depend on it accidentally.
+
+Decision:
+
+Treat documented accepted redesigned modules and unit tests as the production
+validation target. Quarantine exploratory sketches until a future milestone
+promotes or removes them. The validation profile is implemented by
+`tslgen.tooling.validation`.
 
 Required evidence:
 
@@ -475,7 +482,15 @@ Required evidence:
 
 Implementation blocked:
 
-No for Milestones 16 through 20. Broad validation claims are blocked until Milestone 21.
+No for the accepted baseline. Broad repository validation remains unsupported
+until quarantined paths are cleaned up or promoted.
+
+Resolution notes:
+
+Milestone 21 quarantines pre-redesign `frontend`, `ir`, `middle_end`, `utils`,
+and early core sketch files such as `core/passes.py`. The accepted baseline
+includes current-corpus probes, unit discovery, targeted `compileall`, `ruff`,
+targeted `mypy --explicit-package-bases`, and `git diff --check`.
 
 ## OQ-018: Which Backend Rendering Slice Should Follow Summary Artifacts?
 

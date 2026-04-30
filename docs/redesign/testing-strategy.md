@@ -242,6 +242,32 @@ script or command is added, tests should assert:
 - Failures distinguish production regressions from intentionally unsupported
   sketches.
 
+## Validation Baseline Profile
+
+Milestone 21 establishes the local redesigned-code validation profile at
+`tslgen.tooling.validation`. Future milestone review should run:
+
+```sh
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+```
+
+The profile includes:
+
+- current-corpus probes for accepted parser behavior and selector-aware
+  implementation-spec promotion, including scalar-only `blend`;
+- `python -m unittest discover tslgen/tests/unit`;
+- targeted `compileall` for accepted redesigned modules and unit tests;
+- `ruff check` for accepted redesigned modules and unit tests;
+- targeted `mypy --explicit-package-bases` with
+  `MYPYPATH=tslgen/src:tslgen/tests/unit`;
+- `git diff --check`.
+
+The profile deliberately checks accepted redesigned code and tests rather than
+claiming broad repository validation. Quarantined exploratory sketches remain
+outside the lint/type/compile surface until a future milestone either promotes
+or removes them. `tsldata/` remains a read-only corpus fixture target exercised
+by tests, not a Python lint/type target.
+
 ## Integration Tests
 
 Integration tests should cover:
