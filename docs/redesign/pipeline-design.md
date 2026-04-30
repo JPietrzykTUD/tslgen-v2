@@ -321,6 +321,14 @@ Side effects:
 
 - None.
 
+Milestone 17 adds an initial production test-source planning boundary alongside
+backend artifact planning. It consumes the catalog and accepted candidate
+selection output, normalizes supported TSL `tests` declarations into typed
+planning data, filters them against selected candidates, and emits deterministic
+test-source artifact descriptors. It is metadata-only: generated test source
+rendering, test artifact writing, compiler invocation, and test execution remain
+later stages.
+
 ## Stage 10: Rendering
 
 Inputs:

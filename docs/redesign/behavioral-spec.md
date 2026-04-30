@@ -371,6 +371,18 @@ Production test-source planning must:
   rendered.
 - Emit diagnostics for unsupported TSL `tests` declaration shapes.
 
+Milestone 17 introduces the first production test-source planning slice. It
+normalizes `tests` entries with `test_name`, `type`, `case.inputs`, and
+`case.expected`; optional `extension`, `to_extension`, `to_type`, `lane_set`,
+`lanes`, and `attrs`; and preserved extra metadata such as `offset`, `scale`,
+or `index`. The planner validates referenced type, lane-set, and extension
+names, then matches declarations to selected implementation candidates by
+primitive, backend, concrete type tag, explicit extension, and declared
+attribute constraints. Its output is deterministic `ArtifactDescriptor` /
+`ArtifactPlan` metadata for planned production test sources. It does not render
+test source text, write files, invoke compilers, run tests, resize lane data, or
+apply mask/test-manifest policy.
+
 Test rendering must be backend-specific but data-driven. Compiler invocation,
 runtime execution, and generated-test framework orchestration are separate
 future concerns.

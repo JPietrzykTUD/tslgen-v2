@@ -586,3 +586,7 @@ Milestone 22 is blocked until Milestones 18 through 20 are accepted and OQ-004 i
 ## Follow-up from Milestone 16 review
 
 - Keep API/CLI exposure of artifact writing deferred until its own milestone, preserving the dedicated writer boundary.
+
+## Follow-up from Milestone 17 review
+
+- Add broader tests for `to_type` / `to_extension` planning metadata when the next testgen slice starts using those fields semantically.
