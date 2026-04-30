@@ -991,3 +991,10 @@ long as they avoid unrelated corpus churn.
 - Scheduled for Milestone 25: add CLI regression coverage for combining
   `--coverage-report` with `--output-root`, including
   `--no-skip-unchanged`, to lock down stdout and write-report expectations.
+
+## Follow-up from Milestone 25 review
+
+- Keep future CLI output changes under the accepted stream contract:
+  - report-only: report on stdout
+  - write-only: write report on stdout
+  - report + write: report on stdout, write report on stderr
