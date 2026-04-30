@@ -548,3 +548,41 @@ Consequences:
   and Rust production-shaped rendering remain deferred.
 - Future rendering slices should continue consuming typed candidate/spec/lowering
   objects rather than parser trees or raw catalog dictionaries.
+
+## ADR-018: Report HTML Is A Pure Artifact Renderer
+
+Status: Accepted for the Milestone 23 slice
+
+Context:
+
+Milestone 15 introduced deterministic coverage report values and JSON text.
+Milestone 16 introduced artifact writing as the only filesystem mutation
+boundary. The roadmap calls for a first legacy-style report/output slice without
+reintroducing hidden writes or full legacy web UI parity.
+
+Considered alternatives:
+
+- Recreate the legacy HTML report structure.
+- Add report writing directly to reporting helpers.
+- Render a small deterministic HTML report from accepted coverage values and
+  expose it as a normal in-memory artifact.
+
+Decision:
+
+Render the first HTML coverage report as pure text from
+`PipelineCoverageReport`, then wrap it in an `Artifact` at
+`reports/coverage.html` when callers need an artifact value.
+
+Rationale:
+
+This keeps reporting descriptive and side-effect-free while proving report
+artifacts can flow through the same artifact and writer boundaries as backend
+outputs.
+
+Consequences:
+
+- Dynamic report content must be HTML-escaped.
+- HTML output has a narrow golden baseline and does not claim full legacy
+  report parity.
+- Any filesystem write for report artifacts must use the accepted artifact
+  writer boundary.

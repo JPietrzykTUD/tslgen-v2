@@ -251,14 +251,17 @@ Required evidence:
 
 Implementation blocked:
 
-Documentation generation is blocked. Core generation is not blocked.
+Documentation generation remains blocked. Core generation is not blocked, and
+the Milestone 23 HTML report artifact slice is not blocked.
 
 Current status:
 
 - Milestone 15 implements lightweight in-memory coverage summaries and
   deterministic JSON report text.
-- Legacy-style generated documentation, report files, and HTML report parity
-  remain deferred under this question and are scheduled for Milestone 23.
+- Milestone 23 implements a deterministic legacy-style HTML coverage report
+  artifact over accepted `PipelineCoverageReport` values.
+- Full legacy HTML parity, generated documentation sites, report-writing UX, and
+  documentation generation remain deferred under this question.
 
 ## OQ-010: What Backends Are First-Class For The First Release?
 

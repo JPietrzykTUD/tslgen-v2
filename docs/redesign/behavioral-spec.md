@@ -487,6 +487,15 @@ only; report file writing, HTML parity with legacy reports, CI upload, and
 production documentation generation remain deferred. Future report files or HTML
 must be modeled as artifacts and written through the artifact writer boundary.
 
+Milestone 23 adds a narrow legacy-style HTML report slice over the accepted
+`PipelineCoverageReport` value. The HTML report is rendered deterministically in
+memory, escapes dynamic report content, and can be wrapped as a normal
+`Artifact` at `reports/coverage.html`. The HTML report contains summary,
+selection context, primitive coverage, backend coverage, diagnostics summary,
+and deferred-category sections. It does not re-run pipeline stages, write files,
+load external CSS or JavaScript, or claim full parity with legacy generated
+documentation.
+
 ## Determinism Requirements
 
 The following must be stable:
