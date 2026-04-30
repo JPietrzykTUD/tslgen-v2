@@ -241,6 +241,22 @@ Backend renderers must:
 - Produce stable artifact content for identical inputs.
 - Return artifact metadata such as backend, required flags, extension list, and suite count when relevant.
 
+The first C++ backend slice supports only the `cpp` backend and `generated`
+artifact kind. It renders a deterministic header-like artifact that summarizes
+selected primitive candidates, required flags, target/source extensions, type
+tags, template names, and escaped opaque TSIL payload text. This slice does not
+lower TSIL, evaluate backend translations, render full backend templates, or
+produce final SIMD implementation code.
+
+Backend renderers must reject backend mismatches before producing artifacts:
+
+- A C++ renderer must reject an artifact plan or descriptor for a backend other
+  than `cpp`.
+- A C++ renderer must reject candidates selected explicitly for a different
+  backend.
+- Candidates without backend-specific selection metadata may be accepted by a
+  renderer only when the renderer documents that generic policy.
+
 ## Backend Manifest And Artifact Planning Behavior
 
 Backend artifact planning consumes typed backend manifests, selected implementation

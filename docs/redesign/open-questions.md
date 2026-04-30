@@ -356,4 +356,12 @@ Validation strictness is partially blocked. Catalog can preserve extra fields no
 - Clarify that skip-unchanged artifact writer behavior belongs to a later writer stage, not Milestone 10.
 - Add a later writer milestone/test for skip-unchanged behavior and real artifact digests.
 - Keep the actual writer boundary explicit when `io.artifacts` starts performing file writes.
-- Before Milestone 11, decide whether artifact planning should reject mismatches between backend-specific candidate selection and a different requested artifact backend.
+- Addressed in Milestone 11: backend mismatch is a renderer diagnostic. The
+  C++ renderer rejects non-`cpp` artifact plans/descriptors and candidates
+  selected explicitly for a different backend.
+
+## Follow-ups from Milestone 11 review
+
+- Add a regression test proving generic `backend=None` candidates are accepted by the C++ renderer.
+- Add focused tests for non-`cpp` artifact plan and descriptor rejection.
+- Keep the future artifact writer as a separate I/O boundary, not an expansion of the renderer.

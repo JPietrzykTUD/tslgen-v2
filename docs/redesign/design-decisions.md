@@ -372,3 +372,40 @@ Consequences:
 - YAML remains a supported interchange format, not a core architecture shape.
 - Unknown backend diagnostics are issued against the supplied manifest set.
 - Artifact descriptors remain content-free until rendering and writing stages.
+
+## ADR-014: First C++ Slice Renders Opaque Candidate Summaries
+
+Status: Accepted
+
+Context:
+
+The roadmap calls for a first narrow C++ backend artifact before full lowering
+and template rendering exist. Candidate selection currently provides typed
+candidate metadata and opaque implementation payloads, while TSIL lowering is a
+later boundary.
+
+Considered alternatives:
+
+- Implement broad C++ template rendering immediately.
+- Treat opaque TSIL strings as final generated code.
+- Render a deterministic C++ header-like summary artifact from selected
+  candidate metadata.
+
+Decision:
+
+The first C++ backend slice renders a deterministic generated-header artifact
+containing candidate metadata, required flags, and escaped opaque TSIL payload
+text. It does not lower TSIL or claim the payload is executable backend code.
+
+Rationale:
+
+This proves the accepted selection, dependency, manifest, artifact-plan, and
+backend-rendering boundaries can connect end to end without smuggling in a
+template engine or TSIL compiler ahead of their milestones.
+
+Consequences:
+
+- Golden output covers the rendering contract for this narrow slice.
+- Full C++ specialization/wrapper rendering remains deferred.
+- Backend mismatch is diagnosed by the renderer before artifact content is
+  produced.

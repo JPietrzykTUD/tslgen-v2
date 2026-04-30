@@ -67,6 +67,46 @@ class ArtifactPlan:
                 (descriptor.logical_path.as_posix(), descriptor)
                 for descriptor in descriptors
             ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class Artifact:
+    logical_path: PurePosixPath
+    content: str
+    metadata: FrozenMap[str, CatalogValue] = field(default_factory=FrozenMap.empty)
+
+    def __post_init__(self) -> None:
+        path = PurePosixPath(self.logical_path)
+        if path.is_absolute() or ".." in path.parts:
+            raise ValueError("artifact logical path must be relative")
+        object.__setattr__(self, "logical_path", path)
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return (self.logical_path.as_posix(), self.content_digest)
+
+    @property
+    def content_digest(self) -> str:
+        return hashlib.sha256(self.content.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactSet:
+    artifacts: tuple[Artifact, ...]
+    metadata: FrozenMap[str, CatalogValue] = field(default_factory=FrozenMap.empty)
+    artifacts_by_path: FrozenMap[str, Artifact] = field(init=False)
+
+    def __post_init__(self) -> None:
+        artifacts = tuple(sorted(self.artifacts, key=lambda artifact: artifact.key))
+        object.__setattr__(self, "artifacts", artifacts)
+        object.__setattr__(
+            self,
+            "artifacts_by_path",
+            FrozenMap(
+                (artifact.logical_path.as_posix(), artifact)
+                for artifact in artifacts
+            ),
         )
 
 
@@ -100,6 +140,33 @@ def artifact_plan_from_descriptors(
     )
 
 
+def artifact_set_from_artifacts(
+    artifacts: tuple[Artifact, ...],
+    *,
+    metadata: FrozenMap[str, CatalogValue] | None = None,
+) -> Result[ArtifactSet]:
+    diagnostics: list[Diagnostic] = []
+    paths = [artifact.logical_path.as_posix() for artifact in artifacts]
+    for path in sorted(path for path in set(paths) if paths.count(path) > 1):
+        diagnostics.append(
+            Diagnostic.error(
+                "TSL-ARTIFACT-DUPLICATE-RENDERED-TARGET",
+                f"rendered artifact set defines duplicate logical target {path!r}",
+            )
+        )
+
+    ordered = sort_diagnostics(diagnostics)
+    if has_errors(ordered):
+        return Result.failure(ordered)
+    return Result.ok(
+        ArtifactSet(
+            artifacts=artifacts,
+            metadata=metadata or FrozenMap.empty(),
+        ),
+        diagnostics=ordered,
+    )
+
+
 def descriptor_digest_map(plan: ArtifactPlan) -> FrozenMap[str, str]:
     digests: dict[str, str] = {}
     for descriptor in plan.descriptors:
@@ -117,6 +184,13 @@ def descriptor_digest_map(plan: ArtifactPlan) -> FrozenMap[str, str]:
         )
         digests[descriptor.logical_path.as_posix()] = hashlib.sha256(encoded).hexdigest()
     return FrozenMap(digests)
+
+
+def artifact_digest_map(artifacts: ArtifactSet) -> FrozenMap[str, str]:
+    return FrozenMap(
+        (artifact.logical_path.as_posix(), artifact.content_digest)
+        for artifact in artifacts.artifacts
+    )
 
 
 def _catalog_json_value(value: CatalogValue) -> Any:
