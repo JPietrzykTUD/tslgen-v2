@@ -8,6 +8,7 @@ version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
 	"cyclopts",
+	"lark>=1.3",
 ]
 
 [project.scripts]
@@ -15,3 +16,6 @@ tslgen = "tslgen.cli:run"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+tslgen = ["syntax/grammar/*.lark"]

@@ -1,0 +1,119 @@
+%import common.SIGNED_NUMBER
+%import common.WS_INLINE
+
+%declare _INDENT _DEDENT
+%ignore WS_INLINE
+%ignore COMMENT
+
+NEWLINE: /(\r?\n[ \t]*)/
+LBRACE: "{"
+RBRACE: "}"
+LSQB: "["
+RSQB: "]"
+LPAR: "("
+RPAR: ")"
+LT: "<"
+GT: ">"
+DASH: "-"
+
+PRIM: "prim"
+TEMPLATE: "template"
+TYPES: "types"
+FLAGS: "flags"
+LANGUAGE: "language"
+OPERATION: "operation"
+TRANSLATION: "translation"
+GENERIC_PARAMS: "generic_params"
+LANE_SET: "lane_set"
+EXTENSION: "extension"
+
+NAME.1: /(?!prim\b)(?!template\b)(?!types\b)(?!flags\b)(?!language\b)(?!operation\b)(?!translation\b)(?!generic_params\b)(?!lane_set\b)(?!extension\b)(?!body\b)(?!native\b)[a-zA-Z_?][a-zA-Z0-9_?.]*(::[a-zA-Z_?][a-zA-Z0-9_?.]*)*/
+SIGNATURE.2: /[a-zA-Z_?][^<>]*:=[^<>]+/
+
+start: stmt_list
+
+?stmt_list: (NEWLINE | stmt)*
+
+?stmt: pair
+     | primitive_block
+     | template_block
+     | extension_block
+     | types_block
+     | flags_block
+     | language_block
+     | translation_block
+     | lane_set_block
+
+primitive_block: PRIM LT SIGNATURE GT attr_list? NAME LPAR [param ("," param)*] RPAR ":" NEWLINE _INDENT stmt_list _DEDENT
+template_block: TEMPLATE NAME ":" NEWLINE _INDENT stmt_list _DEDENT
+extension_block: EXTENSION NAME ":" NEWLINE _INDENT stmt_list _DEDENT
+types_block: TYPES ":" NEWLINE _INDENT stmt_list _DEDENT
+flags_block: FLAGS ":" NEWLINE _INDENT stmt_list _DEDENT
+language_block: LANGUAGE NAME ":" NEWLINE _INDENT stmt_list _DEDENT
+translation_block: TRANSLATION NAME ":" NEWLINE _INDENT stmt_list _DEDENT
+lane_set_block: LANE_SET NAME ":" NEWLINE _INDENT stmt_list _DEDENT
+
+attr_list: LSQB [attr_pair ("," attr_pair)*] RSQB
+attr_list_nonempty: LSQB attr_pair ("," attr_pair)* RSQB
+attr_pair: attr_key "=" value
+attr_key: NAME
+        | NAME LPAR NAME RPAR
+
+param: NAME
+
+pair.2: key value
+      | key ":" value
+      | key ":" NEWLINE _INDENT stmt_list _DEDENT
+      | key ":" NEWLINE _INDENT list_block _DEDENT
+
+key: NAME
+   | ESCAPED_STRING
+   | PRIM
+   | TEMPLATE
+   | TYPES
+   | FLAGS
+   | LANGUAGE
+   | OPERATION
+   | TRANSLATION
+   | GENERIC_PARAMS
+   | LANE_SET
+   | EXTENSION
+   | key_list
+
+key_list: LSQB [key_list_item ("," key_list_item)* [","]] RSQB
+key_list_item: NAME | ESCAPED_STRING | key_list_parameterized_item
+key_list_parameterized_item: NAME LT key_list_parameter GT
+key_list_parameter: SIGNED_NUMBER | NAME
+
+?value: scalar
+      | list
+      | list_block
+      | attr_list_nonempty
+      | map
+
+list: LSQB RSQB
+    | LSQB value ("," value)* [","] RSQB
+list_block: list_item (NEWLINE list_item)* NEWLINE?
+list_item: DASH value
+
+map: LBRACE [map_inline | map_multiline] RBRACE
+map_inline: pair_inline ("," pair_inline)* [","]
+map_multiline: NEWLINE map_pair_line (NEWLINE map_pair_line)* NEWLINE?
+map_pair_line: pair_inline
+             | key ":" value                -> pair_inline_colon
+             | key ":" NEWLINE map_kv_block -> pair_inline_block
+map_kv_block: map_pair_line (NEWLINE map_pair_line)* NEWLINE?
+pair_inline: key value
+
+?scalar: ESCAPED_STRING        -> string
+       | MULTILINE_STRING      -> multiline_string
+       | SIGNED_NUMBER         -> number
+       | BOOL                  -> bool
+       | ATTR_WILDCARD         -> wildcard
+       | NAME                  -> bare
+
+BOOL.2: "true" | "false" | "True" | "False"
+ATTR_WILDCARD.2: "*"
+MULTILINE_STRING.2: /"""[\s\S]*?"""/
+ESCAPED_STRING.1: /"(\\.|[^"\\])*"/
+COMMENT: /#[^\n]*/ | /\/\/[^\n]*/
