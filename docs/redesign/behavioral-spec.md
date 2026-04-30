@@ -325,6 +325,21 @@ The CLI should support:
 
 Host hardware autodetection belongs to CLI adapters. API callers must be able to supply flags explicitly.
 
+Milestone 13 exposes the accepted pipeline through a public API and a minimal
+diagnostic CLI. The API accepts explicit source configuration, selection
+configuration, optional backend manifests, and an optional in-memory render
+backend. It orchestrates source loading, parsing, catalog construction,
+validation, selection planning, candidate selection, dependency closure,
+artifact planning, and the accepted C++ summary renderer when requested. The API
+does not write generated artifacts and does not inspect host hardware.
+
+The Milestone 13 CLI is a thin adapter over the public API. It parses explicit
+source, manifest, backend, primitive, template, extension, and CPU-flag options;
+it reads host hardware flags only when autodetection is explicitly requested;
+and it reports diagnostics with a nonzero exit code on errors. Full production
+CLI compatibility, output writing, skip-unchanged behavior, production test
+generation, and broad backend rendering remain deferred.
+
 ## Determinism Requirements
 
 The following must be stable:

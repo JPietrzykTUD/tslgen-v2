@@ -179,6 +179,8 @@ SVE test planning and backend slices are blocked. Fixed-lane backends are not bl
 
 ## OQ-008: Which CLI Compatibility Is Required?
 
+Status: Partially answered
+
 Why it matters:
 
 Legacy workflows expose `run_all.sh`, `run_tests.py`, and `python -m tsl_gen` options. The new CLI can be cleaner, but users may rely on existing flags.
@@ -197,7 +199,16 @@ Required evidence:
 
 Implementation blocked:
 
-CLI milestone is blocked. Core API is not blocked.
+No for the Milestone 13 public API and minimal diagnostic CLI. Yes for any
+claim that the redesigned CLI is a drop-in replacement for legacy shell or
+module workflows.
+
+Current resolution:
+
+- Milestone 13 implements a clean public API plus a narrow CLI adapter over it.
+- The CLI does not promise compatibility with legacy flags or shell workflows.
+- A future CLI/writer milestone must decide output-writing behavior and any
+  compatibility aliases before replacing legacy workflows.
 
 ## OQ-009: Should Generated Documentation Be In Scope?
 
@@ -373,3 +384,9 @@ Validation strictness is partially blocked. Catalog can preserve extra fields no
 - Create or rename a future milestone for production test-source planning from TSL `tests` declarations.
 - Move the older broad Milestone 12 test-planning bullets into that future test-generation milestone so future agents do not treat them as already satisfied.
 - Keep artifact writing and skip-unchanged behavior out of the golden harness and in a future writer boundary.
+
+## Follow-ups from Milestone 13 review
+
+- Add a focused manifest-path loading/rendering test for the public API or CLI.
+- Introduce a small backend renderer dispatch mechanism during Milestone 14 instead of extending `if backend == ...` logic in `api.py`.
+- Keep output writing and skip-unchanged behavior in a later writer boundary.

@@ -391,6 +391,15 @@ Goal:
 
 Expose the implemented pipeline through a CLI and stable API.
 
+Milestone 13 initial slice:
+
+- Stable public API that returns structured stage outputs and diagnostics.
+- Minimal diagnostic CLI over the public API.
+- In-memory artifact rendering only for the accepted C++ summary artifact when
+  manifests and `render_backend` are provided.
+- No artifact writing, skip-unchanged behavior, full production CLI compatibility,
+  or production test-source generation.
+
 Scope:
 
 - `api.py`
