@@ -3,10 +3,16 @@ from __future__ import annotations
 from tslgen.analysis.candidates import ImplementationCandidate
 from tslgen.core.frozen_map import FrozenMap
 from tslgen.core.result import Result
+from tslgen.domain.values import CatalogValue
 from tslgen.io.artifacts import Artifact, ArtifactSet, artifact_set_from_artifacts
 
 from .bodies import render_cpp_production_definitions
 from .declarations import render_cpp_production_declarations
+from .layout import (
+    cpp_layout_name,
+    is_cpp_native_header_layout,
+    render_cpp_native_header_preamble,
+)
 from .planner import CppRenderJob, CppRenderPlan
 
 
@@ -16,20 +22,26 @@ def render_cpp_plan(plan: CppRenderPlan) -> Result[ArtifactSet]:
 
 
 def _render_job(job: CppRenderJob) -> Artifact:
-    content = _render_generated_header(job)
+    layout_name = cpp_layout_name(job.descriptor)
+    content = (
+        render_cpp_native_header_preamble()
+        if is_cpp_native_header_layout(job.descriptor)
+        else _render_generated_header(job)
+    )
+    metadata: dict[str, CatalogValue] = {
+        "artifact_kind": job.descriptor.kind,
+        "backend_id": "cpp",
+        "candidate_count": len(job.candidates),
+        "definition_count": len(job.definitions),
+        "required_flags": _required_flag_names(job.candidates),
+        "target_extensions": _target_extension_names(job.candidates),
+    }
+    if layout_name is not None:
+        metadata["cpp_layout"] = layout_name
     return Artifact(
         logical_path=job.descriptor.logical_path,
         content=content,
-        metadata=FrozenMap(
-            {
-                "artifact_kind": job.descriptor.kind,
-                "backend_id": "cpp",
-                "candidate_count": len(job.candidates),
-                "definition_count": len(job.definitions),
-                "required_flags": _required_flag_names(job.candidates),
-                "target_extensions": _target_extension_names(job.candidates),
-            }
-        ),
+        metadata=FrozenMap(metadata),
     )
 
 

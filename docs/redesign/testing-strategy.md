@@ -553,8 +553,10 @@ Recommended first parity checks:
 
 - Milestone 35: fixture provenance and baseline-selection tests if fixtures are
   added.
-- Milestone 36: C++ output path, sidecar, preamble, artifact order, digest, and
-  writer behavior tests.
+- Milestone 36: C++ `tsl/tsl_native.hpp` output path, selected support
+  preamble, artifact order, digest, unsupported layout diagnostics, and fixture
+  provenance tests. CMake sidecar and writer behavior tests remain deferred
+  unless the milestone explicitly touches those boundaries.
 - Milestone 37: C++ `binary/add` primary/specialization/wrapper golden tests.
 - Milestone 38: TSIL intrinsic-compose lowering unit and unsupported-form
   diagnostics.

@@ -2126,6 +2126,9 @@ Expected outputs:
   names.
 - Optional sidecar CMake metadata artifacts if selected by Milestone 35.
 - Diagnostics for unsupported output-layout requests.
+- Milestone 36 selected `tsl/tsl_native.hpp` only. `tsl/CMakeLists.txt` and
+  `tsl/tsl_flags.cmake` remain deferred evidence until a later slice can derive
+  required native-extension flags from accepted rendering behavior.
 
 Parity criterion:
 
@@ -2144,6 +2147,9 @@ Golden fixtures required:
 
 - C++ preamble fixture or excerpts selected in Milestone 35.
 - Optional sidecar CMake fixtures for `tsl_flags.cmake` and `CMakeLists.txt`.
+- M36 adds
+  `tslgen/tests/fixtures/golden/parity/cpp/native_layout_excerpt.hpp` with a
+  companion provenance file; no sidecar fixture is selected in this slice.
 
 Documentation updates:
 

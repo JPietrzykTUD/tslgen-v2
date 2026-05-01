@@ -13,6 +13,11 @@ from tslgen.lowering import LoweringPlan
 
 from .bodies import CppFunctionDefinition, plan_cpp_production_definitions
 from .declarations import CppFunctionDeclaration, plan_cpp_production_declarations
+from .layout import (
+    CPP_NATIVE_HEADER_LAYOUT,
+    cpp_layout_diagnostics,
+    cpp_layout_name,
+)
 
 
 CPP_BACKEND_ID = "cpp"
@@ -75,16 +80,26 @@ def plan_cpp_render_jobs(
     jobs: list[CppRenderJob] = []
     for descriptor in plan.descriptors:
         diagnostics.extend(_descriptor_diagnostics(descriptor))
+        layout_name = cpp_layout_name(descriptor)
         candidates = _descriptor_candidates(descriptor, selection, diagnostics)
-        diagnostics.extend(_candidate_diagnostics(candidates))
+        diagnostics.extend(
+            _candidate_diagnostics(
+                candidates,
+                require_tsil_body=layout_name != CPP_NATIVE_HEADER_LAYOUT,
+            )
+        )
         declarations: tuple[CppFunctionDeclaration, ...] = ()
         definitions: tuple[CppFunctionDefinition, ...] = ()
-        if not has_errors(diagnostics):
+        if not has_errors(diagnostics) and layout_name != CPP_NATIVE_HEADER_LAYOUT:
             declaration_result = plan_cpp_production_declarations(candidates)
             diagnostics.extend(declaration_result.diagnostics)
             if declaration_result.is_ok:
                 declarations = declaration_result.unwrap()
-        if not has_errors(diagnostics) and lowering_plan is not None:
+        if (
+            not has_errors(diagnostics)
+            and layout_name != CPP_NATIVE_HEADER_LAYOUT
+            and lowering_plan is not None
+        ):
             definition_result = plan_cpp_production_definitions(
                 declarations,
                 lowering_plan,
@@ -93,20 +108,21 @@ def plan_cpp_render_jobs(
             if definition_result.is_ok:
                 definitions = definition_result.unwrap()
         if not has_errors(diagnostics):
+            metadata: dict[str, CatalogValue] = {
+                "candidate_count": len(candidates),
+                "definition_count": len(definitions),
+                "required_flags": _required_flag_names(candidates),
+                "target_extensions": _target_extension_names(candidates),
+            }
+            if layout_name is not None:
+                metadata["cpp_layout"] = layout_name
             jobs.append(
                 CppRenderJob(
                     descriptor=descriptor,
                     candidates=candidates,
                     declarations=declarations,
                     definitions=definitions,
-                    metadata=FrozenMap(
-                        {
-                            "candidate_count": len(candidates),
-                            "definition_count": len(definitions),
-                            "required_flags": _required_flag_names(candidates),
-                            "target_extensions": _target_extension_names(candidates),
-                        }
-                    ),
+                    metadata=FrozenMap(metadata),
                 )
             )
 
@@ -158,6 +174,7 @@ def _descriptor_diagnostics(
                 f"C++ renderer does not support artifact kind {descriptor.kind!r}",
             )
         )
+    diagnostics.extend(cpp_layout_diagnostics(descriptor))
     return tuple(diagnostics)
 
 
@@ -184,6 +201,8 @@ def _descriptor_candidates(
 
 def _candidate_diagnostics(
     candidates: tuple[ImplementationCandidate, ...],
+    *,
+    require_tsil_body: bool = True,
 ) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
     for candidate in candidates:
@@ -195,6 +214,8 @@ def _candidate_diagnostics(
                     f"selected for backend {candidate.backend!r}",
                 )
             )
+        if not require_tsil_body:
+            continue
         body = candidate.implementation.body
         if body.kind != "tsil" or body.text is None:
             diagnostics.append(

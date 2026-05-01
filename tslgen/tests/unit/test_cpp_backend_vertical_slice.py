@@ -5,10 +5,11 @@ import unittest
 
 from _golden import (
     assert_artifact_digest_map_stable,
+    assert_artifact_matches_golden,
     assert_artifact_set_matches_golden,
     golden_artifact,
 )
-from _helpers import assert_diagnostic
+from _helpers import assert_diagnostic, fixture_path
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
 from tslgen.analysis.selection import SelectionRequest, plan_selection
 from tslgen.backends.cpp.backend import CppBackend
@@ -17,8 +18,10 @@ from tslgen.backends.cpp.naming import (
     cpp_production_parameter_names,
 )
 from tslgen.config.model import SourceConfig
+from tslgen.core.frozen_map import FrozenMap
 from tslgen.domain.backends import ArtifactSpec, BackendManifest, BackendManifestSet
 from tslgen.domain.catalog import Catalog, build_catalog
+from tslgen.domain.values import CatalogValue
 from tslgen.io.artifacts import ArtifactDescriptor, artifact_plan_from_descriptors
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
 from tslgen.lowering import (
@@ -237,12 +240,17 @@ def artifact_plan_for_selection(
     *,
     plan_backend: str = "cpp",
     descriptor_backend: str = "cpp",
+    logical_path: str = "generated.hpp",
+    metadata: FrozenMap[str, CatalogValue] | None = None,
 ):
     descriptor = ArtifactDescriptor(
         backend_id=descriptor_backend,
         kind="generated",
-        logical_path=PurePosixPath("generated.hpp"),
-        candidate_ids=tuple(candidate.candidate_id for candidate in selection.candidates),
+        logical_path=PurePosixPath(logical_path),
+        candidate_ids=tuple(
+            candidate.candidate_id for candidate in selection.candidates
+        ),
+        metadata=metadata or FrozenMap.empty(),
     )
     artifact_plan = artifact_plan_from_descriptors(plan_backend, (descriptor,))
     if not artifact_plan.is_ok:
@@ -410,6 +418,151 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
         artifact = result.unwrap().artifacts_by_path["generated.hpp"]
         self.assertEqual(artifact.metadata["backend_id"], "cpp")
         self.assertIn('"slice_add"', artifact.content)
+
+    def test_renders_selected_native_header_layout_preamble(self) -> None:
+        selection = candidate_selection_for(catalog_with_primitive(SIMPLE_PRIMITIVE))
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(
+            artifact_plan,
+            selection,
+            lowering_plan_for(selection),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = assert_artifact_matches_golden(
+            self,
+            result.unwrap(),
+            golden_artifact(
+                "tsl/tsl_native.hpp",
+                "golden",
+                "parity",
+                "cpp",
+                "native_layout_excerpt.hpp",
+            ),
+        )
+        self.assertEqual(artifact.metadata["backend_id"], "cpp")
+        self.assertEqual(artifact.metadata["cpp_layout"], "native_header")
+        self.assertEqual(artifact.metadata["candidate_count"], 2)
+        self.assertEqual(artifact.metadata["definition_count"], 0)
+        self.assertIn("#define TSL_FORCE_INLINE inline", artifact.content)
+        self.assertIn(
+            "template <typename T, typename Ext>\nstruct simd;",
+            artifact.content,
+        )
+        self.assertIn("struct reg_param", artifact.content)
+        self.assertNotIn("primitive_candidate", artifact.content)
+        self.assertNotIn("namespace production", artifact.content)
+        self.assertNotIn("slice_add_si32", artifact.content)
+
+    def test_native_header_layout_does_not_require_declaration_slice(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(UNSUPPORTED_DECLARATION_PRIMITIVE),
+            primitive_name="slice_zero",
+        )
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(artifact_plan, selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = result.unwrap().artifacts_by_path["tsl/tsl_native.hpp"]
+        self.assertEqual(artifact.metadata["cpp_layout"], "native_header")
+        self.assertNotIn("slice_zero", artifact.content)
+
+    def test_native_header_layout_order_and_digest_are_deterministic(self) -> None:
+        selection = candidate_selection_for(catalog_with_primitive(SIMPLE_PRIMITIVE))
+        candidate_ids = tuple(
+            candidate.candidate_id for candidate in selection.candidates
+        )
+        generated = ArtifactDescriptor(
+            backend_id="cpp",
+            kind="generated",
+            logical_path=PurePosixPath("generated.hpp"),
+            candidate_ids=candidate_ids,
+        )
+        native = ArtifactDescriptor(
+            backend_id="cpp",
+            kind="generated",
+            logical_path=PurePosixPath("tsl/tsl_native.hpp"),
+            candidate_ids=candidate_ids,
+        )
+        artifact_plan = artifact_plan_from_descriptors("cpp", (native, generated))
+        self.assertTrue(artifact_plan.is_ok, artifact_plan.diagnostics)
+
+        first = CppBackend().render(
+            artifact_plan.unwrap(),
+            selection,
+            lowering_plan_for(selection),
+        )
+        second = CppBackend().render(
+            artifact_plan.unwrap(),
+            selection,
+            lowering_plan_for(selection),
+        )
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        paths = tuple(
+            artifact.logical_path.as_posix() for artifact in first.unwrap().artifacts
+        )
+        self.assertEqual(paths, ("generated.hpp", "tsl/tsl_native.hpp"))
+        assert_artifact_digest_map_stable(self, first.unwrap(), second.unwrap())
+
+    def test_diagnoses_unsupported_cpp_layout_request(self) -> None:
+        selection = candidate_selection_for(catalog_with_primitive(SIMPLE_PRIMITIVE))
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            metadata=FrozenMap({"cpp_layout": "legacy_everything"}),
+        )
+
+        result = CppBackend().render(artifact_plan, selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-LAYOUT-UNSUPPORTED",
+            severity="error",
+        )
+
+    def test_diagnoses_native_header_layout_wrong_path(self) -> None:
+        selection = candidate_selection_for(catalog_with_primitive(SIMPLE_PRIMITIVE))
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            metadata=FrozenMap({"cpp_layout": "native_header"}),
+        )
+
+        result = CppBackend().render(artifact_plan, selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-LAYOUT-PATH",
+            severity="error",
+        )
+
+    def test_native_header_fixture_provenance_is_documented(self) -> None:
+        provenance = fixture_path(
+            "golden",
+            "parity",
+            "cpp",
+            "native_layout_excerpt.provenance.md",
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "`tslgen/tests/fixtures/golden/parity/cpp/native_layout_excerpt.hpp`",
+            provenance,
+        )
+        self.assertIn("`frozen/out/tsl/tsl_native.hpp:1-30`", provenance)
+        self.assertIn("Parity level: semantic parity", provenance)
+        self.assertIn("Runtime dependency on `frozen/`: none", provenance)
 
     def test_diagnoses_non_cpp_artifact_plan(self) -> None:
         selection = candidate_selection_for(catalog_with_primitive(SIMPLE_PRIMITIVE))

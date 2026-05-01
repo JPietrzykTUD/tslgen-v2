@@ -36,8 +36,8 @@ Accepted redesign boundaries available for future parity slices:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `frozen/out/tsl/tsl_native.hpp` | C++ | generated header | primary, specialization, wrapper | `fundamental/add` first; broad native families later | `scalar`, `avx2` first; broad native extensions later | `si32`, `ui32`, `f32` first | none for golden inspection; C++ compiler only for optional future execution | first C++ output target | semantic equivalence plus redesign-owned exact golden text; selected snippets only | M36, M37, M39 |
 | `frozen/out/tsl/tsl_generic.hpp` | C++ | generated header | generic specializations and wrappers | broad primitive families | `generic` | sized generic type matrix | none for inspection; C++ compiler for optional execution | deferred generic parity evidence | semantic equivalence; no whole-file byte parity | later generic C++ milestone |
-| `frozen/out/tsl/CMakeLists.txt` | C++ | sidecar build metadata | output layout | all generated headers | selected generated header set | n/a | CMake only if execution is selected later | selected as output-layout sidecar evidence | byte-for-byte whole-file candidate when M36 selects sidecars | M36 |
-| `frozen/out/tsl/tsl_flags.cmake` | C++ | sidecar compile flags | output layout | all generated headers | required native extensions | n/a | CMake/C++ compiler only if execution is selected later | selected as required-flags sidecar evidence | semantic for required flag sets; byte-for-byte only for the selected generated input | M36 |
+| `frozen/out/tsl/CMakeLists.txt` | C++ | sidecar build metadata | output layout | all generated headers | selected generated header set | n/a | CMake only if execution is selected later | selected as output-layout sidecar evidence | byte-for-byte whole-file candidate when a future sidecar slice selects it | deferred after M36 |
+| `frozen/out/tsl/tsl_flags.cmake` | C++ | sidecar compile flags | output layout | all generated headers | required native extensions | n/a | CMake/C++ compiler only if execution is selected later | selected as required-flags sidecar evidence | semantic for required flag sets; byte-for-byte only for a selected generated input | deferred after native C++ parity |
 | `frozen/out/reports/primitive_coverage.json` | report | coverage JSON | row-oriented coverage | broad primitive catalog | broad extension matrix | broad type matrix | none | report parity evidence, not first output target | selected-row semantic/field parity; no whole-file byte parity | M42 |
 | `frozen/out/reports/primitive_coverage.html` | report | coverage HTML | row table | broad primitive catalog | broad extension matrix | broad type matrix | none | documentation/report evidence only for now | redesign-owned HTML unless a later milestone selects exact rows | later docs/report milestone |
 | `frozen/jinja/cpp/test_file.j2` | C++ | generated test source evidence | test file wrapper | broad test families | selected test extension | selected test type | none for inspection; `gtest`/C++ only for optional execution | selected generated-test structure evidence | semantic equivalence for one generated test source | M40 |
@@ -80,24 +80,36 @@ parity, or report/documentation parity.
 ### CPP-ADD-LAYOUT
 
 - Exact behavior target: emit the selected C++ generated header under logical
-  path `tsl/tsl_native.hpp`; sidecars may use `tsl/CMakeLists.txt` and
-  `tsl/tsl_flags.cmake` when selected by M36.
+  path `tsl/tsl_native.hpp`.
 - Legacy evidence path: `frozen/out/tsl/tsl_native.hpp`,
   `frozen/out/tsl/CMakeLists.txt`, and `frozen/out/tsl/tsl_flags.cmake`.
 - Source line ranges:
   - `frozen/out/tsl/tsl_native.hpp:1-30` for includes and basic support macros.
-  - `frozen/out/tsl/CMakeLists.txt:1-9` for the small CMake sidecar.
-  - `frozen/out/tsl/tsl_flags.cmake:1-2` for the current flags sidecar shape.
-- Fixture path in this milestone: none.
-- Proposed future fixture path:
+  - `frozen/out/tsl/tsl_native.hpp:147-167` for scalar/AVX2 extension tags and
+    the `simd` primary declaration evidence.
+  - `frozen/out/tsl/tsl_native.hpp:720-725` for `detail::reg_param` evidence.
+  - `frozen/out/tsl/CMakeLists.txt:1-9` remains sidecar evidence for a later
+    output-workflow slice.
+  - `frozen/out/tsl/tsl_flags.cmake:1-2` remains required-flags sidecar
+    evidence for a later native-extension slice.
+- Fixture path selected by M36:
   `tslgen/tests/fixtures/golden/parity/cpp/native_layout_excerpt.hpp`.
+- Fixture provenance:
+  `tslgen/tests/fixtures/golden/parity/cpp/native_layout_excerpt.provenance.md`.
 - Parity level: exact logical path parity; selected-preamble semantic parity
-  unless M36 chooses byte-for-byte for a tiny excerpt. Whole-header byte parity
-  is explicitly not selected.
+  with redesign-owned exact golden output. Whole-header byte parity is
+  explicitly not selected.
+- Sidecar decision: M36 does not render `tsl/CMakeLists.txt` or
+  `tsl/tsl_flags.cmake`. `tsl_flags.cmake` depends on native-extension required
+  flags that are not rendered until later parity slices, so sidecars remain
+  evidence only for now.
 - Validation method: artifact descriptor/logical-path golden tests,
-  deterministic digest checks, and optional exact excerpt tests in M36.
+  deterministic digest checks, unsupported layout diagnostics, and fixture
+  provenance tests that do not read from `frozen/` at runtime.
 - Known limitations: broad helper functions, all includes, all macros, and all
-  sidecar flag combinations remain deferred.
+  sidecar flag combinations remain deferred. The preamble fixture contains only
+  the support declarations needed before M37 adds scalar primary,
+  specialization, and wrapper parity.
 
 ### CPP-ADD-SCALAR
 

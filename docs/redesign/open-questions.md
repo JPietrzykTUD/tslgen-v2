@@ -1108,8 +1108,13 @@ Required evidence:
 Decision:
 
 - Output logical paths use exact parity for the selected artifact names.
+- Milestone 36 selects exact logical-path parity for `tsl/tsl_native.hpp` and
+  semantic parity for the support preamble, captured in a redesign-owned exact
+  golden fixture.
 - Tiny sidecar files may use byte-for-byte parity when a future milestone
-  selects them.
+  selects them. M36 explicitly defers `tsl/CMakeLists.txt` and
+  `tsl/tsl_flags.cmake` because required native-extension flag coverage has not
+  landed yet.
 - C++ scalar `add_binary` and native `avx2/f32` code use semantic equivalence
   against frozen evidence plus redesign-owned exact golden output for the new
   renderer.
