@@ -566,8 +566,21 @@ focused milestone with tests and documentation. Any deletion or migration must
 update the validation profile in the same slice, preserve required behavior
 evidence in redesign docs, and keep production import-boundary tests passing.
 Quarantine must not be used to hide failures in accepted redesigned modules.
-Milestone 34 is responsible for broadening corpus and validation hygiene without
-treating `tsldata` churn as incidental implementation cleanup.
+
+Milestone 34 records corpus hygiene policy in
+`docs/redesign/corpus-hygiene-policy.md`. `tsldata` remains outside Python
+compile, lint, and type-check targets because it is accepted source data and
+read-only fixture data, not implementation code. Current and future corpus
+validation should exercise it through deterministic parser, catalog,
+validation, selection, backend metadata, and rendering probes as those
+behaviors are accepted.
+
+Corpus churn is not incidental cleanup. A content diff under `tsldata/` is a
+source-data change that needs behavioral evidence and focused tests. A zero-line
+mode-only diff, such as `100644 => 100755`, is accidental local dirty state
+unless a milestone explicitly documents executable-bit intent. Generated
+artifacts and committed golden fixtures are reviewed under artifact and golden
+policies rather than as corpus data.
 
 ## Sketch Assessment
 

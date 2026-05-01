@@ -1016,3 +1016,52 @@ Consequences:
   focused tests; they must not import quarantined modules.
 - `frozen` remains evidence-only, and `tsldata` remains corpus data pending
   Milestone 34 hygiene policy.
+
+## ADR-029: Corpus Hygiene Validates Data Without Treating It As Code
+
+Status: Accepted for the Milestone 34 documentation slice
+
+Context:
+
+Milestone 21 established a validation profile for accepted redesigned Python
+code and selected current-corpus probes. Milestone 33 classified `tsldata` as
+keep-quarantined pending a corpus hygiene policy. The current workspace also
+showed dirty `tsldata/**`, `.gitignore`, and `.devcontainer/**` entries that
+were mode-only changes with zero content diff.
+
+Considered alternatives:
+
+- Add `tsldata` to Python compile, lint, or type-check targets.
+- Normalize or reformat the entire corpus as cleanup.
+- Expand the validation profile before deciding corpus ownership.
+- Document a corpus review policy and keep the validation command surface
+  unchanged for this slice.
+
+Decision:
+
+Classify `tsldata/` as accepted source corpus and read-only fixture corpus, not
+as generated artifacts or Python implementation code. Validate it through
+deterministic parser, catalog, validation, selection, backend metadata, and
+rendering probes as those behaviors become accepted. Keep current mode-only
+dirty state classified as accidental local dirty state unless executable-bit
+intent is explicitly documented. Keep generated outputs behind the artifact
+writer and committed golden fixtures under their own exact-diff policy.
+
+Rationale:
+
+The corpus should be validated through parser/catalog probes because `tsldata`
+is accepted source data, not Python code. This protects behavior without
+creating output churn, host dependencies, or broad cleanup pressure inside
+implementation milestones.
+
+Consequences:
+
+- Milestone 34 does not change `tslgen.tooling.validation`, `.gitignore`, tests,
+  generator behavior, generated outputs, or corpus contents.
+- Future `tsldata` content edits must be reviewed as source-data changes with
+  behavior evidence and focused tests.
+- Future validation-profile expansion for corpus checks must be deterministic,
+  host-independent, and paired with validation-profile tests plus the full
+  Milestone 21 profile.
+- Permission-bit churn and unrelated local artifacts are reported as dirty
+  workspace state, not silently fixed in implementation slices.

@@ -903,31 +903,50 @@ import-boundary or full validation checks according to the retirement plan.
 
 ## OQ-028: What Is The Policy For `tsldata/` Changes And Dirty Corpus State?
 
-Status: Open - scheduled for Milestone 34
+Status: Resolved for the Milestone 34 current slice; future corpus hygiene
+expansion remains deferred.
 
 Why it matters:
 
-`tsldata/` is both the source corpus and a fixture source for tests. The current
-worktree may contain broad corpus edits. Future agents need to know when TSL
-data changes are source changes, generated-output churn, or fixture updates.
+`tsldata/` is accepted source corpus and read-only fixture corpus. It is not
+Python implementation code and not generated output. Future agents need to
+classify TSL data changes without treating corpus churn as incidental
+implementation cleanup.
 
-Possible answers:
+Policy outcome:
 
-- Treat `tsldata/` as source data requiring focused behavioral review.
-- Treat selected corpus files as fixtures for current tests and defer broad
-  corpus normalization.
-- Add a separate generated-data workflow if any corpus files become generated.
+- `tsldata/` content changes are source-data changes requiring focused
+  behavioral evidence and relevant parser, catalog, validation, selection,
+  backend metadata, lowering, or rendering tests.
+- `tsldata/` may be used as read-only fixture corpus by deterministic
+  current-corpus probes.
+- Generated artifacts are separate from `tsldata/` and remain behind artifact
+  writer and golden-fixture policies.
+- Mode-only dirty state, such as `100644 => 100755`, is accidental local dirty
+  state unless executable-bit intent is explicitly documented.
+
+Deferred:
+
+- Broader corpus probes.
+- Corpus normalization.
+- Permission-bit cleanup.
+- Generated output regeneration.
+- Validation-profile command changes.
 
 Required evidence:
 
-- Current dirty-worktree state.
-- Parser/current-corpus tests.
-- Authoring workflow for TSL data.
+- Milestone 34 corpus policy in
+  `docs/redesign/corpus-hygiene-policy.md`.
+- Current dirty-worktree observations around `tsldata/**`, `.gitignore`, and
+  `.devcontainer/**` showing mode-only zero-line diffs.
+- Parser/current-corpus tests and existing catalog/validation probes that
+  consume selected `tsldata` files.
 
 Implementation blocked:
 
-Milestone 34 is blocked on this policy. Earlier semantic slices can proceed as
-long as they avoid unrelated corpus churn.
+No current Milestone 34 implementation is blocked by this question. Future
+corpus validation expansion or cleanup must be handled by focused milestones
+and must not imply that all corpus hygiene work was completed by Milestone 34.
 
 ## Follow-ups from Milestone 2 review
 
@@ -1114,4 +1133,11 @@ long as they avoid unrelated corpus churn.
 
 ## Follow-up from Milestone 33 review
 
-- Use Milestone 34 to define `tsldata` corpus hygiene and dirty-worktree policy before expanding data validation or cleanup.
+- Addressed in Milestone 34: `docs/redesign/corpus-hygiene-policy.md` defines
+  `tsldata` corpus hygiene, dirty-worktree classification, generated/cache file
+  policy, and the rule that corpus validation uses deterministic data probes
+  rather than Python lint/type checks.
+
+## Follow-up from Milestone 34 review
+
+- Keep broader corpus probes, normalization, permission-bit cleanup, generated-output regeneration, and validation-profile command changes as separate focused milestones.

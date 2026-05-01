@@ -296,8 +296,9 @@ generation:
   future deletion or migration slice must run the import-boundary regression,
   update validation-profile assertions, and run the Milestone 21 profile if
   quarantine entries or accepted paths change.
-- Corpus-hygiene tests only when Milestone 34 changes `tsldata` policy or
-  validation behavior.
+- Corpus-hygiene tests only when a milestone changes validation behavior,
+  corpus probes, or `tsldata` content. Milestone 34 documents policy without
+  changing the validation command surface.
 
 ## Validation Baseline Profile
 
@@ -328,6 +329,34 @@ classification changes require `git diff --check`, while code deletion,
 migration, or validation-profile edits require the targeted import-boundary
 test and the full Milestone 21 profile. `tsldata/` remains a read-only corpus
 fixture target exercised by tests, not a Python lint/type target.
+
+## Corpus Hygiene Tests
+
+Milestone 34 defines the corpus review policy in
+`docs/redesign/corpus-hygiene-policy.md` and keeps the validation command
+surface unchanged. The current validation profile already includes selected
+corpus probes for accepted parser behavior and selector-aware implementation
+spec promotion.
+
+`tsldata/` changes should be tested according to their review classification:
+
+- Source-data changes require focused parser, catalog, validation, selection,
+  backend metadata, lowering, or rendering tests for the behavior affected.
+- Fixture-only changes belong under test fixture paths and should stay small
+  enough for exact diffs to be reviewable.
+- Generated artifact changes belong to artifact or golden tests, not corpus
+  probes.
+- Metadata-only dirty state, such as zero-line mode changes, should be
+  reported and left out of implementation slices unless executable-bit intent
+  is explicit.
+
+Corpus probes must remain deterministic and host-independent. They should not
+write output files, rewrite or normalize `tsldata`, require compilers, inspect
+host CPU features, or depend on the network.
+
+Future validation-profile expansion may add selected corpus checks only when
+they protect accepted behavior without output churn. Any command-surface change
+must update validation-profile tests and run the full Milestone 21 profile.
 
 ## Integration Tests
 

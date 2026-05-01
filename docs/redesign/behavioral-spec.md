@@ -44,6 +44,9 @@ Each stage receives explicit inputs and returns explicit outputs. Only source lo
 - The parser must preserve enough source span information for downstream diagnostics.
 
 Compatibility expectation: TSL files in `tsldata/` must parse without errors.
+`tsldata/` is accepted source corpus and read-only fixture corpus. It is not a
+generated artifact, and it must be validated through parser, catalog, and
+semantic probes rather than Python linting or type-checking.
 
 ## Catalog Behavior
 
