@@ -66,14 +66,29 @@ def cpp_layout_diagnostics(descriptor: ArtifactDescriptor) -> tuple[Diagnostic, 
 
 
 def render_cpp_native_header_preamble() -> str:
-    return "\n".join(_CPP_NATIVE_HEADER_PREAMBLE_LINES)
+    return render_cpp_native_header()
+
+
+def render_cpp_native_header(
+    *,
+    detail_lines: tuple[str, ...] = (),
+    wrapper_lines: tuple[str, ...] = (),
+) -> str:
+    lines = list(_CPP_NATIVE_HEADER_PREFIX_LINES)
+    if detail_lines:
+        lines.extend(("", *detail_lines))
+    lines.extend(("", "}  // namespace detail"))
+    if wrapper_lines:
+        lines.extend(("", *wrapper_lines))
+    lines.extend(("}  // namespace tsl", ""))
+    return "\n".join(lines)
 
 
 def _supported_layout_list() -> str:
     return ", ".join(repr(layout) for layout in sorted(SUPPORTED_CPP_LAYOUTS))
 
 
-_CPP_NATIVE_HEADER_PREAMBLE_LINES = (
+_CPP_NATIVE_HEADER_PREFIX_LINES = (
     "#include <algorithm>",
     "#include <array>",
     "#include <bit>",
@@ -117,8 +132,4 @@ _CPP_NATIVE_HEADER_PREAMBLE_LINES = (
     "struct reg_param {",
     "  using type = const typename Vec::register_type;",
     "};",
-    "",
-    "}  // namespace detail",
-    "}  // namespace tsl",
-    "",
 )

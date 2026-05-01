@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 import unittest
 
@@ -14,8 +15,11 @@ from tslgen.analysis.candidates import CandidateSelection, select_implementation
 from tslgen.analysis.selection import SelectionRequest, plan_selection
 from tslgen.backends.cpp.backend import CppBackend
 from tslgen.backends.cpp.naming import (
+    cpp_detail_functor_name,
     cpp_production_function_name,
     cpp_production_parameter_names,
+    cpp_wrapper_function_name,
+    cpp_wrapper_parameter_names,
 )
 from tslgen.config.model import SourceConfig
 from tslgen.core.frozen_map import FrozenMap
@@ -93,6 +97,39 @@ RAW_SUBTRACT_PRIMITIVE = """prim<v:=(v,v)> slice_add(left, right):
         requires [sse]
         implementation:
           tsil "emit_return(left - right);"
+"""
+
+
+ADD_PARITY_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
+  tests []
+  impls:
+    scalar:
+      ?i32:
+        requires []
+        implementation:
+          tsil "emit_return(left + right);"
+"""
+
+
+RAW_SUBTRACT_ADD_SI32_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(left - right);"
+"""
+
+
+INVALID_ADD_PARAMETER_PRIMITIVE = """prim<v:=(v,v)> add(class, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(class + right);"
 """
 
 
@@ -336,6 +373,35 @@ class CppNamingTests(unittest.TestCase):
             severity="error",
         )
 
+    def test_detail_functor_name_uses_primitive_and_template(self) -> None:
+        name = cpp_detail_functor_name("add", "binary")
+
+        self.assertTrue(name.is_ok, name.diagnostics)
+        self.assertEqual(name.unwrap(), "add_binary")
+
+    def test_wrapper_function_name_preserves_primitive_name(self) -> None:
+        name = cpp_wrapper_function_name("add")
+
+        self.assertTrue(name.is_ok, name.diagnostics)
+        self.assertEqual(name.unwrap(), "add")
+
+    def test_wrapper_parameter_names_preserve_signature_names(self) -> None:
+        names = cpp_wrapper_parameter_names(("left", "right"))
+
+        self.assertTrue(names.is_ok, names.diagnostics)
+        self.assertEqual(names.unwrap(), ("left", "right"))
+
+    def test_invalid_wrapper_name_is_diagnostic(self) -> None:
+        name = cpp_wrapper_function_name("add-mask")
+
+        self.assertFalse(name.is_ok)
+        assert_diagnostic(
+            self,
+            name.diagnostics[0],
+            code="TSL-CPP-RENDER-WRAPPER-NAME",
+            severity="error",
+        )
+
 
 class CppBackendVerticalSliceTests(unittest.TestCase):
     def test_renders_minimal_cpp_generated_artifact(self) -> None:
@@ -426,11 +492,7 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             logical_path="tsl/tsl_native.hpp",
         )
 
-        result = CppBackend().render(
-            artifact_plan,
-            selection,
-            lowering_plan_for(selection),
-        )
+        result = CppBackend().render(artifact_plan, selection)
 
         self.assertTrue(result.is_ok, result.diagnostics)
         artifact = assert_artifact_matches_golden(
@@ -458,6 +520,162 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
         self.assertNotIn("namespace production", artifact.content)
         self.assertNotIn("slice_add_si32", artifact.content)
 
+    def test_renders_selected_add_scalar_parity_slice(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_PARITY_PRIMITIVE),
+            primitive_name="add",
+        )
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(
+            artifact_plan,
+            selection,
+            lowering_plan_for(selection),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = assert_artifact_matches_golden(
+            self,
+            result.unwrap(),
+            golden_artifact(
+                "tsl/tsl_native.hpp",
+                "golden",
+                "parity",
+                "cpp",
+                "add_scalar_excerpt.hpp",
+            ),
+        )
+        self.assertEqual(artifact.metadata["cpp_layout"], "native_header")
+        self.assertEqual(artifact.metadata["scalar_specialization_count"], 2)
+        self.assertIn("struct add_binary", artifact.content)
+        self.assertIn("struct add_binary<simd<int32_t, scalar>>", artifact.content)
+        self.assertIn("struct add_binary<simd<uint32_t, scalar>>", artifact.content)
+        self.assertIn("static constexpr bool has_return_value()", artifact.content)
+        self.assertIn("static constexpr bool native_supported()", artifact.content)
+        self.assertIn("return left + right;", artifact.content)
+        self.assertIn(
+            "return ::tsl::detail::add_binary<Vec>::apply(left, right);",
+            artifact.content,
+        )
+        self.assertNotIn("primitive_candidate", artifact.content)
+
+    def test_add_scalar_parity_uses_lowered_model_not_raw_tsil_text(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(RAW_SUBTRACT_ADD_SI32_PRIMITIVE),
+            primitive_name="add",
+        )
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(
+            artifact_plan,
+            selection,
+            manual_add_lowering_plan_for(selection),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = result.unwrap().artifacts_by_path["tsl/tsl_native.hpp"]
+        self.assertIn("return left + right;", artifact.content)
+        self.assertNotIn("return left - right;", artifact.content)
+
+    def test_diagnoses_unsupported_scalar_wrapper_request(self) -> None:
+        selection = candidate_selection_for(catalog_with_primitive(SIMPLE_PRIMITIVE))
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(
+            artifact_plan,
+            selection,
+            lowering_plan_for(selection),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-SCALAR-UNSUPPORTED",
+            severity="error",
+        )
+
+    def test_diagnoses_unsupported_scalar_template_type_and_extension(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_PARITY_PRIMITIVE),
+            primitive_name="add",
+        )
+        candidate = selection.candidates[0]
+        unsupported_candidates = (
+            replace(
+                candidate,
+                candidate_id=f"{candidate.candidate_id}:template",
+                template_name="unary",
+            ),
+            replace(
+                candidate,
+                candidate_id=f"{candidate.candidate_id}:type",
+                type_tag="f32",
+            ),
+            replace(
+                candidate,
+                candidate_id=f"{candidate.candidate_id}:extension",
+                target_extension="avx2",
+            ),
+        )
+        unsupported_selection = CandidateSelection(
+            plan=selection.plan,
+            candidates=unsupported_candidates,
+        )
+        artifact_plan = artifact_plan_for_selection(
+            unsupported_selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(
+            artifact_plan,
+            unsupported_selection,
+            lowering_plan_for(selection),
+        )
+
+        self.assertFalse(result.is_ok)
+        self.assertEqual(
+            [diagnostic.code for diagnostic in result.diagnostics],
+            [
+                "TSL-CPP-RENDER-SCALAR-UNSUPPORTED",
+                "TSL-CPP-RENDER-SCALAR-UNSUPPORTED",
+                "TSL-CPP-RENDER-SCALAR-UNSUPPORTED",
+            ],
+        )
+
+    def test_diagnoses_invalid_wrapper_parameter_name(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(INVALID_ADD_PARAMETER_PRIMITIVE),
+            primitive_name="add",
+        )
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(
+            artifact_plan,
+            selection,
+            lowering_plan_for(selection),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-WRAPPER-PARAMETER-NAME",
+            severity="error",
+        )
+
     def test_native_header_layout_does_not_require_declaration_slice(self) -> None:
         selection = candidate_selection_for(
             catalog_with_primitive(UNSUPPORTED_DECLARATION_PRIMITIVE),
@@ -476,7 +694,10 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
         self.assertNotIn("slice_zero", artifact.content)
 
     def test_native_header_layout_order_and_digest_are_deterministic(self) -> None:
-        selection = candidate_selection_for(catalog_with_primitive(SIMPLE_PRIMITIVE))
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_PARITY_PRIMITIVE),
+            primitive_name="add",
+        )
         candidate_ids = tuple(
             candidate.candidate_id for candidate in selection.candidates
         )
@@ -549,20 +770,36 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
         )
 
     def test_native_header_fixture_provenance_is_documented(self) -> None:
-        provenance = fixture_path(
+        layout_provenance = fixture_path(
             "golden",
             "parity",
             "cpp",
             "native_layout_excerpt.provenance.md",
         ).read_text(encoding="utf-8")
+        scalar_provenance = fixture_path(
+            "golden",
+            "parity",
+            "cpp",
+            "add_scalar_excerpt.provenance.md",
+        ).read_text(encoding="utf-8")
 
         self.assertIn(
             "`tslgen/tests/fixtures/golden/parity/cpp/native_layout_excerpt.hpp`",
-            provenance,
+            layout_provenance,
         )
-        self.assertIn("`frozen/out/tsl/tsl_native.hpp:1-30`", provenance)
-        self.assertIn("Parity level: semantic parity", provenance)
-        self.assertIn("Runtime dependency on `frozen/`: none", provenance)
+        self.assertIn("`frozen/out/tsl/tsl_native.hpp:1-30`", layout_provenance)
+        self.assertIn("Parity level: semantic parity", layout_provenance)
+        self.assertIn("Runtime dependency on `frozen/`: none", layout_provenance)
+        self.assertIn(
+            "`tslgen/tests/fixtures/golden/parity/cpp/add_scalar_excerpt.hpp`",
+            scalar_provenance,
+        )
+        self.assertIn("`frozen/out/tsl/tsl_native.hpp:805-810`", scalar_provenance)
+        self.assertIn(
+            "`tsldata/primitives/arithmetic/fundamental.tsl:27-31`",
+            scalar_provenance,
+        )
+        self.assertIn("Runtime dependency on `frozen/`: none", scalar_provenance)
 
     def test_diagnoses_non_cpp_artifact_plan(self) -> None:
         selection = candidate_selection_for(catalog_with_primitive(SIMPLE_PRIMITIVE))

@@ -557,7 +557,9 @@ Recommended first parity checks:
   preamble, artifact order, digest, unsupported layout diagnostics, and fixture
   provenance tests. CMake sidecar and writer behavior tests remain deferred
   unless the milestone explicitly touches those boundaries.
-- Milestone 37: C++ `binary/add` primary/specialization/wrapper golden tests.
+- Milestone 37: C++ `binary/add` primary/specialization/wrapper golden tests,
+  lowered-model rendering tests, unsupported scalar-slice diagnostics, digest
+  determinism, and fixture provenance tests.
 - Milestone 38: TSIL intrinsic-compose lowering unit and unsupported-form
   diagnostics.
 - Milestone 39: native C++ `binary/add` intrinsic specialization golden tests.

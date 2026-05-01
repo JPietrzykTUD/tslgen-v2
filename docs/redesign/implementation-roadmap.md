@@ -2214,6 +2214,9 @@ Expected outputs:
 - Deterministic C++ primary declaration, scalar specialization, and wrapper
   artifact content for the selected `add` slice.
 - Structured diagnostics for unsupported template/type/extension combinations.
+- Milestone 37 selects the redesign-owned exact golden fixture
+  `tslgen/tests/fixtures/golden/parity/cpp/add_scalar_excerpt.hpp` and records
+  provenance in the companion `.provenance.md` file.
 
 Parity criterion:
 
@@ -2235,6 +2238,9 @@ Tests required:
 Golden fixtures required:
 
 - Selected `add_binary` primary/specialization/wrapper fixture or excerpt.
+- M37 adds
+  `tslgen/tests/fixtures/golden/parity/cpp/add_scalar_excerpt.hpp` with
+  fixture provenance; native intrinsic and sidecar fixtures remain deferred.
 
 Documentation updates:
 

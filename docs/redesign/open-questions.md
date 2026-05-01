@@ -1118,6 +1118,11 @@ Decision:
 - C++ scalar `add_binary` and native `avx2/f32` code use semantic equivalence
   against frozen evidence plus redesign-owned exact golden output for the new
   renderer.
+- Milestone 37 resolves the selected scalar portion by rendering
+  `detail::add_binary`, scalar `simd<int32_t, scalar>` and
+  `simd<uint32_t, scalar>` specializations, and the public `add<Vec>` wrapper
+  delegation from typed candidates plus a `LoweringPlan`. Native `avx2/f32`
+  parity remains deferred to Milestones 38 and 39.
 - Whole-file legacy whitespace, full header ordering, and full report byte
   parity are not selected.
 

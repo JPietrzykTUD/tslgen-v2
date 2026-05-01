@@ -18,6 +18,7 @@ from .layout import (
     cpp_layout_diagnostics,
     cpp_layout_name,
 )
+from .scalar_binary import CppScalarBinarySlice, plan_cpp_scalar_binary_slice
 
 
 CPP_BACKEND_ID = "cpp"
@@ -30,6 +31,7 @@ class CppRenderJob:
     candidates: tuple[ImplementationCandidate, ...]
     declarations: tuple[CppFunctionDeclaration, ...] = ()
     definitions: tuple[CppFunctionDefinition, ...] = ()
+    scalar_binary_slice: CppScalarBinarySlice | None = None
     metadata: FrozenMap[str, CatalogValue] = field(default_factory=FrozenMap.empty)
 
     def __post_init__(self) -> None:
@@ -48,6 +50,7 @@ class CppRenderJob:
             tuple(candidate.key for candidate in self.candidates),
             tuple(declaration.key for declaration in self.declarations),
             tuple(definition.key for definition in self.definitions),
+            self.scalar_binary_slice.key if self.scalar_binary_slice is not None else (),
         )
 
 
@@ -90,6 +93,7 @@ def plan_cpp_render_jobs(
         )
         declarations: tuple[CppFunctionDeclaration, ...] = ()
         definitions: tuple[CppFunctionDefinition, ...] = ()
+        scalar_binary_slice: CppScalarBinarySlice | None = None
         if not has_errors(diagnostics) and layout_name != CPP_NATIVE_HEADER_LAYOUT:
             declaration_result = plan_cpp_production_declarations(candidates)
             diagnostics.extend(declaration_result.diagnostics)
@@ -107,6 +111,15 @@ def plan_cpp_render_jobs(
             diagnostics.extend(definition_result.diagnostics)
             if definition_result.is_ok:
                 definitions = definition_result.unwrap()
+        if (
+            not has_errors(diagnostics)
+            and layout_name == CPP_NATIVE_HEADER_LAYOUT
+            and lowering_plan is not None
+        ):
+            scalar_result = plan_cpp_scalar_binary_slice(candidates, lowering_plan)
+            diagnostics.extend(scalar_result.diagnostics)
+            if scalar_result.is_ok:
+                scalar_binary_slice = scalar_result.unwrap()
         if not has_errors(diagnostics):
             metadata: dict[str, CatalogValue] = {
                 "candidate_count": len(candidates),
@@ -116,12 +129,17 @@ def plan_cpp_render_jobs(
             }
             if layout_name is not None:
                 metadata["cpp_layout"] = layout_name
+            if scalar_binary_slice is not None:
+                metadata["scalar_specialization_count"] = len(
+                    scalar_binary_slice.specializations
+                )
             jobs.append(
                 CppRenderJob(
                     descriptor=descriptor,
                     candidates=candidates,
                     declarations=declarations,
                     definitions=definitions,
+                    scalar_binary_slice=scalar_binary_slice,
                     metadata=FrozenMap(metadata),
                 )
             )

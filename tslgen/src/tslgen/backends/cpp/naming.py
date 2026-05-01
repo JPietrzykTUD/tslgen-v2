@@ -156,5 +156,68 @@ def cpp_production_parameter_names(
     )
 
 
+def cpp_detail_functor_name(
+    primitive_name: str,
+    template_name: str,
+    *,
+    location: SourceLocation | None = None,
+) -> Result[str]:
+    name = f"{primitive_name}_{template_name}"
+    if _is_cpp_identifier(name):
+        return Result.ok(name)
+    return Result.failure(
+        (
+            Diagnostic.error(
+                "TSL-CPP-RENDER-SCALAR-DETAIL-NAME",
+                "C++ scalar detail functor name "
+                f"{name!r} derived from primitive {primitive_name!r} and "
+                f"template {template_name!r} is not a valid C++ identifier",
+                location=location,
+            ),
+        )
+    )
+
+
+def cpp_wrapper_function_name(
+    primitive_name: str,
+    *,
+    location: SourceLocation | None = None,
+) -> Result[str]:
+    if _is_cpp_identifier(primitive_name):
+        return Result.ok(primitive_name)
+    return Result.failure(
+        (
+            Diagnostic.error(
+                "TSL-CPP-RENDER-WRAPPER-NAME",
+                "C++ wrapper function name "
+                f"{primitive_name!r} is not a valid C++ identifier",
+                location=location,
+            ),
+        )
+    )
+
+
+def cpp_wrapper_parameter_names(
+    parameter_names: Iterable[str],
+    *,
+    location: SourceLocation | None = None,
+) -> Result[tuple[str, ...]]:
+    names = tuple(parameter_names)
+    invalid_names = tuple(name for name in names if not _is_cpp_identifier(name))
+    if not invalid_names:
+        return Result.ok(names)
+    return Result.failure(
+        (
+            Diagnostic.error(
+                "TSL-CPP-RENDER-WRAPPER-PARAMETER-NAME",
+                "C++ wrapper parameter name(s) must be valid C++ identifiers; "
+                f"invalid name(s): "
+                f"{', '.join(repr(name) for name in invalid_names)}",
+                location=location,
+            ),
+        )
+    )
+
+
 def _is_cpp_identifier(value: str) -> bool:
     return _CPP_IDENTIFIER_RE.fullmatch(value) is not None and value not in _CPP_KEYWORDS

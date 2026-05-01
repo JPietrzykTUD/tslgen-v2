@@ -11,9 +11,14 @@ from .declarations import render_cpp_production_declarations
 from .layout import (
     cpp_layout_name,
     is_cpp_native_header_layout,
+    render_cpp_native_header,
     render_cpp_native_header_preamble,
 )
 from .planner import CppRenderJob, CppRenderPlan
+from .scalar_binary import (
+    render_cpp_scalar_binary_detail_lines,
+    render_cpp_scalar_binary_wrapper_lines,
+)
 
 
 def render_cpp_plan(plan: CppRenderPlan) -> Result[ArtifactSet]:
@@ -24,7 +29,7 @@ def render_cpp_plan(plan: CppRenderPlan) -> Result[ArtifactSet]:
 def _render_job(job: CppRenderJob) -> Artifact:
     layout_name = cpp_layout_name(job.descriptor)
     content = (
-        render_cpp_native_header_preamble()
+        _render_cpp_native_header(job)
         if is_cpp_native_header_layout(job.descriptor)
         else _render_generated_header(job)
     )
@@ -38,10 +43,23 @@ def _render_job(job: CppRenderJob) -> Artifact:
     }
     if layout_name is not None:
         metadata["cpp_layout"] = layout_name
+    if job.scalar_binary_slice is not None:
+        metadata["scalar_specialization_count"] = len(
+            job.scalar_binary_slice.specializations
+        )
     return Artifact(
         logical_path=job.descriptor.logical_path,
         content=content,
         metadata=FrozenMap(metadata),
+    )
+
+
+def _render_cpp_native_header(job: CppRenderJob) -> str:
+    if job.scalar_binary_slice is None:
+        return render_cpp_native_header_preamble()
+    return render_cpp_native_header(
+        detail_lines=render_cpp_scalar_binary_detail_lines(job.scalar_binary_slice),
+        wrapper_lines=render_cpp_scalar_binary_wrapper_lines(job.scalar_binary_slice),
     )
 
 

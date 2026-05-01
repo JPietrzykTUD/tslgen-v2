@@ -119,10 +119,10 @@ parity, or report/documentation parity.
 - Legacy evidence path: `frozen/out/tsl/tsl_native.hpp` and
   `frozen/generator_specs/wrapper_shapes.yaml`.
 - Source line ranges:
-  - `frozen/out/tsl/tsl_native.hpp:806-810` for the primary detail declaration.
-  - `frozen/out/tsl/tsl_native.hpp:19433-19451` for
+  - `frozen/out/tsl/tsl_native.hpp:805-810` for the primary detail declaration.
+  - `frozen/out/tsl/tsl_native.hpp:19433-19452` for
     `simd<int32_t, scalar>`.
-  - `frozen/out/tsl/tsl_native.hpp:19513-19531` for
+  - `frozen/out/tsl/tsl_native.hpp:19513-19532` for
     `simd<uint32_t, scalar>`.
   - `frozen/out/tsl/tsl_native.hpp:39071-39075` for public wrapper delegation.
   - `frozen/generator_specs/wrapper_shapes.yaml:47-56` for the C++ `binary`
@@ -133,16 +133,19 @@ parity, or report/documentation parity.
     `prim<v:=(v,v)> add(left, right)`.
   - `tsldata/primitives/arithmetic/fundamental.tsl:27-31` for scalar
     `emit_return(left + right);`.
-- Fixture path in this milestone: none.
-- Proposed future fixture path:
+- Fixture path selected by M37:
   `tslgen/tests/fixtures/golden/parity/cpp/add_scalar_excerpt.hpp`.
+- Fixture provenance:
+  `tslgen/tests/fixtures/golden/parity/cpp/add_scalar_excerpt.provenance.md`.
 - Parity level: semantic equivalence against legacy evidence plus an exact
-  redesign-owned golden file for future generated output. Byte-for-byte legacy
+  redesign-owned golden file for generated output. Byte-for-byte legacy
   whitespace parity is not selected for scalar specializations or wrappers.
-- Validation method: future M37 tests must assert primary name
-  `add_binary`, scalar C++ type mapping, `has_return_value`, `native_supported`,
-  parameter order, `return left + right;`, public wrapper name `add`, and
-  delegation to `::tsl::detail::add_binary<Vec>::apply(left, right)`.
+- Validation method: M37 tests assert primary name `add_binary`, scalar C++
+  type mapping, `has_return_value`, `native_supported`, parameter order,
+  lowered `return left + right;`, public wrapper name `add`, delegation to
+  `::tsl::detail::add_binary<Vec>::apply(left, right)`, unsupported
+  template/type/extension/wrapper diagnostics, digest determinism, and fixture
+  provenance without reading from `frozen/` at runtime.
 - Known limitations: ABI naming, overload policy, masked variants, generic
   loop-backed variants, and combined binary specializations remain deferred.
 
