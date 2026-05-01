@@ -1869,9 +1869,74 @@ Dependencies on prior milestones:
 
 - Milestone 21 and any accepted cleanup decisions from Milestone 33.
 
-## Recommended Next Milestone
+## Post-Milestone-34 Closure Review
 
-Start with Milestone 25. Milestone 24 exposed report printing and artifact
-writing through the CLI, and the most valuable next slice is a regression lock
-around their interaction before the roadmap moves into more semantic rendering
-work.
+Status:
+
+Milestones 1 through 34 close the current implementation roadmap phase. Do not
+define or execute a Milestone 35 until a planner selects a concrete product
+goal for the next phase.
+
+Decision:
+
+Pause implementation and prepare stabilization/release readiness work instead
+of starting another broad feature phase immediately.
+
+Rationale:
+
+- The accepted architecture now has explicit boundaries for source loading,
+  parsing, catalog construction, validation, selection, candidate dependency
+  closure, implementation-spec promotion, backend manifests, artifact planning,
+  artifact writing, reporting, API/CLI integration, typed-opaque lowering,
+  mini-TSIL lowering, narrow C++ rendering, narrow Rust rendering, production
+  test-source planning/rendering, validation quarantine, and corpus hygiene.
+- Remaining work is important but product-directional: broader TSIL semantics,
+  translation-map evaluation, wider C++/Rust output, executable generated tests,
+  legacy CLI compatibility, documentation/report parity, corpus normalization,
+  and exploratory-code deletion.
+- Those remaining areas should be planned as future phases only after a clear
+  objective is chosen. Starting all of them now would couple independent
+  concerns and weaken the clean redesign boundary.
+
+Stabilization checklist:
+
+- Run the accepted validation profile in the dev container.
+- Run the unit, golden, and CLI/API tests that cover accepted Milestones 1
+  through 34.
+- Confirm `--coverage-report` plus `--output-root` stream behavior still matches
+  the Milestone 25 contract.
+- Confirm generated artifacts and golden fixtures are deterministic across two
+  equivalent runs.
+- Review public `tslgen.api` and CLI help for terminology that overclaims full
+  backend generation, full TSIL lowering, or legacy compatibility.
+- Audit dirty workspace state, especially `tsldata/**`, `.devcontainer/**`, and
+  `.gitignore`, using the Milestone 34 corpus hygiene policy.
+- Confirm quarantined exploratory paths remain outside accepted imports and
+  validation targets.
+- Update release notes or project-facing docs to describe the current state as
+  an architectural foundation with narrow production-shaped slices, not a full
+  legacy-generator replacement.
+
+Deferred future phase candidates:
+
+- Broader TSIL grammar and semantic lowering, including generation-time
+  conditions such as `if<generation>(...)`.
+- Translation-map evaluation and backend-owned type/intrinsic lowering.
+- C++ rendering beyond the accepted scalar declaration/body slices.
+- Rust body rendering and broader Rust wrapper/trait policy.
+- Executable production test assertions, compile/run orchestration, and
+  runtime-lane test policy.
+- Legacy CLI compatibility or migration wrapper design.
+- Generated documentation/report parity beyond accepted coverage artifacts.
+- Focused deletion or migration of quarantined exploratory code.
+- Validation-profile expansion and corpus normalization beyond current hygiene
+  policy.
+
+Recommended next action:
+
+Use the stabilization checklist above and the release-readiness gate in
+`docs/redesign/stabilization-release-checklist.md`. If a future implementation
+phase is needed, start with a planner pass that chooses exactly one objective,
+such as broader C++ rendering, broader TSIL lowering, executable test
+generation, or legacy CLI compatibility, and then defines a small reviewable
+milestone sequence for that objective.

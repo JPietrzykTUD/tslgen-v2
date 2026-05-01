@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tslgen"
-version = "0.1.0"
+version = "0.1.0a1"
+readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-	"cyclopts",
 	"lark>=1.3",
 	"PyYAML>=6",
 ]
@@ -17,6 +17,28 @@ tslgen = "tslgen.cli:run"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = [
+	"tslgen",
+	"tslgen.analysis*",
+	"tslgen.backends*",
+	"tslgen.config*",
+	"tslgen.core*",
+	"tslgen.domain*",
+	"tslgen.io*",
+	"tslgen.lowering*",
+	"tslgen.rendering*",
+	"tslgen.reporting*",
+	"tslgen.syntax*",
+	"tslgen.testgen*",
+	"tslgen.tooling*",
+	"tslgen.validation*",
+]
+exclude = [
+	"tslgen.frontend*",
+	"tslgen.ir*",
+	"tslgen.middle_end*",
+	"tslgen.utils*",
+]
 
 [tool.setuptools.package-data]
 tslgen = ["syntax/grammar/*.lark"]

@@ -948,6 +948,89 @@ No current Milestone 34 implementation is blocked by this question. Future
 corpus validation expansion or cleanup must be handled by focused milestones
 and must not imply that all corpus hygiene work was completed by Milestone 34.
 
+## Post-Milestone-34 Closure Review
+
+Status:
+
+Current roadmap phase closed. No remaining open question blocks a stabilization
+pause.
+
+Planner conclusion:
+
+Milestones 25 through 34 answered or narrowed the immediate questions around
+CLI report/write interaction, C++ naming, mini-TSIL lowering, scalar C++ body
+rendering, metadata-style production test rendering, backend metadata
+boundaries, Rust signatures, candidate-dependency reporting, exploratory-code
+retirement, and corpus hygiene.
+
+Questions that still require future planning are expansion questions, not
+current blockers:
+
+- OQ-003 list-backed implementation variant policy.
+- OQ-004 broad generated-output compatibility policy.
+- OQ-005 full TSIL grammar and semantics.
+- OQ-006 generic/sized extension representation.
+- OQ-007 runtime-lane extension policy.
+- OQ-008 legacy CLI compatibility.
+- OQ-009 generated documentation/report parity.
+- OQ-011 structured type/template shape parsing.
+- OQ-012 broad unknown-field strictness policy.
+- Broader forms deferred inside OQ-020 through OQ-025, including C++ ABI/wrapper
+  naming, broader C++ bodies, executable tests, translation-map evaluation, and
+  Rust bodies.
+- Cleanup execution deferred by OQ-027 and broader corpus normalization deferred
+  by OQ-028.
+
+Implementation blocked:
+
+No for stabilization/release-readiness review. Yes for any future claim of full
+legacy-generator replacement, broad backend rendering, full TSIL lowering,
+executable production tests, or drop-in CLI compatibility.
+
+## OQ-029: What Is The Stabilization Or Release Target After Milestone 34?
+
+Status: Resolved for the current release-label slice by
+`docs/redesign/stabilization-release-checklist.md`; not an implementation
+blocker.
+
+Why it matters:
+
+The roadmap now has an accepted architectural foundation plus narrow
+production-shaped slices. A stabilization pass needs to know whether the next
+external milestone is an internal architecture checkpoint, an alpha package, a
+replacement preview, or a production release.
+
+Possible answers:
+
+- Internal architecture checkpoint with validation and documentation only.
+- Alpha release of the redesigned API/CLI for narrow supported slices.
+- Preview release that explicitly excludes full code generation and legacy CLI
+  compatibility.
+- Production replacement release after a future feature phase expands lowering,
+  rendering, tests, and compatibility.
+
+Current recommendation:
+
+Pause feature implementation and run the release-readiness checklist. The
+chosen public alpha / pre-release label is `0.1.0a1`; a release candidate can be
+cut without another implementation phase only under that narrow
+architecture-foundation scope after all checklist blockers pass. A production
+replacement release remains blocked until a future implementation phase expands
+TSIL lowering, backend rendering, generated tests, and compatibility.
+
+Required evidence:
+
+- Intended users of the redesigned package.
+- Required generated artifacts for the next external consumer.
+- Required CLI/API compatibility commitments.
+- Expected validation and packaging surface for the release.
+
+Implementation blocked:
+
+No for pausing implementation and running the stabilization checklist. Yes for
+release packaging, compatibility promises, and any public claim that the
+redesigned generator replaces the legacy workflow.
+
 ## Follow-ups from Milestone 2 review
 
 - Add focused tests for invalid UTF-8 and read failure diagnostics where practical.
@@ -1141,3 +1224,10 @@ and must not imply that all corpus hygiene work was completed by Milestone 34.
 ## Follow-up from Milestone 34 review
 
 - Keep broader corpus probes, normalization, permission-bit cleanup, generated-output regeneration, and validation-profile command changes as separate focused milestones.
+
+## Follow-ups from package-boundary release re-review
+
+- Release version label decided: use `0.1.0a1` for the public
+  alpha/pre-release under PEP 440.
+- Before publishing any artifact, rebuild from a clean worktree.
+- Archive the wheel/sdist leak scan and validation output with the release notes or release-readiness record.

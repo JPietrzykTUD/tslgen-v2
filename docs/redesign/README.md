@@ -15,6 +15,8 @@ Start with:
 - `pipeline-design.md` for stage inputs, outputs, validation points, and side effects.
 - `implementation-roadmap.md` for the milestone sequence.
 - `testing-strategy.md` for expected tests and fixtures.
+- `stabilization-release-checklist.md` for post-Milestone-34 release-readiness
+  gates.
 - `open-questions.md` before making design assumptions.
 
 Use `AGENTS.md` and `PLANS.md` for repository-level execution rules.

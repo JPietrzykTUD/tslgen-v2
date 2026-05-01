@@ -1065,3 +1065,56 @@ Consequences:
   Milestone 21 profile.
 - Permission-bit churn and unrelated local artifacts are reported as dirty
   workspace state, not silently fixed in implementation slices.
+
+## ADR-030: Pause Implementation For Stabilization After Milestone 34
+
+Status: Accepted for the post-Milestone-34 closure review
+
+Context:
+
+Milestones 1 through 34 now cover the accepted clean-redesign foundation:
+diagnostics, loading, parsing, catalog modeling, validation, selection,
+dependency closure, backend manifests, artifact planning/writing, API/CLI
+integration, reporting, typed-opaque lowering, a mini-lowering slice, narrow
+C++ and Rust rendering, production test-source planning/rendering, validation
+quarantine, and corpus hygiene. The remaining candidate work is broad and
+directional rather than an immediate architectural prerequisite.
+
+Considered alternatives:
+
+- Start a new Milestone 35+ phase immediately for all remaining feature areas.
+- Stop planning entirely and leave the stale "Recommended Next Milestone"
+  pointer in place.
+- Require planner resolution of every deferred open question before any
+  stabilization work.
+- Close the current phase and require a new planner pass only when a concrete
+  future objective is chosen.
+
+Decision:
+
+Close the current roadmap phase and pause implementation for a
+stabilization/release-readiness pass. Do not define a Milestone 35 in the
+roadmap yet. Future implementation phases should begin only after a planner
+chooses one primary objective, such as broader TSIL lowering, broader C++
+rendering, Rust bodies, executable generated tests, legacy CLI compatibility,
+or exploratory-code cleanup.
+
+Rationale:
+
+The accepted slices prove the major boundaries without overclaiming full
+generator parity. Starting every deferred area at once would couple independent
+concerns and encourage speculative abstractions. A stabilization pause gives
+future agents a chance to verify the accepted surface, clarify release language,
+and choose the next product goal deliberately.
+
+Consequences:
+
+- `docs/redesign/implementation-roadmap.md` records no new implementation
+  milestone after Milestone 34.
+- Open questions remain valid but are classified as future expansion blockers,
+  not blockers for stabilization.
+- Future agents should run the accepted validation and test surface before
+  making release claims.
+- A future roadmap phase must be scoped around one reviewable objective rather
+  than bundling lowering, backend rendering, tests, CLI compatibility, and
+  cleanup together.

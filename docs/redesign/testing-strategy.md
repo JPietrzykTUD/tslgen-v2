@@ -468,6 +468,37 @@ Post-Milestone-24 milestones:
 - Backend metadata consistency coverage before language/translation maps drive
   broad rendering.
 
+## Post-Milestone-34 Stabilization Validation
+
+The post-Milestone-34 phase is a stabilization/release-readiness review rather
+than a new implementation milestone. Validation should prove the accepted
+surface remains coherent and should not expand behavior opportunistically. The
+full release-readiness gate is recorded in
+`docs/redesign/stabilization-release-checklist.md`.
+
+Required stabilization checks:
+
+- Run the Milestone 21 validation profile:
+  `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`.
+- Run the unit, integration, and golden tests that cover accepted API/CLI,
+  artifact writer, reporting, dependency reporting, lowering, C++ rendering,
+  Rust rendering, backend metadata, test generation, validation quarantine, and
+  corpus hygiene behavior.
+- Run deterministic output checks for repeated artifact rendering, report
+  serialization, artifact writing with skip-unchanged enabled, and CLI
+  report/write stream behavior.
+- Run `git diff --check` for documentation and fixture whitespace safety.
+- Inspect dirty `tsldata/**` state with the corpus hygiene commands before
+  making any source-data or release-readiness claim.
+
+Checks that remain out of the default stabilization surface:
+
+- Host compiler or runtime execution of generated C++/Rust tests.
+- Network-dependent packaging or publishing.
+- Host CPU feature detection.
+- Broad Python lint/type checks over quarantined exploratory code.
+- Corpus-wide normalization or permission-bit cleanup.
+
 ## Review Expectations
 
 Reviewers should check:
