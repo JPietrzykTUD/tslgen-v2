@@ -1123,9 +1123,10 @@ Decision:
   `detail::add_binary`, scalar `simd<int32_t, scalar>` and
   `simd<uint32_t, scalar>` specializations, and the public `add<Vec>` wrapper
   delegation from typed candidates plus a `LoweringPlan`. Native `avx2/f32`
-  parity may be represented by the accepted Milestone 39 transitional slice,
-  but it must not expand until Milestone 40 corrects intrinsic/type resolution
-  behind the lowering/translation boundary.
+  parity may be represented by the accepted Milestone 39 transitional slice.
+  Milestone 40 corrects intrinsic/type resolution for that selected output by
+  translating the lowered helper data into backend-call IR before rendering.
+  It does not authorize broader native intrinsic rendering.
 - Whole-file legacy whitespace, full header ordering, and full report byte
   parity are not selected.
 
@@ -1134,9 +1135,10 @@ Implementation blocked:
 No for Milestones 36 and 37 when they stay within the selected baseline. No
 revert is required solely because Milestone 39 rendered the selected
 `avx2/f32` output through a narrow local mapping, provided that mapping is not
-expanded. Yes for any native expansion beyond the accepted M39 slice until
-Milestone 40 establishes the helper and translation boundary. Yes for any
-broader output family until that family records its parity level.
+expanded. Yes for any native expansion beyond the accepted M39/M40 slice until
+a future milestone selects the next helper, type, extension, and translation
+behavior. Yes for any broader output family until that family records its
+parity level.
 
 ## OQ-032: Which TSIL Helper Boundary Should Follow The Mini Return Lowering?
 
@@ -1160,9 +1162,10 @@ transitional renderer mapping as sufficient to unblock native backend
 expansion. Milestone 38 lowers exactly
 `emit_return(intrin_compose<add>(left, right));` into typed helper data.
 Milestone 39 may preserve the selected observable native C++ output, but it is
-not the architecture. Milestone 40 must define the backend
-translation/intrinsic-composition boundary and resolve the selected native C++
-call through typed data before broader rendering continues.
+not the architecture. Milestone 40 defines the first backend
+translation/intrinsic-composition boundary and resolves the selected native
+C++ call through typed data. Broader rendering still requires its own selected
+helper and translation slices.
 
 Remaining deferred TSIL work includes full modifier expression evaluation,
 integer suffix inference, primitive calls, loops, variables, generation-time
@@ -1262,7 +1265,8 @@ compiles or runs generated tests.
 
 ## OQ-035: How Should Backend Intrinsic Composition Be Data-Driven?
 
-Status: Open; blocks native backend rendering beyond corrected planning slices.
+Status: Answered for the selected Milestone 40 slice; broader native intrinsic
+composition remains open.
 
 Why it matters:
 
@@ -1298,9 +1302,10 @@ Required evidence:
 Implementation blocked:
 
 No for Milestone 38 and no automatic revert for the accepted Milestone 39
-transitional parity slice. Yes for any native C++ or Rust intrinsic rendering
-expansion beyond the selected M39 output until Milestone 40 defines a
-data-driven composition path.
+transitional parity slice. No for the selected Milestone 40 correction that
+preserves the M39 output through backend-call IR. Yes for any native C++ or
+Rust intrinsic rendering expansion beyond the selected M39/M40 output until a
+future milestone selects and tests the next data-driven composition path.
 
 Current roadmap direction:
 
@@ -1308,8 +1313,8 @@ Current roadmap direction:
   pattern.
 - Milestone 40 owns the first typed translation/composition boundary and
   preserves the M39 output through backend-call IR.
-- Milestone 40 must reject unresolved generation-time helpers at the translation
-  boundary; it should not evaluate `if<generation>`, `type<generation>`, or
+- Milestone 40 rejects unresolved generation-time helpers at the translation
+  boundary; it does not evaluate `if<generation>`, `type<generation>`, or
   `value<generation>` itself.
 - Milestone 41 defines the generation-time semantic lowering contract that runs
   before backend translation.

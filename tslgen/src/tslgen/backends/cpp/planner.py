@@ -8,6 +8,8 @@ from tslgen.core.diagnostics import Diagnostic, has_errors, sort_diagnostics
 from tslgen.core.frozen_map import FrozenMap
 from tslgen.core.result import Result
 from tslgen.domain.values import CatalogValue
+from tslgen.domain.backends import BackendMetadataBoundary
+from tslgen.domain.extensions import Extension
 from tslgen.io.artifacts import ArtifactDescriptor, ArtifactPlan
 from tslgen.lowering import LoweringPlan
 
@@ -23,6 +25,7 @@ from .scalar_binary import (
     cpp_native_header_no_lowering_diagnostic,
     plan_cpp_scalar_binary_slice,
 )
+from .translation import CppNativeTranslationPlan, translate_cpp_native_intrinsic_calls
 
 
 CPP_BACKEND_ID = "cpp"
@@ -73,6 +76,8 @@ def plan_cpp_render_jobs(
     plan: ArtifactPlan,
     selection: CandidateSelection,
     lowering_plan: LoweringPlan | None = None,
+    metadata_boundary: BackendMetadataBoundary | None = None,
+    extensions: tuple[Extension, ...] = (),
 ) -> Result[CppRenderPlan]:
     diagnostics: list[Diagnostic] = []
     if plan.backend_id != CPP_BACKEND_ID:
@@ -98,6 +103,7 @@ def plan_cpp_render_jobs(
         declarations: tuple[CppFunctionDeclaration, ...] = ()
         definitions: tuple[CppFunctionDefinition, ...] = ()
         scalar_binary_slice: CppScalarBinarySlice | None = None
+        native_translation_plan: CppNativeTranslationPlan | None = None
         if not has_errors(diagnostics) and layout_name != CPP_NATIVE_HEADER_LAYOUT:
             declaration_result = plan_cpp_production_declarations(candidates)
             diagnostics.extend(declaration_result.diagnostics)
@@ -131,7 +137,25 @@ def plan_cpp_render_jobs(
             and layout_name == CPP_NATIVE_HEADER_LAYOUT
             and lowering_plan is not None
         ):
-            scalar_result = plan_cpp_scalar_binary_slice(candidates, lowering_plan)
+            translation_result = translate_cpp_native_intrinsic_calls(
+                candidates,
+                lowering_plan,
+                metadata_boundary=metadata_boundary,
+                extensions=extensions,
+            )
+            diagnostics.extend(translation_result.diagnostics)
+            if translation_result.is_ok:
+                native_translation_plan = translation_result.unwrap()
+        if (
+            not has_errors(diagnostics)
+            and layout_name == CPP_NATIVE_HEADER_LAYOUT
+            and lowering_plan is not None
+        ):
+            scalar_result = plan_cpp_scalar_binary_slice(
+                candidates,
+                lowering_plan,
+                native_translation_plan,
+            )
             diagnostics.extend(scalar_result.diagnostics)
             if scalar_result.is_ok:
                 scalar_binary_slice = scalar_result.unwrap()

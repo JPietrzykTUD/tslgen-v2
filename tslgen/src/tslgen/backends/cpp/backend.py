@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 from tslgen.analysis.candidates import CandidateSelection
 from tslgen.core.result import Result
+from tslgen.domain.backends import BackendMetadataBoundary
+from tslgen.domain.extensions import Extension
 from tslgen.io.artifacts import ArtifactPlan, ArtifactSet
 from tslgen.lowering import LoweringPlan
 
@@ -20,8 +22,16 @@ class CppBackend:
         plan: ArtifactPlan,
         selection: CandidateSelection,
         lowering_plan: LoweringPlan | None = None,
+        metadata_boundary: BackendMetadataBoundary | None = None,
+        extensions: tuple[Extension, ...] = (),
     ) -> Result[ArtifactSet]:
-        planned = plan_cpp_render_jobs(plan, selection, lowering_plan)
+        planned = plan_cpp_render_jobs(
+            plan,
+            selection,
+            lowering_plan,
+            metadata_boundary,
+            extensions,
+        )
         if not planned.is_ok:
             return Result.failure(planned.diagnostics)
         return render_cpp_plan(planned.unwrap())

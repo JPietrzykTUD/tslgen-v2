@@ -290,15 +290,14 @@ prove the selected observable `avx2/f32` output, including
 not architectural precedent. That mapping must not be expanded to additional
 intrinsics, extensions, types, backends, or helper forms.
 
-Milestone 40 corrects the boundary while preserving the selected M39 output.
-Intrinsic composition is represented as data: base intrinsic name, ordered
-arguments, optional modifiers such as `prefix`, `infix`, `suffix`, `post`, and
+Milestone 40 corrects the boundary for the selected M39 output. Intrinsic
+composition is represented as data: base intrinsic name, ordered arguments,
+optional modifiers such as `prefix`, `infix`, `suffix`, `post`, and
 `immediate(n)`, plus selected backend/type/extension context. The selected
-`add + avx2 + f32` composition may resolve to `_mm256_add_ps`, but that
-resolution belongs to lowering/translation services using typed `tsldata`
-metadata. Backend renderers must consume translated backend-call IR or an
-equivalent typed value; they must not carry tuple-key intrinsic lookup tables
-for this semantic decision.
+`add + avx2 + f32` composition resolves to `_mm256_add_ps` through backend
+translation using typed `tsldata` metadata. Backend renderers consume
+translated backend-call IR or an equivalent typed value; they must not carry
+tuple-key intrinsic lookup tables for this semantic decision.
 
 The lowering and translation order is explicit. TSIL parsing produces helper
 IR first. Generation-time helpers such as `if<generation>(...)`,
@@ -385,8 +384,8 @@ primary, scalar `simd<int32_t, scalar>` and `simd<uint32_t, scalar>`
 specializations, and the public `add<Vec>` wrapper. Native SIMD
 specializations are no longer allowed to grow from renderer-local intrinsic
 maps. Milestone 39 may retain the already-selected native `simd<float, avx2>`
-parity output as a transitional spike, but Milestone 40 must preserve that
-output through backend-call IR produced by the lowering/translation boundary.
+parity output as a transitional spike; Milestone 40 preserves that output
+through backend-call IR produced by the lowering/translation boundary.
 Unsupported native type, extension, intrinsic, missing translated call IR,
 missing lowering, and unsupported lowered-expression inputs are structured
 diagnostics rather than silent omissions.

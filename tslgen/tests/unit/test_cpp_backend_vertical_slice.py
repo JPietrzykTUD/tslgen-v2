@@ -24,8 +24,14 @@ from tslgen.backends.cpp.naming import (
 )
 from tslgen.config.model import SourceConfig
 from tslgen.core.frozen_map import FrozenMap
-from tslgen.domain.backends import ArtifactSpec, BackendManifest, BackendManifestSet
+from tslgen.domain.backends import (
+    ArtifactSpec,
+    BackendManifest,
+    BackendManifestSet,
+    BackendMetadataBoundary,
+)
 from tslgen.domain.catalog import Catalog, build_catalog
+from tslgen.domain.extensions import Extension
 from tslgen.domain.values import CatalogValue
 from tslgen.io.artifacts import ArtifactDescriptor, artifact_plan_from_descriptors
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
@@ -40,10 +46,15 @@ from tslgen.lowering import (
     lower_candidates,
     prepare_lowering_inputs,
 )
+from tslgen.backends.cpp.translation import (
+    CppNativeTranslationPlan,
+    translate_cpp_native_intrinsic_calls,
+)
 from tslgen.rendering.render_plan import build_artifact_plan
 from tslgen.syntax.ast import ParsedDocumentSet
 from tslgen.syntax.parser import parse_document, parse_sources
 from tslgen.validation.catalog_validator import validate_catalog
+from tslgen.validation.backend_metadata import backend_metadata_from_catalog
 from tslgen.validation.reference_rules import ReferenceValidatedCatalog, validate_references
 
 
@@ -151,6 +162,17 @@ RAW_SUBTRACT_NATIVE_ADD_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
 """
 
 
+GENERATION_NATIVE_ADD_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
+  tests []
+  impls:
+    avx2:
+      f32:
+        requires [avx]
+        implementation:
+          tsil "if<generation>(true) { emit_return(intrin_compose<add>(left, right)); }"
+"""
+
+
 RAW_SUBTRACT_ADD_SI32_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
   tests []
   impls:
@@ -223,6 +245,33 @@ def base_catalog() -> Catalog:
         "tsldata/extensions/extension.tsl",
         "tsldata/detail/templates.tsl",
     )
+
+
+def cpp_backend_metadata_boundary(
+    *,
+    text: str | None = None,
+    active_backend_ids: tuple[str, ...] = ("cpp", "rust"),
+) -> BackendMetadataBoundary:
+    catalog = (
+        catalog_from_text(text)
+        if text is not None
+        else catalog_from_paths(
+            "tsldata/detail/lang/types/types_cpp.tsl",
+            "tsldata/detail/lang/translate_cpp.tsl",
+        )
+    )
+    metadata = backend_metadata_from_catalog(catalog)
+    if not metadata.is_ok:
+        raise AssertionError(metadata.diagnostics)
+    return BackendMetadataBoundary(
+        manifests=manifest_set(),
+        metadata=metadata.unwrap(),
+        active_backend_ids=active_backend_ids,
+    )
+
+
+def cpp_extensions() -> tuple[Extension, ...]:
+    return catalog_from_paths("tsldata/extensions/extension.tsl").extensions
 
 
 def catalog_with_primitive(text: str) -> ReferenceValidatedCatalog:
@@ -411,6 +460,35 @@ def manual_intrinsic_add_lowering_plan_for(
     )
 
 
+def manual_generation_intrinsic_add_lowering_plan_for(
+    selection: CandidateSelection,
+) -> LoweringPlan:
+    prepared = prepare_lowering_inputs(selection, LoweringRequest(backend_id="cpp"))
+    if not prepared.is_ok:
+        raise AssertionError(prepared.diagnostics)
+    return LoweringPlan(
+        request=prepared.unwrap().request,
+        input_set=prepared.unwrap(),
+        implementations=(
+            LoweredImplementation(
+                candidate_id=selection.candidates[0].candidate_id,
+                status="lowered",
+                statements=(
+                    TsilReturnStatement(
+                        TsilIntrinsicComposeExpression(
+                            intrinsic="add",
+                            arguments=(
+                                TsilParameterReference("left"),
+                                TsilParameterReference("right"),
+                            ),
+                        )
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
 def manual_binary_add_lowering_plan_for(selection: CandidateSelection) -> LoweringPlan:
     prepared = prepare_lowering_inputs(selection, LoweringRequest(backend_id="cpp"))
     if not prepared.is_ok:
@@ -502,10 +580,189 @@ class CppNamingTests(unittest.TestCase):
 
 
 class CppBackendVerticalSliceTests(unittest.TestCase):
-    def test_native_intrinsic_mapping_is_transitional_and_single_slice(self) -> None:
+    def test_native_intrinsic_mapping_is_no_longer_renderer_owned(self) -> None:
+        renderer_source = Path(cpp_scalar_binary.__file__).read_text(encoding="utf-8")
+
+        self.assertFalse(hasattr(cpp_scalar_binary, "_CPP_NATIVE_INTRINSIC_BY_KEY"))
+        self.assertNotIn("_mm256_add_ps", renderer_source)
+
+    def test_translates_selected_add_native_avx2_f32_backend_call(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_ONLY_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+
+        result = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            lowering_plan_for(selection),
+            metadata_boundary=cpp_backend_metadata_boundary(),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        translated = result.unwrap().calls[0]
+        self.assertEqual(translated.backend_id, "cpp")
+        self.assertEqual(translated.intrinsic, "add")
+        self.assertEqual(translated.extension, "avx2")
+        self.assertEqual(translated.type_tag, "f32")
+        self.assertEqual(translated.backend_type, "float")
+        self.assertEqual(translated.function_name, "_mm256_add_ps")
         self.assertEqual(
-            cpp_scalar_binary._CPP_NATIVE_INTRINSIC_BY_KEY,
-            {("add", "avx2", "f32"): "_mm256_add_ps"},
+            tuple(argument.name for argument in translated.arguments),
+            ("left", "right"),
+        )
+
+    def test_translated_cpp_type_spelling_comes_from_language_map(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_ONLY_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+
+        result = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            lowering_plan_for(selection),
+            metadata_boundary=cpp_backend_metadata_boundary(
+                text="""language cpp:
+  f32 {type "selected_float"}
+translation cpp:
+  emit_return "return {value}"
+"""
+            ),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(result.unwrap().calls[0].backend_type, "selected_float")
+
+    def test_translation_output_is_deterministic(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_ONLY_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+        boundary = cpp_backend_metadata_boundary()
+        extensions = cpp_extensions()
+
+        first = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            lowering_plan_for(selection),
+            metadata_boundary=boundary,
+            extensions=extensions,
+        )
+        second = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            lowering_plan_for(selection),
+            metadata_boundary=boundary,
+            extensions=extensions,
+        )
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+
+    def test_translation_diagnoses_missing_language_map(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_ONLY_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+
+        result = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            lowering_plan_for(selection),
+            metadata_boundary=cpp_backend_metadata_boundary(
+                text="""translation cpp:
+  emit_return "return {value}"
+"""
+            ),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-TRANSLATE-MISSING-LANGUAGE-MAP",
+            severity="error",
+        )
+
+    def test_translation_diagnoses_missing_translation_map(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_ONLY_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+
+        result = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            lowering_plan_for(selection),
+            metadata_boundary=cpp_backend_metadata_boundary(
+                text="""language cpp:
+  f32 {type "float"}
+"""
+            ),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-TRANSLATE-MISSING-TRANSLATION-MAP",
+            severity="error",
+        )
+
+    def test_translation_diagnoses_unsupported_backend(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_ONLY_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+
+        result = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            lowering_plan_for(selection),
+            metadata_boundary=cpp_backend_metadata_boundary(active_backend_ids=("rust",)),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-TRANSLATE-UNSUPPORTED-BACKEND",
+            severity="error",
+        )
+
+    def test_translation_rejects_unresolved_generation_helpers(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(GENERATION_NATIVE_ADD_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+
+        result = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            manual_generation_intrinsic_add_lowering_plan_for(selection),
+            metadata_boundary=cpp_backend_metadata_boundary(),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-TRANSLATE-GENERATION-UNRESOLVED",
+            severity="error",
         )
 
     def test_renders_minimal_cpp_generated_artifact(self) -> None:
@@ -638,6 +895,8 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             artifact_plan,
             selection,
             lowering_plan_for(selection),
+            cpp_backend_metadata_boundary(),
+            cpp_extensions(),
         )
 
         self.assertTrue(result.is_ok, result.diagnostics)
@@ -682,6 +941,8 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             artifact_plan,
             selection,
             lowering_plan_for(selection),
+            cpp_backend_metadata_boundary(),
+            cpp_extensions(),
         )
 
         self.assertTrue(result.is_ok, result.diagnostics)
@@ -724,6 +985,8 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             artifact_plan,
             selection,
             manual_intrinsic_add_lowering_plan_for(selection),
+            cpp_backend_metadata_boundary(),
+            cpp_extensions(),
         )
 
         self.assertTrue(result.is_ok, result.diagnostics)
@@ -745,8 +1008,20 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
         )
         lowering_plan = lowering_plan_for(selection)
 
-        first = CppBackend().render(artifact_plan, selection, lowering_plan)
-        second = CppBackend().render(artifact_plan, selection, lowering_plan)
+        first = CppBackend().render(
+            artifact_plan,
+            selection,
+            lowering_plan,
+            cpp_backend_metadata_boundary(),
+            cpp_extensions(),
+        )
+        second = CppBackend().render(
+            artifact_plan,
+            selection,
+            lowering_plan,
+            cpp_backend_metadata_boundary(),
+            cpp_extensions(),
+        )
 
         self.assertTrue(first.is_ok, first.diagnostics)
         self.assertTrue(second.is_ok, second.diagnostics)
@@ -769,13 +1044,15 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             artifact_plan,
             selection,
             manual_intrinsic_add_lowering_plan_for(selection, intrinsic="sub"),
+            cpp_backend_metadata_boundary(),
+            cpp_extensions(),
         )
 
         self.assertFalse(result.is_ok)
         assert_diagnostic(
             self,
             result.diagnostics[0],
-            code="TSL-CPP-RENDER-NATIVE-INTRINSIC",
+            code="TSL-CPP-TRANSLATE-UNSUPPORTED-INTRINSIC",
             severity="error",
         )
 
@@ -813,14 +1090,16 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             artifact_plan,
             unsupported_selection,
             manual_intrinsic_add_lowering_plan_for(selection),
+            cpp_backend_metadata_boundary(),
+            cpp_extensions(),
         )
 
         self.assertFalse(result.is_ok)
         self.assertEqual(
             [diagnostic.code for diagnostic in result.diagnostics],
             [
-                "TSL-CPP-RENDER-NATIVE-UNSUPPORTED",
-                "TSL-CPP-RENDER-NATIVE-UNSUPPORTED",
+                "TSL-CPP-TRANSLATE-UNSUPPORTED-EXTENSION",
+                "TSL-CPP-TRANSLATE-UNSUPPORTED-TYPE",
             ],
         )
 
@@ -840,13 +1119,15 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             artifact_plan,
             selection,
             empty_lowering_plan_for(selection),
+            cpp_backend_metadata_boundary(),
+            cpp_extensions(),
         )
 
         self.assertFalse(result.is_ok)
         assert_diagnostic(
             self,
             result.diagnostics[0],
-            code="TSL-CPP-RENDER-LOWERING-MISSING",
+            code="TSL-CPP-TRANSLATE-LOWERING-MISSING",
             severity="error",
         )
 
@@ -869,6 +1150,28 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             self,
             result.diagnostics[0],
             code="TSL-CPP-RENDER-LOWERING-MISSING",
+            severity="error",
+        )
+
+    def test_renderer_diagnoses_missing_translated_backend_call_ir(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_ONLY_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+
+        result = cpp_scalar_binary.plan_cpp_scalar_binary_slice(
+            selection.candidates,
+            lowering_plan_for(selection),
+            CppNativeTranslationPlan(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-TRANSLATED-CALL-MISSING",
             severity="error",
         )
 
@@ -928,13 +1231,15 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             artifact_plan,
             selection,
             manual_binary_add_lowering_plan_for(selection),
+            cpp_backend_metadata_boundary(),
+            cpp_extensions(),
         )
 
         self.assertFalse(result.is_ok)
         assert_diagnostic(
             self,
             result.diagnostics[0],
-            code="TSL-CPP-RENDER-LOWERING-UNSUPPORTED",
+            code="TSL-CPP-TRANSLATE-LOWERING-UNSUPPORTED",
             severity="error",
         )
 

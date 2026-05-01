@@ -9,16 +9,17 @@ from tslgen.lowering import (
     LoweredImplementation,
     LoweringPlan,
     TsilBinaryExpression,
-    TsilIntrinsicComposeExpression,
     TsilParameterReference,
     TsilReturnStatement,
 )
+from tslgen.lowering.translations import TranslatedIntrinsicCall
 
 from .naming import (
     cpp_detail_functor_name,
     cpp_wrapper_function_name,
     cpp_wrapper_parameter_names,
 )
+from .translation import CppNativeTranslationPlan
 
 
 _CPP_SCALAR_TYPE_BY_TAG = {
@@ -28,18 +29,6 @@ _CPP_SCALAR_TYPE_BY_TAG = {
 _CPP_SCALAR_TYPE_ORDER = {
     type_tag: index
     for index, type_tag in enumerate(_CPP_SCALAR_TYPE_BY_TAG)
-}
-_CPP_NATIVE_TYPE_BY_TAG = {
-    "f32": "float",
-}
-_CPP_NATIVE_TYPE_ORDER = {
-    type_tag: index
-    for index, type_tag in enumerate(_CPP_NATIVE_TYPE_BY_TAG)
-}
-# Milestone 39 transitional parity only. Do not add keys here; Milestone 40
-# moves intrinsic/type resolution behind typed lowering and translation data.
-_CPP_NATIVE_INTRINSIC_BY_KEY = {
-    ("add", "avx2", "f32"): "_mm256_add_ps",
 }
 
 
@@ -72,17 +61,17 @@ class CppNativeBinarySpecialization:
     extension_name: str
     detail_name: str
     parameter_names: tuple[str, str]
-    intrinsic_call: str
+    translated_call: TranslatedIntrinsicCall
 
     @property
     def key(self) -> tuple[object, ...]:
         return (
             self.extension_name,
-            _CPP_NATIVE_TYPE_ORDER[self.type_tag],
+            self.type_tag,
             self.cpp_type,
             self.detail_name,
             self.parameter_names,
-            self.intrinsic_call,
+            self.translated_call.key,
             self.candidate_id,
         )
 
@@ -126,6 +115,7 @@ class CppScalarBinarySlice:
 def plan_cpp_scalar_binary_slice(
     candidates: tuple[ImplementationCandidate, ...],
     lowering_plan: LoweringPlan,
+    native_translation_plan: CppNativeTranslationPlan | None = None,
 ) -> Result[CppScalarBinarySlice | None]:
     if not candidates:
         return Result.ok(None)
@@ -218,23 +208,34 @@ def plan_cpp_scalar_binary_slice(
                 )
             )
         elif candidate_kind == "native":
-            intrinsic_call = _native_intrinsic_call_for_lowered(
+            translated_call = (
+                None
+                if native_translation_plan is None
+                else native_translation_plan.calls_by_candidate_id.get(
+                    candidate.candidate_id
+                )
+            )
+            if translated_call is None:
+                diagnostics.append(_missing_translated_call_diagnostic(candidate))
+                continue
+            call_validation = _native_translated_call_for_lowered(
                 candidate,
                 lowered,
                 typed_parameter_names,
+                translated_call,
             )
-            diagnostics.extend(intrinsic_call.diagnostics)
-            if not intrinsic_call.is_ok:
+            diagnostics.extend(call_validation.diagnostics)
+            if not call_validation.is_ok:
                 continue
             native_specializations.append(
                 CppNativeBinarySpecialization(
                     candidate_id=candidate.candidate_id,
                     type_tag=candidate.type_tag,
-                    cpp_type=_CPP_NATIVE_TYPE_BY_TAG[candidate.type_tag],
+                    cpp_type=translated_call.backend_type,
                     extension_name=candidate.target_extension,
                     detail_name=detail_name,
                     parameter_names=typed_parameter_names,
-                    intrinsic_call=intrinsic_call.unwrap(),
+                    translated_call=translated_call,
                 )
             )
 
@@ -263,6 +264,8 @@ def cpp_native_header_no_lowering_diagnostic(
 ) -> Diagnostic | None:
     candidate_kind = _candidate_kind(candidate)
     if candidate_kind == "native":
+        if not _is_selected_native_shape(candidate):
+            return _unsupported_candidate_diagnostic(candidate, None)
         return _missing_lowered_body_diagnostic(candidate)
     if _is_native_like_candidate(candidate):
         return _unsupported_candidate_diagnostic(candidate, candidate_kind)
@@ -365,7 +368,7 @@ def _native_specialization_lines(
         f"      typename reg_param<Vec>::type {left},",
         f"      typename reg_param<Vec>::type {right}",
         "  ) {",
-        f"    return {specialization.intrinsic_call};",
+        f"    return {_translated_call_expression(specialization.translated_call)};",
         "  }",
         "};",
     )
@@ -386,9 +389,8 @@ def _candidate_kind(candidate: ImplementationCandidate) -> str | None:
     ):
         return "scalar"
     if (
-        candidate.target_extension == "avx2"
-        and candidate.source_extension == "avx2"
-        and candidate.type_tag in _CPP_NATIVE_TYPE_BY_TAG
+        candidate.target_extension != "scalar"
+        and candidate.source_extension != "scalar"
     ):
         return "native"
     return None
@@ -434,6 +436,17 @@ def _is_native_like_candidate(candidate: ImplementationCandidate) -> bool:
     )
 
 
+def _is_selected_native_shape(candidate: ImplementationCandidate) -> bool:
+    return (
+        candidate.emitted_primitive_name == "add"
+        and candidate.template_name == "binary"
+        and candidate.variant.source.signature.normalized == "v:=(v,v)"
+        and candidate.target_extension == "avx2"
+        and candidate.source_extension == "avx2"
+        and candidate.type_tag == "f32"
+    )
+
+
 def _scalar_return_expression_for_lowered(
     candidate: ImplementationCandidate,
     lowered: LoweredImplementation,
@@ -467,11 +480,12 @@ def _scalar_return_expression_for_lowered(
     return Result.ok(expression)
 
 
-def _native_intrinsic_call_for_lowered(
+def _native_translated_call_for_lowered(
     candidate: ImplementationCandidate,
     lowered: LoweredImplementation,
     parameter_names: tuple[str, str],
-) -> Result[str]:
+    translated_call: TranslatedIntrinsicCall,
+) -> Result[None]:
     if lowered.status != "lowered" or len(lowered.statements) != 1:
         return Result.failure((_unsupported_lowered_body_diagnostic(candidate, lowered),))
 
@@ -480,24 +494,27 @@ def _native_intrinsic_call_for_lowered(
         return Result.failure((_unsupported_lowered_body_diagnostic(candidate, lowered),))
 
     expression = statement.expression
-    if not isinstance(expression, TsilIntrinsicComposeExpression):
+    if expression.key != (
+        "intrin_compose",
+        translated_call.intrinsic,
+        tuple(argument.key for argument in translated_call.arguments),
+    ):
         return Result.failure((_unsupported_lowered_body_diagnostic(candidate, lowered),))
-    if expression.intrinsic != "add":
+    if translated_call.backend_id != "cpp":
         return Result.failure(
             (
                 Diagnostic.error(
-                    "TSL-CPP-RENDER-NATIVE-INTRINSIC",
-                    "C++ native parity rendering supports only lowered "
-                    "intrin_compose<add> for the selected avx2/f32 slice; "
-                    f"got {expression.intrinsic!r}",
+                    "TSL-CPP-RENDER-TRANSLATED-CALL-BACKEND",
+                    "C++ native rendering received translated call IR for "
+                    f"backend {translated_call.backend_id!r}",
                     location=candidate.variant.source.declaration.source_span.location,
                 ),
             )
         )
-    if len(expression.arguments) != 2:
+    if len(translated_call.arguments) != 2:
         return Result.failure((_unsupported_lowered_body_diagnostic(candidate, lowered),))
 
-    argument_names = tuple(argument.name for argument in expression.arguments)
+    argument_names = tuple(argument.name for argument in translated_call.arguments)
     unknown_names = tuple(sorted(set(argument_names) - set(parameter_names)))
     if unknown_names:
         return Result.failure(
@@ -511,25 +528,12 @@ def _native_intrinsic_call_for_lowered(
                 ),
             )
         )
+    return Result.ok(None)
 
-    intrinsic_name = _CPP_NATIVE_INTRINSIC_BY_KEY.get(
-        (expression.intrinsic, candidate.target_extension, candidate.type_tag)
-    )
-    if intrinsic_name is None:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-CPP-RENDER-NATIVE-UNSUPPORTED",
-                    "C++ native parity rendering has no selected intrinsic "
-                    f"mapping for intrinsic {expression.intrinsic!r}, extension "
-                    f"{candidate.target_extension!r}, and type tag "
-                    f"{candidate.type_tag!r}",
-                    location=candidate.variant.source.declaration.source_span.location,
-                ),
-            )
-        )
-    left, right = argument_names
-    return Result.ok(f"{intrinsic_name}({left}, {right})")
+
+def _translated_call_expression(call: TranslatedIntrinsicCall) -> str:
+    arguments = ", ".join(argument.name for argument in call.arguments)
+    return f"{call.function_name}({arguments})"
 
 
 def _cpp_expression(expression: object) -> str | None:
@@ -560,6 +564,17 @@ def _missing_lowered_body_diagnostic(
     return Diagnostic.error(
         "TSL-CPP-RENDER-LOWERING-MISSING",
         "C++ binary parity rendering requires a lowered implementation for "
+        f"candidate {candidate.candidate_id!r}",
+        location=candidate.variant.source.declaration.source_span.location,
+    )
+
+
+def _missing_translated_call_diagnostic(
+    candidate: ImplementationCandidate,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-RENDER-TRANSLATED-CALL-MISSING",
+        "C++ native rendering requires translated backend-call IR for "
         f"candidate {candidate.candidate_id!r}",
         location=candidate.variant.source.declaration.source_span.location,
     )
