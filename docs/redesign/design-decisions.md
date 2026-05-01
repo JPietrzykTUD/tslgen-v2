@@ -374,15 +374,26 @@ known backend IDs. A minimal manifest set may be derived from catalog data only
 when matching `language` and `translation` entries exist for the same backend ID
 and the artifact descriptor is known.
 
+Milestone 30 refinement: the active backend IDs for the current roadmap are
+`cpp` and `rust`. Catalog-derived manifests are created only for active
+backends; `c17` language and translation data remains deferred evidence and is
+not derived into an active `BackendManifestSet`. Catalog `language` and
+`translation` entries are promoted into typed boundary values for validation
+only. Active manifests require a language map for `language_id` and a
+translation map for `backend_id`, but renderers do not evaluate translation maps
+in this slice.
+
 Rationale:
 
 Typed manifests keep YAML at the I/O boundary while preserving a data-driven
-backend model for C++, Rust, and future backends.
+backend model for active C++/Rust and future backends.
 
 Consequences:
 
 - YAML remains a supported interchange format, not a core architecture shape.
 - Unknown backend diagnostics are issued against the supplied manifest set.
+- Inactive backend diagnostics are issued before rendering when a deferred
+  manifest such as C17 is supplied for artifact planning.
 - Artifact descriptors remain content-free until rendering and writing stages.
 
 ## ADR-014: First C++ Slice Renders Opaque Candidate Summaries

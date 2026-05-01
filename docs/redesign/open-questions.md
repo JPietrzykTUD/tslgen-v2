@@ -744,7 +744,7 @@ milestones.
 
 ## OQ-024: How Complete Must Backend Manifests, Language Maps, And Translation Maps Be Before Broader Rendering?
 
-Status: Open - scheduled for Milestone 30
+Status: Answered for the Milestone 30 backend metadata boundary
 
 Why it matters:
 
@@ -753,14 +753,20 @@ still only partially connected to lowering and rendering. Current default
 manifest derivation also has to avoid accidentally reintroducing C17 as an
 active backend.
 
-Possible answers:
+Decision:
 
-- Validate manifest/backend IDs against catalog language and translation maps
-  before rendering.
-- Promote language and translation maps into typed backend planning models only
-  when a lowering slice consumes them.
-- Keep YAML manifests authoritative and treat TSL language/translation maps as
-  deferred catalog data.
+Validate active manifest/backend IDs against catalog language and translation
+maps before broader rendering depends on those values. Promote TSL `language`
+and `translation` declarations into typed boundary data for validation:
+language maps expose source type keys and target type names, and translation
+maps expose raw snippet templates. Do not evaluate translation maps or make
+renderers consume them in Milestone 30.
+
+`BackendManifestSet` remains the authoritative manifest source for artifact
+planning. Catalog-derived manifest creation is limited to active backends with
+matching language and translation data. The active backend IDs are `cpp` and
+`rust`; `c17` remains deferred evidence and is not derived into active manifests
+or planned for rendering.
 
 Required evidence:
 
@@ -771,10 +777,18 @@ Required evidence:
 - C++/Rust renderer needs after Milestones 27 and 28.
 - C17 deferral decision.
 
+Deferred answers:
+
+- Full translation-map evaluation.
+- Backend-specific lowering services over typed translation maps.
+- Rust production-shaped declaration rendering.
+- Reintroducing C17 as an active backend.
+
 Implementation blocked:
 
-Broader backend rendering and translation-map evaluation are blocked. Narrow
-declaration slices are not blocked.
+Broader backend rendering and translation-map evaluation remain blocked until a
+future lowering/rendering milestone consumes the typed boundary. Narrow C++ and
+Rust declaration or summary slices are not blocked.
 
 ## OQ-025: What Is The First Rust Production-Shaped Rendering Slice?
 
@@ -1053,3 +1067,7 @@ long as they avoid unrelated corpus churn.
 
 - Add a focused conversion-shaped test-rendering diagnostic test for `to_type` / `to_extension`.
 - Before executable generated tests, promote enough planned-case metadata to distinguish primitive/template/signature shape explicitly rather than relying on vector-count shape alone.
+
+## Follow-up from Milestone 30 review
+
+- Use `BackendMetadataBoundary` as the input contract for future translation-aware lowering/rendering milestones, and keep translation snippets unevaluated until that slice is explicitly selected.

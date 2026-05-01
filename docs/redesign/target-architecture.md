@@ -46,6 +46,7 @@ tslgen/
       backends.py
     validation/
       catalog_validator.py
+      backend_metadata.py
       signature_rules.py
       attribute_rules.py
       reference_rules.py
@@ -255,6 +256,7 @@ Responsibilities:
 - Extension inheritance validation.
 - Reference validation for type groups, lane sets, extensions, primitive calls.
 - Backend manifest validation.
+- Backend language-map and translation-map boundary validation.
 - Diagnostic creation.
 
 Does not:
@@ -288,6 +290,8 @@ Semantic lowering from implementation body to backend-neutral or backend-ready I
 Responsibilities:
 
 - Accept selected implementation candidates through typed lowering requests.
+- Consume typed language and translation boundary data when a future lowering
+  slice evaluates backend translations.
 - Parse TSIL bodies when a supported subset has been chosen.
 - Keep any TSIL mini-parser behind a lowering-owned model that can grow toward a
   full TSIL AST.
@@ -303,6 +307,8 @@ Does not:
 - Load files.
 - Write artifacts.
 - Render final backend text.
+- Evaluate translation maps before a supported lowering slice defines that
+  behavior.
 
 ### `backends`
 
@@ -311,6 +317,8 @@ Backend-specific planning and rendering strategy.
 Responsibilities:
 
 - Expose backend capabilities.
+- Stay within the active backend policy for the current roadmap: C++ and Rust
+  are active, while C17 is deferred evidence.
 - Plan wrappers, primaries, specializations, tests, traits, and support metadata.
 - Render artifacts through template engines or structured emitters.
 - Report required flags and artifact metadata.

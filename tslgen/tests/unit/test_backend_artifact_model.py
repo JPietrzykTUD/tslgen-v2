@@ -201,7 +201,7 @@ artifact:
             severity="error",
         )
 
-    def test_derives_backend_ids_from_language_and_translation_catalog_entries(self) -> None:
+    def test_derives_active_backend_ids_from_language_and_translation_catalog_entries(self) -> None:
         catalog = catalog_from_paths(
             "tsldata/detail/lang/types/types_cpp.tsl",
             "tsldata/detail/lang/types/types_c17.tsl",
@@ -214,7 +214,7 @@ artifact:
         manifests = backend_manifests_from_catalog(catalog)
 
         self.assertTrue(manifests.is_ok, manifests.diagnostics)
-        self.assertEqual(manifests.unwrap().backend_ids, ("c17", "cpp", "rust"))
+        self.assertEqual(manifests.unwrap().backend_ids, ("cpp", "rust"))
 
     def test_diagnoses_duplicate_manifest_artifact_targets(self) -> None:
         result = parse_backend_manifest_text(

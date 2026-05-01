@@ -5,7 +5,12 @@ from tslgen.analysis.dependencies import DependencyClosure
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.core.frozen_map import FrozenMap
 from tslgen.core.result import Result
-from tslgen.domain.backends import BackendManifestSet
+from tslgen.domain.backends import (
+    ACTIVE_BACKEND_IDS,
+    BackendManifestSet,
+    backend_id_list_text,
+    is_active_backend_id,
+)
 from tslgen.domain.values import CatalogValue
 from tslgen.io.artifacts import (
     ArtifactDescriptor,
@@ -27,6 +32,28 @@ def build_artifact_plan(
                 Diagnostic.error(
                     "TSL-ARTIFACT-UNKNOWN-BACKEND",
                     f"artifact plan requested unknown backend {backend_id!r}",
+                ),
+            )
+        )
+    if not is_active_backend_id(manifest.backend_id):
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-ARTIFACT-UNSUPPORTED-BACKEND",
+                    f"artifact plan requested inactive backend "
+                    f"{manifest.backend_id!r}; active backends: "
+                    f"{backend_id_list_text(ACTIVE_BACKEND_IDS)}",
+                ),
+            )
+        )
+    if not is_active_backend_id(manifest.language_id):
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-ARTIFACT-UNSUPPORTED-LANGUAGE",
+                    f"artifact plan for backend {manifest.backend_id!r} "
+                    f"references inactive language id {manifest.language_id!r}; "
+                    f"active languages: {backend_id_list_text(ACTIVE_BACKEND_IDS)}",
                 ),
             )
         )

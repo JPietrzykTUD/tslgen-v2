@@ -466,6 +466,49 @@ Invariants:
 - A backend cannot read source files, CPU flags, or output directories during render.
 - Backend support and language maps are validated before planning.
 - Template engines are implementation details behind a renderer.
+- Active backend IDs are `cpp` and `rust` for the current roadmap. C17 is
+  deferred evidence and is not an active backend ID.
+
+Milestone 30 adds a typed metadata boundary for catalog language and translation
+data:
+
+```python
+@dataclass(frozen=True, slots=True)
+class LanguageTypeEntry:
+    source_type: str
+    target_type: str
+    fields: FrozenMap[str, CatalogValue]
+
+@dataclass(frozen=True, slots=True)
+class LanguageTypeMap:
+    backend_id: BackendId
+    entries: tuple[LanguageTypeEntry, ...]
+
+@dataclass(frozen=True, slots=True)
+class TranslationSnippet:
+    name: str
+    template: str
+
+@dataclass(frozen=True, slots=True)
+class TranslationMap:
+    backend_id: BackendId
+    snippets: tuple[TranslationSnippet, ...]
+
+@dataclass(frozen=True, slots=True)
+class BackendMetadataBoundary:
+    manifests: BackendManifestSet
+    metadata: BackendMetadataCatalog
+    active_backend_ids: tuple[BackendId, ...]
+```
+
+Invariants:
+
+- Language maps preserve raw source type keys and target type names; they do not
+  normalize TSL type tags or select SIMD vector types.
+- Translation maps preserve raw snippet templates; they are not evaluated by
+  renderers in this milestone.
+- Active manifests require a language map for `language_id` and a translation
+  map for `backend_id`.
 
 ## Test Model
 

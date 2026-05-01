@@ -279,6 +279,10 @@ generation:
   metadata-style test source artifact and diagnostics for unsupported test
   artifact kinds, type tags, extra metadata, and case shapes.
 - Backend manifest/language/translation-map diagnostic tests.
+  Milestone 30 covers typed language-map and translation-map boundary
+  promotion, active C++/Rust manifest consistency, missing-map diagnostics,
+  unsupported-backend diagnostics, and C17 deferral during catalog-derived
+  manifest creation.
 - Rust production-shaped declaration golden tests once that slice is selected.
 - Candidate-specific dependency report/API tests when those values are exposed.
 - Quarantine-retirement and corpus-hygiene tests only when those policies change

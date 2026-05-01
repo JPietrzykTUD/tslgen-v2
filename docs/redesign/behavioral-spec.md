@@ -383,10 +383,24 @@ the supplied `BackendManifestSet`; a minimal manifest set may be derived from
 catalog entries only when matching `language` and `translation` entries exist
 for the same backend ID.
 
-Milestone 30 must tighten this boundary before broad rendering expands. It
-should clarify which backend IDs are active, how catalog `language` and
-`translation` maps are validated against manifests, and how C17 evidence remains
-deferred unless a future decision reintroduces it.
+Milestone 30 defines the active backend IDs for the current redesign slice as
+`cpp` and `rust`. C17 catalog files and manifest fixtures may still be loaded as
+evidence, but `c17` is deferred and must not be derived into active manifests or
+planned for rendering. Artifact planning rejects inactive manifest backends
+before renderer dispatch.
+
+Catalog `language` and `translation` declarations are promoted into typed
+backend metadata boundary data. A language map records backend/language ID,
+source type keys, target language type names, and preserved entry fields. A
+translation map records backend ID and raw snippet templates. This boundary
+validates presence and shape only; it does not evaluate translation snippets,
+lower TSIL through translation maps, or change renderer output.
+
+For every active manifest being validated, the manifest `language_id` must have
+a corresponding language type map and the manifest `backend_id` must have a
+corresponding translation map. Unsupported manifest backend IDs, unsupported
+manifest language IDs, missing maps, malformed language entries, and malformed
+translation entries are structured diagnostics.
 
 Artifact descriptors are content-free. They record logical output paths,
 artifact kind, backend/language IDs, selected candidate IDs, and primitive-level

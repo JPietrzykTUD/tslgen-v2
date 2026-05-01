@@ -10,10 +10,13 @@ from tslgen.core.diagnostics import Diagnostic, SourceLocation, has_errors, sort
 from tslgen.core.frozen_map import FrozenMap
 from tslgen.core.result import Result
 from tslgen.domain.backends import (
+    ACTIVE_BACKEND_IDS,
+    DEFERRED_BACKEND_IDS,
     ArtifactSpec,
     BackendManifest,
     BackendManifestSet,
     BackendTemplatePolicy,
+    backend_id_list_text,
 )
 from tslgen.domain.catalog import Catalog
 from tslgen.domain.values import CatalogValue
@@ -23,7 +26,6 @@ SUPPORTED_BACKEND_MANIFEST_VERSION = 1
 
 _DEFAULT_ARTIFACT_SPECS: FrozenMap[str, ArtifactSpec] = FrozenMap(
     {
-        "c17": ArtifactSpec(kind="generated", logical_name="generated", extension="h"),
         "cpp": ArtifactSpec(
             kind="generated",
             logical_name="generated",
@@ -167,6 +169,8 @@ def backend_manifests_from_catalog(catalog: Catalog) -> Result[BackendManifestSe
     )
     diagnostics: list[Diagnostic] = []
     for backend_id in sorted(language_names - translation_names):
+        if backend_id not in ACTIVE_BACKEND_IDS:
+            continue
         diagnostics.append(
             Diagnostic.error(
                 "TSL-BACKEND-MANIFEST-MISSING-TRANSLATION",
@@ -174,6 +178,8 @@ def backend_manifests_from_catalog(catalog: Catalog) -> Result[BackendManifestSe
             )
         )
     for backend_id in sorted(translation_names - language_names):
+        if backend_id not in ACTIVE_BACKEND_IDS:
+            continue
         diagnostics.append(
             Diagnostic.error(
                 "TSL-BACKEND-MANIFEST-MISSING-LANGUAGE",
@@ -185,6 +191,18 @@ def backend_manifests_from_catalog(catalog: Catalog) -> Result[BackendManifestSe
 
     manifests: list[BackendManifest] = []
     for backend_id in sorted(language_names & translation_names):
+        if backend_id in DEFERRED_BACKEND_IDS:
+            continue
+        if backend_id not in ACTIVE_BACKEND_IDS:
+            diagnostics.append(
+                Diagnostic.error(
+                    "TSL-BACKEND-MANIFEST-UNSUPPORTED-BACKEND",
+                    f"backend {backend_id!r} is not active for manifest "
+                    f"derivation; active backends: "
+                    f"{backend_id_list_text(ACTIVE_BACKEND_IDS)}",
+                )
+            )
+            continue
         artifact = _DEFAULT_ARTIFACT_SPECS.get(backend_id)
         if artifact is None:
             diagnostics.append(

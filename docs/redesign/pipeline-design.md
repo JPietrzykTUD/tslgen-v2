@@ -137,6 +137,12 @@ Validation points:
 - Translation maps for requested backends.
 - Primitive call references, once dependency parsing exists.
 
+Milestone 30 promotes catalog `language` and `translation` entries into typed
+backend metadata boundary values for validation. Active backend manifests must
+match typed language and translation data before broad backend planning or
+future translation-aware lowering consumes those maps. The validation boundary
+does not evaluate translation snippets.
+
 Error handling:
 
 - Accumulate diagnostics.
@@ -363,6 +369,13 @@ Milestone 30 tightens backend manifest, language-map, and translation-map
 validation before broader rendering depends on those values. Generic backend
 planning should receive typed backend metadata and must not consume YAML or raw
 catalog maps directly.
+
+The current active backend IDs are `cpp` and `rust`. C17 may be present in
+catalog or manifest evidence, but it is deferred and not derived into active
+manifest sets. Artifact planning rejects inactive manifest backends and inactive
+manifest language IDs before renderer dispatch. Active manifests require a
+language type map keyed by `language_id` and a translation map keyed by
+`backend_id`.
 
 ## Stage 10: Rendering
 
