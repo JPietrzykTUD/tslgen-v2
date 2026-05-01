@@ -291,7 +291,12 @@ generation:
   pipeline closure values, stable API helper access, deterministic JSON fields,
   deterministic escaped HTML sections, primitive-level fallback visibility, and
   candidate edge/issue/fallback rows.
-- Quarantine-retirement and corpus-hygiene tests only when those policies change
+- Quarantine-retirement tests only when cleanup changes code or the validation
+  profile. Milestone 33 is documentation-only and requires no new tests. A
+  future deletion or migration slice must run the import-boundary regression,
+  update validation-profile assertions, and run the Milestone 21 profile if
+  quarantine entries or accepted paths change.
+- Corpus-hygiene tests only when Milestone 34 changes `tsldata` policy or
   validation behavior.
 
 ## Validation Baseline Profile
@@ -317,8 +322,12 @@ The profile includes:
 The profile deliberately checks accepted redesigned code and tests rather than
 claiming broad repository validation. Quarantined exploratory sketches remain
 outside the lint/type/compile surface until a future milestone either promotes
-or removes them. `tsldata/` remains a read-only corpus fixture target exercised
-by tests, not a Python lint/type target.
+or removes them. Milestone 33 classifies quarantined paths in
+`docs/redesign/exploratory-code-retirement-plan.md`; documentation-only
+classification changes require `git diff --check`, while code deletion,
+migration, or validation-profile edits require the targeted import-boundary
+test and the full Milestone 21 profile. `tsldata/` remains a read-only corpus
+fixture target exercised by tests, not a Python lint/type target.
 
 ## Integration Tests
 

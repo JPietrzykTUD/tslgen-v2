@@ -553,22 +553,30 @@ baseline:
 - `tsldata/`: read-only corpus fixtures exercised by tests, not Python tooling
   targets.
 
-Future cleanup may promote or remove quarantined paths, but doing so requires a
-milestone with tests and documentation. Quarantine must not be used to hide
-failures in accepted redesigned modules.
+Milestone 33 records the retirement plan in
+`docs/redesign/exploratory-code-retirement-plan.md`. The plan classifies
+`frontend`, `ir`, early core context/pass/type sketches, and empty backend
+sketch tests as delete candidates; `middle_end` and `frozen` as evidence-only;
+and `utils`, `tslgen/tests/test_timing.py`, and `tsldata` as keep-quarantined
+until their blockers are resolved. No quarantined path is approved for direct
+code migration.
 
-Milestone 33 is responsible for deciding which quarantined paths should be
-deleted, migrated behind accepted boundaries, or kept quarantined. Milestone 34
-is responsible for broadening corpus and validation hygiene without treating
-`tsldata/` churn as incidental implementation cleanup.
+Future cleanup may promote or remove quarantined paths, but doing so requires a
+focused milestone with tests and documentation. Any deletion or migration must
+update the validation profile in the same slice, preserve required behavior
+evidence in redesign docs, and keep production import-boundary tests passing.
+Quarantine must not be used to hide failures in accepted redesigned modules.
+Milestone 34 is responsible for broadening corpus and validation hygiene without
+treating `tsldata` churn as incidental implementation cleanup.
 
 ## Sketch Assessment
 
 Promising ideas in `tslgen/`:
 
-- `tslgen/src/tslgen/core/context.py` separates global configuration from generation context.
-- `tslgen/src/tslgen/core/passes.py` uses protocols for pass boundaries.
-- `tslgen/src/tslgen/ir/primitive_ir.py` recognizes source spans and primitive scope.
+- `tslgen/src/tslgen/middle_end/README.md` records dependency, filtering, and
+  generation-time rewrite concerns that can inform future semantic lowering.
+- `tslgen/src/tslgen/utils/timing.py` sketches performance instrumentation,
+  but no accepted performance/tooling boundary currently requires it.
 - `tslgen/src/tslgen/cli.py` has explicit hardware mode validation.
 
 Design risks in `tslgen/`:

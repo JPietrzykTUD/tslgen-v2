@@ -969,3 +969,50 @@ Consequences:
   JSON and HTML reports.
 - Reporting still does not parse TSIL, run dependency analysis, select
   dependency implementations, schedule backend jobs, or change lowering.
+
+## ADR-028: Quarantined Code Is Retired By Evidence, Not Migration Shape
+
+Status: Accepted for the Milestone 33 planning slice
+
+Context:
+
+Milestone 21 created a validation baseline that deliberately excludes
+pre-redesign sketches under `frontend`, `ir`, `middle_end`, `utils`, early core
+files, old sketch tests, `frozen`, and `tsldata`. Leaving those paths
+unclassified makes future cleanup ambiguous, but deleting them without a plan
+could lose evidence about dependency syntax, filtering, TSIL generation-time
+expressions, or legacy workflows.
+
+Considered alternatives:
+
+- Promote quarantined modules into accepted packages because similar package
+  names exist.
+- Delete all quarantined paths immediately.
+- Keep all quarantined paths indefinitely.
+- Classify each path by evidence value and accepted-boundary fit.
+
+Decision:
+
+Use `docs/redesign/exploratory-code-retirement-plan.md` as the retirement
+authority for Milestone 33. Delete candidates are paths whose useful concepts
+are already covered by accepted architecture and tests. Evidence-only paths are
+kept as requirement evidence, not runtime architecture. Keep-quarantined paths
+need a future policy decision before deletion or migration. No path is approved
+for direct code migration in this milestone.
+
+Rationale:
+
+The accepted architecture already covers behavior such as parsing, source-span
+diagnostics, typed primitive/signature/extension models, selection filtering,
+dependency closure, and lowering boundaries through accepted modules. The plan
+therefore preserves evidence without treating historical module shape as a
+target design.
+
+Consequences:
+
+- Future cleanup slices must update `tslgen.tooling.validation` only when they
+  actually delete or promote a quarantined path.
+- Future migrations must re-express behavior behind accepted boundaries with
+  focused tests; they must not import quarantined modules.
+- `frozen` remains evidence-only, and `tsldata` remains corpus data pending
+  Milestone 34 hygiene policy.

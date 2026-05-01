@@ -867,7 +867,7 @@ and richer visualization remain deferred.
 
 ## OQ-027: What Should Happen To Quarantined Exploratory Code?
 
-Status: Open - scheduled for Milestone 33
+Status: Answered for the Milestone 33 retirement-planning slice
 
 Why it matters:
 
@@ -875,13 +875,21 @@ The validation profile deliberately quarantines pre-redesign sketches. Leaving
 them indefinitely increases confusion, but deleting them without a plan can
 remove useful evidence or disrupt future work.
 
-Possible answers:
+Decision:
 
-- Delete paths that have no remaining evidence value.
-- Migrate small reusable ideas behind accepted boundaries.
-- Keep specific paths quarantined with documented reasons and future milestones.
+Milestone 33 records the path-by-path plan in
+`docs/redesign/exploratory-code-retirement-plan.md`. The accepted architecture
+already covers frontend parsing, primitive/signature/extension modeling,
+configuration context, pass orchestration needs, and hard-coded type helpers
+through `io`, `syntax`, `domain`, `validation`, `analysis`, `lowering`,
+`config`, and `api`, so those quarantined sketches are delete candidates after
+focused cleanup tests. The middle-end sketch is evidence-only because it
+documents dependency syntax, filtering concerns, and generation-time/type
+rewrite motifs, but its implementation must not be promoted. `frozen` remains
+evidence-only. Timing utilities and `tsldata` remain quarantined until future
+performance/tooling and corpus-hygiene milestones decide their policy.
 
-Required evidence:
+Evidence:
 
 - Milestone 21 quarantine list.
 - Current import boundaries.
@@ -889,8 +897,9 @@ Required evidence:
 
 Implementation blocked:
 
-No for semantic milestones. Broad repository validation expansion is blocked
-until this is planned.
+No for semantic milestones. Direct code migration is not approved by Milestone
+33. Future cleanup slices must update `tslgen.tooling.validation` and run
+import-boundary or full validation checks according to the retirement plan.
 
 ## OQ-028: What Is The Policy For `tsldata/` Changes And Dirty Corpus State?
 
@@ -1102,3 +1111,7 @@ long as they avoid unrelated corpus churn.
 
 - Keep future dependency visualization/API additions DTO-based.
 - Preserve primitive-level fallback visibility alongside candidate-specific dependency precision.
+
+## Follow-up from Milestone 33 review
+
+- Use Milestone 34 to define `tsldata` corpus hygiene and dirty-worktree policy before expanding data validation or cleanup.
