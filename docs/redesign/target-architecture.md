@@ -323,6 +323,10 @@ Current roadmap note:
 - Milestone 41 defines the generation-time semantic lowering contract so raw
   `if<generation>`, `type<generation>`, and `value<generation>` forms cannot
   leak into backend translation.
+- The detailed Milestone 41 contract lives in
+  `generation-time-semantic-lowering.md`. Its first future implementation slice
+  is the boolean primitive-attribute condition used by aligned load/store
+  evidence.
 
 Does not:
 

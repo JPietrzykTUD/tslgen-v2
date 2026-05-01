@@ -341,6 +341,12 @@ translation value must be resolved earlier in semantic lowering. Backend
 translation may handle `type<backend>(...)` and `value<backend>(...)` only as
 typed requests whose inputs are already-resolved semantic values.
 
+Milestone 41 specifies the detailed generation-time helper inventory,
+`GenerationContext` fields, and selected next helper slice in
+`generation-time-semantic-lowering.md`. The selected future slice is boolean
+primitive-attribute branch pruning for
+`if<generation>(value<generation>(primitive::attribute(aligned)))`.
+
 ## Stage 9: Backend Planning
 
 Inputs:

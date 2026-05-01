@@ -584,13 +584,15 @@ Recommended first parity checks:
   preventing renderer-owned intrinsic lookup growth for the selected slice.
 - Milestone 41: documentation/inventory validation for the generation-time
   semantic lowering contract, including explicit generation context fields,
-  ordering tests to prove generation-time helpers resolve before backend
-  translation, backend drift risk reassessment, milestone adaptation decisions,
-  and `git diff --check`; if generation-time conditions or type/value queries
-  are selected next, future tests must cover deterministic branch selection or
-  typed-value resolution, unknown attribute/type-predicate diagnostics, missing
-  generation context diagnostics, malformed branch/query diagnostics, and
-  renderer non-evaluation regression coverage.
+  helper inventory, backend drift risk reassessment, milestone adaptation
+  decisions, and `git diff --check`. Milestone 41 selects the next future slice:
+  boolean primitive-attribute branch pruning for
+  `if<generation>(value<generation>(primitive::attribute(aligned)))`. That
+  future slice must test deterministic branch selection, unknown attribute
+  diagnostics, non-boolean attribute diagnostics, missing generation context
+  diagnostics, malformed branch diagnostics, unresolved nested helper
+  diagnostics, backend-translation rejection of unresolved generation helpers,
+  and renderer non-evaluation regression coverage.
 
 Deferred parity checks:
 

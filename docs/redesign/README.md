@@ -13,6 +13,8 @@ Start with:
 - `domain-model.md` for the core vocabulary and model boundaries.
 - `target-architecture.md` for package layout and dependency direction.
 - `pipeline-design.md` for stage inputs, outputs, validation points, and side effects.
+- `generation-time-semantic-lowering.md` for the generation-time helper
+  contract that must run before backend translation.
 - `implementation-roadmap.md` for the milestone sequence.
 - `testing-strategy.md` for expected tests and fixtures.
 - `stabilization-release-checklist.md` for post-Milestone-34 release-readiness

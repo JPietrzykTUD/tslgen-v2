@@ -1238,6 +1238,10 @@ Consequences:
   native C++ or Rust rendering.
 - Milestone 41 defines the generation-time semantic lowering contract before
   modifier support, suffix inference, or branch-dependent output expands.
+- Milestone 41 selects boolean primitive-attribute branch pruning for
+  `if<generation>(value<generation>(primitive::attribute(aligned)))` as the
+  next implementable generation-time helper slice; broader generation-time
+  type/value queries remain deferred.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

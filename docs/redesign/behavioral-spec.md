@@ -308,6 +308,11 @@ over already-resolved semantic values; they are not allowed to evaluate raw
 nested generation-time TSIL text. Backend rendering receives only translated
 backend-call/type/name values and formats them.
 
+Milestone 41 records the detailed helper inventory and context contract in
+`generation-time-semantic-lowering.md`. It selects a future boolean
+primitive-attribute branch slice:
+`if<generation>(value<generation>(primitive::attribute(aligned)))`.
+
 The current mini-lowering strategy does not parse a general expression
 language, does not evaluate generation-time branches or generation-time
 type/value queries, does not lower primitive calls, and does not render backend

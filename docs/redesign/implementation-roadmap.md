@@ -2682,9 +2682,12 @@ Accepted redesign inputs:
 Expected outputs:
 
 - A documented generation-time-before-backend translation contract.
-- A selected next generation-time helper slice or an explicit decision to pause
-  helper implementation until more evidence is gathered.
-- Updated milestone plan for the chosen helper or a deferred-target list.
+- A helper inventory and typed `GenerationContext` contract in
+  `docs/redesign/generation-time-semantic-lowering.md`.
+- The selected next generation-time helper slice:
+  `if<generation>(value<generation>(primitive::attribute(aligned)))` branch
+  pruning over primitive attributes.
+- Updated milestone plan for the chosen helper and deferred-target list.
 - Updated open questions for blocked helper semantics.
 
 Parity criterion:
@@ -2727,25 +2730,20 @@ Dependencies:
 
 Goal:
 
-Implement the next minimal generation-time semantic lowering slice selected by
-Milestone 41, so future helper forms such as aligned loads, signedness branches,
-type-dependent intrinsic suffixes, and backend modifier expressions do not
-migrate into backend translation or renderers as raw TSIL text.
+Implement the boolean primitive-attribute generation branch slice selected by
+Milestone 41:
+`if<generation>(value<generation>(primitive::attribute(aligned)))`. This keeps
+aligned load/store branch selection in semantic lowering, so future helper
+forms do not migrate into backend translation or renderers as raw TSIL text.
 
 Scope:
 
-- Select one or two concrete `if<generation>(...)` condition shapes from
-  repository evidence, such as primitive attribute checks or type signedness
-  checks.
-- Or select one concrete `type<generation>(...)` / `value<generation>(...)`
-  query shape needed by an intrinsic modifier expression, if that is the
-  smallest useful parity step.
-- Define the typed generation context required to evaluate the selected
-  condition or query.
-- Lower the selected branch form to either a pruned statement list with
-  provenance or lower the selected query to a typed semantic value. Use a typed
-  `TsilGenerationIf` node only when evaluation is intentionally deferred and
-  the next stage explicitly supports deferred branch IR.
+- Recognize the selected primitive-attribute condition shape.
+- Resolve `value<generation>(primitive::attribute(aligned))` to a typed boolean
+  generation value using explicit primitive attributes from
+  `GenerationContext`.
+- Lower the selected branch form to a pruned statement list with deterministic
+  provenance.
 - Keep unsupported condition expressions, nested branch forms, and unselected
   helper families diagnostic-producing.
 
@@ -2775,10 +2773,10 @@ Accepted redesign inputs:
 
 Expected outputs:
 
-- A documented and tested first generation-time condition evaluator or explicit
-  typed query resolver.
+- A documented and tested first generation-time condition evaluator for the
+  selected primitive-attribute branch shape.
 - Diagnostics for unsupported condition/query functions, unknown attributes,
-  unknown type predicates, missing generation context, and malformed
+  non-boolean attributes, missing generation context, and malformed
   generation-time branches.
 - Clear guidance for which future backend parity slices may depend on this
   condition support.
@@ -2824,8 +2822,9 @@ Dependencies:
 
 Scheduling note:
 
-This candidate should become a numbered milestone only after Milestone 41
-selects the concrete generation-time condition or query form.
+Milestone 41 selected the concrete generation-time condition form. The next
+numbered implementation milestone should use the branch-pruning scope above and
+must not add backend rendering behavior.
 
 ## Deferred Parity Targets After Boundary Correction
 
