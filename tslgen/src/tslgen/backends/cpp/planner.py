@@ -18,7 +18,11 @@ from .layout import (
     cpp_layout_diagnostics,
     cpp_layout_name,
 )
-from .scalar_binary import CppScalarBinarySlice, plan_cpp_scalar_binary_slice
+from .scalar_binary import (
+    CppScalarBinarySlice,
+    cpp_native_header_no_lowering_diagnostic,
+    plan_cpp_scalar_binary_slice,
+)
 
 
 CPP_BACKEND_ID = "cpp"
@@ -114,6 +118,17 @@ def plan_cpp_render_jobs(
         if (
             not has_errors(diagnostics)
             and layout_name == CPP_NATIVE_HEADER_LAYOUT
+            and lowering_plan is None
+        ):
+            diagnostics.extend(
+                diagnostic
+                for candidate in candidates
+                for diagnostic in (cpp_native_header_no_lowering_diagnostic(candidate),)
+                if diagnostic is not None
+            )
+        if (
+            not has_errors(diagnostics)
+            and layout_name == CPP_NATIVE_HEADER_LAYOUT
             and lowering_plan is not None
         ):
             scalar_result = plan_cpp_scalar_binary_slice(candidates, lowering_plan)
@@ -132,6 +147,9 @@ def plan_cpp_render_jobs(
             if scalar_binary_slice is not None:
                 metadata["scalar_specialization_count"] = len(
                     scalar_binary_slice.specializations
+                )
+                metadata["native_specialization_count"] = len(
+                    scalar_binary_slice.native_specializations
                 )
             jobs.append(
                 CppRenderJob(

@@ -14,6 +14,7 @@ from _helpers import assert_diagnostic, fixture_path
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
 from tslgen.analysis.selection import SelectionRequest, plan_selection
 from tslgen.backends.cpp.backend import CppBackend
+from tslgen.backends.cpp import scalar_binary as cpp_scalar_binary
 from tslgen.backends.cpp.naming import (
     cpp_detail_functor_name,
     cpp_production_function_name,
@@ -33,6 +34,7 @@ from tslgen.lowering import (
     LoweringPlan,
     LoweringRequest,
     TsilBinaryExpression,
+    TsilIntrinsicComposeExpression,
     TsilParameterReference,
     TsilReturnStatement,
     lower_candidates,
@@ -108,6 +110,44 @@ ADD_PARITY_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
         requires []
         implementation:
           tsil "emit_return(left + right);"
+"""
+
+
+ADD_NATIVE_PARITY_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
+  tests []
+  impls:
+    scalar:
+      ?i32:
+        requires []
+        implementation:
+          tsil "emit_return(left + right);"
+    avx2:
+      f32:
+        requires [avx]
+        implementation:
+          tsil "emit_return(intrin_compose<add>(left, right));"
+"""
+
+
+ADD_NATIVE_ONLY_PARITY_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
+  tests []
+  impls:
+    avx2:
+      f32:
+        requires [avx]
+        implementation:
+          tsil "emit_return(intrin_compose<add>(left, right));"
+"""
+
+
+RAW_SUBTRACT_NATIVE_ADD_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
+  tests []
+  impls:
+    avx2:
+      f32:
+        requires [avx]
+        implementation:
+          tsil "emit_return(intrin_compose<sub>(left, right));"
 """
 
 
@@ -214,14 +254,16 @@ def candidate_selection_for(
     *,
     backend: str | None = "cpp",
     primitive_name: str = "slice_add",
+    extension_names: tuple[str, ...] = ("scalar",),
+    cpu_flags: tuple[str, ...] = ("sse",),
 ) -> CandidateSelection:
     plan = plan_selection(
         referenced,
         SelectionRequest(
             backend=backend,
             primitive_names=(primitive_name,),
-            extension_names=("scalar",),
-            cpu_flags=("sse",),
+            extension_names=extension_names,
+            cpu_flags=cpu_flags,
             include_support_extensions=False,
         ),
     )
@@ -338,6 +380,62 @@ def manual_add_lowering_plan_for(selection: CandidateSelection) -> LoweringPlan:
     )
 
 
+def manual_intrinsic_add_lowering_plan_for(
+    selection: CandidateSelection,
+    *,
+    intrinsic: str = "add",
+) -> LoweringPlan:
+    prepared = prepare_lowering_inputs(selection, LoweringRequest(backend_id="cpp"))
+    if not prepared.is_ok:
+        raise AssertionError(prepared.diagnostics)
+    return LoweringPlan(
+        request=prepared.unwrap().request,
+        input_set=prepared.unwrap(),
+        implementations=(
+            LoweredImplementation(
+                candidate_id=selection.candidates[0].candidate_id,
+                status="lowered",
+                statements=(
+                    TsilReturnStatement(
+                        TsilIntrinsicComposeExpression(
+                            intrinsic=intrinsic,
+                            arguments=(
+                                TsilParameterReference("left"),
+                                TsilParameterReference("right"),
+                            ),
+                        )
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+def manual_binary_add_lowering_plan_for(selection: CandidateSelection) -> LoweringPlan:
+    prepared = prepare_lowering_inputs(selection, LoweringRequest(backend_id="cpp"))
+    if not prepared.is_ok:
+        raise AssertionError(prepared.diagnostics)
+    return LoweringPlan(
+        request=prepared.unwrap().request,
+        input_set=prepared.unwrap(),
+        implementations=(
+            LoweredImplementation(
+                candidate_id=selection.candidates[0].candidate_id,
+                status="lowered",
+                statements=(
+                    TsilReturnStatement(
+                        TsilBinaryExpression(
+                            operator="+",
+                            left=TsilParameterReference("left"),
+                            right=TsilParameterReference("right"),
+                        )
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
 class CppNamingTests(unittest.TestCase):
     def test_production_function_name_uses_primitive_and_type_tag(self) -> None:
         name = cpp_production_function_name("slice_add", "ui32")
@@ -404,6 +502,12 @@ class CppNamingTests(unittest.TestCase):
 
 
 class CppBackendVerticalSliceTests(unittest.TestCase):
+    def test_native_intrinsic_mapping_is_transitional_and_single_slice(self) -> None:
+        self.assertEqual(
+            cpp_scalar_binary._CPP_NATIVE_INTRINSIC_BY_KEY,
+            {("add", "avx2", "f32"): "_mm256_add_ps"},
+        )
+
     def test_renders_minimal_cpp_generated_artifact(self) -> None:
         result = render_simple_fixture()
 
@@ -561,6 +665,278 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             artifact.content,
         )
         self.assertNotIn("primitive_candidate", artifact.content)
+
+    def test_renders_selected_add_native_avx2_f32_parity_slice(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("scalar", "avx2"),
+            cpu_flags=("avx",),
+        )
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(
+            artifact_plan,
+            selection,
+            lowering_plan_for(selection),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = assert_artifact_matches_golden(
+            self,
+            result.unwrap(),
+            golden_artifact(
+                "tsl/tsl_native.hpp",
+                "golden",
+                "parity",
+                "cpp",
+                "add_native_avx2_f32_excerpt.hpp",
+            ),
+        )
+        self.assertEqual(artifact.metadata["cpp_layout"], "native_header")
+        self.assertEqual(artifact.metadata["scalar_specialization_count"], 2)
+        self.assertEqual(artifact.metadata["native_specialization_count"], 1)
+        self.assertIn("struct add_binary<simd<int32_t, scalar>>", artifact.content)
+        self.assertIn("struct add_binary<simd<uint32_t, scalar>>", artifact.content)
+        self.assertIn("struct add_binary<simd<float, avx2>>", artifact.content)
+        self.assertIn("return _mm256_add_ps(left, right);", artifact.content)
+        self.assertIn(
+            "return ::tsl::detail::add_binary<Vec>::apply(left, right);",
+            artifact.content,
+        )
+
+    def test_add_native_parity_uses_lowered_model_not_raw_tsil_text(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(RAW_SUBTRACT_NATIVE_ADD_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(
+            artifact_plan,
+            selection,
+            manual_intrinsic_add_lowering_plan_for(selection),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = result.unwrap().artifacts_by_path["tsl/tsl_native.hpp"]
+        self.assertIn("return _mm256_add_ps(left, right);", artifact.content)
+        self.assertNotIn("intrin_compose<sub>", artifact.content)
+        self.assertNotIn("_mm256_sub", artifact.content)
+
+    def test_add_native_parity_digest_is_deterministic(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("scalar", "avx2"),
+            cpu_flags=("avx",),
+        )
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+        lowering_plan = lowering_plan_for(selection)
+
+        first = CppBackend().render(artifact_plan, selection, lowering_plan)
+        second = CppBackend().render(artifact_plan, selection, lowering_plan)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+        assert_artifact_digest_map_stable(self, first.unwrap(), second.unwrap())
+
+    def test_diagnoses_unsupported_native_intrinsic_name(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_ONLY_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(
+            artifact_plan,
+            selection,
+            manual_intrinsic_add_lowering_plan_for(selection, intrinsic="sub"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-NATIVE-INTRINSIC",
+            severity="error",
+        )
+
+    def test_diagnoses_unsupported_native_extension_and_type(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_ONLY_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+        candidate = selection.candidates[0]
+        unsupported_candidates = (
+            replace(
+                candidate,
+                candidate_id=f"{candidate.candidate_id}:extension",
+                target_extension="sse",
+                source_extension="sse",
+            ),
+            replace(
+                candidate,
+                candidate_id=f"{candidate.candidate_id}:type",
+                type_tag="f64",
+            ),
+        )
+        unsupported_selection = CandidateSelection(
+            plan=selection.plan,
+            candidates=unsupported_candidates,
+        )
+        artifact_plan = artifact_plan_for_selection(
+            unsupported_selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(
+            artifact_plan,
+            unsupported_selection,
+            manual_intrinsic_add_lowering_plan_for(selection),
+        )
+
+        self.assertFalse(result.is_ok)
+        self.assertEqual(
+            [diagnostic.code for diagnostic in result.diagnostics],
+            [
+                "TSL-CPP-RENDER-NATIVE-UNSUPPORTED",
+                "TSL-CPP-RENDER-NATIVE-UNSUPPORTED",
+            ],
+        )
+
+    def test_diagnoses_missing_native_lowered_intrinsic_compose(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_ONLY_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(
+            artifact_plan,
+            selection,
+            empty_lowering_plan_for(selection),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-LOWERING-MISSING",
+            severity="error",
+        )
+
+    def test_diagnoses_missing_native_lowering_plan(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_ONLY_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(artifact_plan, selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-LOWERING-MISSING",
+            severity="error",
+        )
+
+    def test_diagnoses_unsupported_native_without_lowering_plan(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_ONLY_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+        candidate = selection.candidates[0]
+        unsupported_selection = CandidateSelection(
+            plan=selection.plan,
+            candidates=(
+                replace(
+                    candidate,
+                    candidate_id=f"{candidate.candidate_id}:type",
+                    type_tag="f64",
+                ),
+                replace(
+                    candidate,
+                    candidate_id=f"{candidate.candidate_id}:extension",
+                    target_extension="sse",
+                    source_extension="sse",
+                ),
+            ),
+        )
+        artifact_plan = artifact_plan_for_selection(
+            unsupported_selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(artifact_plan, unsupported_selection)
+
+        self.assertFalse(result.is_ok)
+        self.assertEqual(
+            [diagnostic.code for diagnostic in result.diagnostics],
+            [
+                "TSL-CPP-RENDER-NATIVE-UNSUPPORTED",
+                "TSL-CPP-RENDER-NATIVE-UNSUPPORTED",
+            ],
+        )
+
+    def test_diagnoses_unsupported_native_lowered_expression(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_ONLY_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(
+            artifact_plan,
+            selection,
+            manual_binary_add_lowering_plan_for(selection),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-RENDER-LOWERING-UNSUPPORTED",
+            severity="error",
+        )
 
     def test_add_scalar_parity_uses_lowered_model_not_raw_tsil_text(self) -> None:
         selection = candidate_selection_for(
@@ -782,6 +1158,12 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             "cpp",
             "add_scalar_excerpt.provenance.md",
         ).read_text(encoding="utf-8")
+        native_provenance = fixture_path(
+            "golden",
+            "parity",
+            "cpp",
+            "add_native_avx2_f32_excerpt.provenance.md",
+        ).read_text(encoding="utf-8")
 
         self.assertIn(
             "`tslgen/tests/fixtures/golden/parity/cpp/native_layout_excerpt.hpp`",
@@ -800,6 +1182,17 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             scalar_provenance,
         )
         self.assertIn("Runtime dependency on `frozen/`: none", scalar_provenance)
+        self.assertIn(
+            "`tslgen/tests/fixtures/golden/parity/cpp/add_native_avx2_f32_excerpt.hpp`",
+            native_provenance,
+        )
+        self.assertIn("`frozen/out/tsl/tsl_native.hpp:24337-24355`", native_provenance)
+        self.assertIn(
+            "`tsldata/primitives/arithmetic/fundamental.tsl:77-80`",
+            native_provenance,
+        )
+        self.assertIn("`tsldata/detail/lang/types/types_cpp.tsl:10`", native_provenance)
+        self.assertIn("Runtime dependency on `frozen/`: none", native_provenance)
 
     def test_diagnoses_non_cpp_artifact_plan(self) -> None:
         selection = candidate_selection_for(catalog_with_primitive(SIMPLE_PRIMITIVE))

@@ -9,6 +9,7 @@ from tslgen.lowering import (
     LoweredImplementation,
     LoweringPlan,
     TsilBinaryExpression,
+    TsilIntrinsicComposeExpression,
     TsilParameterReference,
     TsilReturnStatement,
 )
@@ -24,7 +25,22 @@ _CPP_SCALAR_TYPE_BY_TAG = {
     "si32": "int32_t",
     "ui32": "uint32_t",
 }
-_CPP_SCALAR_TYPE_ORDER = {type_tag: index for index, type_tag in enumerate(_CPP_SCALAR_TYPE_BY_TAG)}
+_CPP_SCALAR_TYPE_ORDER = {
+    type_tag: index
+    for index, type_tag in enumerate(_CPP_SCALAR_TYPE_BY_TAG)
+}
+_CPP_NATIVE_TYPE_BY_TAG = {
+    "f32": "float",
+}
+_CPP_NATIVE_TYPE_ORDER = {
+    type_tag: index
+    for index, type_tag in enumerate(_CPP_NATIVE_TYPE_BY_TAG)
+}
+# Milestone 39 transitional parity only. Do not add keys here; Milestone 40
+# moves intrinsic/type resolution behind typed lowering and translation data.
+_CPP_NATIVE_INTRINSIC_BY_KEY = {
+    ("add", "avx2", "f32"): "_mm256_add_ps",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,17 +65,52 @@ class CppScalarBinarySpecialization:
 
 
 @dataclass(frozen=True, slots=True)
+class CppNativeBinarySpecialization:
+    candidate_id: str
+    type_tag: str
+    cpp_type: str
+    extension_name: str
+    detail_name: str
+    parameter_names: tuple[str, str]
+    intrinsic_call: str
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            self.extension_name,
+            _CPP_NATIVE_TYPE_ORDER[self.type_tag],
+            self.cpp_type,
+            self.detail_name,
+            self.parameter_names,
+            self.intrinsic_call,
+            self.candidate_id,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class CppScalarBinarySlice:
     detail_name: str
     wrapper_name: str
     parameter_names: tuple[str, str]
     specializations: tuple[CppScalarBinarySpecialization, ...]
+    native_specializations: tuple[CppNativeBinarySpecialization, ...] = ()
 
     def __post_init__(self) -> None:
         specializations = tuple(
             sorted(self.specializations, key=lambda specialization: specialization.key)
         )
         object.__setattr__(self, "specializations", specializations)
+        native_specializations = tuple(
+            sorted(
+                self.native_specializations,
+                key=lambda specialization: specialization.key,
+            )
+        )
+        object.__setattr__(
+            self,
+            "native_specializations",
+            native_specializations,
+        )
 
     @property
     def key(self) -> tuple[object, ...]:
@@ -68,6 +119,7 @@ class CppScalarBinarySlice:
             self.wrapper_name,
             self.parameter_names,
             tuple(specialization.key for specialization in self.specializations),
+            tuple(specialization.key for specialization in self.native_specializations),
         )
 
 
@@ -80,11 +132,13 @@ def plan_cpp_scalar_binary_slice(
 
     diagnostics: list[Diagnostic] = []
     specializations: list[CppScalarBinarySpecialization] = []
+    native_specializations: list[CppNativeBinarySpecialization] = []
     detail_name = ""
     wrapper_name = ""
     wrapper_parameter_names: tuple[str, str] | None = None
     for candidate in candidates:
-        support_diagnostic = _unsupported_candidate_diagnostic(candidate)
+        candidate_kind = _candidate_kind(candidate)
+        support_diagnostic = _unsupported_candidate_diagnostic(candidate, candidate_kind)
         if support_diagnostic is not None:
             diagnostics.append(support_diagnostic)
             continue
@@ -144,13 +198,15 @@ def plan_cpp_scalar_binary_slice(
             diagnostics.append(_missing_lowered_body_diagnostic(candidate))
             continue
 
-        return_expression = _return_expression_for_lowered(
-            candidate,
-            lowered,
-            typed_parameter_names,
-        )
-        diagnostics.extend(return_expression.diagnostics)
-        if return_expression.is_ok:
+        if candidate_kind == "scalar":
+            return_expression = _scalar_return_expression_for_lowered(
+                candidate,
+                lowered,
+                typed_parameter_names,
+            )
+            diagnostics.extend(return_expression.diagnostics)
+            if not return_expression.is_ok:
+                continue
             specializations.append(
                 CppScalarBinarySpecialization(
                     candidate_id=candidate.candidate_id,
@@ -161,11 +217,34 @@ def plan_cpp_scalar_binary_slice(
                     return_expression=return_expression.unwrap(),
                 )
             )
+        elif candidate_kind == "native":
+            intrinsic_call = _native_intrinsic_call_for_lowered(
+                candidate,
+                lowered,
+                typed_parameter_names,
+            )
+            diagnostics.extend(intrinsic_call.diagnostics)
+            if not intrinsic_call.is_ok:
+                continue
+            native_specializations.append(
+                CppNativeBinarySpecialization(
+                    candidate_id=candidate.candidate_id,
+                    type_tag=candidate.type_tag,
+                    cpp_type=_CPP_NATIVE_TYPE_BY_TAG[candidate.type_tag],
+                    extension_name=candidate.target_extension,
+                    detail_name=detail_name,
+                    parameter_names=typed_parameter_names,
+                    intrinsic_call=intrinsic_call.unwrap(),
+                )
+            )
 
     ordered = sort_diagnostics(diagnostics)
     if has_errors(ordered):
         return Result.failure(ordered)
-    if not specializations or wrapper_parameter_names is None:
+    if (
+        not specializations
+        and not native_specializations
+    ) or wrapper_parameter_names is None:
         return Result.ok(None, diagnostics=ordered)
     return Result.ok(
         CppScalarBinarySlice(
@@ -173,9 +252,21 @@ def plan_cpp_scalar_binary_slice(
             wrapper_name=wrapper_name,
             parameter_names=wrapper_parameter_names,
             specializations=tuple(specializations),
+            native_specializations=tuple(native_specializations),
         ),
         diagnostics=ordered,
     )
+
+
+def cpp_native_header_no_lowering_diagnostic(
+    candidate: ImplementationCandidate,
+) -> Diagnostic | None:
+    candidate_kind = _candidate_kind(candidate)
+    if candidate_kind == "native":
+        return _missing_lowered_body_diagnostic(candidate)
+    if _is_native_like_candidate(candidate):
+        return _unsupported_candidate_diagnostic(candidate, candidate_kind)
+    return None
 
 
 def render_cpp_scalar_binary_detail_lines(
@@ -194,6 +285,9 @@ def render_cpp_scalar_binary_detail_lines(
     for specialization in scalar_slice.specializations:
         lines.append("")
         lines.extend(_specialization_lines(specialization))
+    for native_specialization in scalar_slice.native_specializations:
+        lines.append("")
+        lines.extend(_native_specialization_lines(native_specialization))
     return tuple(lines)
 
 
@@ -220,7 +314,8 @@ def _specialization_lines(
     left, right = specialization.parameter_names
     return (
         "template <>",
-        f"struct {specialization.detail_name}<simd<{specialization.cpp_type}, scalar>> {{",
+        f"struct {specialization.detail_name}<"
+        f"simd<{specialization.cpp_type}, scalar>> {{",
         f"  using Vec = simd<{specialization.cpp_type}, scalar>;",
         "  using return_type = typename Vec::register_type;",
         "",
@@ -244,19 +339,80 @@ def _specialization_lines(
     )
 
 
-def _unsupported_candidate_diagnostic(
-    candidate: ImplementationCandidate,
-) -> Diagnostic | None:
-    supported = (
+def _native_specialization_lines(
+    specialization: CppNativeBinarySpecialization,
+) -> tuple[str, ...]:
+    left, right = specialization.parameter_names
+    return (
+        "template <>",
+        f"struct {specialization.detail_name}<"
+        f"simd<{specialization.cpp_type}, {specialization.extension_name}>> {{",
+        f"  using Vec = simd<{specialization.cpp_type}, "
+        f"{specialization.extension_name}>;",
+        "  using return_type = typename Vec::register_type;",
+        "",
+        "  static constexpr bool has_return_value() {",
+        "    return true;",
+        "  }",
+        "",
+        "  static constexpr bool native_supported() {",
+        "    return true;",
+        "  }",
+        "",
+        "  [[nodiscard]]",
+        "  TSL_FORCE_INLINE",
+        "  static typename Vec::register_type apply(",
+        f"      typename reg_param<Vec>::type {left},",
+        f"      typename reg_param<Vec>::type {right}",
+        "  ) {",
+        f"    return {specialization.intrinsic_call};",
+        "  }",
+        "};",
+    )
+
+
+def _candidate_kind(candidate: ImplementationCandidate) -> str | None:
+    common_supported = (
         candidate.emitted_primitive_name == "add"
         and candidate.template_name == "binary"
         and candidate.variant.source.signature.normalized == "v:=(v,v)"
-        and candidate.target_extension == "scalar"
+    )
+    if not common_supported:
+        return None
+    if (
+        candidate.target_extension == "scalar"
         and candidate.source_extension == "scalar"
         and candidate.type_tag in _CPP_SCALAR_TYPE_BY_TAG
-    )
-    if supported:
+    ):
+        return "scalar"
+    if (
+        candidate.target_extension == "avx2"
+        and candidate.source_extension == "avx2"
+        and candidate.type_tag in _CPP_NATIVE_TYPE_BY_TAG
+    ):
+        return "native"
+    return None
+
+
+def _unsupported_candidate_diagnostic(
+    candidate: ImplementationCandidate,
+    candidate_kind: str | None,
+) -> Diagnostic | None:
+    if candidate_kind is not None:
         return None
+    if _is_native_like_candidate(candidate):
+        return Diagnostic.error(
+            "TSL-CPP-RENDER-NATIVE-UNSUPPORTED",
+            "C++ native parity rendering supports only the selected "
+            "fundamental/add binary avx2/f32 slice; candidate "
+            f"{candidate.candidate_id!r} has primitive "
+            f"{candidate.emitted_primitive_name!r}, template "
+            f"{candidate.template_name!r}, signature "
+            f"{candidate.variant.source.signature.normalized!r}, target extension "
+            f"{candidate.target_extension!r}, source extension "
+            f"{candidate.source_extension!r}, and type tag {candidate.type_tag!r}",
+            location=candidate.variant.source.declaration.source_span.location,
+        )
     return Diagnostic.error(
         "TSL-CPP-RENDER-SCALAR-UNSUPPORTED",
         "C++ scalar parity rendering supports only the selected "
@@ -271,7 +427,14 @@ def _unsupported_candidate_diagnostic(
     )
 
 
-def _return_expression_for_lowered(
+def _is_native_like_candidate(candidate: ImplementationCandidate) -> bool:
+    return (
+        candidate.target_extension != "scalar"
+        and candidate.source_extension != "scalar"
+    )
+
+
+def _scalar_return_expression_for_lowered(
     candidate: ImplementationCandidate,
     lowered: LoweredImplementation,
     parameter_names: tuple[str, str],
@@ -304,6 +467,71 @@ def _return_expression_for_lowered(
     return Result.ok(expression)
 
 
+def _native_intrinsic_call_for_lowered(
+    candidate: ImplementationCandidate,
+    lowered: LoweredImplementation,
+    parameter_names: tuple[str, str],
+) -> Result[str]:
+    if lowered.status != "lowered" or len(lowered.statements) != 1:
+        return Result.failure((_unsupported_lowered_body_diagnostic(candidate, lowered),))
+
+    statement = lowered.statements[0]
+    if not isinstance(statement, TsilReturnStatement):
+        return Result.failure((_unsupported_lowered_body_diagnostic(candidate, lowered),))
+
+    expression = statement.expression
+    if not isinstance(expression, TsilIntrinsicComposeExpression):
+        return Result.failure((_unsupported_lowered_body_diagnostic(candidate, lowered),))
+    if expression.intrinsic != "add":
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-CPP-RENDER-NATIVE-INTRINSIC",
+                    "C++ native parity rendering supports only lowered "
+                    "intrin_compose<add> for the selected avx2/f32 slice; "
+                    f"got {expression.intrinsic!r}",
+                    location=candidate.variant.source.declaration.source_span.location,
+                ),
+            )
+        )
+    if len(expression.arguments) != 2:
+        return Result.failure((_unsupported_lowered_body_diagnostic(candidate, lowered),))
+
+    argument_names = tuple(argument.name for argument in expression.arguments)
+    unknown_names = tuple(sorted(set(argument_names) - set(parameter_names)))
+    if unknown_names:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-CPP-RENDER-NATIVE-PARAMETER",
+                    "C++ native parity rendering received lowered parameter "
+                    f"reference(s) not present in primitive {candidate.emitted_primitive_name!r}: "
+                    f"{', '.join(repr(name) for name in unknown_names)}",
+                    location=candidate.variant.source.declaration.source_span.location,
+                ),
+            )
+        )
+
+    intrinsic_name = _CPP_NATIVE_INTRINSIC_BY_KEY.get(
+        (expression.intrinsic, candidate.target_extension, candidate.type_tag)
+    )
+    if intrinsic_name is None:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-CPP-RENDER-NATIVE-UNSUPPORTED",
+                    "C++ native parity rendering has no selected intrinsic "
+                    f"mapping for intrinsic {expression.intrinsic!r}, extension "
+                    f"{candidate.target_extension!r}, and type tag "
+                    f"{candidate.type_tag!r}",
+                    location=candidate.variant.source.declaration.source_span.location,
+                ),
+            )
+        )
+    left, right = argument_names
+    return Result.ok(f"{intrinsic_name}({left}, {right})")
+
+
 def _cpp_expression(expression: object) -> str | None:
     if isinstance(expression, TsilParameterReference):
         return expression.name
@@ -331,7 +559,7 @@ def _missing_lowered_body_diagnostic(
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-CPP-RENDER-LOWERING-MISSING",
-        "C++ scalar parity rendering requires a lowered implementation for "
+        "C++ binary parity rendering requires a lowered implementation for "
         f"candidate {candidate.candidate_id!r}",
         location=candidate.variant.source.declaration.source_span.location,
     )
@@ -355,7 +583,7 @@ def _unsupported_lowered_body_diagnostic(
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-CPP-RENDER-LOWERING-UNSUPPORTED",
-        "C++ scalar parity rendering supports only one mini-lowered return "
+        "C++ binary parity rendering supports only one mini-lowered return "
         f"statement for candidate {candidate.candidate_id!r}; lowered status is "
         f"{lowered.status!r} with {len(lowered.statements)} statement(s)",
         location=candidate.variant.source.declaration.source_span.location,

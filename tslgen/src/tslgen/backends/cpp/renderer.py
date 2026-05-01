@@ -47,6 +47,9 @@ def _render_job(job: CppRenderJob) -> Artifact:
         metadata["scalar_specialization_count"] = len(
             job.scalar_binary_slice.specializations
         )
+        metadata["native_specialization_count"] = len(
+            job.scalar_binary_slice.native_specializations
+        )
     return Artifact(
         logical_path=job.descriptor.logical_path,
         content=content,
