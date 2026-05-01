@@ -2268,10 +2268,12 @@ parity target.
 Scope:
 
 - Parse and lower `emit_return(intrin_compose<add>(left, right));` for one
-  backend-neutral intrinsic-call return form.
-- Resolve the backend, extension, and type context only as needed for the
-  selected C++ floating-point `binary/add` native slice.
-- Model the lowered result as a typed intrinsic-call return, not backend text.
+  backend-neutral intrinsic-compose return form.
+- Validate only the intrinsic name, argument arity, and declared primitive
+  parameter references needed by the selected C++ floating-point `binary/add`
+  native slice.
+- Model the lowered result as a typed intrinsic-compose return, not backend
+  text.
 - Keep unsupported `intrin_compose` metadata, generation-time suffixes,
   primitive calls, loops, variables, and type expressions diagnostic-producing
   unless explicitly selected.
@@ -2288,11 +2290,8 @@ Out of scope:
 Legacy evidence paths:
 
 - `frozen/tsl-gen/tsl_gen/tsil.lark`
-- `frozen/tsl-gen/tsl_gen/tsil_engine/compiler.py`
-- `frozen/tsl-gen/tsl_gen/tsil_engine/passes/calls.py`
-- `frozen/tsl-gen/tsl_gen/tsil_engine/passes/generation_ifs.py`
+- `frozen/out/tsl/tsl_native.hpp`
 - `tsldata/primitives/arithmetic/fundamental.tsl`
-- `tsldata/detail/lang/translate_cpp.tsl`
 
 Accepted redesign inputs:
 
@@ -2302,12 +2301,15 @@ Accepted redesign inputs:
 
 Expected outputs:
 
-- Typed lowered intrinsic-call return statements for the selected form.
-- Unsupported diagnostics for nearby but unsupported TSIL forms.
+- Typed lowered intrinsic-compose return statements for the selected form.
+- Unsupported diagnostics for nearby but unsupported TSIL forms, including
+  unsupported intrinsic names, malformed intrinsic-compose syntax, wrong arity,
+  invalid arguments, unknown operands, generation-time branches, and general
+  calls.
 
 Parity criterion:
 
-The selected TSIL source lowers to a stable, backend-neutral intrinsic-call
+The selected TSIL source lowers to a stable, backend-neutral intrinsic-compose
 model that contains enough information for the C++ backend to render the native
 `add` specialization selected by Milestone 39, without copying legacy string
 rewrite passes.
@@ -2350,7 +2352,7 @@ lowering model.
 Scope:
 
 - Render one selected native extension/type pair, recommended `avx2/f32` or
-  `avx2/f64`, using the Milestone 38 lowered intrinsic-call return.
+  `avx2/f64`, using the Milestone 38 lowered intrinsic-compose return.
 - Use typed backend metadata to map selected language types and intrinsic naming
   only for the selected form.
 - Preserve the primary/specialization/wrapper relationship accepted in

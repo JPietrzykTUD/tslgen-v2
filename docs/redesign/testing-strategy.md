@@ -268,8 +268,11 @@ generation:
   `si32`/`ui32` declaration slice and rejects invalid names rather than
   sanitizing them.
 - TSIL mini-lowering tests for the direct parameter-add return form
-  `emit_return(<parameter> + <parameter>);`, plus malformed return forms,
-  unknown operands, generation-time branches, and typed-opaque fallback.
+  `emit_return(<parameter> + <parameter>);` and the M38 intrinsic-compose form
+  `emit_return(intrin_compose<add>(<parameter>, <parameter>));`, plus
+  malformed return forms, unsupported intrinsic names, wrong arity, invalid
+  arguments, unknown operands, generation-time branches, and typed-opaque
+  fallback.
 - C++ body rendering tests proving bodies consume lowered data rather than raw
   TSIL text. Milestone 28 covers only the scalar `binary` `si32`/`ui32`
   parameter-add return body and diagnostics for missing or unsupported lowered
@@ -560,8 +563,9 @@ Recommended first parity checks:
 - Milestone 37: C++ `binary/add` primary/specialization/wrapper golden tests,
   lowered-model rendering tests, unsupported scalar-slice diagnostics, digest
   determinism, and fixture provenance tests.
-- Milestone 38: TSIL intrinsic-compose lowering unit and unsupported-form
-  diagnostics.
+- Milestone 38: TSIL intrinsic-compose lowering unit tests for the accepted
+  `intrin_compose<add>` return, lowered model shape, deterministic output,
+  typed-opaque fallback, and unsupported-form diagnostics for nearby syntax.
 - Milestone 39: native C++ `binary/add` intrinsic specialization golden tests.
 - Milestone 40: generated C++ `add_i32_basic` test-source golden tests.
 - Milestone 41: one CLI compatibility workflow integration test plus

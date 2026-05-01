@@ -1133,8 +1133,7 @@ Yes for any broader output family until that family records its parity level.
 
 ## OQ-032: Which TSIL Construct Should Follow The Mini Return Lowering?
 
-Status: Narrowed for the next parity phase; exact fixture selected by
-Milestone 35.
+Status: Answered for the Milestone 38 slice; broad TSIL grammar remains open.
 
 Why it matters:
 
@@ -1142,12 +1141,17 @@ Functional parity requires far more TSIL than the accepted direct
 parameter-add return. The next TSIL step should be the smallest construct needed
 by the selected C++ parity target, not a full grammar implementation.
 
-Current recommendation:
+Milestone 38 decision:
 
-Use `emit_return(intrin_compose<add>(left, right));` for one C++ floating-point
-native `binary/add` slice. Defer integer suffix inference, primitive calls,
-loops, variables, generation-time branches, type/value metadata, and Rust TSIL
-lowering.
+Lower exactly `emit_return(intrin_compose<add>(left, right));` when `left` and
+`right` are declared primitive parameters. The lowered model is a
+backend-neutral intrinsic-compose return named `add` with ordered
+parameter-reference arguments. It does not encode C++ intrinsic names, evaluate
+translation maps, or activate native rendering.
+
+Remaining deferred TSIL work includes integer suffix inference,
+`intrin_compose` metadata, primitive calls, loops, variables, generation-time
+branches, type/value metadata, nested expressions, and Rust TSIL lowering.
 
 Milestone 35 selection:
 
@@ -1160,14 +1164,13 @@ Required evidence:
 
 - `tsldata/primitives/arithmetic/fundamental.tsl`
 - `frozen/tsl-gen/tsl_gen/tsil.lark`
-- `frozen/tsl-gen/tsl_gen/tsil_engine/compiler.py`
-- `tsldata/detail/lang/translate_cpp.tsl`
+- `frozen/out/tsl/tsl_native.hpp`
 
 Implementation blocked:
 
-No for Milestone 38 and Milestone 39 when they stay within the selected
-`intrin_compose<add>` floating-point form. Yes for broader TSIL constructs until
-their fixtures and expected models are selected.
+No for Milestone 39 when it consumes the selected `intrin_compose<add>`
+floating-point form. Yes for broader TSIL constructs until their fixtures and
+expected models are selected.
 
 ## OQ-033: Which Legacy CLI Workflow Should Be Supported First?
 

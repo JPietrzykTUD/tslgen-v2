@@ -62,7 +62,8 @@ reviewable:
 2. M37 owns scalar primary, specialization, and wrapper parity for `si32` and
    `ui32`.
 3. M38 owns the next TSIL lowering form:
-   `emit_return(intrin_compose<add>(left, right));`.
+   `emit_return(intrin_compose<add>(left, right));`, represented as a
+   backend-neutral intrinsic-compose return.
 4. M39 owns native `avx2/f32` intrinsic rendering.
 5. M40 owns one generated C++ test source for `add_i32_basic`.
 6. M41 may map one generation-only CLI workflow to the accepted pipeline after
@@ -170,9 +171,10 @@ parity, or report/documentation parity.
 - Parity level: semantic equivalence against legacy evidence plus an exact
   redesign-owned golden file for future generated output. Byte-for-byte legacy
   whitespace parity is not selected.
-- Validation method: future M38 must lower the selected `intrin_compose<add>`
-  form to a typed intrinsic-call return; future M39 must render a deterministic
-  C++ specialization with `simd<float, avx2>`, parameter order `left, right`,
+- Validation method: M38 lowers the selected `intrin_compose<add>` form to a
+  typed intrinsic-compose return named `add` with ordered parameter-reference
+  arguments; future M39 must render a deterministic C++ specialization with
+  `simd<float, avx2>`, parameter order `left, right`,
   `native_supported=true`, and `_mm256_add_ps(left, right)`.
 - Known limitations: integer intrinsic suffix inference, AVX512/SSE/NEON/SVE
   variants, masks, generic calls, and translation-map-wide evaluation remain

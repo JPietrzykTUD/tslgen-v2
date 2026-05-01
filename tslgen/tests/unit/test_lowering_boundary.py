@@ -12,6 +12,7 @@ from tslgen.io.sources import SourceDocument, SourceKind, load_sources
 from tslgen.lowering import (
     LoweringRequest,
     TsilBinaryExpression,
+    TsilIntrinsicComposeExpression,
     TsilParameterReference,
     TsilReturnStatement,
     lower_candidates,
@@ -174,10 +175,103 @@ prim<v:=(v,v)> lower_bad_tsil(left, right):
         requires []
         implementation:
           tsil [1, 2]
+
+prim<v:=(v,v)> lower_intrin_add(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(intrin_compose<add>(left, right));"
+
+prim<v:=(v,v)> lower_intrin_sub(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(intrin_compose<sub>(left, right));"
+
+prim<v:=(v,v)> lower_intrin_one_arg(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(intrin_compose<add>(left));"
+
+prim<v:=(v,v)> lower_intrin_three_args(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(intrin_compose<add>(left, right, extra));"
+
+prim<v:=(v,v)> lower_intrin_unknown(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(intrin_compose<add>(left, missing));"
+
+prim<v:=(v,v)> lower_intrin_expression_arg(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(intrin_compose<add>(left + right));"
+
+prim<v:=(v,v)> lower_intrin_nested(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(intrin_compose<add>(intrin_compose<add>(left, right), right));"
+
+prim<v:=(v,v)> lower_intrin_malformed(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(intrin_compose<add>(left, right);"
+
+prim<v:=(v,v)> lower_call(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(foo(left, right));"
 """
 
 
 class LoweringBoundaryTests(unittest.TestCase):
+    def selection_for(self, primitive_name: str) -> CandidateSelection:
+        referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
+        return candidate_selection_for(
+            referenced,
+            SelectionRequest(
+                backend="cpp",
+                primitive_names=(primitive_name,),
+                extension_names=("scalar",),
+                include_support_extensions=False,
+            ),
+        )
+
     def test_prepares_typed_lowering_inputs_from_selected_candidates(self) -> None:
         referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
         selection = candidate_selection_for(
@@ -226,16 +320,7 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertTrue(lowering_input.payload.has_generation_condition)
 
     def test_lowers_direct_parameter_add_return(self) -> None:
-        referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
-        selection = candidate_selection_for(
-            referenced,
-            SelectionRequest(
-                backend="cpp",
-                primitive_names=("lower_add",),
-                extension_names=("scalar",),
-                include_support_extensions=False,
-            ),
-        )
+        selection = self.selection_for("lower_add")
 
         result = lower_candidates(selection, LoweringRequest(backend_id="cpp"))
 
@@ -257,6 +342,58 @@ class LoweringBoundaryTests(unittest.TestCase):
                     )
                 ),
             ),
+        )
+
+    def test_lowers_intrinsic_compose_add_return(self) -> None:
+        selection = self.selection_for("lower_intrin_add")
+
+        result = lower_candidates(selection, LoweringRequest(backend_id="cpp"))
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation = result.unwrap().implementations[0]
+        self.assertEqual(implementation.status, "lowered")
+        self.assertEqual(implementation.candidate_id, selection.candidates[0].candidate_id)
+        self.assertEqual(
+            implementation.statements,
+            (
+                TsilReturnStatement(
+                    TsilIntrinsicComposeExpression(
+                        intrinsic="add",
+                        arguments=(
+                            TsilParameterReference("left"),
+                            TsilParameterReference("right"),
+                        ),
+                    )
+                ),
+            ),
+        )
+
+    def test_intrinsic_compose_lowering_is_deterministic(self) -> None:
+        selection = self.selection_for("lower_intrin_add")
+
+        first = lower_candidates(selection)
+        second = lower_candidates(selection)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+
+    def test_typed_opaque_strategy_reports_intrinsic_compose_tsil_as_unsupported(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_intrin_add")
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(strategy="typed_opaque", backend_id="cpp"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-TSIL-UNSUPPORTED",
+            severity="error",
         )
 
     def test_typed_opaque_strategy_still_reports_tsil_as_unsupported(self) -> None:
@@ -342,6 +479,89 @@ class LoweringBoundaryTests(unittest.TestCase):
                 include_support_extensions=False,
             ),
         )
+
+        result = lower_candidates(selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-TSIL-RETURN-SHAPE",
+            severity="error",
+        )
+
+    def test_reports_unsupported_intrinsic_compose_name(self) -> None:
+        selection = self.selection_for("lower_intrin_sub")
+
+        result = lower_candidates(selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-TSIL-INTRIN-UNSUPPORTED",
+            severity="error",
+        )
+        self.assertIn("'sub'", result.diagnostics[0].message)
+
+    def test_reports_wrong_intrinsic_compose_arity(self) -> None:
+        for primitive_name in ("lower_intrin_one_arg", "lower_intrin_three_args"):
+            with self.subTest(primitive_name=primitive_name):
+                selection = self.selection_for(primitive_name)
+
+                result = lower_candidates(selection)
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code="TSL-LOWER-TSIL-INTRIN-ARITY",
+                    severity="error",
+                )
+
+    def test_reports_unknown_intrinsic_compose_operand(self) -> None:
+        selection = self.selection_for("lower_intrin_unknown")
+
+        result = lower_candidates(selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-TSIL-UNKNOWN-PARAMETER",
+            severity="error",
+        )
+
+    def test_reports_intrinsic_compose_expression_argument(self) -> None:
+        selection = self.selection_for("lower_intrin_expression_arg")
+
+        result = lower_candidates(selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-TSIL-INTRIN-ARGUMENT",
+            severity="error",
+        )
+
+    def test_reports_malformed_or_nested_intrinsic_compose(self) -> None:
+        for primitive_name in ("lower_intrin_malformed", "lower_intrin_nested"):
+            with self.subTest(primitive_name=primitive_name):
+                selection = self.selection_for(primitive_name)
+
+                result = lower_candidates(selection)
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code="TSL-LOWER-TSIL-INTRIN-MALFORMED",
+                    severity="error",
+                )
+
+    def test_reports_general_call_form_as_unsupported_return_shape(self) -> None:
+        selection = self.selection_for("lower_call")
 
         result = lower_candidates(selection)
 
