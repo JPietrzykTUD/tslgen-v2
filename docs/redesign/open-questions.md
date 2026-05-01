@@ -98,8 +98,8 @@ open until a predicate or priority policy is designed.
 
 ## OQ-004: How Much Byte-For-Byte Output Compatibility Is Required?
 
-Status: Narrowed for Milestone 22; open for expanded declarations, body
-rendering, and broad backend rendering
+Status: Narrowed by Milestones 22, 26, 28, and 35; open for broad backend
+rendering.
 
 Why it matters:
 
@@ -119,10 +119,12 @@ Required evidence:
 
 Implementation blocked:
 
-Not for the Milestone 22 C++ scalar binary declaration slice. Milestones 26 and
-28 must define golden compatibility for their expanded declaration/body slices.
-Broad backend rendering remains blocked until compatibility expectations are
-narrowed for each production-shaped output family.
+Not for the accepted scalar declaration/body slices or the Milestone 35
+baseline-selection slice. Milestone 35 selects semantic equivalence plus
+redesign-owned exact goldens for C++ `binary/add` scalar and `avx2/f32` parity
+rather than whole-file byte-for-byte legacy output. Broad backend rendering
+remains blocked until compatibility expectations are narrowed for each
+production-shaped output family.
 
 Resolution notes:
 
@@ -1033,7 +1035,7 @@ redesigned generator replaces the legacy workflow.
 
 ## OQ-030: Which Frozen Outputs Are The First Parity Golden Baselines?
 
-Status: Open; blocks Milestone 36 and later parity rendering milestones.
+Status: Answered for the first parity phase by Milestone 35.
 
 Why it matters:
 
@@ -1061,15 +1063,24 @@ Required evidence:
 - `frozen/out/reports/primitive_coverage.html`
 - `frozen/run_all.sh`
 
+Decision:
+
+Start with C++ `binary/add` excerpts from `frozen/out/tsl/tsl_native.hpp`,
+recorded in `docs/redesign/frozen-parity-baselines.md`. The selected baseline
+covers the `tsl/tsl_native.hpp` logical path, scalar `si32`/`ui32`
+`add_binary`, native `avx2/f32` `add_binary`, one future `add_i32_basic`
+generated test source, and one future legacy-style coverage JSON row. Whole-file
+header/report parity is not selected.
+
 Implementation blocked:
 
-Yes for any new output-parity renderer beyond the already accepted narrow
-slices. Milestone 35 exists to answer this question before broad generation
-work continues.
+No for Milestone 36. Future output-parity renderers must consume the selected
+baseline rather than choosing new frozen excerpts silently.
 
 ## OQ-031: Should Selected C++ Parity Targets Be Byte-For-Byte Or Semantic?
 
-Status: Open; must be answered per selected output family.
+Status: Answered for the Milestone 35 selected C++ `binary/add` baseline; open
+for broader output families.
 
 Why it matters:
 
@@ -1094,14 +1105,25 @@ Required evidence:
 - `frozen/jinja/cpp/wrappers.j2`
 - Known downstream consumers of generated headers, if any.
 
+Decision:
+
+- Output logical paths use exact parity for the selected artifact names.
+- Tiny sidecar files may use byte-for-byte parity when a future milestone
+  selects them.
+- C++ scalar `add_binary` and native `avx2/f32` code use semantic equivalence
+  against frozen evidence plus redesign-owned exact golden output for the new
+  renderer.
+- Whole-file legacy whitespace, full header ordering, and full report byte
+  parity are not selected.
+
 Implementation blocked:
 
-Yes for Milestones 36, 37, and 39 until Milestone 35 records the selected
-parity criterion.
+No for Milestones 36, 37, and 39 when they stay within the selected baseline.
+Yes for any broader output family until that family records its parity level.
 
 ## OQ-032: Which TSIL Construct Should Follow The Mini Return Lowering?
 
-Status: Narrowed for the next parity phase; exact fixture selected in
+Status: Narrowed for the next parity phase; exact fixture selected by
 Milestone 35.
 
 Why it matters:
@@ -1117,6 +1139,13 @@ native `binary/add` slice. Defer integer suffix inference, primitive calls,
 loops, variables, generation-time branches, type/value metadata, and Rust TSIL
 lowering.
 
+Milestone 35 selection:
+
+The selected TSIL evidence is `tsldata/primitives/arithmetic/fundamental.tsl`
+lines 77-80 for `avx2/f?` `emit_return(intrin_compose<add>(left, right));`.
+The future native renderer baseline is the `simd<float, avx2>` specialization
+in `frozen/out/tsl/tsl_native.hpp` lines 24337-24355.
+
 Required evidence:
 
 - `tsldata/primitives/arithmetic/fundamental.tsl`
@@ -1126,12 +1155,14 @@ Required evidence:
 
 Implementation blocked:
 
-No for Milestone 35. Yes for Milestones 38 and 39 until the exact TSIL fixture
-and expected lowered model are selected.
+No for Milestone 38 and Milestone 39 when they stay within the selected
+`intrin_compose<add>` floating-point form. Yes for broader TSIL constructs until
+their fixtures and expected models are selected.
 
 ## OQ-033: Which Legacy CLI Workflow Should Be Supported First?
 
-Status: Open; blocks broad CLI compatibility claims, not C++ rendering parity.
+Status: Narrowed by Milestone 35; blocks broad CLI compatibility claims, not
+C++ rendering parity.
 
 Why it matters:
 
@@ -1145,6 +1176,14 @@ Current recommendation:
 Start with one generation-only workflow equivalent to selecting C++,
 input/primitives/templates, and an output file. Defer `run_all.sh` build/test
 orchestration, docs generation, clean mode, and test execution.
+
+Milestone 35 selection:
+
+Use one future M41 workflow equivalent to:
+`python -m tsl_gen --emit-lang cpp --input tsldata/primitives/arithmetic/fundamental.tsl --templates binary --primitives add --extensions scalar,avx2 --output <path>`.
+The redesigned command may map this behavior through accepted `PipelineConfig`,
+selection, rendering, and artifact writing; it must not import legacy CLI
+modules or claim full `run_all.sh` compatibility.
 
 Required evidence:
 

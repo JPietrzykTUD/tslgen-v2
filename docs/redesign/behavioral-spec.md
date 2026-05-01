@@ -720,3 +720,39 @@ Parity levels:
 | Output layout/file naming parity: legacy writes specific names under `out/tsl`, `out/reports`, `out/tsl_rs`, tests, examples, and docs. | `frozen/run_all.sh`, `frozen/out/**`, `frozen/tsl-gen/tsl_gen/app/cli.py` | `required-now` for selected C++ output names; `required-later` for broad tree parity | Artifact descriptors, path-safety writer, deterministic writer reports | Current artifact logical names are summary-oriented and not legacy output tree parity | M35, M36, M41 | Artifact path golden tests, path safety, duplicate target diagnostics, no hidden writes |
 | Diagnostics/error behavior parity: legacy raises `SystemExit` for many user errors and scripts print shell-style errors. | `frozen/run_all.sh`, `frozen/tsl-gen/tsl_gen/app/cli.py`, `frozen/tsl-gen/tsl_gen/core/diagnostics.py` | `explicitly-not-required` for exact exception/wording; `required-later` for comparable actionable diagnostics | Structured diagnostics with stable codes and CLI exit handling | Not all legacy invalid workflows have redesigned diagnostic coverage | M41 for selected CLI diagnostics; later validation expansion | Assert diagnostic code/severity/location where available; no `SystemExit` from pure logic; exact legacy wording not required |
 | C17 backend behavior: legacy has a C17 manifest/templates. | `frozen/generator_specs/backend_c17.yaml`, `frozen/jinja/c17/**` | `explicitly-not-required` for current parity phase | C++ and Rust active backend policy; C17 deferred evidence | C17 not active and should not be reintroduced by C++ parity work | None in this phase | Tests ensure active backend IDs remain C++/Rust unless a future ADR changes policy |
+
+## Milestone 35 Parity Baseline
+
+Milestone 35 selects the first measured functional-parity target in
+`docs/redesign/frozen-parity-baselines.md`.
+
+Selected first target:
+
+- Backend: C++.
+- Logical generated artifact path: `tsl/tsl_native.hpp`.
+- Primitive/template family: `fundamental/add`, normalized signature
+  `v:=(v,v)`, template family `binary`.
+- Scalar type tags: `si32` and `ui32`, compared against legacy
+  `simd<int32_t, scalar>` and `simd<uint32_t, scalar>` excerpts.
+- Native extension/type pair: `avx2/f32`, compared against the legacy
+  `simd<float, avx2>` specialization using `_mm256_add_ps(left, right)`.
+- Generated test evidence: one future C++ test-source baseline for
+  `add_i32_basic`.
+- Report evidence: one future legacy-style coverage JSON row baseline for
+  `add`, `avx2`, `cpp`, `f32`.
+
+Selected parity levels:
+
+- Whole-file byte-for-byte parity for `frozen/out/**` is not selected.
+- Output logical paths and small sidecar shapes may use exact parity when a
+  future milestone selects them.
+- C++ scalar and native generated code use semantic equivalence against legacy
+  evidence plus redesign-owned exact golden output for the new renderer.
+- Generated C++ test parity is semantic for test name, inputs, expected values,
+  wrapper call, and assertion intent.
+- Coverage JSON parity is selected-field semantic parity until a future report
+  milestone broadens the adapter.
+
+The selected baseline does not activate C17, does not require full TSIL
+grammar, does not evaluate translation maps globally, does not run legacy
+workflows, and does not make `frozen/` a runtime dependency.

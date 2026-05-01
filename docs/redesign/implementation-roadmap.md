@@ -2030,6 +2030,21 @@ Expected outputs:
 - Updates to open questions if any selected target cannot be judged from
   evidence.
 
+Milestone 35 selected baseline:
+
+- The inventory and baseline decision are recorded in
+  `docs/redesign/frozen-parity-baselines.md`.
+- The first parity target is C++ `binary/add` output in logical path
+  `tsl/tsl_native.hpp`.
+- The selected scalar baseline is `add_binary` for `si32` and `ui32`, grounded
+  in `frozen/out/tsl/tsl_native.hpp` excerpts and
+  `tsldata/primitives/arithmetic/fundamental.tsl`.
+- The selected native baseline is `avx2/f32` `add_binary`, grounded in the
+  `_mm256_add_ps(left, right)` excerpt and the current `intrin_compose<add>`
+  source data.
+- No fixture files are copied by Milestone 35; future parity milestones create
+  fixtures from the recorded provenance when they consume the baseline.
+
 Parity criterion:
 
 Future executors can name one exact output slice, its legacy evidence file, its
@@ -2625,7 +2640,7 @@ Dependencies:
 
 ## Recommended Next Milestone
 
-Start with Milestone 35. The smallest useful step toward `frozen/` parity is to
-select measured golden baselines and parity levels before implementing more
-generation. Without that inventory, executors would either overfit to legacy
-files wholesale or choose output slices whose compatibility cannot be reviewed.
+After Milestone 35, proceed to Milestone 36. The selected baseline now gives the
+next executor a measured C++ `binary/add` output target, so the next smallest
+useful step is the C++ output layout and support preamble slice. Do not start
+Milestone 37 until the selected layout/preamble contract is reviewed.

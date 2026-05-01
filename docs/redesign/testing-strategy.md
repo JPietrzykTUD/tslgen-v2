@@ -520,6 +520,17 @@ Parity fixture rules:
 - Golden fixtures must live under the redesign test fixture tree, not be read
   from `frozen/` at test runtime.
 
+Milestone 35 baseline-selection rule:
+
+- `docs/redesign/frozen-parity-baselines.md` records the first C++
+  `binary/add` parity target and the exact legacy evidence ranges.
+- Milestone 35 does not copy fixture files. Future milestones that consume the
+  baseline must create small fixtures under the redesign test fixture tree and
+  add provenance tests in the same slice.
+- The first C++ parity fixtures should prefer selected excerpts or
+  redesign-owned generated goldens over whole-file legacy copies.
+- Tests must never read `frozen/out/**` at runtime as the expected-output source.
+
 For each parity milestone, tests should cover:
 
 - Exact golden output when the selected parity level is byte-for-byte.
