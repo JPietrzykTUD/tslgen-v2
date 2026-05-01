@@ -1940,3 +1940,692 @@ phase is needed, start with a planner pass that chooses exactly one objective,
 such as broader C++ rendering, broader TSIL lowering, executable test
 generation, or legacy CLI compatibility, and then defines a small reviewable
 milestone sequence for that objective.
+
+## Functional Parity Phase: Behavior-First Frozen Parity
+
+Status:
+
+Planned after the accepted architecture-foundation release. This phase moves
+toward functional parity with `frozen/` by selecting observable legacy behavior,
+measuring it, and reproducing it through the accepted redesign architecture.
+
+Phase principle:
+
+`frozen/` is a behavioral oracle only. Future executors must not port legacy
+modules, mirror legacy package structure, or make runtime imports from
+`frozen/`. Each milestone below chooses one observable behavior and validates it
+with golden, semantic, deterministic, diagnostic, and no-hidden-I/O checks as
+appropriate.
+
+Primary parity target for this phase:
+
+C++ output parity for a small `binary/add` slice, because `frozen/out/tsl` has
+concrete generated C++ output, the accepted redesign already has scalar C++
+declaration/body slices, and `tsldata/primitives/arithmetic/fundamental.tsl`
+contains both simple scalar TSIL and richer native TSIL for the same primitive
+family. Rust, executable tests, generated docs, and broad CLI compatibility
+remain planned later unless the inventory milestone changes the priority with
+evidence.
+
+## Milestone 35: Frozen Output Inventory And Golden Baseline Selection
+
+Goal:
+
+Inventory observable `frozen/` workflows and outputs, then choose a minimal
+golden baseline for the first functional-parity implementation slices.
+
+Scope:
+
+- Inspect `frozen/run_all.sh`, `frozen/run_tests.py`, legacy CLI options,
+  generator specs, generated `frozen/out/**` files, docs/report outputs, test
+  templates, and TSIL grammar evidence.
+- Classify generated output families by backend, artifact kind, template
+  family, primitive family, extension, type, and required toolchain.
+- Choose a small C++ parity baseline, recommended as the `binary/add` family
+  with scalar `si32`/`ui32` and one native floating-point SIMD extension/type
+  such as `avx2/f32`.
+- Decide per selected file whether parity means byte-for-byte output, semantic
+  output equivalence, or a new redesign-owned golden baseline.
+- Record provenance for every selected golden fixture.
+
+Out of scope:
+
+- Production code changes.
+- New rendering behavior.
+- Full output inventory for every template family.
+- Running legacy build/test workflows as part of normal validation.
+- Treating C17 as an active backend.
+
+Legacy evidence paths:
+
+- `frozen/run_all.sh`
+- `frozen/run_tests.py`
+- `frozen/tsl-gen/tsl_gen/app/cli.py`
+- `frozen/generator_specs/backend_cpp.yaml`
+- `frozen/generator_specs/backend_rust.yaml`
+- `frozen/generator_specs/tests.yaml`
+- `frozen/generator_specs/wrapper_shapes.yaml`
+- `frozen/out/tsl/tsl_native.hpp`
+- `frozen/out/tsl/tsl_generic.hpp`
+- `frozen/out/tsl/CMakeLists.txt`
+- `frozen/out/tsl/tsl_flags.cmake`
+- `frozen/out/reports/primitive_coverage.json`
+- `frozen/out/reports/primitive_coverage.html`
+- `frozen/tsl-gen/tsl_gen/tsil.lark`
+- `frozen/jinja/cpp/test_file.j2`
+- `frozen/jinja/cpp/test_case.j2`
+
+Accepted redesign inputs:
+
+- Current `PipelineResult`, `ArtifactSet`, writer, report, lowering, backend,
+  testgen, and validation boundaries.
+- Functional parity gap matrix in `docs/redesign/behavioral-spec.md`.
+- Parity test rules in `docs/redesign/testing-strategy.md`.
+
+Expected outputs:
+
+- A documented frozen-output inventory and selected-golden baseline.
+- Golden fixture plan, including exact source provenance and intended parity
+  level.
+- Updates to open questions if any selected target cannot be judged from
+  evidence.
+
+Parity criterion:
+
+Future executors can name one exact output slice, its legacy evidence file, its
+accepted parity level, and the validation method without inspecting legacy
+implementation modules.
+
+Tests required:
+
+- Documentation-only milestone: `git diff --check`.
+- If fixture files are copied or summarized, add fixture integrity tests that
+  assert provenance metadata and do not import from `frozen/`.
+
+Golden fixtures required:
+
+- Selected C++ excerpt or whole-file fixture for the first parity target.
+- Optional manifest/report fixture excerpts if they are selected as parity
+  targets.
+
+Documentation updates:
+
+- Update `docs/redesign/behavioral-spec.md`, `testing-strategy.md`, and
+  `open-questions.md` with selected baseline decisions.
+
+Review risks:
+
+- Accidentally creating a legacy-module migration map.
+- Choosing an output slice too large to reproduce in one milestone.
+- Treating all `frozen/out` whitespace as globally required.
+- Forgetting that `frozen` cannot become a runtime dependency.
+
+Dependencies:
+
+- Milestones 1 through 34.
+
+## Milestone 36: C++ Output Layout And Support Preamble Parity Slice
+
+Goal:
+
+Reproduce the selected legacy C++ output layout and support preamble needed by
+the first golden C++ parity slice.
+
+Scope:
+
+- Plan and render selected C++ output paths such as `tsl/tsl_native.hpp`,
+  `tsl/tsl_generic.hpp`, `tsl/tsl_flags.cmake`, and `tsl/CMakeLists.txt` only
+  when selected by Milestone 35.
+- Render the minimum C++ support preamble required by the selected
+  `binary/add` slice, such as includes, `TSL_FORCE_INLINE`, `TSL_UNROLL`,
+  `VectorProcessingStyle`, basic `tsl::simd` declarations, and helper type
+  aliases if selected.
+- Keep support/preamble rendering backend-owned and deterministic.
+- Preserve artifact writing through the accepted writer boundary.
+
+Out of scope:
+
+- Full `tsl_native.hpp` or `tsl_generic.hpp` parity.
+- Every helper function in the legacy preamble.
+- Primitive specializations beyond placeholders needed for the next slice.
+- Rust output.
+- CMake build execution.
+
+Legacy evidence paths:
+
+- `frozen/out/tsl/tsl_native.hpp`
+- `frozen/out/tsl/tsl_generic.hpp`
+- `frozen/out/tsl/CMakeLists.txt`
+- `frozen/out/tsl/tsl_flags.cmake`
+- `frozen/jinja/cpp/primary.j2`
+
+Accepted redesign inputs:
+
+- `BackendPlan`, `ArtifactDescriptor`, `ArtifactSet`, `ArtifactWriter`.
+- C++ backend protocol and accepted renderer slices.
+- Backend manifest and language-map metadata.
+
+Expected outputs:
+
+- Deterministic in-memory C++ artifacts with selected legacy-compatible logical
+  names.
+- Optional sidecar CMake metadata artifacts if selected by Milestone 35.
+- Diagnostics for unsupported output-layout requests.
+
+Parity criterion:
+
+Selected output paths and support preamble match the Milestone 35 baseline
+exactly where marked byte-for-byte, or match the documented semantic baseline
+where exact compatibility was rejected.
+
+Tests required:
+
+- Golden tests for selected path names and preamble text.
+- Artifact descriptor/order/digest determinism tests.
+- Writer dry-run and skip-unchanged tests for selected paths.
+- Diagnostic tests for unsupported C++ layout requests.
+
+Golden fixtures required:
+
+- C++ preamble fixture or excerpts selected in Milestone 35.
+- Optional sidecar CMake fixtures for `tsl_flags.cmake` and `CMakeLists.txt`.
+
+Documentation updates:
+
+- Update behavioral output-layout expectations and any CMake sidecar parity
+  decision.
+
+Review risks:
+
+- Recreating a template-file abstraction as the central backend model.
+- Emitting support code that is not needed by the selected slice.
+- Hiding file writes inside the renderer.
+
+Dependencies:
+
+- Milestones 16, 22, 26, 28, 30, and 35.
+
+## Milestone 37: C++ Scalar Binary Primary/Specialization/Wrapper Parity Slice
+
+Goal:
+
+Reproduce one legacy-observed C++ `binary/add` scalar output slice through the
+redesigned renderer.
+
+Scope:
+
+- Render the selected primary declaration shape for `add_binary`.
+- Render scalar `simd<T, scalar>` specializations for the selected type subset,
+  recommended `si32` and `ui32`.
+- Render the minimal public wrapper relationship selected in Milestone 35, such
+  as a `tsl::add<Vec>(...)` wrapper delegating to `tsl::detail::add_binary`.
+- Consume the accepted `LoweringPlan` for `emit_return(left + right);`; do not
+  inspect raw TSIL inside the renderer.
+
+Out of scope:
+
+- Native SIMD intrinsics.
+- Masked add variants.
+- Generic loop-backed add.
+- Combined binary specialization templates.
+- Broad wrapper-shape coverage.
+- Rust rendering.
+
+Legacy evidence paths:
+
+- `tsldata/primitives/arithmetic/fundamental.tsl`
+- `frozen/out/tsl/tsl_native.hpp`
+- `frozen/jinja/cpp/primary.j2`
+- `frozen/jinja/cpp/spec_binary.j2`
+- `frozen/jinja/cpp/wrappers.j2`
+- `frozen/generator_specs/wrapper_shapes.yaml`
+
+Accepted redesign inputs:
+
+- Typed catalog and implementation specs.
+- Candidate selection and dependency closure.
+- Lowering mini-form from Milestone 27.
+- C++ naming contract from Milestones 26 and 28.
+- Output layout from Milestone 36.
+
+Expected outputs:
+
+- Deterministic C++ primary declaration, scalar specialization, and wrapper
+  artifact content for the selected `add` slice.
+- Structured diagnostics for unsupported template/type/extension combinations.
+
+Parity criterion:
+
+For the selected scalar slice, generated C++ must match the Milestone 35
+baseline exactly where exact parity is selected. If Milestone 35 selects a
+semantic baseline, the generated code must expose the same public function,
+detail functor, parameter order, return type, and lowered `return left + right;`
+behavior.
+
+Tests required:
+
+- Golden tests for primary declaration, specialization, and wrapper content.
+- Unit tests for wrapper naming and parameter mapping.
+- Lowering-to-rendering integration test proving the renderer consumes the
+  lowered model.
+- Determinism test for repeated artifact generation.
+- Diagnostic tests for unsupported wrapper/template/type requests.
+
+Golden fixtures required:
+
+- Selected `add_binary` primary/specialization/wrapper fixture or excerpt.
+
+Documentation updates:
+
+- Update C++ rendering behavior with the selected parity contract.
+- Narrow any C++ naming/wrapper open questions with accepted decisions.
+
+Review risks:
+
+- Copying legacy templates instead of modeling primary/specialization/wrapper
+  concepts.
+- Treating `wrapper_shapes.yaml` as downstream architecture instead of evidence.
+- Letting raw TSIL leak into renderer code.
+
+Dependencies:
+
+- Milestones 27, 28, 35, and 36.
+
+## Milestone 38: TSIL Intrinsic Compose Lowering Slice
+
+Goal:
+
+Add the next minimal TSIL lowering form required for a native C++ `binary/add`
+parity target.
+
+Scope:
+
+- Parse and lower `emit_return(intrin_compose<add>(left, right));` for one
+  backend-neutral intrinsic-call return form.
+- Resolve the backend, extension, and type context only as needed for the
+  selected C++ floating-point `binary/add` native slice.
+- Model the lowered result as a typed intrinsic-call return, not backend text.
+- Keep unsupported `intrin_compose` metadata, generation-time suffixes,
+  primitive calls, loops, variables, and type expressions diagnostic-producing
+  unless explicitly selected.
+
+Out of scope:
+
+- Full TSIL grammar.
+- Integer intrinsic suffix inference.
+- `value<generation>(...)`, `type<generation>(...)`, `type<backend>(...)`.
+- `call<primitive=...>` semantic lowering.
+- Loops, variables, arrays, masks, casts, and generation-time `if`.
+- Rust lowering.
+
+Legacy evidence paths:
+
+- `frozen/tsl-gen/tsl_gen/tsil.lark`
+- `frozen/tsl-gen/tsl_gen/tsil_engine/compiler.py`
+- `frozen/tsl-gen/tsl_gen/tsil_engine/passes/calls.py`
+- `frozen/tsl-gen/tsl_gen/tsil_engine/passes/generation_ifs.py`
+- `tsldata/primitives/arithmetic/fundamental.tsl`
+- `tsldata/detail/lang/translate_cpp.tsl`
+
+Accepted redesign inputs:
+
+- Lowering boundary and mini-TSIL model.
+- Backend metadata boundary with typed language/translation maps.
+- Selected candidate implementation specs.
+
+Expected outputs:
+
+- Typed lowered intrinsic-call return statements for the selected form.
+- Unsupported diagnostics for nearby but unsupported TSIL forms.
+
+Parity criterion:
+
+The selected TSIL source lowers to a stable, backend-neutral intrinsic-call
+model that contains enough information for the C++ backend to render the native
+`add` specialization selected by Milestone 39, without copying legacy string
+rewrite passes.
+
+Tests required:
+
+- Unit tests for accepted intrinsic-compose lowering.
+- Negative tests for unsupported metadata, generation-time suffix, calls, loops,
+  and variables.
+- Source-location diagnostic tests when malformed TSIL is tied to source spans.
+- Determinism tests for lowering results.
+
+Golden fixtures required:
+
+- Minimal TSIL fixtures derived from `fundamental.tsl`, not large legacy output
+  files.
+
+Documentation updates:
+
+- Update lowering behavior, domain model if new lowered IR nodes are added, and
+  open questions around TSIL scope.
+
+Review risks:
+
+- Recreating the legacy pass pipeline.
+- Emitting C++ text from lowering.
+- Accidentally accepting more TSIL syntax than tested.
+
+Dependencies:
+
+- Milestones 18, 20, 27, 30, and 35.
+
+## Milestone 39: C++ Native Intrinsic Binary Parity Slice
+
+Goal:
+
+Render one native C++ SIMD `binary/add` specialization from the typed intrinsic
+lowering model.
+
+Scope:
+
+- Render one selected native extension/type pair, recommended `avx2/f32` or
+  `avx2/f64`, using the Milestone 38 lowered intrinsic-call return.
+- Use typed backend metadata to map selected language types and intrinsic naming
+  only for the selected form.
+- Preserve the primary/specialization/wrapper relationship accepted in
+  Milestone 37.
+
+Out of scope:
+
+- Integer intrinsic suffix generation.
+- All AVX/SSE/AVX512 add variants.
+- Masked add.
+- Generic loop-backed add.
+- Rust native rendering.
+- Compiler execution.
+
+Legacy evidence paths:
+
+- `frozen/out/tsl/tsl_native.hpp`
+- `frozen/jinja/cpp/spec_binary.j2`
+- `tsldata/primitives/arithmetic/fundamental.tsl`
+- `tsldata/detail/lang/translate_cpp.tsl`
+- `tsldata/detail/lang/types/types_cpp.tsl`
+
+Accepted redesign inputs:
+
+- C++ output layout and wrapper parity from Milestones 36 and 37.
+- TSIL intrinsic-compose lowering from Milestone 38.
+- Backend metadata boundary from Milestone 30.
+
+Expected outputs:
+
+- Deterministic C++ native `add_binary<simd<float, avx2>>` or equivalent
+  selected specialization.
+- Diagnostics for unsupported native type/extension/intrinsic combinations.
+
+Parity criterion:
+
+Generated native specialization matches the Milestone 35 selected C++ baseline
+for function shape, return type, parameter order, native-supported metadata,
+and intrinsic call semantics. Byte-for-byte whitespace parity is required only
+if Milestone 35 selected exact output parity for this excerpt.
+
+Tests required:
+
+- Golden test for selected native specialization.
+- Unit tests for selected intrinsic name resolution.
+- Determinism test for repeated rendering.
+- Diagnostic tests for unsupported intrinsic compose forms.
+
+Golden fixtures required:
+
+- Selected native `add_binary` specialization excerpt.
+
+Documentation updates:
+
+- Update C++ rendering and lowering behavior with the selected native parity
+  contract.
+
+Review risks:
+
+- Making translation maps executable globally before their semantics are
+  modeled.
+- Hard-coding `avx2`/`f32` in generic rendering paths.
+- Expanding into integer suffix handling without a separate milestone.
+
+Dependencies:
+
+- Milestones 30, 35, 36, 37, and 38.
+
+## Milestone 40: Generated C++ Test Parity Slice
+
+Goal:
+
+Render one legacy-style C++ generated test source for the selected `binary/add`
+parity target.
+
+Scope:
+
+- Render one C++ test source fixture for a selected `add` test case, recommended
+  `add_i32_basic`.
+- Use typed `TestSourcePlan` data and backend-owned test rendering.
+- Include the minimum legacy-observed structure needed for the selected test:
+  support header include, generated output header include, `gtest` include,
+  deterministic test function, and `TEST(...)` registration.
+- Keep compile/run orchestration out of scope unless a later milestone accepts
+  toolchain requirements.
+
+Out of scope:
+
+- Full generated C++ test framework parity.
+- Rust generated tests.
+- SVE/runtime-lane tests.
+- Generic/oneAPIfpga size expansion beyond selected fixtures.
+- Downloading or vendoring googletest.
+- Executing generated tests.
+
+Legacy evidence paths:
+
+- `frozen/generator_specs/tests.yaml`
+- `frozen/jinja/cpp/test_file.j2`
+- `frozen/jinja/cpp/test_case.j2`
+- `frozen/tsl-gen/tsl_gen/backend/tests/planner.py`
+- `tsldata/primitives/arithmetic/fundamental.tsl`
+- `frozen/run_tests.py`
+
+Accepted redesign inputs:
+
+- `TestSourcePlan` from Milestone 17.
+- Metadata-style production test rendering from Milestone 29.
+- C++ output/header naming from Milestones 36 and 37.
+
+Expected outputs:
+
+- Deterministic C++ test artifact for one selected generated test.
+- Diagnostics for unsupported test kinds or missing planned metadata.
+
+Parity criterion:
+
+The selected test artifact either matches the Milestone 35 legacy fixture
+exactly, or preserves the same observable test behavior: same declared test
+name, selected primitive, inputs, expected values, wrapper call, and assertion
+semantics.
+
+Tests required:
+
+- Golden test for selected C++ generated test source.
+- Unit tests for planned-case to test-rendering metadata conversion.
+- Diagnostic tests for unsupported test kinds and missing metadata.
+- Determinism test for repeated test rendering.
+
+Golden fixtures required:
+
+- Selected legacy-style C++ test source fixture or excerpt.
+
+Documentation updates:
+
+- Update test generation behavior and testing strategy with the selected parity
+  contract.
+
+Review risks:
+
+- Turning repository unit-test helpers into production generator logic.
+- Starting compile/run orchestration too early.
+- Reintroducing host toolchain or network dependencies into default tests.
+
+Dependencies:
+
+- Milestones 17, 29, 35, 36, and 37.
+
+## Milestone 41: CLI Workflow Compatibility Slice
+
+Goal:
+
+Implement one documented legacy-compatible workflow through the redesigned CLI
+without cloning the legacy CLI wholesale.
+
+Scope:
+
+- Select one workflow from Milestone 35, recommended:
+  `python -m tsl_gen --emit-lang cpp --input <file> --templates binary
+  --primitives add --output <path>`.
+- Provide a redesigned CLI compatibility command, alias, or adapter that maps
+  the selected workflow onto `PipelineConfig`, accepted selection inputs,
+  rendering, and artifact writing.
+- Preserve the accepted report/write stdout/stderr contract for all existing
+  options.
+- Emit structured diagnostics for unsupported legacy flags or workflows.
+
+Out of scope:
+
+- Full `run_all.sh` replacement.
+- Build/test/run orchestration.
+- All legacy flags.
+- Hidden host CPU reads except through explicit accepted autodetection options.
+- Import compatibility with `tsl_gen` internals.
+
+Legacy evidence paths:
+
+- `frozen/tsl-gen/tsl_gen/app/cli.py`
+- `frozen/tsl-gen/tsl_gen/cli.py`
+- `frozen/run_all.sh`
+- `frozen/run_tests.py`
+
+Accepted redesign inputs:
+
+- Public API and CLI facade.
+- Artifact writer boundary.
+- Selected C++ parity artifact from Milestones 36 through 39.
+
+Expected outputs:
+
+- One documented compatibility workflow.
+- CLI diagnostics for unsupported compatibility requests.
+- No runtime dependency on `frozen`.
+
+Parity criterion:
+
+For the selected command shape, users can request the same observable outcome:
+selected backend, input, primitive/template filter, and output file generation.
+Argument spelling may differ only if the compatibility decision says the exact
+legacy spelling is not required for this slice.
+
+Tests required:
+
+- CLI integration test for the selected compatibility workflow.
+- stdout/stderr regression tests for combined reporting/writing behavior.
+- Diagnostic tests for unsupported legacy flags.
+- No-hidden-I/O test using a temporary output root.
+
+Golden fixtures required:
+
+- CLI output or generated artifact fixture selected by Milestone 35.
+
+Documentation updates:
+
+- Update CLI behavior with supported and unsupported compatibility claims.
+- Update open questions for remaining legacy workflow gaps.
+
+Review risks:
+
+- Creating a broad compatibility wrapper around bad legacy abstractions.
+- Breaking accepted modern CLI behavior.
+- Implied support for `run_all.sh` build/test/run flows.
+
+Dependencies:
+
+- Milestones 24, 25, 35, and at least one accepted C++ parity rendering slice.
+
+## Milestone 42: Legacy Coverage JSON Adapter Slice
+
+Goal:
+
+Provide one deterministic report-adapter slice for legacy-style primitive
+coverage JSON when selected as a parity target.
+
+Scope:
+
+- Render a legacy-style row-oriented coverage JSON artifact from accepted report
+  data for a selected subset.
+- Include fields evidenced by `frozen/out/reports/primitive_coverage.json`,
+  such as primitive, primitive class, template, type, extension, language,
+  `has_tsil`, `has_intrinsic`, `has_lang_block`, and `effective_present`.
+- Route report files through the artifact model and writer boundary.
+
+Out of scope:
+
+- Full HTML documentation site parity.
+- Exact legacy HTML parity.
+- Re-running analysis during report rendering.
+- Changing coverage semantics to hide accepted diagnostic data.
+
+Legacy evidence paths:
+
+- `frozen/out/reports/primitive_coverage.json`
+- `frozen/out/reports/primitive_coverage.html`
+- `frozen/tools/report_primitive_coverage.py`
+- `frozen/tools/primitive_coverage_html.py`
+
+Accepted redesign inputs:
+
+- `PipelineCoverageReport` and candidate dependency report DTOs.
+- HTML and JSON report renderers from Milestones 15, 23, and 32.
+- Artifact writer boundary.
+
+Expected outputs:
+
+- Deterministic legacy-style JSON report artifact for a selected subset.
+- Documentation of fields intentionally absent or semantically different.
+
+Parity criterion:
+
+Selected legacy-style JSON rows match the documented field names and stable
+ordering from the Milestone 35 baseline. Full row count parity is required only
+after a future milestone broadens backend/template coverage.
+
+Tests required:
+
+- Golden JSON adapter test for selected rows.
+- Determinism test for row/key ordering.
+- Diagnostic or unavailable-section tests when required source data is missing.
+
+Golden fixtures required:
+
+- Selected row excerpt from `frozen/out/reports/primitive_coverage.json`.
+
+Documentation updates:
+
+- Update coverage/reporting behavior and open questions around documentation
+  parity.
+
+Review risks:
+
+- Freezing legacy report semantics that conflict with accepted report DTOs.
+- Making report rendering re-run pipeline stages.
+- Claiming full report parity before backend coverage exists.
+
+Dependencies:
+
+- Milestones 15, 23, 32, and 35.
+
+## Recommended Next Milestone
+
+Start with Milestone 35. The smallest useful step toward `frozen/` parity is to
+select measured golden baselines and parity levels before implementing more
+generation. Without that inventory, executors would either overfit to legacy
+files wholesale or choose output slices whose compatibility cannot be reviewed.

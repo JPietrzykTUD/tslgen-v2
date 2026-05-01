@@ -1031,6 +1031,162 @@ No for pausing implementation and running the stabilization checklist. Yes for
 release packaging, compatibility promises, and any public claim that the
 redesigned generator replaces the legacy workflow.
 
+## OQ-030: Which Frozen Outputs Are The First Parity Golden Baselines?
+
+Status: Open; blocks Milestone 36 and later parity rendering milestones.
+
+Why it matters:
+
+The legacy generator emits very large outputs. Treating every byte of
+`frozen/out/**` as required would force a broad rewrite and make review
+impossible. The next parity phase needs selected, representative golden
+baselines with explicit parity levels.
+
+Possible answers:
+
+- Start with C++ `binary/add` excerpts from `frozen/out/tsl/tsl_native.hpp`.
+- Start with C++ output layout and sidecars from `frozen/out/tsl`.
+- Start with legacy coverage JSON rows.
+- Start with generated C++ tests for one `add` case.
+- Regenerate a new redesign-owned golden baseline when legacy output is too
+  unstable or too broad.
+
+Required evidence:
+
+- `frozen/out/tsl/tsl_native.hpp`
+- `frozen/out/tsl/tsl_generic.hpp`
+- `frozen/out/tsl/CMakeLists.txt`
+- `frozen/out/tsl/tsl_flags.cmake`
+- `frozen/out/reports/primitive_coverage.json`
+- `frozen/out/reports/primitive_coverage.html`
+- `frozen/run_all.sh`
+
+Implementation blocked:
+
+Yes for any new output-parity renderer beyond the already accepted narrow
+slices. Milestone 35 exists to answer this question before broad generation
+work continues.
+
+## OQ-031: Should Selected C++ Parity Targets Be Byte-For-Byte Or Semantic?
+
+Status: Open; must be answered per selected output family.
+
+Why it matters:
+
+Some legacy C++ output contains broad preamble text and formatting that may be
+incidental, while function names, wrapper shape, parameter order, return types,
+and intrinsic/body semantics are externally observable. The redesign should not
+make byte-for-byte compatibility the default for all output.
+
+Possible answers:
+
+- Byte-for-byte for selected excerpts only.
+- Semantic parity for generated declarations/bodies/wrappers with
+  redesign-owned formatting.
+- Byte-for-byte for output path names and sidecars, semantic for C++ body text.
+- New golden baseline for narrow slices where legacy text is unsuitable.
+
+Required evidence:
+
+- Selected excerpts from `frozen/out/tsl/tsl_native.hpp`.
+- `frozen/jinja/cpp/primary.j2`
+- `frozen/jinja/cpp/spec_binary.j2`
+- `frozen/jinja/cpp/wrappers.j2`
+- Known downstream consumers of generated headers, if any.
+
+Implementation blocked:
+
+Yes for Milestones 36, 37, and 39 until Milestone 35 records the selected
+parity criterion.
+
+## OQ-032: Which TSIL Construct Should Follow The Mini Return Lowering?
+
+Status: Narrowed for the next parity phase; exact fixture selected in
+Milestone 35.
+
+Why it matters:
+
+Functional parity requires far more TSIL than the accepted direct
+parameter-add return. The next TSIL step should be the smallest construct needed
+by the selected C++ parity target, not a full grammar implementation.
+
+Current recommendation:
+
+Use `emit_return(intrin_compose<add>(left, right));` for one C++ floating-point
+native `binary/add` slice. Defer integer suffix inference, primitive calls,
+loops, variables, generation-time branches, type/value metadata, and Rust TSIL
+lowering.
+
+Required evidence:
+
+- `tsldata/primitives/arithmetic/fundamental.tsl`
+- `frozen/tsl-gen/tsl_gen/tsil.lark`
+- `frozen/tsl-gen/tsl_gen/tsil_engine/compiler.py`
+- `tsldata/detail/lang/translate_cpp.tsl`
+
+Implementation blocked:
+
+No for Milestone 35. Yes for Milestones 38 and 39 until the exact TSIL fixture
+and expected lowered model are selected.
+
+## OQ-033: Which Legacy CLI Workflow Should Be Supported First?
+
+Status: Open; blocks broad CLI compatibility claims, not C++ rendering parity.
+
+Why it matters:
+
+Legacy scripts expose many workflows: generation, build, test, run, docs,
+clean, examples, extension autodetection, cross-run ARM/SVE/NEON handling, and
+Rust/C++ language selection. A broad clone would pull toolchain orchestration
+into the CLI before behavior is selected.
+
+Current recommendation:
+
+Start with one generation-only workflow equivalent to selecting C++,
+input/primitives/templates, and an output file. Defer `run_all.sh` build/test
+orchestration, docs generation, clean mode, and test execution.
+
+Required evidence:
+
+- `frozen/tsl-gen/tsl_gen/app/cli.py`
+- `frozen/run_all.sh`
+- `frozen/run_tests.py`
+
+Implementation blocked:
+
+No for C++ parity rendering. Yes for Milestone 41 and for any user-facing claim
+of legacy CLI compatibility.
+
+## OQ-034: What Is The First Executable Test Parity Boundary?
+
+Status: Open; not part of the first parity implementation slice.
+
+Why it matters:
+
+The legacy test workflow can fetch googletest, configure CMake/Cargo, run
+host-specific or cross-target tests, and summarize results. Default redesign
+validation must remain host-independent, so execution parity needs its own
+toolchain policy.
+
+Possible answers:
+
+- Render generated tests only and keep execution manual.
+- Add optional `toolchain` tests for selected C++ generated fixtures.
+- Add a dedicated compile/run orchestration layer with explicit compilers,
+  qemu, rustup targets, and network-free dependencies.
+
+Required evidence:
+
+- `frozen/run_all.sh`
+- `frozen/run_tests.py`
+- `frozen/jinja/cpp/test_file.j2`
+- `frozen/jinja/cpp/test_case.j2`
+
+Implementation blocked:
+
+No for Milestone 40 test-source rendering. Yes for any milestone that compiles
+or runs generated tests.
+
 ## Follow-ups from Milestone 2 review
 
 - Add focused tests for invalid UTF-8 and read failure diagnostics where practical.

@@ -1118,3 +1118,54 @@ Consequences:
 - A future roadmap phase must be scoped around one reviewable objective rather
   than bundling lowering, backend rendering, tests, CLI compatibility, and
   cleanup together.
+
+## ADR-031: Functional Parity Proceeds From Selected Observable Behaviors
+
+Status: Accepted for the post-stabilization parity roadmap
+
+Context:
+
+The architecture-foundation release does not claim to replace the legacy
+generator. The next user goal is functional parity with `frozen/`, but the
+project remains a clean-room redesign. The legacy implementation contains
+useful evidence for CLI workflows, generated C++ output, backend manifests,
+generated tests, documentation/reporting, and TSIL behavior, but its modules and
+string-rewrite mechanisms are not target architecture.
+
+Considered alternatives:
+
+- Define one broad "reach parity" milestone.
+- Port legacy emitters, TSIL passes, or CLI wrappers module by module.
+- Start by implementing full TSIL grammar before selecting an output target.
+- Select one observable behavior at a time and validate it through accepted
+  redesign boundaries.
+
+Decision:
+
+Functional parity work must start with a frozen-output inventory and selected
+golden baseline. The first implementation target is C++ `binary/add` parity,
+because concrete generated output exists in `frozen/out/tsl`, accepted C++
+scalar rendering already exists, and `tsldata/primitives/arithmetic/fundamental.tsl`
+contains both simple scalar and native intrinsic TSIL evidence for the same
+primitive family. Rust, executable tests, full generated docs, and broad CLI
+compatibility remain later parity areas unless inventory evidence changes the
+priority.
+
+Rationale:
+
+A selected C++ output slice is small enough to review and exercises real parity
+concerns: output layout, support preamble, primary/specialization/wrapper
+relationships, TSIL lowering, backend metadata, generated tests, and CLI
+workflow compatibility. Starting with full TSIL or broad generation would make
+it too easy to copy legacy architecture rather than reproduce required
+behavior.
+
+Consequences:
+
+- `frozen/` remains a behavioral oracle and must not become a runtime
+  dependency.
+- Byte-for-byte compatibility is decided per output family or excerpt.
+- Future parity milestones must name the legacy evidence path, accepted parity
+  level, golden fixture policy, diagnostics, and deterministic validation.
+- Production replacement claims remain blocked until selected parity criteria
+  pass across the required behavior families.

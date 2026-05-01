@@ -499,6 +499,61 @@ Checks that remain out of the default stabilization surface:
 - Broad Python lint/type checks over quarantined exploratory code.
 - Corpus-wide normalization or permission-bit cleanup.
 
+## Functional Parity Testing
+
+The post-Milestone-34 functional parity phase uses `frozen/` as behavioral
+evidence only. Tests must validate observable behavior through accepted
+redesign boundaries and must not import or execute legacy generator modules.
+
+Parity fixture rules:
+
+- Golden fixtures copied or excerpted from `frozen/out/**` must record source
+  path, line or excerpt range when practical, capture date if regenerated, and
+  selected parity level.
+- Whole-file golden parity is allowed only when the selected artifact is small
+  enough to review. Large files such as `frozen/out/tsl/tsl_native.hpp` and
+  `frozen/out/reports/primitive_coverage.json` should normally be represented
+  by selected excerpts or derived semantic fixtures.
+- If legacy output is unstable, overly broad, or includes incidental formatting,
+  create a redesign-owned golden baseline and document why byte-for-byte legacy
+  parity is not required.
+- Golden fixtures must live under the redesign test fixture tree, not be read
+  from `frozen/` at test runtime.
+
+For each parity milestone, tests should cover:
+
+- Exact golden output when the selected parity level is byte-for-byte.
+- Semantic equivalence when exact formatting is intentionally not required,
+  such as function names, wrapper delegation, parameter order, return type,
+  intrinsic call, test inputs/expected values, or report fields.
+- Deterministic output across repeated runs.
+- Structured diagnostics for unsupported legacy behavior.
+- No runtime dependency on `frozen`.
+- No parser-private or syntax-tree leakage into domain, lowering, rendering, or
+  test-generation logic.
+- No hidden filesystem side effects outside `io.artifact_writer`.
+
+Default parity validation must remain host-independent. Generated C++ or Rust
+compile/run checks belong behind optional `toolchain` or `slow` markers until a
+dedicated execution milestone accepts compiler, qemu, rustup, and dependency
+requirements.
+
+Recommended first parity checks:
+
+- Milestone 35: fixture provenance and baseline-selection tests if fixtures are
+  added.
+- Milestone 36: C++ output path, sidecar, preamble, artifact order, digest, and
+  writer behavior tests.
+- Milestone 37: C++ `binary/add` primary/specialization/wrapper golden tests.
+- Milestone 38: TSIL intrinsic-compose lowering unit and unsupported-form
+  diagnostics.
+- Milestone 39: native C++ `binary/add` intrinsic specialization golden tests.
+- Milestone 40: generated C++ `add_i32_basic` test-source golden tests.
+- Milestone 41: one CLI compatibility workflow integration test plus
+  unsupported legacy flag diagnostics.
+- Milestone 42: legacy-style coverage JSON row adapter golden and ordering
+  tests.
+
 ## Review Expectations
 
 Reviewers should check:
