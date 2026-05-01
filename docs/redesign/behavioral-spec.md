@@ -625,9 +625,21 @@ and deferred-category sections. It does not re-run pipeline stages, write files,
 load external CSS or JavaScript, or claim full parity with legacy generated
 documentation.
 
-Milestone 32 may add candidate-specific dependency information to reports or API
-helpers. That reporting must consume existing dependency results and must not
-re-run dependency analysis or reinterpret TSIL.
+Milestone 32 exposes candidate-specific dependency closure through stable report
+fields and the public API helper `candidate_dependency_report(...)`. The
+pipeline computes the candidate-specific closure from the accepted
+primitive-level dependency graph and keeps primitive-level dependency closure
+visible as the broad fallback model. Reporting consumes the retained closure and
+diagnostics; JSON and HTML rendering must not re-run dependency analysis,
+reinterpret TSIL, change selection, or schedule backend render jobs.
+
+Candidate dependency report data includes deterministic edge rows, issue rows,
+fallback primitive names, ambiguous/missing/unsupported primitive-name groups,
+root and required candidate IDs, required primitive names, and candidate
+dependency diagnostic counts. If the pipeline did not reach candidate
+dependency planning, the report marks the candidate dependency section
+unavailable and emits empty deterministic collections. HTML output must escape
+all dynamic candidate IDs, primitive names, issue details, and diagnostics.
 
 ## Determinism Requirements
 

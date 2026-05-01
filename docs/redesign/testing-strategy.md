@@ -287,7 +287,10 @@ generation:
   scalar `binary` `si32`/`ui32` body-free trait signature slice, Rust naming
   helper diagnostics, unsupported declaration inputs, and preservation of the
   original Rust summary metadata.
-- Candidate-specific dependency report/API tests when those values are exposed.
+- Candidate-specific dependency report/API tests. Milestone 32 covers retained
+  pipeline closure values, stable API helper access, deterministic JSON fields,
+  deterministic escaped HTML sections, primitive-level fallback visibility, and
+  candidate edge/issue/fallback rows.
 - Quarantine-retirement and corpus-hygiene tests only when those policies change
   validation behavior.
 

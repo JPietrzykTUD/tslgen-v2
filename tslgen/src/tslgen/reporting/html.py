@@ -8,6 +8,7 @@ from tslgen.domain.values import CatalogValue
 from tslgen.io.artifacts import Artifact, ArtifactSet
 from tslgen.reporting.coverage import (
     BackendCoverageRow,
+    CandidateDependencyReport,
     PipelineCoverageReport,
     PrimitiveCoverageRow,
     SelectionCoverageSummary,
@@ -32,6 +33,7 @@ def render_coverage_report_html(report: PipelineCoverageReport) -> str:
         *_summary_section(report),
         *_selection_section(report.selection),
         *_primitive_section(report.primitive_rows),
+        *_candidate_dependency_section(report.candidate_dependencies),
         *_backend_section(report.backend_rows),
         *_diagnostic_section(report),
         *_deferred_section(report.deferred_categories),
@@ -173,6 +175,128 @@ def _primitive_row(row: PrimitiveCoverageRow) -> str:
         _joined(row.rendered_artifact_paths),
     )
     return _table_row(cells)
+
+
+def _candidate_dependency_section(report: CandidateDependencyReport) -> tuple[str, ...]:
+    summary_rows = (
+        ("Available", "yes" if report.is_available else "no"),
+        ("Root candidates", _joined(report.root_candidate_ids)),
+        ("Required candidates", _joined(report.required_candidate_ids)),
+        ("Required primitives", _joined(report.required_primitive_names)),
+        ("Fallback primitives", _joined(report.fallback_primitive_names)),
+        ("Ambiguous primitives", _joined(report.ambiguous_primitive_names)),
+        ("Unresolved primitives", _joined(report.unresolved_primitive_names)),
+        ("Unsupported primitives", _joined(report.unsupported_primitive_names)),
+        ("Candidate dependency diagnostics", report.diagnostic_count),
+    )
+    return (
+        '  <section id="candidate-dependencies">',
+        "    <h2>Candidate Dependencies</h2>",
+        "    <table>",
+        "      <tbody>",
+        *(
+            f"        <tr><th scope=\"row\">{_text(label)}</th><td>{_text(value)}</td></tr>"
+            for label, value in summary_rows
+        ),
+        "      </tbody>",
+        "    </table>",
+        *_candidate_dependency_edges(report),
+        *_candidate_dependency_issues(report),
+        *_candidate_dependency_diagnostics(report),
+        "  </section>",
+    )
+
+
+def _candidate_dependency_edges(
+    report: CandidateDependencyReport,
+) -> tuple[str, ...]:
+    if not report.edge_rows:
+        return ("    <p>No candidate-specific dependency edges were available.</p>",)
+    return (
+        "    <h3>Edges</h3>",
+        "    <table>",
+        "      <thead>",
+        "        <tr><th>Source candidate</th><th>Source primitive</th>"
+        "<th>Target candidate</th><th>Target primitive</th><th>Raw target</th>"
+        "<th>Type arguments</th><th>Self reference</th></tr>",
+        "      </thead>",
+        "      <tbody>",
+        *(
+            _table_row(
+                (
+                    row.source_candidate_id,
+                    row.source_primitive_name,
+                    row.target_candidate_id,
+                    row.target_primitive_name,
+                    row.raw_target,
+                    _joined(row.type_arguments),
+                    "yes" if row.is_self_reference else "no",
+                )
+            )
+            for row in report.edge_rows
+        ),
+        "      </tbody>",
+        "    </table>",
+    )
+
+
+def _candidate_dependency_issues(
+    report: CandidateDependencyReport,
+) -> tuple[str, ...]:
+    if not report.issue_rows:
+        return ("    <p>No candidate-specific dependency issues were available.</p>",)
+    return (
+        "    <h3>Issues And Fallbacks</h3>",
+        "    <table>",
+        "      <thead>",
+        "        <tr><th>Source candidate</th><th>Source primitive</th>"
+        "<th>Target primitive</th><th>Reason</th><th>Fallback primitive</th>"
+        "<th>Raw target</th><th>Type arguments</th><th>Candidate ids</th>"
+        "<th>Detail</th></tr>",
+        "      </thead>",
+        "      <tbody>",
+        *(
+            _table_row(
+                (
+                    row.source_candidate_id,
+                    row.source_primitive_name,
+                    row.target_primitive_name,
+                    row.reason,
+                    row.fallback_primitive_name,
+                    row.raw_target,
+                    _joined(row.type_arguments),
+                    _joined(row.candidate_ids),
+                    row.detail,
+                )
+            )
+            for row in report.issue_rows
+        ),
+        "      </tbody>",
+        "    </table>",
+    )
+
+
+def _candidate_dependency_diagnostics(
+    report: CandidateDependencyReport,
+) -> tuple[str, ...]:
+    if not report.diagnostic_counts:
+        return (
+            "    <p>No candidate-specific dependency diagnostics were available.</p>",
+        )
+    return (
+        "    <h3>Diagnostics</h3>",
+        "    <table>",
+        "      <thead>",
+        "        <tr><th>Severity</th><th>Code</th><th>Count</th></tr>",
+        "      </thead>",
+        "      <tbody>",
+        *(
+            _table_row((item.severity, item.code, item.count))
+            for item in report.diagnostic_counts
+        ),
+        "      </tbody>",
+        "    </table>",
+    )
 
 
 def _backend_section(rows: tuple[BackendCoverageRow, ...]) -> tuple[str, ...]:

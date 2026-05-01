@@ -259,9 +259,10 @@ Side effects:
 Milestone note:
 
 - A first implementation can use conservative dependency extraction for documented call syntax, but the architecture should lead toward TSIL parsing.
-- Milestone 32 may expose candidate-specific dependency closure through reports
-  and API helpers, but it must not change dependency semantics or re-run this
-  stage from reporting code.
+- Milestone 32 exposes candidate-specific dependency closure through reports and
+  API helpers. The pipeline derives that closure from the accepted
+  primitive-level dependency graph, and reporting consumes the retained values
+  without re-running this stage or changing dependency semantics.
 
 ## Stage 8: Lowering
 
@@ -489,6 +490,7 @@ class PipelineResult:
     catalog: Catalog | None
     selection: SelectionResult | None
     dependency_closure: DependencyClosure | None
+    candidate_dependency_closure: CandidateDependencyClosure | None
     lowering_plan: LoweringPlan | None
     backend_plan: BackendPlan | None
     test_source_plan: TestSourcePlan | None
@@ -501,9 +503,10 @@ Rules:
 - If diagnostics contain errors before rendering, `artifacts` is `None`.
 - If no output root was requested, `write_report` is `None`.
 - CLI decides whether diagnostics are printed and which exit code is used.
-- Public result fields should expose only accepted stage outputs. Milestone 32
-  may add dependency-report helpers rather than expanding `PipelineResult` if
-  that is the cleaner public boundary.
+- Public result fields expose accepted stage outputs. Milestone 32 retains
+  candidate dependency closure for reporting, while stable API inspection is
+  provided through report DTOs instead of requiring callers to depend on raw
+  closure internals.
 
 ## Deterministic Merge Points
 

@@ -5,11 +5,17 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
+from tslgen.analysis.candidate_dependencies import (
+    CandidateDependencyClosure,
+    candidate_dependency_graph_from_primitive_graph,
+    compute_candidate_dependency_closure,
+)
 from tslgen.analysis.dependencies import DependencyClosure, plan_dependency_closure
 from tslgen.analysis.selection import SelectionPlan, SelectionRequest, plan_selection
 from tslgen.backends.registry import BackendRegistry, default_backend_registry
 from tslgen.config.model import SourceConfig
 from tslgen.core.diagnostics import Diagnostic, has_errors, sort_diagnostics
+from tslgen.core.result import Result
 from tslgen.domain.backends import BackendManifestSet
 from tslgen.domain.catalog import Catalog, build_catalog
 from tslgen.io.artifact_writer import write_artifacts as _write_artifacts
@@ -18,6 +24,7 @@ from tslgen.io.manifests import load_backend_manifests
 from tslgen.io.sources import SourceSet, load_sources
 from tslgen.io.write_report import ArtifactWriteOptions, ArtifactWriteReport
 from tslgen.reporting.coverage import (
+    CandidateDependencyReport,
     PipelineCoverageReport,
     coverage_report_from_pipeline_result,
     coverage_report_to_json,
@@ -63,6 +70,7 @@ class PipelineResult:
     selection_plan: SelectionPlan | None = None
     candidate_selection: CandidateSelection | None = None
     dependency_closure: DependencyClosure | None = None
+    candidate_dependency_closure: CandidateDependencyClosure | None = None
     backend_manifests: BackendManifestSet | None = None
     artifact_plan: ArtifactPlan | None = None
     artifacts: ArtifactSet | None = None
@@ -169,6 +177,24 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
         )
     dependency_closure = dependency_result.unwrap()
 
+    candidate_dependency_result = _plan_candidate_dependency_closure(
+        dependency_closure,
+    )
+    diagnostics.extend(candidate_dependency_result.diagnostics)
+    if not candidate_dependency_result.is_ok:
+        return PipelineResult(
+            diagnostics=tuple(diagnostics),
+            sources=sources,
+            parsed=parsed,
+            catalog=catalog,
+            validated_catalog=validated,
+            reference_catalog=reference_catalog,
+            selection_plan=selection_plan,
+            candidate_selection=candidates,
+            dependency_closure=dependency_closure,
+        )
+    candidate_dependency_closure = candidate_dependency_result.unwrap()
+
     manifests = _resolve_manifests(config, diagnostics)
     if has_errors(diagnostics) or config.render_backend is None:
         return PipelineResult(
@@ -181,6 +207,7 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
             selection_plan=selection_plan,
             candidate_selection=candidates,
             dependency_closure=dependency_closure,
+            candidate_dependency_closure=candidate_dependency_closure,
             backend_manifests=manifests,
         )
 
@@ -201,6 +228,7 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
             selection_plan=selection_plan,
             candidate_selection=candidates,
             dependency_closure=dependency_closure,
+            candidate_dependency_closure=candidate_dependency_closure,
         )
 
     artifact_plan_result = build_artifact_plan(
@@ -221,6 +249,7 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
             selection_plan=selection_plan,
             candidate_selection=candidates,
             dependency_closure=dependency_closure,
+            candidate_dependency_closure=candidate_dependency_closure,
             backend_manifests=manifests,
         )
     artifact_plan = artifact_plan_result.unwrap()
@@ -242,6 +271,7 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
             selection_plan=selection_plan,
             candidate_selection=candidates,
             dependency_closure=dependency_closure,
+            candidate_dependency_closure=candidate_dependency_closure,
             backend_manifests=manifests,
             artifact_plan=artifact_plan,
         )
@@ -256,6 +286,7 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
         selection_plan=selection_plan,
         candidate_selection=candidates,
         dependency_closure=dependency_closure,
+        candidate_dependency_closure=candidate_dependency_closure,
         backend_manifests=manifests,
         artifact_plan=artifact_plan,
         artifacts=rendered.unwrap(),
@@ -264,6 +295,12 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
 
 def coverage_report(result: PipelineResult) -> PipelineCoverageReport:
     return coverage_report_from_pipeline_result(result)
+
+
+def candidate_dependency_report(
+    report_or_result: PipelineCoverageReport | PipelineResult,
+) -> CandidateDependencyReport:
+    return _coverage_report_value(report_or_result).candidate_dependencies
 
 
 def coverage_report_json(
@@ -312,6 +349,27 @@ def _coverage_report_value(
     if isinstance(report_or_result, PipelineCoverageReport):
         return report_or_result
     return coverage_report(report_or_result)
+
+
+def _plan_candidate_dependency_closure(
+    dependency_closure: DependencyClosure,
+) -> Result[CandidateDependencyClosure]:
+    graph_result = candidate_dependency_graph_from_primitive_graph(
+        dependency_closure.graph,
+    )
+    if not graph_result.is_ok:
+        return Result.failure(graph_result.diagnostics)
+
+    closure_result = compute_candidate_dependency_closure(
+        graph_result.unwrap(),
+        root_candidate_ids=dependency_closure.root_candidate_ids,
+    )
+    diagnostics = sort_diagnostics(
+        (*graph_result.diagnostics, *closure_result.diagnostics),
+    )
+    if not closure_result.is_ok:
+        return Result.failure(diagnostics)
+    return Result.ok(closure_result.unwrap(), diagnostics=diagnostics)
 
 
 def _resolve_manifests(

@@ -9,6 +9,7 @@ import unittest
 from _helpers import assert_diagnostic
 from tslgen.api import (
     PipelineConfig,
+    candidate_dependency_report,
     coverage_report,
     coverage_report_html,
     coverage_report_html_artifacts,
@@ -32,6 +33,26 @@ SIMPLE_PRIMITIVE = """prim<v:=(v,v)> slice_add(left, right):
         requires [sse]
         implementation:
           tsil "emit_return(left + right);"
+"""
+
+
+DEPENDENCY_PRIMITIVES = """prim<v:=(v,v)> helper(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires [sse]
+        implementation:
+          tsil "emit_return(left);"
+
+prim<v:=(v,v)> slice_add(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires [sse]
+        implementation:
+          tsil "call<primitive=helper>; emit_return(left + right);"
 """
 
 
@@ -243,6 +264,24 @@ class ApiCliIntegrationTests(unittest.TestCase):
                     for artifact in report_artifacts.artifacts
                 ),
                 ("reports/coverage.html",),
+            )
+
+    def test_api_exposes_candidate_dependency_report_helper(self) -> None:
+        with TemporaryDirectory() as temp:
+            primitive_path = Path(temp) / "api_dependency_slice.tsl"
+            primitive_path.write_text(DEPENDENCY_PRIMITIVES, encoding="utf-8")
+            result = run_pipeline(pipeline_config_for(primitive_path))
+
+            self.assertTrue(result.is_ok, result.diagnostics)
+            report = candidate_dependency_report(result)
+            self.assertTrue(report.is_available)
+            self.assertEqual(report.edge_count, 0)
+            self.assertEqual(report.issue_count, 1)
+            self.assertEqual(report.fallback_primitive_names, ("helper",))
+            self.assertEqual(report.unresolved_primitive_names, ("helper",))
+            self.assertEqual(
+                tuple(item.code for item in report.diagnostic_counts),
+                ("TSL-CANDIDATE-DEPENDENCY-MISSING",),
             )
 
     def test_api_write_artifacts_helper_uses_writer_boundary(self) -> None:

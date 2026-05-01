@@ -13,6 +13,9 @@ from tslgen.io.artifact_writer import write_artifacts
 from tslgen.io.write_report import ArtifactWriteOptions
 from tslgen.reporting.coverage import (
     BackendCoverageRow,
+    CandidateDependencyEdgeRow,
+    CandidateDependencyIssueRow,
+    CandidateDependencyReport,
     DiagnosticCount,
     PipelineCoverageReport,
     PrimitiveCoverageRow,
@@ -78,6 +81,32 @@ def representative_report() -> PipelineCoverageReport:
             ),
         ),
         unplanned_dependency_primitives=("helper",),
+        candidate_dependencies=CandidateDependencyReport(
+            is_available=True,
+            issue_rows=(
+                CandidateDependencyIssueRow(
+                    source_candidate_id="slice_add::scalar::si32",
+                    source_primitive_name="slice_add",
+                    target_primitive_name="helper",
+                    reason="missing",
+                    fallback_primitive_name="helper",
+                    raw_target="helper",
+                    detail="target primitive has no candidate in the current selection",
+                ),
+            ),
+            root_candidate_ids=("slice_add::scalar::si32",),
+            required_candidate_ids=("slice_add::scalar::si32",),
+            required_primitive_names=("helper", "slice_add"),
+            fallback_primitive_names=("helper",),
+            unresolved_primitive_names=("helper",),
+            diagnostic_counts=(
+                DiagnosticCount(
+                    severity="warning",
+                    code="TSL-CANDIDATE-DEPENDENCY-MISSING",
+                    count=1,
+                ),
+            ),
+        ),
         deferred_categories=("full_template_rendering", "tsil_lowering"),
     )
 
@@ -131,6 +160,31 @@ class CoverageHtmlReportingTests(unittest.TestCase):
                     count=1,
                 ),
             ),
+            candidate_dependencies=CandidateDependencyReport(
+                is_available=True,
+                edge_rows=(
+                    CandidateDependencyEdgeRow(
+                        source_candidate_id='source<&>"candidate"',
+                        source_primitive_name='alpha<script data-x="1">',
+                        target_candidate_id="target<&>",
+                        target_primitive_name="beta<&>",
+                        raw_target="beta<&>",
+                        type_arguments=("si32<&>",),
+                    ),
+                ),
+                issue_rows=(
+                    CandidateDependencyIssueRow(
+                        source_candidate_id='source<&>"candidate"',
+                        source_primitive_name='alpha<script data-x="1">',
+                        target_primitive_name="gamma<&>",
+                        reason="missing",
+                        fallback_primitive_name="gamma<&>",
+                        raw_target="gamma<&>",
+                        detail='unsafe detail <&>"',
+                    ),
+                ),
+                fallback_primitive_names=("gamma<&>",),
+            ),
             deferred_categories=("unsafe<&>",),
         )
 
@@ -139,6 +193,8 @@ class CoverageHtmlReportingTests(unittest.TestCase):
         self.assertIn("alpha&lt;script data-x=&quot;1&quot;&gt;", html)
         self.assertIn("binary&lt;&amp;&gt;", html)
         self.assertIn("cpp&quot;unsafe&quot;", html)
+        self.assertIn("source&lt;&amp;&gt;&quot;candidate&quot;", html)
+        self.assertIn("unsafe detail &lt;&amp;&gt;&quot;", html)
         self.assertIn("TSL-REPORT-&lt;UNSAFE-&quot;CODE&quot;&gt;", html)
         self.assertNotIn('alpha<script data-x="1">', html)
         self.assertNotIn('TSL-REPORT-<UNSAFE-"CODE">', html)

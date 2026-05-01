@@ -352,12 +352,27 @@ class CandidateDependencyClosure:
     fallback_primitive_names: tuple[PrimitiveName, ...]
 ```
 
+Milestone 32 keeps this closure as dependency-stage data and adds stable report
+DTOs so API/report consumers do not have to depend on raw dependency internals:
+
+```python
+@dataclass(frozen=True, slots=True)
+class CandidateDependencyReport:
+    is_available: bool
+    edge_rows: tuple[CandidateDependencyEdgeRow, ...]
+    issue_rows: tuple[CandidateDependencyIssueRow, ...]
+    fallback_primitive_names: tuple[PrimitiveName, ...]
+    diagnostic_counts: tuple[DiagnosticCount, ...]
+```
+
 Invariants:
 
 - Candidate-specific edges are emitted only for uniquely resolved target
   candidates.
 - Ambiguous, missing, or lowering-dependent target references remain explicit
   fallback primitive names.
+- Primitive-level dependency closure remains visible even when
+  candidate-specific report rows are available.
 - Dependency extraction remains conservative until TSIL lowering has a semantic
   representation of calls.
 

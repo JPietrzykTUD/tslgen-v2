@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from tslgen.analysis.candidates import CandidateSelection, ImplementationCandidate
+from tslgen.analysis.candidate_dependencies import (
+    CandidateDependencyClosure,
+    CandidateDependencyEdge,
+    CandidateDependencyIssue,
+)
 from tslgen.analysis.dependencies import DependencyClosure
 from tslgen.analysis.selection import SelectionPlan
 from tslgen.core.diagnostics import Diagnostic, DiagnosticSeverity
@@ -14,6 +19,7 @@ from tslgen.io.artifacts import ArtifactPlan, ArtifactSet
 
 
 _ANY_BACKEND = "any"
+_CANDIDATE_DEPENDENCY_DIAGNOSTIC_PREFIX = "TSL-CANDIDATE-DEPENDENCY-"
 _DEFAULT_DEFERRED_CATEGORIES = (
     "artifact_writing",
     "backend_capability_evaluation",
@@ -38,6 +44,9 @@ class PipelineResultLike(Protocol):
 
     @property
     def dependency_closure(self) -> DependencyClosure | None: ...
+
+    @property
+    def candidate_dependency_closure(self) -> CandidateDependencyClosure | None: ...
 
     @property
     def artifact_plan(self) -> ArtifactPlan | None: ...
@@ -218,12 +227,149 @@ class BackendCoverageRow:
 
 
 @dataclass(frozen=True, slots=True)
+class CandidateDependencyEdgeRow:
+    source_candidate_id: str
+    source_primitive_name: str
+    target_candidate_id: str
+    target_primitive_name: str
+    raw_target: str
+    type_arguments: tuple[str, ...] = ()
+    is_self_reference: bool = False
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "source_candidate_id",
+            "source_primitive_name",
+            "target_candidate_id",
+            "target_primitive_name",
+            "raw_target",
+        ):
+            if not getattr(self, field_name):
+                raise ValueError(f"{field_name} must be non-empty")
+        object.__setattr__(self, "type_arguments", tuple(self.type_arguments))
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            self.source_candidate_id,
+            self.target_candidate_id,
+            self.target_primitive_name,
+            self.raw_target,
+            self.type_arguments,
+            self.is_self_reference,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateDependencyIssueRow:
+    source_candidate_id: str
+    source_primitive_name: str
+    target_primitive_name: str
+    reason: str
+    fallback_primitive_name: str
+    raw_target: str
+    type_arguments: tuple[str, ...] = ()
+    candidate_ids: tuple[str, ...] = ()
+    detail: str = ""
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "source_candidate_id",
+            "source_primitive_name",
+            "target_primitive_name",
+            "reason",
+            "fallback_primitive_name",
+            "raw_target",
+        ):
+            if not getattr(self, field_name):
+                raise ValueError(f"{field_name} must be non-empty")
+        object.__setattr__(self, "type_arguments", tuple(self.type_arguments))
+        object.__setattr__(self, "candidate_ids", tuple(sorted(self.candidate_ids)))
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            self.source_candidate_id,
+            self.target_primitive_name,
+            self.reason,
+            self.raw_target,
+            self.type_arguments,
+            self.candidate_ids,
+            self.detail,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateDependencyReport:
+    is_available: bool = False
+    edge_rows: tuple[CandidateDependencyEdgeRow, ...] = ()
+    issue_rows: tuple[CandidateDependencyIssueRow, ...] = ()
+    root_candidate_ids: tuple[str, ...] = ()
+    required_candidate_ids: tuple[str, ...] = ()
+    required_primitive_names: tuple[str, ...] = ()
+    fallback_primitive_names: tuple[str, ...] = ()
+    ambiguous_primitive_names: tuple[str, ...] = ()
+    unresolved_primitive_names: tuple[str, ...] = ()
+    unsupported_primitive_names: tuple[str, ...] = ()
+    diagnostic_counts: tuple[DiagnosticCount, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "edge_rows",
+            tuple(sorted(self.edge_rows, key=lambda row: row.key)),
+        )
+        object.__setattr__(
+            self,
+            "issue_rows",
+            tuple(sorted(self.issue_rows, key=lambda row: row.key)),
+        )
+        for field_name in (
+            "root_candidate_ids",
+            "required_candidate_ids",
+        ):
+            object.__setattr__(self, field_name, tuple(getattr(self, field_name)))
+        for field_name in (
+            "required_primitive_names",
+            "fallback_primitive_names",
+            "ambiguous_primitive_names",
+            "unresolved_primitive_names",
+            "unsupported_primitive_names",
+        ):
+            object.__setattr__(
+                self,
+                field_name,
+                tuple(sorted(getattr(self, field_name))),
+            )
+        object.__setattr__(
+            self,
+            "diagnostic_counts",
+            tuple(sorted(self.diagnostic_counts, key=lambda item: item.key)),
+        )
+
+    @property
+    def edge_count(self) -> int:
+        return len(self.edge_rows)
+
+    @property
+    def issue_count(self) -> int:
+        return len(self.issue_rows)
+
+    @property
+    def diagnostic_count(self) -> int:
+        return sum(item.count for item in self.diagnostic_counts)
+
+
+@dataclass(frozen=True, slots=True)
 class PipelineCoverageReport:
     primitive_rows: tuple[PrimitiveCoverageRow, ...]
     selection: SelectionCoverageSummary | None = None
     backend_rows: tuple[BackendCoverageRow, ...] = ()
     diagnostic_counts: tuple[DiagnosticCount, ...] = ()
     unplanned_dependency_primitives: tuple[str, ...] = ()
+    candidate_dependencies: CandidateDependencyReport = field(
+        default_factory=CandidateDependencyReport,
+    )
     deferred_categories: tuple[str, ...] = _DEFAULT_DEFERRED_CATEGORIES
 
     def __post_init__(self) -> None:
@@ -289,6 +435,14 @@ class PipelineCoverageReport:
             if row.is_required_by_dependency_closure
         )
 
+    @property
+    def candidate_dependency_edges(self) -> int:
+        return self.candidate_dependencies.edge_count
+
+    @property
+    def candidate_dependency_issues(self) -> int:
+        return self.candidate_dependencies.issue_count
+
 
 def coverage_report_from_pipeline_result(
     result: PipelineResultLike,
@@ -298,6 +452,7 @@ def coverage_report_from_pipeline_result(
         selection_plan=result.selection_plan,
         candidate_selection=result.candidate_selection,
         dependency_closure=result.dependency_closure,
+        candidate_dependency_closure=result.candidate_dependency_closure,
         artifact_plan=result.artifact_plan,
         artifacts=result.artifacts,
         diagnostics=result.diagnostics,
@@ -310,10 +465,12 @@ def build_coverage_report(
     selection_plan: SelectionPlan | None = None,
     candidate_selection: CandidateSelection | None = None,
     dependency_closure: DependencyClosure | None = None,
+    candidate_dependency_closure: CandidateDependencyClosure | None = None,
     artifact_plan: ArtifactPlan | None = None,
     artifacts: ArtifactSet | None = None,
     diagnostics: Iterable[Diagnostic] = (),
 ) -> PipelineCoverageReport:
+    diagnostics_tuple = tuple(diagnostics)
     effective_plan = _effective_selection_plan(selection_plan, candidate_selection)
     candidates = candidate_selection.candidates if candidate_selection is not None else ()
     primitive_rows = _primitive_rows(
@@ -328,11 +485,15 @@ def build_coverage_report(
         primitive_rows=primitive_rows,
         selection=_selection_summary(effective_plan),
         backend_rows=_backend_rows(artifact_plan, artifacts),
-        diagnostic_counts=_diagnostic_counts(diagnostics),
+        diagnostic_counts=_diagnostic_counts(diagnostics_tuple),
         unplanned_dependency_primitives=(
             dependency_closure.unplanned_primitive_names
             if dependency_closure is not None
             else ()
+        ),
+        candidate_dependencies=_candidate_dependency_report(
+            candidate_dependency_closure,
+            diagnostics=diagnostics_tuple,
         ),
     )
 
@@ -645,9 +806,86 @@ def _backend_name(backend: str | None) -> str:
     return backend if backend is not None else _ANY_BACKEND
 
 
+def _candidate_dependency_report(
+    closure: CandidateDependencyClosure | None,
+    diagnostics: Iterable[Diagnostic],
+) -> CandidateDependencyReport:
+    diagnostic_counts = _diagnostic_counts(
+        diagnostic
+        for diagnostic in diagnostics
+        if diagnostic.code.startswith(_CANDIDATE_DEPENDENCY_DIAGNOSTIC_PREFIX)
+    )
+    if closure is None:
+        return CandidateDependencyReport(diagnostic_counts=diagnostic_counts)
+
+    reachable_candidate_ids = frozenset(closure.required_candidate_ids)
+    return CandidateDependencyReport(
+        is_available=True,
+        edge_rows=tuple(
+            _candidate_dependency_edge_row(closure, edge)
+            for edge in closure.graph.edges
+            if edge.source_candidate_id in reachable_candidate_ids
+        ),
+        issue_rows=tuple(
+            _candidate_dependency_issue_row(closure, issue)
+            for issue in closure.graph.issues
+            if issue.source_candidate_id in reachable_candidate_ids
+        ),
+        root_candidate_ids=closure.root_candidate_ids,
+        required_candidate_ids=closure.required_candidate_ids,
+        required_primitive_names=closure.required_primitive_names,
+        fallback_primitive_names=closure.fallback_primitive_names,
+        ambiguous_primitive_names=closure.ambiguous_primitive_names,
+        unresolved_primitive_names=closure.unresolved_primitive_names,
+        unsupported_primitive_names=closure.unsupported_primitive_names,
+        diagnostic_counts=diagnostic_counts,
+    )
+
+
+def _candidate_dependency_edge_row(
+    closure: CandidateDependencyClosure,
+    edge: CandidateDependencyEdge,
+) -> CandidateDependencyEdgeRow:
+    candidates = closure.graph.primitive_graph.selection.candidates_by_id
+    source = candidates[edge.source_candidate_id]
+    target = candidates[edge.target_candidate_id]
+    return CandidateDependencyEdgeRow(
+        source_candidate_id=edge.source_candidate_id,
+        source_primitive_name=source.source_primitive_name,
+        target_candidate_id=edge.target_candidate_id,
+        target_primitive_name=target.source_primitive_name,
+        raw_target=edge.reference.raw_target,
+        type_arguments=edge.reference.type_arguments,
+        is_self_reference=edge.reference.is_self_reference,
+    )
+
+
+def _candidate_dependency_issue_row(
+    closure: CandidateDependencyClosure,
+    issue: CandidateDependencyIssue,
+) -> CandidateDependencyIssueRow:
+    candidate = closure.graph.primitive_graph.selection.candidates_by_id[
+        issue.source_candidate_id
+    ]
+    return CandidateDependencyIssueRow(
+        source_candidate_id=issue.source_candidate_id,
+        source_primitive_name=candidate.source_primitive_name,
+        target_primitive_name=issue.target_primitive_name,
+        reason=issue.reason,
+        fallback_primitive_name=issue.target_primitive_name,
+        raw_target=issue.reference.raw_target,
+        type_arguments=issue.reference.type_arguments,
+        candidate_ids=issue.candidate_ids,
+        detail=issue.detail,
+    )
+
+
 def _report_dict(report: PipelineCoverageReport) -> dict[str, Any]:
     return {
         "backend_rows": [_backend_row_dict(row) for row in report.backend_rows],
+        "candidate_dependencies": _candidate_dependency_report_dict(
+            report.candidate_dependencies,
+        ),
         "deferred_categories": list(report.deferred_categories),
         "diagnostic_counts": [
             _diagnostic_count_dict(item) for item in report.diagnostic_counts
@@ -662,6 +900,14 @@ def _report_dict(report: PipelineCoverageReport) -> dict[str, Any]:
             else None
         ),
         "summary": {
+            "candidate_dependency_diagnostics": (
+                report.candidate_dependencies.diagnostic_count
+            ),
+            "candidate_dependency_edges": report.candidate_dependency_edges,
+            "candidate_dependency_fallback_primitives": list(
+                report.candidate_dependencies.fallback_primitive_names
+            ),
+            "candidate_dependency_issues": report.candidate_dependency_issues,
             "candidates_with_opaque_bodies": report.candidates_with_opaque_bodies,
             "candidates_without_bodies": report.candidates_without_bodies,
             "primitives_with_candidates": report.primitives_with_candidates,
@@ -719,6 +965,56 @@ def _primitive_row_dict(row: PrimitiveCoverageRow) -> dict[str, Any]:
         "type_tags": list(row.type_tags),
         "unplanned_dependency_count": row.unplanned_dependency_count,
         "variant_count": row.variant_count,
+    }
+
+
+def _candidate_dependency_report_dict(
+    report: CandidateDependencyReport,
+) -> dict[str, Any]:
+    return {
+        "ambiguous_primitive_names": list(report.ambiguous_primitive_names),
+        "available": report.is_available,
+        "diagnostic_counts": [
+            _diagnostic_count_dict(item) for item in report.diagnostic_counts
+        ],
+        "edges": [_candidate_dependency_edge_dict(row) for row in report.edge_rows],
+        "fallback_primitive_names": list(report.fallback_primitive_names),
+        "issues": [_candidate_dependency_issue_dict(row) for row in report.issue_rows],
+        "required_candidate_ids": list(report.required_candidate_ids),
+        "required_primitive_names": list(report.required_primitive_names),
+        "root_candidate_ids": list(report.root_candidate_ids),
+        "unresolved_primitive_names": list(report.unresolved_primitive_names),
+        "unsupported_primitive_names": list(report.unsupported_primitive_names),
+    }
+
+
+def _candidate_dependency_edge_dict(
+    row: CandidateDependencyEdgeRow,
+) -> dict[str, Any]:
+    return {
+        "is_self_reference": row.is_self_reference,
+        "raw_target": row.raw_target,
+        "source_candidate_id": row.source_candidate_id,
+        "source_primitive_name": row.source_primitive_name,
+        "target_candidate_id": row.target_candidate_id,
+        "target_primitive_name": row.target_primitive_name,
+        "type_arguments": list(row.type_arguments),
+    }
+
+
+def _candidate_dependency_issue_dict(
+    row: CandidateDependencyIssueRow,
+) -> dict[str, Any]:
+    return {
+        "candidate_ids": list(row.candidate_ids),
+        "detail": row.detail,
+        "fallback_primitive_name": row.fallback_primitive_name,
+        "raw_target": row.raw_target,
+        "reason": row.reason,
+        "source_candidate_id": row.source_candidate_id,
+        "source_primitive_name": row.source_primitive_name,
+        "target_primitive_name": row.target_primitive_name,
+        "type_arguments": list(row.type_arguments),
     }
 
 

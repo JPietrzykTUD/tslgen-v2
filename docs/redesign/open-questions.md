@@ -829,7 +829,7 @@ integration, and broad Rust type mapping remain deferred.
 
 ## OQ-026: How Should Candidate-Specific Dependency Closure Appear In API And Reports?
 
-Status: Open - scheduled for Milestone 32
+Status: Answered for the Milestone 32 reporting/API slice
 
 Why it matters:
 
@@ -838,21 +838,32 @@ and public API consumers still primarily see primitive-level dependency
 coverage. The extra precision should be inspectable without changing dependency
 semantics.
 
-Possible answers:
+Decision:
 
-- Add candidate dependency rows to coverage reports.
-- Add a public API helper for candidate dependency summaries.
-- Keep candidate dependency closure internal until backend scheduling needs it.
+Milestone 32 retains candidate-specific dependency closure in the pipeline after
+primitive-level dependency closure and exposes it through stable coverage-report
+DTOs. `PipelineCoverageReport.candidate_dependencies` contains deterministic
+edge rows, issue rows, fallback primitive names, ambiguous/missing/unsupported
+groups, required candidate/primitive IDs, and candidate dependency diagnostic
+counts. `tslgen.api.candidate_dependency_report(...)` returns that DTO from a
+`PipelineResult` or an existing coverage report.
 
-Required evidence:
+Evidence:
 
-- Current `DependencyClosure` result shape.
-- Reporting output from Milestones 15 and 23.
-- API facade from Milestone 24.
+- The report should include candidate-specific dependency fallbacks because
+  Milestone 19 accepted fallback preservation as part of the dependency model.
+- Reports already preserve primitive-level dependency closure from Milestone 15,
+  so candidate-specific rows are additive and do not replace the broad fallback
+  model.
+- The Milestone 24 API facade already exposes stable report helpers, so the
+  candidate-specific helper returns a report DTO rather than making callers
+  inspect raw dependency internals.
 
 Implementation blocked:
 
-Milestone 32 is blocked on choosing a stable report/API shape.
+No for the reporting/API slice. New dependency extraction semantics, TSIL call
+graph parsing, dependency implementation selection, backend render scheduling,
+and richer visualization remain deferred.
 
 ## OQ-027: What Should Happen To Quarantined Exploratory Code?
 
@@ -1086,3 +1097,8 @@ long as they avoid unrelated corpus churn.
 
 - Keep future Rust body rendering behind a lowering-backed slice.
 - Define any broader Rust trait/wrapper API as its own reviewed contract.
+
+## Follow-up from Milestone 32 review
+
+- Keep future dependency visualization/API additions DTO-based.
+- Preserve primitive-level fallback visibility alongside candidate-specific dependency precision.

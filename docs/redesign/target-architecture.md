@@ -429,6 +429,9 @@ def write_artifacts(
 def plan_tests(catalog: Catalog, request: TestPlanRequest) -> TestPlanResult: ...
 def run_pipeline(config: PipelineConfig) -> PipelineResult: ...
 def coverage_report(result: PipelineResult) -> PipelineCoverageReport: ...
+def candidate_dependency_report(
+    result: PipelineResult | PipelineCoverageReport,
+) -> CandidateDependencyReport: ...
 ```
 
 These functions are the long-term facade. Milestone 24 decides which post-15
@@ -443,9 +446,10 @@ writing files; and `tslgen.api.write_artifacts(...)` delegates to
 `io.artifact_writer`.
 
 Future API additions after Milestone 24 should expose already-accepted values
-only. Milestone 32 may add candidate-specific dependency reporting helpers or
-result fields, but it must not make report generation perform dependency
-analysis.
+only. Milestone 32 adds candidate-specific dependency reporting through a stable
+`CandidateDependencyReport` DTO and helper while retaining primitive-level
+dependency closure. Report generation must consume retained dependency values
+and must not perform dependency analysis.
 
 ### CLI
 

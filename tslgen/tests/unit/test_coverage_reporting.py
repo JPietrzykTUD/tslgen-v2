@@ -83,6 +83,7 @@ def pipeline_config_for(
     backend_id: str = "cpp",
     artifact_extension: str = "hpp",
     extension_names: tuple[str, ...] = ("scalar",),
+    primitive_names: tuple[str, ...] = ("slice_add",),
 ) -> PipelineConfig:
     return PipelineConfig(
         source_config=SourceConfig(
@@ -91,7 +92,7 @@ def pipeline_config_for(
         ),
         selection_request=SelectionRequest(
             backend=backend_id,
-            primitive_names=("slice_add",),
+            primitive_names=primitive_names,
             extension_names=extension_names,
             cpu_flags=("sse",),
             include_support_extensions=False,
@@ -126,6 +127,25 @@ class CoverageReportingTests(unittest.TestCase):
             self.assertEqual(report.candidates_without_bodies, 0)
             self.assertEqual(report.rendered_artifacts, 1)
             self.assertEqual(report.unplanned_dependency_primitives, ("helper",))
+            self.assertIsNotNone(result.candidate_dependency_closure)
+            self.assertTrue(report.candidate_dependencies.is_available)
+            self.assertEqual(report.candidate_dependencies.edge_count, 0)
+            self.assertEqual(report.candidate_dependencies.issue_count, 1)
+            self.assertEqual(
+                report.candidate_dependencies.fallback_primitive_names,
+                ("helper",),
+            )
+            self.assertEqual(
+                report.candidate_dependencies.unresolved_primitive_names,
+                ("helper",),
+            )
+            self.assertEqual(
+                tuple(
+                    item.code
+                    for item in report.candidate_dependencies.diagnostic_counts
+                ),
+                ("TSL-CANDIDATE-DEPENDENCY-MISSING",),
+            )
 
             selection = report.selection
             self.assertIsNotNone(selection)
@@ -154,6 +174,31 @@ class CoverageReportingTests(unittest.TestCase):
             self.assertEqual(backend_row.planned_artifact_count, 1)
             self.assertEqual(backend_row.rendered_artifact_count, 1)
             self.assertEqual(backend_row.rendered_candidate_count, 1)
+
+    def test_report_exposes_candidate_dependency_edge_rows(self) -> None:
+        with TemporaryDirectory() as temp:
+            primitive_path = Path(temp) / "coverage_slice.tsl"
+            primitive_path.write_text(DEPENDENCY_PRIMITIVES, encoding="utf-8")
+
+            result = run_pipeline(
+                pipeline_config_for(
+                    primitive_path,
+                    primitive_names=("slice_add", "helper"),
+                )
+            )
+
+            self.assertTrue(result.is_ok, result.diagnostics)
+            report = coverage_report_from_pipeline_result(result)
+            self.assertTrue(report.candidate_dependencies.is_available)
+            self.assertEqual(report.candidate_dependencies.edge_count, 1)
+            self.assertEqual(report.candidate_dependencies.issue_count, 0)
+            edge = report.candidate_dependencies.edge_rows[0]
+            self.assertEqual(edge.source_primitive_name, "slice_add")
+            self.assertEqual(edge.target_primitive_name, "helper")
+            self.assertEqual(edge.raw_target, "helper")
+            self.assertEqual(edge.type_arguments, ())
+            self.assertEqual(report.candidate_dependencies.fallback_primitive_names, ())
+            self.assertEqual(report.unplanned_dependency_primitives, ())
 
     def test_report_identifies_missing_implementation_by_selection_context(self) -> None:
         with TemporaryDirectory() as temp:
@@ -220,9 +265,36 @@ class CoverageReportingTests(unittest.TestCase):
                 ["helper"],
             )
             self.assertEqual(
+                payload["summary"]["candidate_dependency_fallback_primitives"],
+                ["helper"],
+            )
+            self.assertEqual(payload["summary"]["candidate_dependency_edges"], 0)
+            self.assertEqual(payload["summary"]["candidate_dependency_issues"], 1)
+            self.assertEqual(
+                payload["candidate_dependencies"]["unresolved_primitive_names"],
+                ["helper"],
+            )
+            self.assertEqual(
+                payload["candidate_dependencies"]["issues"][0]["reason"],
+                "missing",
+            )
+            self.assertEqual(
                 [row["primitive_name"] for row in payload["primitive_rows"]],
                 ["helper", "slice_add"],
             )
+
+    def test_report_json_marks_candidate_dependencies_unavailable(self) -> None:
+        payload = json.loads(
+            coverage_report_to_json(PipelineCoverageReport(primitive_rows=()))
+        )
+
+        self.assertFalse(payload["candidate_dependencies"]["available"])
+        self.assertEqual(payload["candidate_dependencies"]["edges"], [])
+        self.assertEqual(payload["candidate_dependencies"]["issues"], [])
+        self.assertEqual(
+            payload["summary"]["candidate_dependency_fallback_primitives"],
+            [],
+        )
 
 
 if __name__ == "__main__":

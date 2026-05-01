@@ -923,3 +923,49 @@ Consequences:
   diagnostics.
 - Rust function bodies, intrinsics, Cargo integration, generated tests,
   translation-map evaluation, and broad trait/wrapper parity remain deferred.
+
+## ADR-027: Candidate Dependency Reporting Uses Stable DTOs
+
+Status: Accepted for the Milestone 32 slice
+
+Context:
+
+Milestone 19 accepted candidate-specific dependency closure, including
+candidate edges, fallback primitive names, and warning diagnostics for
+ambiguous, missing, or unsupported candidate-specific resolution. Coverage
+reports and API helpers still exposed primarily primitive-level dependency
+closure, leaving the accepted candidate-specific data hard to inspect.
+
+Considered alternatives:
+
+- Expose raw candidate dependency closure objects as the main public API.
+- Recompute candidate dependency closure inside report generation.
+- Replace primitive-level dependency fields with candidate-specific fields.
+- Retain the closure in the pipeline and expose stable report DTOs.
+
+Decision:
+
+Retain candidate-specific dependency closure after primitive dependency
+closure, derive it from the accepted primitive dependency graph, and expose it
+through `CandidateDependencyReport` rows in coverage reports plus
+`tslgen.api.candidate_dependency_report(...)`. JSON and HTML reports include
+candidate edges, issues, fallback primitive names, ambiguous/missing/unsupported
+groups, required candidate/primitive IDs, and candidate dependency diagnostic
+counts.
+
+Rationale:
+
+The report should include candidate-specific dependency fallbacks because
+Milestone 19 accepted fallback preservation as part of the dependency model.
+Stable DTOs let API callers inspect the data without depending on raw analysis
+internals, and deriving the closure before reporting keeps JSON/HTML rendering
+pure and deterministic.
+
+Consequences:
+
+- Primitive-level dependency closure remains visible as the broad fallback
+  model.
+- Candidate-specific unresolved issues and fallback names are visible in both
+  JSON and HTML reports.
+- Reporting still does not parse TSIL, run dependency analysis, select
+  dependency implementations, schedule backend jobs, or change lowering.

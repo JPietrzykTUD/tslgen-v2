@@ -49,6 +49,41 @@
       </tbody>
     </table>
   </section>
+  <section id="candidate-dependencies">
+    <h2>Candidate Dependencies</h2>
+    <table>
+      <tbody>
+        <tr><th scope="row">Available</th><td>yes</td></tr>
+        <tr><th scope="row">Root candidates</th><td>slice_add::scalar::si32</td></tr>
+        <tr><th scope="row">Required candidates</th><td>slice_add::scalar::si32</td></tr>
+        <tr><th scope="row">Required primitives</th><td>helper, slice_add</td></tr>
+        <tr><th scope="row">Fallback primitives</th><td>helper</td></tr>
+        <tr><th scope="row">Ambiguous primitives</th><td>none</td></tr>
+        <tr><th scope="row">Unresolved primitives</th><td>helper</td></tr>
+        <tr><th scope="row">Unsupported primitives</th><td>none</td></tr>
+        <tr><th scope="row">Candidate dependency diagnostics</th><td>1</td></tr>
+      </tbody>
+    </table>
+    <p>No candidate-specific dependency edges were available.</p>
+    <h3>Issues And Fallbacks</h3>
+    <table>
+      <thead>
+        <tr><th>Source candidate</th><th>Source primitive</th><th>Target primitive</th><th>Reason</th><th>Fallback primitive</th><th>Raw target</th><th>Type arguments</th><th>Candidate ids</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>slice_add::scalar::si32</td><td>slice_add</td><td>helper</td><td>missing</td><td>helper</td><td>helper</td><td>none</td><td>none</td><td>target primitive has no candidate in the current selection</td></tr>
+      </tbody>
+    </table>
+    <h3>Diagnostics</h3>
+    <table>
+      <thead>
+        <tr><th>Severity</th><th>Code</th><th>Count</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>warning</td><td>TSL-CANDIDATE-DEPENDENCY-MISSING</td><td>1</td></tr>
+      </tbody>
+    </table>
+  </section>
   <section id="backend-coverage">
     <h2>Backend Coverage</h2>
     <table>
