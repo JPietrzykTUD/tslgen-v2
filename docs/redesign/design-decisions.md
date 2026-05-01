@@ -1169,3 +1169,79 @@ Consequences:
   level, golden fixture policy, diagnostics, and deterministic validation.
 - Production replacement claims remain blocked until selected parity criteria
   pass across the required behavior families.
+
+## ADR-032: Backend Intrinsic Composition Belongs Behind Lowering/Translation
+
+Status: Accepted for the backend-drift correction roadmap
+
+Context:
+
+The selected C++ native `binary/add` parity target requires a visible intrinsic
+call such as `_mm256_add_ps(left, right)`. A narrow renderer-local mapping from
+`("add", "avx2", "f32")` to that spelling can reproduce one fixture, but it
+puts semantic lowering in the renderer and would scale into backend-specific
+Python lookup tables. Repository evidence shows that `intrin_compose<...>`
+includes base names, optional prefix/infix/suffix/post/immediate modifiers, and
+generation-time type/value queries. The relevant data already lives in
+`tsldata/detail/lang/types/types_cpp.tsl`,
+`tsldata/detail/lang/translate_cpp.tsl`, `tsldata/extensions/extension.tsl`,
+and primitive TSIL bodies.
+
+Some modifier expressions combine backend-scoped requests with generation-time
+queries, for example a backend suffix request whose input depends on
+`type<generation>(...)`. Those generation-time forms must be resolved before
+backend translation; otherwise translation becomes a raw TSIL evaluator.
+
+Considered alternatives:
+
+- Keep a small renderer-local intrinsic map for each native parity case.
+- Implement full TSIL grammar and full translation-map evaluation before any
+  native C++ output.
+- Let backend templates evaluate generation-time conditions and compose
+  intrinsic names.
+- Let backend translation evaluate raw nested `if<generation>`,
+  `type<generation>`, or `value<generation>` text.
+- Add a typed translation/intrinsic-composition boundary that can grow one
+  helper form at a time.
+
+Decision:
+
+Intrinsic composition must be represented as typed helper data and resolved by
+a lowering/translation boundary before text rendering. Backend renderers may own
+language-specific formatting, declarations, wrappers, and emitted text, but they
+must consume already-resolved backend-call IR for semantic helper forms such as
+`intrin_compose<add>`. Renderer-local intrinsic lookup tables are rejected as
+the expansion strategy for native C++ or Rust rendering. The already-implemented
+Milestone 39 native C++ `avx2/f32` slice does not need to be reverted solely
+because it used a narrow local mapping, but it is classified as transitional:
+Milestone 40 must preserve its observable output while relocating
+intrinsic/type resolution behind typed lowering and data-driven translation.
+Generation-time helpers such as `if<generation>(...)`,
+`type<generation>(...)`, and `value<generation>(...)` resolve in semantic
+lowering before backend translation. Backend translation receives typed semantic
+values and backend-scoped requests; it does not parse or evaluate raw
+generation-time TSIL text.
+
+Rationale:
+
+This preserves the generator architecture: TSIL helper semantics are modeled
+once, data from `tsldata` remains authoritative, unsupported helper forms
+produce diagnostics, and backend renderers stay focused on text emission. It
+also avoids the false choice between a one-off hardcoded slice and a full TSIL
+compiler.
+
+Consequences:
+
+- The accepted M39 native-rendering slice remains useful parity evidence, but
+  it must not be expanded as-is.
+- Milestone 40 becomes the required boundary-correction step before any broader
+  native C++ or Rust rendering.
+- Milestone 41 defines the generation-time semantic lowering contract before
+  modifier support, suffix inference, or branch-dependent output expands.
+- The selected `_mm256_add_ps` output can still be golden-tested, but tests must
+  also prove the value came from typed metadata and lowered helper IR rather
+  than a renderer table.
+- Broad modifier support, primitive calls, direct intrinsics, and Rust body
+  rendering remain deferred until their own helper slices are selected.
+- Future native rendering milestones must state which helper IR and translation
+  data they consume before adding generated output.

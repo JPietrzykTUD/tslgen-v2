@@ -564,14 +564,42 @@ Recommended first parity checks:
   lowered-model rendering tests, unsupported scalar-slice diagnostics, digest
   determinism, and fixture provenance tests.
 - Milestone 38: TSIL intrinsic-compose lowering unit tests for the accepted
-  `intrin_compose<add>` return, lowered model shape, deterministic output,
-  typed-opaque fallback, and unsupported-form diagnostics for nearby syntax.
-- Milestone 39: native C++ `binary/add` intrinsic specialization golden tests.
-- Milestone 40: generated C++ `add_i32_basic` test-source golden tests.
-- Milestone 41: one CLI compatibility workflow integration test plus
-  unsupported legacy flag diagnostics.
-- Milestone 42: legacy-style coverage JSON row adapter golden and ordering
-  tests.
+  `intrin_compose<add>` return, lowered helper model shape, typed-opaque
+  fallback, deterministic output, and unsupported-form diagnostics for modifier
+  metadata, nested calls, generation-time suffixes, loops, variables, wrong
+  arity, unsupported names, and unknown parameters.
+- Milestone 39: transitional native C++ `binary/add` intrinsic specialization
+  golden tests for the selected `avx2/f32` output, diagnostics for unsupported
+  native intrinsic/type/extension combinations, digest determinism, fixture
+  provenance tests, and an explicit test/doc note that renderer-local intrinsic
+  mapping is not an expansion path.
+- Milestone 40: backend translation-boundary correction tests, including typed
+  intrinsic-composition input/output, C++ type-map access from
+  `types_cpp.tsl`, selected `add + avx2 + f32 -> _mm256_add_ps` composition
+  through metadata, renderer consumption of already-resolved backend-call IR,
+  raw-TSIL non-rescan tests, rejection or diagnostics for unresolved
+  `if<generation>`, `type<generation>`, and `value<generation>` reaching
+  translation, missing-map and missing-translated-call diagnostics,
+  determinism, no runtime dependency on `frozen/`, and regression coverage
+  preventing renderer-owned intrinsic lookup growth for the selected slice.
+- Milestone 41: documentation/inventory validation for the generation-time
+  semantic lowering contract, including explicit generation context fields,
+  ordering tests to prove generation-time helpers resolve before backend
+  translation, backend drift risk reassessment, milestone adaptation decisions,
+  and `git diff --check`; if generation-time conditions or type/value queries
+  are selected next, future tests must cover deterministic branch selection or
+  typed-value resolution, unknown attribute/type-predicate diagnostics, missing
+  generation context diagnostics, malformed branch/query diagnostics, and
+  renderer non-evaluation regression coverage.
+
+Deferred parity checks:
+
+- Generated C++ `add_i32_basic` test-source golden tests from the old Milestone
+  40 resume only after Milestone 40 corrects the native/backend boundary.
+- CLI compatibility workflow tests from the old Milestone 41 resume only after
+  the selected generated artifact behavior is stable.
+- Legacy-style coverage JSON adapter tests from the old Milestone 42 resume only
+  when report parity is reintroduced as its own milestone.
 
 ## Review Expectations
 

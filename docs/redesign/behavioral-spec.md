@@ -278,16 +278,41 @@ a direct parameter-add return shaped as
 `emit_return(<parameter> + <parameter>);`, where both operands are names from
 the selected primitive declaration. This produces a backend-neutral lowered
 return statement containing a binary `+` expression over parameter references.
-Milestone 38 extends that mini-lowering boundary with exactly one intrinsic
-compose return shaped as
-`emit_return(intrin_compose<add>(<parameter>, <parameter>));`. The lowered
-model represents this as a backend-neutral intrinsic-compose expression named
-`add` with ordered parameter-reference arguments. It does not encode C++
-intrinsic names or evaluate translation maps.
+Milestone 38 adds the next narrow TSIL helper slice by lowering exactly
+`emit_return(intrin_compose<add>(<parameter>, <parameter>));`. The lowered model
+represents this as backend-neutral intrinsic-compose helper data named `add`
+with ordered parameter-reference arguments. It does not render backend text and
+does not evaluate intrinsic names.
 
-The mini-lowering strategy does not parse a general expression language, does
-not evaluate generation-time branches, does not lower primitive calls, and does
-not render backend text. Unsupported TSIL remains diagnostic-producing:
+Milestone 39 is accepted only as a transitional native C++ parity slice. It may
+prove the selected observable `avx2/f32` output, including
+`_mm256_add_ps(left, right)`, but its renderer-local intrinsic/type mapping is
+not architectural precedent. That mapping must not be expanded to additional
+intrinsics, extensions, types, backends, or helper forms.
+
+Milestone 40 corrects the boundary while preserving the selected M39 output.
+Intrinsic composition is represented as data: base intrinsic name, ordered
+arguments, optional modifiers such as `prefix`, `infix`, `suffix`, `post`, and
+`immediate(n)`, plus selected backend/type/extension context. The selected
+`add + avx2 + f32` composition may resolve to `_mm256_add_ps`, but that
+resolution belongs to lowering/translation services using typed `tsldata`
+metadata. Backend renderers must consume translated backend-call IR or an
+equivalent typed value; they must not carry tuple-key intrinsic lookup tables
+for this semantic decision.
+
+The lowering and translation order is explicit. TSIL parsing produces helper
+IR first. Generation-time helpers such as `if<generation>(...)`,
+`type<generation>(...)`, and `value<generation>(...)` are then resolved against
+typed generation context before backend translation runs. Backend-scoped forms
+such as `type<backend>(...)` and `value<backend>(...)` are translation requests
+over already-resolved semantic values; they are not allowed to evaluate raw
+nested generation-time TSIL text. Backend rendering receives only translated
+backend-call/type/name values and formats them.
+
+The current mini-lowering strategy does not parse a general expression
+language, does not evaluate generation-time branches or generation-time
+type/value queries, does not lower primitive calls, and does not render backend
+text. Unsupported TSIL remains diagnostic-producing:
 unrecognized TSIL returns `TSL-LOWER-TSIL-UNSUPPORTED`, nearby unsupported or
 malformed direct `emit_return(...)` forms return `TSL-LOWER-TSIL-RETURN-SHAPE`,
 unsupported intrinsic names return `TSL-LOWER-TSIL-INTRIN-UNSUPPORTED`,
@@ -353,6 +378,18 @@ requested with missing or unsupported lowered data, it reports
 `TSL-CPP-RENDER-LOWERING-UNSUPPORTED`, or
 `TSL-CPP-RENDER-LOWERING-PARAMETER` rather than emitting a stub. Raw opaque TSIL
 payload text must not be spliced into C++ bodies.
+
+Milestones 36 and 37 add the selected C++ native-header parity path for
+`tsl/tsl_native.hpp` through layout, support preamble, the `detail::add_binary`
+primary, scalar `simd<int32_t, scalar>` and `simd<uint32_t, scalar>`
+specializations, and the public `add<Vec>` wrapper. Native SIMD
+specializations are no longer allowed to grow from renderer-local intrinsic
+maps. Milestone 39 may retain the already-selected native `simd<float, avx2>`
+parity output as a transitional spike, but Milestone 40 must preserve that
+output through backend-call IR produced by the lowering/translation boundary.
+Unsupported native type, extension, intrinsic, missing translated call IR,
+missing lowering, and unsupported lowered-expression inputs are structured
+diagnostics rather than silent omissions.
 
 The first Rust backend slice supports only the `rust` backend and `generated`
 artifact kind. It renders a deterministic Rust module-like summary artifact
@@ -719,18 +756,18 @@ Parity levels:
 
 | Category / legacy-observed behavior | Evidence path | Required parity level | Accepted redesign capability | Gap | Proposed milestone | Validation |
 | --- | --- | --- | --- | --- | --- | --- |
-| CLI/workflow parity: legacy scripts support generate/build/run/test modes, language selection, extension filters, primitive filters, docs toggles, clean mode, CPU-derived defaults, and target-specific behavior. | `frozen/run_all.sh`, `frozen/run_tests.py`, `frozen/tsl-gen/tsl_gen/app/cli.py` | `required-later` for broad workflow replacement; `required-now` only for one selected generation workflow | Public API/CLI, explicit config, artifact writer, report/write stream contract | No broad compatibility shim, no build/test/run orchestration, no legacy flag parity | M35 inventory, M41 one workflow compatibility slice | CLI integration tests, stdout/stderr contract tests, temp output root, diagnostics for unsupported legacy flags, no runtime dependency on `frozen` |
-| Generated C++ output parity: legacy writes large header artifacts and CMake sidecars, including `tsl_native.hpp`, `tsl_generic.hpp`, `tsl_flags.cmake`, and `CMakeLists.txt`. | `frozen/out/tsl/tsl_native.hpp`, `frozen/out/tsl/tsl_generic.hpp`, `frozen/out/tsl/tsl_flags.cmake`, `frozen/out/tsl/CMakeLists.txt`, `frozen/generator_specs/backend_cpp.yaml` | `required-now` for selected `binary/add` excerpts and output layout; `required-later` for broad headers | Artifact descriptors, writer, C++ summary/declaration/body slices, M36 native header path/preamble slice, M37 scalar `add_binary` primary/specialization/wrapper slice | No native intrinsic, masked, generic, combined-template, or sidecar parity | M35, M36, M37, M39 | Golden excerpts or selected whole-file sections, semantic equivalence where exact whitespace is rejected, deterministic artifact order/digests |
+| CLI/workflow parity: legacy scripts support generate/build/run/test modes, language selection, extension filters, primitive filters, docs toggles, clean mode, CPU-derived defaults, and target-specific behavior. | `frozen/run_all.sh`, `frozen/run_tests.py`, `frozen/tsl-gen/tsl_gen/app/cli.py` | `required-later` for broad workflow replacement; defer the first selected workflow until generated C++ behavior is corrected | Public API/CLI, explicit config, artifact writer, report/write stream contract | No broad compatibility shim, no build/test/run orchestration, no legacy flag parity | M35 inventory; deferred old M41 after M40 boundary correction unless limited to scalar output | CLI integration tests, stdout/stderr contract tests, temp output root, diagnostics for unsupported legacy flags, no runtime dependency on `frozen` |
+| Generated C++ output parity: legacy writes large header artifacts and CMake sidecars, including `tsl_native.hpp`, `tsl_generic.hpp`, `tsl_flags.cmake`, and `CMakeLists.txt`. | `frozen/out/tsl/tsl_native.hpp`, `frozen/out/tsl/tsl_generic.hpp`, `frozen/out/tsl/tsl_flags.cmake`, `frozen/out/tsl/CMakeLists.txt`, `frozen/generator_specs/backend_cpp.yaml` | `required-now` for selected `binary/add` excerpts and output layout; `required-later` for broad headers | Artifact descriptors, writer, C++ summary/declaration/body slices, M36 native header path/preamble slice, M37 scalar `add_binary` primary/specialization/wrapper slice, M39 transitional native `avx2/f32` output | Native intrinsic parity must be corrected through data-driven translation before expansion; masked, generic, combined-template, and sidecar parity remain deferred | M35, M36, M37, M39 transitional, M40 correction | Golden excerpts or selected whole-file sections, semantic equivalence where exact whitespace is rejected, deterministic artifact order/digests, renderer consumes backend-call IR after M40 |
 | Generated Rust output parity: legacy manifests/templates describe Rust primary/specialization/wrapper/trait generation. | `frozen/generator_specs/backend_rust.yaml`, `frozen/jinja/rust/**`, `frozen/examples/filter_count.rs` | `required-later` | Rust summary and body-free scalar trait signature slice | No Rust bodies, wrappers, tests, Cargo integration, or generated Rust output baseline | Future phase after C++ parity baseline | Rust golden fixtures selected from legacy templates or regenerated evidence, no Cargo/toolchain requirement in default tests |
-| TSIL semantic/lowering parity: legacy TSIL grammar and compiler handle calls, intrinsics, variables, loops, generation-time conditions, casts, type/value metadata, and cleanup passes. | `frozen/tsl-gen/tsl_gen/tsil.lark`, `frozen/tsl-gen/tsl_gen/tsil_engine/compiler.py`, `frozen/tsl-gen/tsl_gen/tsil_engine/passes/*.py`, `tsldata/primitives/**.tsl` | `required-now` for the selected intrinsic-compose form; `required-later` for full semantic TSIL | Typed-opaque lowering, direct parameter-add mini-lowering, and M38 `intrin_compose<add>` return lowering | No semantic primitive calls, loops, variables, type/value queries, generation-time evaluation, or broad `intrin_compose` metadata | M38 for selected intrinsic compose; later milestones for calls/loops/generation-time conditions | Unit lowering fixtures, unsupported-form diagnostics, deterministic lowered IR, renderer consumes typed lowering only |
+| TSIL semantic/lowering parity: legacy TSIL grammar and compiler handle calls, intrinsics, variables, loops, generation-time conditions, casts, type/value metadata, and cleanup passes. | `frozen/tsl-gen/tsl_gen/tsil.lark`, `frozen/tsl-gen/tsl_gen/tsil_engine/compiler.py`, `frozen/tsl-gen/tsl_gen/tsil_engine/passes/*.py`, `tsldata/primitives/**.tsl` | `required-now` for the selected intrinsic-compose/translation correction; `required-later` for full semantic TSIL | Typed-opaque lowering, direct parameter-add mini-lowering, M38 selected intrinsic-compose helper lowering, and M39 transitional native output | No semantic primitive calls, loops, variables, broad type/value queries, generation-time evaluation, direct intrinsics, or broad `intrin_compose` metadata; M39 native translation must be moved out of the renderer | M38 selected helper lowering, M40 translation/boundary correction, M41 generation-time semantic lowering contract | Unit lowering fixtures, unsupported-form diagnostics, deterministic lowered IR, translation metadata tests, tests that backend translation rejects unresolved generation-time helpers, renderer consumes typed lowering/backend-call IR only |
 | Template-family coverage: legacy specs map many templates to primary and specialization templates. | `frozen/generator_specs/signatures.yaml`, `frozen/generator_specs/backend_cpp.yaml`, `frozen/jinja/cpp/spec_*.j2`, `tsldata/detail/templates.tsl` | `required-now` for `binary/add`; `required-later` for broad template families | Signature/template/attribute validation and narrow binary scalar rendering | No primary/specialization abstraction for broad template families; wrapper rules are not fully modeled | M35, M37, later family-specific milestones | Golden tests per selected family, unsupported-template diagnostics, no broad template engine until needed |
-| Generated test-source parity: legacy C++ tests include support/output headers, `gtest`, generated test functions, and `TEST(...)` registration. | `frozen/generator_specs/tests.yaml`, `frozen/jinja/cpp/test_file.j2`, `frozen/jinja/cpp/test_case.j2`, `frozen/tsl-gen/tsl_gen/backend/tests/planner.py` | `required-now` for one selected C++ `add` test source; `required-later` for full tests | Test-source planning and metadata-style C++ test artifact | No legacy-style assertion source, support-header policy, wrapper call, or `gtest` registration | M40 | Golden C++ test source, metadata conversion tests, unsupported test diagnostics, deterministic rendering |
+| Generated test-source parity: legacy C++ tests include support/output headers, `gtest`, generated test functions, and `TEST(...)` registration. | `frozen/generator_specs/tests.yaml`, `frozen/jinja/cpp/test_file.j2`, `frozen/jinja/cpp/test_case.j2`, `frozen/tsl-gen/tsl_gen/backend/tests/planner.py` | `required-later`; defer until corrected generated C++ API/output is stable | Test-source planning and metadata-style C++ test artifact | No legacy-style assertion source, support-header policy, wrapper call, or `gtest` registration | Deferred old M40 after M40 boundary correction | Golden C++ test source, metadata conversion tests, unsupported test diagnostics, deterministic rendering |
 | Executable test behavior: legacy workflows configure CMake/Cargo, fetch or use googletest, cross-run ARM/SVE/NEON via qemu when available, and summarize runs. | `frozen/run_all.sh`, `frozen/run_tests.py`, `frozen/CMakeLists.txt` | `required-later`; not in this phase by default | Host-independent unit/golden tests; artifact writer; no compiler dependency | No compile/run orchestration, no toolchain abstraction, no host runtime policy | Future toolchain/test-execution phase | Optional `toolchain`/`slow` tests only, explicit compiler/qemu/rustup requirements, no default host dependency |
-| Generated documentation/report parity: legacy generates MkDocs content and large JSON/HTML primitive coverage reports. | `frozen/docs/_templates/**`, `frozen/out/reports/primitive_coverage.json`, `frozen/out/reports/primitive_coverage.html`, `frozen/run_all.sh` docs generation block | `required-later` for docs; `required-now` only if selected for legacy JSON adapter | Deterministic coverage report DTOs, JSON, HTML artifact, candidate dependency report | Current reports are redesign-owned and not legacy row/HTML/site parity | M42 for selected JSON adapter; later docs phase | Golden row excerpts, deterministic key order, report rendering does not rerun pipeline, docs/site parity explicitly deferred |
-| Backend manifest/language/translation parity: legacy YAML manifests and TSL language/translation maps drive artifacts, wrappers, type strings, and TSIL text expansion. | `frozen/generator_specs/backend_cpp.yaml`, `frozen/generator_specs/backend_rust.yaml`, `tsldata/detail/lang/types/types_cpp.tsl`, `tsldata/detail/lang/translate_cpp.tsl` | `required-now` for selected C++ binary/intrinsic forms; `required-later` for broad evaluation | Typed backend manifests and backend metadata validation | Translation snippets are validated but not evaluated; manifest template names are evidence, not architecture | M36, M38, M39 | Metadata unit tests, selected intrinsic/type mapping tests, unsupported translation diagnostics |
+| Generated documentation/report parity: legacy generates MkDocs content and large JSON/HTML primitive coverage reports. | `frozen/docs/_templates/**`, `frozen/out/reports/primitive_coverage.json`, `frozen/out/reports/primitive_coverage.html`, `frozen/run_all.sh` docs generation block | `required-later` for docs and selected JSON adapter | Deterministic coverage report DTOs, JSON, HTML artifact, candidate dependency report | Current reports are redesign-owned and not legacy row/HTML/site parity | Deferred old M42 after M40 boundary correction; later docs phase | Golden row excerpts, deterministic key order, report rendering does not rerun pipeline, docs/site parity explicitly deferred |
+| Backend manifest/language/translation parity: legacy YAML manifests and TSL language/translation maps drive artifacts, wrappers, type strings, and TSIL text expansion. | `frozen/generator_specs/backend_cpp.yaml`, `frozen/generator_specs/backend_rust.yaml`, `tsldata/detail/lang/types/types_cpp.tsl`, `tsldata/detail/lang/translate_cpp.tsl` | `required-now` for selected C++ binary/intrinsic forms; `required-later` for broad evaluation | Typed backend manifests and backend metadata validation, M39 transitional native output | Translation snippets are validated but not yet evaluated by a supported lowering/translation service; renderer-local intrinsic/type maps are explicitly rejected as the long-term path | M40 boundary correction | Metadata unit tests, selected data-driven intrinsic/type mapping tests, unsupported translation diagnostics, renderer-boundary regression tests |
 | Dependency/call closure parity: legacy detects `call<primitive=...>` dependencies and can expand helper primitives for tests. | `frozen/tsl-gen/tsl_gen/tsil_engine/dependencies.py`, `frozen/tsl-gen/tsl_gen/backend/tests/planner.py`, `tsldata/primitives/**.tsl` | `required-later` for semantic calls; `required-now` only for preserving existing primitive/candidate fallback visibility | Primitive and candidate-specific dependency closure with fallback rows | No semantic TSIL call AST, no `@self` generic call lowering, no test-helper dependency policy beyond accepted metadata | M35 records target; later TSIL call/test-helper milestone | Dependency golden/DTO tests, unsupported generic-call diagnostics, primitive fallback remains visible |
-| Output layout/file naming parity: legacy writes specific names under `out/tsl`, `out/reports`, `out/tsl_rs`, tests, examples, and docs. | `frozen/run_all.sh`, `frozen/out/**`, `frozen/tsl-gen/tsl_gen/app/cli.py` | `required-now` for selected C++ output names; `required-later` for broad tree parity | Artifact descriptors, path-safety writer, deterministic writer reports, M36 `tsl/tsl_native.hpp` path support | Broad tree parity and sidecar path coverage remain deferred | M35, M36, M41 | Artifact path golden tests, path safety, duplicate target diagnostics, no hidden writes |
-| Diagnostics/error behavior parity: legacy raises `SystemExit` for many user errors and scripts print shell-style errors. | `frozen/run_all.sh`, `frozen/tsl-gen/tsl_gen/app/cli.py`, `frozen/tsl-gen/tsl_gen/core/diagnostics.py` | `explicitly-not-required` for exact exception/wording; `required-later` for comparable actionable diagnostics | Structured diagnostics with stable codes and CLI exit handling | Not all legacy invalid workflows have redesigned diagnostic coverage | M41 for selected CLI diagnostics; later validation expansion | Assert diagnostic code/severity/location where available; no `SystemExit` from pure logic; exact legacy wording not required |
+| Output layout/file naming parity: legacy writes specific names under `out/tsl`, `out/reports`, `out/tsl_rs`, tests, examples, and docs. | `frozen/run_all.sh`, `frozen/out/**`, `frozen/tsl-gen/tsl_gen/app/cli.py` | `required-now` for selected C++ output names; `required-later` for broad tree parity | Artifact descriptors, path-safety writer, deterministic writer reports, M36 `tsl/tsl_native.hpp` path support | Broad tree parity, CLI workflow compatibility, and sidecar path coverage remain deferred | M35, M36; old M41 deferred | Artifact path golden tests, path safety, duplicate target diagnostics, no hidden writes |
+| Diagnostics/error behavior parity: legacy raises `SystemExit` for many user errors and scripts print shell-style errors. | `frozen/run_all.sh`, `frozen/tsl-gen/tsl_gen/app/cli.py`, `frozen/tsl-gen/tsl_gen/core/diagnostics.py` | `explicitly-not-required` for exact exception/wording; `required-later` for comparable actionable diagnostics | Structured diagnostics with stable codes and CLI exit handling | Not all legacy invalid workflows have redesigned diagnostic coverage | Deferred CLI compatibility milestone; later validation expansion | Assert diagnostic code/severity/location where available; no `SystemExit` from pure logic; exact legacy wording not required |
 | C17 backend behavior: legacy has a C17 manifest/templates. | `frozen/generator_specs/backend_c17.yaml`, `frozen/jinja/c17/**` | `explicitly-not-required` for current parity phase | C++ and Rust active backend policy; C17 deferred evidence | C17 not active and should not be reintroduced by C++ parity work | None in this phase | Tests ensure active backend IDs remain C++/Rust unless a future ADR changes policy |
 
 ## Milestone 35 Parity Baseline
@@ -764,10 +801,14 @@ Selected parity levels:
   `frozen/out/tsl/tsl_native.hpp` evidence and a redesign-owned exact golden
   fixture under `tslgen/tests/fixtures/golden/parity/cpp/`.
 - C++ scalar and native generated code use semantic equivalence against legacy
-  evidence plus redesign-owned exact golden output for the new renderer.
+  evidence plus redesign-owned exact golden output for the new renderer, but
+  native intrinsic parity must be reached through data-driven lowering and
+  translation rather than renderer-local lookup tables.
   Milestone 37 selects `detail::add_binary`, scalar `simd<int32_t, scalar>` and
   `simd<uint32_t, scalar>` specializations, and public `add<Vec>` wrapper
-  delegation for the scalar `add` slice.
+  delegation for the scalar `add` slice. Milestone 39 is the first selected
+  native-output spike; Milestone 40 must preserve that output while moving
+  intrinsic/type resolution behind data-driven lowering/translation.
 - Generated C++ test parity is semantic for test name, inputs, expected values,
   wrapper call, and assertion intent.
 - Coverage JSON parity is selected-field semantic parity until a future report

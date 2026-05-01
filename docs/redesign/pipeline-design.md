@@ -283,14 +283,17 @@ Processing:
 
 - Parse TSIL text into TSIL AST.
 - Resolve semantic operations.
-- Evaluate generation-time conditions.
+- Evaluate generation-time conditions and generation-time type/value queries
+  against explicit generation context.
 - Lower to backend-neutral IR.
-- Apply backend translation rules.
+- Apply backend translation rules only after generation-time helpers have been
+  resolved to typed semantic values.
 - Attach required flags and helper includes.
 
 Validation:
 
 - Unknown TSIL operation.
+- Unresolved generation-time helper reaching backend translation.
 - Missing translation entry.
 - Type mismatch.
 - Unsupported immediate dispatch strategy.
@@ -319,6 +322,24 @@ parameter-reference, binary-expression, and return-statement values for that
 shape only. The stage still diagnoses all other TSIL, malformed nearby
 `emit_return(...)` forms, generation-time branches, and non-TSIL payloads before
 rendering can consume them.
+
+The post-Milestone-34 backend-drift correction keeps native intrinsic expansion
+behind this stage. Milestone 38 lowers exactly the selected
+`emit_return(intrin_compose<add>(left, right));` form into typed helper data.
+Milestone 39 may preserve the selected native C++ `avx2/f32` observable output
+as a transitional parity slice, but it is not the pipeline model for future
+native rendering. Milestone 40 adds the translation/intrinsic-composition
+boundary that can turn typed helper data plus backend metadata into backend-call
+IR while preserving the M39 output. The C++ renderer must receive the resolved
+backend-call IR; it must not compose `_mm256_add_ps` from primitive, extension,
+and type inside rendering.
+
+Backend translation is not a second TSIL evaluator. Any
+`if<generation>(...)`, `type<generation>(...)`, or `value<generation>(...)`
+that influences an intrinsic modifier, type suffix, backend type spelling, or
+translation value must be resolved earlier in semantic lowering. Backend
+translation may handle `type<backend>(...)` and `value<backend>(...)` only as
+typed requests whose inputs are already-resolved semantic values.
 
 ## Stage 9: Backend Planning
 
@@ -416,6 +437,14 @@ metadata. That artifact is metadata-style source, not compiled or executable
 test orchestration. Milestone 31 may add one Rust production-shaped
 declaration/signature slice. Each of these rendering slices must stay
 backend-owned and must not perform selection, lowering, execution, or writing.
+
+Corrected native rendering is a boundary repair, not an extension of the scalar
+mini-renderer. Milestone 39 may keep one selected native C++ `binary/add`
+specialization as transitional output. Milestone 40 must make that output flow
+from backend-call IR produced by lowering/translation rather than from
+renderer-local intrinsic/type tables. Generated-test, CLI compatibility, and
+legacy-report parity milestones that were previously planned after native
+rendering are deferred until this renderer boundary is corrected.
 
 ## Stage 11: Artifact Writing
 

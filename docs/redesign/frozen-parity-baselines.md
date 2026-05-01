@@ -34,23 +34,23 @@ Accepted redesign boundaries available for future parity slices:
 
 | Evidence path | Backend | Artifact kind | Template family | Primitive family | Extension | Type | Required toolchain | Parity relevance | Recommended parity level | Proposed milestone |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `frozen/out/tsl/tsl_native.hpp` | C++ | generated header | primary, specialization, wrapper | `fundamental/add` first; broad native families later | `scalar`, `avx2` first; broad native extensions later | `si32`, `ui32`, `f32` first | none for golden inspection; C++ compiler only for optional future execution | first C++ output target | semantic equivalence plus redesign-owned exact golden text; selected snippets only | M36, M37, M39 |
+| `frozen/out/tsl/tsl_native.hpp` | C++ | generated header | primary, specialization, wrapper | `fundamental/add` first; broad native families later | `scalar`, `avx2` first; broad native extensions later | `si32`, `ui32`, `f32` first | none for golden inspection; C++ compiler only for optional future execution | first C++ output target | semantic equivalence plus redesign-owned exact golden text; selected snippets only | M36, M37, M39 transitional, M40 correction |
 | `frozen/out/tsl/tsl_generic.hpp` | C++ | generated header | generic specializations and wrappers | broad primitive families | `generic` | sized generic type matrix | none for inspection; C++ compiler for optional execution | deferred generic parity evidence | semantic equivalence; no whole-file byte parity | later generic C++ milestone |
 | `frozen/out/tsl/CMakeLists.txt` | C++ | sidecar build metadata | output layout | all generated headers | selected generated header set | n/a | CMake only if execution is selected later | selected as output-layout sidecar evidence | byte-for-byte whole-file candidate when a future sidecar slice selects it | deferred after M36 |
 | `frozen/out/tsl/tsl_flags.cmake` | C++ | sidecar compile flags | output layout | all generated headers | required native extensions | n/a | CMake/C++ compiler only if execution is selected later | selected as required-flags sidecar evidence | semantic for required flag sets; byte-for-byte only for a selected generated input | deferred after native C++ parity |
-| `frozen/out/reports/primitive_coverage.json` | report | coverage JSON | row-oriented coverage | broad primitive catalog | broad extension matrix | broad type matrix | none | report parity evidence, not first output target | selected-row semantic/field parity; no whole-file byte parity | M42 |
+| `frozen/out/reports/primitive_coverage.json` | report | coverage JSON | row-oriented coverage | broad primitive catalog | broad extension matrix | broad type matrix | none | report parity evidence, not first output target | selected-row semantic/field parity; no whole-file byte parity | deferred after backend-boundary correction |
 | `frozen/out/reports/primitive_coverage.html` | report | coverage HTML | row table | broad primitive catalog | broad extension matrix | broad type matrix | none | documentation/report evidence only for now | redesign-owned HTML unless a later milestone selects exact rows | later docs/report milestone |
-| `frozen/jinja/cpp/test_file.j2` | C++ | generated test source evidence | test file wrapper | broad test families | selected test extension | selected test type | none for inspection; `gtest`/C++ only for optional execution | selected generated-test structure evidence | semantic equivalence for one generated test source | M40 |
-| `frozen/jinja/cpp/test_case.j2` | C++ | generated test case evidence | `binary` first; broad tests later | `fundamental/add` first | selected extension | `si32` first | none for inspection; `gtest`/C++ only for optional execution | selected generated-test behavior evidence | semantic equivalence for test name, inputs, expected values, wrapper call, and assertion shape | M40 |
-| `frozen/generator_specs/tests.yaml` | C++/Rust | test planning metadata | test support policy | broad primitive families | runtime and fixed-width extension policy | broad type matrix | none | test planning and runtime-lane evidence | semantic policy evidence; no direct golden output | M40 and later toolchain phase |
-| `frozen/generator_specs/backend_cpp.yaml` | C++ | backend manifest evidence | primary, specialization, wrappers, combined templates | broad template families | all C++ supported extensions | broad type matrix | none | C++ backend metadata evidence | semantic manifest policy; no template-file architecture | M36, M37, M39 |
+| `frozen/jinja/cpp/test_file.j2` | C++ | generated test source evidence | test file wrapper | broad test families | selected test extension | selected test type | none for inspection; `gtest`/C++ only for optional execution | selected generated-test structure evidence | semantic equivalence for one generated test source | deferred after backend-boundary correction |
+| `frozen/jinja/cpp/test_case.j2` | C++ | generated test case evidence | `binary` first; broad tests later | `fundamental/add` first | selected extension | `si32` first | none for inspection; `gtest`/C++ only for optional execution | selected generated-test behavior evidence | semantic equivalence for test name, inputs, expected values, wrapper call, and assertion shape | deferred after backend-boundary correction |
+| `frozen/generator_specs/tests.yaml` | C++/Rust | test planning metadata | test support policy | broad primitive families | runtime and fixed-width extension policy | broad type matrix | none | test planning and runtime-lane evidence | semantic policy evidence; no direct golden output | deferred generated-test and later toolchain phase |
+| `frozen/generator_specs/backend_cpp.yaml` | C++ | backend manifest evidence | primary, specialization, wrappers, combined templates | broad template families | all C++ supported extensions | broad type matrix | none | C++ backend metadata evidence | semantic manifest policy; no template-file architecture | M36, M37, M40 |
 | `frozen/generator_specs/backend_rust.yaml` | Rust | backend manifest evidence | primary, specialization, wrappers, trait | broad Rust families | Rust-supported extensions | broad type matrix | Cargo only for future execution | deferred Rust parity evidence | semantic manifest policy; no current output baseline | future Rust parity phase |
 | `frozen/generator_specs/wrapper_shapes.yaml` | C++/Rust | wrapper signature evidence | `binary` first; broad wrappers later | `fundamental/add` first | selected extension | selected type | none | selected wrapper relationship evidence | semantic equivalence for public wrapper signature and delegation | M37 |
 | `frozen/tsl-gen/tsl_gen/tsil.lark` | neutral lowering | TSIL grammar evidence | expressions, calls, loops, intrinsics | broad primitive TSIL | all | all | none | TSIL syntax evidence | semantic lowering fixtures only; no legacy parser dependency | M38 and later TSIL milestones |
-| `tsldata/primitives/arithmetic/fundamental.tsl` | source corpus | TSL primitive source | `binary` first | `fundamental/add` | `scalar`, `avx2` first | `si32`, `ui32`, `f32` first | none | active source evidence for selected baseline | accepted source-data behavior, not generated output | M37, M38, M39, M40 |
-| `frozen/run_all.sh` | workflow | generation/build/test/docs workflow | all | selected by CLI filters | host-derived or explicit extensions | broad | CMake, compilers, optional qemu, Cargo, MkDocs | workflow parity evidence | one generation-only workflow first; build/test/docs deferred | M41 |
+| `tsldata/primitives/arithmetic/fundamental.tsl` | source corpus | TSL primitive source | `binary` first | `fundamental/add` | `scalar`, `avx2` first | `si32`, `ui32`, `f32` first | none | active source evidence for selected baseline | accepted source-data behavior, not generated output | M37, M38, M39 transitional, M40 correction |
+| `frozen/run_all.sh` | workflow | generation/build/test/docs workflow | all | selected by CLI filters | host-derived or explicit extensions | broad | CMake, compilers, optional qemu, Cargo, MkDocs | workflow parity evidence | one generation-only workflow first; build/test/docs deferred | deferred CLI milestone |
 | `frozen/run_tests.py` | workflow | generated test execution workflow | test execution | selected primitives or files | explicit extension matrix | broad | CMake, compilers, optional qemu, Cargo, possible googletest fetch | executable-test evidence | not in default validation; future optional toolchain policy | future toolchain phase |
-| `frozen/tsl-gen/tsl_gen/app/cli.py` | workflow | legacy CLI evidence | codegen and tests | selected primitives/templates | explicit extensions and CPU flags | broad | none for inspection | CLI compatibility evidence | one mapped generation workflow first; no drop-in claim | M41 |
+| `frozen/tsl-gen/tsl_gen/app/cli.py` | workflow | legacy CLI evidence | codegen and tests | selected primitives/templates | explicit extensions and CPU flags | broad | none for inspection | CLI compatibility evidence | one mapped generation workflow first; no drop-in claim | deferred CLI milestone |
 
 ## Selected First Parity Target
 
@@ -61,14 +61,13 @@ reviewable:
 1. M36 owns the selected output path and minimum support preamble.
 2. M37 owns scalar primary, specialization, and wrapper parity for `si32` and
    `ui32`.
-3. M38 owns the next TSIL lowering form:
-   `emit_return(intrin_compose<add>(left, right));`, represented as a
-   backend-neutral intrinsic-compose return.
-4. M39 owns native `avx2/f32` intrinsic rendering.
-5. M40 owns one generated C++ test source for `add_i32_basic`.
-6. M41 may map one generation-only CLI workflow to the accepted pipeline after
-   the selected C++ artifact exists.
-7. M42 may add selected legacy coverage JSON row parity.
+3. M38 owns the selected bare `intrin_compose<add>` lowering slice.
+4. M39 owns the transitional native `avx2/f32` output slice and must not be
+   expanded as the long-term architecture.
+5. M40 owns backend translation and intrinsic-composition correction while
+   preserving the selected M39 output from already-resolved backend-call IR.
+6. Generated C++ tests, CLI workflow compatibility, and coverage JSON adapter
+   work are deferred until the backend/lowering boundary correction is accepted.
 
 This target is small enough because it uses one primitive family, one template
 family, two scalar integer type tags, and one native floating-point
@@ -165,17 +164,20 @@ parity, or report/documentation parity.
   - `frozen/out/reports/primitive_coverage.json:57762-57777` records
     `add`, `avx2`, `cpp`, `f32`, `has_tsil=true`, and
     `effective_present=true`.
-- Fixture path in this milestone: none.
-- Proposed future fixture path:
-  `tslgen/tests/fixtures/golden/parity/cpp/add_avx2_f32_excerpt.hpp`.
+- Fixture path selected by M39:
+  `tslgen/tests/fixtures/golden/parity/cpp/add_native_avx2_f32_excerpt.hpp`.
+- Fixture provenance:
+  `tslgen/tests/fixtures/golden/parity/cpp/add_native_avx2_f32_excerpt.provenance.md`.
 - Parity level: semantic equivalence against legacy evidence plus an exact
-  redesign-owned golden file for future generated output. Byte-for-byte legacy
+  redesign-owned golden file for generated output. Byte-for-byte legacy
   whitespace parity is not selected.
-- Validation method: M38 lowers the selected `intrin_compose<add>` form to a
-  typed intrinsic-compose return named `add` with ordered parameter-reference
-  arguments; future M39 must render a deterministic C++ specialization with
-  `simd<float, avx2>`, parameter order `left, right`,
-  `native_supported=true`, and `_mm256_add_ps(left, right)`.
+- Validation method: M38 lowers the selected bare `intrin_compose<add>` helper
+  form, M39 renders a deterministic transitional C++ specialization with
+  `simd<float, avx2>`, parameter order `left, right`, `native_supported=true`,
+  and `_mm256_add_ps(left, right)`, and M40 preserves that output while proving
+  the selected backend intrinsic call is derived from typed `tsldata` metadata
+  and consumed as already-resolved backend-call IR instead of renderer-local
+  intrinsic lookup.
 - Known limitations: integer intrinsic suffix inference, AVX512/SSE/NEON/SVE
   variants, masks, generic calls, and translation-map-wide evaluation remain
   deferred.
@@ -197,8 +199,9 @@ parity, or report/documentation parity.
 - Parity level: semantic equivalence for test name, selected primitive,
   input vectors, expected vector, wrapper call, and assertion intent.
   Byte-for-byte legacy template output is not selected.
-- Validation method: future M40 must render deterministic test source from
-  `TestSourcePlan` data and must not execute compilers or `gtest` by default.
+- Validation method: a future deferred generated-test milestone must render
+  deterministic test source from `TestSourcePlan` data and must not execute
+  compilers or `gtest` by default.
 - Known limitations: executable assertion framework breadth, mask resizing,
   runtime-lane tests, support headers, and compile/run orchestration remain
   deferred.
@@ -215,9 +218,9 @@ parity, or report/documentation parity.
   `tslgen/tests/fixtures/golden/parity/reports/add_avx2_f32_coverage_row.json`.
 - Parity level: selected-field semantic parity and stable field ordering for
   the adapter output. Whole-report row count parity is not selected.
-- Validation method: future M42 must render rows from accepted report DTOs and
-  must not rerun parsing, selection, lowering, or rendering during report
-  serialization.
+- Validation method: a future deferred report-adapter milestone must render
+  rows from accepted report DTOs and must not rerun parsing, selection,
+  lowering, or rendering during report serialization.
 - Known limitations: full coverage matrix parity and HTML/site parity remain
   deferred.
 

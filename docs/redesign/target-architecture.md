@@ -299,8 +299,30 @@ Responsibilities:
 - Represent unsupported or deferred implementation payloads explicitly.
 - Analyze primitive calls and dependencies when enough semantics are available.
 - Evaluate generation-time expressions such as `if<generation>(...)`.
+- Resolve generation-time type/value queries such as `type<generation>(...)`
+  and `value<generation>(...)` into typed semantic values before backend
+  translation.
 - Apply translation maps where that belongs before backend rendering.
+- Treat backend-scoped queries such as `type<backend>(...)` and
+  `value<backend>(...)` as translation requests over already-resolved semantic
+  inputs, not as raw nested TSIL text.
+- Represent TSIL helpers such as `intrin_compose<...>` as typed data, including
+  base intrinsic name, modifier fields, argument expressions, and required
+  generation/backend context.
+- Produce backend-call IR for selected translation-aware slices so renderers do
+  not own semantic intrinsic or type resolution.
 - Produce lowered body objects.
+
+Current roadmap note:
+
+- The Milestone 39 native C++ `avx2/f32` output is transitional parity
+  evidence, not the final lowering/backend boundary.
+- Milestone 40 is the first required boundary-correction slice: it must
+  preserve that output while producing backend-call IR or an equivalent typed
+  translated value before rendering.
+- Milestone 41 defines the generation-time semantic lowering contract so raw
+  `if<generation>`, `type<generation>`, and `value<generation>` forms cannot
+  leak into backend translation.
 
 Does not:
 
@@ -310,6 +332,8 @@ Does not:
 - Render final backend text.
 - Evaluate translation maps before a supported lowering slice defines that
   behavior.
+- Pass unresolved generation-time helper IR into backend translation.
+- Defer supported semantic intrinsic-name composition to text renderers.
 
 ### `backends`
 
@@ -327,6 +351,8 @@ Responsibilities:
   lowering boundary supports the selected slice.
 - Own backend-specific naming, parameter, and body-rendering policies for the
   supported slice.
+- Render backend-call IR and backend type/name values that were already
+  produced by the lowering/translation boundary.
 
 Does not:
 
@@ -334,6 +360,9 @@ Does not:
 - Make selection decisions based on CPU flags.
 - Own output paths.
 - Evaluate generation-time TSIL conditions in template rendering.
+- Maintain broad hardcoded intrinsic/type lookup tables for semantic lowering.
+- Decide that a semantic helper such as `intrin_compose<add>` maps to a
+  particular backend intrinsic name.
 
 ### `rendering`
 

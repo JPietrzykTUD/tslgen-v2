@@ -1117,60 +1117,78 @@ Decision:
   landed yet.
 - C++ scalar `add_binary` and native `avx2/f32` code use semantic equivalence
   against frozen evidence plus redesign-owned exact golden output for the new
-  renderer.
+  renderer, but native parity must be reached through data-driven translation
+  rather than renderer-local intrinsic lookup.
 - Milestone 37 resolves the selected scalar portion by rendering
   `detail::add_binary`, scalar `simd<int32_t, scalar>` and
   `simd<uint32_t, scalar>` specializations, and the public `add<Vec>` wrapper
   delegation from typed candidates plus a `LoweringPlan`. Native `avx2/f32`
-  parity remains deferred to Milestones 38 and 39.
+  parity may be represented by the accepted Milestone 39 transitional slice,
+  but it must not expand until Milestone 40 corrects intrinsic/type resolution
+  behind the lowering/translation boundary.
 - Whole-file legacy whitespace, full header ordering, and full report byte
   parity are not selected.
 
 Implementation blocked:
 
-No for Milestones 36, 37, and 39 when they stay within the selected baseline.
-Yes for any broader output family until that family records its parity level.
+No for Milestones 36 and 37 when they stay within the selected baseline. No
+revert is required solely because Milestone 39 rendered the selected
+`avx2/f32` output through a narrow local mapping, provided that mapping is not
+expanded. Yes for any native expansion beyond the accepted M39 slice until
+Milestone 40 establishes the helper and translation boundary. Yes for any
+broader output family until that family records its parity level.
 
-## OQ-032: Which TSIL Construct Should Follow The Mini Return Lowering?
+## OQ-032: Which TSIL Helper Boundary Should Follow The Mini Return Lowering?
 
-Status: Answered for the Milestone 38 slice; broad TSIL grammar remains open.
+Status: Reopened and narrowed by the backend-drift correction roadmap.
 
 Why it matters:
 
 Functional parity requires far more TSIL than the accepted direct
-parameter-add return. The next TSIL step should be the smallest construct needed
-by the selected C++ parity target, not a full grammar implementation.
+parameter-add return. The previous next step selected only
+`emit_return(intrin_compose<add>(left, right));`, but repository evidence shows
+that `intrin_compose` belongs to a larger helper ecosystem with modifier
+fields, generation-time type/value queries, generation-time branches, primitive
+calls, loops, variables, casts, direct intrinsics, and translation-map helpers.
+If the next slice ignores that context, backend renderers can drift into
+hardcoded intrinsic and type lookup tables.
 
-Milestone 38 decision:
+Current decision:
 
-Lower exactly `emit_return(intrin_compose<add>(left, right));` when `left` and
-`right` are declared primitive parameters. The lowered model is a
-backend-neutral intrinsic-compose return named `add` with ordered
-parameter-reference arguments. It does not encode C++ intrinsic names, evaluate
-translation maps, or activate native rendering.
+Do not treat a bare `intrin_compose<add>` parser or the Milestone 39
+transitional renderer mapping as sufficient to unblock native backend
+expansion. Milestone 38 lowers exactly
+`emit_return(intrin_compose<add>(left, right));` into typed helper data.
+Milestone 39 may preserve the selected observable native C++ output, but it is
+not the architecture. Milestone 40 must define the backend
+translation/intrinsic-composition boundary and resolve the selected native C++
+call through typed data before broader rendering continues.
 
-Remaining deferred TSIL work includes integer suffix inference,
-`intrin_compose` metadata, primitive calls, loops, variables, generation-time
-branches, type/value metadata, nested expressions, and Rust TSIL lowering.
-
-Milestone 35 selection:
-
-The selected TSIL evidence is `tsldata/primitives/arithmetic/fundamental.tsl`
-lines 77-80 for `avx2/f?` `emit_return(intrin_compose<add>(left, right));`.
-The future native renderer baseline is the `simd<float, avx2>` specialization
-in `frozen/out/tsl/tsl_native.hpp` lines 24337-24355.
+Remaining deferred TSIL work includes full modifier expression evaluation,
+integer suffix inference, primitive calls, loops, variables, generation-time
+branches, type/value metadata, nested expressions, direct `intrin<...>` calls,
+helper families such as `io`, `mem`, `seq`, `pack`, and `algo`, and Rust TSIL
+lowering.
 
 Required evidence:
 
 - `tsldata/primitives/arithmetic/fundamental.tsl`
+- `tsldata/primitives/load_store/load.tsl`
+- `tsldata/primitives/bitwise/shifts.tsl`
+- `tsldata/primitives/conversion/repr_change.tsl`
+- `tsldata/primitives/load_store/rnd_access.tsl`
 - `frozen/tsl-gen/tsl_gen/tsil.lark`
+- `frozen/tsl-gen/tsl_gen/tsil_engine/passes/*.py`
+- `frozen/tsl-gen/tsl_gen/resolver/render_support.py`
 - `frozen/out/tsl/tsl_native.hpp`
 
 Implementation blocked:
 
-No for Milestone 39 when it consumes the selected `intrin_compose<add>`
-floating-point form. Yes for broader TSIL constructs until their fixtures and
-expected models are selected.
+No for Milestone 38 and no need to revert Milestone 39 solely on boundary
+grounds. Yes for any native rendering expansion beyond the selected M39 slice
+until Milestone 40 establishes data-driven translation and typed lowered helper
+output. Yes for broader TSIL constructs until their fixtures and expected
+models are selected.
 
 ## OQ-033: Which Legacy CLI Workflow Should Be Supported First?
 
@@ -1190,13 +1208,15 @@ Start with one generation-only workflow equivalent to selecting C++,
 input/primitives/templates, and an output file. Defer `run_all.sh` build/test
 orchestration, docs generation, clean mode, and test execution.
 
-Milestone 35 selection:
+Milestone 35 selection, now deferred by the backend-drift correction roadmap:
 
-Use one future M41 workflow equivalent to:
+Use one future CLI compatibility workflow equivalent to:
 `python -m tsl_gen --emit-lang cpp --input tsldata/primitives/arithmetic/fundamental.tsl --templates binary --primitives add --extensions scalar,avx2 --output <path>`.
 The redesigned command may map this behavior through accepted `PipelineConfig`,
 selection, rendering, and artifact writing; it must not import legacy CLI
-modules or claim full `run_all.sh` compatibility.
+modules or claim full `run_all.sh` compatibility. This workflow should not be
+scheduled until Milestone 40 corrects the native translation boundary or until
+the CLI slice explicitly limits itself to scalar output.
 
 Required evidence:
 
@@ -1206,8 +1226,8 @@ Required evidence:
 
 Implementation blocked:
 
-No for C++ parity rendering. Yes for Milestone 41 and for any user-facing claim
-of legacy CLI compatibility.
+No for C++ parity rendering. Yes for the deferred CLI workflow milestone and for
+any user-facing claim of legacy CLI compatibility.
 
 ## OQ-034: What Is The First Executable Test Parity Boundary?
 
@@ -1236,8 +1256,115 @@ Required evidence:
 
 Implementation blocked:
 
-No for Milestone 40 test-source rendering. Yes for any milestone that compiles
-or runs generated tests.
+No for a future deferred generated-test source rendering milestone once it is
+reintroduced after backend-boundary correction. Yes for any milestone that
+compiles or runs generated tests.
+
+## OQ-035: How Should Backend Intrinsic Composition Be Data-Driven?
+
+Status: Open; blocks native backend rendering beyond corrected planning slices.
+
+Why it matters:
+
+The current C++ native parity work exposed a renderer-local mapping from
+`("add", "avx2", "f32")` to `_mm256_add_ps`. That can reproduce one observable
+output, but it is not the generator architecture: intrinsic names should be
+composed from TSIL helper IR and typed `tsldata` translation/type/extension
+metadata. If this boundary is not explicit, each backend renderer will grow its
+own semantic translation table.
+
+Possible answers:
+
+- Add a lowering-owned backend translation service that resolves
+  `IntrinsicCompose` helper IR into backend-call IR before rendering.
+- Add a backend-owned translation service that is called from lowering but kept
+  outside text renderers.
+- Keep literal intrinsic names only for direct `intrin<...>` forms and use
+  data-driven composition for `intrin_compose<...>`.
+- Temporarily allow a one-case map only in a translation fixture, never in a
+  renderer, until richer modifier semantics are implemented.
+
+Required evidence:
+
+- `tsldata/detail/lang/types/types_cpp.tsl`
+- `tsldata/detail/lang/translate_cpp.tsl`
+- `tsldata/extensions/extension.tsl`
+- `tsldata/primitives/arithmetic/fundamental.tsl`
+- modifier-heavy examples in `tsldata/primitives/bitwise/shifts.tsl`,
+  `tsldata/primitives/conversion/repr_change.tsl`, and
+  `tsldata/primitives/load_store/rnd_access.tsl`
+- legacy evidence in `frozen/tsl-gen/tsl_gen/resolver/render_support.py`
+
+Implementation blocked:
+
+No for Milestone 38 and no automatic revert for the accepted Milestone 39
+transitional parity slice. Yes for any native C++ or Rust intrinsic rendering
+expansion beyond the selected M39 output until Milestone 40 defines a
+data-driven composition path.
+
+Current roadmap direction:
+
+- Milestone 39 is a transitional selected-output spike, not an expansion
+  pattern.
+- Milestone 40 owns the first typed translation/composition boundary and
+  preserves the M39 output through backend-call IR.
+- Milestone 40 must reject unresolved generation-time helpers at the translation
+  boundary; it should not evaluate `if<generation>`, `type<generation>`, or
+  `value<generation>` itself.
+- Milestone 41 defines the generation-time semantic lowering contract that runs
+  before backend translation.
+- Renderer-local intrinsic lookup tables are rejected as an implementation
+  strategy for future native expansion.
+
+## OQ-036: Where Do Generation-Time Helpers Resolve Relative To Backend Translation?
+
+Status: Answered as a roadmap policy; implementation details remain open for
+the first selected helper slice.
+
+Why it matters:
+
+TSIL expressions such as `if<generation>(...)`, `type<generation>(...)`, and
+`value<generation>(...)` affect which code exists and which semantic type/value
+is passed into backend translation. If backend translation evaluates those
+forms from raw text, it becomes a second TSIL interpreter and backend renderers
+can again accumulate semantic rules.
+
+Decision:
+
+Generation-time helpers resolve before backend translation. The ordered model
+is TSIL helper parse, generation-time semantic lowering, backend translation,
+then backend rendering. Backend translation may consume `type<backend>(...)`
+and `value<backend>(...)` only as typed requests whose inputs are already
+resolved semantic values.
+
+Possible first implementation slices:
+
+- Resolve one `type<generation>(...)` query needed by a selected intrinsic
+  suffix or type rule.
+- Resolve one `value<generation>(...)` query used by modifier metadata.
+- Evaluate one simple `if<generation>(...)` condition using selected primitive
+  attributes or type predicates.
+- Preserve an explicit typed `TsilGenerationIf` only when a later stage is
+  designed to accept deferred branch IR.
+
+Required evidence:
+
+- `tsldata/primitives/arithmetic/fundamental.tsl`
+- `tsldata/primitives/load_store/load.tsl`
+- `tsldata/primitives/load_store/store.tsl`
+- `tsldata/primitives/bitwise/shifts.tsl`
+- `tsldata/primitives/conversion/repr_change.tsl`
+- `frozen/tsl-gen/tsl_gen/tsil_engine/passes/generation_ifs.py`
+- `frozen/tsl-gen/tsl_gen/tsil_engine/passes/types.py`
+- `frozen/tsl-gen/tsl_gen/tsil_engine/passes/values.py`
+
+Implementation blocked:
+
+No for M40 because the selected `avx2/f32` default intrinsic-composition case
+can remain generation-free and must reject unresolved generation-time inputs.
+Yes for modifier support, suffix inference, branch-dependent output, and broad
+translation-map evaluation until Milestone 41 defines and a later numbered
+slice implements the selected generation-time semantic lowering behavior.
 
 ## Follow-ups from Milestone 2 review
 

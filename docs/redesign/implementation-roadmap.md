@@ -1967,6 +1967,78 @@ family. Rust, executable tests, generated docs, and broad CLI compatibility
 remain planned later unless the inventory milestone changes the priority with
 evidence.
 
+Roadmap correction for TSIL/backend drift:
+
+The native C++ parity path must not grow backend-local type or intrinsic lookup
+tables. Evidence from `tsldata/primitives/**.tsl` shows that
+`intrin_compose<...>` is only one helper among many TSIL forms that require
+semantic lowering.
+
+Current-state policy:
+
+- Do not revert Milestone 39 solely because it used a narrow renderer-local
+  intrinsic mapping for the selected `avx2/f32` output.
+- Treat Milestone 39 as a transitional parity spike that proves the observable
+  native C++ output, not as the architecture for future native rendering.
+- Do not expand the Milestone 39 hardcoded pattern to additional intrinsics,
+  types, extensions, backends, or helper forms.
+- Milestone 40 must preserve the selected M39 output while relocating
+  intrinsic/type resolution behind the lowering/translation boundary.
+- Generated-test, CLI workflow, coverage-adapter, Rust-body, and broader C++
+  parity work remain deferred until the M40 boundary correction is accepted.
+
+Staged lowering/translation contract:
+
+1. TSIL parsing/lowering produces typed helper IR.
+2. Generation-time semantic lowering resolves `if<generation>(...)`,
+   `type<generation>(...)`, and `value<generation>(...)` against an explicit
+   generation context before backend translation runs.
+3. Backend translation receives typed semantic values such as resolved type
+   tags, selected extension metadata, primitive attributes, and ordered helper
+   arguments. It does not evaluate raw generation-time TSIL text.
+4. Backend-scoped forms such as `type<backend>(...)` and
+   `value<backend>(...)` are translation requests whose inputs must already be
+   typed semantic values.
+5. Backend renderers receive backend-call IR or equivalent translated values
+   and format text only.
+
+### TSIL/Lowering Helper Inventory Matrix
+
+| Observed helper/form | Evidence path | Apparent semantics | Required context | Lowered IR concept | Backend/data dependency | Parity priority | Proposed milestone | Validation |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Direct scalar return `emit_return(left + right);` | `tsldata/primitives/arithmetic/fundamental.tsl` | Return a binary expression over declared primitive parameters. | Primitive parameter names and selected candidate. | `TsilReturnStatement(TsilBinaryExpression("+", ...))` | None beyond backend expression rendering. | `required-now`, already accepted for scalar parity | M27/M28/M37 retained | Lowering unit tests and C++ scalar golden output. |
+| Simple `intrin_compose<add>(left, right)` | `tsldata/primitives/arithmetic/fundamental.tsl` | Compose a target intrinsic from operation name plus default backend prefix/suffix for selected extension and type. | Backend ID, extension, type tag, language type map, intrinsic style, primitive parameters. | `TsilIntrinsicComposeExpression` plus backend-call IR after translation. | `tsldata/detail/lang/types/types_cpp.tsl`, `tsldata/detail/lang/translate_cpp.tsl`, `tsldata/extensions/extension.tsl` | `required-for-selected-parity-slice` | M38/M39 transitional, M40 correction | Data-driven `add + avx2 + f32 -> _mm256_add_ps` fixture with no renderer-owned lookup table after M40. |
+| `intrin_compose` modifiers: `prefix=...`, `suffix=...`, `infix=...`, `post=...`, `immediate(n)=...` | `tsldata/primitives/arithmetic/fundamental.tsl`, `tsldata/primitives/bitwise/shifts.tsl`, `tsldata/primitives/conversion/repr_change.tsl`, `tsldata/primitives/load_store/rnd_access.tsl`, `frozen/tsl-gen/tsl_gen/resolver/render_support.py` | Compose backend intrinsic names and immediate metadata from explicit and default modifier fields. | Modifier parser, already-resolved generation-time type/value inputs, backend intrinsic naming policy. | `IntrinsicComposeModifier`, `BackendIntrinsicName`, optional immediate metadata. | Translation/type maps, extension intrinsic style, type suffix rules. | `required-later`; default prefix/suffix is `required-for-selected-parity-slice` | M40 for selected generation-free default form; later helper slices after generation-time semantic lowering for full modifier semantics | Unit tests for modifier parsing, deterministic composition, unsupported modifier diagnostics, and proof that generation-time expressions are resolved before backend translation. |
+| `if<generation>(...)` / `else<generation>` | `tsldata/primitives/load_store/load.tsl`, `tsldata/primitives/load_store/store.tsl`, `tsldata/primitives/bitwise/shifts.tsl`, `frozen/tsl-gen/tsl_gen/tsil_engine/passes/generation_ifs.py` | Select a TSIL branch at generation time based on attributes, type predicates, or vector metadata. | Generation context: selected type, extension, primitive attributes, vector metadata, type predicates. | `TsilGenerationIf` or already-pruned statement list with branch provenance. | Translation values such as type predicates and primitive attributes. | `required-later`, `required-for-selected-parity-slice` only when a selected output uses a generation branch | M41 selection or later numbered helper slice | Branch selection fixtures, unsupported condition diagnostics, renderer non-evaluation tests. |
+| `type<generation>(...)`, `value<generation>(...)`, `type<backend>(...)`, `value<backend>(...)` | `tsldata/primitives/**.tsl`, `tsldata/detail/lang/translate_cpp.tsl`, `frozen/tsl-gen/tsl_gen/tsil_engine/passes/types.py`, `frozen/tsl-gen/tsl_gen/tsil_engine/passes/values.py` | Resolve semantic types/values first, then translate backend spellings or suffixes from typed values. | Type tag, extension, vector/register metadata, primitive attributes, backend language map, translation map. | `TsilGenerationTypeQuery`, `TsilGenerationValueQuery`, `ResolvedGenerationValue`, `BackendTypeRequest`, `BackendValueRequest`. | Typed language maps and translation snippets. | `required-later`; selected C++ type spelling is `required-for-selected-parity-slice` | M40 for selected generation-free C++ type spelling; M41 defines generation-time-before-backend contract; later numbered slice implements selected query forms | Type/value query fixtures, missing map diagnostics, no renderer-owned resolution, and tests that backend translation never receives unresolved `type<generation>`/`value<generation>` nodes. |
+| `call<primitive=...>` and `call<primitive=@self[...] ...>` | `tsldata/primitives/arithmetic/fundamental.tsl`, `tsldata/primitives/misc/conflict.tsl`, `tsldata/primitives/load_store/load.tsl` | Call selected primitive implementations or wrappers; may also define dependency edges. | Catalog, selected candidates, type/extension arguments, attributes, dependency closure. | `TsilPrimitiveCall` plus dependency/render-call metadata. | Selection and dependency closure; backend call translation. | `required-later` | Future TSIL call/dependency milestone after M41 chooses the next helper family | Candidate-specific call fixtures, fallback diagnostics, no string-only dependency semantics. |
+| `loop<range>`, `loop<unroll>`, `var<...>`, `let<type>`, assignment, indexing | `tsldata/primitives/arithmetic/fundamental.tsl`, `tsldata/primitives/io/out.tsl`, `tsldata/primitives/misc/conflict.tsl` | Structured statements for generic fallback implementations and helper code. | Statement parser, scoped symbols, type/value evaluation, backend statement translation. | `TsilLoop`, `TsilVariable`, `TsilLetType`, assignment/index expressions. | Translation entries for loops, vars, arrays, and type aliases. | `required-later` | Future generic-body lowering phase | Statement-level AST fixtures and unsupported-scope diagnostics. |
+| `cast<...>`, `io<...>`, `mem<...>`, `pack<...>`, `seq<...>`, `algo<...>` | `tsldata/primitives/io/out.tsl`, `tsldata/primitives/bitwise/bit_counts.tsl`, `tsldata/detail/lang/translate_cpp.tsl` | Backend-language helper operations for casts, IO, memory, tuples, sequences, and algorithms. | Backend translation map and typed argument semantics. | Helper-call IR keyed by semantic helper family. | Translation snippets such as `cast_static`, `io_write`, `mem_copy`, `seq_make`. | `required-later` | Future helper-family milestones | Translation helper fixtures and missing-entry diagnostics. |
+| Direct `intrin<...>` calls and placeholder tokens such as `{{ ?i? }}` | `tsldata/primitives/arithmetic/horizontal.tsl`, `tsldata/primitives/bitwise/shifts.tsl`, `frozen/tsl-gen/tsl_gen/tsil.lark` | Call an explicitly named backend intrinsic, sometimes with type suffix placeholders. | Backend, type tag, extension, placeholder resolver, argument expression lowering. | `BackendIntrinsicCall` with literal or resolved name. | Intrinsic suffix/type rules and backend expression rendering. | `required-later` | Future direct-intrinsic milestone | Exact-name and placeholder diagnostics; no raw string splice into renderer. |
+
+### Backend Drift Risk Matrix
+
+| Current behavior | File/evidence path | Why it is risky | Correct boundary | Proposed fix milestone | Validation |
+| --- | --- | --- | --- | --- | --- |
+| Native C++ intrinsic selected by local tuple table, e.g. `("add", "avx2", "f32") -> "_mm256_add_ps"`. | `tslgen/src/tslgen/backends/cpp/scalar_binary.py` | Encodes backend translation in renderer-owned Python data and will grow into an x86 intrinsic registry. | Lowering/translation service composes backend calls from typed TSIL IR plus `tsldata` metadata; renderer renders a backend call IR. | M40 | Test that selected native add is produced through translation metadata, and add a regression preventing new renderer-owned intrinsic lookup tables for the slice. |
+| C++ scalar and native type spellings are local renderer maps. | `tslgen/src/tslgen/backends/cpp/scalar_binary.py`, `tsldata/detail/lang/types/types_cpp.tsl` | Type spellings are part of language-map data, not renderer policy. Local maps make future backends and type groups inconsistent. | Backend language-map access through typed metadata passed into lowering/render planning. | M40 | Type-map fixture uses `types_cpp.tsl`; missing/unknown type diagnostics occur before rendering. |
+| A file named `scalar_binary.py` now owns native SIMD specializations. | `tslgen/src/tslgen/backends/cpp/scalar_binary.py` | Naming and ownership encourage mixing scalar body rendering, native translation, and wrapper rendering. | Separate scalar rendering from backend-call rendering or rename around the supported binary parity slice once boundary is corrected. | M40 or focused follow-up | Review confirms native renderer consumes backend-call IR and does not use scalar-only planning assumptions. |
+| Mini TSIL parser recognizes only a regex-shaped `intrin_compose<add>` without modifier metadata. | `tslgen/src/tslgen/lowering/boundary.py`, `tsldata/primitives/arithmetic/fundamental.tsl`, `tsldata/primitives/load_store/load.tsl` | It cannot represent the modifiers that make TSIL helper lowering general enough for real parity. | Lowering-owned helper parser/model with explicit modifier fields and diagnostics. | M38 and M40, with broader modifier slices selected later | Modifier inventory, unsupported-modifier diagnostics, and typed model tests. |
+| Golden tests may lock in hardcoded renderer output as if it were the intended architecture. | `tslgen/tests/unit/test_cpp_backend_vertical_slice.py`, native parity fixtures | Tests could protect the wrong boundary by asserting `_mm256_add_ps` without asserting data-driven translation. | Golden tests assert output plus unit tests assert the translation source and renderer non-ownership. | M40 | Golden parity remains, but a lower-level test proves `tsldata` metadata drove composition. |
+
+### Roadmap Change Matrix
+
+| Current/proposed milestone | Current intent | Issue discovered | Action | Revised milestone/deferred target | Reason |
+| --- | --- | --- | --- | --- | --- |
+| M35 Frozen Output Inventory And Golden Baseline Selection | Select first parity target. | No boundary issue; selected baseline remains useful. | Kept. | M35 unchanged. | Parity work still needs measured behavior before implementation. |
+| M36 C++ Output Layout And Support Preamble Parity Slice | Render selected path and preamble. | Does not require intrinsic translation. | Kept. | M36 unchanged. | Layout/preamble can remain renderer-owned support output. |
+| M37 C++ Scalar Binary Primary/Specialization/Wrapper Parity Slice | Render scalar add primary/specialization/wrapper from lowered scalar add. | Does not require native translation. | Kept. | M37 unchanged. | Scalar slice validates wrapper/body shape before native translation. |
+| M38 TSIL Intrinsic Compose Lowering Slice | Lower `intrin_compose<add>(left, right)` into typed helper IR. | Narrow but useful; not enough by itself to authorize renderer-owned intrinsic naming. | Kept as predecessor. | M38 remains accepted if already reviewed. | It provides the input M40 needs. |
+| M39 C++ Native Intrinsic Binary Parity Slice | Render native `avx2/f32` output. | Used a local renderer mapping for intrinsic/type resolution. | Keep as transitional; do not revert by default; do not expand. | M40 boundary correction follows immediately. | Reverting would lose useful parity evidence; correction can preserve output while fixing architecture. |
+| Old M40 Generated C++ Test Parity Slice | Render a legacy-style generated C++ test. | Depends on stable generated function/wrapper output; not urgent before native translation correction. | Deferred. | Future generated-test parity milestone after M40. | Test parity should validate accepted generated APIs, not a drifting backend. |
+| Old M41 CLI Workflow Compatibility Slice | Add one legacy-compatible generation workflow. | Depends on corrected rendering/output behavior. | Deferred. | Future CLI workflow milestone after M40 or later selected output slice. | CLI compatibility should not expose unstable native rendering. |
+| Old M42 Legacy Coverage JSON Adapter Slice | Add legacy-style coverage JSON adapter. | Independent but lower priority than correcting generation semantics. | Deferred. | Future report parity milestone after generation boundary correction. | Reporting adapter should not distract from backend/lowering boundary repair. |
+
 ## Milestone 35: Frozen Output Inventory And Golden Baseline Selection
 
 Goal:
@@ -2260,114 +2332,121 @@ Dependencies:
 
 ## Milestone 38: TSIL Intrinsic Compose Lowering Slice
 
+Status:
+
+Retained as the accepted predecessor for the native C++ parity slice.
+
 Goal:
 
-Add the next minimal TSIL lowering form required for a native C++ `binary/add`
-parity target.
+Lower exactly the selected TSIL form
+`emit_return(intrin_compose<add>(left, right));` into typed helper IR without
+rendering backend text.
 
 Scope:
 
-- Parse and lower `emit_return(intrin_compose<add>(left, right));` for one
-  backend-neutral intrinsic-compose return form.
-- Validate only the intrinsic name, argument arity, and declared primitive
-  parameter references needed by the selected C++ floating-point `binary/add`
-  native slice.
-- Model the lowered result as a typed intrinsic-compose return, not backend
-  text.
-- Keep unsupported `intrin_compose` metadata, generation-time suffixes,
-  primitive calls, loops, variables, and type expressions diagnostic-producing
-  unless explicitly selected.
+- Parse and lower the no-modifier `intrin_compose<add>` return shape for the
+  selected `binary/add` parity target.
+- Validate declared parameter references, arity, unsupported intrinsic names,
+  malformed nearby syntax, and unknown operands.
+- Represent the result as typed helper data, not C++ source.
+- Keep modifier metadata, generation-time suffixes, primitive calls, loops,
+  variables, direct `intrin<...>` calls, and generation-time branches
+  diagnostic-producing.
 
 Out of scope:
 
+- Backend intrinsic name composition.
 - Full TSIL grammar.
-- Integer intrinsic suffix inference.
-- `value<generation>(...)`, `type<generation>(...)`, `type<backend>(...)`.
-- `call<primitive=...>` semantic lowering.
-- Loops, variables, arrays, masks, casts, and generation-time `if`.
+- Full modifier expression evaluation.
+- Primitive-call semantic lowering.
 - Rust lowering.
 
-Legacy evidence paths:
+Evidence paths:
 
+- `tsldata/primitives/arithmetic/fundamental.tsl`
 - `frozen/tsl-gen/tsl_gen/tsil.lark`
 - `frozen/out/tsl/tsl_native.hpp`
-- `tsldata/primitives/arithmetic/fundamental.tsl`
 
 Accepted redesign inputs:
 
-- Lowering boundary and mini-TSIL model.
-- Backend metadata boundary with typed language/translation maps.
-- Selected candidate implementation specs.
+- Typed implementation specs from Milestone 20.
+- Typed-opaque lowering boundary from Milestone 18.
+- Direct scalar return lowering from Milestone 27.
+- Selected C++ parity baseline from Milestone 35.
 
 Expected outputs:
 
-- Typed lowered intrinsic-compose return statements for the selected form.
-- Unsupported diagnostics for nearby but unsupported TSIL forms, including
-  unsupported intrinsic names, malformed intrinsic-compose syntax, wrong arity,
-  invalid arguments, unknown operands, generation-time branches, and general
-  calls.
+- Lowered helper IR for the selected no-modifier `intrin_compose<add>` return.
+- Deterministic unsupported-form diagnostics for adjacent helper shapes.
+- No backend intrinsic name, backend type spelling, or rendered C++ text.
 
 Parity criterion:
 
-The selected TSIL source lowers to a stable, backend-neutral intrinsic-compose
-model that contains enough information for the C++ backend to render the native
-`add` specialization selected by Milestone 39, without copying legacy string
-rewrite passes.
+The selected TSIL source form is represented as typed helper data with the same
+operation name and argument order as the legacy-observed `avx2/f32` add body.
+It does not yet claim backend intrinsic-name parity.
 
 Tests required:
 
-- Unit tests for accepted intrinsic-compose lowering.
-- Negative tests for unsupported metadata, generation-time suffix, calls, loops,
-  and variables.
-- Source-location diagnostic tests when malformed TSIL is tied to source spans.
-- Determinism tests for lowering results.
+- Lowering tests for the selected helper form.
+- Unsupported-form diagnostics for nearby syntax.
+- Deterministic lowered IR.
+- No backend text emitted from lowering.
 
 Golden fixtures required:
 
-- Minimal TSIL fixtures derived from `fundamental.tsl`, not large legacy output
-  files.
+- Minimal TSIL/lowering fixtures only; no generated C++ golden is owned by this
+  milestone.
 
 Documentation updates:
 
-- Update lowering behavior, domain model if new lowered IR nodes are added, and
-  open questions around TSIL scope.
+- Record that this milestone enables M39/M40 but does not authorize
+  renderer-local intrinsic composition.
 
 Review risks:
 
-- Recreating the legacy pass pipeline.
-- Emitting C++ text from lowering.
-- Accidentally accepting more TSIL syntax than tested.
+- Treating the bare helper parser as a general TSIL parser.
+- Emitting `_mm256_add_ps` or any backend text from lowering.
+- Silently accepting modifier syntax that is not modeled yet.
 
 Dependencies:
 
-- Milestones 18, 20, 27, 30, and 35.
+- Milestones 18, 27, 35, and 37.
 
-## Milestone 39: C++ Native Intrinsic Binary Parity Slice
+## Milestone 39: Transitional C++ Native Intrinsic Binary Parity Slice
+
+Status:
+
+Accepted only as a transitional parity slice if already implemented/reviewed.
+Do not revert solely because this slice used a narrow renderer-local mapping.
+Do not expand this pattern.
 
 Goal:
 
-Render one native C++ SIMD `binary/add` specialization from the typed intrinsic
-lowering model.
+Render the selected native C++ `binary/add` `avx2/f32` specialization and
+preserve the observable parity output selected by Milestone 35.
 
 Scope:
 
-- Render one selected native extension/type pair, recommended `avx2/f32` or
-  `avx2/f64`, using the Milestone 38 lowered intrinsic-compose return.
-- Use typed backend metadata to map selected language types and intrinsic naming
-  only for the selected form.
-- Preserve the primary/specialization/wrapper relationship accepted in
+- Render one selected native extension/type pair: `avx2/f32`.
+- Consume the Milestone 38 lowered `intrin_compose<add>` helper result.
+- Preserve the primary/specialization/wrapper relationship accepted by
   Milestone 37.
+- Produce the selected `_mm256_add_ps(left, right)` observable output.
+- Record that any renderer-local intrinsic/type mapping in this slice is a
+  correction target for Milestone 40.
 
 Out of scope:
 
-- Integer intrinsic suffix generation.
-- All AVX/SSE/AVX512 add variants.
+- Additional native intrinsics, extensions, or type tags.
+- Integer suffix generation.
 - Masked add.
 - Generic loop-backed add.
 - Rust native rendering.
 - Compiler execution.
+- Treating renderer-local intrinsic maps as architecture.
 
-Legacy evidence paths:
+Evidence paths:
 
 - `frozen/out/tsl/tsl_native.hpp`
 - `frozen/jinja/cpp/spec_binary.j2`
@@ -2377,284 +2456,400 @@ Legacy evidence paths:
 
 Accepted redesign inputs:
 
-- C++ output layout and wrapper parity from Milestones 36 and 37.
-- TSIL intrinsic-compose lowering from Milestone 38.
-- Backend metadata boundary from Milestone 30.
+- Output layout and scalar wrapper/body shape from Milestones 36 and 37.
+- Selected intrinsic-compose helper lowering from Milestone 38.
+- Selected native C++ parity baseline from Milestone 35.
 
 Expected outputs:
 
-- Deterministic C++ native `add_binary<simd<float, avx2>>` or equivalent
-  selected specialization.
-- Diagnostics for unsupported native type/extension/intrinsic combinations.
+- Deterministic selected native C++ specialization for `simd<float, avx2>`.
+- Selected native golden fixture and provenance.
+- Structured diagnostics for unsupported native rendering cases.
+- Explicit documentation that local intrinsic/type mapping is temporary debt.
 
 Parity criterion:
 
-Generated native specialization matches the Milestone 35 selected C++ baseline
-for function shape, return type, parameter order, native-supported metadata,
-and intrinsic call semantics. Byte-for-byte whitespace parity is required only
-if Milestone 35 selected exact output parity for this excerpt.
+The selected generated output exposes the expected `detail::add_binary`
+specialization and public wrapper behavior and emits
+`_mm256_add_ps(left, right)` for `avx2/f32`. This criterion is transitional:
+it proves observable output only, not the final translation boundary.
 
 Tests required:
 
-- Golden test for selected native specialization.
-- Unit tests for selected intrinsic name resolution.
-- Determinism test for repeated rendering.
-- Diagnostic tests for unsupported intrinsic compose forms.
+- Golden test for the selected native specialization.
+- Diagnostics for unsupported native type, extension, intrinsic, missing
+  lowering, and unsupported lowered-expression inputs.
+- Deterministic output.
 
 Golden fixtures required:
 
-- Selected native `add_binary` specialization excerpt.
+- `tslgen/tests/fixtures/golden/parity/cpp/add_native_avx2_f32_excerpt.hpp`
+  with companion provenance.
 
 Documentation updates:
 
-- Update C++ rendering and lowering behavior with the selected native parity
-  contract.
-
-Review risks:
-
-- Making translation maps executable globally before their semantics are
-  modeled.
-- Hard-coding `avx2`/`f32` in generic rendering paths.
-- Expanding into integer suffix handling without a separate milestone.
+- Mark this milestone transitional in the roadmap, behavioral spec, parity
+  baseline, testing strategy, and open questions.
 
 Dependencies:
 
-- Milestones 30, 35, 36, 37, and 38.
+- Milestones 35, 36, 37, and 38.
 
-## Milestone 40: Generated C++ Test Parity Slice
+Review risks:
+
+- Mistaking this transitional slice for permission to add more renderer-local
+  intrinsic mappings.
+- Hiding the need for data-driven translation behind a passing golden test.
+
+## Milestone 40: Backend Translation Boundary Correction
 
 Goal:
 
-Render one legacy-style C++ generated test source for the selected `binary/add`
-parity target.
+Preserve the Milestone 39 observable C++ native output while moving selected
+intrinsic/type resolution out of the renderer and behind a typed
+lowering/translation boundary.
 
 Scope:
 
-- Render one C++ test source fixture for a selected `add` test case, recommended
-  `add_i32_basic`.
-- Use typed `TestSourcePlan` data and backend-owned test rendering.
-- Include the minimum legacy-observed structure needed for the selected test:
-  support header include, generated output header include, `gtest` include,
-  deterministic test function, and `TEST(...)` registration.
-- Keep compile/run orchestration out of scope unless a later milestone accepts
-  toolchain requirements.
+- Introduce the smallest typed translation/composition service needed for the
+  selected `intrin_compose<add>` `avx2/f32` fixture.
+- Treat the selected M40 fixture as generation-free: any nested
+  `if<generation>(...)`, `type<generation>(...)`, or
+  `value<generation>(...)` expression remains unsupported until a generation
+  semantic-lowering slice resolves it before translation.
+- Model intrinsic composition as data: base name, ordered arguments, selected
+  backend, selected extension, selected type tag, and optional modifier fields.
+- Load or promote the selected C++ type spelling from
+  `tsldata/detail/lang/types/types_cpp.tsl` instead of relying on a native-only
+  renderer map.
+- Resolve the selected backend intrinsic call from typed `tsldata` metadata and
+  selected context, producing backend-call IR or an equivalent typed translated
+  call value.
+- Require backend translation inputs to be typed semantic values; do not allow
+  backend translation to parse or evaluate raw generation-time TSIL helpers.
+- Adapt the current C++ native renderer path so the selected native
+  specialization renders that already-resolved backend call.
+- Remove, bypass, or quarantine the selected renderer-local intrinsic lookup so
+  future cases cannot be added there accidentally.
+- Keep the M39 golden output stable unless the corrected architecture reveals a
+  documented parity mistake.
 
 Out of scope:
 
-- Full generated C++ test framework parity.
-- Rust generated tests.
-- SVE/runtime-lane tests.
-- Generic/oneAPIfpga size expansion beyond selected fixtures.
-- Downloading or vendoring googletest.
-- Executing generated tests.
+- Adding new generated output beyond the M39 `avx2/f32` slice.
+- Full translation-map evaluation.
+- Full TSIL grammar.
+- Full modifier expression evaluation for `suffix=value<backend>(...)`,
+  `post=...`, `infix=...`, `prefix=...`, or `immediate(n)=...`.
+- Generation-time branch evaluation.
+- Generation-time type/value query evaluation, including nested
+  `type<generation>(...)` or `value<generation>(...)` inside backend modifier
+  expressions.
+- Primitive-call semantic lowering.
+- Rust native rendering.
+- Generated-test, CLI workflow, or report parity.
 
-Legacy evidence paths:
+Evidence paths:
 
-- `frozen/generator_specs/tests.yaml`
-- `frozen/jinja/cpp/test_file.j2`
-- `frozen/jinja/cpp/test_case.j2`
-- `frozen/tsl-gen/tsl_gen/backend/tests/planner.py`
+- `tsldata/detail/lang/types/types_cpp.tsl`
+- `tsldata/detail/lang/translate_cpp.tsl`
+- `tsldata/extensions/extension.tsl`
 - `tsldata/primitives/arithmetic/fundamental.tsl`
-- `frozen/run_tests.py`
+- `frozen/tsl-gen/tsl_gen/resolver/render_support.py`
+- `frozen/out/tsl/tsl_native.hpp`
+- `tslgen/src/tslgen/backends/cpp/scalar_binary.py`
 
 Accepted redesign inputs:
 
-- `TestSourcePlan` from Milestone 17.
-- Metadata-style production test rendering from Milestone 29.
-- C++ output/header naming from Milestones 36 and 37.
+- Backend metadata boundary from Milestone 30.
+- Selected parity baseline from Milestone 35.
+- Scalar wrapper/body output from Milestones 36 and 37.
+- Lowered intrinsic-compose helper output from Milestone 38.
+- Transitional native output from Milestone 39.
 
 Expected outputs:
 
-- Deterministic C++ test artifact for one selected generated test.
-- Diagnostics for unsupported test kinds or missing planned metadata.
+- Typed translation/composition model for the selected helper form.
+- Backend-call IR or equivalent typed value for `_mm256_add_ps(left, right)`.
+- A stated translation input contract that rejects unresolved generation-time
+  helper IR before backend translation.
+- C++ renderer consumption of the translated value rather than renderer-owned
+  intrinsic lookup.
+- Diagnostics for missing language map, missing translation metadata,
+  unsupported extension/type/intrinsic, and missing translated call IR.
+- Stable M39 native golden output.
 
 Parity criterion:
 
-The selected test artifact either matches the Milestone 35 legacy fixture
-exactly, or preserves the same observable test behavior: same declared test
-name, selected primitive, inputs, expected values, wrapper call, and assertion
-semantics.
+The selected native specialization still emits the same observable
+`_mm256_add_ps(left, right)` call, but the renderer no longer decides that
+`add + avx2 + f32` means `_mm256_add_ps`.
 
 Tests required:
 
-- Golden test for selected C++ generated test source.
-- Unit tests for planned-case to test-rendering metadata conversion.
-- Diagnostic tests for unsupported test kinds and missing metadata.
-- Determinism test for repeated test rendering.
+- Unit tests for selected translation/composition input and output.
+- Unit tests proving `f32` type spelling is read through typed backend metadata.
+- Unit tests or diagnostics proving backend translation rejects unresolved
+  `if<generation>`, `type<generation>`, or `value<generation>` helper nodes.
+- Unit tests or integration tests proving the C++ renderer consumes translated
+  backend-call IR and does not rescan raw TSIL.
+- Regression coverage preventing future selected native intrinsic resolution
+  from being added by extending renderer-local lookup tables.
+- Golden regression for the existing native `avx2/f32` specialization.
+- Diagnostic tests for missing translated call IR and unsupported
+  type/extension/intrinsic combinations.
+- Determinism tests for translation output and rendered artifacts.
 
 Golden fixtures required:
 
-- Selected legacy-style C++ test source fixture or excerpt.
+- Reuse the Milestone 39 native C++ golden fixture.
+- Add a small translation fixture derived from `tsldata` only if it clarifies
+  provenance; do not copy broad legacy output.
 
 Documentation updates:
 
-- Update test generation behavior and testing strategy with the selected parity
-  contract.
+- Update `behavioral-spec.md`, `pipeline-design.md`,
+  `target-architecture.md`, `testing-strategy.md`, and `open-questions.md` with
+  the corrected boundary.
+- Close or narrow OQ-035 for the selected fixture.
 
 Review risks:
 
-- Turning repository unit-test helpers into production generator logic.
-- Starting compile/run orchestration too early.
-- Reintroducing host toolchain or network dependencies into default tests.
+- Moving the hardcoded table without actually making translation data-driven.
+- Making all translation maps executable in one milestone.
+- Letting backend translation become a second TSIL evaluator for
+  generation-time helpers.
+- Emitting backend text from lowering instead of a typed translated value.
+- Leaving a duplicate renderer-local intrinsic path that future slices might
+  expand.
 
 Dependencies:
 
-- Milestones 17, 29, 35, 36, and 37.
+- Milestones 30, 35, 36, 37, 38, and 39.
 
-## Milestone 41: CLI Workflow Compatibility Slice
+## Milestone 41: Generation-Time Semantic Lowering Contract
 
 Goal:
 
-Implement one documented legacy-compatible workflow through the redesigned CLI
-without cloning the legacy CLI wholesale.
+After the M40 boundary correction, define the generation-time semantic lowering
+contract that must run before backend translation. This prevents helpers such as
+`if<generation>(...)`, `type<generation>(...)`, and
+`value<generation>(...)` from leaking into backend translation or renderers as
+raw TSIL text.
 
 Scope:
 
-- Select one workflow from Milestone 35, recommended:
-  `python -m tsl_gen --emit-lang cpp --input <file> --templates binary
-  --primitives add --output <path>`.
-- Provide a redesigned CLI compatibility command, alias, or adapter that maps
-  the selected workflow onto `PipelineConfig`, accepted selection inputs,
-  rendering, and artifact writing.
-- Preserve the accepted report/write stdout/stderr contract for all existing
-  options.
-- Emit structured diagnostics for unsupported legacy flags or workflows.
+- Refresh the TSIL helper inventory against the actual post-M40 code.
+- Define the ordered lowering phases:
+  TSIL helper parse, generation-time semantic lowering, backend translation,
+  then backend rendering.
+- Define the typed `GenerationContext` fields required by the first query
+  forms, such as selected primitive, selected candidate, type tag, extension,
+  vector/register metadata, primitive attributes, signature, and template.
+- Classify `type<generation>(...)`, `value<generation>(...)`, and
+  `if<generation>(...)` forms found in `tsldata` by priority and required
+  context.
+- Pick one next implementable generation-time semantic slice or explicitly
+  defer implementation if evidence is insufficient.
+- Record that backend translation may consume `type<backend>(...)` and
+  `value<backend>(...)` only after their generation-time arguments have been
+  resolved to typed semantic values.
+- Keep generated-test, CLI, report, Rust-body, and broad backend expansion
+  deferred unless they directly depend on the selected helper slice.
 
 Out of scope:
 
-- Full `run_all.sh` replacement.
-- Build/test/run orchestration.
-- All legacy flags.
-- Hidden host CPU reads except through explicit accepted autodetection options.
-- Import compatibility with `tsl_gen` internals.
+- Production implementation unless the planner explicitly converts this into a
+  small implementation milestone.
+- Full TSIL grammar.
+- Evaluating broad generation-time expression language.
+- Backend translation for unresolved generation-time helper expressions.
+- Broad C++ or Rust rendering.
 
-Legacy evidence paths:
+Evidence paths:
 
-- `frozen/tsl-gen/tsl_gen/app/cli.py`
-- `frozen/tsl-gen/tsl_gen/cli.py`
-- `frozen/run_all.sh`
-- `frozen/run_tests.py`
+- `tsldata/primitives/**.tsl`
+- `frozen/tsl-gen/tsl_gen/tsil.lark`
+- `frozen/tsl-gen/tsl_gen/tsil_engine/passes/*.py`
+- `frozen/tsl-gen/tsl_gen/resolver/render_support.py`
 
 Accepted redesign inputs:
 
-- Public API and CLI facade.
-- Artifact writer boundary.
-- Selected C++ parity artifact from Milestones 36 through 39.
+- Corrected translation/backend boundary from Milestone 40.
+- Updated helper inventory and drift matrices from this roadmap phase.
+- Open questions OQ-032 and OQ-035.
 
 Expected outputs:
 
-- One documented compatibility workflow.
-- CLI diagnostics for unsupported compatibility requests.
-- No runtime dependency on `frozen`.
+- A documented generation-time-before-backend translation contract.
+- A selected next generation-time helper slice or an explicit decision to pause
+  helper implementation until more evidence is gathered.
+- Updated milestone plan for the chosen helper or a deferred-target list.
+- Updated open questions for blocked helper semantics.
 
 Parity criterion:
 
-For the selected command shape, users can request the same observable outcome:
-selected backend, input, primitive/template filter, and output file generation.
-Argument spelling may differ only if the compatibility decision says the exact
-legacy spelling is not required for this slice.
+The next implementation target must be justified by observed `tsldata` and
+`frozen` behavior and must ensure generation-time helper semantics are resolved
+before backend translation receives inputs.
 
 Tests required:
 
-- CLI integration test for the selected compatibility workflow.
-- stdout/stderr regression tests for combined reporting/writing behavior.
-- Diagnostic tests for unsupported legacy flags.
-- No-hidden-I/O test using a temporary output root.
+- Documentation-only milestone: `git diff --check`.
+- Matrix checks for every observed `type<generation>`, `value<generation>`, and
+  `if<generation>` form selected by the contract.
+- If a fixture inventory is added, provenance tests must not import from
+  `frozen/`.
 
 Golden fixtures required:
 
-- CLI output or generated artifact fixture selected by Milestone 35.
+- None unless the selected next helper needs a minimal TSIL fixture.
 
 Documentation updates:
 
-- Update CLI behavior with supported and unsupported compatibility claims.
-- Update open questions for remaining legacy workflow gaps.
+- Update the roadmap, open questions, behavioral spec, and testing strategy
+  with the generation-time lowering contract and selected next helper family.
 
 Review risks:
 
-- Creating a broad compatibility wrapper around bad legacy abstractions.
-- Breaking accepted modern CLI behavior.
-- Implied support for `run_all.sh` build/test/run flows.
+- Reopening broad TSIL grammar work without a selected parity need.
+- Letting backend translation parse or evaluate raw `type<generation>` or
+  `if<generation>` text.
+- Picking generated-test or CLI work before the required helper semantics are
+  stable.
+- Letting another backend renderer absorb helper-specific translation.
 
 Dependencies:
 
-- Milestones 24, 25, 35, and at least one accepted C++ parity rendering slice.
+- Milestone 40.
 
-## Milestone 42: Legacy Coverage JSON Adapter Slice
+## Candidate Future Milestone: Generation-Time Query/Condition Lowering Slice
 
 Goal:
 
-Provide one deterministic report-adapter slice for legacy-style primitive
-coverage JSON when selected as a parity target.
+Implement the next minimal generation-time semantic lowering slice selected by
+Milestone 41, so future helper forms such as aligned loads, signedness branches,
+type-dependent intrinsic suffixes, and backend modifier expressions do not
+migrate into backend translation or renderers as raw TSIL text.
 
 Scope:
 
-- Render a legacy-style row-oriented coverage JSON artifact from accepted report
-  data for a selected subset.
-- Include fields evidenced by `frozen/out/reports/primitive_coverage.json`,
-  such as primitive, primitive class, template, type, extension, language,
-  `has_tsil`, `has_intrinsic`, `has_lang_block`, and `effective_present`.
-- Route report files through the artifact model and writer boundary.
+- Select one or two concrete `if<generation>(...)` condition shapes from
+  repository evidence, such as primitive attribute checks or type signedness
+  checks.
+- Or select one concrete `type<generation>(...)` / `value<generation>(...)`
+  query shape needed by an intrinsic modifier expression, if that is the
+  smallest useful parity step.
+- Define the typed generation context required to evaluate the selected
+  condition or query.
+- Lower the selected branch form to either a pruned statement list with
+  provenance or lower the selected query to a typed semantic value. Use a typed
+  `TsilGenerationIf` node only when evaluation is intentionally deferred and
+  the next stage explicitly supports deferred branch IR.
+- Keep unsupported condition expressions, nested branch forms, and unselected
+  helper families diagnostic-producing.
 
 Out of scope:
 
-- Full HTML documentation site parity.
-- Exact legacy HTML parity.
-- Re-running analysis during report rendering.
-- Changing coverage semantics to hide accepted diagnostic data.
+- Full generation-time expression language.
+- Generic loops, arrays, and variable scoping.
+- Backend rendering changes.
+- Backend translation of unresolved generation-time helper IR.
+- Compile/run orchestration.
+- Rust body generation.
 
 Legacy evidence paths:
 
-- `frozen/out/reports/primitive_coverage.json`
-- `frozen/out/reports/primitive_coverage.html`
-- `frozen/tools/report_primitive_coverage.py`
-- `frozen/tools/primitive_coverage_html.py`
+- `tsldata/primitives/load_store/load.tsl`
+- `tsldata/primitives/load_store/store.tsl`
+- `tsldata/primitives/bitwise/shifts.tsl`
+- `tsldata/primitives/conversion/repr_change.tsl`
+- `frozen/tsl-gen/tsl_gen/tsil_engine/passes/generation_ifs.py`
+- `frozen/tsl-gen/tsl_gen/tsil_engine/expansion_support.py`
 
 Accepted redesign inputs:
 
-- `PipelineCoverageReport` and candidate dependency report DTOs.
-- HTML and JSON report renderers from Milestones 15, 23, and 32.
-- Artifact writer boundary.
+- Generation context placeholder from Milestone 18.
+- Helper inventory from Milestone 38.
+- Translation/type metadata boundary from Milestone 40.
 
 Expected outputs:
 
-- Deterministic legacy-style JSON report artifact for a selected subset.
-- Documentation of fields intentionally absent or semantically different.
+- A documented and tested first generation-time condition evaluator or explicit
+  typed query resolver.
+- Diagnostics for unsupported condition/query functions, unknown attributes,
+  unknown type predicates, missing generation context, and malformed
+  generation-time branches.
+- Clear guidance for which future backend parity slices may depend on this
+  condition support.
 
 Parity criterion:
 
-Selected legacy-style JSON rows match the documented field names and stable
-ordering from the Milestone 35 baseline. Full row count parity is required only
-after a future milestone broadens backend/template coverage.
+Selected generation-time branch/query behavior is evaluated in semantic
+lowering before backend translation receives inputs, never in backend renderers
+or template text.
 
 Tests required:
 
-- Golden JSON adapter test for selected rows.
-- Determinism test for row/key ordering.
-- Diagnostic or unavailable-section tests when required source data is missing.
+- Unit tests for the selected condition shape.
+- Branch-selection, query-resolution, or typed-value determinism tests.
+- Diagnostic tests for unknown attributes, unknown type predicates, missing
+  generation context, malformed branches, and unsupported nested forms.
+- Regression tests proving backend translation rejects unresolved
+  generation-time helper IR.
+- Renderer non-evaluation regression test when a rendering fixture consumes a
+  lowered branch result later.
 
 Golden fixtures required:
 
-- Selected row excerpt from `frozen/out/reports/primitive_coverage.json`.
+- Minimal TSIL condition fixtures derived from `tsldata`, not large legacy
+  output files.
 
 Documentation updates:
 
-- Update coverage/reporting behavior and open questions around documentation
-  parity.
+- Update lowering behavior, pipeline design, and open questions for generation
+  expressions.
+- Add or revise an ADR if this milestone chooses branch pruning versus explicit
+  branch IR.
 
 Review risks:
 
-- Freezing legacy report semantics that conflict with accepted report DTOs.
-- Making report rendering re-run pipeline stages.
-- Claiming full report parity before backend coverage exists.
+- Implementing a broad expression evaluator too early.
+- Evaluating type or attribute predicates in backend templates.
+- Choosing a branch fixture unrelated to the next parity target.
 
 Dependencies:
 
-- Milestones 15, 23, 32, and 35.
+- Milestones 18, 30, 40, and 41.
+
+Scheduling note:
+
+This candidate should become a numbered milestone only after Milestone 41
+selects the concrete generation-time condition or query form.
+
+## Deferred Parity Targets After Boundary Correction
+
+The following previously planned targets remain valid but are deliberately
+deferred behind Milestone 40:
+
+- Generated C++ test parity slice from old M40.
+- CLI workflow compatibility slice from old M41.
+- Legacy coverage JSON adapter slice from old M42.
+- Broader C++ or Rust backend rendering beyond the corrected M40 call IR.
+- Executable generated tests and compile/run orchestration.
+
+When one of these targets is reintroduced, give it a fresh milestone number and
+reuse the same milestone contract fields: goal, scope, out of scope, evidence
+paths, accepted redesign inputs, expected outputs, parity criterion, tests,
+golden fixtures, documentation updates, review risks, dependencies, and whether
+it replaces or adapts a deferred target.
 
 ## Recommended Next Milestone
 
-After Milestone 35, proceed to Milestone 36. The selected baseline now gives the
-next executor a measured C++ `binary/add` output target, so the next smallest
-useful step is the C++ output layout and support preamble slice. Do not start
-Milestone 37 until the selected layout/preamble contract is reviewed.
+If Milestone 39 is already implemented or accepted, do not revert it by default.
+Proceed to Milestone 40 and correct the boundary while preserving the selected
+native C++ golden output.
+
+Do not expand the current Milestone 39 renderer-local intrinsic mapping to any
+new primitive, intrinsic, type, extension, backend, or helper form. The next
+executor milestone is Milestone 40: Backend Translation Boundary Correction.
