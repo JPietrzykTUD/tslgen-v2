@@ -15,6 +15,10 @@ from tslgen.analysis.selection import SelectionRequest, plan_selection
 from tslgen.api import PipelineConfig, run_pipeline
 from tslgen.backends.registry import BackendRegistry
 from tslgen.backends.rust.backend import RustBackend
+from tslgen.backends.rust.naming import (
+    rust_production_function_name,
+    rust_production_parameter_names,
+)
 from tslgen.config.model import SourceConfig
 from tslgen.domain.backends import ArtifactSpec, BackendManifest, BackendManifestSet
 from tslgen.domain.catalog import Catalog, build_catalog
@@ -36,6 +40,39 @@ SIMPLE_PRIMITIVE = """prim<v:=(v,v)> slice_add(left, right):
         requires [sse]
         implementation:
           tsil "emit_return(left + right);"
+"""
+
+
+I32_PRIMITIVE = """prim<v:=(v,v)> slice_add(left, right):
+  tests []
+  impls:
+    scalar:
+      ?i32:
+        requires [sse]
+        implementation:
+          tsil "emit_return(left + right);"
+"""
+
+
+UNSUPPORTED_DECLARATION_PRIMITIVE = """prim<v:=()> slice_zero():
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "emit_return(0);"
+"""
+
+
+INVALID_PARAMETER_PRIMITIVE = """prim<v:=(v,v)> slice_add(type, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires [sse]
+        implementation:
+          tsil "emit_return(type + right);"
 """
 
 
@@ -133,6 +170,7 @@ def candidate_selection_for(
     referenced: ReferenceValidatedCatalog,
     *,
     backend: str | None = "rust",
+    primitive_name: str = "slice_add",
     extension_names: tuple[str, ...] = ("scalar",),
     cpu_flags: tuple[str, ...] = ("sse",),
 ) -> CandidateSelection:
@@ -140,7 +178,7 @@ def candidate_selection_for(
         referenced,
         SelectionRequest(
             backend=backend,
-            primitive_names=("slice_add",),
+            primitive_names=(primitive_name,),
             extension_names=extension_names,
             cpu_flags=cpu_flags,
             include_support_extensions=False,
@@ -175,10 +213,11 @@ def rust_manifest_set(*, artifact_kind: str = "generated") -> BackendManifestSet
 
 def render_simple_fixture(
     *,
+    primitive_text: str = SIMPLE_PRIMITIVE,
     selection_backend: str | None = "rust",
     artifact_kind: str = "generated",
 ):
-    referenced = catalog_with_primitive(SIMPLE_PRIMITIVE)
+    referenced = catalog_with_primitive(primitive_text)
     selection = candidate_selection_for(referenced, backend=selection_backend)
     artifact_plan = build_artifact_plan(
         rust_manifest_set(artifact_kind=artifact_kind),
@@ -208,6 +247,42 @@ def artifact_plan_for_selection(
     return artifact_plan.unwrap()
 
 
+class RustNamingTests(unittest.TestCase):
+    def test_production_function_name_uses_primitive_and_type_tag(self) -> None:
+        name = rust_production_function_name("slice_add", "ui32")
+
+        self.assertTrue(name.is_ok, name.diagnostics)
+        self.assertEqual(name.unwrap(), "slice_add_ui32")
+
+    def test_production_parameter_names_preserve_signature_names(self) -> None:
+        names = rust_production_parameter_names(("left", "right"))
+
+        self.assertTrue(names.is_ok, names.diagnostics)
+        self.assertEqual(names.unwrap(), ("left", "right"))
+
+    def test_invalid_function_name_is_diagnostic(self) -> None:
+        name = rust_production_function_name("slice-add", "ui32")
+
+        self.assertFalse(name.is_ok)
+        assert_diagnostic(
+            self,
+            name.diagnostics[0],
+            code="TSL-RUST-RENDER-DECLARATION-FUNCTION-NAME",
+            severity="error",
+        )
+
+    def test_invalid_parameter_name_is_diagnostic(self) -> None:
+        names = rust_production_parameter_names(("type", "right"))
+
+        self.assertFalse(names.is_ok)
+        assert_diagnostic(
+            self,
+            names.diagnostics[0],
+            code="TSL-RUST-RENDER-DECLARATION-PARAMETER-NAME",
+            severity="error",
+        )
+
+
 class RustBackendVerticalSliceTests(unittest.TestCase):
     def test_renders_minimal_rust_generated_artifact(self) -> None:
         result = render_simple_fixture()
@@ -230,6 +305,28 @@ class RustBackendVerticalSliceTests(unittest.TestCase):
         self.assertEqual(artifact.metadata["backend_id"], "rust")
         self.assertEqual(artifact.metadata["required_flags"], ("sse",))
         self.assertEqual(artifact.metadata["target_extensions"], ("scalar",))
+        self.assertEqual(artifact.metadata["declaration_count"], 1)
+        self.assertIn("pub mod production", artifact.content)
+        self.assertIn(
+            "        fn slice_add_si32(left: i32, right: i32) -> i32;",
+            artifact.content,
+        )
+        self.assertNotIn("return left + right", artifact.content)
+
+    def test_renders_si32_and_ui32_rust_signatures(self) -> None:
+        result = render_simple_fixture(primitive_text=I32_PRIMITIVE)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = result.unwrap().artifacts_by_path["generated.rs"]
+        self.assertEqual(artifact.metadata["declaration_count"], 2)
+        self.assertIn(
+            "        fn slice_add_si32(left: i32, right: i32) -> i32;",
+            artifact.content,
+        )
+        self.assertIn(
+            "        fn slice_add_ui32(left: u32, right: u32) -> u32;",
+            artifact.content,
+        )
 
     def test_rendering_is_deterministic(self) -> None:
         first = render_simple_fixture()
@@ -295,6 +392,36 @@ class RustBackendVerticalSliceTests(unittest.TestCase):
             self,
             result.diagnostics[0],
             code="TSL-RUST-RENDER-UNSUPPORTED-ARTIFACT",
+            severity="error",
+        )
+
+    def test_diagnoses_candidate_outside_production_declaration_slice(self) -> None:
+        referenced = catalog_with_primitive(UNSUPPORTED_DECLARATION_PRIMITIVE)
+        selection = candidate_selection_for(
+            referenced,
+            primitive_name="slice_zero",
+            cpu_flags=(),
+        )
+        artifact_plan = artifact_plan_for_selection(selection)
+
+        result = RustBackend().render(artifact_plan, selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-RUST-RENDER-DECLARATION-UNSUPPORTED",
+            severity="error",
+        )
+
+    def test_diagnoses_invalid_declaration_parameter_name(self) -> None:
+        result = render_simple_fixture(primitive_text=INVALID_PARAMETER_PRIMITIVE)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-RUST-RENDER-DECLARATION-PARAMETER-NAME",
             severity="error",
         )
 

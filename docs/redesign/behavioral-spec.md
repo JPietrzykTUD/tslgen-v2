@@ -347,9 +347,27 @@ payload text. This slice does not lower TSIL, evaluate Rust translation maps,
 render full Rust templates, invoke Cargo, or produce final Rust SIMD
 implementation code.
 
-Milestone 31 may add the first Rust production-shaped declaration or signature
-slice. It must remain body-free until lowering supports Rust body semantics, and
-it must document Rust naming rules rather than copying C++ rules blindly.
+Milestone 31 adds the first Rust production-shaped signature slice. The Rust
+`generated` artifact now includes a body-free `pub mod production` section with
+a `ScalarBinaryDeclarations` trait for selected scalar `binary` candidates with
+normalized signature `v:=(v,v)` and type tags `si32` and `ui32`. The selected
+slice maps `si32` to `i32` and `ui32` to `u32` through a local renderer mapping
+grounded in the Rust language type evidence; it does not evaluate
+`types_rust.tsl` or Rust translation maps.
+
+The Rust naming contract is intentionally narrow. Function names are derived as
+`<emitted_primitive_name>_<type_tag>` and must already be valid non-keyword
+Rust identifiers. Parameter names are preserved from the selected primitive
+declaration and must also be valid non-keyword Rust identifiers. The renderer
+does not sanitize, mangle, or convert names to raw identifiers. Invalid function
+names produce `TSL-RUST-RENDER-DECLARATION-FUNCTION-NAME`, invalid parameter
+names produce `TSL-RUST-RENDER-DECLARATION-PARAMETER-NAME`, and selected
+candidates outside this scalar signature slice produce
+`TSL-RUST-RENDER-DECLARATION-UNSUPPORTED`.
+
+The Rust signature slice remains body-free. It does not lower TSIL, emit
+function bodies, evaluate translation maps, render intrinsics, invoke Cargo,
+or claim full Rust wrapper/trait parity.
 
 The next production-shaped backend rendering slice must wait until artifact
 writing, lowering, dependency semantics, and implementation spec promotion have

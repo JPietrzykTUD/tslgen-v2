@@ -878,3 +878,48 @@ Consequences:
 - Full assertion rendering, lane policy, mask/test-manifest policy, compile/run
   orchestration, and Rust test rendering remain future milestones.
 - Test rendering consumes `TestSourcePlan` and does not rescan raw TSL.
+
+## ADR-026: First Rust Production Shape Is Body-Free Trait Signatures
+
+Status: Accepted for the Milestone 31 slice
+
+Context:
+
+The accepted Rust backend renders deterministic summary metadata, while C++
+already has a narrow scalar declaration and body slice. Rust needs a first
+production-shaped output that validates backend-owned naming and signature
+rendering without implying Rust body lowering or broad wrapper parity.
+
+Considered alternatives:
+
+- Render Rust free-function declarations without bodies.
+- Render Rust function bodies from opaque TSIL payload text.
+- Start with broad Rust trait/wrapper parity.
+- Render one narrow trait signature slice.
+
+Decision:
+
+Render body-free Rust trait function signatures for scalar `binary`
+`si32`/`ui32` candidates with normalized signature `v:=(v,v)`. The signatures
+are emitted under `pub mod production` in a `ScalarBinaryDeclarations` trait.
+Function names are derived as `<emitted_primitive_name>_<type_tag>` and
+parameter names are preserved. Names must already be valid non-keyword Rust
+identifiers. The slice uses a local explicit type mapping for `si32 -> i32` and
+`ui32 -> u32`; it does not evaluate Rust language or translation maps.
+
+Rationale:
+
+Rust does not have ordinary body-free free-function declarations in modules.
+Trait signatures provide a valid Rust-shaped declaration surface without
+claiming lowered bodies, compiler integration, or final wrapper design. The
+small scalar mapping is grounded in current Rust type evidence while keeping
+translation-map evaluation deferred.
+
+Consequences:
+
+- The Rust golden artifact now preserves the summary metadata and adds body-free
+  production signatures.
+- Unsupported Rust declaration candidates and invalid names are structured
+  diagnostics.
+- Rust function bodies, intrinsics, Cargo integration, generated tests,
+  translation-map evaluation, and broad trait/wrapper parity remain deferred.

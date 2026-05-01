@@ -5,6 +5,7 @@ from tslgen.core.frozen_map import FrozenMap
 from tslgen.core.result import Result
 from tslgen.io.artifacts import Artifact, ArtifactSet, artifact_set_from_artifacts
 
+from .declarations import render_rust_production_declarations
 from .planner import RustRenderJob, RustRenderPlan
 
 
@@ -23,6 +24,7 @@ def _render_job(job: RustRenderJob) -> Artifact:
                 "artifact_kind": job.descriptor.kind,
                 "backend_id": "rust",
                 "candidate_count": len(job.candidates),
+                "declaration_count": len(job.declarations),
                 "required_flags": _required_flag_names(job.candidates),
                 "target_extensions": _target_extension_names(job.candidates),
             }
@@ -39,6 +41,7 @@ def _render_generated_module(job: RustRenderJob) -> str:
         f"// Artifact: {job.descriptor.logical_path.as_posix()}",
         f"// Artifact kind: {job.descriptor.kind}",
         f"// Candidates: {len(job.candidates)}",
+        f"// Declarations: {len(job.declarations)}",
         f"// Required flags: {required_flags}",
         f"// Target extensions: {target_extensions}",
         "",
@@ -64,6 +67,9 @@ def _render_generated_module(job: RustRenderJob) -> str:
             "",
         ]
     )
+    production_lines = render_rust_production_declarations(job.declarations)
+    if production_lines:
+        lines.extend((*production_lines, ""))
     return "\n".join(lines)
 
 

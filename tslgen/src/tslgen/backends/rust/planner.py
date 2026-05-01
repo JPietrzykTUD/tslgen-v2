@@ -10,6 +10,8 @@ from tslgen.core.result import Result
 from tslgen.domain.values import CatalogValue
 from tslgen.io.artifacts import ArtifactDescriptor, ArtifactPlan
 
+from .declarations import RustFunctionDeclaration, plan_rust_production_declarations
+
 
 RUST_BACKEND_ID = "rust"
 SUPPORTED_RUST_ARTIFACT_KINDS = frozenset({"generated"})
@@ -19,11 +21,14 @@ SUPPORTED_RUST_ARTIFACT_KINDS = frozenset({"generated"})
 class RustRenderJob:
     descriptor: ArtifactDescriptor
     candidates: tuple[ImplementationCandidate, ...]
+    declarations: tuple[RustFunctionDeclaration, ...] = ()
     metadata: FrozenMap[str, CatalogValue] = field(default_factory=FrozenMap.empty)
 
     def __post_init__(self) -> None:
         candidates = tuple(sorted(self.candidates, key=lambda candidate: candidate.key))
         object.__setattr__(self, "candidates", candidates)
+        declarations = tuple(sorted(self.declarations, key=lambda item: item.key))
+        object.__setattr__(self, "declarations", declarations)
 
     @property
     def key(self) -> tuple[object, ...]:
@@ -31,6 +36,7 @@ class RustRenderJob:
             self.descriptor.logical_path.as_posix(),
             self.descriptor.kind,
             tuple(candidate.key for candidate in self.candidates),
+            tuple(declaration.key for declaration in self.declarations),
         )
 
 
@@ -64,14 +70,22 @@ def plan_rust_render_jobs(
         diagnostics.extend(_descriptor_diagnostics(descriptor))
         candidates = _descriptor_candidates(descriptor, selection, diagnostics)
         diagnostics.extend(_candidate_diagnostics(candidates))
+        declarations: tuple[RustFunctionDeclaration, ...] = ()
+        if not has_errors(diagnostics):
+            declaration_result = plan_rust_production_declarations(candidates)
+            diagnostics.extend(declaration_result.diagnostics)
+            if declaration_result.is_ok:
+                declarations = declaration_result.unwrap()
         if not has_errors(diagnostics):
             jobs.append(
                 RustRenderJob(
                     descriptor=descriptor,
                     candidates=candidates,
+                    declarations=declarations,
                     metadata=FrozenMap(
                         {
                             "candidate_count": len(candidates),
+                            "declaration_count": len(declarations),
                             "required_flags": _required_flag_names(candidates),
                             "target_extensions": _target_extension_names(candidates),
                         }
@@ -90,6 +104,9 @@ def plan_rust_render_jobs(
                 {
                     "backend_id": RUST_BACKEND_ID,
                     "candidate_count": sum(len(job.candidates) for job in jobs),
+                    "declaration_count": sum(
+                        len(job.declarations) for job in jobs
+                    ),
                     "required_flags": _required_flag_names(
                         candidate
                         for job in jobs

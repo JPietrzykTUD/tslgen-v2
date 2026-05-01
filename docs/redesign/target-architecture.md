@@ -77,6 +77,7 @@ tslgen/
       rust/
         backend.py
         declarations.py
+        naming.py
         planner.py
         renderer.py
     rendering/

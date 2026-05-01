@@ -3,6 +3,7 @@
 // Artifact: generated.rs
 // Artifact kind: generated
 // Candidates: 1
+// Declarations: 1
 // Required flags: sse
 // Target extensions: scalar
 
@@ -30,3 +31,9 @@ pub const PRIMITIVE_CANDIDATES: &[PrimitiveCandidate] = &[
         opaque_tsil_payload: "emit_return(left + right);",
     },
 ];
+
+pub mod production {
+    pub trait ScalarBinaryDeclarations {
+        fn slice_add_si32(left: i32, right: i32) -> i32;
+    }
+}

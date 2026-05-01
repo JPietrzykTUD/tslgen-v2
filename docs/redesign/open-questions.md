@@ -792,7 +792,7 @@ Rust declaration or summary slices are not blocked.
 
 ## OQ-025: What Is The First Rust Production-Shaped Rendering Slice?
 
-Status: Open - scheduled for Milestone 31
+Status: Answered for the Milestone 31 Rust signature slice
 
 Why it matters:
 
@@ -800,11 +800,20 @@ Rust is first-class, but the accepted Rust backend still emits summary artifacts
 only. The first Rust production-shaped slice should validate the backend
 interface without duplicating C++ assumptions.
 
-Possible answers:
+Decision:
 
-- Render Rust function signatures for the same scalar primitive class as C++.
-- Render trait declarations first.
-- Defer Rust production-shaped output until C++ body rendering stabilizes.
+Render body-free Rust trait function signatures for the same scalar primitive
+class used by the accepted C++ declaration slice: scalar `binary` candidates
+with normalized signature `v:=(v,v)` and type tags `si32` and `ui32`. The
+signatures live in a small `pub mod production` section under a
+`ScalarBinaryDeclarations` trait. This is a Rust-specific signature form, not a
+copy of C++ free-function declaration syntax.
+
+Rust function names are derived as `<emitted_primitive_name>_<type_tag>`.
+Parameter names are preserved from the TSL declaration. Function and parameter
+names must already be valid non-keyword Rust identifiers; the renderer does not
+sanitize, mangle, or convert names to raw identifiers. The slice uses only a
+local explicit type mapping: `si32 -> i32` and `ui32 -> u32`.
 
 Required evidence:
 
@@ -814,8 +823,9 @@ Required evidence:
 
 Implementation blocked:
 
-Milestone 31 is blocked on a selected Rust slice and any backend manifest policy
-needed from Milestone 30.
+No for this selected signature slice. Rust bodies, wrappers, trait parity,
+intrinsic lowering, translation-map evaluation, generated tests, Cargo
+integration, and broad Rust type mapping remain deferred.
 
 ## OQ-026: How Should Candidate-Specific Dependency Closure Appear In API And Reports?
 
@@ -1071,3 +1081,8 @@ long as they avoid unrelated corpus churn.
 ## Follow-up from Milestone 30 review
 
 - Use `BackendMetadataBoundary` as the input contract for future translation-aware lowering/rendering milestones, and keep translation snippets unevaluated until that slice is explicitly selected.
+
+## Follow-up from Milestone 31 review
+
+- Keep future Rust body rendering behind a lowering-backed slice.
+- Define any broader Rust trait/wrapper API as its own reviewed contract.

@@ -283,7 +283,10 @@ generation:
   promotion, active C++/Rust manifest consistency, missing-map diagnostics,
   unsupported-backend diagnostics, and C17 deferral during catalog-derived
   manifest creation.
-- Rust production-shaped declaration golden tests once that slice is selected.
+- Rust production-shaped declaration golden tests. Milestone 31 covers the
+  scalar `binary` `si32`/`ui32` body-free trait signature slice, Rust naming
+  helper diagnostics, unsupported declaration inputs, and preservation of the
+  original Rust summary metadata.
 - Candidate-specific dependency report/API tests when those values are exposed.
 - Quarantine-retirement and corpus-hygiene tests only when those policies change
   validation behavior.
