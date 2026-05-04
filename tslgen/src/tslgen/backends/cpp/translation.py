@@ -13,6 +13,9 @@ from tslgen.domain.backends import (
 )
 from tslgen.domain.extensions import Extension
 from tslgen.lowering import (
+    BackendIntrinsicModifier,
+    BackendIntrinsicModifierRequest,
+    GenerationTypeRef,
     LoweredImplementation,
     LoweringPlan,
     TranslatedIntrinsicCall,
@@ -28,18 +31,31 @@ _SELECTED_TYPE_TAG = "f32"
 _SELECTED_INTRINSIC_STYLE = "x86"
 _SELECTED_VECTOR_BITS = 256
 _SELECTED_INTRINSIC_SUFFIX = "ps"
+_SELECTED_INTEGER_SUFFIX_TYPE_TAGS = ("si32", "ui32")
+_SELECTED_SUFFIX_SOURCE_REF_KIND = "base.signed_of"
+_SELECTED_INTEGER_SUFFIX_TYPE_TAG = "si32"
+_SELECTED_INTEGER_INTRINSIC_SUFFIX = "epi32"
+_SELECTED_MODIFIER_METADATA_SNIPPET = "type_signed_of"
+_RAW_GENERATION_HELPER_MARKERS = (
+    "if<generation>",
+    "type<generation>",
+    "value<generation>",
+)
 
 
 @dataclass(frozen=True, slots=True)
 class CppNativeTranslationPlan:
     calls: tuple[TranslatedIntrinsicCall, ...] = ()
+    modifiers: tuple[BackendIntrinsicModifier, ...] = ()
     calls_by_candidate_id: FrozenMap[str, TranslatedIntrinsicCall] = field(
         init=False
     )
 
     def __post_init__(self) -> None:
         calls = tuple(sorted(self.calls, key=lambda call: call.key))
+        modifiers = tuple(sorted(self.modifiers, key=lambda modifier: modifier.key))
         object.__setattr__(self, "calls", calls)
+        object.__setattr__(self, "modifiers", modifiers)
         object.__setattr__(
             self,
             "calls_by_candidate_id",
@@ -48,7 +64,75 @@ class CppNativeTranslationPlan:
 
     @property
     def key(self) -> tuple[object, ...]:
-        return tuple(call.key for call in self.calls)
+        return (
+            tuple(call.key for call in self.calls),
+            tuple(modifier.key for modifier in self.modifiers),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class _CandidateTranslation:
+    call: TranslatedIntrinsicCall | None = None
+    modifier: BackendIntrinsicModifier | None = None
+
+
+def translate_cpp_intrinsic_suffix_modifier(
+    request: BackendIntrinsicModifierRequest,
+    *,
+    translation_snippets: FrozenMap[str, TranslationSnippet] | None,
+) -> Result[BackendIntrinsicModifier]:
+    if _contains_raw_generation_helper(request.raw_helper_text):
+        return Result.failure((_unresolved_modifier_generation_diagnostic(request),))
+
+    malformed_fields = tuple(
+        field_name
+        for field_name, value in (
+            ("kind", request.kind),
+            ("backend_id", request.backend_id),
+            ("extension", request.extension),
+            ("intrinsic", request.intrinsic),
+        )
+        if not value
+    )
+    if malformed_fields:
+        return Result.failure(
+            (_malformed_modifier_request_diagnostic(request, malformed_fields),)
+        )
+
+    if request.kind != "suffix":
+        return Result.failure((_unsupported_modifier_family_diagnostic(request),))
+    if request.backend_id != CPP_TRANSLATION_BACKEND_ID:
+        return Result.failure((_unsupported_modifier_backend_diagnostic(request),))
+    if request.extension != _SELECTED_EXTENSION:
+        return Result.failure((_unsupported_modifier_extension_diagnostic(request),))
+    if translation_snippets is None or "emit_return" not in translation_snippets:
+        return Result.failure((_missing_modifier_translation_metadata(request),))
+    if _SELECTED_MODIFIER_METADATA_SNIPPET not in translation_snippets:
+        return Result.failure((_missing_modifier_metadata_diagnostic(request),))
+    if request.intrinsic != _SELECTED_INTRINSIC:
+        return Result.failure((_unsupported_modifier_intrinsic_diagnostic(request),))
+    type_ref = request.type_ref
+    if type_ref is None:
+        return Result.failure((_missing_modifier_type_ref_diagnostic(request),))
+    if type_ref.kind != _SELECTED_SUFFIX_SOURCE_REF_KIND:
+        return Result.failure((_unsupported_modifier_source_ref_diagnostic(request),))
+    if (
+        type_ref.type_tag != _SELECTED_INTEGER_SUFFIX_TYPE_TAG
+        or type_ref.source_type_tag not in _SELECTED_INTEGER_SUFFIX_TYPE_TAGS
+    ):
+        return Result.failure((_unsupported_modifier_type_tag_diagnostic(request),))
+
+    return Result.ok(
+        BackendIntrinsicModifier(
+            kind="suffix",
+            backend_id=request.backend_id,
+            extension=request.extension,
+            intrinsic=request.intrinsic,
+            value=_SELECTED_INTEGER_INTRINSIC_SUFFIX,
+            source_type_tag=type_ref.type_tag,
+            source_ref_kind=type_ref.kind,
+        )
+    )
 
 
 def translate_cpp_native_intrinsic_calls(
@@ -85,6 +169,7 @@ def translate_cpp_native_intrinsic_calls(
 
     diagnostics: list[Diagnostic] = []
     calls: list[TranslatedIntrinsicCall] = []
+    modifiers: list[BackendIntrinsicModifier] = []
     for candidate in native_candidates:
         translated = _translate_candidate(
             candidate,
@@ -95,12 +180,19 @@ def translate_cpp_native_intrinsic_calls(
         )
         diagnostics.extend(translated.diagnostics)
         if translated.is_ok:
-            calls.append(translated.unwrap())
+            candidate_translation = translated.unwrap()
+            if candidate_translation.call is not None:
+                calls.append(candidate_translation.call)
+            if candidate_translation.modifier is not None:
+                modifiers.append(candidate_translation.modifier)
 
     ordered = sort_diagnostics(diagnostics)
     if has_errors(ordered):
         return Result.failure(ordered)
-    return Result.ok(CppNativeTranslationPlan(tuple(calls)), diagnostics=ordered)
+    return Result.ok(
+        CppNativeTranslationPlan(tuple(calls), tuple(modifiers)),
+        diagnostics=ordered,
+    )
 
 
 def _metadata_diagnostics(
@@ -152,7 +244,7 @@ def _translate_candidate(
     language_map_entries: FrozenMap[str, LanguageTypeEntry],
     translation_snippets: FrozenMap[str, TranslationSnippet],
     extensions_by_name: FrozenMap[str, Extension],
-) -> Result[TranslatedIntrinsicCall]:
+) -> Result[_CandidateTranslation]:
     generation_diagnostic = _unresolved_generation_helper_diagnostic(
         candidate,
         lowering_plan,
@@ -173,11 +265,6 @@ def _translate_candidate(
     ):
         return Result.failure((_unsupported_extension_diagnostic(candidate),))
 
-    type_entry = language_map_entries.get(candidate.type_tag)
-    backend_type = type_entry.target_type if type_entry is not None else None
-    if candidate.type_tag != _SELECTED_TYPE_TAG or backend_type is None:
-        return Result.failure((_unsupported_type_diagnostic(candidate),))
-
     if "emit_return" not in translation_snippets:
         return Result.failure(
             (
@@ -190,6 +277,12 @@ def _translate_candidate(
             )
         )
 
+    if (
+        candidate.type_tag != _SELECTED_TYPE_TAG
+        and candidate.type_tag not in _SELECTED_INTEGER_SUFFIX_TYPE_TAGS
+    ):
+        return Result.failure((_unsupported_type_diagnostic(candidate),))
+
     lowered = lowering_plan.implementations_by_candidate_id.get(candidate.candidate_id)
     if lowered is None:
         return Result.failure((_missing_lowered_body_diagnostic(candidate),))
@@ -199,16 +292,24 @@ def _translate_candidate(
         return Result.failure(expression.diagnostics)
     intrinsic_expression = expression.unwrap()
     if intrinsic_expression.intrinsic != _SELECTED_INTRINSIC:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-CPP-TRANSLATE-UNSUPPORTED-INTRINSIC",
-                    "C++ native translation supports only lowered "
-                    "intrin_compose<add> for the selected avx2/f32 slice; got "
-                    f"{intrinsic_expression.intrinsic!r}",
-                    location=candidate.variant.source.declaration.source_span.location,
-                ),
+        if candidate.type_tag in _SELECTED_INTEGER_SUFFIX_TYPE_TAGS:
+            return Result.failure(
+                (
+                    _unsupported_modifier_intrinsic_diagnostic(
+                        BackendIntrinsicModifierRequest(
+                            kind="suffix",
+                            backend_id=CPP_TRANSLATION_BACKEND_ID,
+                            extension=candidate.target_extension,
+                            intrinsic=intrinsic_expression.intrinsic,
+                            source_location=(
+                                candidate.variant.source.declaration.source_span.location
+                            ),
+                        )
+                    ),
+                )
             )
+        return Result.failure(
+            (_unsupported_intrinsic_diagnostic(candidate, intrinsic_expression.intrinsic),)
         )
     if len(intrinsic_expression.arguments) != 2:
         return Result.failure((_unsupported_lowered_body_diagnostic(candidate, lowered),))
@@ -232,22 +333,74 @@ def _translate_candidate(
             )
         )
 
+    if candidate.type_tag in _SELECTED_INTEGER_SUFFIX_TYPE_TAGS:
+        type_ref = _single_generation_type_ref(candidate, lowered)
+        if not type_ref.is_ok:
+            return Result.failure(type_ref.diagnostics)
+        modifier = translate_cpp_intrinsic_suffix_modifier(
+            BackendIntrinsicModifierRequest(
+                kind="suffix",
+                backend_id=CPP_TRANSLATION_BACKEND_ID,
+                extension=candidate.target_extension,
+                intrinsic=intrinsic_expression.intrinsic,
+                type_ref=type_ref.unwrap(),
+                source_location=candidate.variant.source.declaration.source_span.location,
+            ),
+            translation_snippets=translation_snippets,
+        )
+        if not modifier.is_ok:
+            return Result.failure(modifier.diagnostics)
+        return Result.ok(_CandidateTranslation(modifier=modifier.unwrap()))
+
+    type_entry = language_map_entries.get(candidate.type_tag)
+    backend_type = type_entry.target_type if type_entry is not None else None
+    if candidate.type_tag != _SELECTED_TYPE_TAG or backend_type is None:
+        return Result.failure((_unsupported_type_diagnostic(candidate),))
+
     prefix = _selected_intrinsic_prefix(extension)
     function_name = (
         f"{prefix}{intrinsic_expression.intrinsic}_{_SELECTED_INTRINSIC_SUFFIX}"
     )
     return Result.ok(
-        TranslatedIntrinsicCall(
-            candidate_id=candidate.candidate_id,
-            backend_id=CPP_TRANSLATION_BACKEND_ID,
-            intrinsic=intrinsic_expression.intrinsic,
-            extension=candidate.target_extension,
-            type_tag=candidate.type_tag,
-            backend_type=backend_type,
-            function_name=function_name,
-            arguments=intrinsic_expression.arguments,
+        _CandidateTranslation(
+            call=TranslatedIntrinsicCall(
+                candidate_id=candidate.candidate_id,
+                backend_id=CPP_TRANSLATION_BACKEND_ID,
+                intrinsic=intrinsic_expression.intrinsic,
+                extension=candidate.target_extension,
+                type_tag=candidate.type_tag,
+                backend_type=backend_type,
+                function_name=function_name,
+                arguments=intrinsic_expression.arguments,
+            )
         )
     )
+
+
+def _single_generation_type_ref(
+    candidate: ImplementationCandidate,
+    lowered: LoweredImplementation,
+) -> Result[GenerationTypeRef | None]:
+    if len(lowered.generation_type_refs) > 1:
+        return Result.failure(
+            (
+                _malformed_modifier_request_diagnostic(
+                    BackendIntrinsicModifierRequest(
+                        kind="suffix",
+                        backend_id=CPP_TRANSLATION_BACKEND_ID,
+                        extension=candidate.target_extension,
+                        intrinsic=_SELECTED_INTRINSIC,
+                        source_location=(
+                            candidate.variant.source.declaration.source_span.location
+                        ),
+                    ),
+                    ("generation_type_refs",),
+                ),
+            )
+        )
+    if not lowered.generation_type_refs:
+        return Result.ok(None)
+    return Result.ok(lowered.generation_type_refs[0])
 
 
 def _intrinsic_compose_expression(
@@ -306,6 +459,159 @@ def _unresolved_generation_helper_diagnostic(
     )
 
 
+def _contains_raw_generation_helper(text: str | None) -> bool:
+    return text is not None and any(
+        marker in text
+        for marker in _RAW_GENERATION_HELPER_MARKERS
+    )
+
+
+def _unresolved_modifier_generation_diagnostic(
+    request: BackendIntrinsicModifierRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-GENERATION-UNRESOLVED",
+        "C++ intrinsic suffix modifier translation requires generation-time "
+        "helpers to be resolved to typed GenerationTypeRef values before "
+        f"backend translation; got raw helper text {request.raw_helper_text!r}",
+        location=request.source_location,
+    )
+
+
+def _malformed_modifier_request_diagnostic(
+    request: BackendIntrinsicModifierRequest,
+    field_names: tuple[str, ...],
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-MODIFIER-MALFORMED",
+        "C++ intrinsic modifier translation received a malformed request; "
+        f"missing or invalid field(s): {', '.join(field_names)}; backend "
+        f"{request.backend_id!r}, extension {request.extension!r}, modifier "
+        f"family {request.kind!r}, intrinsic base {request.intrinsic!r}",
+        location=request.source_location,
+    )
+
+
+def _unsupported_modifier_family_diagnostic(
+    request: BackendIntrinsicModifierRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-MODIFIER-UNSUPPORTED",
+        "C++ backend modifier translation supports only intrinsic suffix in "
+        f"Milestone 45; got modifier family {request.kind!r} for backend "
+        f"{request.backend_id!r}, extension {request.extension!r}, intrinsic "
+        f"base {request.intrinsic!r}",
+        location=request.source_location,
+    )
+
+
+def _unsupported_modifier_backend_diagnostic(
+    request: BackendIntrinsicModifierRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-UNSUPPORTED-BACKEND",
+        "C++ intrinsic suffix modifier translation supports only backend "
+        f"{CPP_TRANSLATION_BACKEND_ID!r}; got backend {request.backend_id!r}",
+        location=request.source_location,
+    )
+
+
+def _unsupported_modifier_extension_diagnostic(
+    request: BackendIntrinsicModifierRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-UNSUPPORTED-EXTENSION",
+        "C++ intrinsic suffix modifier translation supports only extension "
+        f"{_SELECTED_EXTENSION!r}; got extension {request.extension!r} for "
+        f"backend {request.backend_id!r} and intrinsic base {request.intrinsic!r}",
+        location=request.source_location,
+    )
+
+
+def _missing_modifier_translation_metadata(
+    request: BackendIntrinsicModifierRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-MISSING-TRANSLATION-MAP",
+        "C++ intrinsic suffix modifier translation requires translation map "
+        f"{request.backend_id!r} with emit_return metadata before backend "
+        f"modifier translation; extension {request.extension!r}, intrinsic "
+        f"base {request.intrinsic!r}",
+        location=request.source_location,
+    )
+
+
+def _missing_modifier_metadata_diagnostic(
+    request: BackendIntrinsicModifierRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-MODIFIER-METADATA-MISSING",
+        "C++ intrinsic suffix modifier translation requires selected modifier "
+        f"metadata {_SELECTED_MODIFIER_METADATA_SNIPPET!r} in translation map "
+        f"{request.backend_id!r}; extension {request.extension!r}, intrinsic "
+        f"base {request.intrinsic!r}",
+        location=request.source_location,
+    )
+
+
+def _unsupported_modifier_intrinsic_diagnostic(
+    request: BackendIntrinsicModifierRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-MODIFIER-INTRINSIC-UNSUPPORTED",
+        "C++ intrinsic suffix modifier translation supports only intrinsic "
+        f"base {_SELECTED_INTRINSIC!r}; got {request.intrinsic!r} for backend "
+        f"{request.backend_id!r} and extension {request.extension!r}",
+        location=request.source_location,
+    )
+
+
+def _missing_modifier_type_ref_diagnostic(
+    request: BackendIntrinsicModifierRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-MODIFIER-TYPE-MISSING",
+        "C++ intrinsic suffix modifier translation requires a typed "
+        "GenerationTypeRef input; got none for backend "
+        f"{request.backend_id!r}, extension {request.extension!r}, intrinsic "
+        f"base {request.intrinsic!r}",
+        location=request.source_location,
+    )
+
+
+def _unsupported_modifier_source_ref_diagnostic(
+    request: BackendIntrinsicModifierRequest,
+) -> Diagnostic:
+    type_ref = request.type_ref
+    source_ref_kind = type_ref.kind if type_ref is not None else None
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-MODIFIER-SOURCE-REF-UNSUPPORTED",
+        "C++ intrinsic suffix modifier translation supports only "
+        f"GenerationTypeRef kind {_SELECTED_SUFFIX_SOURCE_REF_KIND!r}; got "
+        f"{source_ref_kind!r} for backend {request.backend_id!r}, extension "
+        f"{request.extension!r}, intrinsic base {request.intrinsic!r}",
+        location=request.source_location,
+    )
+
+
+def _unsupported_modifier_type_tag_diagnostic(
+    request: BackendIntrinsicModifierRequest,
+) -> Diagnostic:
+    type_ref = request.type_ref
+    type_tag = type_ref.type_tag if type_ref is not None else None
+    selected_type_tag = type_ref.source_type_tag if type_ref is not None else None
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-MODIFIER-TYPE-UNSUPPORTED",
+        "C++ intrinsic suffix modifier translation supports only resolved "
+        f"type tag {_SELECTED_INTEGER_SUFFIX_TYPE_TAG!r} from selected source "
+        f"tags {_SELECTED_INTEGER_SUFFIX_TYPE_TAGS!r}; got type tag "
+        f"{type_tag!r} from source type tag {selected_type_tag!r} for backend "
+        f"{request.backend_id!r}, extension {request.extension!r}, intrinsic "
+        f"base {request.intrinsic!r}",
+        location=request.source_location,
+    )
+
+
 def _missing_lowered_body_diagnostic(
     candidate: ImplementationCandidate,
 ) -> Diagnostic:
@@ -350,5 +656,18 @@ def _unsupported_type_diagnostic(
         "C++ native translation supports only the selected f32 type for this "
         f"slice; candidate {candidate.candidate_id!r} has type tag "
         f"{candidate.type_tag!r}",
+        location=candidate.variant.source.declaration.source_span.location,
+    )
+
+
+def _unsupported_intrinsic_diagnostic(
+    candidate: ImplementationCandidate,
+    intrinsic: str,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-UNSUPPORTED-INTRINSIC",
+        "C++ native translation supports only lowered intrin_compose<add> for "
+        "the selected avx2/f32 slice; got "
+        f"{intrinsic!r}",
         location=candidate.variant.source.declaration.source_span.location,
     )

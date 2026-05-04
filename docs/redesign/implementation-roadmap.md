@@ -3042,7 +3042,7 @@ parse generation-time helpers or derive suffix/type semantics locally.
 | Candidate slice | Evidence path and exact form | Required inputs from previous milestones | Expected output/model | Pipeline owner | Risk and test strategy | Recommended position |
 | --- | --- | --- | --- | --- | --- | --- |
 | Backend modifier value family boundary selection and inventory | `tsldata/primitives/arithmetic/fundamental.tsl:47-90` uses `suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))`; `tsldata/primitives/load_store/load.tsl:55-70` and `tsldata/primitives/load_store/store.tsl:54-64` show prefix/suffix plus aligned branches; `tsldata/primitives/conversion/repr_change.tsl:358-370` and `:908-918` show literal and backend `immediate(n)` modifiers; grammar evidence in `frozen/tsl-gen/tsl_gen/tsil.lark:75-78`; canonical value-backend evidence in `frozen/tsl-gen/tsl_gen/tsil_engine/expansion_support.py:416-433`; modifier behavior evidence in `frozen/tsl-gen/tsl_gen/resolver/render_support.py:500-524`, `:632-674`, and `:680-699`; signed/unsigned output evidence in `frozen/out/tsl/tsl_native.hpp:24460-24477` and `:24712-24729`. | M40 backend-call translation boundary, M41/M42 generation-time-before-backend rule, M43 `GenerationTypeRef` values, and backend metadata inventory from M30. | A documented typed request/result model for backend intrinsic modifier values plus a selected first family. No runtime model changes in the planning milestone. | Planning for backend translation boundary. | Low for docs; validation is `git diff --check`. Future tests are defined here so implementation can cover raw-helper rejection, missing metadata, unsupported modifiers, and renderer non-evaluation. | Milestone 44. |
-| Intrinsic suffix modifier translation over typed `GenerationTypeRef` | `tsldata/primitives/arithmetic/fundamental.tsl:65-75` shows native integer `avx2` add suffix input; `frozen/tsl-gen/tsl_gen/resolver/render_support.py:500-524`, `:632-657`, and `:680-692` show suffix-derived intrinsic-name behavior as evidence only; `frozen/out/tsl/tsl_native.hpp:24460-24477` and `:24712-24729` show `_mm256_add_epi32` for signed and unsigned 32-bit add. Exact supported form: `suffix=value<backend>(intrin::suffix(<GenerationTypeRef>))`, where the type ref was produced by M43 from `type<generation>(base::signed_of(type<generation>(base::in)))`. | M43 typed `GenerationTypeRef(kind="base.signed_of", type_tag="si32")` with `source_type_tag` in `{si32, ui32}`, M44 modifier request/result contract, M40 intrinsic-compose expression model, selected backend id `cpp`, selected extension `avx2`, selected primitive/type, implementation source location, and typed backend metadata. | Typed backend modifier value such as `BackendIntrinsicModifier(kind="suffix", backend_id="cpp", extension="avx2", value="epi32", source_type_tag="si32")`, or an equivalent immutable modifier result consumed by later backend-call translation. | Backend translation. | Medium because suffix semantics cross type, extension, and translation metadata. Tests cover `si32` and `ui32` selected candidates resolving through `base.signed_of` to `epi32`, deterministic output, unsupported type/extension/map diagnostics, missing typed input diagnostics, and rejection of raw `type<generation>(...)` text. | Milestone 45. |
+| Intrinsic suffix modifier translation over typed `GenerationTypeRef` | `tsldata/primitives/arithmetic/fundamental.tsl:65-75` shows native integer `avx2` add suffix input; `frozen/tsl-gen/tsl_gen/resolver/render_support.py:500-524`, `:632-657`, and `:680-692` show suffix-derived intrinsic-name behavior as evidence only; `frozen/out/tsl/tsl_native.hpp:24460-24477` and `:24712-24729` show `_mm256_add_epi32` for signed and unsigned 32-bit add. Exact supported form: `suffix=value<backend>(intrin::suffix(<GenerationTypeRef>))`, where the type ref was produced by M43 from `type<generation>(base::signed_of(type<generation>(base::in)))`. | M43 typed `GenerationTypeRef(kind="base.signed_of", type_tag="si32")` with `source_type_tag` in `{si32, ui32}`, M44 modifier request/result contract, M40 intrinsic-compose expression model, selected backend id `cpp`, selected extension `avx2`, selected primitive/type, implementation source location, and typed backend metadata. | Typed backend modifier value such as `BackendIntrinsicModifier(kind="suffix", backend_id="cpp", extension="avx2", intrinsic="add", value="epi32", source_type_tag="si32")`, or an equivalent immutable modifier result consumed by later backend-call translation. | Backend translation. | Medium because suffix semantics cross type, extension, and translation metadata. Tests cover `si32` and `ui32` selected candidates resolving through `base.signed_of` to `epi32`, deterministic output, unsupported type/extension/map diagnostics, missing typed input diagnostics, and rejection of raw `type<generation>(...)` text. | Milestone 45. |
 | Backend type spelling request over typed `GenerationTypeRef` | `tsldata/detail/lang/types/types_cpp.tsl:1-12` maps C++ scalar spellings such as `s32 {type "int32_t"}` and `u32 {type "uint32_t"}`; `translate_cpp.tsl:4-8` records backend type trait forms; frozen output uses `simd<int32_t, avx2>` at `tsl_native.hpp:24460-24477` and `simd<uint32_t, avx2>` at `:24712-24729`. Exact form: selected C++ backend type spelling request over M43 `GenerationTypeRef(kind="base.in")` for `si32` and `ui32`. | M43 `GenerationTypeRef`, typed language map metadata, backend id `cpp`, selected candidate type tag, and a documented tag-key normalization rule when source tags use `si32`/`ui32` but language keys use `s32`/`u32`. | Typed backend type spelling result such as `BackendTypeSpelling(backend_id="cpp", type_tag="si32", spelling="int32_t")`. | Backend translation. | Medium because tag normalization must be explicit and cannot live in renderers. Tests cover `si32 -> int32_t`, `ui32 -> uint32_t`, missing map diagnostics, unsupported/raw helper diagnostics, and deterministic results. | Milestone 46. |
 | Native integer add parity rendering using resolved suffix/type data | `fundamental.tsl:65-75` is the active `avx2/?i?` add source; frozen output evidence is `tsl_native.hpp:24460-24477` for `simd<int32_t, avx2>` and `:24712-24729` for `simd<uint32_t, avx2>`, both returning `_mm256_add_epi32(left, right)`. | M45 resolved suffix modifier, M46 resolved C++ type spelling, M40 backend-call IR, existing C++ native specialization/wrapper rendering from M36-M40, selected candidate metadata and provenance. | Deterministic C++ golden fixture for selected native integer `add_binary` specializations, consuming already-translated suffix/type data. | Rendering, but only after translation outputs are explicit inputs. | Medium because it touches output. Tests are golden/provenance/determinism tests plus regressions proving the renderer has no suffix/type lookup and rejects missing translated data. No compiler execution. | Milestone 47. |
 | Signedness branch pruning | `tsldata/primitives/bitwise/shifts.tsl:535-553` and `:625-648`, plus `tsldata/primitives/conversion/repr_change.tsl:1210-1225`, use `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`. | M42 branch-pruning model and M43 `GenerationTypeRef(kind="base.in")`. | Boolean generation value and pruned branch result for signed/unsigned selected types. | Generation-time semantic lowering. | Medium. Tests would cover true/false pruning, selected-branch-only diagnostics, unsupported type predicates, and raw-helper rejection. | Defer until after the native integer add phase; it is more relevant to shifts/conversions than to `binary/add`. |
@@ -3231,6 +3231,13 @@ Dependencies on prior milestones:
 
 ## Milestone 45: Intrinsic Suffix Modifier Translation Slice
 
+Status:
+
+Implemented in the M45 slice. Milestone 45 adds typed backend intrinsic
+modifier request/result values and translates only the selected C++ AVX2
+integer `add` suffix request over M43 `GenerationTypeRef` inputs. It does not
+render native integer output and does not provide backend type spelling.
+
 Goal:
 
 Translate one selected intrinsic suffix modifier over typed M43
@@ -3288,16 +3295,19 @@ Expected outputs:
     kind="suffix",
     backend_id="cpp",
     extension="avx2",
+    intrinsic="add",
     value="epi32",
     source_type_tag="si32",
     source_ref_kind="base.signed_of",
   )
   ```
 
-- Structured diagnostics listed in the M44 contract for unsupported modifier
-  shape, unsupported or missing type/extension metadata, missing typed
-  `GenerationTypeRef`, missing translation metadata, unsupported backend, and
-  raw generation-helper text reaching backend translation.
+- Structured diagnostics for unsupported modifier shape, unsupported or
+  missing type/extension metadata, missing typed `GenerationTypeRef`, missing
+  translation metadata, missing modifier metadata, unsupported backend,
+  unsupported extension, unsupported intrinsic base, unsupported source ref
+  kind, unsupported type tag, malformed modifier requests, and raw
+  generation-helper text reaching backend translation.
 
 Validation criteria:
 
@@ -3314,7 +3324,8 @@ Tests required:
   `base.signed_of` input to `epi32`.
 - Diagnostic tests for missing metadata, unsupported type tag, unsupported
   extension, unsupported backend, unsupported modifier family, missing
-  `GenerationTypeRef`, malformed modifier request, and raw helper text.
+  `GenerationTypeRef`, unsupported intrinsic base, unsupported source ref kind,
+  malformed modifier request, and raw helper text.
 - Determinism tests for repeated suffix translation.
 - Regression tests proving renderers do not evaluate suffix helpers.
 
@@ -3525,13 +3536,13 @@ it replaces or adapts a deferred target.
 
 ## Recommended Next Milestone
 
-Milestones 1 through 43 are accepted. Milestone 44 is the current
-documentation/planning boundary-selection result. It selects intrinsic suffix as
-the first backend modifier value family, preserves the M40/M43 boundary, and
-prepares Milestone 45 implementation without adding renderer behavior or output
-expansion.
+Milestones 1 through 44 are accepted. Milestone 45 is the current executor
+milestone and implements the selected intrinsic suffix modifier translation
+slice without renderer or output expansion.
 
-After focused Milestone 44 review, the recommended executor milestone is
-Milestone 45: Intrinsic Suffix Modifier Translation Slice, constrained to typed
-M43 `GenerationTypeRef(kind="base.signed_of")` inputs for selected `si32` and
-`ui32` native integer add candidates.
+After focused Milestone 45 review, the recommended executor milestone is
+Milestone 46: Backend Type Spelling Request Slice, constrained to typed M43
+`GenerationTypeRef(kind="base.in")` inputs for selected `si32` and `ui32`
+native integer add candidates. Milestone 47 native integer output remains
+blocked until both M45 suffix translation and M46 backend type spelling are
+available as explicit renderer inputs.

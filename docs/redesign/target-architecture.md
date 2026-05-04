@@ -337,9 +337,11 @@ Current roadmap note:
 - Milestone 44 is the post-M43 backend modifier boundary-selection milestone;
   it selects intrinsic suffix as the first modifier family and remains
   documentation/planning only.
-- Milestones 45 and 46 keep intrinsic suffix translation and C++ scalar type
-  spelling inside backend translation, both consuming typed M43
-  `GenerationTypeRef` values rather than raw helper text.
+- Milestone 45 implements intrinsic suffix translation inside backend
+  translation, consuming typed M43 `GenerationTypeRef` values rather than raw
+  helper text.
+- Milestone 46 keeps C++ scalar type spelling inside backend translation and
+  consumes typed M43 `GenerationTypeRef` values rather than raw helper text.
 - Milestone 47 is the next allowed native integer C++ output expansion and must
   consume translated suffix/type-spelling values as renderer inputs.
 

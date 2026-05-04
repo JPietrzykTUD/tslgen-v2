@@ -1257,6 +1257,10 @@ Consequences:
   intrinsic suffix translation over typed M43 values, Milestone 46 implements
   selected C++ type spelling over typed M43 values, and Milestone 47 renders
   native integer add only from those translated outputs.
+- Milestone 45 produces typed suffix modifier values such as
+  `BackendIntrinsicModifier(kind="suffix", backend_id="cpp",
+  extension="avx2", intrinsic="add", value="epi32")` and deliberately leaves
+  backend type spelling and native integer output to M46/M47.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

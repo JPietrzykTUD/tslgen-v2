@@ -206,7 +206,8 @@ parity, or report/documentation parity.
 - Prerequisite phase:
   - M44 selects intrinsic suffix as the first backend modifier family.
   - M45 translates the selected suffix from typed M43 `GenerationTypeRef`
-    values.
+    values and produces `epi32` for selected `si32`/`ui32` AVX2 integer add
+    suffix requests.
   - M46 translates selected C++ type spellings from typed M43
     `GenerationTypeRef` values.
   - M47 renders the selected integer output only after those translated values

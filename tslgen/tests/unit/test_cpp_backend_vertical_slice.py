@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path, PurePosixPath
+from typing import cast
 import unittest
 
 from _golden import (
@@ -36,6 +37,7 @@ from tslgen.domain.values import CatalogValue
 from tslgen.io.artifacts import ArtifactDescriptor, artifact_plan_from_descriptors
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
 from tslgen.lowering import (
+    BackendIntrinsicModifierRequest,
     GenerationTypeRef,
     LoweredImplementation,
     LoweringPlan,
@@ -49,6 +51,7 @@ from tslgen.lowering import (
 )
 from tslgen.backends.cpp.translation import (
     CppNativeTranslationPlan,
+    translate_cpp_intrinsic_suffix_modifier,
     translate_cpp_native_intrinsic_calls,
 )
 from tslgen.rendering.render_plan import build_artifact_plan
@@ -152,6 +155,28 @@ ADD_NATIVE_ONLY_PARITY_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
 """
 
 
+ADD_NATIVE_INTEGER_SUFFIX_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
+  tests []
+  impls:
+    avx2:
+      ?i32:
+        requires [avx, avx2]
+        implementation:
+          tsil "emit_return(intrin_compose<add, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(left, right));"
+"""
+
+
+ADD_NATIVE_INTEGER_SIMPLE_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
+  tests []
+  impls:
+    avx2:
+      si32:
+        requires [avx, avx2]
+        implementation:
+          tsil "emit_return(intrin_compose<add>(left, right));"
+"""
+
+
 RAW_SUBTRACT_NATIVE_ADD_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
   tests []
   impls:
@@ -193,6 +218,17 @@ GENERATION_TYPE_SUMMARY_PRIMITIVE = """prim<v:=(v,v)> slice_add(left, right):
         requires [sse]
         implementation:
           tsil "type<generation>(base::in)"
+"""
+
+
+SUFFIX_HELPER_SUMMARY_PRIMITIVE = """prim<v:=(v,v)> slice_add(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires [sse]
+        implementation:
+          tsil "emit_return(intrin_compose<add, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(left, right));"
 """
 
 
@@ -293,6 +329,19 @@ def cpp_backend_metadata_boundary(
     )
 
 
+def cpp_translation_snippets(
+    text: str = """translation cpp:
+  type_signed_of "std::make_signed_t<{type}>"
+  emit_return "return {value}"
+""",
+):
+    catalog = catalog_from_text(text)
+    metadata = backend_metadata_from_catalog(catalog)
+    if not metadata.is_ok:
+        raise AssertionError(metadata.diagnostics)
+    return metadata.unwrap().translation_maps_by_backend["cpp"].snippets_by_name
+
+
 def cpp_extensions() -> tuple[Extension, ...]:
     return catalog_from_paths("tsldata/extensions/extension.tsl").extensions
 
@@ -345,6 +394,20 @@ def candidate_selection_for(
     if not candidates.is_ok:
         raise AssertionError(candidates.diagnostics)
     return candidates.unwrap()
+
+
+def selection_for_type(
+    selection: CandidateSelection,
+    type_tag: str,
+) -> CandidateSelection:
+    candidates = tuple(
+        candidate
+        for candidate in selection.candidates
+        if candidate.type_tag == type_tag
+    )
+    if len(candidates) != 1:
+        raise AssertionError(f"expected exactly one candidate for {type_tag!r}")
+    return CandidateSelection(plan=selection.plan, candidates=candidates)
 
 
 def manifest_set(*, artifact_kind: str = "generated") -> BackendManifestSet:
@@ -533,6 +596,37 @@ def manual_generation_type_ref_lowering_plan_for(
     )
 
 
+def manual_intrinsic_add_with_generation_type_ref_lowering_plan_for(
+    selection: CandidateSelection,
+    type_ref: GenerationTypeRef,
+) -> LoweringPlan:
+    prepared = prepare_lowering_inputs(selection, LoweringRequest(backend_id="cpp"))
+    if not prepared.is_ok:
+        raise AssertionError(prepared.diagnostics)
+    return LoweringPlan(
+        request=prepared.unwrap().request,
+        input_set=prepared.unwrap(),
+        implementations=(
+            LoweredImplementation(
+                candidate_id=selection.candidates[0].candidate_id,
+                status="lowered",
+                statements=(
+                    TsilReturnStatement(
+                        TsilIntrinsicComposeExpression(
+                            intrinsic="add",
+                            arguments=(
+                                TsilParameterReference("left"),
+                                TsilParameterReference("right"),
+                            ),
+                        )
+                    ),
+                ),
+                generation_type_refs=(type_ref,),
+            ),
+        ),
+    )
+
+
 def manual_binary_add_lowering_plan_for(selection: CandidateSelection) -> LoweringPlan:
     prepared = prepare_lowering_inputs(selection, LoweringRequest(backend_id="cpp"))
     if not prepared.is_ok:
@@ -657,6 +751,257 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             tuple(argument.name for argument in translated.arguments),
             ("left", "right"),
         )
+
+    def test_translates_selected_add_native_avx2_si32_suffix_modifier(self) -> None:
+        selection = selection_for_type(
+            candidate_selection_for(
+                catalog_with_primitive(ADD_NATIVE_INTEGER_SUFFIX_PRIMITIVE),
+                primitive_name="add",
+                extension_names=("avx2",),
+                cpu_flags=("avx", "avx2"),
+            ),
+            "si32",
+        )
+
+        result = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            manual_intrinsic_add_with_generation_type_ref_lowering_plan_for(
+                selection,
+                GenerationTypeRef(
+                    kind="base.signed_of",
+                    type_tag="si32",
+                    source_type_tag="si32",
+                ),
+            ),
+            metadata_boundary=cpp_backend_metadata_boundary(),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(result.unwrap().calls, ())
+        modifier = result.unwrap().modifiers[0]
+        self.assertEqual(modifier.kind, "suffix")
+        self.assertEqual(modifier.backend_id, "cpp")
+        self.assertEqual(modifier.extension, "avx2")
+        self.assertEqual(modifier.intrinsic, "add")
+        self.assertEqual(modifier.value, "epi32")
+        self.assertEqual(modifier.source_type_tag, "si32")
+        self.assertEqual(modifier.source_ref_kind, "base.signed_of")
+
+    def test_translates_selected_add_native_avx2_ui32_suffix_modifier(self) -> None:
+        selection = selection_for_type(
+            candidate_selection_for(
+                catalog_with_primitive(ADD_NATIVE_INTEGER_SUFFIX_PRIMITIVE),
+                primitive_name="add",
+                extension_names=("avx2",),
+                cpu_flags=("avx", "avx2"),
+            ),
+            "ui32",
+        )
+
+        result = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            manual_intrinsic_add_with_generation_type_ref_lowering_plan_for(
+                selection,
+                GenerationTypeRef(
+                    kind="base.signed_of",
+                    type_tag="si32",
+                    source_type_tag="ui32",
+                ),
+            ),
+            metadata_boundary=cpp_backend_metadata_boundary(),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(result.unwrap().calls, ())
+        self.assertEqual(result.unwrap().modifiers[0].value, "epi32")
+        self.assertEqual(result.unwrap().modifiers[0].source_type_tag, "si32")
+
+    def test_suffix_modifier_translation_is_deterministic(self) -> None:
+        selection = selection_for_type(
+            candidate_selection_for(
+                catalog_with_primitive(ADD_NATIVE_INTEGER_SUFFIX_PRIMITIVE),
+                primitive_name="add",
+                extension_names=("avx2",),
+                cpu_flags=("avx", "avx2"),
+            ),
+            "si32",
+        )
+        lowering_plan = manual_intrinsic_add_with_generation_type_ref_lowering_plan_for(
+            selection,
+            GenerationTypeRef(
+                kind="base.signed_of",
+                type_tag="si32",
+                source_type_tag="si32",
+            ),
+        )
+
+        first = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            lowering_plan,
+            metadata_boundary=cpp_backend_metadata_boundary(),
+            extensions=cpp_extensions(),
+        )
+        second = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            lowering_plan,
+            metadata_boundary=cpp_backend_metadata_boundary(),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+
+    def test_suffix_modifier_rejects_raw_nested_generation_type_text(self) -> None:
+        selection = selection_for_type(
+            candidate_selection_for(
+                catalog_with_primitive(ADD_NATIVE_INTEGER_SUFFIX_PRIMITIVE),
+                primitive_name="add",
+                extension_names=("avx2",),
+                cpu_flags=("avx", "avx2"),
+            ),
+            "si32",
+        )
+
+        result = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            manual_intrinsic_add_lowering_plan_for(selection),
+            metadata_boundary=cpp_backend_metadata_boundary(),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-TRANSLATE-GENERATION-UNRESOLVED",
+            severity="error",
+        )
+        self.assertIn("typed semantic values", result.diagnostics[0].message)
+
+    def test_suffix_modifier_reports_missing_generation_type_ref(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_INTEGER_SIMPLE_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx", "avx2"),
+        )
+
+        result = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            manual_intrinsic_add_lowering_plan_for(selection),
+            metadata_boundary=cpp_backend_metadata_boundary(),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-TRANSLATE-MODIFIER-TYPE-MISSING",
+            severity="error",
+        )
+        self.assertIn("GenerationTypeRef", result.diagnostics[0].message)
+
+    def test_suffix_modifier_request_diagnostics(self) -> None:
+        snippets = cpp_translation_snippets()
+        valid_type_ref = GenerationTypeRef(
+            kind="base.signed_of",
+            type_tag="si32",
+            source_type_tag="si32",
+        )
+
+        def request(**overrides: object) -> BackendIntrinsicModifierRequest:
+            return BackendIntrinsicModifierRequest(
+                kind=cast(str, overrides.get("kind", "suffix")),
+                backend_id=cast(str, overrides.get("backend_id", "cpp")),
+                extension=cast(str, overrides.get("extension", "avx2")),
+                intrinsic=cast(str, overrides.get("intrinsic", "add")),
+                type_ref=cast(
+                    GenerationTypeRef | None,
+                    overrides.get("type_ref", valid_type_ref),
+                ),
+            )
+
+        cases = (
+            (
+                request(kind="prefix"),
+                snippets,
+                "TSL-CPP-TRANSLATE-MODIFIER-UNSUPPORTED",
+            ),
+            (
+                request(backend_id="rust"),
+                snippets,
+                "TSL-CPP-TRANSLATE-UNSUPPORTED-BACKEND",
+            ),
+            (
+                request(extension="sse"),
+                snippets,
+                "TSL-CPP-TRANSLATE-UNSUPPORTED-EXTENSION",
+            ),
+            (
+                request(
+                    type_ref=GenerationTypeRef(
+                        kind="base.signed_of",
+                        type_tag="ui32",
+                        source_type_tag="si32",
+                    )
+                ),
+                snippets,
+                "TSL-CPP-TRANSLATE-MODIFIER-TYPE-UNSUPPORTED",
+            ),
+            (
+                request(intrinsic="sub"),
+                snippets,
+                "TSL-CPP-TRANSLATE-MODIFIER-INTRINSIC-UNSUPPORTED",
+            ),
+            (
+                request(type_ref=GenerationTypeRef(kind="base.in", type_tag="si32")),
+                snippets,
+                "TSL-CPP-TRANSLATE-MODIFIER-SOURCE-REF-UNSUPPORTED",
+            ),
+            (
+                request(type_ref=None),
+                snippets,
+                "TSL-CPP-TRANSLATE-MODIFIER-TYPE-MISSING",
+            ),
+            (
+                request(intrinsic=""),
+                snippets,
+                "TSL-CPP-TRANSLATE-MODIFIER-MALFORMED",
+            ),
+            (
+                request(),
+                None,
+                "TSL-CPP-TRANSLATE-MISSING-TRANSLATION-MAP",
+            ),
+            (
+                request(),
+                cpp_translation_snippets(
+                    """translation cpp:
+  emit_return "return {value}"
+"""
+                ),
+                "TSL-CPP-TRANSLATE-MODIFIER-METADATA-MISSING",
+            ),
+        )
+
+        for modifier_request, translation_snippets, code in cases:
+            with self.subTest(code=code):
+                result = translate_cpp_intrinsic_suffix_modifier(
+                    modifier_request,
+                    translation_snippets=translation_snippets,
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
 
     def test_translated_cpp_type_spelling_comes_from_language_map(self) -> None:
         selection = candidate_selection_for(
@@ -868,6 +1213,19 @@ translation cpp:
         self.assertIn("type<generation>(base::in)", artifact.content)
         self.assertNotIn("std::make_signed", artifact.content)
         self.assertNotIn("std::make_unsigned", artifact.content)
+
+    def test_renderer_does_not_evaluate_suffix_helpers(self) -> None:
+        result = render_simple_fixture(
+            primitive_text=SUFFIX_HELPER_SUMMARY_PRIMITIVE,
+            include_lowering=False,
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = result.unwrap().artifacts_by_path["generated.hpp"]
+        self.assertIn("value<backend>(intrin::suffix", artifact.content)
+        self.assertIn("type<generation>(base::signed_of", artifact.content)
+        self.assertNotIn("epi32", artifact.content)
+        self.assertNotIn("_mm256_add_epi32", artifact.content)
 
     def test_renders_minimal_cpp_generated_artifact(self) -> None:
         result = render_simple_fixture()

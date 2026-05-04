@@ -79,7 +79,7 @@ behavior without treating the whole corpus as implemented.
 | `value<generation>(mask::lane::all_true)` | `tsldata/primitives/bitwise/bit_ops.tsl` search result for `mask::lane::all_true` | Supply all-true mask lane literal. | Mask lane count and representation. | `GenerationValue[int|string](kind="mask.lane.all_true")`. | Mask metadata. | explicitly-deferred | Defer until mask helper parity. | Mask fixture and metadata diagnostics. |
 | `type<backend>(vector::as_extension(...))` | `tsldata/primitives/arithmetic/fundamental.tsl:38-45`, `tsldata/primitives/bitwise/shifts.tsl:50-53`, `shifts.tsl:68-76` | Request backend spelling for a semantically selected vector type. | Resolved generation type value and backend id. | Backend translation request over `GenerationTypeRef`. | Language type map. | required-later | Defer until generation type values exist. | Backend translation tests must reject raw nested generation text. |
 | `type<backend>(scalar::ui64)` and scalar backend casts | `tsldata/primitives/load_store/store.tsl:181-188`, `store.tsl:196-210`, `tsldata/primitives/conversion/repr_change.tsl:121-128` | Request backend scalar type spelling. | Resolved scalar type and backend id. | Backend type translation request. | Language type map. | required-later | Defer until scalar backend type request slice. | Missing type-map and unsupported backend diagnostics. |
-| `value<backend>(intrin::suffix(...))` | `tsldata/primitives/arithmetic/fundamental.tsl:47-80`, `tsldata/primitives/bitwise/shifts.tsl:63-82`, `shifts.tsl:672-683` | Compute backend intrinsic suffix from selected type. | Resolved generation type, extension, backend id. | Backend translation value request. | Translation map and extension metadata. | selected M44/M45 | M44 selects intrinsic suffix as the first backend modifier family; M45 implements only `suffix=value<backend>(intrin::suffix(<GenerationTypeRef>))` over typed M43 inputs. | Tests prove generation type resolves before suffix translation. |
+| `value<backend>(intrin::suffix(...))` | `tsldata/primitives/arithmetic/fundamental.tsl:47-80`, `tsldata/primitives/bitwise/shifts.tsl:63-82`, `shifts.tsl:672-683` | Compute backend intrinsic suffix from selected type. | Resolved generation type, extension, backend id. | Backend translation value request. | Translation map and extension metadata. | implemented M45 for selected suffix | M45 implements only `suffix=value<backend>(intrin::suffix(<GenerationTypeRef>))` over typed M43 `base.signed_of` inputs for selected C++ AVX2 `si32`/`ui32` integer add. | Tests prove generation type resolves before suffix translation. |
 | `value<backend>(intrin::prefix)` and stream suffix | `tsldata/primitives/load_store/load.tsl:55-70`, `store.tsl:54-64` | Compute backend intrinsic prefix and stream-load/store suffix. | Backend id and extension. | Backend translation value request. | Translation map and extension metadata. | required-later | Defer until load/store native modifier slice. | Missing translation-map and unsupported extension diagnostics. |
 | `post=...`, `infix=...`, `prefix=...`, `suffix=...`, `immediate(n)=...` modifiers | `frozen/tsl-gen/tsl_gen/tsil.lark:75-78`, `frozen/tsl-gen/tsl_gen/resolver/render_support.py:565-699`, `tsldata/primitives/bitwise/shifts.tsl:150`, `shifts.tsl:1511-1517` | Modify composed intrinsic names or direct intrinsic calls. | Resolved type/value modifiers and ordered intrinsic arguments. | Intrinsic modifier IR fields. | Translation map and backend-specific intrinsic metadata. | required-later | Defer broad modifier evaluation; keep only M40 selected default composition active. | Modifier-specific parser and translation diagnostics. |
 | Direct `intrin<...>` calls with template placeholders | `tsldata/primitives/bitwise/shifts.tsl:120-128`, `shifts.tsl:150`, `tsldata/primitives/conversion/repr_change.tsl:25-43` | Emit an already named intrinsic or placeholder-bearing intrinsic call. | Backend id, type tag, extension, placeholder rules. | Direct backend intrinsic call IR or explicit unsupported node. | Translation metadata and language-specific rules. | explicitly-deferred | Defer until a direct-intrinsic parity target is selected. | Unsupported diagnostics until selected. |
@@ -237,11 +237,20 @@ M43 diagnostics:
 - `TSL-LOWER-GEN-TYPE-NON-INTEGER`
 
 Backend translation still rejects raw unresolved generation-time helper text.
-If lowering already produced a `GenerationTypeRef`, the current C++ translator
-does not evaluate it for suffixes or type spellings; it rejects the selected
-native path as unsupported until M45 consumes typed suffix inputs and M46
-consumes typed type-spelling inputs. Renderers remain non-evaluating text
-emitters and must not parse raw generation-time helper text.
+If lowering already produced a `GenerationTypeRef`, M45 now translates only the
+selected intrinsic suffix request over typed M43 inputs:
+`GenerationTypeRef(kind="base.signed_of", type_tag="si32",
+source_type_tag="si32")` and
+`GenerationTypeRef(kind="base.signed_of", type_tag="si32",
+source_type_tag="ui32")`. That slice produces a typed backend modifier value
+equivalent to `BackendIntrinsicModifier(kind="suffix", backend_id="cpp",
+extension="avx2", intrinsic="add", value="epi32",
+source_type_tag="si32", source_ref_kind="base.signed_of")`. Raw
+`type<generation>(...)` text remains rejected by backend translation. Backend
+type spelling remains deferred to M46, and native integer rendering remains
+deferred to M47. Prefix, infix, post, immediate, and broad translation-map
+evaluation remain deferred. Renderers remain non-evaluating text emitters and
+must not parse raw generation-time helper text.
 
 ## Post-M43 Phase Direction
 
@@ -256,8 +265,10 @@ The accepted post-M43 phase is numbered in the roadmap:
   `suffix=value<backend>(intrin::suffix(<GenerationTypeRef>))` over typed M43
   inputs. For selected `si32` and `ui32` native integer add candidates, M43
   produces `GenerationTypeRef(kind="base.signed_of", type_tag="si32",
-  source_type_tag=<selected tag>)`, and M45 is expected to return backend
-  modifier value `epi32`.
+  source_type_tag=<selected tag>)`, and M45 returns typed backend modifier
+  value `BackendIntrinsicModifier(kind="suffix", backend_id="cpp",
+  extension="avx2", intrinsic="add", value="epi32",
+  source_type_tag="si32", source_ref_kind="base.signed_of")`.
 - Milestone 46 translates selected C++ scalar type spelling requests over typed
   M43 `GenerationTypeRef` inputs.
 - Milestone 47 renders selected native integer C++ `binary/add` output only
@@ -278,9 +289,9 @@ Deferred beyond the Milestone 43 slice:
   constants, and generic lengths.
 - Signedness branch pruning for
   `if<generation>(value<generation>(type::is_signed(...)))`.
-- Backend modifier translation remains unimplemented in M44. M45 is selected to
-  implement only the intrinsic suffix request over typed M43 inputs; prefix,
-  infix, post, and `immediate(n)` remain deferred.
+- Backend modifier translation remains limited to the M45 intrinsic suffix
+  request over typed M43 inputs; prefix, infix, post, and `immediate(n)` remain
+  deferred.
 - Backend type/value requests whose inputs are still raw generation-time text.
 - Primitive-call lowering, loops, variables, aliases, casts, arrays, and
   branch-dependent backend output.

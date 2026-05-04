@@ -609,9 +609,9 @@ Recommended first parity checks:
   diagnostics, unsupported float/pointer/generic companion conversions,
   unsupported helper-shape diagnostics, deterministic lowered semantic type
   values, backend-translation rejection of unresolved raw generation type text,
-  resolved `GenerationTypeRef` remaining unsupported by current backend suffix
-  translation, renderer non-evaluation, and unchanged Milestone 42
-  branch-pruning regressions. Prose shorthand such as
+  resolved `GenerationTypeRef` values remaining unsupported except for the
+  selected M45 suffix request, renderer non-evaluation, and unchanged
+  Milestone 42 branch-pruning regressions. Prose shorthand such as
   `base::signed_of(base::in)` is tested as unsupported unless written in the
   exact nested accepted form.
 - Milestone 44: docs-only validation with `git diff --check`; no runtime tests.
@@ -620,11 +620,13 @@ Recommended first parity checks:
   add candidates, diagnostics, and renderer non-evaluation regressions before
   implementation resumes.
 - Milestone 45: backend intrinsic suffix modifier translation tests over typed
-  M43 `GenerationTypeRef` inputs, including selected `si32` and `ui32` native
-  integer add suffix success, missing `GenerationTypeRef`, unsupported modifier
-  family, unsupported type tag, unsupported backend, unsupported extension,
-  missing translation metadata, malformed modifier request, raw
-  generation-helper rejection, determinism, and renderer non-evaluation.
+  M43 `GenerationTypeRef` inputs cover selected `si32` and `ui32` native
+  integer add suffix success, `epi32` output, missing `GenerationTypeRef`,
+  unsupported modifier family, unsupported type tag, unsupported backend,
+  unsupported extension, unsupported intrinsic base, unsupported source ref
+  kind, missing translation metadata, missing modifier metadata, malformed
+  modifier request, raw generation-helper rejection, determinism, and renderer
+  non-evaluation.
 - Milestone 46: backend C++ scalar type spelling tests over typed M43
   `GenerationTypeRef` inputs, including `si32 -> int32_t`,
   `ui32 -> uint32_t`, language-map key normalization or equivalent typed

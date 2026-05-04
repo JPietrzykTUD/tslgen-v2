@@ -363,7 +363,7 @@ generation-time helpers.
 
 The post-M43 native integer phase keeps backend modifier and type-spelling work
 inside backend translation. Milestone 44 selects the modifier boundary,
-Milestone 45 translates only the selected intrinsic suffix request over typed
+Milestone 45 implements only the selected intrinsic suffix request over typed
 M43 values, and Milestone 46 translates selected C++ type spellings over typed
 M43 values. Milestone 47 may render native integer add output only by consuming
 those translated values as explicit renderer inputs.

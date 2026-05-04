@@ -19,7 +19,11 @@ from tslgen.lowering.boundary import (
     prepare_lowering_inputs,
     resolve_generation_type_query,
 )
-from tslgen.lowering.translations import TranslatedIntrinsicCall
+from tslgen.lowering.translations import (
+    BackendIntrinsicModifier,
+    BackendIntrinsicModifierRequest,
+    TranslatedIntrinsicCall,
+)
 
 __all__ = [
     "ClassifiedPayload",
@@ -36,6 +40,8 @@ __all__ = [
     "TsilParameterReference",
     "TsilPrimitiveAttributeCondition",
     "TsilReturnStatement",
+    "BackendIntrinsicModifier",
+    "BackendIntrinsicModifierRequest",
     "TranslatedIntrinsicCall",
     "lower_candidates",
     "prepare_lowering_inputs",
