@@ -1143,8 +1143,9 @@ parity level.
 ## OQ-032: Which TSIL Helper Boundary Should Follow The Mini Return Lowering?
 
 Status: Answered for the Milestone 41 contract, Milestone 42 aligned-branch
-slice, and Milestone 43 base type query selection; broader helper families
-remain open until selected by future milestones.
+slice, and accepted/implemented Milestone 43 base type query slice. Narrowed,
+but not closed, by the M44-M47 post-M43 native integer sequence; broader helper
+families remain open until selected by future milestones.
 
 Why it matters:
 
@@ -1195,12 +1196,26 @@ as the explicit override; missing override, missing context-selected type tag,
 and missing selected candidate type tag produces
 `TSL-LOWER-GEN-TYPE-CONTEXT-MISSING`.
 
-Remaining deferred TSIL work includes full modifier expression evaluation,
-integer suffix inference, primitive calls, loops, variables, generation-time
-branches beyond the selected aligned primitive-attribute condition, type/value
-metadata beyond the selected base type query family, nested expressions, direct
-`intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
-`algo`, and Rust TSIL lowering.
+The post-M43 roadmap narrows the next helper path without closing broad TSIL
+semantics. Milestone 44 is documentation/planning only: it selects the backend
+modifier value boundary and chooses intrinsic suffix first. The selected M45
+request is `suffix=value<backend>(intrin::suffix(<GenerationTypeRef>))`, with
+the input constrained to the M43 `base.signed_of` result for selected `si32`
+and `ui32` native integer add candidates; both resolve to suffix `epi32`.
+Milestone 45 is planned to implement only that suffix translation over typed
+M43 `GenerationTypeRef` inputs. Milestone 46 is planned to provide selected
+C++ scalar backend type spelling over typed M43 inputs and language maps.
+Milestone 47 is the first allowed native integer add output slice, and only
+after M45 and M46 translated values exist.
+
+Remaining deferred work includes broad TSIL grammar, full translation-map
+evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
+vector/register metadata, signedness branch pruning, primitive calls, loops,
+variables, generation-time branches beyond the selected aligned
+primitive-attribute condition, type/value metadata beyond the selected base type
+query family, nested expressions, direct `intrin<...>` calls, helper families
+such as `io`, `mem`, `seq`, `pack`, and `algo`, Rust output, generated tests,
+CLI/report parity, compiler execution, and broad native rendering.
 
 Required evidence:
 
@@ -1217,11 +1232,23 @@ Required evidence:
 Implementation blocked:
 
 No for Milestone 38 and no need to revert Milestone 39 solely on boundary
-grounds. Yes for any native rendering expansion beyond the selected M39 slice
-until Milestone 40 establishes data-driven translation and typed lowered helper
-output. No for Milestone 41 documentation and inventory work or the Milestone
-42 aligned-branch pruning slice. Yes for broader TSIL constructs until their
-fixtures and expected models are selected.
+grounds. No for the Milestone 41 documentation contract, the Milestone 42
+aligned-branch pruning slice, the accepted/implemented Milestone 43 base type
+query slice, or the Milestone 44 documentation/planning milestone.
+
+Yes for native integer rendering expansion beyond the selected M39/M40 output
+until both Milestone 45 provides selected intrinsic suffix translation over
+typed M43 `GenerationTypeRef` inputs and Milestone 46 provides selected C++
+scalar backend type spelling over typed M43 inputs and language maps. Milestone
+40 remains the required translation-boundary correction, but it is not
+sufficient by itself for further native output expansion. Milestone 47 is the
+first allowed native integer output expansion, and only after the M45/M46
+translated values exist. Backend translation must not parse raw
+`type<generation>(...)` text, and renderers must not evaluate generation-time
+helpers, suffixes, or type spelling locally. Yes for broader TSIL constructs,
+broad native rendering, Rust output, generated tests, CLI/report parity, and
+compiler execution until their fixtures, expected models, and validation
+boundaries are selected.
 
 ## OQ-033: Which Legacy CLI Workflow Should Be Supported First?
 
@@ -1295,8 +1322,9 @@ compiles or runs generated tests.
 
 ## OQ-035: How Should Backend Intrinsic Composition Be Data-Driven?
 
-Status: Answered for the selected Milestone 40 slice; broader native intrinsic
-composition remains open.
+Status: Answered for the selected Milestone 40 slice and narrowed for the
+post-M43 suffix/type-spelling phase; broader native intrinsic composition
+remains open.
 
 Why it matters:
 
@@ -1348,13 +1376,23 @@ Current roadmap direction:
   `value<generation>` itself.
 - Milestone 41 defines the generation-time semantic lowering contract that runs
   before backend translation.
+- Milestone 43 supplies typed `GenerationTypeRef` inputs for exact base scalar
+  type queries.
+- Milestone 44 selects intrinsic suffix as the first backend modifier family.
+- Milestone 45 is planned to provide only suffix translation over typed M43
+  inputs.
+- Milestone 46 is planned to provide selected C++ scalar type spelling over
+  typed M43 inputs.
+- Milestone 47 may expand native integer add output only after M45 and M46
+  translation results exist.
 - Renderer-local intrinsic lookup tables are rejected as an implementation
   strategy for future native expansion.
 
 ## OQ-036: Where Do Generation-Time Helpers Resolve Relative To Backend Translation?
 
 Status: Answered for Milestone 41, implemented for the first Milestone 42
-helper slice, and narrowed for the Milestone 43 base type query slice.
+helper slice, narrowed for the Milestone 43 base type query slice, and preserved
+by the numbered M44-M47 post-M43 phase.
 
 Why it matters:
 
@@ -1386,6 +1424,12 @@ resolve to typed semantic type values before backend translation. Type
 signedness branch pruning, vector type/value queries, backend suffix/prefix
 modifiers, `immediate(n)`, primitive calls, loops, and direct intrinsics remain
 deferred.
+
+Milestones 44 through 47 preserve this decision. M45 and M46 are backend
+translation slices that consume typed M43 values; they do not parse raw
+generation helper text. M47 is a rendering slice that consumes translated
+suffix/type-spelling values and must not evaluate helper or backend metadata
+semantics locally.
 
 Required evidence:
 

@@ -359,6 +359,22 @@ not parse or evaluate generation-time helpers. M43 does not expand C++ or Rust
 output and does not implement backend type spelling or backend
 suffix/prefix/post/infix/immediate evaluation.
 
+The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
+backend modifier value boundary, Milestone 45 translates the selected intrinsic
+suffix request over typed M43 `GenerationTypeRef` inputs, Milestone 46 translates
+selected C++ scalar type spellings over typed M43 inputs, and Milestone 47 is the
+first allowed native integer C++ `add` output expansion. The renderer in
+Milestone 47 must consume translated suffix and type-spelling values; it must
+not evaluate `type<generation>(...)`, `value<generation>(...)`, or backend
+modifier/type-map semantics locally.
+
+M44 narrows the M45 suffix request to
+`suffix=value<backend>(intrin::suffix(<GenerationTypeRef>))`, where the
+`GenerationTypeRef` is the M43 `base.signed_of` result. For selected `si32` and
+`ui32` native integer add candidates, the expected suffix value is `epi32`.
+Backend type spelling, C++/Rust output expansion, and prefix, post, infix, and
+immediate modifier evaluation remain deferred.
+
 ## Rendering Behavior
 
 Rendering receives a backend plan and produces artifacts. Rendering must not perform selection, parse source files, read CPU flags, or write files.

@@ -1252,6 +1252,11 @@ Consequences:
   shorthand such as `base::signed_of(base::in)` is not accepted TSIL syntax.
   The slice produces typed semantic type references only; backend suffix
   translation and rendered type spellings remain separate future work.
+- The post-M43 phase is numbered to keep translation and rendering separate:
+  Milestone 44 selects the modifier boundary, Milestone 45 implements only
+  intrinsic suffix translation over typed M43 values, Milestone 46 implements
+  selected C++ type spelling over typed M43 values, and Milestone 47 renders
+  native integer add only from those translated outputs.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

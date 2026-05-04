@@ -3018,6 +3018,494 @@ Implementation note:
 Milestone 43 is complete as a lowering/model slice only. It did not combine
 query support with C++ or Rust output changes.
 
+## Post-Milestone-43 Native Integer Modifier Phase
+
+Milestones 1 through 43 are accepted. The next phase advances from typed M43
+`GenerationTypeRef` values toward the next useful native integer C++ parity
+slice without repeating the Milestone 39 renderer-local intrinsic drift.
+
+Pipeline order remains:
+
+```text
+generation-time semantic lowering
+-> backend translation
+-> backend rendering
+```
+
+Generation-time helpers still resolve before backend translation. Backend
+translation consumes typed semantic values, not raw
+`type<generation>(...)` or `value<generation>(...)` helper text. Renderers never
+parse generation-time helpers or derive suffix/type semantics locally.
+
+### Phase Decision Table
+
+| Candidate slice | Evidence path and exact form | Required inputs from previous milestones | Expected output/model | Pipeline owner | Risk and test strategy | Recommended position |
+| --- | --- | --- | --- | --- | --- | --- |
+| Backend modifier value family boundary selection and inventory | `tsldata/primitives/arithmetic/fundamental.tsl:47-90` uses `suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))`; `tsldata/primitives/load_store/load.tsl:55-70` and `tsldata/primitives/load_store/store.tsl:54-64` show prefix/suffix plus aligned branches; `tsldata/primitives/conversion/repr_change.tsl:358-370` and `:908-918` show literal and backend `immediate(n)` modifiers; grammar evidence in `frozen/tsl-gen/tsl_gen/tsil.lark:75-78`; canonical value-backend evidence in `frozen/tsl-gen/tsl_gen/tsil_engine/expansion_support.py:416-433`; modifier behavior evidence in `frozen/tsl-gen/tsl_gen/resolver/render_support.py:500-524`, `:632-674`, and `:680-699`; signed/unsigned output evidence in `frozen/out/tsl/tsl_native.hpp:24460-24477` and `:24712-24729`. | M40 backend-call translation boundary, M41/M42 generation-time-before-backend rule, M43 `GenerationTypeRef` values, and backend metadata inventory from M30. | A documented typed request/result model for backend intrinsic modifier values plus a selected first family. No runtime model changes in the planning milestone. | Planning for backend translation boundary. | Low for docs; validation is `git diff --check`. Future tests are defined here so implementation can cover raw-helper rejection, missing metadata, unsupported modifiers, and renderer non-evaluation. | Milestone 44. |
+| Intrinsic suffix modifier translation over typed `GenerationTypeRef` | `tsldata/primitives/arithmetic/fundamental.tsl:65-75` shows native integer `avx2` add suffix input; `frozen/tsl-gen/tsl_gen/resolver/render_support.py:500-524`, `:632-657`, and `:680-692` show suffix-derived intrinsic-name behavior as evidence only; `frozen/out/tsl/tsl_native.hpp:24460-24477` and `:24712-24729` show `_mm256_add_epi32` for signed and unsigned 32-bit add. Exact supported form: `suffix=value<backend>(intrin::suffix(<GenerationTypeRef>))`, where the type ref was produced by M43 from `type<generation>(base::signed_of(type<generation>(base::in)))`. | M43 typed `GenerationTypeRef(kind="base.signed_of", type_tag="si32")` with `source_type_tag` in `{si32, ui32}`, M44 modifier request/result contract, M40 intrinsic-compose expression model, selected backend id `cpp`, selected extension `avx2`, selected primitive/type, implementation source location, and typed backend metadata. | Typed backend modifier value such as `BackendIntrinsicModifier(kind="suffix", backend_id="cpp", extension="avx2", value="epi32", source_type_tag="si32")`, or an equivalent immutable modifier result consumed by later backend-call translation. | Backend translation. | Medium because suffix semantics cross type, extension, and translation metadata. Tests cover `si32` and `ui32` selected candidates resolving through `base.signed_of` to `epi32`, deterministic output, unsupported type/extension/map diagnostics, missing typed input diagnostics, and rejection of raw `type<generation>(...)` text. | Milestone 45. |
+| Backend type spelling request over typed `GenerationTypeRef` | `tsldata/detail/lang/types/types_cpp.tsl:1-12` maps C++ scalar spellings such as `s32 {type "int32_t"}` and `u32 {type "uint32_t"}`; `translate_cpp.tsl:4-8` records backend type trait forms; frozen output uses `simd<int32_t, avx2>` at `tsl_native.hpp:24460-24477` and `simd<uint32_t, avx2>` at `:24712-24729`. Exact form: selected C++ backend type spelling request over M43 `GenerationTypeRef(kind="base.in")` for `si32` and `ui32`. | M43 `GenerationTypeRef`, typed language map metadata, backend id `cpp`, selected candidate type tag, and a documented tag-key normalization rule when source tags use `si32`/`ui32` but language keys use `s32`/`u32`. | Typed backend type spelling result such as `BackendTypeSpelling(backend_id="cpp", type_tag="si32", spelling="int32_t")`. | Backend translation. | Medium because tag normalization must be explicit and cannot live in renderers. Tests cover `si32 -> int32_t`, `ui32 -> uint32_t`, missing map diagnostics, unsupported/raw helper diagnostics, and deterministic results. | Milestone 46. |
+| Native integer add parity rendering using resolved suffix/type data | `fundamental.tsl:65-75` is the active `avx2/?i?` add source; frozen output evidence is `tsl_native.hpp:24460-24477` for `simd<int32_t, avx2>` and `:24712-24729` for `simd<uint32_t, avx2>`, both returning `_mm256_add_epi32(left, right)`. | M45 resolved suffix modifier, M46 resolved C++ type spelling, M40 backend-call IR, existing C++ native specialization/wrapper rendering from M36-M40, selected candidate metadata and provenance. | Deterministic C++ golden fixture for selected native integer `add_binary` specializations, consuming already-translated suffix/type data. | Rendering, but only after translation outputs are explicit inputs. | Medium because it touches output. Tests are golden/provenance/determinism tests plus regressions proving the renderer has no suffix/type lookup and rejects missing translated data. No compiler execution. | Milestone 47. |
+| Signedness branch pruning | `tsldata/primitives/bitwise/shifts.tsl:535-553` and `:625-648`, plus `tsldata/primitives/conversion/repr_change.tsl:1210-1225`, use `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`. | M42 branch-pruning model and M43 `GenerationTypeRef(kind="base.in")`. | Boolean generation value and pruned branch result for signed/unsigned selected types. | Generation-time semantic lowering. | Medium. Tests would cover true/false pruning, selected-branch-only diagnostics, unsupported type predicates, and raw-helper rejection. | Defer until after the native integer add phase; it is more relevant to shifts/conversions than to `binary/add`. |
+| Prefix/post/infix/immediate modifiers | `load.tsl:55-70` and `store.tsl:54-64` show `prefix=value<backend>(intrin::prefix)` and suffix literals; `repr_change.tsl:358-370` and `:908-918` show `immediate(n)`; `render_support.py:610-623` and `:675-699` show modifier assembly behavior as evidence. Exact forms include `prefix=value<backend>(intrin::prefix)`, `post=...`, `infix=...`, and `immediate(n)=...`. | M44 request/result model, selected backend metadata, argument ordering, extension/type context, and for dynamic forms M43/M45-style typed values. | Typed modifier results for non-suffix families. | Backend translation. | Medium to high because forms have different syntax and naming effects. Tests must be family-specific and fixture-driven. | Defer until suffix proves the modifier boundary. |
+| Vector/register metadata queries | `load.tsl:55-70`, `store.tsl:177-205`, and `translate_cpp.tsl:16-23`, `:63-65` show `type<generation>(vector::register)`, `type<generation>(vector::mask_underlying_t)`, `value<generation>(vector::alignment)`, and `value<generation>(vector::length)`. | Selected extension, vector width/lane/alignment metadata, backend id only for later spelling, and existing M42/M43 lowering context fields. | `GenerationTypeRef` or typed generation integer/symbol values for vector metadata. | Generation-time semantic lowering. | High for this phase because selected bodies also contain casts, loops, calls, masks, and attributes. Tests need metadata fixtures and no host CPU dependency. | Defer until load/store or mask parity is selected. |
+
+The selected sequence is four milestones. Milestone 44 stays planning-only so
+reviewers can confirm the backend modifier value boundary before implementation.
+Milestones 45 and 46 build the translation prerequisites independently.
+Milestone 47 is the first output expansion and is allowed to render only after
+it consumes the explicit typed suffix and type-spelling results.
+
+## Milestone 44: Backend Modifier Value Family Boundary Selection
+
+Goal:
+
+Select the first backend modifier value family to implement and define the
+typed request/result model that backend translation will own.
+
+Scope:
+
+- Documentation/planning only.
+- Select intrinsic suffix as the first backend modifier family because it is
+  required by native integer `binary/add` and directly consumes M43 typed type
+  refs.
+- Define M45 as suffix translation over typed M43 `GenerationTypeRef` inputs,
+  not as parsing of raw nested generation helper text.
+- Prove the selected `si32` and `ui32` native integer add candidates both need
+  the x86 suffix `epi32` after the M43 `base.signed_of` query resolves.
+- Inventory exact evidence paths for suffix, prefix, post, infix, immediate,
+  signedness predicates, type spelling, and vector/register metadata.
+- Define implementation-slice diagnostics and tests for suffix translation.
+- State the renderer non-evaluation regression that future implementation must
+  keep.
+
+Out of scope:
+
+- Implementing modifier evaluation.
+- Backend type spelling.
+- Renderer changes or output changes.
+- Full translation-map evaluation.
+- Prefix, post, infix, or `immediate(n)` implementation.
+
+Required inputs:
+
+- Accepted M40 backend translation boundary.
+- Accepted M41/M42 generation-time semantic-lowering contract.
+- Accepted M43 `GenerationTypeRef` model.
+- Backend metadata/language-map evidence from M30 and `tsldata/detail/lang`.
+- Source/evidence paths listed in the phase decision table.
+
+M44 selection result:
+
+- First backend modifier value family: intrinsic suffix.
+- First implementation milestone for that family: Milestone 45.
+- M45 accepted conceptual form:
+
+  ```text
+  suffix=value<backend>(intrin::suffix(<GenerationTypeRef>))
+  ```
+
+  where `<GenerationTypeRef>` is already the typed M43 lowering result for:
+
+  ```text
+  type<generation>(base::signed_of(type<generation>(base::in)))
+  ```
+
+- M45 must not consume or parse raw nested text such as:
+
+  ```text
+  suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
+  ```
+
+  until the `type<generation>(...)` portion has been resolved by semantic
+  lowering into `GenerationTypeRef`.
+
+Accepted typed M45 inputs:
+
+- `GenerationTypeRef(kind="base.signed_of", type_tag="si32",
+  source_type_tag="si32")` for the selected signed 32-bit add candidate.
+- `GenerationTypeRef(kind="base.signed_of", type_tag="si32",
+  source_type_tag="ui32")` for the selected unsigned 32-bit add candidate.
+- Backend id `cpp`.
+- Selected extension `avx2`.
+- Intrinsic base name `add`.
+- The typed intrinsic-compose boundary from M40.
+- The typed backend translation metadata boundary needed to prove the selected
+  suffix table is present.
+- Implementation source location for diagnostics.
+- Source extension only when the selected implementation carries one; it must
+  be request-local metadata, not renderer state.
+
+Expected typed M45 output:
+
+```text
+BackendIntrinsicModifier(
+  kind="suffix",
+  backend_id="cpp",
+  extension="avx2",
+  value="epi32",
+  source_type_tag="si32",
+  source_ref_kind="base.signed_of",
+)
+```
+
+An equivalent immutable value is acceptable if it preserves the same typed
+data and provenance. The value is backend translation output for later
+intrinsic-call translation/rendering; it is not a rendered intrinsic name.
+
+Supported M45 suffix behavior:
+
+| Selected candidate type tag | M43 typed input | M45 suffix output |
+| --- | --- | --- |
+| `si32` | `GenerationTypeRef(kind="base.signed_of", type_tag="si32", source_type_tag="si32")` | `epi32` |
+| `ui32` | `GenerationTypeRef(kind="base.signed_of", type_tag="si32", source_type_tag="ui32")` | `epi32` |
+
+M45 diagnostics:
+
+- Raw unresolved generation helper text:
+  `TSL-CPP-TRANSLATE-GENERATION-UNRESOLVED`.
+- Missing `GenerationTypeRef` for a suffix request:
+  `TSL-CPP-TRANSLATE-MODIFIER-TYPE-MISSING`.
+- Unsupported modifier family:
+  `TSL-CPP-TRANSLATE-MODIFIER-UNSUPPORTED`.
+- Unsupported suffix type tag:
+  `TSL-CPP-TRANSLATE-MODIFIER-TYPE-UNSUPPORTED`.
+- Unsupported backend:
+  `TSL-CPP-TRANSLATE-UNSUPPORTED-BACKEND`.
+- Unsupported extension:
+  `TSL-CPP-TRANSLATE-UNSUPPORTED-EXTENSION`.
+- Missing translation metadata:
+  `TSL-CPP-TRANSLATE-MISSING-TRANSLATION-MAP`.
+- Missing modifier metadata inside an otherwise present map:
+  `TSL-CPP-TRANSLATE-MODIFIER-METADATA-MISSING`.
+- Malformed modifier request:
+  `TSL-CPP-TRANSLATE-MODIFIER-MALFORMED`.
+
+Each diagnostic should include the invalid helper, type tag, backend,
+extension, or metadata key in the message and source location when available.
+
+Expected outputs:
+
+- Roadmap decision that intrinsic suffix is Milestone 45.
+- A typed backend modifier request/result contract to be implemented later.
+- Documentation that raw `type<generation>(...)` and
+  `value<generation>(...)` helper text must not reach backend modifier
+  translation.
+- Documentation that prefix, post, infix, `immediate(n)`, backend type
+  spelling, vector/register metadata, signedness branch pruning, renderer
+  changes, C++ output changes, Rust output changes, and full translation-map
+  evaluation remain separate milestones.
+
+Validation criteria:
+
+- Roadmap and supporting docs agree that M43 is complete and that M44-M47 are
+  the post-M43 phase.
+- No implementation files are changed.
+- `git diff --check` succeeds.
+
+Tests required:
+
+- No runtime tests in the planning milestone.
+- Future M45 tests must cover selected suffix success, diagnostics, determinism,
+  raw-helper rejection, and renderer non-evaluation.
+- Future M45 tests must also prove M42 branch-pruning and M43 base-type query
+  regressions remain stable while suffix translation is added.
+
+Documentation updates:
+
+- Update this roadmap with the phase decision table and numbered milestones.
+- Align generation-time lowering, behavioral, pipeline, architecture, testing,
+  open-question, ADR, and parity-baseline notes if they reference the stale
+  unnumbered next target.
+
+Review risks:
+
+- Accidentally turning the planning milestone into broad modifier
+  implementation.
+- Selecting a modifier family that is useful only for load/store before the
+  integer add parity path is unblocked.
+- Letting suffix semantics drift into renderer-local lookup again.
+
+Dependencies on prior milestones:
+
+- Milestones 30, 40, 41, 42, and 43.
+
+## Milestone 45: Intrinsic Suffix Modifier Translation Slice
+
+Goal:
+
+Translate one selected intrinsic suffix modifier over typed M43
+`GenerationTypeRef` inputs.
+
+Scope:
+
+- Implement typed backend modifier request/result values for the selected
+  suffix family.
+- Support exactly the native integer C++ `binary/add` suffix input:
+
+  ```text
+  suffix=value<backend>(intrin::suffix(<GenerationTypeRef>))
+  ```
+
+  where `<GenerationTypeRef>` is the M43 result for:
+
+  ```text
+  type<generation>(base::signed_of(type<generation>(base::in)))
+  ```
+
+- Support the selected `avx2` `si32` and `ui32` add candidates through the same
+  signed companion suffix result, `epi32`.
+- Reject raw `type<generation>(...)` or `value<generation>(...)` text at the
+  backend translation boundary.
+- Preserve deterministic provenance for the modifier source and resolved value.
+
+Out of scope:
+
+- Prefix, post, infix, and `immediate(n)`.
+- Backend type spelling.
+- Renderer changes and output changes.
+- Full translation-map evaluation.
+- Vector/register metadata queries and signedness branch pruning.
+
+Required inputs:
+
+- M43 `GenerationTypeRef` values.
+- M44 typed modifier request/result contract.
+- M40 intrinsic-compose translation boundary.
+- Selected backend id `cpp`.
+- Selected extension `avx2`.
+- Selected candidate type tags `si32` and `ui32`.
+- Intrinsic base name `add`.
+- Implementation source location.
+- Typed backend translation metadata needed to map signed 32-bit integer type
+  to `epi32`.
+
+Expected outputs:
+
+- Immutable suffix modifier translation result, for example:
+
+  ```text
+  BackendIntrinsicModifier(
+    kind="suffix",
+    backend_id="cpp",
+    extension="avx2",
+    value="epi32",
+    source_type_tag="si32",
+    source_ref_kind="base.signed_of",
+  )
+  ```
+
+- Structured diagnostics listed in the M44 contract for unsupported modifier
+  shape, unsupported or missing type/extension metadata, missing typed
+  `GenerationTypeRef`, missing translation metadata, unsupported backend, and
+  raw generation-helper text reaching backend translation.
+
+Validation criteria:
+
+- Backend translation accepts only typed M43 inputs for the selected suffix
+  request.
+- `si32` and `ui32` selected add candidates resolve the suffix needed for
+  `_mm256_add_epi32`.
+- No renderer output changes occur in this milestone.
+
+Tests required:
+
+- Unit tests for suffix translation over `si32` and `ui32`.
+- Unit tests proving both selected tags resolve through the M43
+  `base.signed_of` input to `epi32`.
+- Diagnostic tests for missing metadata, unsupported type tag, unsupported
+  extension, unsupported backend, unsupported modifier family, missing
+  `GenerationTypeRef`, malformed modifier request, and raw helper text.
+- Determinism tests for repeated suffix translation.
+- Regression tests proving renderers do not evaluate suffix helpers.
+
+Documentation updates:
+
+- Record the implemented suffix slice and remaining modifier deferrals in the
+  roadmap, generation-time semantic-lowering doc, behavioral spec, pipeline
+  design, testing strategy, open questions, and ADR notes.
+
+Review risks:
+
+- Implementing prefix/post/infix/immediate while adding suffix.
+- Inferring backend type spelling from suffix translation.
+- Keeping a renderer-local fallback for `_mm256_add_epi32`.
+- Treating legacy `render_support.py` parsing as the new architecture.
+
+Dependencies on prior milestones:
+
+- Milestones 30, 40, 41, 42, 43, and 44.
+
+## Milestone 46: Backend Type Spelling Request Slice
+
+Goal:
+
+Translate one selected backend C++ type spelling request over typed M43
+`GenerationTypeRef` inputs.
+
+Scope:
+
+- Implement a typed backend type-spelling request/result boundary for selected
+  scalar C++ base types.
+- Support selected `si32` and `ui32` type refs for the native integer add path:
+
+  ```text
+  GenerationTypeRef(kind="base.in", type_tag="si32") -> int32_t
+  GenerationTypeRef(kind="base.in", type_tag="ui32") -> uint32_t
+  ```
+
+- Read through typed language-map metadata; document or implement the
+  `si32`/`ui32` to `s32`/`u32` key normalization needed by
+  `types_cpp.tsl`.
+- Reject raw generation helper text.
+- Preserve deterministic provenance tying spelling to backend metadata.
+
+Out of scope:
+
+- Vector/register type spellings.
+- Generic, wildcard, pointer, mask, or extension-transform type spellings.
+- Rust type spelling.
+- Suffix, prefix, post, infix, or immediate evaluation.
+- Renderer/output changes except metadata-level consumption tests if needed.
+
+Required inputs:
+
+- M43 `GenerationTypeRef(kind="base.in")` values.
+- Typed C++ language-map metadata from `types_cpp.tsl`.
+- Backend id `cpp`.
+- Selected candidate type tags `si32` and `ui32`.
+- The M40 translation boundary and M44/M45 no-raw-helper rule.
+
+Expected outputs:
+
+- Immutable backend type spelling results, for example:
+
+  ```text
+  BackendTypeSpelling(backend_id="cpp", type_tag="si32", spelling="int32_t")
+  BackendTypeSpelling(backend_id="cpp", type_tag="ui32", spelling="uint32_t")
+  ```
+
+- Structured diagnostics for missing language-map entries, unsupported backend,
+  unsupported type tag, malformed request, and raw helper text.
+
+Validation criteria:
+
+- Backend type spelling is translated before rendering and never inside a
+  renderer-local scalar type map.
+- The selected `si32` and `ui32` spellings match the frozen native integer add
+  evidence.
+- No output expansion occurs in this milestone.
+
+Tests required:
+
+- Unit tests for `si32 -> int32_t` and `ui32 -> uint32_t`.
+- Tests for language-map key normalization or equivalent typed metadata.
+- Diagnostic tests for missing/unsupported type-map entries and raw helper text.
+- Determinism tests and renderer non-evaluation regressions.
+
+Documentation updates:
+
+- Record the implemented backend type-spelling boundary, supported tags,
+  language-map normalization rule, diagnostics, and remaining deferrals.
+
+Review risks:
+
+- Placing type spelling in generation-time semantic lowering.
+- Reintroducing local C++ renderer type maps.
+- Accidentally selecting vector/register or generic type spelling.
+- Hiding tag normalization in ad hoc string logic.
+
+Dependencies on prior milestones:
+
+- Milestones 30, 40, 41, 42, 43, 44, and usually 45 for the selected native add
+  path, though the type-spelling translator is independently testable.
+
+## Milestone 47: Native Integer Add Parity Slice
+
+Goal:
+
+Render the selected native integer C++ `add` output slice using typed suffix and
+type-spelling translation outputs.
+
+Scope:
+
+- One backend: C++.
+- One primitive/template path: `fundamental/add` with `binary`.
+- One native extension: `avx2`.
+- Selected integer types: `si32` and `ui32`.
+- Consume the M45 suffix value and M46 C++ type spelling values as explicit
+  renderer inputs.
+- Produce deterministic golden output for:
+
+  ```text
+  add_binary<simd<int32_t, avx2>>
+  add_binary<simd<uint32_t, avx2>>
+  return _mm256_add_epi32(left, right);
+  ```
+
+- Record fixture provenance against active source and frozen behavioral
+  evidence.
+
+Out of scope:
+
+- Broad native rendering.
+- SSE, AVX512, NEON, SVE, scalar, generic, mask, or conversion expansion.
+- Shifts, load/store, reinterpret, or immediate-heavy primitives.
+- Compiler execution, generated-test execution, CLI workflows, and report
+  parity.
+- Renderer-local suffix or type lookup.
+
+Required inputs:
+
+- M40 backend-call IR boundary.
+- M45 resolved intrinsic suffix modifier.
+- M46 resolved C++ type spelling.
+- Existing C++ native layout/specialization/wrapper rendering slices from
+  M36-M40.
+- Selected candidate metadata and deterministic provenance.
+
+Expected outputs:
+
+- A redesign-owned golden fixture for the selected native integer C++ add
+  specializations.
+- Artifact metadata and provenance showing the output consumed translated
+  suffix/type values.
+- Structured diagnostics when the translated suffix, translated type spelling,
+  or backend-call IR is missing.
+
+Validation criteria:
+
+- Golden output matches the selected semantic evidence for `int32_t` and
+  `uint32_t` AVX2 add.
+- Repeated rendering is deterministic.
+- Renderer tests prove no raw generation helper text, suffix lookup, or type-map
+  lookup is evaluated locally.
+- No compiler or legacy workflow is run.
+
+Tests required:
+
+- Golden output fixture and provenance test.
+- Unit tests for renderer consumption of translated suffix/type values.
+- Diagnostic tests for missing translated suffix/type/call IR.
+- Determinism test for repeated artifact rendering.
+- Regression tests keeping M39/M40 `avx2/f32` behavior intact.
+
+Documentation updates:
+
+- Update roadmap status, parity baselines, behavioral spec, testing strategy,
+  and open questions for the implemented native integer add parity slice.
+
+Review risks:
+
+- Expanding beyond selected `si32`/`ui32` AVX2 add.
+- Combining rendering with new translation semantics.
+- Allowing fallback renderer maps for `_mm256_add_epi32`, `int32_t`, or
+  `uint32_t`.
+- Treating frozen output as a byte-for-byte whole-header target.
+
+Dependencies on prior milestones:
+
+- Milestones 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, and 46.
+
 ## Deferred Parity Targets After Boundary Correction
 
 The following previously planned targets remain valid but are deliberately
@@ -3037,16 +3525,13 @@ it replaces or adapts a deferred target.
 
 ## Recommended Next Milestone
 
-Milestones 1 through 42 are accepted, and Milestone 43 implementation behavior
-is complete pending focused documentation re-review. Do not expand the selected
-native C++ output or backend translation behavior beyond typed inputs.
+Milestones 1 through 43 are accepted. Milestone 44 is the current
+documentation/planning boundary-selection result. It selects intrinsic suffix as
+the first backend modifier value family, preserves the M40/M43 boundary, and
+prepares Milestone 45 implementation without adding renderer behavior or output
+expansion.
 
-Milestone 43 resolves only the selected
-`type<generation>(base::in)`,
-`type<generation>(base::signed_of(type<generation>(base::in)))`, and
-`type<generation>(base::unsigned_of(type<generation>(base::in)))`
-generation-time type queries in semantic lowering so later backend modifier
-work can consume typed semantic values. The next executor target is the backend
-modifier value family for suffix/prefix/post/infix/immediate translation,
-explicitly constrained to typed M43 `GenerationTypeRef` inputs and not broad
-translation-map evaluation.
+After focused Milestone 44 review, the recommended executor milestone is
+Milestone 45: Intrinsic Suffix Modifier Translation Slice, constrained to typed
+M43 `GenerationTypeRef(kind="base.signed_of")` inputs for selected `si32` and
+`ui32` native integer add candidates.

@@ -66,7 +66,13 @@ reviewable:
    expanded as the long-term architecture.
 5. M40 owns backend translation and intrinsic-composition correction while
    preserving the selected M39 output from already-resolved backend-call IR.
-6. Generated C++ tests, CLI workflow compatibility, and coverage JSON adapter
+6. M43 owns exact base scalar generation-time type queries needed before native
+   integer suffix/type work.
+7. M44-M46 own the backend modifier and type-spelling boundaries before native
+   integer output expands.
+8. M47 is the next selected native integer add parity slice for `avx2` `si32`
+   and `ui32`.
+9. Generated C++ tests, CLI workflow compatibility, and coverage JSON adapter
    work are deferred until the backend/lowering boundary correction is accepted.
 
 This target is small enough because it uses one primitive family, one template
@@ -181,6 +187,37 @@ parity, or report/documentation parity.
 - Known limitations: integer intrinsic suffix inference, AVX512/SSE/NEON/SVE
   variants, masks, generic calls, and translation-map-wide evaluation remain
   deferred.
+
+### CPP-ADD-AVX2-I32-U32
+
+- Exact behavior target: native C++ specializations for `add_binary` over
+  `simd<int32_t, avx2>` and `simd<uint32_t, avx2>` using
+  `_mm256_add_epi32(left, right)`.
+- Legacy evidence path: `frozen/out/tsl/tsl_native.hpp`.
+- Source line ranges:
+  - `frozen/out/tsl/tsl_native.hpp:24460-24477` for
+    `simd<int32_t, avx2>`.
+  - `frozen/out/tsl/tsl_native.hpp:24712-24729` for
+    `simd<uint32_t, avx2>`.
+- Active source evidence path: `tsldata/primitives/arithmetic/fundamental.tsl`.
+- Active source line range:
+  - `tsldata/primitives/arithmetic/fundamental.tsl:65-75` for the `avx2/?i?`
+    `intrin_compose<add, suffix=value<backend>(intrin::suffix(...))>` form.
+- Prerequisite phase:
+  - M44 selects intrinsic suffix as the first backend modifier family.
+  - M45 translates the selected suffix from typed M43 `GenerationTypeRef`
+    values.
+  - M46 translates selected C++ type spellings from typed M43
+    `GenerationTypeRef` values.
+  - M47 renders the selected integer output only after those translated values
+    exist.
+- Proposed future fixture path:
+  `tslgen/tests/fixtures/golden/parity/cpp/add_native_avx2_i32_u32_excerpt.hpp`.
+- Parity level: semantic equivalence against legacy evidence plus an exact
+  redesign-owned golden file for the selected excerpt. Whole-header
+  byte-for-byte parity is not selected.
+- Known limitations: SSE, AVX512, masks, generic calls, generated tests,
+  compiler execution, and translation-map-wide evaluation remain deferred.
 
 ### CPP-ADD-I32-TEST
 
