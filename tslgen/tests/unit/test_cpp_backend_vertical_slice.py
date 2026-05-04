@@ -36,6 +36,7 @@ from tslgen.domain.values import CatalogValue
 from tslgen.io.artifacts import ArtifactDescriptor, artifact_plan_from_descriptors
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
 from tslgen.lowering import (
+    GenerationTypeRef,
     LoweredImplementation,
     LoweringPlan,
     LoweringRequest,
@@ -170,6 +171,28 @@ GENERATION_NATIVE_ADD_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
         requires [avx]
         implementation:
           tsil "if<generation>(true) { emit_return(intrin_compose<add>(left, right)); }"
+"""
+
+
+GENERATION_TYPE_NATIVE_ADD_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
+  tests []
+  impls:
+    avx2:
+      f32:
+        requires [avx]
+        implementation:
+          tsil "type<generation>(base::in)"
+"""
+
+
+GENERATION_TYPE_SUMMARY_PRIMITIVE = """prim<v:=(v,v)> slice_add(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires [sse]
+        implementation:
+          tsil "type<generation>(base::in)"
 """
 
 
@@ -489,6 +512,27 @@ def manual_generation_intrinsic_add_lowering_plan_for(
     )
 
 
+def manual_generation_type_ref_lowering_plan_for(
+    selection: CandidateSelection,
+) -> LoweringPlan:
+    prepared = prepare_lowering_inputs(selection, LoweringRequest(backend_id="cpp"))
+    if not prepared.is_ok:
+        raise AssertionError(prepared.diagnostics)
+    return LoweringPlan(
+        request=prepared.unwrap().request,
+        input_set=prepared.unwrap(),
+        implementations=(
+            LoweredImplementation(
+                candidate_id=selection.candidates[0].candidate_id,
+                status="lowered",
+                generation_type_refs=(
+                    GenerationTypeRef(kind="base.in", type_tag="si32"),
+                ),
+            ),
+        ),
+    )
+
+
 def manual_binary_add_lowering_plan_for(selection: CandidateSelection) -> LoweringPlan:
     prepared = prepare_lowering_inputs(selection, LoweringRequest(backend_id="cpp"))
     if not prepared.is_ok:
@@ -764,6 +808,66 @@ translation cpp:
             code="TSL-CPP-TRANSLATE-GENERATION-UNRESOLVED",
             severity="error",
         )
+
+    def test_translation_rejects_unresolved_raw_generation_type_query(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(GENERATION_TYPE_NATIVE_ADD_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+
+        result = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            manual_generation_intrinsic_add_lowering_plan_for(selection),
+            metadata_boundary=cpp_backend_metadata_boundary(),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-TRANSLATE-GENERATION-UNRESOLVED",
+            severity="error",
+        )
+
+    def test_translation_rejects_resolved_generation_type_ref_as_unsupported(
+        self,
+    ) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(GENERATION_TYPE_NATIVE_ADD_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("avx2",),
+            cpu_flags=("avx",),
+        )
+
+        result = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            manual_generation_type_ref_lowering_plan_for(selection),
+            metadata_boundary=cpp_backend_metadata_boundary(),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-TRANSLATE-LOWERING-UNSUPPORTED",
+            severity="error",
+        )
+
+    def test_renderer_does_not_evaluate_generation_type_queries(self) -> None:
+        result = render_simple_fixture(
+            primitive_text=GENERATION_TYPE_SUMMARY_PRIMITIVE,
+            include_lowering=False,
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = result.unwrap().artifacts_by_path["generated.hpp"]
+        self.assertIn("type<generation>(base::in)", artifact.content)
+        self.assertNotIn("std::make_signed", artifact.content)
+        self.assertNotIn("std::make_unsigned", artifact.content)
 
     def test_renders_minimal_cpp_generated_artifact(self) -> None:
         result = render_simple_fixture()

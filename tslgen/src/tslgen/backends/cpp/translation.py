@@ -294,12 +294,14 @@ def _unresolved_generation_helper_diagnostic(
     if lowering_input is None or not lowering_input.payload.has_generation_condition:
         return None
     lowered = lowering_plan.implementations_by_candidate_id.get(candidate.candidate_id)
-    if lowered is not None and lowered.generation_branches:
+    if lowered is not None and (
+        lowered.generation_branches or lowered.generation_type_refs
+    ):
         return None
     return Diagnostic.error(
         "TSL-CPP-TRANSLATE-GENERATION-UNRESOLVED",
         "C++ native translation requires generation-time helpers to be resolved "
-        "before backend translation",
+        "to typed semantic values before backend translation",
         location=candidate.variant.source.declaration.source_span.location,
     )
 

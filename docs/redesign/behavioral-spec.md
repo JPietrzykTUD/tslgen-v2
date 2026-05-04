@@ -314,7 +314,7 @@ primitive-attribute branch slice:
 `if<generation>(value<generation>(primitive::attribute(aligned)))`.
 Milestone 42 implements that selected slice for `aligned` and prunes only the
 selected branch before nested unresolved-helper diagnostics run.
-Milestone 43 is the next planned semantic-lowering slice. It selects only
+Milestone 43 implements the next semantic-lowering slice. It resolves only
 generation-time base scalar type queries:
 `type<generation>(base::in)`,
 `type<generation>(base::signed_of(type<generation>(base::in)))`, and
@@ -336,14 +336,28 @@ non-parameter intrinsic-compose arguments return
 `TSL-LOWER-TSIL-UNKNOWN-PARAMETER`. The selected generation-time branch slice
 adds `TSL-LOWER-GEN-*` diagnostics for malformed branches, unsupported
 conditions, missing/unknown/non-boolean `aligned` attributes, missing
-generation context, and unresolved helpers in the selected branch. The planned
-base-type query slice adds typed semantic type values for selected exact
-`base::in`, `base::signed_of(base::in)`, and `base::unsigned_of(base::in)`
-forms only; all other generation-time type/value queries remain unsupported
-until selected by a later milestone. The
+generation context, and unresolved helpers in the selected branch. The
+Milestone 43 base-type query slice implemented typed semantic type values for
+selected exact
+`type<generation>(base::in)`,
+`type<generation>(base::signed_of(type<generation>(base::in)))`, and
+`type<generation>(base::unsigned_of(type<generation>(base::in)))` forms only;
+prose shorthand such as `base::signed_of(base::in)` is not accepted TSIL
+syntax. M43 supports only selected concrete tags `si32` and `ui32`, with
+`si32 -> ui32` and `ui32 -> si32` companion conversion. Missing type context,
+unknown tags, unsupported tags, non-integer companion requests, malformed
+queries, shorthand forms, and unsupported nested queries are structured
+diagnostics. `GenerationContext.type_tag_override` is the explicit
+request-local override and wins over the context-selected type tag and selected
+candidate default. All other generation-time type/value queries remain
+unsupported until selected by a later milestone. The
 `typed_opaque` strategy remains available for callers that need the Milestone 18
 unsupported behavior. Any C++ body-rendering milestone must consume this lowered
-model rather than raw TSIL text.
+model rather than raw TSIL text. Backend translation rejects unresolved raw
+generation helper text; renderer behavior remains unchanged and renderers do
+not parse or evaluate generation-time helpers. M43 does not expand C++ or Rust
+output and does not implement backend type spelling or backend
+suffix/prefix/post/infix/immediate evaluation.
 
 ## Rendering Behavior
 

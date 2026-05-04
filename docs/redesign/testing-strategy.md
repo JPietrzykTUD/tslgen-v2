@@ -609,7 +609,11 @@ Recommended first parity checks:
   diagnostics, unsupported float/pointer/generic companion conversions,
   unsupported helper-shape diagnostics, deterministic lowered semantic type
   values, backend-translation rejection of unresolved raw generation type text,
-  and unchanged Milestone 42 branch-pruning regressions.
+  resolved `GenerationTypeRef` remaining unsupported by current backend suffix
+  translation, renderer non-evaluation, and unchanged Milestone 42
+  branch-pruning regressions. Prose shorthand such as
+  `base::signed_of(base::in)` is tested as unsupported unless written in the
+  exact nested accepted form.
 
 Deferred parity checks:
 

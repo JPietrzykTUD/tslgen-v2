@@ -3,6 +3,7 @@
 from tslgen.lowering.boundary import (
     ClassifiedPayload,
     GenerationContext,
+    GenerationTypeRef,
     LoweredImplementation,
     LoweringInput,
     LoweringInputSet,
@@ -16,12 +17,14 @@ from tslgen.lowering.boundary import (
     TsilReturnStatement,
     lower_candidates,
     prepare_lowering_inputs,
+    resolve_generation_type_query,
 )
 from tslgen.lowering.translations import TranslatedIntrinsicCall
 
 __all__ = [
     "ClassifiedPayload",
     "GenerationContext",
+    "GenerationTypeRef",
     "LoweredImplementation",
     "LoweringInput",
     "LoweringInputSet",
@@ -36,4 +39,5 @@ __all__ = [
     "TranslatedIntrinsicCall",
     "lower_candidates",
     "prepare_lowering_inputs",
+    "resolve_generation_type_query",
 ]

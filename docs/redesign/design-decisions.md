@@ -1245,11 +1245,13 @@ Consequences:
 - Milestone 42 implements that slice. The unselected branch is not recursively
   lowered or diagnosed, while unresolved generation-time helpers in the
   selected branch produce lowering diagnostics before backend translation.
-- Milestone 43 is selected as the next generation-time helper/query slice:
-  exact base scalar type queries for `base::in`, `base::signed_of(base::in)`,
-  and `base::unsigned_of(base::in)`. The slice produces typed semantic type
-  references only; backend suffix translation and rendered type spellings
-  remain separate future work.
+- Milestone 43 implements the next generation-time helper/query slice:
+  exact base scalar type queries for `type<generation>(base::in)`,
+  `type<generation>(base::signed_of(type<generation>(base::in)))`, and
+  `type<generation>(base::unsigned_of(type<generation>(base::in)))`. Prose
+  shorthand such as `base::signed_of(base::in)` is not accepted TSIL syntax.
+  The slice produces typed semantic type references only; backend suffix
+  translation and rendered type spellings remain separate future work.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

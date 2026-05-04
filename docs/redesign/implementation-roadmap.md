@@ -2886,6 +2886,8 @@ Required `GenerationContext` fields:
 - parameter list
 - selected type tag, defaulting to the selected candidate type tag when no
   explicit generation-context override is supplied
+- `GenerationContext.type_tag_override`, which is the explicit request-local
+  override and wins over the context-selected type tag and candidate default
 - implementation source location
 
 Typed semantic value model:
@@ -2910,13 +2912,21 @@ Diagnostics:
 - Unsupported companion conversion for non-integer, generic, wildcard, pointer,
   or mask-like tags.
 - Unresolved nested generation helper reaching backend translation.
+- `TSL-LOWER-GEN-TYPE-CONTEXT-MISSING` triggers when no
+  `GenerationContext.type_tag_override`, no `selected_type_tag`, and no
+  selected candidate type tag is available.
 
-Expected outputs:
+Implemented outputs:
 
 - A documented and tested base-generation-type value model.
 - Deterministic lowering output that can be consumed by a later backend
   modifier translation milestone.
-- No generated output changes.
+- Backend-neutral `GenerationTypeRef` values only; backend type spelling and
+  suffix/prefix/post/infix/immediate evaluation remain deferred.
+- Translation rejection of unresolved raw generation helper text remains in
+  force.
+- Renderer behavior remains unchanged.
+- No generated C++, Rust, or other output changes.
 
 Parity criterion:
 
@@ -2948,36 +2958,45 @@ Evidence paths:
   that suffix modifiers consume type-derived values, not as architecture to
   port.
 
-Tests required:
+Tests implemented:
 
-- Unit tests for each exact supported query form over selected `si32` and
+- Unit tests cover each exact supported query form over selected `si32` and
   `ui32` candidates.
-- Tests proving selected candidate type tag is the default generation context
+- Tests prove selected candidate type tag is the default generation context
   source unless an explicit generation context supplies a type tag.
-- Diagnostic tests for missing type context, unknown tags, malformed helper
+- Diagnostic tests cover missing type context, unknown tags, malformed helper
   text, unsupported helper families, and unsupported companion conversions.
-- Determinism tests for repeated lowering of the same query input.
-- Regression tests proving backend translation still rejects unresolved raw
-  `type<generation>(...)` text and accepts only typed semantic type values
-  when a later translation slice consumes them.
-- Existing Milestone 42 branch-pruning tests must continue to pass unchanged.
+- Determinism tests cover repeated lowering of the same query input.
+- Regression tests prove backend translation still rejects unresolved raw
+  `type<generation>(...)` text, while resolved `GenerationTypeRef` values
+  remain backend-neutral and unsupported by current suffix/type-spelling
+  translation.
+- Existing Milestone 42 branch-pruning tests continue to pass unchanged.
 
 Documentation updates:
 
-- Update `generation-time-semantic-lowering.md` with the selected M43 helper
+- `generation-time-semantic-lowering.md` records the implemented M43 helper
   family, decision table, context fields, typed semantic result, and deferrals.
-- Update `behavioral-spec.md`, `pipeline-design.md`, `testing-strategy.md`,
-  `open-questions.md`, and the existing ADR-032 notes in
-  `design-decisions.md` to record that base generation type queries are the
-  next implementation target.
-- No new ADR is required unless implementation changes the M40/M41 boundary or
-  changes signed/unsigned companion semantics.
+- `behavioral-spec.md`, `pipeline-design.md`, `testing-strategy.md`,
+  `open-questions.md`, and the ADR-032 notes in `design-decisions.md` record
+  the implemented base generation type query behavior.
+- No new ADR was required because implementation did not change the M40/M41
+  boundary or signed/unsigned companion semantics.
 
 Validation commands:
 
-- `git diff --check` for this documentation-only planning milestone.
-- The future implementation milestone should additionally run the focused
-  lowering unit tests and C++ translation-boundary regressions it changes.
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+  for lowering behavior and diagnostics.
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_cpp_backend_vertical_slice.py`
+  for C++ translation-boundary and renderer non-evaluation regressions.
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_backend_metadata_boundary.py`
+  for unchanged backend metadata boundary behavior.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation` for the full
+  accepted validation profile.
+- Targeted `python -m compileall -q`, `ruff check`, and
+  `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases` over
+  the changed Python files and tests.
+- `git diff --check`.
 
 Review risks:
 
@@ -2996,8 +3015,8 @@ Dependencies:
 
 Implementation note:
 
-The next executor milestone is Milestone 43. It is a lowering/model slice only
-and must not combine query support with C++ output changes.
+Milestone 43 is complete as a lowering/model slice only. It did not combine
+query support with C++ or Rust output changes.
 
 ## Deferred Parity Targets After Boundary Correction
 
@@ -3018,10 +3037,16 @@ it replaces or adapts a deferred target.
 
 ## Recommended Next Milestone
 
-Milestones 1 through 42 are accepted. Do not expand the selected native C++
-output or backend translation behavior next.
+Milestones 1 through 42 are accepted, and Milestone 43 implementation behavior
+is complete pending focused documentation re-review. Do not expand the selected
+native C++ output or backend translation behavior beyond typed inputs.
 
-Proceed to Milestone 43: Base Type Generation Query Slice. It resolves only the
-selected `base::in`, `base::signed_of(base::in)`, and
-`base::unsigned_of(base::in)` generation-time type queries in semantic lowering
-so later backend modifier work can consume typed semantic values.
+Milestone 43 resolves only the selected
+`type<generation>(base::in)`,
+`type<generation>(base::signed_of(type<generation>(base::in)))`, and
+`type<generation>(base::unsigned_of(type<generation>(base::in)))`
+generation-time type queries in semantic lowering so later backend modifier
+work can consume typed semantic values. The next executor target is the backend
+modifier value family for suffix/prefix/post/infix/immediate translation,
+explicitly constrained to typed M43 `GenerationTypeRef` inputs and not broad
+translation-map evaluation.

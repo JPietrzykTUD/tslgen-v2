@@ -349,14 +349,17 @@ primitive-attribute branch pruning for
 Milestone 42 implements that slice for `aligned`. Helpers in the unselected
 branch are discarded without diagnostics; unresolved generation-time helpers in
 the selected branch remain diagnostic-producing before backend translation.
-Milestone 43 is the next planned slice and will add only exact base scalar type
-generation queries:
+Milestone 43 implements only exact base scalar type generation queries:
 `type<generation>(base::in)`,
 `type<generation>(base::signed_of(type<generation>(base::in)))`, and
 `type<generation>(base::unsigned_of(type<generation>(base::in)))`. The lowering
-stage will resolve these to typed generation type references using the selected
-candidate type tag before any backend modifier or type-spelling translation is
-allowed to consume them.
+stage resolves these to typed generation type references using
+`GenerationContext.type_tag_override`, `GenerationContext.selected_type_tag`, or
+the selected candidate type tag in that order before any backend modifier or
+type-spelling translation is allowed to consume them. If none is available,
+lowering emits `TSL-LOWER-GEN-TYPE-CONTEXT-MISSING`. Backend translation still
+rejects unresolved raw generation type query text; renderers do not evaluate
+generation-time helpers.
 
 ## Stage 9: Backend Planning
 

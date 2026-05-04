@@ -3,9 +3,10 @@
 Milestone 41 defined the contract for generation-time helper semantics that
 must run before backend translation. Milestone 42 implements the first selected
 slice: boolean primitive-attribute branch pruning for `aligned`. Milestone 43
-is selected as the next planned implementation slice: exact base scalar type
-queries for `base::in`, `base::signed_of(base::in)`, and
-`base::unsigned_of(base::in)`.
+implements the next slice: exact base scalar type queries. For prose only,
+`base::signed_of(base::in)` and `base::unsigned_of(base::in)` may be used as
+shorthand, but accepted TSIL syntax requires the full nested forms documented
+below.
 
 ## Ordered Contract
 
@@ -27,7 +28,7 @@ renderers must never parse or evaluate generation-time helpers.
 
 ## GenerationContext Contract
 
-The first implementation slice uses an explicit immutable `GenerationContext`
+The implemented helper slices use an explicit immutable `GenerationContext`
 rather than raw parser dictionaries or backend renderer state.
 
 | Field | Status | Purpose |
@@ -41,7 +42,8 @@ rather than raw parser dictionaries or backend renderer state.
 | implementation source location | used in M42 | Provides actionable diagnostics for malformed or unsupported helpers. |
 | backend id | likely later | Required for backend-scoped requests after generation values are typed. |
 | extension and source extension | likely later | Required for vector metadata, intrinsic suffixes, and conversion helpers. |
-| type tag | selected for M43 | Required for base scalar type queries before suffix and signedness work. |
+| selected type tag | implemented in M43 | Required for base scalar type queries before suffix and signedness work. Defaults from the selected candidate type tag when `GenerationContext.type_tag_override` is absent and candidate defaulting is enabled. |
+| type tag override | implemented in M43 | Explicit request-local test/diagnostic override. `GenerationContext.type_tag_override` wins over `selected_type_tag` and the selected candidate type tag. |
 | backend type spelling | likely later | Consumed by backend translation and rendering after type resolution. |
 | vector/register metadata | likely later | Required for `vector::length`, `vector::alignment`, and register types. |
 | primitive attributes with non-bool values | likely later | Needed if non-boolean attribute queries are selected. |
@@ -70,8 +72,8 @@ behavior without treating the whole corpus as implemented.
 | `type<generation>(vector::register)` | `tsldata/primitives/load_store/load.tsl:39-45`, `load.tsl:59-67`, `store.tsl:56-61` | Resolve selected vector register type. | Backend id, extension, type tag, vector/register metadata. | `GenerationTypeRef(kind="vector.register")`. | Language type map. | required-later | Defer until vector register type rendering is selected. | Typed metadata fixtures; missing language-map diagnostics. |
 | `value<generation>(vector::length)` | `tsldata/primitives/load_store/load.tsl:41-43`, `tsldata/primitives/bitwise/shifts.tsl:50-53`, `shifts.tsl:218-221` | Resolve lane count for generated loops. | Extension, type tag, lane metadata. | `GenerationValue[int](kind="vector.length")`. | Extension/type metadata. | required-later | Defer with loop lowering. | Deterministic lane query tests after loop model exists. |
 | `value<generation>(vector::alignment)` | `tsldata/primitives/load_store/load.tsl:55-70`, `store.tsl:54-64`, `store.tsl:75-85` | Supply alignment value to selected aligned branch. | Extension, type tag, alignment metadata. | `GenerationValue[int](kind="vector.alignment")`. | Extension/type metadata. | required-later | Defer until aligned branch body rendering is selected. | Query tests plus missing alignment diagnostics. |
-| `type<generation>(base::in)` | `tsldata/primitives/bitwise/shifts.tsl:38-40`, `shifts.tsl:150`, `tsldata/primitives/conversion/repr_change.tsl:121-128` | Resolve selected primitive base type. | Type tag and active vector type. | `GenerationTypeRef(kind="base.in")`. | No backend data to resolve the semantic type; later backend spelling uses language maps. | selected-next | Selected by Milestone 43 as part of the base type query family. | Type-query diagnostics for missing type tag. |
-| `type<generation>(base::signed_of(...))` and `base::unsigned_of(...)` | `tsldata/primitives/arithmetic/fundamental.tsl:47-90`, `tsldata/primitives/bitwise/shifts.tsl:38-40`, `shifts.tsl:63-82` | Convert selected base type to signed/unsigned companion. | Type tag and integer signedness rules. | `GenerationTypeRef(kind="base.signed_of")` or `base.unsigned_of`. | No backend data to resolve the semantic type; later suffix translation uses translation maps. | selected-next | Selected by Milestone 43 for exact `base::in` nested forms only. | Query tests for selected scalar tags; unsupported float/pointer/generic conversion diagnostics. |
+| `type<generation>(base::in)` | `tsldata/primitives/bitwise/shifts.tsl:38-40`, `shifts.tsl:150`, `tsldata/primitives/conversion/repr_change.tsl:1210-1225` | Resolve selected primitive base type. | Type tag and active vector type. | `GenerationTypeRef(kind="base.in")`. | No backend data to resolve the semantic type; later backend spelling uses language maps. | implemented M43 | Selected by Milestone 43 as part of the base type query family. | Type-query diagnostics for missing type tag. |
+| `type<generation>(base::signed_of(type<generation>(base::in)))` and `type<generation>(base::unsigned_of(type<generation>(base::in)))` | `tsldata/primitives/arithmetic/fundamental.tsl:47-90`, `tsldata/primitives/bitwise/shifts.tsl:38-40`, `shifts.tsl:63-82` | Convert selected base type to signed/unsigned companion. | Type tag and integer signedness rules. | `GenerationTypeRef(kind="base.signed_of")` or `base.unsigned_of`. | No backend data to resolve the semantic type; later suffix translation uses translation maps. | implemented M43 | Milestone 43 accepts only these exact nested forms. Prose shorthand such as `base::signed_of(base::in)` is not accepted TSIL syntax. | Query tests for selected scalar tags; unsupported float/pointer/generic conversion diagnostics. |
 | `type<generation>(vector::transform_extension(...))` and `vector::as_extension(...)` | `tsldata/primitives/conversion/repr_change.tsl:121-128`, `tsldata/primitives/bitwise/shifts.tsl:875-880`, `shifts.tsl:1222-1240` | Build related vector types for conversion or reinterpret paths. | Current extension, target extension, type tag, vector family/width. | `GenerationTypeRef(kind="vector.transform_extension")`. | Extension metadata and language type map. | required-later | Defer until conversion parity slice. | Fixture-driven type transformation tests. |
 | `type<generation>(vector::mask_underlying_t)` | `tsldata/primitives/load_store/store.tsl:177-188`, `store.tsl:196-210` | Resolve mask storage word type. | Mask parameter role, vector mask metadata. | `GenerationTypeRef(kind="vector.mask_underlying_t")`. | Language type map and vector mask metadata. | required-later | Defer until mask store parity. | Mask metadata tests. |
 | `value<generation>(mask::lane::all_true)` | `tsldata/primitives/bitwise/bit_ops.tsl` search result for `mask::lane::all_true` | Supply all-true mask lane literal. | Mask lane count and representation. | `GenerationValue[int|string](kind="mask.lane.all_true")`. | Mask metadata. | explicitly-deferred | Defer until mask helper parity. | Mask fixture and metadata diagnostics. |
@@ -168,7 +170,7 @@ Selection method:
 
 ## Selected Next Helper Slice
 
-Milestone 43 selects the base scalar type query family:
+Milestone 43 implements the base scalar type query family:
 
 ```text
 type<generation>(base::in)
@@ -192,15 +194,58 @@ M43 typed semantic result:
 
 M43 context additions:
 
-- selected type tag, defaulting to the selected candidate type tag when the
-  generation context does not explicitly override it;
+- `GenerationContext.type_tag_override`, an explicit request-local override
+  used by tests and diagnostics. It wins over `selected_type_tag` and over the
+  selected candidate type tag.
+- `GenerationContext.selected_type_tag`, used when supplied by a caller.
+- selected candidate type tag defaulting, used when neither override nor
+  context-selected type tag is supplied and candidate defaulting is enabled.
 - the existing M42 diagnostic/provenance fields: selected primitive name,
   emitted primitive name, selected candidate id, normalized signature,
   parameter list, and implementation source location.
 
+If a generation type query is evaluated without `type_tag_override`, without
+`selected_type_tag`, and without an available selected candidate type tag,
+lowering emits `TSL-LOWER-GEN-TYPE-CONTEXT-MISSING`. The override is part of
+the immutable request-local `GenerationContext`; it is not global state.
+
+M43 supported type tags and companion behavior:
+
+| Selected tag | `base::in` | signed companion | unsigned companion |
+| --- | --- | --- | --- |
+| `si32` | `si32` | `si32` | `ui32` |
+| `ui32` | `ui32` | `si32` | `ui32` |
+
+The exact accepted companion query forms are:
+
+```text
+type<generation>(base::signed_of(type<generation>(base::in)))
+type<generation>(base::unsigned_of(type<generation>(base::in)))
+```
+
+Shorthand forms such as `type<generation>(base::signed_of(base::in))` and
+`type<generation>(base::unsigned_of(base::in))` are diagnostics, not aliases.
+
+M43 diagnostics:
+
+- `TSL-LOWER-GEN-TYPE-MALFORMED`
+- `TSL-LOWER-GEN-TYPE-UNSUPPORTED`
+- `TSL-LOWER-GEN-TYPE-NESTED-UNSUPPORTED`
+- `TSL-LOWER-GEN-TYPE-CONTEXT-MISSING`
+- `TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED`
+- `TSL-LOWER-GEN-TYPE-TAG-UNKNOWN`
+- `TSL-LOWER-GEN-TYPE-NON-INTEGER`
+
+Backend translation still rejects raw unresolved generation-time helper text.
+If lowering already produced a `GenerationTypeRef`, the current C++ translator
+does not evaluate it for suffixes or type spellings; it rejects the selected
+native path as unsupported until a future backend modifier/type-spelling slice
+consumes these typed values. Renderers remain non-evaluating text emitters and
+must not parse raw generation-time helper text.
+
 ## Explicit Deferrals
 
-Deferred beyond the planned Milestone 43 slice:
+Deferred beyond the Milestone 43 slice:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask

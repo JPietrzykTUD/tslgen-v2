@@ -1182,7 +1182,7 @@ Diagnostics for unresolved nested generation-time helpers apply only to the
 selected branch after pruning; helper forms in the unselected branch do not
 poison a valid branch choice.
 
-Milestone 43 is selected as the next helper/query family:
+Milestone 43 implements the next helper/query family:
 `type<generation>(base::in)`,
 `type<generation>(base::signed_of(type<generation>(base::in)))`, and
 `type<generation>(base::unsigned_of(type<generation>(base::in)))`. This
@@ -1190,7 +1190,10 @@ advances native integer `binary/add` suffix parity and later shift/conversion
 work by creating typed generation type references before backend modifier
 translation. It does not implement suffix/prefix/post/infix/immediate modifier
 evaluation, backend type spelling, vector/register queries, or signedness
-branch pruning.
+branch pruning. M43 uses request-local `GenerationContext.type_tag_override`
+as the explicit override; missing override, missing context-selected type tag,
+and missing selected candidate type tag produces
+`TSL-LOWER-GEN-TYPE-CONTEXT-MISSING`.
 
 Remaining deferred TSIL work includes full modifier expression evaluation,
 integer suffix inference, primitive calls, loops, variables, generation-time
@@ -1374,11 +1377,11 @@ Milestone 41 selects and Milestone 42 implements the first slice: evaluate
 primitive attributes and prune the selected branch with deterministic
 provenance. The selected branch is checked for unresolved nested
 generation-time helpers; the unselected branch is discarded without recursive
-helper diagnostics. Milestone 43 is selected next to resolve only exact base
+helper diagnostics. Milestone 43 resolves only exact base
 scalar type queries:
 `type<generation>(base::in)`,
 `type<generation>(base::signed_of(type<generation>(base::in)))`, and
-`type<generation>(base::unsigned_of(type<generation>(base::in)))`. These will
+`type<generation>(base::unsigned_of(type<generation>(base::in)))`. These
 resolve to typed semantic type values before backend translation. Type
 signedness branch pruning, vector type/value queries, backend suffix/prefix
 modifiers, `immediate(n)`, primitive calls, loops, and direct intrinsics remain
@@ -1400,8 +1403,8 @@ Implementation blocked:
 No for M40 because the selected `avx2/f32` default intrinsic-composition case
 can remain generation-free and must reject unresolved generation-time inputs.
 No for the Milestone 41 documentation contract, the Milestone 42
-primitive-attribute branch pruning slice, or the planned Milestone 43 base type
-query slice. Yes for modifier support, suffix inference, branch-dependent
+primitive-attribute branch pruning slice, or the Milestone 43 base type query
+slice. Yes for modifier support, suffix inference, branch-dependent
 output beyond selected branch pruning, vector/generic metadata queries, and
 broad translation-map evaluation until later numbered slices implement the
 selected generation-time semantic lowering behavior.
@@ -1626,6 +1629,13 @@ selected generation-time semantic lowering behavior.
 
 ## Follow-ups from M43 planning review
 
-- Fix the stale `repr_change.tsl:121-128` citation for the `base::in` inventory row.
-- Replace or label shorthand `base::signed_of(base::in)` / `base::unsigned_of(base::in)` prose where exact supported forms matter.
-- Define the concrete `GenerationContext` type-tag override field and missing-context diagnostic trigger.
+- Addressed in Milestone 43: fixed the stale `base::in` inventory citation to
+  use the stronger `repr_change.tsl:1210-1225` evidence.
+- Addressed in Milestone 43: exact accepted forms are written as
+  `type<generation>(base::signed_of(type<generation>(base::in)))` and
+  `type<generation>(base::unsigned_of(type<generation>(base::in)))`; shorthand
+  wording is labeled prose-only where retained.
+- Addressed in Milestone 43: `GenerationContext.type_tag_override` is the
+  concrete override field, and `TSL-LOWER-GEN-TYPE-CONTEXT-MISSING` triggers
+  when no override, no context-selected type tag, and no selected candidate
+  type tag is available.

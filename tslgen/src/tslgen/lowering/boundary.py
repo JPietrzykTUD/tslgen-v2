@@ -20,6 +20,11 @@ type PayloadClassification = Literal[
 ]
 type LoweringStatus = Literal["lowered", "unsupported"]
 type GenerationBranchChoice = Literal["true", "false"]
+type GenerationTypeRefKind = Literal[
+    "base.in",
+    "base.signed_of",
+    "base.unsigned_of",
+]
 type TsilBinaryOperator = Literal["+"]
 type TsilExpression = (
     TsilParameterReference | TsilBinaryExpression | TsilIntrinsicComposeExpression
@@ -32,8 +37,12 @@ _GENERATION_HELPER_MARKERS = (
     "type<generation>",
     "value<generation>",
 )
+_GENERATION_TYPE_MARKER = "type<generation>"
 _TSIL_IDENTIFIER = r"[A-Za-z_][A-Za-z0-9_]*"
 _TSIL_IDENTIFIER_RE = re.compile(rf"\A{_TSIL_IDENTIFIER}\Z")
+_CONCRETE_INTEGER_TAG_RE = re.compile(r"\A[su]i\d+\Z")
+_FLOAT_TAG_RE = re.compile(r"\Af\d+\Z")
+_WILDCARD_TYPE_TAG_RE = re.compile(r"\A(?:\?i\?|\?i\d+|[su]i\?|f\?)\Z")
 _PRIMITIVE_ATTRIBUTE_CONDITION_RE = re.compile(
     rf"\A\s*value<generation>\(\s*primitive::attribute\(\s*"
     rf"({_TSIL_IDENTIFIER})\s*\)\s*\)\s*\Z"
@@ -55,6 +64,15 @@ class GenerationContext:
     values: FrozenMap[str, CatalogValue] = field(default_factory=FrozenMap.empty)
     primitive_attributes: FrozenMap[str, CatalogValue] | None = None
     use_candidate_attributes: bool = True
+    selected_primitive_name: str | None = None
+    emitted_primitive_name: str | None = None
+    selected_candidate_id: str | None = None
+    normalized_signature: str | None = None
+    parameters: tuple[str, ...] = ()
+    selected_type_tag: str | None = None
+    type_tag_override: str | None = None
+    use_candidate_type_tag: bool = True
+    implementation_source_location: SourceLocation | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "values", FrozenMap(self.values.items()))
@@ -64,6 +82,21 @@ class GenerationContext:
                 "primitive_attributes",
                 FrozenMap(self.primitive_attributes.items()),
             )
+        object.__setattr__(self, "parameters", tuple(self.parameters))
+        for field_name in (
+            "selected_primitive_name",
+            "emitted_primitive_name",
+            "selected_candidate_id",
+            "normalized_signature",
+            "selected_type_tag",
+            "type_tag_override",
+        ):
+            value = getattr(self, field_name)
+            if value == "":
+                raise ValueError(f"generation context {field_name} must be non-empty")
+        for parameter in self.parameters:
+            if not parameter:
+                raise ValueError("generation context parameters must be non-empty")
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,11 +268,29 @@ class PrunedGenerationBranch:
 
 
 @dataclass(frozen=True, slots=True)
+class GenerationTypeRef:
+    kind: GenerationTypeRefKind
+    type_tag: str
+    source_type_tag: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.type_tag:
+            raise ValueError("generation type ref type tag must be non-empty")
+        if self.source_type_tag == "":
+            raise ValueError("generation type ref source type tag must be non-empty")
+
+    @property
+    def key(self) -> tuple[str, str, str]:
+        return (self.kind, self.type_tag, self.source_type_tag or "")
+
+
+@dataclass(frozen=True, slots=True)
 class LoweredImplementation:
     candidate_id: str
     status: LoweringStatus
     statements: tuple[TsilStatement, ...] = ()
     generation_branches: tuple[PrunedGenerationBranch, ...] = ()
+    generation_type_refs: tuple[GenerationTypeRef, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.candidate_id:
@@ -250,6 +301,11 @@ class LoweredImplementation:
             "generation_branches",
             tuple(self.generation_branches),
         )
+        object.__setattr__(
+            self,
+            "generation_type_refs",
+            tuple(self.generation_type_refs),
+        )
 
     @property
     def key(self) -> tuple[object, ...]:
@@ -258,6 +314,7 @@ class LoweredImplementation:
             self.status,
             tuple(statement.key for statement in self.statements),
             tuple(branch.key for branch in self.generation_branches),
+            tuple(type_ref.key for type_ref in self.generation_type_refs),
         )
 
 
@@ -354,6 +411,32 @@ def lower_candidates(
     )
 
 
+def resolve_generation_type_query(
+    query_text: str,
+    context: GenerationContext | None = None,
+    *,
+    selected_candidate_type_tag: str | None = None,
+    location: SourceLocation | None = None,
+) -> Result[GenerationTypeRef]:
+    generation_context = context or GenerationContext()
+    diagnostic_location = (
+        location
+        if location is not None
+        else generation_context.implementation_source_location
+    )
+    query = query_text.strip()
+    inner = _generation_type_query_inner(query, diagnostic_location)
+    if not inner.is_ok:
+        return Result.failure(inner.diagnostics)
+    return _generation_type_ref_from_inner(
+        inner.unwrap(),
+        query,
+        generation_context,
+        selected_candidate_type_tag=selected_candidate_type_tag,
+        location=diagnostic_location,
+    )
+
+
 def _classify_payload(candidate: ImplementationCandidate) -> Result[ClassifiedPayload]:
     body = candidate.implementation.body
     text = body.text
@@ -391,6 +474,18 @@ def _lower_input(
         return Result.failure((_unsupported_payload_diagnostic(item),))
 
     text = item.payload.text or ""
+    type_ref = _lower_generation_type_query_payload(item, request, text)
+    if type_ref is not None:
+        if not type_ref.is_ok:
+            return Result.failure(type_ref.diagnostics)
+        return Result.ok(
+            LoweredImplementation(
+                candidate_id=item.candidate_id,
+                status="lowered",
+                generation_type_refs=(type_ref.unwrap(),),
+            )
+        )
+
     generation_branches: tuple[PrunedGenerationBranch, ...] = ()
     if item.payload.has_generation_condition:
         if _GENERATION_CONDITION_MARKER not in text:
@@ -415,6 +510,30 @@ def _lower_input(
             statements=(statement.unwrap(),),
             generation_branches=generation_branches,
         )
+    )
+
+
+def _lower_generation_type_query_payload(
+    item: LoweringInput,
+    request: LoweringRequest,
+    text: str,
+) -> Result[GenerationTypeRef] | None:
+    if _GENERATION_TYPE_MARKER not in text:
+        return None
+    stripped = text.strip()
+    if not stripped.startswith(_GENERATION_TYPE_MARKER):
+        return None
+    context = _context_for_candidate(item, request)
+    selected_candidate_type_tag = (
+        item.candidate.type_tag
+        if request.generation_context.use_candidate_type_tag
+        else None
+    )
+    return resolve_generation_type_query(
+        stripped,
+        context,
+        selected_candidate_type_tag=selected_candidate_type_tag,
+        location=item.source_location,
     )
 
 
@@ -553,6 +672,339 @@ def _primitive_attributes_for(
     if request.generation_context.use_candidate_attributes:
         return item.candidate.variant.attributes
     return None
+
+
+def _context_for_candidate(
+    item: LoweringInput,
+    request: LoweringRequest,
+) -> GenerationContext:
+    context = request.generation_context
+    parameters = context.parameters or tuple(
+        parameter.name
+        for parameter in item.candidate.variant.source.declaration.parameters
+    )
+    selected_type_tag = context.selected_type_tag
+    if selected_type_tag is None and context.use_candidate_type_tag:
+        selected_type_tag = item.candidate.type_tag
+    return GenerationContext(
+        values=context.values,
+        primitive_attributes=context.primitive_attributes,
+        use_candidate_attributes=context.use_candidate_attributes,
+        selected_primitive_name=(
+            context.selected_primitive_name or item.candidate.source_primitive_name
+        ),
+        emitted_primitive_name=(
+            context.emitted_primitive_name or item.candidate.emitted_primitive_name
+        ),
+        selected_candidate_id=context.selected_candidate_id or item.candidate_id,
+        normalized_signature=(
+            context.normalized_signature
+            or item.candidate.variant.source.signature.normalized
+        ),
+        parameters=parameters,
+        selected_type_tag=selected_type_tag,
+        type_tag_override=context.type_tag_override,
+        use_candidate_type_tag=context.use_candidate_type_tag,
+        implementation_source_location=(
+            context.implementation_source_location or item.source_location
+        ),
+    )
+
+
+def _generation_type_query_inner(
+    query_text: str,
+    location: SourceLocation | None,
+) -> Result[str]:
+    query = query_text.strip()
+    if not query.startswith(_GENERATION_TYPE_MARKER):
+        return Result.failure(
+            (
+                _unsupported_generation_type_query_diagnostic(
+                    query_text,
+                    location,
+                ),
+            )
+        )
+
+    cursor = len(_GENERATION_TYPE_MARKER)
+    cursor = _skip_whitespace(query, cursor)
+    if cursor >= len(query) or query[cursor] != "(":
+        return Result.failure(
+            (_malformed_generation_type_query_diagnostic(query_text, location),)
+        )
+    query_end = _matching_delimiter(query, cursor, "(", ")")
+    if query_end is None:
+        return Result.failure(
+            (_malformed_generation_type_query_diagnostic(query_text, location),)
+        )
+    tail = query[query_end + 1:].strip()
+    if tail:
+        return Result.failure(
+            (_malformed_generation_type_query_diagnostic(query_text, location),)
+        )
+    return Result.ok(query[cursor + 1:query_end].strip())
+
+
+def _generation_type_ref_from_inner(
+    inner: str,
+    query_text: str,
+    context: GenerationContext,
+    *,
+    selected_candidate_type_tag: str | None,
+    location: SourceLocation | None,
+) -> Result[GenerationTypeRef]:
+    if inner == "base::in":
+        type_tag = _effective_generation_type_tag(
+            context,
+            selected_candidate_type_tag=selected_candidate_type_tag,
+            query_text=query_text,
+            location=location,
+        )
+        if not type_tag.is_ok:
+            return Result.failure(type_tag.diagnostics)
+        return _base_in_type_ref(type_tag.unwrap(), query_text, location)
+
+    helper_forms: tuple[tuple[str, GenerationTypeRefKind], ...] = (
+        ("base::signed_of", "base.signed_of"),
+        ("base::unsigned_of", "base.unsigned_of"),
+    )
+    for helper_name, kind in helper_forms:
+        parsed = _parse_generation_type_call(inner, helper_name)
+        if parsed is None:
+            continue
+        if len(parsed) != 1:
+            return Result.failure(
+                (_malformed_generation_type_query_diagnostic(query_text, location),)
+            )
+        nested = parsed[0].strip()
+        if nested == "base::in":
+            return Result.failure(
+                (
+                    _unsupported_generation_type_shorthand_diagnostic(
+                        query_text,
+                        helper_name,
+                        location,
+                    ),
+                )
+            )
+        nested_inner = _generation_type_query_inner(nested, location)
+        if not nested_inner.is_ok:
+            return Result.failure(
+                (
+                    _unsupported_nested_generation_type_query_diagnostic(
+                        query_text,
+                        nested,
+                        location,
+                    ),
+                )
+            )
+        if nested_inner.unwrap() != "base::in":
+            return Result.failure(
+                (
+                    _unsupported_nested_generation_type_query_diagnostic(
+                        query_text,
+                        nested,
+                        location,
+                    ),
+                )
+            )
+        source_type_tag = _effective_generation_type_tag(
+            context,
+            selected_candidate_type_tag=selected_candidate_type_tag,
+            query_text=query_text,
+            location=location,
+        )
+        if not source_type_tag.is_ok:
+            return Result.failure(source_type_tag.diagnostics)
+        companion = _integer_companion_type_tag(
+            source_type_tag.unwrap(),
+            kind,
+            query_text,
+            location,
+        )
+        if not companion.is_ok:
+            return Result.failure(companion.diagnostics)
+        return Result.ok(
+            GenerationTypeRef(
+                kind=kind,
+                type_tag=companion.unwrap(),
+                source_type_tag=source_type_tag.unwrap(),
+            )
+        )
+
+    if "base::signed_of(base::in)" in inner:
+        return Result.failure(
+            (
+                _unsupported_generation_type_shorthand_diagnostic(
+                    query_text,
+                    "base::signed_of",
+                    location,
+                ),
+            )
+        )
+    if "base::unsigned_of(base::in)" in inner:
+        return Result.failure(
+            (
+                _unsupported_generation_type_shorthand_diagnostic(
+                    query_text,
+                    "base::unsigned_of",
+                    location,
+                ),
+            )
+        )
+    return Result.failure(
+        (_unsupported_generation_type_query_diagnostic(query_text, location),)
+    )
+
+
+def _parse_generation_type_call(text: str, function_name: str) -> tuple[str, ...] | None:
+    stripped = text.strip()
+    if not stripped.startswith(function_name):
+        return None
+    open_index = _skip_whitespace(stripped, len(function_name))
+    if open_index >= len(stripped) or stripped[open_index] != "(":
+        return None
+    close_index = _matching_delimiter(stripped, open_index, "(", ")")
+    if close_index is None or stripped[close_index + 1:].strip():
+        return ()
+    return _split_generation_type_arguments(stripped[open_index + 1:close_index])
+
+
+def _split_generation_type_arguments(text: str) -> tuple[str, ...]:
+    arguments: list[str] = []
+    start = 0
+    depth = 0
+    for index, character in enumerate(text):
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth < 0:
+                return ()
+        elif character == "," and depth == 0:
+            arguments.append(text[start:index].strip())
+            start = index + 1
+    if depth != 0:
+        return ()
+    tail = text[start:].strip()
+    if tail:
+        arguments.append(tail)
+    return tuple(arguments)
+
+
+def _effective_generation_type_tag(
+    context: GenerationContext,
+    *,
+    selected_candidate_type_tag: str | None,
+    query_text: str,
+    location: SourceLocation | None,
+) -> Result[str]:
+    type_tag = (
+        context.type_tag_override
+        or context.selected_type_tag
+        or selected_candidate_type_tag
+    )
+    if type_tag is None:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-GEN-TYPE-CONTEXT-MISSING",
+                    "generation-time type query requires a selected candidate "
+                    "type tag or GenerationContext.type_tag_override; query "
+                    f"was {query_text!r}",
+                    location=location,
+                ),
+            )
+        )
+    return Result.ok(type_tag)
+
+
+def _base_in_type_ref(
+    type_tag: str,
+    query_text: str,
+    location: SourceLocation | None,
+) -> Result[GenerationTypeRef]:
+    supported = _supported_generation_type_tag(type_tag, query_text, location)
+    if not supported.is_ok:
+        return Result.failure(supported.diagnostics)
+    return Result.ok(GenerationTypeRef(kind="base.in", type_tag=type_tag))
+
+
+def _supported_generation_type_tag(
+    type_tag: str,
+    query_text: str,
+    location: SourceLocation | None,
+) -> Result[None]:
+    if type_tag in {"si32", "ui32"}:
+        return Result.ok(None)
+    if _known_unsupported_type_tag(type_tag):
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED",
+                    "generation-time base type query supports only concrete "
+                    f"type tags 'si32' and 'ui32'; got {type_tag!r} for "
+                    f"query {query_text!r}",
+                    location=location,
+                ),
+            )
+        )
+    return Result.failure(
+        (
+            Diagnostic.error(
+                "TSL-LOWER-GEN-TYPE-TAG-UNKNOWN",
+                "generation-time base type query received unknown type tag "
+                f"{type_tag!r} for query {query_text!r}",
+                location=location,
+            ),
+        )
+    )
+
+
+def _integer_companion_type_tag(
+    source_type_tag: str,
+    kind: GenerationTypeRefKind,
+    query_text: str,
+    location: SourceLocation | None,
+) -> Result[str]:
+    if source_type_tag in {"si32", "ui32"}:
+        if kind == "base.signed_of":
+            return Result.ok("si32")
+        if kind == "base.unsigned_of":
+            return Result.ok("ui32")
+    if _is_non_integer_type_tag(source_type_tag):
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-GEN-TYPE-NON-INTEGER",
+                    "generation-time signed/unsigned companion query requires "
+                    f"a concrete integer type tag; got {source_type_tag!r} "
+                    f"for query {query_text!r}",
+                    location=location,
+                ),
+            )
+        )
+    supported = _supported_generation_type_tag(source_type_tag, query_text, location)
+    if supported.is_ok:
+        raise AssertionError("supported companion type tags must be handled directly")
+    return Result.failure(supported.diagnostics)
+
+
+def _known_unsupported_type_tag(type_tag: str) -> bool:
+    return (
+        bool(_CONCRETE_INTEGER_TAG_RE.fullmatch(type_tag))
+        or bool(_FLOAT_TAG_RE.fullmatch(type_tag))
+        or bool(_WILDCARD_TYPE_TAG_RE.fullmatch(type_tag))
+        or type_tag in {"ptr", "mask", "imask"}
+    )
+
+
+def _is_non_integer_type_tag(type_tag: str) -> bool:
+    return bool(_FLOAT_TAG_RE.fullmatch(type_tag)) or type_tag in {
+        "ptr",
+        "mask",
+        "imask",
+    }
 
 
 def _parse_generation_if(
@@ -798,6 +1250,67 @@ def _unsupported_generation_condition_diagnostic(
     )
 
 
+def _malformed_generation_type_query_diagnostic(
+    query_text: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-TYPE-MALFORMED",
+        "generation-time type query must be shaped as "
+        "'type<generation>(...)'; got "
+        f"{query_text!r}",
+        location=location,
+    )
+
+
+def _unsupported_generation_type_query_diagnostic(
+    query_text: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-TYPE-UNSUPPORTED",
+        "generation-time type lowering supports only "
+        "'type<generation>(base::in)', "
+        "'type<generation>(base::signed_of(type<generation>(base::in)))', "
+        "and "
+        "'type<generation>(base::unsigned_of(type<generation>(base::in)))'; "
+        f"got {query_text!r}",
+        location=location,
+    )
+
+
+def _unsupported_generation_type_shorthand_diagnostic(
+    query_text: str,
+    helper_name: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    exact_form = (
+        f"type<generation>({helper_name}"
+        "(type<generation>(base::in)))"
+    )
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-TYPE-UNSUPPORTED",
+        "generation-time type lowering does not accept shorthand "
+        f"{helper_name}(base::in); use exact nested form {exact_form!r}; "
+        f"got {query_text!r}",
+        location=location,
+    )
+
+
+def _unsupported_nested_generation_type_query_diagnostic(
+    query_text: str,
+    nested_text: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-TYPE-NESTED-UNSUPPORTED",
+        "generation-time signed/unsigned companion lowering supports only "
+        "nested 'type<generation>(base::in)' input; got nested query "
+        f"{nested_text!r} in {query_text!r}",
+        location=location,
+    )
+
+
 def _unresolved_selected_branch_diagnostic(
     item: LoweringInput,
     branch_text: str,
@@ -838,7 +1351,7 @@ def _unsupported_payload_diagnostic(
             )
         if item.payload.has_generation_condition:
             message += (
-                " and contains generation-time conditions that must be evaluated "
+                " and contains generation-time helpers that must be evaluated "
                 "by a future lowering slice"
             )
     else:

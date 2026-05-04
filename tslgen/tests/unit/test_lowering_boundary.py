@@ -12,6 +12,7 @@ from tslgen.domain.catalog import Catalog, build_catalog
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
 from tslgen.lowering import (
     GenerationContext,
+    GenerationTypeRef,
     LoweringRequest,
     PrunedGenerationBranch,
     TsilBinaryExpression,
@@ -21,6 +22,7 @@ from tslgen.lowering import (
     TsilReturnStatement,
     lower_candidates,
     prepare_lowering_inputs,
+    resolve_generation_type_query,
 )
 from tslgen.syntax.ast import ParsedDocumentSet
 from tslgen.syntax.parser import parse_document, parse_sources
@@ -134,6 +136,42 @@ prim<v:=(v,v)> lower_generation(left, right):
         requires []
         implementation:
           tsil "if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) { emit_return(left + right); } else<generation> { emit_return(right + left); }"
+
+prim<v:=(v,v)> lower_generation_type_base(left, right):
+  tests []
+  impls:
+    scalar:
+      ?i32:
+        requires []
+        implementation:
+          tsil "type<generation>(base::in)"
+
+prim<v:=(v,v)> lower_generation_type_signed(left, right):
+  tests []
+  impls:
+    scalar:
+      ?i32:
+        requires []
+        implementation:
+          tsil "type<generation>(base::signed_of(type<generation>(base::in)))"
+
+prim<v:=(v,v)> lower_generation_type_unsigned(left, right):
+  tests []
+  impls:
+    scalar:
+      ?i32:
+        requires []
+        implementation:
+          tsil "type<generation>(base::unsigned_of(type<generation>(base::in)))"
+
+prim<v:=(v,v)> lower_generation_type_override(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "type<generation>(base::in)"
 
 prim<v:=ptr>[aligned=true] lower_generation_aligned_true(ptr):
   tests []
@@ -367,6 +405,243 @@ class LoweringBoundaryTests(unittest.TestCase):
         lowering_input = result.unwrap().inputs[0]
         self.assertEqual(lowering_input.payload.classification, "tsil")
         self.assertTrue(lowering_input.payload.has_generation_condition)
+
+    def test_lowers_base_generation_type_query_for_si32_and_ui32(self) -> None:
+        selection = self.selection_for("lower_generation_type_base")
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(
+            tuple(
+                implementation.generation_type_refs[0]
+                for implementation in result.unwrap().implementations
+            ),
+            (
+                GenerationTypeRef(kind="base.in", type_tag="si32"),
+                GenerationTypeRef(kind="base.in", type_tag="ui32"),
+            ),
+        )
+
+    def test_lowers_signed_generation_type_query_for_si32_and_ui32(self) -> None:
+        selection = self.selection_for("lower_generation_type_signed")
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(
+            tuple(
+                implementation.generation_type_refs[0]
+                for implementation in result.unwrap().implementations
+            ),
+            (
+                GenerationTypeRef(
+                    kind="base.signed_of",
+                    type_tag="si32",
+                    source_type_tag="si32",
+                ),
+                GenerationTypeRef(
+                    kind="base.signed_of",
+                    type_tag="si32",
+                    source_type_tag="ui32",
+                ),
+            ),
+        )
+
+    def test_lowers_unsigned_generation_type_query_for_si32_and_ui32(self) -> None:
+        selection = self.selection_for("lower_generation_type_unsigned")
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(
+            tuple(
+                implementation.generation_type_refs[0]
+                for implementation in result.unwrap().implementations
+            ),
+            (
+                GenerationTypeRef(
+                    kind="base.unsigned_of",
+                    type_tag="ui32",
+                    source_type_tag="si32",
+                ),
+                GenerationTypeRef(
+                    kind="base.unsigned_of",
+                    type_tag="ui32",
+                    source_type_tag="ui32",
+                ),
+            ),
+        )
+
+    def test_generation_type_query_defaults_to_selected_candidate_type_tag(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_type_override")
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(
+            result.unwrap().implementations[0].generation_type_refs,
+            (GenerationTypeRef(kind="base.in", type_tag="si32"),),
+        )
+
+    def test_generation_type_query_uses_explicit_type_tag_override(self) -> None:
+        selection = self.selection_for("lower_generation_type_override")
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(type_tag_override="ui32"),
+            ),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(
+            result.unwrap().implementations[0].generation_type_refs,
+            (GenerationTypeRef(kind="base.in", type_tag="ui32"),),
+        )
+
+    def test_generation_type_query_reports_missing_type_context(self) -> None:
+        selection = self.selection_for("lower_generation_type_override")
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(use_candidate_type_tag=False),
+            ),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-TYPE-CONTEXT-MISSING",
+            severity="error",
+        )
+
+    def test_generation_type_query_lowering_is_deterministic(self) -> None:
+        selection = self.selection_for("lower_generation_type_unsigned")
+
+        first = lower_candidates(selection)
+        second = lower_candidates(selection)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+
+    def test_resolves_generation_type_query_with_explicit_context(self) -> None:
+        result = resolve_generation_type_query(
+            "type<generation>(base::unsigned_of(type<generation>(base::in)))",
+            GenerationContext(type_tag_override="si32"),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(
+            result.unwrap(),
+            GenerationTypeRef(
+                kind="base.unsigned_of",
+                type_tag="ui32",
+                source_type_tag="si32",
+            ),
+        )
+
+    def test_generation_type_query_reports_unsupported_shorthand(self) -> None:
+        result = resolve_generation_type_query(
+            "type<generation>(base::signed_of(base::in))",
+            GenerationContext(type_tag_override="si32"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-TYPE-UNSUPPORTED",
+            severity="error",
+        )
+        self.assertIn("shorthand", result.diagnostics[0].message)
+        self.assertIn("type<generation>(base::in)", result.diagnostics[0].message)
+
+    def test_generation_type_query_reports_unsupported_tags(self) -> None:
+        cases = (
+            ("f32", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("ptr", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("?i?", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+        )
+        for type_tag, code in cases:
+            with self.subTest(type_tag=type_tag):
+                result = resolve_generation_type_query(
+                    "type<generation>(base::in)",
+                    GenerationContext(type_tag_override=type_tag),
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
+                self.assertIn(type_tag, result.diagnostics[0].message)
+
+    def test_generation_type_query_reports_non_integer_companion_tag(self) -> None:
+        result = resolve_generation_type_query(
+            "type<generation>(base::signed_of(type<generation>(base::in)))",
+            GenerationContext(type_tag_override="f32"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-TYPE-NON-INTEGER",
+            severity="error",
+        )
+        self.assertIn("f32", result.diagnostics[0].message)
+
+    def test_generation_type_query_reports_unknown_type_tag(self) -> None:
+        result = resolve_generation_type_query(
+            "type<generation>(base::in)",
+            GenerationContext(type_tag_override="mystery"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-TYPE-TAG-UNKNOWN",
+            severity="error",
+        )
+        self.assertIn("mystery", result.diagnostics[0].message)
+
+    def test_generation_type_query_reports_malformed_query(self) -> None:
+        result = resolve_generation_type_query(
+            "type<generation>(base::in",
+            GenerationContext(type_tag_override="si32"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-TYPE-MALFORMED",
+            severity="error",
+        )
+
+    def test_generation_type_query_reports_unsupported_nested_query(self) -> None:
+        result = resolve_generation_type_query(
+            "type<generation>(base::signed_of(type<generation>(vector::register)))",
+            GenerationContext(type_tag_override="si32"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-TYPE-NESTED-UNSUPPORTED",
+            severity="error",
+        )
+        self.assertIn("vector::register", result.diagnostics[0].message)
 
     def test_prunes_generation_branch_when_aligned_true(self) -> None:
         selection = self.selection_for("lower_generation_aligned_true")

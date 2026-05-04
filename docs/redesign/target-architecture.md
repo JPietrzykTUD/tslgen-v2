@@ -329,9 +329,11 @@ Current roadmap note:
   evidence.
 - Milestone 42 implements that first slice in lowering. Backend translation and
   rendering still do not evaluate generation-time helpers.
-- Milestone 43 is the next planned lowering/model slice. It will resolve only
-  selected base scalar type generation queries to typed semantic type values
-  before backend modifier translation is allowed to consume them.
+- Milestone 43 implements the selected base scalar type generation queries as a
+  lowering/model slice. It resolves those exact queries to typed semantic type
+  values before backend modifier translation is allowed to consume them, using
+  `GenerationContext.type_tag_override`, `selected_type_tag`, or the selected
+  candidate type tag without introducing renderer evaluation.
 
 Does not:
 
