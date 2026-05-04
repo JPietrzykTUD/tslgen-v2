@@ -329,6 +329,9 @@ Current roadmap note:
   evidence.
 - Milestone 42 implements that first slice in lowering. Backend translation and
   rendering still do not evaluate generation-time helpers.
+- Milestone 43 is the next planned lowering/model slice. It will resolve only
+  selected base scalar type generation queries to typed semantic type values
+  before backend modifier translation is allowed to consume them.
 
 Does not:
 

@@ -600,6 +600,16 @@ Recommended first parity checks:
   unsupported condition diagnostics, backend-translation rejection of unresolved
   helper IR, existing direct-add and intrinsic-compose lowering regressions,
   C++ backend regressions, and validation profile coverage.
+- Milestone 43: base scalar type generation query tests for
+  `type<generation>(base::in)`,
+  `type<generation>(base::signed_of(type<generation>(base::in)))`, and
+  `type<generation>(base::unsigned_of(type<generation>(base::in)))`. Tests
+  should cover `si32` and `ui32`, selected-candidate type-tag defaults,
+  explicit generation-context type overrides, missing and unknown type-tag
+  diagnostics, unsupported float/pointer/generic companion conversions,
+  unsupported helper-shape diagnostics, deterministic lowered semantic type
+  values, backend-translation rejection of unresolved raw generation type text,
+  and unchanged Milestone 42 branch-pruning regressions.
 
 Deferred parity checks:
 

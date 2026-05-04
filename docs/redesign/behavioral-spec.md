@@ -314,6 +314,13 @@ primitive-attribute branch slice:
 `if<generation>(value<generation>(primitive::attribute(aligned)))`.
 Milestone 42 implements that selected slice for `aligned` and prunes only the
 selected branch before nested unresolved-helper diagnostics run.
+Milestone 43 is the next planned semantic-lowering slice. It selects only
+generation-time base scalar type queries:
+`type<generation>(base::in)`,
+`type<generation>(base::signed_of(type<generation>(base::in)))`, and
+`type<generation>(base::unsigned_of(type<generation>(base::in)))`. These
+queries resolve to typed generation type references before backend translation;
+they do not render backend type spellings or evaluate suffix modifiers.
 
 The current mini-lowering strategy does not parse a general expression
 language, does not evaluate arbitrary generation-time branches or
@@ -329,7 +336,11 @@ non-parameter intrinsic-compose arguments return
 `TSL-LOWER-TSIL-UNKNOWN-PARAMETER`. The selected generation-time branch slice
 adds `TSL-LOWER-GEN-*` diagnostics for malformed branches, unsupported
 conditions, missing/unknown/non-boolean `aligned` attributes, missing
-generation context, and unresolved helpers in the selected branch. The
+generation context, and unresolved helpers in the selected branch. The planned
+base-type query slice adds typed semantic type values for selected exact
+`base::in`, `base::signed_of(base::in)`, and `base::unsigned_of(base::in)`
+forms only; all other generation-time type/value queries remain unsupported
+until selected by a later milestone. The
 `typed_opaque` strategy remains available for callers that need the Milestone 18
 unsupported behavior. Any C++ body-rendering milestone must consume this lowered
 model rather than raw TSIL text.

@@ -2828,6 +2828,177 @@ Implementation note:
 Milestone 42 implements this selected branch-pruning scope and does not add
 backend rendering behavior.
 
+## Milestone 43: Base Type Generation Query Slice
+
+Goal:
+
+Implement the next narrow generation-time query family after Milestone 42:
+selected base scalar type references and their signed/unsigned integer
+companions. This gives later backend modifier translation typed semantic input
+for forms such as integer intrinsic suffix selection without letting backend
+translation parse raw `type<generation>(...)` text.
+
+Scope:
+
+- Recognize only the selected base-type generation query forms listed below.
+- Resolve the selected candidate type tag to an immutable typed semantic type
+  value during semantic lowering.
+- Resolve signed and unsigned integer companions for the selected base type.
+- Preserve deterministic provenance tying the resolved type value to the
+  candidate id and implementation source location.
+- Keep the resolved generation type as semantic IR for later backend
+  translation; do not render a backend type spelling in this milestone.
+- Continue rejecting unresolved generation-time helpers before backend
+  translation.
+
+Out of scope:
+
+- Full TSIL grammar or expression parsing.
+- Backend suffix, prefix, infix, post, or `immediate(n)` modifier evaluation.
+- Backend rendering changes or new C++/Rust output.
+- Vector/register type queries such as `vector::register`,
+  `vector::as_extension(...)`, `vector::transform_extension(...)`, and
+  `vector::mask_underlying_t`.
+- Generation-time value queries such as `vector::length`,
+  `vector::alignment`, and `generic::length(...)`.
+- Signedness branch pruning for
+  `if<generation>(value<generation>(type::is_signed(...)))`.
+- Primitive calls, loops, variables, aliases, casts, arrays, compile-time
+  switches, and direct intrinsic parsing.
+
+Exact supported helper/query forms:
+
+```text
+type<generation>(base::in)
+type<generation>(base::signed_of(type<generation>(base::in)))
+type<generation>(base::unsigned_of(type<generation>(base::in)))
+```
+
+No shorthand, alias, vector, generic, nested non-base, or backend-scoped type
+form is accepted by this milestone.
+
+Required `GenerationContext` fields:
+
+- selected primitive name
+- emitted primitive name
+- selected candidate id
+- normalized signature
+- parameter list
+- selected type tag, defaulting to the selected candidate type tag when no
+  explicit generation-context override is supplied
+- implementation source location
+
+Typed semantic value model:
+
+- `GenerationTypeRef(kind="base.in", type_tag=<selected type tag>)`
+- `GenerationTypeRef(kind="base.signed_of", type_tag=<signed companion>,
+  source_type_tag=<selected type tag>)`
+- `GenerationTypeRef(kind="base.unsigned_of", type_tag=<unsigned companion>,
+  source_type_tag=<selected type tag>)`
+
+The selected companion conversion supports only integer tags with explicit
+signed/unsigned prefixes such as `si32` and `ui32`. Signedness-preserving input
+returns the corresponding same-width tag. Floating, pointer, mask, wildcard,
+generic, and unknown tags are diagnostics until a later milestone selects their
+semantics.
+
+Diagnostics:
+
+- Missing selected type context.
+- Unknown or malformed selected type tag.
+- Unsupported generation type query shape.
+- Unsupported companion conversion for non-integer, generic, wildcard, pointer,
+  or mask-like tags.
+- Unresolved nested generation helper reaching backend translation.
+
+Expected outputs:
+
+- A documented and tested base-generation-type value model.
+- Deterministic lowering output that can be consumed by a later backend
+  modifier translation milestone.
+- No generated output changes.
+
+Parity criterion:
+
+Integer native `binary/add` variants and shift/conversion parity paths require
+generation-time base type references before backend suffix or signedness
+translation can be implemented. This milestone resolves those generation-time
+type references before backend translation, preserving the Milestone 40 rule
+that translation receives typed semantic values only.
+
+Evidence paths:
+
+- `tsldata/primitives/arithmetic/fundamental.tsl:47-90` for integer
+  `intrin_compose<add>` suffix inputs using
+  `type<generation>(base::signed_of(type<generation>(base::in)))`.
+- `tsldata/primitives/bitwise/shifts.tsl:38-40`,
+  `shifts.tsl:63-82`, `shifts.tsl:625-648`, and
+  `shifts.tsl:842-886` for signed/unsigned companion and signedness-branch
+  pressure.
+- `tsldata/primitives/conversion/repr_change.tsl:1210-1225` for conversion
+  paths that combine signedness predicates and companion type references.
+- `tsldata/detail/lang/translate_cpp.tsl:5-8` for backend type-trait and
+  signed/unsigned translation metadata that later consumes resolved type
+  values.
+- `frozen/tsl-gen/tsl_gen/tsil_engine/expansion_support.py:319-354`,
+  `expansion_support.py:375-412`, and
+  `expansion_support.py:4578-4596` as behavior evidence for canonical base
+  type, signed/unsigned companion, and signedness classification forms.
+- `frozen/tsl-gen/tsl_gen/resolver/render_support.py:565-699` as evidence
+  that suffix modifiers consume type-derived values, not as architecture to
+  port.
+
+Tests required:
+
+- Unit tests for each exact supported query form over selected `si32` and
+  `ui32` candidates.
+- Tests proving selected candidate type tag is the default generation context
+  source unless an explicit generation context supplies a type tag.
+- Diagnostic tests for missing type context, unknown tags, malformed helper
+  text, unsupported helper families, and unsupported companion conversions.
+- Determinism tests for repeated lowering of the same query input.
+- Regression tests proving backend translation still rejects unresolved raw
+  `type<generation>(...)` text and accepts only typed semantic type values
+  when a later translation slice consumes them.
+- Existing Milestone 42 branch-pruning tests must continue to pass unchanged.
+
+Documentation updates:
+
+- Update `generation-time-semantic-lowering.md` with the selected M43 helper
+  family, decision table, context fields, typed semantic result, and deferrals.
+- Update `behavioral-spec.md`, `pipeline-design.md`, `testing-strategy.md`,
+  `open-questions.md`, and the existing ADR-032 notes in
+  `design-decisions.md` to record that base generation type queries are the
+  next implementation target.
+- No new ADR is required unless implementation changes the M40/M41 boundary or
+  changes signed/unsigned companion semantics.
+
+Validation commands:
+
+- `git diff --check` for this documentation-only planning milestone.
+- The future implementation milestone should additionally run the focused
+  lowering unit tests and C++ translation-boundary regressions it changes.
+
+Review risks:
+
+- Accidentally implementing backend suffix translation in the same slice.
+- Rendering C++ or Rust type spellings from generation lowering.
+- Treating wildcard type-group selectors such as `?i?` as concrete selected
+  type tags.
+- Extending companion conversion to floats, masks, pointer-like tags, or
+  generic aliases without evidence-backed semantics.
+- Letting backend translation evaluate raw nested `type<generation>(...)`
+  expressions.
+
+Dependencies:
+
+- Milestones 18, 30, 40, 41, and 42.
+
+Implementation note:
+
+The next executor milestone is Milestone 43. It is a lowering/model slice only
+and must not combine query support with C++ output changes.
+
 ## Deferred Parity Targets After Boundary Correction
 
 The following previously planned targets remain valid but are deliberately
@@ -2847,10 +3018,10 @@ it replaces or adapts a deferred target.
 
 ## Recommended Next Milestone
 
-If Milestone 39 is already implemented or accepted, do not revert it by default.
-Proceed to Milestone 40 and correct the boundary while preserving the selected
-native C++ golden output.
+Milestones 1 through 42 are accepted. Do not expand the selected native C++
+output or backend translation behavior next.
 
-Do not expand the current Milestone 39 renderer-local intrinsic mapping to any
-new primitive, intrinsic, type, extension, backend, or helper form. The next
-executor milestone is Milestone 40: Backend Translation Boundary Correction.
+Proceed to Milestone 43: Base Type Generation Query Slice. It resolves only the
+selected `base::in`, `base::signed_of(base::in)`, and
+`base::unsigned_of(base::in)` generation-time type queries in semantic lowering
+so later backend modifier work can consume typed semantic values.

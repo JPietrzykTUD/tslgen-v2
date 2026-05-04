@@ -1142,8 +1142,9 @@ parity level.
 
 ## OQ-032: Which TSIL Helper Boundary Should Follow The Mini Return Lowering?
 
-Status: Answered for the Milestone 41 contract and Milestone 42 aligned-branch
-slice; broader helper families remain open until selected by future milestones.
+Status: Answered for the Milestone 41 contract, Milestone 42 aligned-branch
+slice, and Milestone 43 base type query selection; broader helper families
+remain open until selected by future milestones.
 
 Why it matters:
 
@@ -1181,11 +1182,22 @@ Diagnostics for unresolved nested generation-time helpers apply only to the
 selected branch after pruning; helper forms in the unselected branch do not
 poison a valid branch choice.
 
+Milestone 43 is selected as the next helper/query family:
+`type<generation>(base::in)`,
+`type<generation>(base::signed_of(type<generation>(base::in)))`, and
+`type<generation>(base::unsigned_of(type<generation>(base::in)))`. This
+advances native integer `binary/add` suffix parity and later shift/conversion
+work by creating typed generation type references before backend modifier
+translation. It does not implement suffix/prefix/post/infix/immediate modifier
+evaluation, backend type spelling, vector/register queries, or signedness
+branch pruning.
+
 Remaining deferred TSIL work includes full modifier expression evaluation,
 integer suffix inference, primitive calls, loops, variables, generation-time
 branches beyond the selected aligned primitive-attribute condition, type/value
-metadata, nested expressions, direct `intrin<...>` calls, helper families such
-as `io`, `mem`, `seq`, `pack`, and `algo`, and Rust TSIL lowering.
+metadata beyond the selected base type query family, nested expressions, direct
+`intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
+`algo`, and Rust TSIL lowering.
 
 Required evidence:
 
@@ -1338,8 +1350,8 @@ Current roadmap direction:
 
 ## OQ-036: Where Do Generation-Time Helpers Resolve Relative To Backend Translation?
 
-Status: Answered for Milestone 41 and implemented for the first Milestone 42
-helper slice.
+Status: Answered for Milestone 41, implemented for the first Milestone 42
+helper slice, and narrowed for the Milestone 43 base type query slice.
 
 Why it matters:
 
@@ -1362,9 +1374,15 @@ Milestone 41 selects and Milestone 42 implements the first slice: evaluate
 primitive attributes and prune the selected branch with deterministic
 provenance. The selected branch is checked for unresolved nested
 generation-time helpers; the unselected branch is discarded without recursive
-helper diagnostics. Type signedness queries, vector type/value queries, backend
-suffix/prefix modifiers, `immediate(n)`, primitive calls, loops, and direct
-intrinsics remain deferred.
+helper diagnostics. Milestone 43 is selected next to resolve only exact base
+scalar type queries:
+`type<generation>(base::in)`,
+`type<generation>(base::signed_of(type<generation>(base::in)))`, and
+`type<generation>(base::unsigned_of(type<generation>(base::in)))`. These will
+resolve to typed semantic type values before backend translation. Type
+signedness branch pruning, vector type/value queries, backend suffix/prefix
+modifiers, `immediate(n)`, primitive calls, loops, and direct intrinsics remain
+deferred.
 
 Required evidence:
 
@@ -1381,11 +1399,12 @@ Implementation blocked:
 
 No for M40 because the selected `avx2/f32` default intrinsic-composition case
 can remain generation-free and must reject unresolved generation-time inputs.
-No for the Milestone 41 documentation contract or the Milestone 42
-primitive-attribute branch pruning slice. Yes for modifier support, suffix
-inference, branch-dependent output beyond selected branch pruning, and broad
-translation-map evaluation until a later numbered slice implements the selected
-generation-time semantic lowering behavior.
+No for the Milestone 41 documentation contract, the Milestone 42
+primitive-attribute branch pruning slice, or the planned Milestone 43 base type
+query slice. Yes for modifier support, suffix inference, branch-dependent
+output beyond selected branch pruning, vector/generic metadata queries, and
+broad translation-map evaluation until later numbered slices implement the
+selected generation-time semantic lowering behavior.
 
 ## Follow-ups from Milestone 2 review
 
@@ -1604,3 +1623,9 @@ generation-time semantic lowering behavior.
 - Document explicitly that selected candidate variant attributes are the default primitive-attribute generation context unless `GenerationContext.primitive_attributes` is supplied.
 - Add a translation-boundary regression where a raw generation branch is first pruned by lowering and then accepted by C++ translation because branch provenance is present.
 - Consider hardening empty selected-branch handling so it returns a structured diagnostic rather than relying only on the `PrunedGenerationBranch` invariant.
+
+## Follow-ups from M43 planning review
+
+- Fix the stale `repr_change.tsl:121-128` citation for the `base::in` inventory row.
+- Replace or label shorthand `base::signed_of(base::in)` / `base::unsigned_of(base::in)` prose where exact supported forms matter.
+- Define the concrete `GenerationContext` type-tag override field and missing-context diagnostic trigger.
