@@ -1205,8 +1205,8 @@ constrained to the M43 `base.signed_of` result for selected `si32` and `ui32`
 native integer add candidates; both resolve to typed suffix value `epi32`.
 Milestone 46 provides selected C++ scalar backend type spelling over typed M43
 inputs and language maps: `si32 -> int32_t` and `ui32 -> uint32_t`. Milestone
-47 is the first allowed native integer add output slice, and only after M45 and
-M46 translated values exist.
+47 renders the selected native integer add output slice after consuming the M45
+and M46 translated values.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1236,14 +1236,9 @@ grounds. No for the Milestone 41 documentation contract, the Milestone 42
 aligned-branch pruning slice, the accepted/implemented Milestone 43 base type
 query slice, or the Milestone 44 documentation/planning milestone.
 
-Yes for native integer rendering expansion beyond the selected M39/M40 output
-until Milestone 47 consumes the selected M45 suffix value and M46 C++ scalar
-backend type spelling values as explicit renderer inputs. Milestone 45 now
-provides the selected intrinsic suffix translation over typed M43
-`GenerationTypeRef` inputs, and Milestone 46 now provides selected
-`si32 -> int32_t` and `ui32 -> uint32_t` type spellings, but neither milestone
-changes rendered output. Milestone 47 is the first allowed native integer output
-expansion, and only after the M45/M46 translated values exist.
+No for the selected `avx2` `si32`/`ui32` native integer `binary/add` output:
+Milestone 47 renders that slice from explicit M45 suffix and M46 type-spelling
+values. Yes for native integer rendering expansion beyond that selected slice.
 Backend translation must not parse raw
 `type<generation>(...)` text, and renderers must not evaluate generation-time
 helpers, suffixes, or type spelling locally. Yes for broader TSIL constructs,
@@ -1382,8 +1377,8 @@ Current roadmap direction:
 - Milestone 44 selects intrinsic suffix as the first backend modifier family.
 - Milestone 45 provides only suffix translation over typed M43 inputs.
 - Milestone 46 provides selected C++ scalar type spelling over typed M43 inputs.
-- Milestone 47 may expand native integer add output only after M45 and M46
-  translation results exist.
+- Milestone 47 expands only the selected native integer add output after M45 and
+  M46 translation results exist.
 - Renderer-local intrinsic lookup tables are rejected as an implementation
   strategy for future native expansion.
 

@@ -3446,7 +3446,7 @@ Dependencies on prior milestones:
 
 Goal:
 
-Render the selected native integer C++ `add` output slice using typed suffix and
+Implemented: render the selected native integer C++ `add` output slice using typed suffix and
 type-spelling translation outputs.
 
 Scope:
@@ -3489,11 +3489,13 @@ Required inputs:
 Expected outputs:
 
 - A redesign-owned golden fixture for the selected native integer C++ add
-  specializations.
+  specializations:
+  `tslgen/tests/fixtures/golden/parity/cpp/add_native_avx2_i32_u32_excerpt.hpp`
+  with provenance in the adjacent `.provenance.md` file.
 - Artifact metadata and provenance showing the output consumed translated
   suffix/type values.
 - Structured diagnostics when the translated suffix, translated type spelling,
-  or backend-call IR is missing.
+  or native integer translation plan is missing, unsupported, or ambiguous.
 
 Validation criteria:
 
@@ -3508,7 +3510,8 @@ Tests required:
 
 - Golden output fixture and provenance test.
 - Unit tests for renderer consumption of translated suffix/type values.
-- Diagnostic tests for missing translated suffix/type/call IR.
+- Diagnostic tests for missing, unsupported, and ambiguous translated suffix
+  and type-spelling values, plus missing translated native integer plan.
 - Determinism test for repeated artifact rendering.
 - Regression tests keeping M39/M40 `avx2/f32` behavior intact.
 
@@ -3548,12 +3551,12 @@ it replaces or adapts a deferred target.
 
 ## Recommended Next Milestone
 
-Milestones 1 through 45 are accepted. Milestone 46 is the current executor
-milestone and implements selected C++ scalar type spelling over typed M43
-`GenerationTypeRef` inputs without renderer or output expansion.
+Milestones 1 through 46 are accepted. Milestone 47 is the current executor
+milestone and implements only the selected native integer C++ `binary/add`
+output from explicit M45 suffix and M46 type-spelling values.
 
-After focused Milestone 46 review, the recommended executor milestone is
-Milestone 47: Native Integer Add Parity Slice. Milestone 47 remains constrained
-to consuming the explicit M45 suffix modifier and M46 backend type-spelling
-values as renderer inputs; it must not introduce renderer-local suffix or type
-lookup.
+After focused Milestone 47 review, the recommended next target is a new
+numbered milestone for signedness/type predicate branch pruning, constrained to
+typed M43 `GenerationTypeRef(kind="base.in")` inputs. Broader native rendering,
+prefix/post/infix/immediate modifiers, vector/register metadata, Rust output,
+generated tests, and compiler execution remain deferred.

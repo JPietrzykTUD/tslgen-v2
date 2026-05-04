@@ -1264,7 +1264,11 @@ Consequences:
 - Milestone 46 produces typed C++ scalar type-spelling values such as
   `BackendTypeSpelling(backend_id="cpp", type_tag="si32",
   spelling="int32_t")` and `BackendTypeSpelling(backend_id="cpp",
-  type_tag="ui32", spelling="uint32_t")`; native integer output remains M47.
+  type_tag="ui32", spelling="uint32_t")`.
+- Milestone 47 consumes the M45/M46 values to render only the selected
+  `add_binary<simd<int32_t, avx2>>` and
+  `add_binary<simd<uint32_t, avx2>>` output returning
+  `_mm256_add_epi32(left, right)`.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

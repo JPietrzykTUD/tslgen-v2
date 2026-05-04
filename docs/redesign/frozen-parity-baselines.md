@@ -210,9 +210,11 @@ parity, or report/documentation parity.
     suffix requests.
   - M46 translates selected C++ type spellings from typed M43
     `GenerationTypeRef` values.
+- M47 output:
   - M47 renders the selected integer output only after those translated values
-    exist.
-- Proposed future fixture path:
+    exist and uses `_mm256_add_epi32(left, right)` for both selected signed and
+    unsigned 32-bit AVX2 add specializations.
+- Fixture path:
   `tslgen/tests/fixtures/golden/parity/cpp/add_native_avx2_i32_u32_excerpt.hpp`.
 - Parity level: semantic equivalence against legacy evidence plus an exact
   redesign-owned golden file for the selected excerpt. Whole-header

@@ -363,9 +363,9 @@ The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
 suffix request over typed M43 `GenerationTypeRef` inputs. Milestone 46
 translates selected C++ scalar type spellings over typed M43 inputs, and
-Milestone 47 is the first allowed native integer C++ `add` output expansion.
-The renderer in Milestone 47 must consume translated suffix and type-spelling
-values; it must not evaluate `type<generation>(...)`,
+Milestone 47 implements the first allowed native integer C++ `add` output
+expansion. The renderer in Milestone 47 consumes translated suffix and
+type-spelling values; it must not evaluate `type<generation>(...)`,
 `value<generation>(...)`, or backend modifier/type-map semantics locally.
 
 M45 implements
@@ -375,8 +375,12 @@ M45 implements
 `epi32`. M46 implements selected C++ scalar backend type spelling over typed
 M43 `GenerationTypeRef` inputs for `base.in`, `base.signed_of`, and
 `base.unsigned_of`: `si32` resolves to `int32_t` and `ui32` resolves to
-`uint32_t` as typed `BackendTypeSpelling` values. C++/Rust output expansion and
-prefix, post, infix, and immediate modifier evaluation remain deferred.
+`uint32_t` as typed `BackendTypeSpelling` values. M47 consumes those values to
+render only `add_binary<simd<int32_t, avx2>>` and
+`add_binary<simd<uint32_t, avx2>>` bodies returning
+`_mm256_add_epi32(left, right)`. C++/Rust output expansion beyond this selected
+slice and prefix, post, infix, and immediate modifier evaluation remain
+deferred.
 
 ## Rendering Behavior
 

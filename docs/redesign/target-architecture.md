@@ -342,8 +342,8 @@ Current roadmap note:
   helper text.
 - Milestone 46 keeps C++ scalar type spelling inside backend translation and
   consumes typed M43 `GenerationTypeRef` values rather than raw helper text.
-- Milestone 47 is the next allowed native integer C++ output expansion and must
-  consume translated suffix/type-spelling values as renderer inputs.
+- Milestone 47 implements the selected native integer C++ output expansion and
+  consumes translated suffix/type-spelling values as renderer inputs.
 
 Does not:
 

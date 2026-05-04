@@ -635,8 +635,10 @@ Recommended first parity checks:
   lookup.
 - Milestone 47: native integer C++ `binary/add` golden fixture and provenance
   tests for selected `avx2` `si32` and `ui32` output, plus diagnostics for
-  missing translated suffix/type/call IR, determinism, M39/M40 `avx2/f32`
-  regressions, and no compiler execution.
+  missing, unsupported, and ambiguous translated suffix/type values, missing
+  translated native integer plan, determinism, M39/M40 `avx2/f32` regressions,
+  and no compiler execution. The selected fixture is
+  `tslgen/tests/fixtures/golden/parity/cpp/add_native_avx2_i32_u32_excerpt.hpp`.
 
 Deferred parity checks:
 

@@ -252,10 +252,12 @@ translates selected C++ scalar type spelling requests over typed M43
 `base.unsigned_of`, producing typed backend type-spelling values equivalent to
 `BackendTypeSpelling(backend_id="cpp", type_tag="si32",
 spelling="int32_t")` and `BackendTypeSpelling(backend_id="cpp",
-type_tag="ui32", spelling="uint32_t")`. Native integer rendering remains
-deferred to M47. Prefix, infix, post, immediate, and broad translation-map or
-language-map evaluation remain deferred. Renderers remain non-evaluating text
-emitters and must not parse raw generation-time helper text.
+type_tag="ui32", spelling="uint32_t")`. M47 now renders only the selected C++
+native integer `binary/add` `avx2` `si32`/`ui32` output after consuming those
+M45/M46 values as explicit renderer inputs. Prefix, infix, post, immediate, and
+broad translation-map or language-map evaluation remain deferred. Renderers
+remain non-evaluating text emitters and must not parse raw generation-time
+helper text.
 
 ## Post-M43 Phase Direction
 
@@ -280,7 +282,8 @@ The accepted post-M43 phase is numbered in the roadmap:
   `si32` and `uint32_t` for `ui32`.
 - Milestone 47 renders selected native integer C++ `binary/add` output only
   after the suffix and type-spelling translation outputs are explicit renderer
-  inputs.
+  inputs; the implemented fixture is
+  `tslgen/tests/fixtures/golden/parity/cpp/add_native_avx2_i32_u32_excerpt.hpp`.
 
 This phase does not make backend translation parse raw generation-time helper
 text and does not move suffix or type-spelling evaluation into renderers.

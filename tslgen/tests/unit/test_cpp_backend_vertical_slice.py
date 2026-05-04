@@ -40,7 +40,9 @@ from tslgen.domain.values import CatalogValue
 from tslgen.io.artifacts import ArtifactDescriptor, artifact_plan_from_descriptors
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
 from tslgen.lowering import (
+    BackendIntrinsicModifier,
     BackendIntrinsicModifierRequest,
+    BackendTypeSpelling,
     BackendTypeSpellingRequest,
     GenerationTypeRef,
     LoweredImplementation,
@@ -163,6 +165,22 @@ ADD_NATIVE_ONLY_PARITY_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
 ADD_NATIVE_INTEGER_SUFFIX_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
   tests []
   impls:
+    avx2:
+      ?i32:
+        requires [avx, avx2]
+        implementation:
+          tsil "emit_return(intrin_compose<add, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(left, right));"
+"""
+
+
+ADD_NATIVE_INTEGER_PARITY_PRIMITIVE = """prim<v:=(v,v)> add(left, right):
+  tests []
+  impls:
+    scalar:
+      ?i32:
+        requires []
+        implementation:
+          tsil "emit_return(left + right);"
     avx2:
       ?i32:
         requires [avx, avx2]
@@ -353,6 +371,40 @@ def cpp_language_entries(
     return cpp_backend_metadata_boundary(text=text).metadata.language_maps_by_backend[
         "cpp"
     ].entries_by_type
+
+
+def native_integer_suffix_modifier(
+    *,
+    value: str = "epi32",
+    backend_id: str = "cpp",
+    extension: str = "avx2",
+    intrinsic: str = "add",
+    source_ref_kind: Any = "base.signed_of",
+) -> BackendIntrinsicModifier:
+    return BackendIntrinsicModifier(
+        kind="suffix",
+        backend_id=backend_id,
+        extension=extension,
+        intrinsic=intrinsic,
+        value=value,
+        source_type_tag="si32",
+        source_ref_kind=source_ref_kind,
+    )
+
+
+def native_integer_type_spelling(
+    *,
+    type_tag: str = "si32",
+    spelling: str = "int32_t",
+    backend_id: str = "cpp",
+    source_ref_kind: Any = "base.in",
+) -> BackendTypeSpelling:
+    return BackendTypeSpelling(
+        backend_id=backend_id,
+        type_tag=type_tag,
+        spelling=spelling,
+        source_ref_kind=source_ref_kind,
+    )
 
 
 def cpp_extensions() -> tuple[Extension, ...]:
@@ -650,6 +702,63 @@ def manual_intrinsic_add_with_generation_type_refs_lowering_plan_for(
     )
 
 
+def manual_integer_add_parity_lowering_plan_for(
+    selection: CandidateSelection,
+) -> LoweringPlan:
+    prepared = prepare_lowering_inputs(selection, LoweringRequest(backend_id="cpp"))
+    if not prepared.is_ok:
+        raise AssertionError(prepared.diagnostics)
+    implementations: list[LoweredImplementation] = []
+    for candidate in selection.candidates:
+        if candidate.target_extension == "scalar":
+            implementations.append(
+                LoweredImplementation(
+                    candidate_id=candidate.candidate_id,
+                    status="lowered",
+                    statements=(
+                        TsilReturnStatement(
+                            TsilBinaryExpression(
+                                operator="+",
+                                left=TsilParameterReference("left"),
+                                right=TsilParameterReference("right"),
+                            )
+                        ),
+                    ),
+                )
+            )
+            continue
+        implementations.append(
+            LoweredImplementation(
+                candidate_id=candidate.candidate_id,
+                status="lowered",
+                statements=(
+                    TsilReturnStatement(
+                        TsilIntrinsicComposeExpression(
+                            intrinsic="add",
+                            arguments=(
+                                TsilParameterReference("left"),
+                                TsilParameterReference("right"),
+                            ),
+                        )
+                    ),
+                ),
+                generation_type_refs=(
+                    GenerationTypeRef(kind="base.in", type_tag=candidate.type_tag),
+                    GenerationTypeRef(
+                        kind="base.signed_of",
+                        type_tag="si32",
+                        source_type_tag=candidate.type_tag,
+                    ),
+                ),
+            )
+        )
+    return LoweringPlan(
+        request=prepared.unwrap().request,
+        input_set=prepared.unwrap(),
+        implementations=tuple(implementations),
+    )
+
+
 def manual_binary_add_lowering_plan_for(selection: CandidateSelection) -> LoweringPlan:
     prepared = prepare_lowering_inputs(selection, LoweringRequest(backend_id="cpp"))
     if not prepared.is_ok:
@@ -752,7 +861,6 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
         self.assertNotIn("translate_cpp_backend_type_spelling", renderer_source)
         self.assertNotIn("translate_cpp_backend_type_spelling", scalar_binary_source)
         self.assertNotIn("BackendTypeSpelling", renderer_source)
-        self.assertNotIn("BackendTypeSpelling", scalar_binary_source)
 
     def test_translates_selected_add_native_avx2_f32_backend_call(self) -> None:
         selection = candidate_selection_for(
@@ -1769,6 +1877,80 @@ translation cpp:
             artifact.content,
         )
 
+    def test_renders_selected_add_native_avx2_integer_parity_slice(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_INTEGER_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("scalar", "avx2"),
+            cpu_flags=("avx", "avx2"),
+        )
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+
+        result = CppBackend().render(
+            artifact_plan,
+            selection,
+            manual_integer_add_parity_lowering_plan_for(selection),
+            cpp_backend_metadata_boundary(),
+            cpp_extensions(),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = assert_artifact_matches_golden(
+            self,
+            result.unwrap(),
+            golden_artifact(
+                "tsl/tsl_native.hpp",
+                "golden",
+                "parity",
+                "cpp",
+                "add_native_avx2_i32_u32_excerpt.hpp",
+            ),
+        )
+        self.assertEqual(artifact.metadata["cpp_layout"], "native_header")
+        self.assertEqual(artifact.metadata["scalar_specialization_count"], 2)
+        self.assertEqual(artifact.metadata["native_specialization_count"], 2)
+        self.assertIn("struct add_binary<simd<int32_t, avx2>>", artifact.content)
+        self.assertIn("struct add_binary<simd<uint32_t, avx2>>", artifact.content)
+        self.assertEqual(artifact.content.count("_mm256_add_epi32(left, right)"), 2)
+        self.assertNotIn("type<generation>", artifact.content)
+        self.assertNotIn("value<backend>", artifact.content)
+
+    def test_add_native_integer_parity_digest_is_deterministic(self) -> None:
+        selection = candidate_selection_for(
+            catalog_with_primitive(ADD_NATIVE_INTEGER_PARITY_PRIMITIVE),
+            primitive_name="add",
+            extension_names=("scalar", "avx2"),
+            cpu_flags=("avx", "avx2"),
+        )
+        artifact_plan = artifact_plan_for_selection(
+            selection,
+            logical_path="tsl/tsl_native.hpp",
+        )
+        lowering_plan = manual_integer_add_parity_lowering_plan_for(selection)
+
+        first = CppBackend().render(
+            artifact_plan,
+            selection,
+            lowering_plan,
+            cpp_backend_metadata_boundary(),
+            cpp_extensions(),
+        )
+        second = CppBackend().render(
+            artifact_plan,
+            selection,
+            lowering_plan,
+            cpp_backend_metadata_boundary(),
+            cpp_extensions(),
+        )
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+        assert_artifact_digest_map_stable(self, first.unwrap(), second.unwrap())
+
     def test_add_native_parity_uses_lowered_model_not_raw_tsil_text(self) -> None:
         selection = candidate_selection_for(
             catalog_with_primitive(RAW_SUBTRACT_NATIVE_ADD_PRIMITIVE),
@@ -1974,6 +2156,141 @@ translation cpp:
             code="TSL-CPP-RENDER-TRANSLATED-CALL-MISSING",
             severity="error",
         )
+
+    def test_renderer_requires_translated_native_integer_values(self) -> None:
+        selection = selection_for_type(
+            candidate_selection_for(
+                catalog_with_primitive(ADD_NATIVE_INTEGER_SUFFIX_PRIMITIVE),
+                primitive_name="add",
+                extension_names=("avx2",),
+                cpu_flags=("avx", "avx2"),
+            ),
+            "si32",
+        )
+        lowering_plan = manual_intrinsic_add_with_generation_type_refs_lowering_plan_for(
+            selection,
+            (
+                GenerationTypeRef(kind="base.in", type_tag="si32"),
+                GenerationTypeRef(
+                    kind="base.signed_of",
+                    type_tag="si32",
+                    source_type_tag="si32",
+                ),
+            ),
+        )
+
+        cases: tuple[tuple[CppNativeTranslationPlan | None, str, str], ...] = (
+            (
+                None,
+                "TSL-CPP-RENDER-NATIVE-TRANSLATION-MISSING",
+                "translated native plan",
+            ),
+            (
+                CppNativeTranslationPlan(
+                    type_spellings=(native_integer_type_spelling(),),
+                ),
+                "TSL-CPP-RENDER-NATIVE-SUFFIX-MISSING",
+                "Milestone 45 suffix",
+            ),
+            (
+                CppNativeTranslationPlan(
+                    modifiers=(native_integer_suffix_modifier(),),
+                ),
+                "TSL-CPP-RENDER-NATIVE-TYPE-SPELLING-MISSING",
+                "Milestone 46 base type spelling",
+            ),
+            (
+                CppNativeTranslationPlan(
+                    modifiers=(native_integer_suffix_modifier(value="epi64"),),
+                    type_spellings=(native_integer_type_spelling(),),
+                ),
+                "TSL-CPP-RENDER-NATIVE-SUFFIX-UNSUPPORTED",
+                "epi32",
+            ),
+            (
+                CppNativeTranslationPlan(
+                    modifiers=(native_integer_suffix_modifier(backend_id="rust"),),
+                    type_spellings=(native_integer_type_spelling(),),
+                ),
+                "TSL-CPP-RENDER-NATIVE-SUFFIX-UNSUPPORTED",
+                "backend_id='rust'",
+            ),
+            (
+                CppNativeTranslationPlan(
+                    modifiers=(native_integer_suffix_modifier(extension="sse"),),
+                    type_spellings=(native_integer_type_spelling(),),
+                ),
+                "TSL-CPP-RENDER-NATIVE-SUFFIX-UNSUPPORTED",
+                "extension='sse'",
+            ),
+            (
+                CppNativeTranslationPlan(
+                    modifiers=(native_integer_suffix_modifier(intrinsic="sub"),),
+                    type_spellings=(native_integer_type_spelling(),),
+                ),
+                "TSL-CPP-RENDER-NATIVE-SUFFIX-UNSUPPORTED",
+                "intrinsic='sub'",
+            ),
+            (
+                CppNativeTranslationPlan(
+                    modifiers=(native_integer_suffix_modifier(),),
+                    type_spellings=(
+                        native_integer_type_spelling(spelling="std::int32_t"),
+                    ),
+                ),
+                "TSL-CPP-RENDER-NATIVE-TYPE-SPELLING-UNSUPPORTED",
+                "int32_t",
+            ),
+            (
+                CppNativeTranslationPlan(
+                    modifiers=(native_integer_suffix_modifier(),),
+                    type_spellings=(
+                        native_integer_type_spelling(backend_id="rust"),
+                    ),
+                ),
+                "TSL-CPP-RENDER-NATIVE-TYPE-SPELLING-UNSUPPORTED",
+                "backend_id='rust'",
+            ),
+            (
+                CppNativeTranslationPlan(
+                    modifiers=(
+                        native_integer_suffix_modifier(),
+                        native_integer_suffix_modifier(value="epi64"),
+                    ),
+                    type_spellings=(native_integer_type_spelling(),),
+                ),
+                "TSL-CPP-RENDER-NATIVE-SUFFIX-AMBIGUOUS",
+                "multiple translated suffix",
+            ),
+            (
+                CppNativeTranslationPlan(
+                    modifiers=(native_integer_suffix_modifier(),),
+                    type_spellings=(
+                        native_integer_type_spelling(),
+                        native_integer_type_spelling(spelling="selected_i32"),
+                    ),
+                ),
+                "TSL-CPP-RENDER-NATIVE-TYPE-SPELLING-AMBIGUOUS",
+                "multiple translated type",
+            ),
+        )
+
+        for native_translation_plan, code, message_part in cases:
+            with self.subTest(code=code):
+                result = cpp_scalar_binary.plan_cpp_scalar_binary_slice(
+                    selection.candidates,
+                    lowering_plan,
+                    native_translation_plan,
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
+                self.assertIn(message_part, result.diagnostics[0].message)
 
     def test_diagnoses_unsupported_native_without_lowering_plan(self) -> None:
         selection = candidate_selection_for(
@@ -2269,6 +2586,20 @@ translation cpp:
             "cpp",
             "add_native_avx2_f32_excerpt.provenance.md",
         ).read_text(encoding="utf-8")
+        native_integer_provenance_path = fixture_path(
+            "golden",
+            "parity",
+            "cpp",
+            "add_native_avx2_i32_u32_excerpt.provenance.md",
+        )
+        self.assertTrue(native_integer_provenance_path.is_file())
+        self.assertEqual(
+            "add_native_avx2_i32_u32_excerpt.provenance.md",
+            native_integer_provenance_path.name,
+        )
+        native_integer_provenance = native_integer_provenance_path.read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn(
             "`tslgen/tests/fixtures/golden/parity/cpp/native_layout_excerpt.hpp`",
@@ -2298,6 +2629,35 @@ translation cpp:
         )
         self.assertIn("`tsldata/detail/lang/types/types_cpp.tsl:10`", native_provenance)
         self.assertIn("Runtime dependency on `frozen/`: none", native_provenance)
+        self.assertIn(
+            "`tslgen/tests/fixtures/golden/parity/cpp/"
+            "add_native_avx2_i32_u32_excerpt.hpp`",
+            native_integer_provenance,
+        )
+        self.assertIn(
+            "`frozen/out/tsl/tsl_native.hpp:24460-24477`",
+            native_integer_provenance,
+        )
+        self.assertIn(
+            "`frozen/out/tsl/tsl_native.hpp:24712-24729`",
+            native_integer_provenance,
+        )
+        self.assertIn(
+            "`tsldata/primitives/arithmetic/fundamental.tsl:65-75`",
+            native_integer_provenance,
+        )
+        self.assertIn(
+            "`tsldata/detail/lang/types/types_cpp.tsl:4`",
+            native_integer_provenance,
+        )
+        self.assertIn(
+            "`tsldata/detail/lang/translate_cpp.tsl:4-8`",
+            native_integer_provenance,
+        )
+        self.assertIn(
+            "Runtime dependency on `frozen/`: none",
+            native_integer_provenance,
+        )
 
     def test_diagnoses_non_cpp_artifact_plan(self) -> None:
         selection = candidate_selection_for(catalog_with_primitive(SIMPLE_PRIMITIVE))
