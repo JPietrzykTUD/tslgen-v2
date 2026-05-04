@@ -628,10 +628,11 @@ Recommended first parity checks:
   modifier request, raw generation-helper rejection, determinism, and renderer
   non-evaluation.
 - Milestone 46: backend C++ scalar type spelling tests over typed M43
-  `GenerationTypeRef` inputs, including `si32 -> int32_t`,
-  `ui32 -> uint32_t`, language-map key normalization or equivalent typed
-  metadata, missing-map diagnostics, raw-helper rejection, determinism, and no
-  renderer-local type lookup.
+  `GenerationTypeRef` inputs, including `base.in`, `base.signed_of`, and
+  `base.unsigned_of` refs for `si32 -> int32_t` and `ui32 -> uint32_t`,
+  language-map key normalization or equivalent typed metadata, missing-map
+  diagnostics, raw-helper rejection, determinism, and no renderer-local type
+  lookup.
 - Milestone 47: native integer C++ `binary/add` golden fixture and provenance
   tests for selected `avx2` `si32` and `ui32` output, plus diagnostics for
   missing translated suffix/type/call IR, determinism, M39/M40 `avx2/f32`

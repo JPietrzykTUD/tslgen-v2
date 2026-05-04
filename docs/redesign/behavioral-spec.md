@@ -372,8 +372,11 @@ M45 implements
 `suffix=value<backend>(intrin::suffix(<GenerationTypeRef>))`, where the
 `GenerationTypeRef` is the M43 `base.signed_of` result. For selected `si32` and
 `ui32` native integer add candidates, the produced typed suffix value is
-`epi32`. Backend type spelling, C++/Rust output expansion, and prefix, post,
-infix, and immediate modifier evaluation remain deferred.
+`epi32`. M46 implements selected C++ scalar backend type spelling over typed
+M43 `GenerationTypeRef` inputs for `base.in`, `base.signed_of`, and
+`base.unsigned_of`: `si32` resolves to `int32_t` and `ui32` resolves to
+`uint32_t` as typed `BackendTypeSpelling` values. C++/Rust output expansion and
+prefix, post, infix, and immediate modifier evaluation remain deferred.
 
 ## Rendering Behavior
 

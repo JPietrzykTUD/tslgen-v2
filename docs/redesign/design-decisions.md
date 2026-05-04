@@ -1250,8 +1250,9 @@ Consequences:
   `type<generation>(base::signed_of(type<generation>(base::in)))`, and
   `type<generation>(base::unsigned_of(type<generation>(base::in)))`. Prose
   shorthand such as `base::signed_of(base::in)` is not accepted TSIL syntax.
-  The slice produces typed semantic type references only; backend suffix
-  translation and rendered type spellings remain separate future work.
+  The slice produces typed semantic type references only; M45 and M46 consume
+  those refs in backend translation for selected suffix and type-spelling
+  slices, while native integer rendering remains separate M47 work.
 - The post-M43 phase is numbered to keep translation and rendering separate:
   Milestone 44 selects the modifier boundary, Milestone 45 implements only
   intrinsic suffix translation over typed M43 values, Milestone 46 implements
@@ -1259,8 +1260,11 @@ Consequences:
   native integer add only from those translated outputs.
 - Milestone 45 produces typed suffix modifier values such as
   `BackendIntrinsicModifier(kind="suffix", backend_id="cpp",
-  extension="avx2", intrinsic="add", value="epi32")` and deliberately leaves
-  backend type spelling and native integer output to M46/M47.
+  extension="avx2", intrinsic="add", value="epi32")`.
+- Milestone 46 produces typed C++ scalar type-spelling values such as
+  `BackendTypeSpelling(backend_id="cpp", type_tag="si32",
+  spelling="int32_t")` and `BackendTypeSpelling(backend_id="cpp",
+  type_tag="ui32", spelling="uint32_t")`; native integer output remains M47.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

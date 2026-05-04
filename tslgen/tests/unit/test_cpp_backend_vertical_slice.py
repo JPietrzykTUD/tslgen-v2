@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path, PurePosixPath
-from typing import cast
+from typing import Any, cast
 import unittest
 
 from _golden import (
@@ -15,6 +15,7 @@ from _helpers import assert_diagnostic, fixture_path
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
 from tslgen.analysis.selection import SelectionRequest, plan_selection
 from tslgen.backends.cpp.backend import CppBackend
+from tslgen.backends.cpp import renderer as cpp_renderer
 from tslgen.backends.cpp import scalar_binary as cpp_scalar_binary
 from tslgen.backends.cpp.naming import (
     cpp_detail_functor_name,
@@ -30,6 +31,8 @@ from tslgen.domain.backends import (
     BackendManifest,
     BackendManifestSet,
     BackendMetadataBoundary,
+    LanguageTypeEntry,
+    TranslationSnippet,
 )
 from tslgen.domain.catalog import Catalog, build_catalog
 from tslgen.domain.extensions import Extension
@@ -38,6 +41,7 @@ from tslgen.io.artifacts import ArtifactDescriptor, artifact_plan_from_descripto
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
 from tslgen.lowering import (
     BackendIntrinsicModifierRequest,
+    BackendTypeSpellingRequest,
     GenerationTypeRef,
     LoweredImplementation,
     LoweringPlan,
@@ -51,6 +55,7 @@ from tslgen.lowering import (
 )
 from tslgen.backends.cpp.translation import (
     CppNativeTranslationPlan,
+    translate_cpp_backend_type_spelling,
     translate_cpp_intrinsic_suffix_modifier,
     translate_cpp_native_intrinsic_calls,
 )
@@ -342,6 +347,14 @@ def cpp_translation_snippets(
     return metadata.unwrap().translation_maps_by_backend["cpp"].snippets_by_name
 
 
+def cpp_language_entries(
+    text: str | None = None,
+) -> FrozenMap[str, LanguageTypeEntry]:
+    return cpp_backend_metadata_boundary(text=text).metadata.language_maps_by_backend[
+        "cpp"
+    ].entries_by_type
+
+
 def cpp_extensions() -> tuple[Extension, ...]:
     return catalog_from_paths("tsldata/extensions/extension.tsl").extensions
 
@@ -600,6 +613,16 @@ def manual_intrinsic_add_with_generation_type_ref_lowering_plan_for(
     selection: CandidateSelection,
     type_ref: GenerationTypeRef,
 ) -> LoweringPlan:
+    return manual_intrinsic_add_with_generation_type_refs_lowering_plan_for(
+        selection,
+        (type_ref,),
+    )
+
+
+def manual_intrinsic_add_with_generation_type_refs_lowering_plan_for(
+    selection: CandidateSelection,
+    type_refs: tuple[GenerationTypeRef, ...],
+) -> LoweringPlan:
     prepared = prepare_lowering_inputs(selection, LoweringRequest(backend_id="cpp"))
     if not prepared.is_ok:
         raise AssertionError(prepared.diagnostics)
@@ -621,7 +644,7 @@ def manual_intrinsic_add_with_generation_type_ref_lowering_plan_for(
                         )
                     ),
                 ),
-                generation_type_refs=(type_ref,),
+                generation_type_refs=type_refs,
             ),
         ),
     )
@@ -719,10 +742,17 @@ class CppNamingTests(unittest.TestCase):
 
 class CppBackendVerticalSliceTests(unittest.TestCase):
     def test_native_intrinsic_mapping_is_no_longer_renderer_owned(self) -> None:
-        renderer_source = Path(cpp_scalar_binary.__file__).read_text(encoding="utf-8")
+        renderer_source = Path(cpp_renderer.__file__).read_text(encoding="utf-8")
+        scalar_binary_source = Path(cpp_scalar_binary.__file__).read_text(
+            encoding="utf-8"
+        )
 
         self.assertFalse(hasattr(cpp_scalar_binary, "_CPP_NATIVE_INTRINSIC_BY_KEY"))
-        self.assertNotIn("_mm256_add_ps", renderer_source)
+        self.assertNotIn("_mm256_add_ps", scalar_binary_source)
+        self.assertNotIn("translate_cpp_backend_type_spelling", renderer_source)
+        self.assertNotIn("translate_cpp_backend_type_spelling", scalar_binary_source)
+        self.assertNotIn("BackendTypeSpelling", renderer_source)
+        self.assertNotIn("BackendTypeSpelling", scalar_binary_source)
 
     def test_translates_selected_add_native_avx2_f32_backend_call(self) -> None:
         selection = candidate_selection_for(
@@ -925,7 +955,14 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
                 ),
             )
 
-        cases = (
+        cases: tuple[
+            tuple[
+                BackendIntrinsicModifierRequest,
+                FrozenMap[str, TranslationSnippet] | None,
+                str,
+            ],
+            ...,
+        ] = (
             (
                 request(kind="prefix"),
                 snippets,
@@ -993,6 +1030,307 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
                 result = translate_cpp_intrinsic_suffix_modifier(
                     modifier_request,
                     translation_snippets=translation_snippets,
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
+
+    def test_type_spelling_translates_selected_cpp_scalar_refs(self) -> None:
+        entries = cpp_language_entries()
+        cases: tuple[
+            tuple[GenerationTypeRef, str, str, str | None],
+            ...,
+        ] = (
+            (
+                GenerationTypeRef(kind="base.in", type_tag="si32"),
+                "int32_t",
+                "base.in",
+                None,
+            ),
+            (
+                GenerationTypeRef(kind="base.in", type_tag="ui32"),
+                "uint32_t",
+                "base.in",
+                None,
+            ),
+            (
+                GenerationTypeRef(
+                    kind="base.signed_of",
+                    type_tag="si32",
+                    source_type_tag="si32",
+                ),
+                "int32_t",
+                "base.signed_of",
+                "si32",
+            ),
+            (
+                GenerationTypeRef(
+                    kind="base.signed_of",
+                    type_tag="si32",
+                    source_type_tag="ui32",
+                ),
+                "int32_t",
+                "base.signed_of",
+                "ui32",
+            ),
+            (
+                GenerationTypeRef(
+                    kind="base.unsigned_of",
+                    type_tag="ui32",
+                    source_type_tag="si32",
+                ),
+                "uint32_t",
+                "base.unsigned_of",
+                "si32",
+            ),
+            (
+                GenerationTypeRef(
+                    kind="base.unsigned_of",
+                    type_tag="ui32",
+                    source_type_tag="ui32",
+                ),
+                "uint32_t",
+                "base.unsigned_of",
+                "ui32",
+            ),
+        )
+
+        for type_ref, spelling, source_ref_kind, source_type_tag in cases:
+            with self.subTest(type_ref=type_ref):
+                result = translate_cpp_backend_type_spelling(
+                    BackendTypeSpellingRequest(
+                        backend_id="cpp",
+                        type_ref=type_ref,
+                    ),
+                    language_map_entries=entries,
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                translated = result.unwrap()
+                self.assertEqual(translated.backend_id, "cpp")
+                self.assertEqual(translated.type_tag, type_ref.type_tag)
+                self.assertEqual(translated.spelling, spelling)
+                self.assertEqual(translated.source_ref_kind, source_ref_kind)
+                self.assertEqual(translated.source_type_tag, source_type_tag)
+
+    def test_type_spelling_uses_selected_language_map_entries(self) -> None:
+        result = translate_cpp_backend_type_spelling(
+            BackendTypeSpellingRequest(
+                backend_id="cpp",
+                type_ref=GenerationTypeRef(kind="base.in", type_tag="si32"),
+            ),
+            language_map_entries=cpp_language_entries(
+                """language cpp:
+  s32 {type "selected_i32"}
+  u32 {type "selected_u32"}
+"""
+            ),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(result.unwrap().spelling, "selected_i32")
+
+    def test_native_integer_translation_collects_type_spelling_inputs(self) -> None:
+        selection = selection_for_type(
+            candidate_selection_for(
+                catalog_with_primitive(ADD_NATIVE_INTEGER_SUFFIX_PRIMITIVE),
+                primitive_name="add",
+                extension_names=("avx2",),
+                cpu_flags=("avx", "avx2"),
+            ),
+            "si32",
+        )
+
+        result = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            manual_intrinsic_add_with_generation_type_refs_lowering_plan_for(
+                selection,
+                (
+                    GenerationTypeRef(kind="base.in", type_tag="si32"),
+                    GenerationTypeRef(
+                        kind="base.signed_of",
+                        type_tag="si32",
+                        source_type_tag="si32",
+                    ),
+                ),
+            ),
+            metadata_boundary=cpp_backend_metadata_boundary(),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        plan = result.unwrap()
+        self.assertEqual(plan.calls, ())
+        self.assertEqual(plan.modifiers[0].value, "epi32")
+        self.assertEqual(
+            {
+                (
+                    spelling.source_ref_kind,
+                    spelling.type_tag,
+                    spelling.spelling,
+                    spelling.source_type_tag,
+                )
+                for spelling in plan.type_spellings
+            },
+            {
+                ("base.in", "si32", "int32_t", None),
+                ("base.signed_of", "si32", "int32_t", "si32"),
+            },
+        )
+
+    def test_native_integer_translation_requires_suffix_source_ref(self) -> None:
+        selection = selection_for_type(
+            candidate_selection_for(
+                catalog_with_primitive(ADD_NATIVE_INTEGER_SUFFIX_PRIMITIVE),
+                primitive_name="add",
+                extension_names=("avx2",),
+                cpu_flags=("avx", "avx2"),
+            ),
+            "si32",
+        )
+
+        result = translate_cpp_native_intrinsic_calls(
+            selection.candidates,
+            manual_intrinsic_add_with_generation_type_refs_lowering_plan_for(
+                selection,
+                (GenerationTypeRef(kind="base.in", type_tag="si32"),),
+            ),
+            metadata_boundary=cpp_backend_metadata_boundary(),
+            extensions=cpp_extensions(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-CPP-TRANSLATE-INTRINSIC-SUFFIX-MISSING",
+            severity="error",
+        )
+        self.assertIn("Milestone 45 suffix modifier source", result.diagnostics[0].message)
+        self.assertIn("base.signed_of", result.diagnostics[0].message)
+        self.assertIn("base.in", result.diagnostics[0].message)
+
+    def test_type_spelling_translation_is_deterministic(self) -> None:
+        request = BackendTypeSpellingRequest(
+            backend_id="cpp",
+            type_ref=GenerationTypeRef(kind="base.in", type_tag="ui32"),
+        )
+        entries = cpp_language_entries()
+
+        first = translate_cpp_backend_type_spelling(
+            request,
+            language_map_entries=entries,
+        )
+        second = translate_cpp_backend_type_spelling(
+            request,
+            language_map_entries=entries,
+        )
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+
+    def test_type_spelling_request_diagnostics(self) -> None:
+        entries = cpp_language_entries()
+        valid_type_ref = GenerationTypeRef(kind="base.in", type_tag="si32")
+
+        def request(**overrides: object) -> BackendTypeSpellingRequest:
+            return BackendTypeSpellingRequest(
+                backend_id=cast(str, overrides.get("backend_id", "cpp")),
+                type_ref=cast(
+                    GenerationTypeRef | None,
+                    overrides.get("type_ref", valid_type_ref),
+                ),
+                raw_helper_text=cast(
+                    str | None,
+                    overrides.get("raw_helper_text", None),
+                ),
+            )
+
+        cases: tuple[
+            tuple[
+                BackendTypeSpellingRequest,
+                FrozenMap[str, LanguageTypeEntry] | None,
+                str,
+            ],
+            ...,
+        ] = (
+            (
+                request(
+                    raw_helper_text=(
+                        "type<backend>(type<generation>(base::in))"
+                    )
+                ),
+                entries,
+                "TSL-CPP-TRANSLATE-GENERATION-UNRESOLVED",
+            ),
+            (
+                request(type_ref=None),
+                entries,
+                "TSL-CPP-TRANSLATE-TYPE-SPELLING-TYPE-MISSING",
+            ),
+            (
+                request(backend_id="rust"),
+                entries,
+                "TSL-CPP-TRANSLATE-UNSUPPORTED-BACKEND",
+            ),
+            (
+                request(type_ref=GenerationTypeRef(kind="base.in", type_tag="f32")),
+                entries,
+                "TSL-CPP-TRANSLATE-TYPE-SPELLING-TYPE-UNSUPPORTED",
+            ),
+            (
+                request(type_ref=GenerationTypeRef(kind="base.in", type_tag="ptr")),
+                entries,
+                "TSL-CPP-TRANSLATE-TYPE-SPELLING-TYPE-UNSUPPORTED",
+            ),
+            (
+                request(type_ref=GenerationTypeRef(kind="base.in", type_tag="?i32")),
+                entries,
+                "TSL-CPP-TRANSLATE-TYPE-SPELLING-TYPE-UNSUPPORTED",
+            ),
+            (
+                request(type_ref=GenerationTypeRef(kind="base.in", type_tag="mask")),
+                entries,
+                "TSL-CPP-TRANSLATE-TYPE-SPELLING-TYPE-UNSUPPORTED",
+            ),
+            (
+                request(
+                    type_ref=GenerationTypeRef(
+                        kind=cast(Any, "vector.register"),
+                        type_tag="si32",
+                    )
+                ),
+                entries,
+                "TSL-CPP-TRANSLATE-TYPE-SPELLING-SOURCE-REF-UNSUPPORTED",
+            ),
+            (
+                request(),
+                None,
+                "TSL-CPP-TRANSLATE-MISSING-LANGUAGE-MAP",
+            ),
+            (
+                request(),
+                FrozenMap.empty(),
+                "TSL-CPP-TRANSLATE-TYPE-SPELLING-METADATA-MISSING",
+            ),
+            (
+                request(backend_id=""),
+                entries,
+                "TSL-CPP-TRANSLATE-TYPE-SPELLING-MALFORMED",
+            ),
+        )
+
+        for type_spelling_request, language_map_entries, code in cases:
+            with self.subTest(code=code):
+                result = translate_cpp_backend_type_spelling(
+                    type_spelling_request,
+                    language_map_entries=language_map_entries,
                 )
 
                 self.assertFalse(result.is_ok)

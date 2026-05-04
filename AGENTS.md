@@ -74,6 +74,16 @@ When implementation begins:
 - Keep deterministic ordering for maps, plans, render jobs, artifacts, and diagnostics.
 - Keep path resolution in loader/configuration layers, not in model or renderer code.
 
+## Semantic Rule Boundary
+
+Semantic lowering and backend translation must express behavior as typed rules or typed evaluator functions over explicit IR/domain values.
+
+Do not use ad-hoc dictionary mappings as the semantic model past parser/catalog boundaries. Dictionary-like metadata may be loaded at I/O or catalog boundaries, but downstream stages must consume typed objects, typed rule records, typed translation requests, or typed translation results.
+
+A lookup table is acceptable only when its entries are typed rule values with documented supported cases, unsupported cases, diagnostics, and tests. It must not become an unreviewed shortcut from raw keys such as `(intrinsic, extension, type)` directly to emitted backend text.
+
+Do not implement semantic behavior through raw text rewriting. String templates or rendered text may appear only after lowering/translation has produced typed values for the selected slice.
+
 ## Testing Expectations
 
 Every implementation milestone needs tests proportionate to its risk:

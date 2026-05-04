@@ -63,6 +63,45 @@ class BackendIntrinsicModifier:
 
 
 @dataclass(frozen=True, slots=True)
+class BackendTypeSpellingRequest:
+    backend_id: str
+    type_ref: GenerationTypeRef | None = None
+    source_location: SourceLocation | None = None
+    raw_helper_text: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BackendTypeSpelling:
+    backend_id: str
+    type_tag: str
+    spelling: str
+    source_ref_kind: GenerationTypeRefKind
+    source_type_tag: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.backend_id:
+            raise ValueError("backend type spelling backend id must be non-empty")
+        if not self.type_tag:
+            raise ValueError("backend type spelling type tag must be non-empty")
+        if not self.spelling:
+            raise ValueError("backend type spelling spelling must be non-empty")
+        if self.source_type_tag == "":
+            raise ValueError(
+                "backend type spelling source type tag must be non-empty"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            self.backend_id,
+            self.type_tag,
+            self.spelling,
+            self.source_ref_kind,
+            self.source_type_tag or "",
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class TranslatedIntrinsicCall:
     candidate_id: str
     backend_id: str

@@ -15,6 +15,8 @@ from tslgen.domain.extensions import Extension
 from tslgen.lowering import (
     BackendIntrinsicModifier,
     BackendIntrinsicModifierRequest,
+    BackendTypeSpelling,
+    BackendTypeSpellingRequest,
     GenerationTypeRef,
     LoweredImplementation,
     LoweringPlan,
@@ -36,6 +38,16 @@ _SELECTED_SUFFIX_SOURCE_REF_KIND = "base.signed_of"
 _SELECTED_INTEGER_SUFFIX_TYPE_TAG = "si32"
 _SELECTED_INTEGER_INTRINSIC_SUFFIX = "epi32"
 _SELECTED_MODIFIER_METADATA_SNIPPET = "type_signed_of"
+_SELECTED_TYPE_SPELLING_SOURCE_REF_KINDS = (
+    "base.in",
+    "base.signed_of",
+    "base.unsigned_of",
+)
+_SELECTED_TYPE_SPELLING_TAGS = ("si32", "ui32")
+_CPP_LANGUAGE_TYPE_KEY_BY_TAG = {
+    "si32": "s32",
+    "ui32": "u32",
+}
 _RAW_GENERATION_HELPER_MARKERS = (
     "if<generation>",
     "type<generation>",
@@ -47,6 +59,7 @@ _RAW_GENERATION_HELPER_MARKERS = (
 class CppNativeTranslationPlan:
     calls: tuple[TranslatedIntrinsicCall, ...] = ()
     modifiers: tuple[BackendIntrinsicModifier, ...] = ()
+    type_spellings: tuple[BackendTypeSpelling, ...] = ()
     calls_by_candidate_id: FrozenMap[str, TranslatedIntrinsicCall] = field(
         init=False
     )
@@ -54,8 +67,12 @@ class CppNativeTranslationPlan:
     def __post_init__(self) -> None:
         calls = tuple(sorted(self.calls, key=lambda call: call.key))
         modifiers = tuple(sorted(self.modifiers, key=lambda modifier: modifier.key))
+        type_spellings = tuple(
+            sorted(self.type_spellings, key=lambda spelling: spelling.key)
+        )
         object.__setattr__(self, "calls", calls)
         object.__setattr__(self, "modifiers", modifiers)
+        object.__setattr__(self, "type_spellings", type_spellings)
         object.__setattr__(
             self,
             "calls_by_candidate_id",
@@ -67,6 +84,7 @@ class CppNativeTranslationPlan:
         return (
             tuple(call.key for call in self.calls),
             tuple(modifier.key for modifier in self.modifiers),
+            tuple(spelling.key for spelling in self.type_spellings),
         )
 
 
@@ -74,6 +92,7 @@ class CppNativeTranslationPlan:
 class _CandidateTranslation:
     call: TranslatedIntrinsicCall | None = None
     modifier: BackendIntrinsicModifier | None = None
+    type_spellings: tuple[BackendTypeSpelling, ...] = ()
 
 
 def translate_cpp_intrinsic_suffix_modifier(
@@ -135,6 +154,47 @@ def translate_cpp_intrinsic_suffix_modifier(
     )
 
 
+def translate_cpp_backend_type_spelling(
+    request: BackendTypeSpellingRequest,
+    *,
+    language_map_entries: FrozenMap[str, LanguageTypeEntry] | None,
+) -> Result[BackendTypeSpelling]:
+    if _contains_raw_generation_helper(request.raw_helper_text):
+        return Result.failure((_unresolved_type_spelling_generation_diagnostic(request),))
+
+    if not request.backend_id:
+        return Result.failure((_malformed_type_spelling_request_diagnostic(request),))
+    if request.backend_id != CPP_TRANSLATION_BACKEND_ID:
+        return Result.failure((_unsupported_type_spelling_backend_diagnostic(request),))
+    if language_map_entries is None:
+        return Result.failure((_missing_type_spelling_language_map(request),))
+
+    type_ref = request.type_ref
+    if type_ref is None:
+        return Result.failure((_missing_type_spelling_type_ref_diagnostic(request),))
+    if type_ref.kind not in _SELECTED_TYPE_SPELLING_SOURCE_REF_KINDS:
+        return Result.failure((_unsupported_type_spelling_source_ref_diagnostic(request),))
+    if not _is_selected_type_spelling_ref(type_ref):
+        return Result.failure((_unsupported_type_spelling_type_tag_diagnostic(request),))
+
+    language_key = _CPP_LANGUAGE_TYPE_KEY_BY_TAG[type_ref.type_tag]
+    type_entry = language_map_entries.get(language_key)
+    if type_entry is None:
+        return Result.failure(
+            (_missing_type_spelling_metadata_diagnostic(request, language_key),)
+        )
+
+    return Result.ok(
+        BackendTypeSpelling(
+            backend_id=request.backend_id,
+            type_tag=type_ref.type_tag,
+            spelling=type_entry.target_type,
+            source_ref_kind=type_ref.kind,
+            source_type_tag=type_ref.source_type_tag,
+        )
+    )
+
+
 def translate_cpp_native_intrinsic_calls(
     candidates: tuple[ImplementationCandidate, ...],
     lowering_plan: LoweringPlan,
@@ -170,6 +230,7 @@ def translate_cpp_native_intrinsic_calls(
     diagnostics: list[Diagnostic] = []
     calls: list[TranslatedIntrinsicCall] = []
     modifiers: list[BackendIntrinsicModifier] = []
+    type_spellings: list[BackendTypeSpelling] = []
     for candidate in native_candidates:
         translated = _translate_candidate(
             candidate,
@@ -185,12 +246,17 @@ def translate_cpp_native_intrinsic_calls(
                 calls.append(candidate_translation.call)
             if candidate_translation.modifier is not None:
                 modifiers.append(candidate_translation.modifier)
+            type_spellings.extend(candidate_translation.type_spellings)
 
     ordered = sort_diagnostics(diagnostics)
     if has_errors(ordered):
         return Result.failure(ordered)
     return Result.ok(
-        CppNativeTranslationPlan(tuple(calls), tuple(modifiers)),
+        CppNativeTranslationPlan(
+            tuple(calls),
+            tuple(modifiers),
+            tuple(type_spellings),
+        ),
         diagnostics=ordered,
     )
 
@@ -334,9 +400,21 @@ def _translate_candidate(
         )
 
     if candidate.type_tag in _SELECTED_INTEGER_SUFFIX_TYPE_TAGS:
-        type_ref = _single_generation_type_ref(candidate, lowered)
+        type_spellings = _translate_generation_type_spellings(
+            candidate,
+            lowered,
+            language_map_entries=language_map_entries,
+        )
+        if not type_spellings.is_ok:
+            return Result.failure(type_spellings.diagnostics)
+
+        type_ref = _suffix_generation_type_ref(candidate, lowered)
         if not type_ref.is_ok:
             return Result.failure(type_ref.diagnostics)
+        if type_ref.unwrap() is None and lowered.generation_type_refs:
+            return Result.failure(
+                (_missing_integer_suffix_source_diagnostic(candidate, lowered),)
+            )
         modifier = translate_cpp_intrinsic_suffix_modifier(
             BackendIntrinsicModifierRequest(
                 kind="suffix",
@@ -350,7 +428,12 @@ def _translate_candidate(
         )
         if not modifier.is_ok:
             return Result.failure(modifier.diagnostics)
-        return Result.ok(_CandidateTranslation(modifier=modifier.unwrap()))
+        return Result.ok(
+            _CandidateTranslation(
+                modifier=modifier.unwrap(),
+                type_spellings=type_spellings.unwrap(),
+            )
+        )
 
     type_entry = language_map_entries.get(candidate.type_tag)
     backend_type = type_entry.target_type if type_entry is not None else None
@@ -377,11 +460,45 @@ def _translate_candidate(
     )
 
 
-def _single_generation_type_ref(
+def _translate_generation_type_spellings(
+    candidate: ImplementationCandidate,
+    lowered: LoweredImplementation,
+    *,
+    language_map_entries: FrozenMap[str, LanguageTypeEntry],
+) -> Result[tuple[BackendTypeSpelling, ...]]:
+    diagnostics: list[Diagnostic] = []
+    spellings: list[BackendTypeSpelling] = []
+    for type_ref in lowered.generation_type_refs:
+        spelling = translate_cpp_backend_type_spelling(
+            BackendTypeSpellingRequest(
+                backend_id=CPP_TRANSLATION_BACKEND_ID,
+                type_ref=type_ref,
+                source_location=(
+                    candidate.variant.source.declaration.source_span.location
+                ),
+            ),
+            language_map_entries=language_map_entries,
+        )
+        diagnostics.extend(spelling.diagnostics)
+        if spelling.is_ok:
+            spellings.append(spelling.unwrap())
+
+    ordered = sort_diagnostics(diagnostics)
+    if has_errors(ordered):
+        return Result.failure(ordered)
+    return Result.ok(tuple(spellings), diagnostics=ordered)
+
+
+def _suffix_generation_type_ref(
     candidate: ImplementationCandidate,
     lowered: LoweredImplementation,
 ) -> Result[GenerationTypeRef | None]:
-    if len(lowered.generation_type_refs) > 1:
+    suffix_refs = tuple(
+        type_ref
+        for type_ref in lowered.generation_type_refs
+        if type_ref.kind == _SELECTED_SUFFIX_SOURCE_REF_KIND
+    )
+    if len(suffix_refs) > 1:
         return Result.failure(
             (
                 _malformed_modifier_request_diagnostic(
@@ -398,9 +515,25 @@ def _single_generation_type_ref(
                 ),
             )
         )
-    if not lowered.generation_type_refs:
+    if not suffix_refs:
         return Result.ok(None)
-    return Result.ok(lowered.generation_type_refs[0])
+    return Result.ok(suffix_refs[0])
+
+
+def _missing_integer_suffix_source_diagnostic(
+    candidate: ImplementationCandidate,
+    lowered: LoweredImplementation,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-INTRINSIC-SUFFIX-MISSING",
+        "C++ native integer translation requires the Milestone 45 suffix "
+        "modifier source "
+        "GenerationTypeRef(kind='base.signed_of', type_tag='si32', "
+        "source_type_tag='si32' | 'ui32') before the integrated native "
+        "integer plan can succeed; got generation type ref(s): "
+        f"{', '.join(_type_ref_text(type_ref) for type_ref in lowered.generation_type_refs)}",
+        location=candidate.variant.source.declaration.source_span.location,
+    )
 
 
 def _intrinsic_compose_expression(
@@ -466,6 +599,22 @@ def _contains_raw_generation_helper(text: str | None) -> bool:
     )
 
 
+def _is_selected_type_spelling_ref(type_ref: GenerationTypeRef) -> bool:
+    if type_ref.kind == "base.in":
+        return type_ref.type_tag in _SELECTED_TYPE_SPELLING_TAGS
+    if type_ref.kind == "base.signed_of":
+        return (
+            type_ref.type_tag == _SELECTED_INTEGER_SUFFIX_TYPE_TAG
+            and type_ref.source_type_tag in _SELECTED_TYPE_SPELLING_TAGS
+        )
+    if type_ref.kind == "base.unsigned_of":
+        return (
+            type_ref.type_tag == "ui32"
+            and type_ref.source_type_tag in _SELECTED_TYPE_SPELLING_TAGS
+        )
+    return False
+
+
 def _unresolved_modifier_generation_diagnostic(
     request: BackendIntrinsicModifierRequest,
 ) -> Diagnostic:
@@ -475,6 +624,125 @@ def _unresolved_modifier_generation_diagnostic(
         "helpers to be resolved to typed GenerationTypeRef values before "
         f"backend translation; got raw helper text {request.raw_helper_text!r}",
         location=request.source_location,
+    )
+
+
+def _unresolved_type_spelling_generation_diagnostic(
+    request: BackendTypeSpellingRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-GENERATION-UNRESOLVED",
+        "C++ backend type-spelling translation requires generation-time "
+        "helpers to be resolved to typed GenerationTypeRef values before "
+        f"backend translation; got raw helper text {request.raw_helper_text!r}",
+        location=request.source_location,
+    )
+
+
+def _malformed_type_spelling_request_diagnostic(
+    request: BackendTypeSpellingRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-TYPE-SPELLING-MALFORMED",
+        "C++ backend type-spelling translation received a malformed request; "
+        f"backend {request.backend_id!r}, type ref {_type_ref_text(request.type_ref)}",
+        location=request.source_location,
+    )
+
+
+def _unsupported_type_spelling_backend_diagnostic(
+    request: BackendTypeSpellingRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-UNSUPPORTED-BACKEND",
+        "C++ backend type-spelling translation supports only backend "
+        f"{CPP_TRANSLATION_BACKEND_ID!r}; got backend {request.backend_id!r}",
+        location=request.source_location,
+    )
+
+
+def _missing_type_spelling_language_map(
+    request: BackendTypeSpellingRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-MISSING-LANGUAGE-MAP",
+        "C++ backend type-spelling translation requires language type map "
+        f"{request.backend_id!r}",
+        location=request.source_location,
+    )
+
+
+def _missing_type_spelling_type_ref_diagnostic(
+    request: BackendTypeSpellingRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-TYPE-SPELLING-TYPE-MISSING",
+        "C++ backend type-spelling translation requires a typed "
+        f"GenerationTypeRef input; got none for backend {request.backend_id!r}",
+        location=request.source_location,
+    )
+
+
+def _unsupported_type_spelling_source_ref_diagnostic(
+    request: BackendTypeSpellingRequest,
+) -> Diagnostic:
+    type_ref = request.type_ref
+    source_ref_kind = type_ref.kind if type_ref is not None else None
+    source_type_tag = type_ref.source_type_tag if type_ref is not None else None
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-TYPE-SPELLING-SOURCE-REF-UNSUPPORTED",
+        "C++ backend type-spelling translation supports only selected M43 "
+        "base.in, base.signed_of, and base.unsigned_of GenerationTypeRef "
+        f"kinds; got source ref kind {source_ref_kind!r}, source type tag "
+        f"{source_type_tag!r}, backend {request.backend_id!r}",
+        location=request.source_location,
+    )
+
+
+def _unsupported_type_spelling_type_tag_diagnostic(
+    request: BackendTypeSpellingRequest,
+) -> Diagnostic:
+    type_ref = request.type_ref
+    type_tag = type_ref.type_tag if type_ref is not None else None
+    source_ref_kind = type_ref.kind if type_ref is not None else None
+    source_type_tag = type_ref.source_type_tag if type_ref is not None else None
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-TYPE-SPELLING-TYPE-UNSUPPORTED",
+        "C++ backend type-spelling translation supports only selected scalar "
+        "integer tags 'si32' and 'ui32' for M43 base.in, base.signed_of, and "
+        "base.unsigned_of inputs; got type tag "
+        f"{type_tag!r}, source ref kind {source_ref_kind!r}, source type tag "
+        f"{source_type_tag!r}, backend {request.backend_id!r}",
+        location=request.source_location,
+    )
+
+
+def _missing_type_spelling_metadata_diagnostic(
+    request: BackendTypeSpellingRequest,
+    language_key: str,
+) -> Diagnostic:
+    type_ref = request.type_ref
+    type_tag = type_ref.type_tag if type_ref is not None else None
+    source_ref_kind = type_ref.kind if type_ref is not None else None
+    source_type_tag = type_ref.source_type_tag if type_ref is not None else None
+    return Diagnostic.error(
+        "TSL-CPP-TRANSLATE-TYPE-SPELLING-METADATA-MISSING",
+        "C++ backend type-spelling translation requires selected language-map "
+        f"entry {language_key!r} for backend {request.backend_id!r}; got type "
+        f"tag {type_tag!r}, source ref kind {source_ref_kind!r}, source type "
+        f"tag {source_type_tag!r}",
+        location=request.source_location,
+    )
+
+
+def _type_ref_text(type_ref: GenerationTypeRef | None) -> str:
+    if type_ref is None:
+        return "None"
+    return (
+        "GenerationTypeRef("
+        f"kind={type_ref.kind!r}, "
+        f"type_tag={type_ref.type_tag!r}, "
+        f"source_type_tag={type_ref.source_type_tag!r})"
     )
 
 

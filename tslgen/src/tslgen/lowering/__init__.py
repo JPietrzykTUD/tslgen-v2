@@ -22,6 +22,8 @@ from tslgen.lowering.boundary import (
 from tslgen.lowering.translations import (
     BackendIntrinsicModifier,
     BackendIntrinsicModifierRequest,
+    BackendTypeSpelling,
+    BackendTypeSpellingRequest,
     TranslatedIntrinsicCall,
 )
 
@@ -42,6 +44,8 @@ __all__ = [
     "TsilReturnStatement",
     "BackendIntrinsicModifier",
     "BackendIntrinsicModifierRequest",
+    "BackendTypeSpelling",
+    "BackendTypeSpellingRequest",
     "TranslatedIntrinsicCall",
     "lower_candidates",
     "prepare_lowering_inputs",

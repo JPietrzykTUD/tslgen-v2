@@ -282,6 +282,26 @@ The executor must not:
 - change public architecture without documenting the decision
 - use old module boundaries as the new package structure
 
+## Semantic Rule And Translation Boundary
+
+When a milestone implements lowering or backend translation semantics, the executor must model the selected behavior as typed rules or typed evaluator
+functions.
+
+A selected rule must define:
+
+- typed input values
+- typed output values
+- supported cases
+- unsupported cases
+- diagnostics
+- deterministic ordering, if collections are involved
+- tests proving raw helper text and unsupported forms do not bypass the rule
+
+Dictionary-like source metadata may be preserved at the I/O/catalog boundary, but it must be promoted into typed boundary data before semantic lowering or backend translation consumes it. A raw dictionary lookup such as `(intrinsic, extension, type) -> emitted text` is acceptable only as a temporary selected-slice fixture if explicitly documented, reviewed, and prevented from
+becoming the extension path.
+
+Renderers must not perform semantic rule evaluation. They may only format typed lowered/translated values.
+
 ## Testing Protocol
 
 For each milestone:

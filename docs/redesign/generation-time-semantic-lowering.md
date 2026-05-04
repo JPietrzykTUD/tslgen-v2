@@ -246,11 +246,16 @@ source_type_tag="ui32")`. That slice produces a typed backend modifier value
 equivalent to `BackendIntrinsicModifier(kind="suffix", backend_id="cpp",
 extension="avx2", intrinsic="add", value="epi32",
 source_type_tag="si32", source_ref_kind="base.signed_of")`. Raw
-`type<generation>(...)` text remains rejected by backend translation. Backend
-type spelling remains deferred to M46, and native integer rendering remains
-deferred to M47. Prefix, infix, post, immediate, and broad translation-map
-evaluation remain deferred. Renderers remain non-evaluating text emitters and
-must not parse raw generation-time helper text.
+`type<generation>(...)` text remains rejected by backend translation. M46 now
+translates selected C++ scalar type spelling requests over typed M43
+`GenerationTypeRef` values for `base.in`, `base.signed_of`, and
+`base.unsigned_of`, producing typed backend type-spelling values equivalent to
+`BackendTypeSpelling(backend_id="cpp", type_tag="si32",
+spelling="int32_t")` and `BackendTypeSpelling(backend_id="cpp",
+type_tag="ui32", spelling="uint32_t")`. Native integer rendering remains
+deferred to M47. Prefix, infix, post, immediate, and broad translation-map or
+language-map evaluation remain deferred. Renderers remain non-evaluating text
+emitters and must not parse raw generation-time helper text.
 
 ## Post-M43 Phase Direction
 
@@ -270,7 +275,9 @@ The accepted post-M43 phase is numbered in the roadmap:
   extension="avx2", intrinsic="add", value="epi32",
   source_type_tag="si32", source_ref_kind="base.signed_of")`.
 - Milestone 46 translates selected C++ scalar type spelling requests over typed
-  M43 `GenerationTypeRef` inputs.
+  M43 `GenerationTypeRef` inputs for `base.in`, `base.signed_of`, and
+  `base.unsigned_of`, using the C++ language map to produce `int32_t` for
+  `si32` and `uint32_t` for `ui32`.
 - Milestone 47 renders selected native integer C++ `binary/add` output only
   after the suffix and type-spelling translation outputs are explicit renderer
   inputs.
