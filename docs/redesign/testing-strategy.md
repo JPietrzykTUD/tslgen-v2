@@ -593,6 +593,13 @@ Recommended first parity checks:
   diagnostics, malformed branch diagnostics, unresolved nested helper
   diagnostics, backend-translation rejection of unresolved generation helpers,
   and renderer non-evaluation regression coverage.
+- Milestone 42: primitive-attribute generation branch pruning tests for
+  `if<generation>(value<generation>(primitive::attribute(aligned)))`, including
+  true/false pruning, selected-branch-only diagnostics, missing/non-boolean/
+  unknown attribute diagnostics, missing context diagnostics, malformed and
+  unsupported condition diagnostics, backend-translation rejection of unresolved
+  helper IR, existing direct-add and intrinsic-compose lowering regressions,
+  C++ backend regressions, and validation profile coverage.
 
 Deferred parity checks:
 

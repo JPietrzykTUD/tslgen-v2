@@ -7,13 +7,17 @@ from _helpers import assert_diagnostic
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
 from tslgen.analysis.selection import SelectionRequest, plan_selection
 from tslgen.config.model import SourceConfig
+from tslgen.core.frozen_map import FrozenMap
 from tslgen.domain.catalog import Catalog, build_catalog
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
 from tslgen.lowering import (
+    GenerationContext,
     LoweringRequest,
+    PrunedGenerationBranch,
     TsilBinaryExpression,
     TsilIntrinsicComposeExpression,
     TsilParameterReference,
+    TsilPrimitiveAttributeCondition,
     TsilReturnStatement,
     lower_candidates,
     prepare_lowering_inputs,
@@ -129,7 +133,52 @@ prim<v:=(v,v)> lower_generation(left, right):
       si32:
         requires []
         implementation:
-          tsil "if<generation>(value<generation>(vector::length) > 4) { emit_return(left); }"
+          tsil "if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) { emit_return(left + right); } else<generation> { emit_return(right + left); }"
+
+prim<v:=ptr>[aligned=true] lower_generation_aligned_true(ptr):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(primitive::attribute(aligned))) { emit_return(ptr + ptr); } else<generation> { emit_return(value<generation>(vector::length)); }"
+
+prim<v:=ptr>[aligned=false] lower_generation_aligned_false(ptr):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(primitive::attribute(aligned))) { emit_return(value<generation>(vector::length)); } else<generation> { emit_return(intrin_compose<add>(ptr, ptr)); }"
+
+prim<v:=ptr>[aligned=true] lower_generation_selected_branch_helper(ptr):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(primitive::attribute(aligned))) { emit_return(value<generation>(vector::length)); } else<generation> { emit_return(ptr + ptr); }"
+
+prim<v:=ptr>[aligned=true] lower_generation_unknown_attribute(ptr):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(primitive::attribute(unknown))) { emit_return(ptr + ptr); } else<generation> { emit_return(ptr + ptr); }"
+
+prim<v:=ptr>[aligned=true] lower_generation_malformed_branch(ptr):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(primitive::attribute(aligned))) { emit_return(ptr + ptr); }"
 
 prim<v:=(v,v)> lower_subtract(left, right):
   tests []
@@ -319,6 +368,192 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(lowering_input.payload.classification, "tsil")
         self.assertTrue(lowering_input.payload.has_generation_condition)
 
+    def test_prunes_generation_branch_when_aligned_true(self) -> None:
+        selection = self.selection_for("lower_generation_aligned_true")
+
+        result = lower_candidates(selection, LoweringRequest(backend_id="cpp"))
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation = result.unwrap().implementations[0]
+        self.assertEqual(
+            implementation.statements,
+            (
+                TsilReturnStatement(
+                    TsilBinaryExpression(
+                        operator="+",
+                        left=TsilParameterReference("ptr"),
+                        right=TsilParameterReference("ptr"),
+                    )
+                ),
+            ),
+        )
+        self.assertEqual(len(implementation.generation_branches), 1)
+        branch = implementation.generation_branches[0]
+        self.assertEqual(
+            branch.condition,
+            TsilPrimitiveAttributeCondition("aligned"),
+        )
+        self.assertEqual(branch.selected_branch, "true")
+        self.assertEqual(branch.statement_text, "emit_return(ptr + ptr);")
+
+    def test_prunes_generation_branch_when_aligned_false(self) -> None:
+        selection = self.selection_for("lower_generation_aligned_false")
+
+        result = lower_candidates(selection, LoweringRequest(backend_id="cpp"))
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation = result.unwrap().implementations[0]
+        self.assertEqual(
+            implementation.statements,
+            (
+                TsilReturnStatement(
+                    TsilIntrinsicComposeExpression(
+                        intrinsic="add",
+                        arguments=(
+                            TsilParameterReference("ptr"),
+                            TsilParameterReference("ptr"),
+                        ),
+                    )
+                ),
+            ),
+        )
+        self.assertEqual(len(implementation.generation_branches), 1)
+        self.assertEqual(
+            implementation.generation_branches[0],
+            PrunedGenerationBranch(
+                condition=TsilPrimitiveAttributeCondition("aligned"),
+                selected_branch="false",
+                statement_text="emit_return(intrin_compose<add>(ptr, ptr));",
+                condition_location=selection.candidates[
+                    0
+                ].variant.source.declaration.source_span.location,
+            ),
+        )
+
+    def test_generation_branch_pruning_is_deterministic(self) -> None:
+        selection = self.selection_for("lower_generation_aligned_true")
+
+        first = lower_candidates(selection)
+        second = lower_candidates(selection)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+
+    def test_unselected_branch_generation_helper_does_not_poison_selection(
+        self,
+    ) -> None:
+        for primitive_name in (
+            "lower_generation_aligned_true",
+            "lower_generation_aligned_false",
+        ):
+            with self.subTest(primitive_name=primitive_name):
+                selection = self.selection_for(primitive_name)
+
+                result = lower_candidates(selection)
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+
+    def test_selected_branch_generation_helper_reports_diagnostic(self) -> None:
+        selection = self.selection_for("lower_generation_selected_branch_helper")
+
+        result = lower_candidates(selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-UNRESOLVED-SELECTED-BRANCH",
+            severity="error",
+        )
+        self.assertIn("value<generation>", result.diagnostics[0].message)
+
+    def test_reports_missing_aligned_attribute(self) -> None:
+        selection = self.selection_for("lower_generation_aligned_true")
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(
+                    primitive_attributes=FrozenMap.empty(),
+                ),
+            ),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-ATTRIBUTE-MISSING",
+            severity="error",
+        )
+
+    def test_reports_non_boolean_aligned_attribute(self) -> None:
+        selection = self.selection_for("lower_generation_aligned_true")
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(
+                    primitive_attributes=FrozenMap({"aligned": "maybe"}),
+                ),
+            ),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-ATTRIBUTE-TYPE",
+            severity="error",
+        )
+        self.assertIn("maybe", result.diagnostics[0].message)
+
+    def test_reports_unknown_primitive_attribute_condition(self) -> None:
+        selection = self.selection_for("lower_generation_unknown_attribute")
+
+        result = lower_candidates(selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-ATTRIBUTE-UNKNOWN",
+            severity="error",
+        )
+        self.assertIn("unknown", result.diagnostics[0].message)
+
+    def test_reports_malformed_generation_branch(self) -> None:
+        selection = self.selection_for("lower_generation_malformed_branch")
+
+        result = lower_candidates(selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-IF-MALFORMED",
+            severity="error",
+        )
+
+    def test_reports_missing_generation_context(self) -> None:
+        selection = self.selection_for("lower_generation_aligned_true")
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(use_candidate_attributes=False),
+            ),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-CONTEXT-MISSING",
+            severity="error",
+        )
+
     def test_lowers_direct_parameter_add_return(self) -> None:
         selection = self.selection_for("lower_add")
 
@@ -421,7 +656,7 @@ class LoweringBoundaryTests(unittest.TestCase):
             severity="error",
         )
 
-    def test_reports_generation_time_conditions_as_deferred_lowering_work(self) -> None:
+    def test_reports_unsupported_generation_time_condition(self) -> None:
         referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
         selection = candidate_selection_for(
             referenced,
@@ -441,10 +676,10 @@ class LoweringBoundaryTests(unittest.TestCase):
         assert_diagnostic(
             self,
             diagnostic,
-            code="TSL-LOWER-TSIL-UNSUPPORTED",
+            code="TSL-LOWER-GEN-IF-UNSUPPORTED",
             severity="error",
         )
-        self.assertIn("generation-time conditions", diagnostic.message)
+        self.assertIn("type::is_signed", diagnostic.message)
 
     def test_reports_unsupported_nearby_return_form(self) -> None:
         referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
@@ -681,7 +916,7 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(first.diagnostics, second.diagnostics)
         self.assertEqual(
             tuple(diagnostic.code for diagnostic in first.diagnostics),
-            ("TSL-LOWER-TSIL-UNSUPPORTED", "TSL-LOWER-PAYLOAD-UNSUPPORTED"),
+            ("TSL-LOWER-GEN-IF-UNSUPPORTED", "TSL-LOWER-PAYLOAD-UNSUPPORTED"),
         )
 
 

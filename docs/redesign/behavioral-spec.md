@@ -312,11 +312,13 @@ Milestone 41 records the detailed helper inventory and context contract in
 `generation-time-semantic-lowering.md`. It selects a future boolean
 primitive-attribute branch slice:
 `if<generation>(value<generation>(primitive::attribute(aligned)))`.
+Milestone 42 implements that selected slice for `aligned` and prunes only the
+selected branch before nested unresolved-helper diagnostics run.
 
 The current mini-lowering strategy does not parse a general expression
-language, does not evaluate generation-time branches or generation-time
-type/value queries, does not lower primitive calls, and does not render backend
-text. Unsupported TSIL remains diagnostic-producing:
+language, does not evaluate arbitrary generation-time branches or
+generation-time type/value queries, does not lower primitive calls, and does
+not render backend text. Unsupported TSIL remains diagnostic-producing:
 unrecognized TSIL returns `TSL-LOWER-TSIL-UNSUPPORTED`, nearby unsupported or
 malformed direct `emit_return(...)` forms return `TSL-LOWER-TSIL-RETURN-SHAPE`,
 unsupported intrinsic names return `TSL-LOWER-TSIL-INTRIN-UNSUPPORTED`,
@@ -324,7 +326,10 @@ malformed intrinsic-compose syntax returns `TSL-LOWER-TSIL-INTRIN-MALFORMED`,
 wrong intrinsic-compose arity returns `TSL-LOWER-TSIL-INTRIN-ARITY`,
 non-parameter intrinsic-compose arguments return
 `TSL-LOWER-TSIL-INTRIN-ARGUMENT`, and unknown operand names return
-`TSL-LOWER-TSIL-UNKNOWN-PARAMETER`. The
+`TSL-LOWER-TSIL-UNKNOWN-PARAMETER`. The selected generation-time branch slice
+adds `TSL-LOWER-GEN-*` diagnostics for malformed branches, unsupported
+conditions, missing/unknown/non-boolean `aligned` attributes, missing
+generation context, and unresolved helpers in the selected branch. The
 `typed_opaque` strategy remains available for callers that need the Milestone 18
 unsupported behavior. Any C++ body-rendering milestone must consume this lowered
 model rather than raw TSIL text.

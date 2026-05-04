@@ -2726,7 +2726,7 @@ Dependencies:
 
 - Milestone 40.
 
-## Candidate Future Milestone: Generation-Time Query/Condition Lowering Slice
+## Milestone 42: Primitive-Attribute Generation Branch Pruning Slice
 
 Goal:
 
@@ -2744,8 +2744,10 @@ Scope:
   `GenerationContext`.
 - Lower the selected branch form to a pruned statement list with deterministic
   provenance.
-- Keep unsupported condition expressions, nested branch forms, and unselected
-  helper families diagnostic-producing.
+- Diagnose unsupported condition expressions, malformed branch forms, missing
+  context, missing/non-boolean/unknown attributes, and unresolved helper forms
+  only in the selected branch.
+- Do not recursively lower or diagnose helper forms in the unselected branch.
 
 Out of scope:
 
@@ -2775,24 +2777,26 @@ Expected outputs:
 
 - A documented and tested first generation-time condition evaluator for the
   selected primitive-attribute branch shape.
-- Diagnostics for unsupported condition/query functions, unknown attributes,
-  non-boolean attributes, missing generation context, and malformed
-  generation-time branches.
+- Diagnostics for unsupported condition functions, unknown attributes,
+  missing `aligned`, non-boolean `aligned`, missing generation context,
+  malformed generation-time branches, and unresolved helpers in the selected
+  branch.
 - Clear guidance for which future backend parity slices may depend on this
   condition support.
 
 Parity criterion:
 
-Selected generation-time branch/query behavior is evaluated in semantic
-lowering before backend translation receives inputs, never in backend renderers
-or template text.
+Selected generation-time branch behavior is evaluated in semantic lowering
+before backend translation receives inputs, never in backend renderers or
+template text. The unselected branch must not poison a valid branch choice.
 
 Tests required:
 
 - Unit tests for the selected condition shape.
-- Branch-selection, query-resolution, or typed-value determinism tests.
-- Diagnostic tests for unknown attributes, unknown type predicates, missing
-  generation context, malformed branches, and unsupported nested forms.
+- Branch-selection and typed-value determinism tests.
+- Diagnostic tests for unknown attributes, missing/non-boolean `aligned`,
+  missing generation context, malformed branches, unsupported conditions, and
+  unresolved helpers in the selected branch.
 - Regression tests proving backend translation rejects unresolved
   generation-time helper IR.
 - Renderer non-evaluation regression test when a rendering fixture consumes a
@@ -2807,8 +2811,7 @@ Documentation updates:
 
 - Update lowering behavior, pipeline design, and open questions for generation
   expressions.
-- Add or revise an ADR if this milestone chooses branch pruning versus explicit
-  branch IR.
+- Add or revise an ADR if implementation reveals a branch-pruning policy change.
 
 Review risks:
 
@@ -2820,11 +2823,10 @@ Dependencies:
 
 - Milestones 18, 30, 40, and 41.
 
-Scheduling note:
+Implementation note:
 
-Milestone 41 selected the concrete generation-time condition form. The next
-numbered implementation milestone should use the branch-pruning scope above and
-must not add backend rendering behavior.
+Milestone 42 implements this selected branch-pruning scope and does not add
+backend rendering behavior.
 
 ## Deferred Parity Targets After Boundary Correction
 

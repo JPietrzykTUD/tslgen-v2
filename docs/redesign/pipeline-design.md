@@ -346,6 +346,9 @@ Milestone 41 specifies the detailed generation-time helper inventory,
 `generation-time-semantic-lowering.md`. The selected future slice is boolean
 primitive-attribute branch pruning for
 `if<generation>(value<generation>(primitive::attribute(aligned)))`.
+Milestone 42 implements that slice for `aligned`. Helpers in the unselected
+branch are discarded without diagnostics; unresolved generation-time helpers in
+the selected branch remain diagnostic-producing before backend translation.
 
 ## Stage 9: Backend Planning
 

@@ -1242,6 +1242,9 @@ Consequences:
   `if<generation>(value<generation>(primitive::attribute(aligned)))` as the
   next implementable generation-time helper slice; broader generation-time
   type/value queries remain deferred.
+- Milestone 42 implements that slice. The unselected branch is not recursively
+  lowered or diagnosed, while unresolved generation-time helpers in the
+  selected branch produce lowering diagnostics before backend translation.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

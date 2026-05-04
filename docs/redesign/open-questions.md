@@ -1142,8 +1142,8 @@ parity level.
 
 ## OQ-032: Which TSIL Helper Boundary Should Follow The Mini Return Lowering?
 
-Status: Answered for the Milestone 41 contract; broader helper families remain
-open until selected by future milestones.
+Status: Answered for the Milestone 41 contract and Milestone 42 aligned-branch
+slice; broader helper families remain open until selected by future milestones.
 
 Why it matters:
 
@@ -1176,6 +1176,11 @@ implementable helper slice. That selection does not implement type/value query
 families, modifier evaluation, primitive calls, loops, or branch-dependent
 backend rendering.
 
+Milestone 42 implements that selected branch-pruning slice for `aligned`.
+Diagnostics for unresolved nested generation-time helpers apply only to the
+selected branch after pruning; helper forms in the unselected branch do not
+poison a valid branch choice.
+
 Remaining deferred TSIL work includes full modifier expression evaluation,
 integer suffix inference, primitive calls, loops, variables, generation-time
 branches beyond the selected aligned primitive-attribute condition, type/value
@@ -1199,8 +1204,9 @@ Implementation blocked:
 No for Milestone 38 and no need to revert Milestone 39 solely on boundary
 grounds. Yes for any native rendering expansion beyond the selected M39 slice
 until Milestone 40 establishes data-driven translation and typed lowered helper
-output. No for Milestone 41 documentation and inventory work. Yes for broader
-TSIL constructs until their fixtures and expected models are selected.
+output. No for Milestone 41 documentation and inventory work or the Milestone
+42 aligned-branch pruning slice. Yes for broader TSIL constructs until their
+fixtures and expected models are selected.
 
 ## OQ-033: Which Legacy CLI Workflow Should Be Supported First?
 
@@ -1332,8 +1338,8 @@ Current roadmap direction:
 
 ## OQ-036: Where Do Generation-Time Helpers Resolve Relative To Backend Translation?
 
-Status: Answered for Milestone 41; the first selected helper slice is not yet
-implemented.
+Status: Answered for Milestone 41 and implemented for the first Milestone 42
+helper slice.
 
 Why it matters:
 
@@ -1351,14 +1357,14 @@ then backend rendering. Backend translation may consume `type<backend>(...)`
 and `value<backend>(...)` only as typed requests whose inputs are already
 resolved semantic values.
 
-Milestone 41 selects the first implementation slice: evaluate
+Milestone 41 selects and Milestone 42 implements the first slice: evaluate
 `if<generation>(value<generation>(primitive::attribute(aligned)))` from explicit
 primitive attributes and prune the selected branch with deterministic
-provenance. The nested branch body may still contain deferred helper forms; a
-future implementation must keep those diagnostic-producing until their own
-semantic slices are selected. Type signedness queries, vector type/value
-queries, backend suffix/prefix modifiers, `immediate(n)`, primitive calls,
-loops, and direct intrinsics remain deferred.
+provenance. The selected branch is checked for unresolved nested
+generation-time helpers; the unselected branch is discarded without recursive
+helper diagnostics. Type signedness queries, vector type/value queries, backend
+suffix/prefix modifiers, `immediate(n)`, primitive calls, loops, and direct
+intrinsics remain deferred.
 
 Required evidence:
 
@@ -1375,10 +1381,11 @@ Implementation blocked:
 
 No for M40 because the selected `avx2/f32` default intrinsic-composition case
 can remain generation-free and must reject unresolved generation-time inputs.
-No for the Milestone 41 documentation contract. Yes for modifier support,
-suffix inference, branch-dependent output, and broad translation-map evaluation
-until a later numbered slice implements the selected generation-time semantic
-lowering behavior.
+No for the Milestone 41 documentation contract or the Milestone 42
+primitive-attribute branch pruning slice. Yes for modifier support, suffix
+inference, branch-dependent output beyond selected branch pruning, and broad
+translation-map evaluation until a later numbered slice implements the selected
+generation-time semantic lowering behavior.
 
 ## Follow-ups from Milestone 2 review
 
@@ -1591,3 +1598,9 @@ lowering behavior.
   - non-boolean `aligned` attribute diagnostics.
   - renderer non-evaluation of generation-time helpers.
 - Ensure unresolved nested-helper diagnostics apply only after branch pruning to the selected branch; helpers in the unselected branch must not poison a valid branch choice.
+
+## Follow-ups from Milestone 42 review
+
+- Document explicitly that selected candidate variant attributes are the default primitive-attribute generation context unless `GenerationContext.primitive_attributes` is supplied.
+- Add a translation-boundary regression where a raw generation branch is first pruned by lowering and then accepted by C++ translation because branch provenance is present.
+- Consider hardening empty selected-branch handling so it returns a structured diagnostic rather than relying only on the `PrunedGenerationBranch` invariant.

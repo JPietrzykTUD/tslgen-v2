@@ -1,8 +1,8 @@
 # Generation-Time Semantic Lowering Contract
 
-Milestone 41 defines the contract for generation-time helper semantics that
-must run before backend translation. It is a planning and inventory milestone:
-no production lowering or rendering behavior is added here.
+Milestone 41 defined the contract for generation-time helper semantics that
+must run before backend translation. Milestone 42 implements the first selected
+slice: boolean primitive-attribute branch pruning for `aligned`.
 
 ## Ordered Contract
 
@@ -24,19 +24,18 @@ renderers must never parse or evaluate generation-time helpers.
 
 ## GenerationContext Contract
 
-The first implementation slice should use an explicit immutable
-`GenerationContext` rather than raw parser dictionaries or backend renderer
-state.
+The first implementation slice uses an explicit immutable `GenerationContext`
+rather than raw parser dictionaries or backend renderer state.
 
 | Field | Status | Purpose |
 | --- | --- | --- |
-| selected primitive name | required next | Diagnostic and provenance anchor for branch/query resolution. |
-| emitted primitive name | required next | Stable output-facing name when it differs from source primitive identity. |
-| selected candidate id | required next | Deterministic identity for one implementation candidate. |
-| normalized signature | required next | Confirms the helper is evaluated for the selected overload shape. |
-| parameter list | required next | Keeps diagnostics tied to the selected implementation signature. |
-| primitive attributes | required next | Supplies boolean values such as `aligned` and `packed`. |
-| implementation source location | required next | Provides actionable diagnostics for malformed or unsupported helpers. |
+| selected primitive name | available in M42 | Diagnostic and provenance anchor for branch/query resolution. |
+| emitted primitive name | available in M42 | Stable output-facing name when it differs from source primitive identity. |
+| selected candidate id | used in M42 | Deterministic identity for one implementation candidate. |
+| normalized signature | available in M42 | Confirms the helper is evaluated for the selected overload shape. |
+| parameter list | used in M42 | Keeps diagnostics tied to the selected implementation signature. |
+| primitive attributes | used in M42 | Supplies boolean values such as `aligned` and `packed`. |
+| implementation source location | used in M42 | Provides actionable diagnostics for malformed or unsupported helpers. |
 | backend id | likely later | Required for backend-scoped requests after generation values are typed. |
 | extension and source extension | likely later | Required for vector metadata, intrinsic suffixes, and conversion helpers. |
 | type tag | likely later | Required for signedness, base-type, and suffix queries. |
@@ -62,7 +61,7 @@ behavior without treating the whole corpus as implemented.
 
 | Observed form | Evidence | Apparent semantics | Required context | Candidate lowered IR concept | Backend/data dependency | Priority | Future status | Validation strategy |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `if<generation>(value<generation>(primitive::attribute(aligned)))` | `tsldata/primitives/load_store/load.tsl:55-70`, `load.tsl:79-91`, `store.tsl:54-64`, `store.tsl:75-85` | Select aligned or unaligned branch for load/store bodies. | Primitive attributes, candidate id, source location. | Boolean `GenerationValue` plus pruned statement list with branch provenance. | No backend data for the condition itself; branch bodies may contain backend requests. | required-next | Selected for Milestone 42. | Golden TSIL fixture for true/false branch selection, unknown attribute diagnostics, renderer non-evaluation regression. |
+| `if<generation>(value<generation>(primitive::attribute(aligned)))` | `tsldata/primitives/load_store/load.tsl:55-70`, `load.tsl:79-91`, `store.tsl:54-64`, `store.tsl:75-85` | Select aligned or unaligned branch for load/store bodies. | Primitive attributes, candidate id, source location. | Boolean primitive-attribute condition plus pruned branch provenance. | No backend data for the condition itself; branch bodies may contain backend requests. | required-now | Implemented by Milestone 42. | Unit tests cover true/false pruning, missing/non-bool/unknown attributes, selected-branch-only diagnostics, and deterministic output. |
 | `if<generation>(value<generation>(primitive::attribute(packed)))` | `tsldata/primitives/load_store/store.tsl:177-188`, `store.tsl:196-210` | Select packed mask-store path. | Primitive attributes, mask parameter role, vector metadata. | Same branch-pruning model as `aligned`, with mask-specific context later. | Mask/vector type data for selected branch. | required-later | Defer until mask store parity is selected. | Reuse branch evaluator after selected mask fixture exists. |
 | `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))` | `tsldata/primitives/bitwise/shifts.tsl:535-553`, `shifts.tsl:625-648`, `shifts.tsl:842-886` | Select signed or unsigned shift behavior. | Type tag and signedness query. | Boolean `GenerationValue` derived from typed type query. | Type-map data and base type metadata. | required-later | Defer until signedness branch parity is selected. | Type-query tests before branch tests; unsupported predicate diagnostics. |
 | `type<generation>(vector::register)` | `tsldata/primitives/load_store/load.tsl:39-45`, `load.tsl:59-67`, `store.tsl:56-61` | Resolve selected vector register type. | Backend id, extension, type tag, vector/register metadata. | `GenerationTypeRef(kind="vector.register")`. | Language type map. | required-later | Defer until vector register type rendering is selected. | Typed metadata fixtures; missing language-map diagnostics. |
@@ -81,12 +80,10 @@ behavior without treating the whole corpus as implemented.
 | Direct `intrin<...>` calls with template placeholders | `tsldata/primitives/bitwise/shifts.tsl:120-128`, `shifts.tsl:150`, `tsldata/primitives/conversion/repr_change.tsl:25-43` | Emit an already named intrinsic or placeholder-bearing intrinsic call. | Backend id, type tag, extension, placeholder rules. | Direct backend intrinsic call IR or explicit unsupported node. | Translation metadata and language-specific rules. | explicitly-deferred | Defer until a direct-intrinsic parity target is selected. | Unsupported diagnostics until selected. |
 | Primitive calls and generic loops | `tsldata/primitives/arithmetic/fundamental.tsl:38-45`, `tsldata/primitives/load_store/load.tsl:39-45`, `tsldata/primitives/conversion/repr_change.tsl:121-128` | Compose helper primitives, arrays, and loop bodies. | Primitive dependency graph, variable scope, vector length. | Call, loop, variable, and assignment IR. | Selection, dependency, and lowering metadata. | explicitly-deferred | Defer beyond the first generation helper slice. | Separate primitive-call and loop lowering tests. |
 
-## Selected Next Helper Slice
+## Implemented Helper Slice
 
-Outcome A is selected for the next implementation milestone.
-
-The next slice should implement exactly the boolean primitive-attribute
-generation condition:
+Milestone 42 implements exactly the boolean primitive-attribute generation
+condition:
 
 ```text
 if<generation>(value<generation>(primitive::attribute(aligned))) {
@@ -99,11 +96,18 @@ if<generation>(value<generation>(primitive::attribute(aligned))) {
 The active evidence is `tsldata/primitives/load_store/load.tsl:55-70`,
 `load.tsl:79-91`, and `tsldata/primitives/load_store/store.tsl:54-64`.
 `store.tsl:75-85` supplies the same shape for floating store. These forms are
-small enough because the condition depends only on primitive attributes. The
-selected branch bodies still contain deferred helper forms such as
+small enough because the condition depends only on primitive attributes.
+
+Milestone 42 records the selected branch as typed provenance and then lowers
+the pruned branch through the existing mini TSIL forms. The selected branch may
+lower to direct parameter-add return or `intrin_compose<add>` return. The
+unselected branch is discarded before nested helper diagnostics run.
+
+The selected branch bodies in corpus evidence may still contain deferred helper
+forms such as
 `type<generation>(vector::register)`, `value<generation>(vector::alignment)`,
-and `value<backend>(intrin::prefix)`, so Milestone 42 should prune the branch
-and preserve unsupported diagnostics for any unselected nested helper.
+and `value<backend>(intrin::prefix)`. Those remain unsupported unless a future
+slice selects them.
 
 Required context fields for the selected slice:
 
@@ -115,23 +119,39 @@ Required context fields for the selected slice:
 - primitive attributes
 - implementation source location
 
-Expected lowered behavior:
+Implemented lowered behavior:
 
-- Recognize the selected `if<generation>` condition shape.
-- Resolve `value<generation>(primitive::attribute(aligned))` to a typed boolean
+- Recognizes the selected `if<generation>` condition shape.
+- Resolves `value<generation>(primitive::attribute(aligned))` to a typed boolean
   generation value.
-- Keep only the selected branch as the semantic-lowering output, with
+- Keeps only the selected branch as the semantic-lowering output, with
   deterministic provenance.
-- Diagnose unknown attributes, non-boolean attribute values, malformed branch
+- Diagnoses unknown attributes, non-boolean attribute values, malformed branch
   syntax, unsupported condition expressions, and missing generation context.
-- Continue diagnosing unresolved nested generation-time helpers before backend
-  translation unless a later slice selects them.
+- Diagnoses unresolved nested generation-time helpers only when they appear in
+  the selected branch.
+- Does not diagnose unresolved helpers in the unselected branch.
+- Continues to prevent unresolved generation-time helpers from reaching backend
+  translation.
 
-Milestone 42 should implement this selected primitive-attribute branch slice.
+Milestone 42 diagnostics:
+
+- `TSL-LOWER-GEN-IF-MALFORMED`
+- `TSL-LOWER-GEN-IF-UNSUPPORTED`
+- `TSL-LOWER-GEN-ATTRIBUTE-UNKNOWN`
+- `TSL-LOWER-GEN-ATTRIBUTE-MISSING`
+- `TSL-LOWER-GEN-ATTRIBUTE-TYPE`
+- `TSL-LOWER-GEN-CONTEXT-MISSING`
+- `TSL-LOWER-GEN-UNRESOLVED-SELECTED-BRANCH`
+
+The next generation-time helper slice should choose either a type/value query
+needed by a selected backend modifier or a second branch condition such as
+`type::is_signed(...)`. It should not add backend rendering behavior unless a
+separate parity milestone selects that output.
 
 ## Explicit Deferrals
 
-Deferred beyond Milestone 41:
+Deferred beyond Milestone 42:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, base signedness, extension

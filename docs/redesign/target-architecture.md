@@ -327,6 +327,8 @@ Current roadmap note:
   `generation-time-semantic-lowering.md`. Its first future implementation slice
   is the boolean primitive-attribute condition used by aligned load/store
   evidence.
+- Milestone 42 implements that first slice in lowering. Backend translation and
+  rendering still do not evaluate generation-time helpers.
 
 Does not:
 
