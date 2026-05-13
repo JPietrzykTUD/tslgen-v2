@@ -87,8 +87,8 @@ additional generated-output target.
 Post-M47 lowering prerequisite:
 
 - M48 is the selected signedness predicate branch-pruning slice over typed M43
-  `base.in` values. It is planned for later shift/conversion parity and is not
-  an output parity slice.
+  `base.in` values. It supports later shift/conversion parity and is not an
+  output parity slice.
 
 ## Baseline Decisions
 

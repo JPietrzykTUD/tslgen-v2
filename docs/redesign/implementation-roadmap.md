@@ -3542,7 +3542,7 @@ Dependencies on prior milestones:
 
 Status:
 
-Implemented. Pending Milestone 48 review and acceptance.
+Accepted.
 
 Goal:
 
@@ -3698,10 +3698,12 @@ paths, accepted redesign inputs, expected outputs, parity criterion, tests,
 golden fixtures, documentation updates, review risks, dependencies, and whether
 it replaces or adapts a deferred target.
 
-## Current Milestone Review
+## Post-M48 Planning Needed
 
-Milestones 1 through 47 are accepted. Milestone 48: Signedness Type-Predicate
-Branch Pruning Slice is implemented and awaiting review.
+Milestones 1 through 48 are accepted. No Milestone 49 is selected yet.
+
+The next action is a docs-only post-M48 planning pass that reviews the deferred
+targets below and selects at most one narrow next milestone.
 
 M48 is constrained to generation-time semantic lowering over typed M43
 `GenerationTypeRef(kind="base.in")` inputs. Broader native rendering,

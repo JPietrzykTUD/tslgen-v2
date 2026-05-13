@@ -6,39 +6,39 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 47 is accepted.
+Milestone 48 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
-Milestone 48 as the next executor milestone.
+Milestone 48, and the M48 execution-review loop returned `Accept`.
 
-Milestone 48 execution is complete and awaiting review.
+No Milestone 49 is selected yet.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Run the Milestone 48 execution-review loop.
+Run post-M48 planning plus review.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m48-execution-review-loop-prompt.md
+docs/agent/runs/post-m48-planning-plus-review-prompt.md
 ```
 
-Active review milestone:
+Active planning target:
 
 ```text
-Milestone 48: Signedness Type-Predicate Branch Pruning Slice
+Select the next numbered milestone after Milestone 48, or explicitly defer.
 ```
 
 Next expected action:
 
 ```text
-The M48 execution-review loop consolidates a verdict. If accepted, it creates
-the next concrete prompt under docs/agent/runs/. If Needs Revision, it runs a
-focused revision loop.
+The post-M48 planning-plus-review prompt proposes the next milestone, runs
+internal planning review subagents, and records the accepted planning result
+or a focused planning revision prompt.
 ```
 
 Accepted planning prompt:
@@ -68,9 +68,9 @@ docs/agent/runs/post-m47-orchestrated-planning-plus-review-prompt.md
 - M48 includes no backend translation, rendering, generated output,
   CLI/report/writer, Rust, or compiler execution work.
 
-## Active Review Milestone
+## Accepted Milestone 48
 
-The Milestone 48 executor implemented:
+The Milestone 48 execution-review loop accepted:
 
 ```text
 Milestone 48: Signedness Type-Predicate Branch Pruning Slice
@@ -86,7 +86,7 @@ plain `else` conversion syntax, or broad shift/conversion body lowering.
 ## Known Follow-Ups
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
-  later. This is non-blocking for M48 review and acceptance.
+  later. This is non-blocking for post-M48 planning.
 - The retried evidence audit confirmed additional exact shift evidence ranges:
   `tsldata/primitives/bitwise/shifts.tsl:535-547`, `:625-635`, `:842-887`,
   `:933-943`, `:1222-1244`, `:1268-1280`, `:1465-1481`, and `:1507-1518`.
@@ -95,8 +95,8 @@ plain `else` conversion syntax, or broad shift/conversion body lowering.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the active M48 review
-prompt.
+No stop condition is active. The workflow proceeds with the active post-M48
+planning-plus-review prompt.
 
 ## Validation Expectations
 
