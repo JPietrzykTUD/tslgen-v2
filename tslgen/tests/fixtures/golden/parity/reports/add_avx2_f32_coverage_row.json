@@ -1,0 +1,16 @@
+{
+  "effective_present": "true",
+  "extension": "avx2",
+  "has_intrinsic": "false",
+  "has_lang_block": "false",
+  "has_tsil": "true",
+  "language": "cpp",
+  "missing_effective": "false",
+  "missing_intrinsic": "true",
+  "missing_lang_block": "true",
+  "missing_tsil": "false",
+  "primitive": "add",
+  "primitive_class": "fundamental",
+  "template": "v:=(v,v)",
+  "type": "f32"
+}

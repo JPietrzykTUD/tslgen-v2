@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 49 is accepted.
+Milestone 50 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -17,38 +17,37 @@ accepted the plan after local planning-doc revisions.
 The M49 execution-review loop returned `Accept With Follow-Ups` after one
 focused revision.
 
-Post-M49 planning selected Milestone 50. Internal review returned
-`Accept With Follow-Ups` after local planning-doc corrections.
+Post-M49 planning is accepted. It selected Milestone 50, and internal review
+returned `Accept With Follow-Ups` after local planning-doc corrections.
 
-Post-M49 planning is awaiting human acceptance before M50 execution is
-activated.
+The M50 execution-review loop returned `Accept With Follow-Ups` after one
+focused revision.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Finalize human acceptance of the post-M49 planning update.
+Run the post-M50 planning-plus-review prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m49-acceptance-finalization-prompt.md
+docs/agent/runs/post-m50-planning-plus-review-prompt.md
 ```
 
 Active planning target:
 
 ```text
-Milestone 50: Legacy Coverage JSON Adapter Row Slice
+Next numbered milestone after Milestone 50; no Milestone 51 is selected yet.
 ```
 
 Next expected action:
 
 ```text
-After explicit human acceptance, the finalization prompt creates
-docs/agent/runs/m50-execution-review-loop-prompt.md and updates this state file
-to make M50 execution active.
+Use planning and review subagents to select at most one next milestone or
+record an explicit deferral. Do not implement code from the planning prompt.
 ```
 
 Accepted planning prompt:
@@ -73,6 +72,18 @@ Accepted post-M49 planning prompt:
 
 ```text
 docs/agent/runs/post-m49-planning-plus-review-prompt.md
+```
+
+Accepted post-M49 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m49-acceptance-finalization-prompt.md
+```
+
+Accepted M50 execution prompt:
+
+```text
+docs/agent/runs/m50-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -104,12 +115,25 @@ docs/agent/runs/post-m49-planning-plus-review-prompt.md
   generated-test parity, or modify generation-time lowering, backend
   translation, generated implementation output rendering, CLI/report/writer,
   Rust, or compiler execution behavior.
-- No Milestone 50 executor is selected yet. The active prompt is planning and
-  review only.
-- Planned M50 is reporting-adapter work only. It consumes accepted typed
-  coverage/report DTOs for the selected `add` / `avx2` / `cpp` / `f32` row and
-  must not rerun parsing, selection, lowering, backend rendering, test-source
-  rendering, CLI/writer work, Rust, or compiler execution during serialization.
+- M50 is reporting-adapter work only.
+- M50 is selected-row only: primitive `add`, extension `avx2`, language `cpp`,
+  and type `f32`.
+- M50 produces only the selected legacy coverage JSON row adapter.
+- M50 consumes accepted `PipelineCoverageReport` / primitive coverage DTOs or
+  equivalent typed report data, plus a new M50 typed adapter request and
+  selected-row fact value carrying the exact selected legacy-row facts.
+- Legacy string-valued booleans are adapter/serialization output only; internal
+  report values must remain typed.
+- M50 must not implement whole `primitive_coverage.json` parity, row-count
+  parity, broad coverage matrix parity, coverage HTML/site parity, CLI workflow
+  compatibility, new CLI flags, writer/report file writes, backend rendering,
+  generation-time lowering, backend translation, generated C++ implementation
+  output, test-source rendering, Rust output, compiler execution, or
+  generated-test execution.
+- M50 must not read `frozen/`, legacy report tools, raw legacy JSON, or raw TSL
+  at runtime.
+- M50 must not rerun parsing, selection, lowering, backend rendering, or test
+  planning during adapter serialization.
 
 ## Accepted Milestone 48
 
@@ -141,6 +165,29 @@ type-spelling input for `si32 -> int32_t`; the renderer does not infer type
 spellings, rescan raw TSL text, read or execute legacy templates, compile or run
 generated tests, fetch or require `gtest`, or broaden generated-test parity.
 
+## Accepted Milestone 50
+
+The Milestone 50 execution-review loop accepted with non-blocking follow-ups:
+
+```text
+Milestone 50: Legacy Coverage JSON Adapter Row Slice
+```
+
+The slice renders exactly one deterministic legacy-style coverage JSON adapter
+row for `add` / `avx2` / `cpp` / `f32`. It consumes typed
+`PipelineCoverageReport` / `PrimitiveCoverageRow` data plus a selected typed
+adapter request, produces a typed `LegacyCoverageSelectedRowFact`, and emits
+legacy string-valued booleans only at the JSON serialization boundary. It
+rejects aggregate primitive rows that would infer a selected row by cross
+product and rejects unsupported direct row-fact serialization.
+
+M50 remains reporting-adapter work only. It does not implement whole
+`primitive_coverage.json` parity, row-count parity, broad coverage matrix
+parity, HTML/site parity, CLI/report writing, backend rendering,
+generation-time lowering, backend translation, generated C++ implementation
+output, test-source rendering, Rust output, compiler execution, generated-test
+execution, or runtime reads from `frozen/`, raw legacy JSON, or raw TSL.
+
 ## Known Follow-Ups
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
@@ -162,16 +209,19 @@ generated tests, fetch or require `gtest`, or broaden generated-test parity.
   rendered artifact logical path with committed golden fixture path.
 - M49 evidence follow-up: consider extending the `test_common.j2` evidence
   range if a future doc wants to claim the full macro closing shape.
-- M50 planning follow-up: future M50 provenance may also cite
-  `frozen/tools/report_primitive_coverage.py:110` for legacy `sort_keys=True`
-  serialization evidence. Existing row and construction evidence is sufficient
-  for planning.
-- Post-M49 planning human acceptance is required before executor work begins.
+- M50 review follow-up: harden the no-file-read regression so it wraps the full
+  `selected_legacy_coverage_row_to_json(...)` adapter path, not only direct
+  row-fact serialization. Source inspection and focused boundary review found
+  the adapter pure/in-memory, so this is non-blocking.
+- M50 evidence follow-up: consider adding an explicit active source/report data
+  note to `add_avx2_f32_coverage_row.provenance.md`. Existing selected legacy
+  row, field-construction evidence, and redesign baseline citations were
+  accepted for M50.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the active post-M49
-acceptance finalization prompt.
+No stop condition is active. The workflow proceeds with the active post-M50
+planning-plus-review prompt.
 
 ## Validation Expectations
 

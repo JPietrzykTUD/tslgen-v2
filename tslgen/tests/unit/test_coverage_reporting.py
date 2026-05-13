@@ -1,21 +1,31 @@
 from __future__ import annotations
 
 import json
+from collections import OrderedDict
+from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
-from _helpers import assert_diagnostic
+from _helpers import assert_diagnostic, fixture_path
 from tslgen.analysis.selection import SelectionRequest
 from tslgen.api import PipelineConfig, run_pipeline
 from tslgen.config.model import SourceConfig
 from tslgen.domain.backends import ArtifactSpec, BackendManifest, BackendManifestSet
 from tslgen.reporting.coverage import (
+    LegacyCoverageRowAdapterRequest,
+    LegacyCoverageSelectedRowFact,
     PipelineCoverageReport,
     PrimitiveCoverageRow,
+    adapt_legacy_coverage_row,
     coverage_report_from_pipeline_result,
     coverage_report_to_json,
+    legacy_coverage_row_to_json,
+    selected_legacy_coverage_request,
+    selected_legacy_coverage_row_to_json,
 )
+from tslgen.reporting.html import render_coverage_report_html
 
 
 DEPENDENCY_PRIMITIVES = """prim<v:=(v,v)> helper(left, right):
@@ -107,6 +117,34 @@ def row_by_name(report: PipelineCoverageReport, name: str) -> PrimitiveCoverageR
         if row.primitive_name == name:
             return row
     raise AssertionError(f"missing primitive coverage row for {name!r}")
+
+
+def selected_legacy_report(
+    row: PrimitiveCoverageRow | None = None,
+) -> PipelineCoverageReport:
+    return PipelineCoverageReport(
+        primitive_rows=(
+            row
+            if row is not None
+            else PrimitiveCoverageRow(
+                primitive_name="add",
+                declaration_count=1,
+                variant_count=1,
+                candidate_count=1,
+                candidates_with_opaque_bodies=1,
+                templates=("v:=(v,v)",),
+                candidate_backends=("cpp",),
+                target_extensions=("avx2",),
+                source_extensions=("avx2",),
+                type_tags=("f32",),
+                primitive_classes=("fundamental",),
+                has_tsil=True,
+                has_intrinsic=False,
+                has_lang_block=False,
+                effective_present=True,
+            ),
+        )
+    )
 
 
 class CoverageReportingTests(unittest.TestCase):
@@ -295,6 +333,363 @@ class CoverageReportingTests(unittest.TestCase):
             payload["summary"]["candidate_dependency_fallback_primitives"],
             [],
         )
+
+    def test_selected_legacy_coverage_row_matches_golden_fixture(self) -> None:
+        result = selected_legacy_coverage_row_to_json(
+            selected_legacy_report(),
+            selected_legacy_coverage_request(),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        rendered = result.unwrap()
+        expected = fixture_path(
+            "golden",
+            "parity",
+            "reports",
+            "add_avx2_f32_coverage_row.json",
+        ).read_text(encoding="utf-8")
+        self.assertEqual(rendered, expected)
+
+        payload = json.loads(rendered, object_pairs_hook=OrderedDict)
+        self.assertEqual(
+            tuple(payload.keys()),
+            (
+                "effective_present",
+                "extension",
+                "has_intrinsic",
+                "has_lang_block",
+                "has_tsil",
+                "language",
+                "missing_effective",
+                "missing_intrinsic",
+                "missing_lang_block",
+                "missing_tsil",
+                "primitive",
+                "primitive_class",
+                "template",
+                "type",
+            ),
+        )
+        self.assertEqual(
+            payload,
+            OrderedDict(
+                (
+                    ("effective_present", "true"),
+                    ("extension", "avx2"),
+                    ("has_intrinsic", "false"),
+                    ("has_lang_block", "false"),
+                    ("has_tsil", "true"),
+                    ("language", "cpp"),
+                    ("missing_effective", "false"),
+                    ("missing_intrinsic", "true"),
+                    ("missing_lang_block", "true"),
+                    ("missing_tsil", "false"),
+                    ("primitive", "add"),
+                    ("primitive_class", "fundamental"),
+                    ("template", "v:=(v,v)"),
+                    ("type", "f32"),
+                )
+            ),
+        )
+
+    def test_selected_legacy_coverage_row_has_provenance_fixture(self) -> None:
+        provenance = fixture_path(
+            "golden",
+            "parity",
+            "reports",
+            "add_avx2_f32_coverage_row.provenance.md",
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("frozen/out/reports/primitive_coverage.json:57762-57777", provenance)
+        self.assertIn("frozen/tools/report_primitive_coverage.py:242-266", provenance)
+        self.assertIn("COVERAGE-ADD-AVX2-F32-ROW", provenance)
+        self.assertIn("not loaded from `frozen/` at runtime", provenance)
+
+    def test_selected_legacy_coverage_row_serialization_is_deterministic(self) -> None:
+        report = selected_legacy_report()
+        request = selected_legacy_coverage_request()
+
+        first = selected_legacy_coverage_row_to_json(report, request)
+        second = selected_legacy_coverage_row_to_json(report, request)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+
+    def test_selected_legacy_coverage_row_adapter_exposes_typed_fact(self) -> None:
+        fact_result = adapt_legacy_coverage_row(
+            selected_legacy_report(),
+            selected_legacy_coverage_request(),
+        )
+
+        self.assertTrue(fact_result.is_ok, fact_result.diagnostics)
+        fact = fact_result.unwrap()
+        self.assertEqual(fact.primitive, "add")
+        self.assertEqual(fact.extension, "avx2")
+        self.assertEqual(fact.language, "cpp")
+        self.assertEqual(fact.type_tag, "f32")
+        self.assertEqual(fact.primitive_class, "fundamental")
+        self.assertEqual(fact.template, "v:=(v,v)")
+        self.assertTrue(fact.has_tsil)
+        self.assertFalse(fact.has_intrinsic)
+        self.assertFalse(fact.has_lang_block)
+        self.assertTrue(fact.effective_present)
+        self.assertFalse(fact.missing_tsil)
+        self.assertTrue(fact.missing_intrinsic)
+        self.assertTrue(fact.missing_lang_block)
+        self.assertFalse(fact.missing_effective)
+
+    def test_selected_legacy_coverage_row_rejects_unsupported_request(self) -> None:
+        result = adapt_legacy_coverage_row(
+            selected_legacy_report(),
+            LegacyCoverageRowAdapterRequest(
+                primitive="sub",
+                extension="avx2",
+                language="cpp",
+                type_tag="f32",
+            ),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LEGACY-COVERAGE-UNSUPPORTED-REQUEST",
+            severity="error",
+        )
+
+    def test_selected_legacy_coverage_row_reports_missing_row(self) -> None:
+        result = adapt_legacy_coverage_row(
+            PipelineCoverageReport(
+                primitive_rows=(
+                    PrimitiveCoverageRow(
+                        primitive_name="sub",
+                        declaration_count=1,
+                    ),
+                )
+            ),
+            selected_legacy_coverage_request(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LEGACY-COVERAGE-MISSING-ROW",
+            severity="error",
+        )
+
+    def test_selected_legacy_coverage_row_reports_ambiguous_row(self) -> None:
+        row = selected_legacy_report().primitive_rows[0]
+        result = adapt_legacy_coverage_row(
+            PipelineCoverageReport(primitive_rows=(row, row)),
+            selected_legacy_coverage_request(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LEGACY-COVERAGE-AMBIGUOUS-ROW",
+            severity="error",
+        )
+
+    def test_selected_legacy_coverage_row_requires_typed_report_fields(self) -> None:
+        row = replace(
+            selected_legacy_report().primitive_rows[0],
+            target_extensions=(),
+        )
+        result = adapt_legacy_coverage_row(
+            selected_legacy_report(row),
+            selected_legacy_coverage_request(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LEGACY-COVERAGE-MISSING-REPORT-FIELD",
+            severity="error",
+        )
+
+    def test_selected_legacy_coverage_row_rejects_aggregate_row_fields(self) -> None:
+        base_row = selected_legacy_report().primitive_rows[0]
+        aggregate_cases = (
+            replace(base_row, target_extensions=("avx2", "sse")),
+            replace(base_row, candidate_backends=("cpp", "rust")),
+            replace(base_row, type_tags=("f32", "si32")),
+        )
+
+        for row in aggregate_cases:
+            with self.subTest(row=row):
+                result = adapt_legacy_coverage_row(
+                    selected_legacy_report(row),
+                    selected_legacy_coverage_request(),
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code="TSL-LEGACY-COVERAGE-AGGREGATE-ROW",
+                    severity="error",
+                )
+
+    def test_selected_legacy_coverage_row_requires_boolean_report_fields(self) -> None:
+        row = replace(
+            selected_legacy_report().primitive_rows[0],
+            has_intrinsic=None,
+        )
+        result = adapt_legacy_coverage_row(
+            selected_legacy_report(row),
+            selected_legacy_coverage_request(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LEGACY-COVERAGE-MISSING-REPORT-FIELD",
+            severity="error",
+        )
+
+    def test_selected_legacy_coverage_row_requires_class_and_template_metadata(self) -> None:
+        row = replace(
+            selected_legacy_report().primitive_rows[0],
+            primitive_classes=(),
+            templates=(),
+        )
+        result = adapt_legacy_coverage_row(
+            selected_legacy_report(row),
+            selected_legacy_coverage_request(),
+        )
+
+        self.assertFalse(result.is_ok)
+        self.assertEqual(
+            tuple(diagnostic.code for diagnostic in result.diagnostics),
+            (
+                "TSL-LEGACY-COVERAGE-MISSING-METADATA",
+                "TSL-LEGACY-COVERAGE-MISSING-METADATA",
+            ),
+        )
+
+    def test_selected_legacy_coverage_row_rejects_raw_legacy_evidence(self) -> None:
+        result = selected_legacy_coverage_row_to_json(
+            {
+                "primitive": "add",
+                "extension": "avx2",
+                "language": "cpp",
+                "type": "f32",
+            },
+            selected_legacy_coverage_request(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LEGACY-COVERAGE-RAW-EVIDENCE",
+            severity="error",
+        )
+
+        serialized = legacy_coverage_row_to_json({"primitive": "add"})
+        self.assertFalse(serialized.is_ok)
+        assert_diagnostic(
+            self,
+            serialized.diagnostics[0],
+            code="TSL-LEGACY-COVERAGE-RAW-EVIDENCE",
+            severity="error",
+        )
+
+    def test_selected_legacy_coverage_row_serialization_does_not_read_sources(self) -> None:
+        fact = adapt_legacy_coverage_row(
+            selected_legacy_report(),
+            selected_legacy_coverage_request(),
+        ).unwrap()
+
+        with patch(
+            "pathlib.Path.read_text",
+            side_effect=AssertionError("adapter serialization must not read files"),
+        ):
+            result = legacy_coverage_row_to_json(fact)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertIn('"primitive": "add"', result.unwrap())
+
+    def test_selected_legacy_coverage_row_serializer_rejects_unsupported_fact(self) -> None:
+        unsupported_facts: tuple[LegacyCoverageSelectedRowFact, ...] = (
+            replace(
+                adapt_legacy_coverage_row(
+                    selected_legacy_report(),
+                    selected_legacy_coverage_request(),
+                ).unwrap(),
+                primitive="sub",
+            ),
+            replace(
+                adapt_legacy_coverage_row(
+                    selected_legacy_report(),
+                    selected_legacy_coverage_request(),
+                ).unwrap(),
+                extension="sse",
+            ),
+            replace(
+                adapt_legacy_coverage_row(
+                    selected_legacy_report(),
+                    selected_legacy_coverage_request(),
+                ).unwrap(),
+                language="rust",
+            ),
+            replace(
+                adapt_legacy_coverage_row(
+                    selected_legacy_report(),
+                    selected_legacy_coverage_request(),
+                ).unwrap(),
+                type_tag="si32",
+            ),
+        )
+
+        for fact in unsupported_facts:
+            with self.subTest(fact=fact):
+                result = legacy_coverage_row_to_json(fact)
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code="TSL-LEGACY-COVERAGE-UNSUPPORTED-FACT",
+                    severity="error",
+                )
+
+    def test_existing_redesign_report_json_and_html_remain_stable(self) -> None:
+        report = PipelineCoverageReport(
+            primitive_rows=(
+                PrimitiveCoverageRow(
+                    primitive_name="slice_add",
+                    declaration_count=1,
+                    templates=("binary",),
+                    candidate_backends=("cpp",),
+                    target_extensions=("scalar",),
+                    type_tags=("si32",),
+                    primitive_classes=("fundamental",),
+                    has_tsil=True,
+                    has_intrinsic=False,
+                    has_lang_block=False,
+                    effective_present=True,
+                ),
+            )
+        )
+
+        json_payload = json.loads(coverage_report_to_json(report))
+        primitive_row = json_payload["primitive_rows"][0]
+        self.assertNotIn("primitive_classes", primitive_row)
+        self.assertNotIn("has_tsil", primitive_row)
+        self.assertNotIn("has_intrinsic", primitive_row)
+        self.assertNotIn("has_lang_block", primitive_row)
+        self.assertNotIn("effective_present", primitive_row)
+
+        html = render_coverage_report_html(report)
+        self.assertIn("slice_add", html)
+        self.assertNotIn("primitive_classes", html)
 
 
 if __name__ == "__main__":

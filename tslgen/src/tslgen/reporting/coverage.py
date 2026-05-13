@@ -14,6 +14,7 @@ from tslgen.analysis.candidate_dependencies import (
 from tslgen.analysis.dependencies import DependencyClosure
 from tslgen.analysis.selection import SelectionPlan
 from tslgen.core.diagnostics import Diagnostic, DiagnosticSeverity
+from tslgen.core.result import Result
 from tslgen.domain.catalog import Catalog
 from tslgen.io.artifacts import ArtifactPlan, ArtifactSet
 
@@ -27,6 +28,25 @@ _DEFAULT_DEFERRED_CATEGORIES = (
     "production_test_generation",
     "tsil_lowering",
 )
+_LEGACY_COVERAGE_ROW_FIELD_ORDER = (
+    "effective_present",
+    "extension",
+    "has_intrinsic",
+    "has_lang_block",
+    "has_tsil",
+    "language",
+    "missing_effective",
+    "missing_intrinsic",
+    "missing_lang_block",
+    "missing_tsil",
+    "primitive",
+    "primitive_class",
+    "template",
+    "type",
+)
+_SELECTED_LEGACY_COVERAGE_REQUEST = ("add", "avx2", "cpp", "f32")
+_SELECTED_LEGACY_PRIMITIVE_CLASS = "fundamental"
+_SELECTED_LEGACY_TEMPLATE = "v:=(v,v)"
 
 
 class PipelineResultLike(Protocol):
@@ -53,6 +73,71 @@ class PipelineResultLike(Protocol):
 
     @property
     def artifacts(self) -> ArtifactSet | None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class LegacyCoverageRowAdapterRequest:
+    primitive: str
+    extension: str
+    language: str
+    type_tag: str
+
+    def __post_init__(self) -> None:
+        for field_name in ("primitive", "extension", "language", "type_tag"):
+            if not getattr(self, field_name):
+                raise ValueError(
+                    f"legacy coverage row request {field_name} must be non-empty"
+                )
+
+    @property
+    def key(self) -> tuple[str, str, str, str]:
+        return (self.primitive, self.extension, self.language, self.type_tag)
+
+
+@dataclass(frozen=True, slots=True)
+class LegacyCoverageSelectedRowFact:
+    primitive: str
+    extension: str
+    language: str
+    type_tag: str
+    primitive_class: str
+    template: str
+    has_tsil: bool
+    has_intrinsic: bool
+    has_lang_block: bool
+    effective_present: bool
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "primitive",
+            "extension",
+            "language",
+            "type_tag",
+            "primitive_class",
+            "template",
+        ):
+            if not getattr(self, field_name):
+                raise ValueError(f"legacy coverage row {field_name} must be non-empty")
+
+    @property
+    def missing_tsil(self) -> bool:
+        return not self.has_tsil
+
+    @property
+    def missing_intrinsic(self) -> bool:
+        return not self.has_intrinsic
+
+    @property
+    def missing_lang_block(self) -> bool:
+        return not self.has_lang_block
+
+    @property
+    def missing_effective(self) -> bool:
+        return not self.effective_present
+
+    @property
+    def key(self) -> tuple[str, str, str, str]:
+        return (self.primitive, self.extension, self.language, self.type_tag)
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +217,11 @@ class PrimitiveCoverageRow:
     target_extensions: tuple[str, ...] = ()
     source_extensions: tuple[str, ...] = ()
     type_tags: tuple[str, ...] = ()
+    primitive_classes: tuple[str, ...] = ()
+    has_tsil: bool | None = None
+    has_intrinsic: bool | None = None
+    has_lang_block: bool | None = None
+    effective_present: bool | None = None
     direct_dependency_names: tuple[str, ...] = ()
     rendered_artifact_paths: tuple[str, ...] = ()
 
@@ -167,6 +257,11 @@ class PrimitiveCoverageRow:
             tuple(sorted(self.source_extensions)),
         )
         object.__setattr__(self, "type_tags", tuple(sorted(self.type_tags)))
+        object.__setattr__(
+            self,
+            "primitive_classes",
+            tuple(sorted(self.primitive_classes)),
+        )
         object.__setattr__(
             self,
             "direct_dependency_names",
@@ -504,6 +599,87 @@ def coverage_report_to_json(report: PipelineCoverageReport) -> str:
         indent=2,
         sort_keys=True,
     ) + "\n"
+
+
+def selected_legacy_coverage_request() -> LegacyCoverageRowAdapterRequest:
+    return LegacyCoverageRowAdapterRequest(
+        primitive=_SELECTED_LEGACY_COVERAGE_REQUEST[0],
+        extension=_SELECTED_LEGACY_COVERAGE_REQUEST[1],
+        language=_SELECTED_LEGACY_COVERAGE_REQUEST[2],
+        type_tag=_SELECTED_LEGACY_COVERAGE_REQUEST[3],
+    )
+
+
+def adapt_legacy_coverage_row(
+    report: object,
+    request: LegacyCoverageRowAdapterRequest,
+) -> Result[LegacyCoverageSelectedRowFact]:
+    if not isinstance(report, PipelineCoverageReport):
+        return Result.failure((_raw_evidence_diagnostic(report),))
+    if request.key != _SELECTED_LEGACY_COVERAGE_REQUEST:
+        return Result.failure((_unsupported_legacy_request_diagnostic(request),))
+
+    primitive_rows = tuple(
+        row for row in report.primitive_rows if row.primitive_name == request.primitive
+    )
+    if not primitive_rows:
+        return Result.failure((_missing_legacy_row_diagnostic(request),))
+
+    matching_rows = tuple(
+        row
+        for row in primitive_rows
+        if _matches_exact_legacy_row_key(row, request)
+    )
+    if len(matching_rows) > 1:
+        return Result.failure((_ambiguous_legacy_row_diagnostic(request),))
+    if not matching_rows:
+        if any(_contains_legacy_row_key(row, request) for row in primitive_rows):
+            return Result.failure(
+                (_aggregate_legacy_row_diagnostic(request, primitive_rows),)
+            )
+        return Result.failure(
+            (_missing_required_report_fields_diagnostic(request, primitive_rows),)
+        )
+
+    row = matching_rows[0]
+    diagnostics = _legacy_fact_diagnostics(row, request)
+    if diagnostics:
+        return Result.failure(diagnostics)
+
+    return Result.ok(
+        LegacyCoverageSelectedRowFact(
+            primitive=request.primitive,
+            extension=request.extension,
+            language=request.language,
+            type_tag=request.type_tag,
+            primitive_class=row.primitive_classes[0],
+            template=row.templates[0],
+            has_tsil=_required_bool(row.has_tsil),
+            has_intrinsic=_required_bool(row.has_intrinsic),
+            has_lang_block=_required_bool(row.has_lang_block),
+            effective_present=_required_bool(row.effective_present),
+        )
+    )
+
+
+def legacy_coverage_row_to_json(
+    fact: object,
+) -> Result[str]:
+    if not isinstance(fact, LegacyCoverageSelectedRowFact):
+        return Result.failure((_raw_evidence_diagnostic(fact),))
+    if fact.key != _SELECTED_LEGACY_COVERAGE_REQUEST:
+        return Result.failure((_unsupported_legacy_fact_diagnostic(fact),))
+    return Result.ok(json.dumps(_legacy_row_dict(fact), indent=2) + "\n")
+
+
+def selected_legacy_coverage_row_to_json(
+    report: object,
+    request: LegacyCoverageRowAdapterRequest,
+) -> Result[str]:
+    fact_result = adapt_legacy_coverage_row(report, request)
+    if not fact_result.is_ok:
+        return Result.failure(fact_result.diagnostics)
+    return legacy_coverage_row_to_json(fact_result.unwrap())
 
 
 def _effective_selection_plan(
@@ -1027,3 +1203,198 @@ def _backend_row_dict(row: BackendCoverageRow) -> dict[str, Any]:
         "rendered_artifact_paths": list(row.rendered_artifact_paths),
         "rendered_candidate_count": row.rendered_candidate_count,
     }
+
+
+def _legacy_row_dict(fact: LegacyCoverageSelectedRowFact) -> dict[str, str]:
+    values = {
+        "effective_present": _legacy_bool(fact.effective_present),
+        "extension": fact.extension,
+        "has_intrinsic": _legacy_bool(fact.has_intrinsic),
+        "has_lang_block": _legacy_bool(fact.has_lang_block),
+        "has_tsil": _legacy_bool(fact.has_tsil),
+        "language": fact.language,
+        "missing_effective": _legacy_bool(fact.missing_effective),
+        "missing_intrinsic": _legacy_bool(fact.missing_intrinsic),
+        "missing_lang_block": _legacy_bool(fact.missing_lang_block),
+        "missing_tsil": _legacy_bool(fact.missing_tsil),
+        "primitive": fact.primitive,
+        "primitive_class": fact.primitive_class,
+        "template": fact.template,
+        "type": fact.type_tag,
+    }
+    return {field_name: values[field_name] for field_name in _LEGACY_COVERAGE_ROW_FIELD_ORDER}
+
+
+def _legacy_bool(value: bool) -> str:
+    return "true" if value else "false"
+
+
+def _required_bool(value: bool | None) -> bool:
+    if value is None:
+        raise AssertionError("required legacy coverage row bool was not validated")
+    return value
+
+
+def _matches_exact_legacy_row_key(
+    row: PrimitiveCoverageRow,
+    request: LegacyCoverageRowAdapterRequest,
+) -> bool:
+    return (
+        row.target_extensions == (request.extension,)
+        and row.candidate_backends == (request.language,)
+        and row.type_tags == (request.type_tag,)
+    )
+
+
+def _contains_legacy_row_key(
+    row: PrimitiveCoverageRow,
+    request: LegacyCoverageRowAdapterRequest,
+) -> bool:
+    return (
+        request.extension in row.target_extensions
+        and request.language in row.candidate_backends
+        and request.type_tag in row.type_tags
+    )
+
+
+def _legacy_fact_diagnostics(
+    row: PrimitiveCoverageRow,
+    request: LegacyCoverageRowAdapterRequest,
+) -> tuple[Diagnostic, ...]:
+    diagnostics: list[Diagnostic] = []
+    if row.primitive_classes != (_SELECTED_LEGACY_PRIMITIVE_CLASS,):
+        diagnostics.append(
+            Diagnostic.error(
+                "TSL-LEGACY-COVERAGE-MISSING-METADATA",
+                (
+                    "legacy coverage row adapter requires primitive class metadata "
+                    f"{_SELECTED_LEGACY_PRIMITIVE_CLASS!r} for {request.key!r}"
+                ),
+            )
+        )
+    if row.templates != (_SELECTED_LEGACY_TEMPLATE,):
+        diagnostics.append(
+            Diagnostic.error(
+                "TSL-LEGACY-COVERAGE-MISSING-METADATA",
+                (
+                    "legacy coverage row adapter requires template metadata "
+                    f"{_SELECTED_LEGACY_TEMPLATE!r} for {request.key!r}"
+                ),
+            )
+        )
+
+    missing_bool_fields = tuple(
+        field_name
+        for field_name in (
+            "has_tsil",
+            "has_intrinsic",
+            "has_lang_block",
+            "effective_present",
+        )
+        if getattr(row, field_name) is None
+    )
+    if missing_bool_fields:
+        diagnostics.append(
+            Diagnostic.error(
+                "TSL-LEGACY-COVERAGE-MISSING-REPORT-FIELD",
+                (
+                    "legacy coverage row adapter requires typed report boolean "
+                    f"fields {missing_bool_fields!r} for {request.key!r}"
+                ),
+            )
+        )
+    return tuple(diagnostics)
+
+
+def _aggregate_legacy_row_diagnostic(
+    request: LegacyCoverageRowAdapterRequest,
+    rows: tuple[PrimitiveCoverageRow, ...],
+) -> Diagnostic:
+    available = tuple(
+        (
+            row.target_extensions,
+            row.candidate_backends,
+            row.type_tags,
+        )
+        for row in rows
+    )
+    return Diagnostic.error(
+        "TSL-LEGACY-COVERAGE-AGGREGATE-ROW",
+        (
+            "legacy coverage row adapter requires one exact typed selected-row "
+            f"fact for {request.key!r}; aggregate row fields were {available!r}"
+        ),
+    )
+
+
+def _missing_required_report_fields_diagnostic(
+    request: LegacyCoverageRowAdapterRequest,
+    rows: tuple[PrimitiveCoverageRow, ...],
+) -> Diagnostic:
+    available = tuple(
+        (
+            row.target_extensions,
+            row.candidate_backends,
+            row.type_tags,
+        )
+        for row in rows
+    )
+    return Diagnostic.error(
+        "TSL-LEGACY-COVERAGE-MISSING-REPORT-FIELD",
+        (
+            "legacy coverage row adapter requires typed extension/language/type "
+            f"fields for {request.key!r}; available row fields were {available!r}"
+        ),
+    )
+
+
+def _unsupported_legacy_request_diagnostic(
+    request: LegacyCoverageRowAdapterRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LEGACY-COVERAGE-UNSUPPORTED-REQUEST",
+        (
+            "legacy coverage row adapter only supports selected request "
+            f"{_SELECTED_LEGACY_COVERAGE_REQUEST!r}; got {request.key!r}"
+        ),
+    )
+
+
+def _unsupported_legacy_fact_diagnostic(
+    fact: LegacyCoverageSelectedRowFact,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LEGACY-COVERAGE-UNSUPPORTED-FACT",
+        (
+            "legacy coverage row serializer only supports selected row "
+            f"{_SELECTED_LEGACY_COVERAGE_REQUEST!r}; got {fact.key!r}"
+        ),
+    )
+
+
+def _missing_legacy_row_diagnostic(
+    request: LegacyCoverageRowAdapterRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LEGACY-COVERAGE-MISSING-ROW",
+        f"accepted coverage report has no primitive row for {request.key!r}",
+    )
+
+
+def _ambiguous_legacy_row_diagnostic(
+    request: LegacyCoverageRowAdapterRequest,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LEGACY-COVERAGE-AMBIGUOUS-ROW",
+        f"accepted coverage report has multiple matching rows for {request.key!r}",
+    )
+
+
+def _raw_evidence_diagnostic(value: object) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LEGACY-COVERAGE-RAW-EVIDENCE",
+        (
+            "legacy coverage row adapter requires accepted typed coverage/report "
+            f"data, not {type(value).__name__}"
+        ),
+    )

@@ -77,8 +77,7 @@ reviewable:
    output parity slice.
 10. M49 is accepted as the generated C++ `add_i32_basic` test-source parity
    slice.
-11. M50 is selected for human acceptance as the legacy coverage JSON adapter
-   row slice.
+11. M50 is accepted as the legacy coverage JSON adapter row slice.
 12. CLI workflow compatibility, coverage JSON adapter breadth beyond the
    selected M50 row, executable generated tests, and broad generated-test parity
    remain deferred until explicitly selected as separate milestones.

@@ -3859,8 +3859,9 @@ it replaces or adapts a deferred target.
 
 Status:
 
-Planned for human acceptance. Do not implement until this planning result is
-accepted.
+Accepted. The M50 execution-review loop returned `Accept With Follow-Ups` after
+one focused revision. Non-blocking follow-ups are tracked in
+`docs/agent/current-redesign-state.md`.
 
 Goal:
 
@@ -4006,11 +4007,11 @@ Dependencies on prior milestones:
   not borrow backend-call, generated-output, or test-source rendering machinery
   as implementation inputs.
 
-## Recommended Next Milestone
+## Post-M50 Planning Context
 
-Milestones 1 through 49 are accepted. The recommended next executor milestone,
-after human acceptance of this planning pass, is Milestone 50: Legacy Coverage
-JSON Adapter Row Slice.
+Milestones 1 through 50 are accepted. The next action is post-M50 planning to
+select at most one next milestone or record an explicit deferral. No Milestone
+51 executor is active yet.
 
 M49 reintroduced only the generated C++ test parity target from old M40 as a
 single-test source-rendering slice. M50 reintroduces only the selected legacy
