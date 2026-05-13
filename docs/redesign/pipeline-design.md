@@ -367,6 +367,12 @@ Milestone 45 implements only the selected intrinsic suffix request over typed
 M43 values, and Milestone 46 translates selected C++ type spellings over typed
 M43 values. Milestone 47 renders the selected native integer add output only by
 consuming those translated values as explicit renderer inputs.
+Milestone 48 is the selected post-M47 lowering slice: evaluate only
+`value<generation>(type::is_signed(type<generation>(base::in)))` over typed M43
+`GenerationTypeRef(kind="base.in")` inputs, then prune exact
+`if<generation> ... else<generation>` branches with M42-style provenance. It
+does not add backend translation, rendering behavior, broad TSIL parsing, or
+plain `else` branch support.
 
 ## Stage 9: Backend Planning
 

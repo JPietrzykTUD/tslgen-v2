@@ -3045,7 +3045,7 @@ parse generation-time helpers or derive suffix/type semantics locally.
 | Intrinsic suffix modifier translation over typed `GenerationTypeRef` | `tsldata/primitives/arithmetic/fundamental.tsl:65-75` shows native integer `avx2` add suffix input; `frozen/tsl-gen/tsl_gen/resolver/render_support.py:500-524`, `:632-657`, and `:680-692` show suffix-derived intrinsic-name behavior as evidence only; `frozen/out/tsl/tsl_native.hpp:24460-24477` and `:24712-24729` show `_mm256_add_epi32` for signed and unsigned 32-bit add. Exact supported form: `suffix=value<backend>(intrin::suffix(<GenerationTypeRef>))`, where the type ref was produced by M43 from `type<generation>(base::signed_of(type<generation>(base::in)))`. | M43 typed `GenerationTypeRef(kind="base.signed_of", type_tag="si32")` with `source_type_tag` in `{si32, ui32}`, M44 modifier request/result contract, M40 intrinsic-compose expression model, selected backend id `cpp`, selected extension `avx2`, selected primitive/type, implementation source location, and typed backend metadata. | Typed backend modifier value such as `BackendIntrinsicModifier(kind="suffix", backend_id="cpp", extension="avx2", intrinsic="add", value="epi32", source_type_tag="si32")`, or an equivalent immutable modifier result consumed by later backend-call translation. | Backend translation. | Medium because suffix semantics cross type, extension, and translation metadata. Tests cover `si32` and `ui32` selected candidates resolving through `base.signed_of` to `epi32`, deterministic output, unsupported type/extension/map diagnostics, missing typed input diagnostics, and rejection of raw `type<generation>(...)` text. | Milestone 45. |
 | Backend type spelling request over typed `GenerationTypeRef` | `tsldata/detail/lang/types/types_cpp.tsl:1-12` maps C++ scalar spellings such as `s32 {type "int32_t"}` and `u32 {type "uint32_t"}`; `translate_cpp.tsl:4-8` records backend type trait forms; frozen output uses `simd<int32_t, avx2>` at `tsl_native.hpp:24460-24477` and `simd<uint32_t, avx2>` at `:24712-24729`. Exact form: selected C++ backend type spelling request over typed M43 `GenerationTypeRef` values for `base.in`, `base.signed_of`, and `base.unsigned_of` when they resolve to selected `si32`/`ui32` scalar integer tags. | M43 `GenerationTypeRef`, typed language map metadata, backend id `cpp`, selected candidate type tag, and a documented tag-key normalization rule when source tags use `si32`/`ui32` but language keys use `s32`/`u32`. | Typed backend type spelling result such as `BackendTypeSpelling(backend_id="cpp", type_tag="si32", spelling="int32_t", source_ref_kind="base.in")`. | Backend translation. | Medium because tag normalization must be explicit and cannot live in renderers. Tests cover `si32 -> int32_t`, `ui32 -> uint32_t`, companion ref spellings, missing map diagnostics, unsupported/raw helper diagnostics, and deterministic results. | Milestone 46. |
 | Native integer add parity rendering using resolved suffix/type data | `fundamental.tsl:65-75` is the active `avx2/?i?` add source; frozen output evidence is `tsl_native.hpp:24460-24477` for `simd<int32_t, avx2>` and `:24712-24729` for `simd<uint32_t, avx2>`, both returning `_mm256_add_epi32(left, right)`. | M45 resolved suffix modifier, M46 resolved C++ type spelling, M40 backend-call IR, existing C++ native specialization/wrapper rendering from M36-M40, selected candidate metadata and provenance. | Deterministic C++ golden fixture for selected native integer `add_binary` specializations, consuming already-translated suffix/type data. | Rendering, but only after translation outputs are explicit inputs. | Medium because it touches output. Tests are golden/provenance/determinism tests plus regressions proving the renderer has no suffix/type lookup and rejects missing translated data. No compiler execution. | Milestone 47. |
-| Signedness branch pruning | `tsldata/primitives/bitwise/shifts.tsl:535-553` and `:625-648`, plus `tsldata/primitives/conversion/repr_change.tsl:1210-1225`, use `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`. | M42 branch-pruning model and M43 `GenerationTypeRef(kind="base.in")`. | Boolean generation value and pruned branch result for signed/unsigned selected types. | Generation-time semantic lowering. | Medium. Tests would cover true/false pruning, selected-branch-only diagnostics, unsupported type predicates, and raw-helper rejection. | Defer until after the native integer add phase; it is more relevant to shifts/conversions than to `binary/add`. |
+| Signedness branch pruning | `tsldata/primitives/bitwise/shifts.tsl:535-547`, `:625-635`, `:842-887`, `:933-943`, `:1222-1244`, `:1268-1280`, `:1465-1481`, and `:1507-1518` use the exact `if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) { ... } else<generation> { ... }` form. `tsldata/primitives/conversion/repr_change.tsl:1210-1217` is predicate evidence but uses plain `else`, so it is not an exact M48 branch-shape input. | M42 branch-pruning model and M43 `GenerationTypeRef(kind="base.in")`. | Boolean generation value and pruned branch result for signed/unsigned selected types. | Generation-time semantic lowering. | Medium. Tests cover true/false pruning, selected-branch-only diagnostics, unsupported type predicates, unsupported/non-integer tags, and raw-helper rejection. | Select as Milestone 48 after the native integer add phase is accepted. |
 | Prefix/post/infix/immediate modifiers | `load.tsl:55-70` and `store.tsl:54-64` show `prefix=value<backend>(intrin::prefix)` and suffix literals; `repr_change.tsl:358-370` and `:908-918` show `immediate(n)`; `render_support.py:610-623` and `:675-699` show modifier assembly behavior as evidence. Exact forms include `prefix=value<backend>(intrin::prefix)`, `post=...`, `infix=...`, and `immediate(n)=...`. | M44 request/result model, selected backend metadata, argument ordering, extension/type context, and for dynamic forms M43/M45-style typed values. | Typed modifier results for non-suffix families. | Backend translation. | Medium to high because forms have different syntax and naming effects. Tests must be family-specific and fixture-driven. | Defer until suffix proves the modifier boundary. |
 | Vector/register metadata queries | `load.tsl:55-70`, `store.tsl:177-205`, and `translate_cpp.tsl:16-23`, `:63-65` show `type<generation>(vector::register)`, `type<generation>(vector::mask_underlying_t)`, `value<generation>(vector::alignment)`, and `value<generation>(vector::length)`. | Selected extension, vector width/lane/alignment metadata, backend id only for later spelling, and existing M42/M43 lowering context fields. | `GenerationTypeRef` or typed generation integer/symbol values for vector metadata. | Generation-time semantic lowering. | High for this phase because selected bodies also contain casts, loops, calls, masks, and attributes. Tests need metadata fixtures and no host CPU dependency. | Defer until load/store or mask parity is selected. |
 
@@ -3444,10 +3444,16 @@ Dependencies on prior milestones:
 
 ## Milestone 47: Native Integer Add Parity Slice
 
+Status:
+
+Accepted. Milestone 47 renders only the selected native integer C++
+`binary/add` output after consuming explicit M45 suffix and M46 type-spelling
+translation values.
+
 Goal:
 
-Implemented: render the selected native integer C++ `add` output slice using typed suffix and
-type-spelling translation outputs.
+Render the selected native integer C++ `add` output slice using typed suffix
+and type-spelling translation outputs.
 
 Scope:
 
@@ -3532,10 +3538,154 @@ Dependencies on prior milestones:
 
 - Milestones 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, and 46.
 
+## Milestone 48: Signedness Type-Predicate Branch Pruning Slice
+
+Status:
+
+Planned for human acceptance. Do not implement until this planning result is
+accepted.
+
+Goal:
+
+Implement the next narrow generation-time semantic lowering slice:
+`if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
+branch pruning over typed M43 `GenerationTypeRef(kind="base.in")` inputs.
+This unlocks a prerequisite for later shift and conversion parity without
+combining branch pruning with backend modifier translation or rendering.
+
+Scope:
+
+- Recognize only the exact signedness condition shape:
+
+  ```text
+  value<generation>(type::is_signed(type<generation>(base::in)))
+  ```
+
+- Reuse the M42 generation branch pruning model, including selected-branch
+  provenance and selected-branch-only unresolved-helper diagnostics.
+- Resolve the inner `type<generation>(base::in)` through the M43 typed
+  `GenerationTypeRef` model. Do not parse raw type text downstream.
+- Evaluate signedness as a typed boolean generation value for selected
+  concrete integer tags already supported by M43:
+  `si32 -> true` and `ui32 -> false`.
+- Prune the selected `if<generation> ... else<generation>` branch
+  deterministically.
+- Keep unresolved generation-time helpers diagnostic-producing only in the
+  selected branch.
+
+Out of scope:
+
+- Plain `else` branch syntax, including the conversion evidence in
+  `repr_change.tsl`.
+- Shift or conversion output parity, direct intrinsic rendering, backend
+  rendering changes, generated output, compiler execution, and generated-test
+  execution.
+- Backend suffix/type translation, prefix/post/infix/immediate modifiers, and
+  broad translation-map evaluation.
+- Vector/register metadata, vector transforms, masks, casts, loops,
+  `if<compile>`, primitive calls, variables, aliases, and direct
+  `intrin<...>` parsing.
+- Signedness predicates over floats, masks, pointers, wildcard/generic tags,
+  vector types, or backend-scoped type requests.
+
+Required inputs:
+
+- M42 branch-pruning model and provenance behavior.
+- M43 `GenerationTypeRef(kind="base.in", type_tag="si32" | "ui32")` values.
+- Existing request-local `GenerationContext` type-tag override, selected type
+  tag, and selected candidate default behavior.
+- M40/M41/OQ-036 ordering: generation-time semantic lowering before backend
+  translation before rendering.
+
+Expected outputs:
+
+- A typed boolean generation predicate result for the selected
+  `type::is_signed(base.in)` condition.
+- A pruned generation branch result, or equivalent lowered statement list with
+  deterministic branch provenance, for signed and unsigned selected candidates.
+- Structured diagnostics for malformed branches, unsupported condition
+  expressions, missing generation/type context, unsupported type tags,
+  non-integer signedness predicates, unsupported nested type query shapes, and
+  unresolved helpers in the selected branch.
+- Continued backend-translation rejection of raw unresolved generation helper
+  text.
+
+Parity criterion:
+
+The selected signedness branch condition is evaluated in semantic lowering from
+typed M43 values, never in backend translation, backend templates, or
+renderers. The unselected branch does not poison a valid selected branch.
+
+Evidence paths:
+
+- `tsldata/primitives/bitwise/shifts.tsl:535-547`, `:625-635`,
+  `:842-887`, `:933-943`, `:1222-1244`, `:1268-1280`, `:1465-1481`, and
+  `:1507-1518` for exact `if<generation>(...type::is_signed...)` plus
+  `else<generation>` branch forms.
+- `tsldata/primitives/conversion/repr_change.tsl:1210-1217` for the same
+  signedness predicate in conversion code, but with plain `else`; this is
+  predicate evidence only and not an accepted M48 branch syntax.
+- `frozen/tsl-gen/tsl_gen/tsil_engine/expansion_support.py:319-339`,
+  `:403-404`, `:4586-4596`, and `:5011-5097` as behavior evidence for base
+  type canonicalization, `type::is_signed` canonicalization, signedness
+  classification, and generation-branch selection. `frozen/` remains evidence
+  only.
+
+Tests required:
+
+- Unit tests where selected `si32` prunes to the true branch and selected
+  `ui32` prunes to the false branch.
+- Determinism tests for repeated signedness branch pruning and diagnostic
+  ordering.
+- Diagnostic tests for malformed branches, unsupported predicates,
+  unsupported nested type query shapes, missing type context, unknown tags,
+  unsupported/non-integer tags such as `f32`, pointer/mask-like tags, wildcard
+  or generic tags, and unresolved helpers in the selected branch.
+- Regression tests proving unselected branch helpers are not diagnosed.
+- Regression tests proving backend translation still rejects unresolved raw
+  `if<generation>`, `type<generation>`, and `value<generation>` text and that
+  renderers remain non-evaluating.
+
+Golden fixtures required:
+
+- None. M48 is a lowering slice and must not change generated C++ or Rust
+  output.
+
+Documentation updates:
+
+- Update lowering behavior, pipeline design, behavioral spec, testing
+  strategy, open questions, ADR notes, parity baselines, and
+  `docs/agent/current-redesign-state.md` for the selected M48 boundary.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Re-parsing raw `type<generation>(...)` text instead of consuming typed M43
+  values.
+- Expanding the slice into shift/conversion body lowering or plain `else`
+  syntax support.
+- Letting backend translation, backend templates, or renderers evaluate
+  signedness.
+- Treating legacy `expansion_support.py` as architecture rather than evidence.
+
+Dependencies on prior milestones:
+
+- Milestones 18, 30, 40, 41, 42, 43, 44, 45, 46, and 47.
+
+Implementation note:
+
+Milestone 48 should remain generation-time semantic lowering only. It should
+not change generated output or broaden backend translation.
+
 ## Deferred Parity Targets After Boundary Correction
 
 The following previously planned targets remain valid but are deliberately
-deferred behind Milestone 40:
+deferred until explicitly reintroduced as separate milestones:
 
 - Generated C++ test parity slice from old M40.
 - CLI workflow compatibility slice from old M41.
@@ -3551,12 +3701,12 @@ it replaces or adapts a deferred target.
 
 ## Recommended Next Milestone
 
-Milestones 1 through 46 are accepted. Milestone 47 is the current executor
-milestone and implements only the selected native integer C++ `binary/add`
-output from explicit M45 suffix and M46 type-spelling values.
+Milestones 1 through 47 are accepted. The recommended next executor milestone,
+after human acceptance of this planning pass, is Milestone 48: Signedness
+Type-Predicate Branch Pruning Slice.
 
-After focused Milestone 47 review, the recommended next target is a new
-numbered milestone for signedness/type predicate branch pruning, constrained to
-typed M43 `GenerationTypeRef(kind="base.in")` inputs. Broader native rendering,
+M48 is constrained to generation-time semantic lowering over typed M43
+`GenerationTypeRef(kind="base.in")` inputs. Broader native rendering,
 prefix/post/infix/immediate modifiers, vector/register metadata, Rust output,
-generated tests, and compiler execution remain deferred.
+generated tests, compiler execution, and branch body semantics beyond the
+selected pruning result remain deferred.

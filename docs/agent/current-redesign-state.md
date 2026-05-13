@@ -13,7 +13,8 @@ Milestone 47 is accepted.
 Current required action:
 
 ```text
-Plan and internally review the next numbered milestone after M47.
+Human review/acceptance of the formal M48 planning pass. Do not implement M48
+until the plan is accepted.
 ```
 
 Primary prompt:
@@ -21,6 +22,8 @@ Primary prompt:
 ```text
 docs/agent/runs/post-m47-orchestrated-planning-plus-review-prompt.md
 ```
+
+This prompt has been run as the planning source for M48.
 
 ## Current Boundary Rules
 
@@ -36,19 +39,33 @@ docs/agent/runs/post-m47-orchestrated-planning-plus-review-prompt.md
 - Backend translation must not parse raw `type<generation>(...)` text.
 - Future semantic behavior must be expressed as typed rules or typed evaluator
   functions over explicit IR/domain values.
+- Planned M48 consumes typed M43 `GenerationTypeRef(kind="base.in")` values for
+  signedness predicate branch pruning and remains generation-time semantic
+  lowering only.
 
-## Next Planning Goal
+## Selected Next Milestone Candidate
 
-Create a formal next milestone or explicitly defer.
-
-The expected candidate is:
+The post-M47 planning pass selected:
 
 ```text
 Milestone 48: Signedness Type-Predicate Branch Pruning Slice
 ```
 
-The slice should remain generation-time semantic lowering only. It should not
-combine branch pruning with backend modifier translation or output rendering.
+The slice remains generation-time semantic lowering only. It evaluates the
+exact
+`if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
+plus `else<generation>` form over typed M43 `base.in` values. It does not
+combine branch pruning with backend modifier translation, output rendering,
+plain `else` conversion syntax, or broad shift/conversion body lowering.
+
+## Known Follow-Ups
+
+- Human acceptance is still required before execution.
+- The retried evidence audit confirmed additional exact shift evidence ranges:
+  `tsldata/primitives/bitwise/shifts.tsl:535-547`, `:625-635`, `:842-887`,
+  `:933-943`, `:1222-1244`, `:1268-1280`, `:1465-1481`, and `:1507-1518`.
+- `tsldata/primitives/conversion/repr_change.tsl:1210-1217` is predicate
+  evidence only because it uses plain `else`, not `else<generation>`.
 
 ## Validation Expectations
 

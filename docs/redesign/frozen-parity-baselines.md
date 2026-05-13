@@ -38,10 +38,10 @@ Accepted redesign boundaries available for future parity slices:
 | `frozen/out/tsl/tsl_generic.hpp` | C++ | generated header | generic specializations and wrappers | broad primitive families | `generic` | sized generic type matrix | none for inspection; C++ compiler for optional execution | deferred generic parity evidence | semantic equivalence; no whole-file byte parity | later generic C++ milestone |
 | `frozen/out/tsl/CMakeLists.txt` | C++ | sidecar build metadata | output layout | all generated headers | selected generated header set | n/a | CMake only if execution is selected later | selected as output-layout sidecar evidence | byte-for-byte whole-file candidate when a future sidecar slice selects it | deferred after M36 |
 | `frozen/out/tsl/tsl_flags.cmake` | C++ | sidecar compile flags | output layout | all generated headers | required native extensions | n/a | CMake/C++ compiler only if execution is selected later | selected as required-flags sidecar evidence | semantic for required flag sets; byte-for-byte only for a selected generated input | deferred after native C++ parity |
-| `frozen/out/reports/primitive_coverage.json` | report | coverage JSON | row-oriented coverage | broad primitive catalog | broad extension matrix | broad type matrix | none | report parity evidence, not first output target | selected-row semantic/field parity; no whole-file byte parity | deferred after backend-boundary correction |
+| `frozen/out/reports/primitive_coverage.json` | report | coverage JSON | row-oriented coverage | broad primitive catalog | broad extension matrix | broad type matrix | none | report parity evidence, not first output target | selected-row semantic/field parity; no whole-file byte parity | deferred until report parity is explicitly selected |
 | `frozen/out/reports/primitive_coverage.html` | report | coverage HTML | row table | broad primitive catalog | broad extension matrix | broad type matrix | none | documentation/report evidence only for now | redesign-owned HTML unless a later milestone selects exact rows | later docs/report milestone |
-| `frozen/jinja/cpp/test_file.j2` | C++ | generated test source evidence | test file wrapper | broad test families | selected test extension | selected test type | none for inspection; `gtest`/C++ only for optional execution | selected generated-test structure evidence | semantic equivalence for one generated test source | deferred after backend-boundary correction |
-| `frozen/jinja/cpp/test_case.j2` | C++ | generated test case evidence | `binary` first; broad tests later | `fundamental/add` first | selected extension | `si32` first | none for inspection; `gtest`/C++ only for optional execution | selected generated-test behavior evidence | semantic equivalence for test name, inputs, expected values, wrapper call, and assertion shape | deferred after backend-boundary correction |
+| `frozen/jinja/cpp/test_file.j2` | C++ | generated test source evidence | test file wrapper | broad test families | selected test extension | selected test type | none for inspection; `gtest`/C++ only for optional execution | selected generated-test structure evidence | semantic equivalence for one generated test source | deferred until generated-test source rendering is explicitly selected |
+| `frozen/jinja/cpp/test_case.j2` | C++ | generated test case evidence | `binary` first; broad tests later | `fundamental/add` first | selected extension | `si32` first | none for inspection; `gtest`/C++ only for optional execution | selected generated-test behavior evidence | semantic equivalence for test name, inputs, expected values, wrapper call, and assertion shape | deferred until generated-test source rendering is explicitly selected |
 | `frozen/generator_specs/tests.yaml` | C++/Rust | test planning metadata | test support policy | broad primitive families | runtime and fixed-width extension policy | broad type matrix | none | test planning and runtime-lane evidence | semantic policy evidence; no direct golden output | deferred generated-test and later toolchain phase |
 | `frozen/generator_specs/backend_cpp.yaml` | C++ | backend manifest evidence | primary, specialization, wrappers, combined templates | broad template families | all C++ supported extensions | broad type matrix | none | C++ backend metadata evidence | semantic manifest policy; no template-file architecture | M36, M37, M40 |
 | `frozen/generator_specs/backend_rust.yaml` | Rust | backend manifest evidence | primary, specialization, wrappers, trait | broad Rust families | Rust-supported extensions | broad type matrix | Cargo only for future execution | deferred Rust parity evidence | semantic manifest policy; no current output baseline | future Rust parity phase |
@@ -70,16 +70,25 @@ reviewable:
    integer suffix/type work.
 7. M44-M46 own the backend modifier and type-spelling boundaries before native
    integer output expands.
-8. M47 is the next selected native integer add parity slice for `avx2` `si32`
-   and `ui32`.
+8. M47 is the accepted native integer add parity slice for `avx2` `si32` and
+   `ui32`.
 9. Generated C++ tests, CLI workflow compatibility, and coverage JSON adapter
-   work are deferred until the backend/lowering boundary correction is accepted.
+   work remain deferred until explicitly selected as separate milestones.
 
-This target is small enough because it uses one primitive family, one template
-family, two scalar integer type tags, and one native floating-point
-extension/type pair. It exercises the important parity boundaries without
-requiring full headers, full TSIL, all wrappers, generated-test execution, Rust
-parity, or report/documentation parity.
+This selected output target is small enough because it uses one primitive
+family, one template family, two scalar integer type tags, one native
+floating-point extension/type pair, and selected AVX2 integer output after
+typed suffix/type-spelling translation. It exercises the important parity
+boundaries without requiring full headers, full TSIL, all wrappers,
+generated-test execution, Rust parity, or report/documentation parity. M48 is
+a post-output lowering prerequisite for later shift/conversion parity, not an
+additional generated-output target.
+
+Post-M47 lowering prerequisite:
+
+- M48 is the selected signedness predicate branch-pruning slice over typed M43
+  `base.in` values. It is planned for later shift/conversion parity and is not
+  an output parity slice.
 
 ## Baseline Decisions
 
@@ -273,8 +282,10 @@ parity, or report/documentation parity.
 - Rust generated output, Rust bodies, Rust generated tests, and Cargo
   integration.
 - C17 activation.
-- Full TSIL grammar, semantic calls, loops, variables, type/value queries,
-  generation-time conditions, and backend translation-map evaluation.
+- Full TSIL grammar, semantic calls, loops, variables, broad type/value
+  queries, generation-time conditions beyond the selected M42/M48 pruning
+  forms, and backend translation-map evaluation beyond the selected M40/M45/M46
+  requests.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and
   googletest download or vendoring.
 - Full legacy CLI drop-in compatibility and `run_all.sh` replacement.

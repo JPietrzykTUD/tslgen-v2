@@ -1269,6 +1269,13 @@ Consequences:
   `add_binary<simd<int32_t, avx2>>` and
   `add_binary<simd<uint32_t, avx2>>` output returning
   `_mm256_add_epi32(left, right)`.
+- Milestone 48 is the selected post-M47 generation-time semantic lowering
+  slice. It evaluates only
+  `value<generation>(type::is_signed(type<generation>(base::in)))` over typed
+  M43 `GenerationTypeRef(kind="base.in")` values and prunes exact
+  `if<generation> ... else<generation>` branches with M42-style provenance.
+  It does not reopen backend suffix/type-spelling translation or renderer
+  semantics.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

@@ -344,6 +344,10 @@ Current roadmap note:
   consumes typed M43 `GenerationTypeRef` values rather than raw helper text.
 - Milestone 47 implements the selected native integer C++ output expansion and
   consumes translated suffix/type-spelling values as renderer inputs.
+- Milestone 48 is the selected post-M47 lowering slice for
+  `type::is_signed(type<generation>(base::in))` branch pruning. It consumes
+  typed M43 `GenerationTypeRef(kind="base.in")` values, reuses M42 branch
+  provenance, and does not add backend translation or rendering behavior.
 
 Does not:
 

@@ -610,8 +610,9 @@ Recommended first parity checks:
   unsupported helper-shape diagnostics, deterministic lowered semantic type
   values, backend-translation rejection of unresolved raw generation type text,
   resolved `GenerationTypeRef` values remaining unsupported except for the
-  selected M45 suffix request, renderer non-evaluation, and unchanged
-  Milestone 42 branch-pruning regressions. Prose shorthand such as
+  selected M45 suffix and M46 C++ type-spelling requests, renderer
+  non-evaluation, and unchanged Milestone 42 branch-pruning regressions. Prose
+  shorthand such as
   `base::signed_of(base::in)` is tested as unsupported unless written in the
   exact nested accepted form.
 - Milestone 44: docs-only validation with `git diff --check`; no runtime tests.
@@ -639,13 +640,22 @@ Recommended first parity checks:
   translated native integer plan, determinism, M39/M40 `avx2/f32` regressions,
   and no compiler execution. The selected fixture is
   `tslgen/tests/fixtures/golden/parity/cpp/add_native_avx2_i32_u32_excerpt.hpp`.
+- Milestone 48: signedness type-predicate branch-pruning tests for the exact
+  `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
+  plus `else<generation>` form. Tests should cover `si32` true-branch pruning,
+  `ui32` false-branch pruning, selected-branch-only unresolved-helper
+  diagnostics, malformed branch diagnostics, unsupported predicate and nested
+  type-query diagnostics, missing type context, unknown or unsupported type
+  tags, non-integer signedness predicates, determinism, backend-translation
+  rejection of raw unresolved generation helpers, and renderer non-evaluation.
 
 Deferred parity checks:
 
 - Generated C++ `add_i32_basic` test-source golden tests from the old Milestone
-  40 resume only after Milestone 40 corrects the native/backend boundary.
+  40 remain deferred until generated-test source rendering is explicitly
+  reintroduced as its own milestone.
 - CLI compatibility workflow tests from the old Milestone 41 resume only after
-  the selected generated artifact behavior is stable.
+  a selected CLI workflow is explicitly reintroduced as its own milestone.
 - Legacy-style coverage JSON adapter tests from the old Milestone 42 resume only
   when report parity is reintroduced as its own milestone.
 
