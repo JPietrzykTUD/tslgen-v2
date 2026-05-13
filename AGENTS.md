@@ -108,6 +108,24 @@ Documentation is part of the implementation contract. Update:
 
 Keep docs behavior-centered. Avoid describing work as porting or moving legacy modules.
 
+## Codex Workflow State
+
+Codex tasks must read `docs/agent/current-redesign-state.md` before planning,
+executing, reviewing, or revising a milestone.
+
+Concrete run prompts live under `docs/agent/runs/`. Reusable prompt templates
+live under `docs/agent/prompt-templates/`. Subagent role definitions live under
+`docs/agent/subagents/`.
+
+The repository state file, not chat history, is the authoritative handoff for:
+
+- accepted milestone
+- current action
+- active prompt
+- boundary rules
+- known follow-ups
+- validation expectations
+
 ## Implementation Workflow
 
 1. Read `PLANS.md`.
@@ -119,6 +137,27 @@ Keep docs behavior-centered. Avoid describing work as porting or moving legacy m
 7. Run targeted tests.
 8. Update docs if evidence or design changed.
 9. Stop if an unresolved architectural question would force speculative design.
+
+## Multi-Agent Workflow
+
+When Codex subagents are used, the main thread acts as orchestrator.
+
+Subagents may run in parallel for planning, review, validation, documentation
+audits, or evidence audits. Only one write-capable executor should modify a
+given worktree at a time. Review and audit subagents are read-only unless
+explicitly assigned a focused revision task.
+
+Subagents must follow the same clean-redesign rules:
+
+- one milestone at a time
+- no runtime dependency on `frozen/`
+- typed boundaries and typed semantic rules
+- explicit diagnostics
+- deterministic validation
+- no renderer-side semantic inference
+
+The orchestrator owns final state updates to
+`docs/agent/current-redesign-state.md`.
 
 ## Review Workflow
 

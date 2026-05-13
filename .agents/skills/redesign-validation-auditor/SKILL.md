@@ -1,13 +1,12 @@
-# Redesign Reviewer Skill
+# Redesign Validation Auditor Skill
 
-Use this skill for read-only milestone review.
+Use this skill for read-only validation and test triage.
 
 ## Responsibilities
 
-- Do not implement fixes.
-- Evaluate scope, boundaries, legacy leakage, diagnostics, tests, docs, and
-  validation.
-- Return exactly one reviewer verdict.
+- Run requested validation commands.
+- Summarize exact command results.
+- Do not edit files unless explicitly assigned a revision task.
 
 ## Shared rules
 

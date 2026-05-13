@@ -48,6 +48,34 @@ The reviewer checks:
 
 The reviewer should not implement fixes directly. It should produce a verdict and concrete issues for the executor or planner.
 
+## Codex Subagent Protocol
+
+Codex may use subagents for bounded, parallel work when explicitly requested.
+
+Allowed subagent roles:
+
+- Orchestrator: owns task decomposition, subagent coordination, final verdict
+  consolidation, and updates to `docs/agent/current-redesign-state.md`.
+- Planner: documentation and roadmap planning only.
+- Executor: one milestone implementation in one branch or worktree.
+- Reviewer: read-only milestone review; may run validation.
+- Validation auditor: test, log, and diff-check triage only.
+- Evidence auditor: source/evidence/provenance inspection only.
+- Documentation auditor: redesign-doc consistency checks only.
+- Boundary auditor: verifies pipeline and semantic boundary preservation.
+
+Rules:
+
+- Do not let two write-capable agents edit the same files or branch concurrently.
+- Reviewers and auditors must not implement fixes.
+- Executors must implement exactly one milestone.
+- The main/orchestrator thread owns final state updates to
+  `docs/agent/current-redesign-state.md`.
+- Subagents must return concise structured summaries, not raw logs unless needed.
+- If a design inconsistency appears, stop implementation and return to planner.
+- If implementation is needed, use one writer in one worktree; parallelize only
+  read-only review, validation, evidence, and documentation audits.
+
 ## Planning Loop
 
 1. Select one milestone from `docs/redesign/implementation-roadmap.md`.
@@ -360,6 +388,23 @@ Stop implementation and update `docs/redesign/open-questions.md` when:
 - the executor cannot define validation criteria for the slice
 
 Stopping is preferable to encoding speculative architecture.
+
+## Codex Run Files
+
+Concrete Codex tasks should be written to `docs/agent/runs/`.
+
+Each run file should declare:
+
+- role
+- accepted state
+- selected milestone or planning target
+- files to read
+- scope and out-of-scope items
+- validation commands
+- expected output format
+
+Reusable prompts belong in `docs/agent/prompt-templates/`; role definitions
+belong in `docs/agent/subagents/`.
 
 ## Review Packet
 

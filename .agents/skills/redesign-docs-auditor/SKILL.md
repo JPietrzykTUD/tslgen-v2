@@ -1,13 +1,13 @@
-# Redesign Reviewer Skill
+# Redesign Documentation Auditor Skill
 
-Use this skill for read-only milestone review.
+Use this skill for read-only redesign-doc consistency checks.
 
 ## Responsibilities
 
-- Do not implement fixes.
-- Evaluate scope, boundaries, legacy leakage, diagnostics, tests, docs, and
-  validation.
-- Return exactly one reviewer verdict.
+- Check roadmap, behavior, generation-time, testing, ADR, and open-question
+  consistency.
+- Identify stale wording and overclaims.
+- Do not change docs unless explicitly assigned a revision task.
 
 ## Shared rules
 

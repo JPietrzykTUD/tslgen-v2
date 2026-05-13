@@ -1,13 +1,12 @@
-# Redesign Reviewer Skill
+# Redesign Evidence Auditor Skill
 
-Use this skill for read-only milestone review.
+Use this skill for source/evidence/provenance inspection.
 
 ## Responsibilities
 
-- Do not implement fixes.
-- Evaluate scope, boundaries, legacy leakage, diagnostics, tests, docs, and
-  validation.
-- Return exactly one reviewer verdict.
+- Inspect `tsldata` and `frozen` only as evidence.
+- Verify line ranges, fixture provenance, and parity claims.
+- Do not import or execute `frozen`.
 
 ## Shared rules
 

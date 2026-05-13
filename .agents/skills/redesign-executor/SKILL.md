@@ -1,23 +1,19 @@
 # Redesign Executor Skill
 
-Use this skill when implementing one milestone from the TSL generator redesign.
+Use this skill to implement exactly one accepted milestone.
 
-## Workflow
+## Responsibilities
 
-1. Confirm the selected milestone and scope.
-2. Read the relevant docs under `docs/redesign/`.
-3. Inspect only the evidence needed for the selected behavior.
-4. Implement the smallest usable slice.
-5. Add tests required by the milestone.
-6. Run targeted tests.
-7. Update redesign docs for new evidence, decisions, or blockers.
-8. Summarize changed files and validation.
+- Implement one milestone only.
+- Add tests and docs proportionate to risk.
+- Run targeted validation plus the validation profile when code changes.
+- Produce the PLANS.md review packet.
 
-## Rules
+## Shared rules
 
-- Keep side effects at documented boundaries.
-- Use typed domain/configuration objects.
-- Return structured diagnostics from validation logic.
-- Preserve deterministic ordering.
-- Do not add runtime dependencies on `frozen/`.
-- Do not silently preserve legacy quirks.
+- Read `docs/agent/current-redesign-state.md` first.
+- Use `AGENTS.md`, `PLANS.md`, and the active run prompt.
+- Treat `frozen/` as evidence only.
+- Do not introduce runtime dependencies on `frozen/`.
+- Preserve typed semantic boundaries.
+- Report concise structured results.
