@@ -23,21 +23,24 @@ returned `Accept With Follow-Ups` after local planning-doc corrections.
 The M50 execution-review loop returned `Accept With Follow-Ups` after one
 focused revision.
 
+Post-M50 planning is accepted. It selected Milestone 51, and internal review
+returned `Accept With Follow-Ups` after local planning-doc corrections.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Await human acceptance of the post-M50 planning update.
+Run the Milestone 51 execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m50-acceptance-finalization-prompt.md
+docs/agent/runs/m51-execution-review-loop-prompt.md
 ```
 
-Active planning target:
+Active executor milestone:
 
 ```text
 Milestone 51: Plain-Else Signedness Generation Branch Lowering Slice
@@ -46,9 +49,9 @@ Milestone 51: Plain-Else Signedness Generation Branch Lowering Slice
 Next expected action:
 
 ```text
-After explicit human acceptance, the finalization prompt creates
-docs/agent/runs/m51-execution-review-loop-prompt.md and updates this state file
-to make M51 execution active.
+Execute and internally review M51. If accepted, record follow-ups if needed,
+mark accepted through Milestone 51, and create the next concrete run prompt.
+Do not start Milestone 52 from the M51 execution-review loop.
 ```
 
 Accepted planning prompt:
@@ -91,6 +94,12 @@ Accepted post-M50 planning prompt:
 
 ```text
 docs/agent/runs/post-m50-planning-plus-review-prompt.md
+```
+
+Accepted post-M50 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m50-acceptance-finalization-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -141,19 +150,33 @@ docs/agent/runs/post-m50-planning-plus-review-prompt.md
   at runtime.
 - M50 must not rerun parsing, selection, lowering, backend rendering, or test
   planning during adapter serialization.
-- Planned M51 is generation-time semantic lowering only.
-- Planned M51 accepts only the exact signedness predicate branch form
+- M51 is generation-time semantic lowering only.
+- M51 accepts only the exact signedness predicate branch form
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   with plain `else`.
-- Planned M51 reuses M48 signedness predicate evaluation, M42 branch provenance,
-  and typed M43 `GenerationTypeRef(kind="base.in")` inputs.
-- Planned M51 treats `tsldata/primitives/conversion/repr_change.tsl:1210-1217`
-  as branch-shape evidence only. Conversion body lowering remains out of scope.
-- Planned M51 must not add backend translation, rendering, generated output,
-  shift/conversion body parity, `switch<compile>`, `if<compile>`, direct
-  `intrin<...>`, `let`, `var`, calls, vector transforms, loops, generic
-  lengths, vector/register metadata, Rust, CLI/reporting, compiler execution,
-  generated-test execution, broad TSIL parsing, or broad plain-`else` support.
+- M51 reuses M48 signedness predicate evaluation over typed M43
+  `GenerationTypeRef(kind="base.in")` inputs.
+- M51 reuses M42/M48 branch pruning, deterministic provenance, and
+  selected-branch-only diagnostics.
+- M51 treats plain `else` as equivalent to `else<generation>` only for this
+  selected signedness predicate branch form.
+- M51 must preserve existing `else<generation>` signedness branch behavior.
+- M51 must not add broad plain-`else` support for arbitrary generation
+  branches.
+- M51 must not add primitive-attribute plain `else` support.
+- M51 must not add conversion or shift body parity.
+- M51 must not add `switch<compile>`, `if<compile>`, direct `intrin<...>`,
+  `let`, `var`, calls, vector transforms, loops, aliases, casts, arrays,
+  generic lengths, immediates, vector/register metadata, backend translation,
+  backend rendering, generated C++ output, generated test sources, Rust output,
+  CLI/reporting, writer behavior, compiler execution, generated-test
+  execution, broad TSIL parsing, or branch-body semantics.
+- M51 must not broaden signedness predicates beyond the selected M43
+  `si32`/`ui32` `base.in` inputs.
+- `tsldata/primitives/conversion/repr_change.tsl:1210-1217` is selected M51
+  branch-shape evidence only. Its enclosing `switch<compile>` and branch
+  bodies remain out of scope.
+- `frozen/` remains evidence only.
 
 ## Accepted Milestone 48
 
@@ -208,6 +231,23 @@ generation-time lowering, backend translation, generated C++ implementation
 output, test-source rendering, Rust output, compiler execution, generated-test
 execution, or runtime reads from `frozen/`, raw legacy JSON, or raw TSL.
 
+## Active Milestone 51
+
+The accepted post-M50 planning result selected:
+
+```text
+Milestone 51: Plain-Else Signedness Generation Branch Lowering Slice
+```
+
+M51 is now active for execution through
+`docs/agent/runs/m51-execution-review-loop-prompt.md`. The slice is
+generation-time semantic lowering only. It extends the accepted M48 signedness
+predicate branch pruning behavior to the documented plain `else` form for the
+exact M48 predicate over typed M43 `base.in` values. Backend translation,
+rendering, output generation, CLI/report/writer behavior, Rust, compiler
+execution, generated-test execution, and broader TSIL/plain-`else` support
+remain out of scope.
+
 ## Known Follow-Ups
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
@@ -239,18 +279,18 @@ execution, or runtime reads from `frozen/`, raw legacy JSON, or raw TSL.
   note to `add_avx2_f32_coverage_row.provenance.md`. Existing selected legacy
   row, field-construction evidence, and redesign baseline citations were
   accepted for M50.
-- M51 planning follow-up: before execution, clarify whether
-  `tsldata/primitives/conversion/repr_change.tsl:1210-1217` is the canonical
-  fixture and the broader `repr_change.tsl` ranges are supporting evidence
-  only. This is non-blocking for human acceptance.
+- M51 planning clarification: `tsldata/primitives/conversion/repr_change.tsl:1210-1217`
+  is the representative branch-shape evidence for M51; broader
+  `repr_change.tsl` ranges are supporting evidence only and do not expand M51
+  scope.
 - M51 docs follow-up: tighten `generation-time-semantic-lowering.md` wording
   that says "report parity" remains deferred so it clearly means broad report
   parity beyond the accepted M50 selected row.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the active post-M50
-acceptance finalization prompt after human acceptance.
+No stop condition is active. The workflow proceeds with the active M51
+execution-review loop prompt.
 
 ## Validation Expectations
 
