@@ -1269,6 +1269,12 @@ Consequences:
   `add_binary<simd<int32_t, avx2>>` and
   `add_binary<simd<uint32_t, avx2>>` output returning
   `_mm256_add_epi32(left, right)`.
+- Post-M47 planning selects Milestone 48 as the next generation-time
+  semantic-lowering slice: exact signedness predicate branch pruning for
+  `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
+  with `else<generation>`, evaluated from typed M43
+  `GenerationTypeRef(kind="base.in")` values. This does not add backend
+  translation or rendering behavior.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

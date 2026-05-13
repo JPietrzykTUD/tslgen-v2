@@ -382,6 +382,28 @@ render only `add_binary<simd<int32_t, avx2>>` and
 slice and prefix, post, infix, and immediate modifier evaluation remain
 deferred.
 
+The post-M47 plan selects Milestone 48 as the next generation-time semantic
+lowering slice. M48 evaluates only the exact signedness predicate branch:
+
+```text
+if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+  ...
+} else<generation> {
+  ...
+}
+```
+
+The predicate consumes the typed M43 `GenerationTypeRef(kind="base.in")` value:
+`si32` selects the signed branch and `ui32` selects the unsigned branch. The
+lowering result is a typed boolean generation value plus the same deterministic
+selected-branch provenance used by M42. Unresolved helpers in the unselected
+branch remain ignored; unresolved helpers in the selected branch remain
+diagnostic-producing. M48 does not accept bare `else`, does not implement
+`type::is_same` or `type::is_integral`, does not expand supported type tags
+beyond the selected M43 `si32`/`ui32` cases, and does not render shift or
+conversion output. Backend translation and renderers still reject or avoid raw
+generation helper evaluation.
+
 ## Rendering Behavior
 
 Rendering receives a backend plan and produces artifacts. Rendering must not perform selection, parse source files, read CPU flags, or write files.

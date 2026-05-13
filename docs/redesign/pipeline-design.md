@@ -342,9 +342,9 @@ translation may handle `type<backend>(...)` and `value<backend>(...)` only as
 typed requests whose inputs are already-resolved semantic values.
 
 Milestone 41 specifies the detailed generation-time helper inventory,
-`GenerationContext` fields, and selected next helper slice in
-`generation-time-semantic-lowering.md`. The selected future slice is boolean
-primitive-attribute branch pruning for
+`GenerationContext` fields, and the first selected helper slice in
+`generation-time-semantic-lowering.md`: boolean primitive-attribute branch
+pruning for
 `if<generation>(value<generation>(primitive::attribute(aligned)))`.
 Milestone 42 implements that slice for `aligned`. Helpers in the unselected
 branch are discarded without diagnostics; unresolved generation-time helpers in
@@ -366,7 +366,12 @@ inside backend translation. Milestone 44 selects the modifier boundary,
 Milestone 45 implements only the selected intrinsic suffix request over typed
 M43 values, and Milestone 46 translates selected C++ type spellings over typed
 M43 values. Milestone 47 renders the selected native integer add output only by
-consuming those translated values as explicit renderer inputs.
+consuming those translated values as explicit renderer inputs. Milestone 48 is
+the next selected generation-time semantic-lowering slice: it evaluates only the
+exact `type::is_signed(type<generation>(base::in))` branch predicate over the
+typed M43 `GenerationTypeRef(kind="base.in")` value, prunes to the selected
+branch with M42 provenance behavior, and leaves backend translation/rendering
+unchanged.
 
 ## Stage 9: Backend Planning
 

@@ -20,18 +20,18 @@ Latest accepted slice:
 Current required action:
 
 ```text
-Plan the next numbered milestone after M47.
+Review the post-M47 planning packet. If accepted, execute Milestone 48.
 ```
 
-Use:
+Planning prompt used:
 
 ```text
 docs/agent/runs/post-m47-orchestrated-planning-prompt.md
 ```
 
-The likely next milestone is a narrow signedness/type-predicate generation-time
-branch-pruning slice over typed M43 values, but Codex must confirm the evidence
-and update the roadmap before any implementation begins.
+The post-M47 orchestrated planning pass selects a narrow
+signedness/type-predicate generation-time branch-pruning slice over typed M43
+values. The roadmap and supporting docs now contain a formal Milestone 48 plan.
 
 ## Current Boundary Rules
 
@@ -42,17 +42,17 @@ and update the roadmap before any implementation begins.
   `uint32_t`.
 - M47 consumes M45 and M46 translated values for the selected native integer add
   output.
+- M48, if accepted for execution, evaluates only the exact
+  `type::is_signed(type<generation>(base::in))` generation-time predicate over
+  typed M43 `GenerationTypeRef(kind="base.in")` values and prunes the selected
+  branch in semantic lowering.
 - Renderers must not infer suffixes, type spellings, generation-time helper
   semantics, or backend modifier semantics.
 - Backend translation must not parse raw `type<generation>(...)` text.
 - Future semantic behavior must be expressed as typed rules or typed evaluator
   functions over explicit IR/domain values.
 
-## Next Planning Goal
-
-Create a formal Milestone 48 section or an explicitly justified alternative.
-
-The expected candidate is:
+## Selected Next Milestone
 
 ```text
 Milestone 48: Signedness Type-Predicate Branch Pruning Slice
@@ -60,6 +60,9 @@ Milestone 48: Signedness Type-Predicate Branch Pruning Slice
 
 The slice should remain generation-time semantic lowering only. It should not
 combine branch pruning with backend modifier translation or output rendering.
+It should not accept bare `else`, broaden to `type::is_same` or
+`type::is_integral`, or render shift/conversion output without a later explicit
+milestone.
 
 ## Validation Expectations
 

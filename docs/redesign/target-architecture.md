@@ -324,8 +324,8 @@ Current roadmap note:
   `if<generation>`, `type<generation>`, and `value<generation>` forms cannot
   leak into backend translation.
 - The detailed Milestone 41 contract lives in
-  `generation-time-semantic-lowering.md`. Its first future implementation slice
-  is the boolean primitive-attribute condition used by aligned load/store
+  `generation-time-semantic-lowering.md`. Its first implementation slice
+  was the boolean primitive-attribute condition used by aligned load/store
   evidence.
 - Milestone 42 implements that first slice in lowering. Backend translation and
   rendering still do not evaluate generation-time helpers.
@@ -344,6 +344,10 @@ Current roadmap note:
   consumes typed M43 `GenerationTypeRef` values rather than raw helper text.
 - Milestone 47 implements the selected native integer C++ output expansion and
   consumes translated suffix/type-spelling values as renderer inputs.
+- Milestone 48 is the next selected lowering/model slice. It evaluates only the
+  exact signedness predicate branch over M43
+  `GenerationTypeRef(kind="base.in")` values and does not add backend
+  translation or rendering behavior.
 
 Does not:
 

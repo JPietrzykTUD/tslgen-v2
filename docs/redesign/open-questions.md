@@ -1143,9 +1143,10 @@ parity level.
 ## OQ-032: Which TSIL Helper Boundary Should Follow The Mini Return Lowering?
 
 Status: Answered for the Milestone 41 contract, Milestone 42 aligned-branch
-slice, and accepted/implemented Milestone 43 base type query slice. Narrowed,
-but not closed, by the M44-M47 post-M43 native integer sequence; broader helper
-families remain open until selected by future milestones.
+slice, accepted/implemented Milestone 43 base type query slice, and the
+post-M47 M48 signedness branch-pruning plan. Narrowed, but not closed, by the
+M44-M47 post-M43 native integer sequence; broader helper families remain open
+until selected by future milestones.
 
 Why it matters:
 
@@ -1208,14 +1209,23 @@ inputs and language maps: `si32 -> int32_t` and `ui32 -> uint32_t`. Milestone
 47 renders the selected native integer add output slice after consuming the M45
 and M46 translated values.
 
+The post-M47 planning pass selects Milestone 48 as the next helper boundary:
+signedness/type-predicate branch pruning for the exact
+`if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
+condition with `else<generation>`. M48 consumes the typed M43
+`GenerationTypeRef(kind="base.in")`, supports the selected `si32`/`ui32` tags,
+and remains generation-time semantic lowering only.
+
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
-vector/register metadata, signedness branch pruning, primitive calls, loops,
-variables, generation-time branches beyond the selected aligned
-primitive-attribute condition, type/value metadata beyond the selected base type
-query family, nested expressions, direct `intrin<...>` calls, helper families
-such as `io`, `mem`, `seq`, `pack`, and `algo`, Rust output, generated tests,
-CLI/report parity, compiler execution, and broad native rendering.
+vector/register metadata, signedness/type-predicate forms beyond the exact M48
+`type::is_signed(type<generation>(base::in))` and `else<generation>` shape,
+primitive calls, loops, variables, generation-time branches beyond the selected
+aligned primitive-attribute and signedness-predicate conditions, type/value
+metadata beyond the selected base type query family, nested expressions, direct
+`intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
+`algo`, Rust output, generated tests, CLI/report parity, compiler execution,
+and broad native rendering.
 
 Required evidence:
 
@@ -1244,7 +1254,9 @@ Backend translation must not parse raw
 helpers, suffixes, or type spelling locally. Yes for broader TSIL constructs,
 broad native rendering, Rust output, generated tests, CLI/report parity, and
 compiler execution until their fixtures, expected models, and validation
-boundaries are selected.
+boundaries are selected. No for the exact M48 signedness branch-pruning slice,
+provided it stays in generation-time semantic lowering and consumes typed M43
+`GenerationTypeRef(kind="base.in")` values.
 
 ## OQ-033: Which Legacy CLI Workflow Should Be Supported First?
 
@@ -1385,8 +1397,9 @@ Current roadmap direction:
 ## OQ-036: Where Do Generation-Time Helpers Resolve Relative To Backend Translation?
 
 Status: Answered for Milestone 41, implemented for the first Milestone 42
-helper slice, narrowed for the Milestone 43 base type query slice, and preserved
-by the numbered M44-M47 post-M43 phase.
+helper slice, narrowed for the Milestone 43 base type query slice, preserved by
+the numbered M44-M47 post-M43 phase, and selected for the next M48 signedness
+branch-pruning slice.
 
 Why it matters:
 
@@ -1415,15 +1428,19 @@ scalar type queries:
 `type<generation>(base::signed_of(type<generation>(base::in)))`, and
 `type<generation>(base::unsigned_of(type<generation>(base::in)))`. These
 resolve to typed semantic type values before backend translation. Type
-signedness branch pruning, vector type/value queries, backend suffix/prefix
-modifiers, `immediate(n)`, primitive calls, loops, and direct intrinsics remain
-deferred.
+signedness branch pruning is selected next as M48 for the exact
+`type::is_signed(type<generation>(base::in))` predicate over the M43 `base.in`
+typed value. Vector type/value queries, backend prefix/post/infix modifiers,
+`immediate(n)`, primitive calls, loops, direct intrinsics, and broader predicate
+forms remain deferred.
 
 Milestones 44 through 47 preserve this decision. M45 and M46 are backend
 translation slices that consume typed M43 values; they do not parse raw
 generation helper text. M47 is a rendering slice that consumes translated
 suffix/type-spelling values and must not evaluate helper or backend metadata
-semantics locally.
+semantics locally. M48 preserves the same order by evaluating signedness in
+generation-time semantic lowering before any backend translation or rendering
+stage can consume the pruned result.
 
 Required evidence:
 
@@ -1442,10 +1459,12 @@ No for M40 because the selected `avx2/f32` default intrinsic-composition case
 can remain generation-free and must reject unresolved generation-time inputs.
 No for the Milestone 41 documentation contract, the Milestone 42
 primitive-attribute branch pruning slice, or the Milestone 43 base type query
-slice. Yes for modifier support, suffix inference, branch-dependent
-output beyond selected branch pruning, vector/generic metadata queries, and
-broad translation-map evaluation until later numbered slices implement the
-selected generation-time semantic lowering behavior.
+slice. No for the exact M48 signedness branch-pruning slice if it remains scoped
+to typed M43 `base.in` values and `else<generation>`. Yes for modifier support,
+suffix inference, branch-dependent output beyond selected branch pruning,
+bare-`else` compatibility, `type::is_same`/`type::is_integral`, vector/generic
+metadata queries, and broad translation-map evaluation until later numbered
+slices implement the selected generation-time semantic lowering behavior.
 
 ## Follow-ups from Milestone 2 review
 

@@ -639,6 +639,15 @@ Recommended first parity checks:
   translated native integer plan, determinism, M39/M40 `avx2/f32` regressions,
   and no compiler execution. The selected fixture is
   `tslgen/tests/fixtures/golden/parity/cpp/add_native_avx2_i32_u32_excerpt.hpp`.
+- Milestone 48: signedness type-predicate branch-pruning tests in
+  generation-time semantic lowering. Tests must cover `si32` selecting the signed
+  branch, `ui32` selecting the unsigned branch, context precedence for
+  `type_tag_override`, `selected_type_tag`, and selected candidate defaults,
+  malformed branch syntax, unsupported predicate forms, missing type context,
+  unknown/unsupported/non-integer type tags, unsupported `else` mode,
+  selected-branch-only unresolved-helper diagnostics, backend raw-helper
+  rejection, renderer non-evaluation, determinism, and unchanged M42/M43/M45/M46
+  and M47 regressions. No generated output or compiler execution is selected.
 
 Deferred parity checks:
 

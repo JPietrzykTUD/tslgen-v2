@@ -70,9 +70,11 @@ reviewable:
    integer suffix/type work.
 7. M44-M46 own the backend modifier and type-spelling boundaries before native
    integer output expands.
-8. M47 is the next selected native integer add parity slice for `avx2` `si32`
-   and `ui32`.
-9. Generated C++ tests, CLI workflow compatibility, and coverage JSON adapter
+8. M47 owns the selected native integer add parity slice for `avx2` `si32` and
+   `ui32`.
+9. M48 returns to generation-time semantic lowering for signedness branch
+   pruning and does not add a generated-output baseline.
+10. Generated C++ tests, CLI workflow compatibility, and coverage JSON adapter
    work are deferred until the backend/lowering boundary correction is accepted.
 
 This target is small enough because it uses one primitive family, one template
@@ -273,8 +275,9 @@ parity, or report/documentation parity.
 - Rust generated output, Rust bodies, Rust generated tests, and Cargo
   integration.
 - C17 activation.
-- Full TSIL grammar, semantic calls, loops, variables, type/value queries,
-  generation-time conditions, and backend translation-map evaluation.
+- Full TSIL grammar, semantic calls, loops, variables, type/value queries beyond
+  the selected M43/M48 forms, generation-time conditions beyond the selected M42
+  and M48 branch forms, and backend translation-map evaluation.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and
   googletest download or vendoring.
 - Full legacy CLI drop-in compatibility and `run_all.sh` replacement.
