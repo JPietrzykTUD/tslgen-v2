@@ -242,8 +242,22 @@ class TsilPrimitiveAttributeCondition:
 
 
 @dataclass(frozen=True, slots=True)
+class TsilTypeSignednessCondition:
+    type_ref: GenerationTypeRef
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return ("type_is_signed", self.type_ref.key)
+
+
+type TsilGenerationCondition = (
+    TsilPrimitiveAttributeCondition | TsilTypeSignednessCondition
+)
+
+
+@dataclass(frozen=True, slots=True)
 class PrunedGenerationBranch:
-    condition: TsilPrimitiveAttributeCondition
+    condition: TsilGenerationCondition
     selected_branch: GenerationBranchChoice
     statement_text: str
     condition_location: SourceLocation | None = None
@@ -570,6 +584,12 @@ class _ParsedGenerationIf:
     false_branch_text: str
 
 
+@dataclass(frozen=True, slots=True)
+class _ResolvedGenerationCondition:
+    condition: TsilGenerationCondition
+    value: bool
+
+
 def _prune_generation_branch(
     item: LoweringInput,
     request: LoweringRequest,
@@ -580,81 +600,22 @@ def _prune_generation_branch(
         return Result.failure(parsed.diagnostics)
     parsed_branch = parsed.unwrap()
 
-    condition = _primitive_attribute_condition(item, parsed_branch.condition_text)
+    condition = _generation_branch_condition(item, request, parsed_branch.condition_text)
     if not condition.is_ok:
         return Result.failure(condition.diagnostics)
-    attribute_condition = condition.unwrap()
+    resolved_condition = condition.unwrap()
 
-    attributes = _primitive_attributes_for(item, request)
-    if attributes is None:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-LOWER-GEN-CONTEXT-MISSING",
-                    "generation-time primitive-attribute lowering requires "
-                    "primitive attributes in GenerationContext or on the "
-                    "selected candidate",
-                    location=item.source_location,
-                ),
-            )
-        )
-
-    if attribute_condition.attribute_name != "aligned":
-        if attribute_condition.attribute_name not in attributes:
-            return Result.failure(
-                (
-                    Diagnostic.error(
-                        "TSL-LOWER-GEN-ATTRIBUTE-UNKNOWN",
-                        "generation-time primitive-attribute condition "
-                        f"references unknown primitive attribute "
-                        f"{attribute_condition.attribute_name!r}",
-                        location=item.source_location,
-                    ),
-                )
-            )
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-LOWER-GEN-IF-UNSUPPORTED",
-                    "generation-time branch pruning supports only primitive "
-                    "attribute 'aligned'; got "
-                    f"{attribute_condition.attribute_name!r}",
-                    location=item.source_location,
-                ),
-            )
-        )
-
-    if attribute_condition.attribute_name not in attributes:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-LOWER-GEN-ATTRIBUTE-MISSING",
-                    "generation-time branch pruning requires primitive "
-                    "attribute 'aligned'",
-                    location=item.source_location,
-                ),
-            )
-        )
-    value = attributes[attribute_condition.attribute_name]
-    if not isinstance(value, bool):
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-LOWER-GEN-ATTRIBUTE-TYPE",
-                    "generation-time branch pruning requires primitive "
-                    f"attribute 'aligned' to be boolean; got {value!r}",
-                    location=item.source_location,
-                ),
-            )
-        )
-
-    selected_branch: GenerationBranchChoice = "true" if value else "false"
+    selected_branch: GenerationBranchChoice = (
+        "true" if resolved_condition.value else "false"
+    )
     statement_text = (
-        parsed_branch.true_branch_text if value else parsed_branch.false_branch_text
+        parsed_branch.true_branch_text
+        if resolved_condition.value
+        else parsed_branch.false_branch_text
     ).strip()
     return Result.ok(
         PrunedGenerationBranch(
-            condition=attribute_condition,
+            condition=resolved_condition.condition,
             selected_branch=selected_branch,
             statement_text=statement_text,
             condition_location=item.source_location,
@@ -1056,14 +1017,172 @@ def _parse_generation_if(
     )
 
 
-def _primitive_attribute_condition(
+def _generation_branch_condition(
     item: LoweringInput,
+    request: LoweringRequest,
     condition_text: str,
-) -> Result[TsilPrimitiveAttributeCondition]:
+) -> Result[_ResolvedGenerationCondition]:
+    primitive_condition = _primitive_attribute_condition(condition_text)
+    if primitive_condition is not None:
+        return _resolve_primitive_attribute_condition(
+            item,
+            request,
+            primitive_condition,
+        )
+    return _resolve_type_signedness_condition(item, request, condition_text)
+
+
+def _primitive_attribute_condition(
+    condition_text: str,
+) -> TsilPrimitiveAttributeCondition | None:
     match = _PRIMITIVE_ATTRIBUTE_CONDITION_RE.fullmatch(condition_text)
     if match is None:
-        return Result.failure((_unsupported_generation_condition_diagnostic(item, condition_text),))
-    return Result.ok(TsilPrimitiveAttributeCondition(match.group(1)))
+        return None
+    return TsilPrimitiveAttributeCondition(match.group(1))
+
+
+def _resolve_primitive_attribute_condition(
+    item: LoweringInput,
+    request: LoweringRequest,
+    attribute_condition: TsilPrimitiveAttributeCondition,
+) -> Result[_ResolvedGenerationCondition]:
+    attributes = _primitive_attributes_for(item, request)
+    if attributes is None:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-GEN-CONTEXT-MISSING",
+                    "generation-time primitive-attribute lowering requires "
+                    "primitive attributes in GenerationContext or on the "
+                    "selected candidate",
+                    location=item.source_location,
+                ),
+            )
+        )
+
+    if attribute_condition.attribute_name != "aligned":
+        if attribute_condition.attribute_name not in attributes:
+            return Result.failure(
+                (
+                    Diagnostic.error(
+                        "TSL-LOWER-GEN-ATTRIBUTE-UNKNOWN",
+                        "generation-time primitive-attribute condition "
+                        f"references unknown primitive attribute "
+                        f"{attribute_condition.attribute_name!r}",
+                        location=item.source_location,
+                    ),
+                )
+            )
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-GEN-IF-UNSUPPORTED",
+                    "generation-time branch pruning supports only primitive "
+                    "attribute 'aligned'; got "
+                    f"{attribute_condition.attribute_name!r}",
+                    location=item.source_location,
+                ),
+            )
+        )
+
+    if attribute_condition.attribute_name not in attributes:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-GEN-ATTRIBUTE-MISSING",
+                    "generation-time branch pruning requires primitive "
+                    "attribute 'aligned'",
+                    location=item.source_location,
+                ),
+            )
+        )
+    value = attributes[attribute_condition.attribute_name]
+    if not isinstance(value, bool):
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-GEN-ATTRIBUTE-TYPE",
+                    "generation-time branch pruning requires primitive "
+                    f"attribute 'aligned' to be boolean; got {value!r}",
+                    location=item.source_location,
+                ),
+            )
+        )
+
+    return Result.ok(
+        _ResolvedGenerationCondition(
+            condition=attribute_condition,
+            value=value,
+        )
+    )
+
+
+def _resolve_type_signedness_condition(
+    item: LoweringInput,
+    request: LoweringRequest,
+    condition_text: str,
+) -> Result[_ResolvedGenerationCondition]:
+    value_call = _parse_generation_type_call(condition_text, "value<generation>")
+    if value_call is None or len(value_call) != 1:
+        return Result.failure(
+            (_unsupported_generation_condition_diagnostic(item, condition_text),)
+        )
+    predicate_call = _parse_generation_type_call(value_call[0], "type::is_signed")
+    if predicate_call is None or len(predicate_call) != 1:
+        return Result.failure(
+            (_unsupported_generation_condition_diagnostic(item, condition_text),)
+        )
+
+    type_query = predicate_call[0].strip()
+    context = _context_for_candidate(item, request)
+    selected_candidate_type_tag = (
+        item.candidate.type_tag
+        if request.generation_context.use_candidate_type_tag
+        else None
+    )
+    type_ref = resolve_generation_type_query(
+        type_query,
+        context,
+        selected_candidate_type_tag=selected_candidate_type_tag,
+        location=item.source_location,
+    )
+    if not type_ref.is_ok:
+        return Result.failure(type_ref.diagnostics)
+
+    resolved_type_ref = type_ref.unwrap()
+    if resolved_type_ref.kind != "base.in":
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-GEN-IF-UNSUPPORTED",
+                    "generation-time signedness branch pruning supports only "
+                    "'type::is_signed(type<generation>(base::in))'; got "
+                    f"{condition_text!r}",
+                    location=item.source_location,
+                ),
+            )
+        )
+
+    if resolved_type_ref.type_tag == "si32":
+        value = True
+    elif resolved_type_ref.type_tag == "ui32":
+        value = False
+    else:
+        supported = _supported_generation_type_tag(
+            resolved_type_ref.type_tag,
+            type_query,
+            item.source_location,
+        )
+        if not supported.is_ok:
+            return Result.failure(supported.diagnostics)
+        raise AssertionError("supported signedness type tags must be handled directly")
+
+    return Result.ok(
+        _ResolvedGenerationCondition(
+            condition=TsilTypeSignednessCondition(resolved_type_ref),
+            value=value,
+        )
+    )
 
 
 def _skip_whitespace(text: str, index: int) -> int:
@@ -1231,8 +1350,8 @@ def _malformed_generation_if_diagnostic(
     return Diagnostic.error(
         "TSL-LOWER-GEN-IF-MALFORMED",
         "generation-time branch pruning supports only branches shaped as "
-        "'if<generation>(value<generation>(primitive::attribute(aligned))) "
-        "{ ... } else<generation> { ... }'",
+        "'if<generation>(<supported condition>) { ... } else<generation> "
+        "{ ... }'",
         location=item.source_location,
     )
 
@@ -1243,8 +1362,10 @@ def _unsupported_generation_condition_diagnostic(
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-LOWER-GEN-IF-UNSUPPORTED",
-        "generation-time branch pruning supports only condition "
-        "'value<generation>(primitive::attribute(aligned))'; got "
+        "generation-time branch pruning supports only conditions "
+        "'value<generation>(primitive::attribute(aligned))' and "
+        "'value<generation>(type::is_signed(type<generation>(base::in)))'; "
+        "got "
         f"{condition_text!r}",
         location=item.source_location,
     )

@@ -11,21 +11,23 @@ Milestone 47 is accepted.
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48 as the next executor milestone.
 
+Milestone 48 execution is complete and awaiting review.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 48.
+Review Milestone 48.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m48-executor-prompt.md
+docs/agent/runs/m48-review-prompt.md
 ```
 
-Active executor milestone:
+Active review milestone:
 
 ```text
 Milestone 48: Signedness Type-Predicate Branch Pruning Slice
@@ -34,8 +36,8 @@ Milestone 48: Signedness Type-Predicate Branch Pruning Slice
 Next expected action:
 
 ```text
-Milestone 48 executor finishes, creates docs/agent/runs/m48-review-prompt.md,
-and updates this state file to point at that review prompt.
+Milestone 48 reviewer returns a verdict, creates the next concrete run prompt
+under docs/agent/runs/, and updates this state file according to the verdict.
 ```
 
 Accepted planning prompt:
@@ -65,9 +67,9 @@ docs/agent/runs/post-m47-orchestrated-planning-plus-review-prompt.md
 - M48 includes no backend translation, rendering, generated output,
   CLI/report/writer, Rust, or compiler execution work.
 
-## Active Executor Milestone
+## Active Review Milestone
 
-The accepted post-M47 planning pass selected:
+The Milestone 48 executor implemented:
 
 ```text
 Milestone 48: Signedness Type-Predicate Branch Pruning Slice
@@ -83,7 +85,7 @@ plain `else` conversion syntax, or broad shift/conversion body lowering.
 ## Known Follow-Ups
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
-  later. This is non-blocking for M48 execution.
+  later. This is non-blocking for M48 review and acceptance.
 - The retried evidence audit confirmed additional exact shift evidence ranges:
   `tsldata/primitives/bitwise/shifts.tsl:535-547`, `:625-635`, `:842-887`,
   `:933-943`, `:1222-1244`, `:1268-1280`, `:1465-1481`, and `:1507-1518`.
@@ -92,7 +94,7 @@ plain `else` conversion syntax, or broad shift/conversion body lowering.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the active M48 executor
+No stop condition is active. The workflow proceeds with the active M48 review
 prompt.
 
 ## Validation Expectations

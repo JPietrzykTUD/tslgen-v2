@@ -640,9 +640,9 @@ Recommended first parity checks:
   translated native integer plan, determinism, M39/M40 `avx2/f32` regressions,
   and no compiler execution. The selected fixture is
   `tslgen/tests/fixtures/golden/parity/cpp/add_native_avx2_i32_u32_excerpt.hpp`.
-- Milestone 48: signedness type-predicate branch-pruning tests for the exact
+- Milestone 48: signedness type-predicate branch-pruning tests cover the exact
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
-  plus `else<generation>` form. Tests should cover `si32` true-branch pruning,
+  plus `else<generation>` form, including `si32` true-branch pruning,
   `ui32` false-branch pruning, selected-branch-only unresolved-helper
   diagnostics, malformed branch diagnostics, unsupported predicate and nested
   type-query diagnostics, missing type context, unknown or unsupported type

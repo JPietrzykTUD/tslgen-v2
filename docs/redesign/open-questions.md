@@ -1143,10 +1143,10 @@ parity level.
 ## OQ-032: Which TSIL Helper Boundary Should Follow The Mini Return Lowering?
 
 Status: Answered for the Milestone 41 contract, Milestone 42 aligned-branch
-slice, and accepted/implemented Milestone 43 base type query slice. Narrowed,
-but not closed, by the M44-M47 post-M43 native integer sequence and the
-selected post-M47 M48 signedness branch-pruning plan; broader helper families
-remain open until selected by future milestones.
+slice, accepted/implemented Milestone 43 base type query slice, and
+implemented Milestone 48 signedness branch-pruning slice. Narrowed, but not
+closed, by the M44-M47 post-M43 native integer sequence; broader helper
+families remain open until selected by future milestones.
 
 Why it matters:
 
@@ -1209,8 +1209,7 @@ inputs and language maps: `si32 -> int32_t` and `ui32 -> uint32_t`. Milestone
 47 renders the selected native integer add output slice after consuming the M45
 and M46 translated values.
 
-The selected post-M47 plan is Milestone 48: signedness type-predicate branch
-pruning for exact
+Milestone 48 implements signedness type-predicate branch pruning for exact
 `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
 plus `else<generation>` forms. M48 consumes typed M43
 `GenerationTypeRef(kind="base.in")` values, produces a typed boolean
@@ -1252,9 +1251,9 @@ Milestone 47 renders that slice from explicit M45 suffix and M46 type-spelling
 values. Yes for native integer rendering expansion beyond that selected slice.
 Backend translation must not parse raw
 `type<generation>(...)` text, and renderers must not evaluate generation-time
-helpers, suffixes, or type spelling locally. No for the planned M48
-signedness-pruning slice once this planning pass is accepted, provided it
-stays inside generation-time semantic lowering. Yes for broader TSIL
+helpers, suffixes, or type spelling locally. No for the M48
+signedness-pruning slice because it stays inside generation-time semantic
+lowering. Yes for broader TSIL
 constructs, broad native rendering, Rust output, generated tests, CLI/report
 parity, and compiler execution until their fixtures, expected models, and
 validation boundaries are selected.
@@ -1392,7 +1391,7 @@ Current roadmap direction:
 - Milestone 46 provides selected C++ scalar type spelling over typed M43 inputs.
 - Milestone 47 expands only the selected native integer add output after M45 and
   M46 translation results exist.
-- Milestone 48 is the selected return to generation-time semantic lowering for
+- Milestone 48 implements the selected return to generation-time semantic lowering for
   signedness branch pruning over typed M43 `base.in` values; it does not add
   native rendering expansion.
 - Renderer-local intrinsic lookup tables are rejected as an implementation
@@ -1402,8 +1401,8 @@ Current roadmap direction:
 
 Status: Answered for Milestone 41, implemented for the first Milestone 42
 helper slice, narrowed for the Milestone 43 base type query slice, preserved by
-the numbered M44-M47 post-M43 phase, and selected for the post-M47 M48
-signedness branch-pruning plan.
+the numbered M44-M47 post-M43 phase, and implemented for the M48 signedness
+branch-pruning slice.
 
 Why it matters:
 
@@ -1432,7 +1431,7 @@ scalar type queries:
 `type<generation>(base::signed_of(type<generation>(base::in)))`, and
 `type<generation>(base::unsigned_of(type<generation>(base::in)))`. These
 resolve to typed semantic type values before backend translation. Milestone 48
-is selected to evaluate only
+evaluates only
 `value<generation>(type::is_signed(type<generation>(base::in)))` over M43
 `GenerationTypeRef(kind="base.in")` values and prune exact
 `if<generation> ... else<generation>` branches before backend translation.
@@ -1444,7 +1443,7 @@ Milestones 44 through 47 preserve this decision. M45 and M46 are backend
 translation slices that consume typed M43 values; they do not parse raw
 generation helper text. M47 is a rendering slice that consumes translated
 suffix/type-spelling values and must not evaluate helper or backend metadata
-semantics locally. M48 returns to generation-time semantic lowering and must
+semantics locally. M48 returns to generation-time semantic lowering and does
 not reopen the M45/M46 translation or M47 rendering boundaries.
 
 Required evidence:
@@ -1464,8 +1463,8 @@ No for M40 because the selected `avx2/f32` default intrinsic-composition case
 can remain generation-free and must reject unresolved generation-time inputs.
 No for the Milestone 41 documentation contract, the Milestone 42
 primitive-attribute branch pruning slice, or the Milestone 43 base type query
-slice. No for the planned M48 signedness branch-pruning slice once this
-planning pass is accepted and the implementation remains lowering-only. Yes for
+slice. No for the M48 signedness branch-pruning slice because the
+implementation remains lowering-only. Yes for
 modifier support beyond accepted suffix/type spelling, branch-dependent output
 beyond selected branch pruning, vector/generic metadata queries, and broad
 translation-map evaluation until later numbered slices implement the selected

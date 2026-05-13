@@ -20,6 +20,7 @@ from tslgen.lowering import (
     TsilParameterReference,
     TsilPrimitiveAttributeCondition,
     TsilReturnStatement,
+    TsilTypeSignednessCondition,
     lower_candidates,
     prepare_lowering_inputs,
     resolve_generation_type_query,
@@ -136,6 +137,69 @@ prim<v:=(v,v)> lower_generation(left, right):
         requires []
         implementation:
           tsil "if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) { emit_return(left + right); } else<generation> { emit_return(right + left); }"
+
+prim<v:=(v,v)> lower_generation_signedness(left, right):
+  tests []
+  impls:
+    scalar:
+      ?i32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) { emit_return(left + right); } else<generation> { emit_return(right + left); }"
+
+prim<v:=(v,v)> lower_generation_signedness_unselected_helper_si32(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) { emit_return(left + right); } else<generation> { emit_return(value<generation>(vector::length)); }"
+
+prim<v:=(v,v)> lower_generation_signedness_unselected_helper_ui32(left, right):
+  tests []
+  impls:
+    scalar:
+      ui32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) { emit_return(value<generation>(vector::length)); } else<generation> { emit_return(right + left); }"
+
+prim<v:=(v,v)> lower_generation_signedness_selected_helper(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) { emit_return(value<generation>(vector::length)); } else<generation> { emit_return(right + left); }"
+
+prim<v:=(v,v)> lower_generation_signedness_unsupported_predicate(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(type::is_integral(type<generation>(base::in)))) { emit_return(left + right); } else<generation> { emit_return(right + left); }"
+
+prim<v:=(v,v)> lower_generation_signedness_nested_type(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(type::is_signed(type<generation>(base::signed_of(type<generation>(vector::register)))))) { emit_return(left + right); } else<generation> { emit_return(right + left); }"
+
+prim<v:=(v,v)> lower_generation_signedness_plain_else(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) { emit_return(left + right); } else { emit_return(right + left); }"
 
 prim<v:=(v,v)> lower_generation_type_base(left, right):
   tests []
@@ -643,6 +707,194 @@ class LoweringBoundaryTests(unittest.TestCase):
         )
         self.assertIn("vector::register", result.diagnostics[0].message)
 
+    def test_prunes_signedness_generation_branch_for_si32_and_ui32(self) -> None:
+        selection = self.selection_for("lower_generation_signedness")
+
+        result = lower_candidates(selection, LoweringRequest(backend_id="cpp"))
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementations = result.unwrap().implementations
+        self.assertEqual(len(implementations), 2)
+        self.assertEqual(
+            tuple(implementation.statements for implementation in implementations),
+            (
+                (
+                    TsilReturnStatement(
+                        TsilBinaryExpression(
+                            operator="+",
+                            left=TsilParameterReference("left"),
+                            right=TsilParameterReference("right"),
+                        )
+                    ),
+                ),
+                (
+                    TsilReturnStatement(
+                        TsilBinaryExpression(
+                            operator="+",
+                            left=TsilParameterReference("right"),
+                            right=TsilParameterReference("left"),
+                        )
+                    ),
+                ),
+            ),
+        )
+        self.assertEqual(
+            tuple(
+                implementation.generation_branches[0]
+                for implementation in implementations
+            ),
+            (
+                PrunedGenerationBranch(
+                    condition=TsilTypeSignednessCondition(
+                        GenerationTypeRef(kind="base.in", type_tag="si32")
+                    ),
+                    selected_branch="true",
+                    statement_text="emit_return(left + right);",
+                    condition_location=selection.candidates[
+                        0
+                    ].variant.source.declaration.source_span.location,
+                ),
+                PrunedGenerationBranch(
+                    condition=TsilTypeSignednessCondition(
+                        GenerationTypeRef(kind="base.in", type_tag="ui32")
+                    ),
+                    selected_branch="false",
+                    statement_text="emit_return(right + left);",
+                    condition_location=selection.candidates[
+                        1
+                    ].variant.source.declaration.source_span.location,
+                ),
+            ),
+        )
+
+    def test_signedness_generation_branch_pruning_is_deterministic(self) -> None:
+        selection = self.selection_for("lower_generation_signedness")
+
+        first = lower_candidates(selection)
+        second = lower_candidates(selection)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+
+    def test_signedness_unselected_branch_helper_does_not_poison_selection(
+        self,
+    ) -> None:
+        for primitive_name in (
+            "lower_generation_signedness_unselected_helper_si32",
+            "lower_generation_signedness_unselected_helper_ui32",
+        ):
+            with self.subTest(primitive_name=primitive_name):
+                selection = self.selection_for(primitive_name)
+
+                result = lower_candidates(selection)
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+
+    def test_signedness_selected_branch_helper_reports_diagnostic(self) -> None:
+        selection = self.selection_for("lower_generation_signedness_selected_helper")
+
+        result = lower_candidates(selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-UNRESOLVED-SELECTED-BRANCH",
+            severity="error",
+        )
+        self.assertIn("value<generation>", result.diagnostics[0].message)
+
+    def test_signedness_generation_branch_reports_missing_type_context(self) -> None:
+        selection = self.selection_for("lower_generation")
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(use_candidate_type_tag=False),
+            ),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-TYPE-CONTEXT-MISSING",
+            severity="error",
+        )
+
+    def test_signedness_generation_branch_reports_unsupported_type_tags(self) -> None:
+        selection = self.selection_for("lower_generation")
+        cases = (
+            ("f32", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("ptr", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("?i?", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("mystery", "TSL-LOWER-GEN-TYPE-TAG-UNKNOWN"),
+        )
+
+        for type_tag, code in cases:
+            with self.subTest(type_tag=type_tag):
+                result = lower_candidates(
+                    selection,
+                    LoweringRequest(
+                        generation_context=GenerationContext(
+                            type_tag_override=type_tag,
+                        ),
+                    ),
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
+                self.assertIn(type_tag, result.diagnostics[0].message)
+
+    def test_signedness_generation_branch_reports_unsupported_predicate(self) -> None:
+        selection = self.selection_for("lower_generation_signedness_unsupported_predicate")
+
+        result = lower_candidates(selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-IF-UNSUPPORTED",
+            severity="error",
+        )
+        self.assertIn("type::is_integral", result.diagnostics[0].message)
+
+    def test_signedness_generation_branch_reports_unsupported_nested_type(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_signedness_nested_type")
+
+        result = lower_candidates(selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-TYPE-NESTED-UNSUPPORTED",
+            severity="error",
+        )
+        self.assertIn("vector::register", result.diagnostics[0].message)
+
+    def test_signedness_generation_branch_rejects_plain_else(self) -> None:
+        selection = self.selection_for("lower_generation_signedness_plain_else")
+
+        result = lower_candidates(selection)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-IF-MALFORMED",
+            severity="error",
+        )
+
     def test_prunes_generation_branch_when_aligned_true(self) -> None:
         selection = self.selection_for("lower_generation_aligned_true")
 
@@ -937,7 +1189,7 @@ class LoweringBoundaryTests(unittest.TestCase):
             referenced,
             SelectionRequest(
                 backend="cpp",
-                primitive_names=("lower_generation",),
+                primitive_names=("lower_generation_signedness_unsupported_predicate",),
                 extension_names=("scalar",),
                 include_support_extensions=False,
             ),
@@ -954,7 +1206,7 @@ class LoweringBoundaryTests(unittest.TestCase):
             code="TSL-LOWER-GEN-IF-UNSUPPORTED",
             severity="error",
         )
-        self.assertIn("type::is_signed", diagnostic.message)
+        self.assertIn("type::is_integral", diagnostic.message)
 
     def test_reports_unsupported_nearby_return_form(self) -> None:
         referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
@@ -1177,7 +1429,10 @@ class LoweringBoundaryTests(unittest.TestCase):
             referenced,
             SelectionRequest(
                 backend="cpp",
-                primitive_names=("lower_generation", "lower_intrinsic"),
+                primitive_names=(
+                    "lower_generation_signedness_unsupported_predicate",
+                    "lower_intrinsic",
+                ),
                 extension_names=("scalar",),
                 include_support_extensions=False,
             ),
