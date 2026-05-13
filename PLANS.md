@@ -393,6 +393,14 @@ Stopping is preferable to encoding speculative architecture.
 
 Concrete Codex tasks should be written to `docs/agent/runs/`.
 
+No Codex task is complete until it has written the next concrete prompt under
+`docs/agent/runs/` and updated `docs/agent/current-redesign-state.md` to point
+at it, unless the task intentionally ends the workflow and records an explicit
+stop condition. When the next action depends on human acceptance, create a
+finalization prompt that converts acceptance into the next concrete run prompt.
+The transition matrix and filename rules live in
+`docs/agent/next-run-prompt-protocol.md`.
+
 Each run file should declare:
 
 - role
@@ -402,6 +410,7 @@ Each run file should declare:
 - scope and out-of-scope items
 - validation commands
 - expected output format
+- next run prompt expected from this task, unless the workflow stops
 
 Reusable prompts belong in `docs/agent/prompt-templates/`; role definitions
 belong in `docs/agent/subagents/`.

@@ -121,10 +121,18 @@ The repository state file, not chat history, is the authoritative handoff for:
 
 - accepted milestone
 - current action
-- active prompt
+- active run prompt under `docs/agent/runs/`
+- next expected verdict or action
 - boundary rules
 - known follow-ups
 - validation expectations
+- stop condition, if no next prompt should be generated
+
+No Codex task is complete until it has written the next concrete prompt under
+`docs/agent/runs/` and updated `docs/agent/current-redesign-state.md` to point
+at it, unless the task intentionally ends the workflow and records an explicit
+stop condition. The next-run prompt protocol lives in
+`docs/agent/next-run-prompt-protocol.md`.
 
 ## Implementation Workflow
 

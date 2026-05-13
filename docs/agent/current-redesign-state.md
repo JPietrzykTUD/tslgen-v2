@@ -19,10 +19,23 @@ Current required action:
 Execute Milestone 48.
 ```
 
+Active run prompt:
+
+```text
+docs/agent/runs/m48-executor-prompt.md
+```
+
 Active executor milestone:
 
 ```text
 Milestone 48: Signedness Type-Predicate Branch Pruning Slice
+```
+
+Next expected action:
+
+```text
+Milestone 48 executor finishes, creates docs/agent/runs/m48-review-prompt.md,
+and updates this state file to point at that review prompt.
 ```
 
 Accepted planning prompt:
@@ -76,6 +89,11 @@ plain `else` conversion syntax, or broad shift/conversion body lowering.
   `:933-943`, `:1222-1244`, `:1268-1280`, `:1465-1481`, and `:1507-1518`.
 - `tsldata/primitives/conversion/repr_change.tsl:1210-1217` is predicate
   evidence only because it uses plain `else`, not `else<generation>`.
+
+## Stop Condition
+
+No stop condition is active. The workflow proceeds with the active M48 executor
+prompt.
 
 ## Validation Expectations
 

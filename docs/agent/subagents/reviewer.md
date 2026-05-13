@@ -13,3 +13,9 @@ Read-only role for milestone review.
   - `Needs Revision`
   - `Return To Planner`
   - `Reject`
+- Identify the next required workflow action for the returned verdict so the
+  orchestrator can create the correct run prompt.
+- When assigned as the write-capable main task, create the next prompt or
+  prompts under `docs/agent/runs/` and update
+  `docs/agent/current-redesign-state.md` before finishing, unless the workflow
+  intentionally stops.

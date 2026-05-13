@@ -33,6 +33,20 @@ Subagent role definitions live in:
 docs/agent/subagents/
 ```
 
+`docs/agent/runs/` is the authoritative location for the next executable
+Codex prompt. No planning, execution, review, revision, focused re-review, or
+documentation-correction task is complete until it has written the next
+concrete prompt under `docs/agent/runs/` and updated
+`docs/agent/current-redesign-state.md` to point at it, unless the task
+intentionally ends the workflow and records an explicit stop condition.
+
+The full prompt-generation protocol, transition matrix, required state fields,
+and filename rules live in:
+
+```text
+docs/agent/next-run-prompt-protocol.md
+```
+
 ## Subagent usage
 
 Use subagents for bounded, parallel read-only work:
@@ -57,6 +71,12 @@ Or, with orchestrated planning:
 ```text
 Planning subagents -> docs update -> review subagents -> local docs corrections -> human acceptance
 ```
+
+Every transition in this flow must leave a concrete active run prompt in
+`docs/agent/runs/`. If the transition is waiting on human acceptance, the next
+prompt should be a finalization prompt. After acceptance, the finalization
+prompt creates the concrete executor, reviewer, planner, revision, or stop
+prompt required by the workflow state.
 
 ## Drift controls
 
