@@ -302,6 +302,48 @@ becoming the extension path.
 
 Renderers must not perform semantic rule evaluation. They may only format typed lowered/translated values.
 
+
+## Codex Subagent Protocol
+
+Codex may use subagents for bounded parallel work when explicitly requested.
+The main Codex thread is the orchestrator. It reads
+`docs/agent/current-redesign-state.md`, assigns subagent tasks, waits for all
+results, and consolidates the final verdict or next action.
+
+Allowed subagent roles:
+
+- Planner: documentation and roadmap planning only.
+- Executor: one milestone implementation in one branch or worktree.
+- Reviewer: read-only milestone review; may run validation.
+- Validation auditor: test, log, and diff-check triage only.
+- Evidence auditor: source/evidence/provenance inspection only.
+- Documentation auditor: redesign-document consistency review only.
+
+Rules:
+
+- Do not let two write-capable agents edit the same files or branch
+  concurrently.
+- Reviewers and auditors must not implement fixes.
+- Executors must implement exactly one milestone or one focused revision.
+- The orchestrator owns final updates to `docs/agent/current-redesign-state.md`.
+- Subagents must return concise structured summaries, not raw logs unless a
+  failure requires them.
+- If a design inconsistency appears, stop implementation and return to the
+  planner.
+- Use separate worktrees or branches for concurrent write-capable tasks.
+- It is safe to parallelize review, validation, evidence, and documentation
+  audits. It is unsafe to parallelize implementation across the same pipeline
+  boundary or files.
+
+Recommended subagent fan-out for milestone review:
+
+1. Architecture reviewer checks scope, pipeline boundaries, and legacy leakage.
+2. Validation auditor runs the required tests and summarizes exact results.
+3. Evidence/provenance auditor checks source evidence, golden files, and
+   provenance fixtures.
+4. Documentation auditor checks roadmap/spec/OQ/ADR consistency.
+5. Orchestrator merges findings into one reviewer verdict.
+
 ## Testing Protocol
 
 For each milestone:

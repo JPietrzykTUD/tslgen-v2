@@ -97,6 +97,25 @@ Every implementation milestone needs tests proportionate to its risk:
 
 Do not rely on host CPU features for normal unit tests. Hardware autodetection must be injectable.
 
+
+## Multi-Agent Workflow
+
+When Codex subagents are used, the main thread acts as orchestrator.
+
+Subagents may run in parallel for planning, review, validation, or evidence
+audits. Only one write-capable executor should modify a given worktree at a
+time. Review, validation, and evidence-audit subagents are read-only unless they
+are explicitly assigned a focused revision task.
+
+Subagents must follow the same clean-redesign rules: one milestone at a time,
+no runtime dependency on `frozen/`, typed boundaries, explicit diagnostics,
+deterministic output, and no renderer-side semantic inference.
+
+The orchestrator owns final verdict consolidation and updates to
+`docs/agent/current-redesign-state.md`. Subagents must return concise structured
+summaries with enough evidence for the orchestrator to decide, not raw logs
+unless a failure requires them.
+
 ## Documentation Expectations
 
 Documentation is part of the implementation contract. Update:

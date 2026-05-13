@@ -4,6 +4,7 @@ Use this skill when implementing one milestone from the TSL generator redesign.
 
 ## Workflow
 
+0. Read `docs/agent/current-redesign-state.md` if it exists.
 1. Confirm the selected milestone and scope.
 2. Read the relevant docs under `docs/redesign/`.
 3. Inspect only the evidence needed for the selected behavior.

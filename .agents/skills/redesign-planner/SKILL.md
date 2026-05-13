@@ -4,6 +4,7 @@ Use this skill when planning a new implementation slice for the TSL generator re
 
 ## Workflow
 
+0. Read `docs/agent/current-redesign-state.md` if it exists.
 1. Read `AGENTS.md` and `PLANS.md`.
 2. Pick exactly one milestone from `docs/redesign/implementation-roadmap.md`.
 3. Read the relevant redesign docs for that milestone.

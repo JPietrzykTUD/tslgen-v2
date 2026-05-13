@@ -4,6 +4,7 @@ Use this skill when reviewing a redesign implementation change.
 
 ## Workflow
 
+0. Read `docs/agent/current-redesign-state.md` if it exists.
 1. Read `docs/agent/review-checklist.md`.
 2. Identify the milestone or slice being reviewed.
 3. Check architecture boundaries before style.
