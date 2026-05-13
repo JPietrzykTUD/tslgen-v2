@@ -15,7 +15,7 @@ required before M52 execution can be activated.
 The post-M51 planning update selected:
 
 ```text
-Milestone 52:  Type Semantics Slice
+Milestone 52: Concrete Integer Generation Type Semantics Slice
 ```
 
 Internal Codex review returned:
