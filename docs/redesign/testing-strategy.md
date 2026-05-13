@@ -665,6 +665,18 @@ Recommended first parity checks:
   parser/selection/lowering/rendering reruns during serialization, and
   regression coverage that existing redesign coverage JSON and HTML reports
   remain stable.
+- Milestone 51: plain-`else` signedness generation branch tests should cover
+  the exact M48 signedness predicate with plain `else`, `si32` true-branch
+  pruning, `ui32` false-branch pruning, M48 `else<generation>` regression
+  coverage, selected-branch-only unresolved-helper diagnostics, no diagnostics
+  for unresolved helpers in the unselected branch, malformed plain-`else`
+  branch diagnostics, unsupported predicate and nested type-query diagnostics,
+  missing type context, unknown or unsupported type tags, non-integer
+  signedness predicates, deterministic pruning and diagnostic ordering,
+  backend-translation rejection of raw unresolved generation helpers, and
+  renderer non-evaluation. No conversion body lowering, backend translation,
+  rendering, generated output, Rust, CLI/reporting, or compiler execution is
+  part of this check.
 
 Deferred parity checks:
 

@@ -68,7 +68,7 @@ behavior without treating the whole corpus as implemented.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `if<generation>(value<generation>(primitive::attribute(aligned)))` | `tsldata/primitives/load_store/load.tsl:55-70`, `load.tsl:79-91`, `store.tsl:54-64`, `store.tsl:75-85` | Select aligned or unaligned branch for load/store bodies. | Primitive attributes, candidate id, source location. | Boolean primitive-attribute condition plus pruned branch provenance. | No backend data for the condition itself; branch bodies may contain backend requests. | required-now | Implemented by Milestone 42. | Unit tests cover true/false pruning, missing/non-bool/unknown attributes, selected-branch-only diagnostics, and deterministic output. |
 | `if<generation>(value<generation>(primitive::attribute(packed)))` | `tsldata/primitives/load_store/store.tsl:177-188`, `store.tsl:196-210` | Select packed mask-store path. | Primitive attributes, mask parameter role, vector metadata. | Same branch-pruning model as `aligned`, with mask-specific context later. | Mask/vector type data for selected branch. | required-later | Defer until mask store parity is selected. | Reuse branch evaluator after selected mask fixture exists. |
-| `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))` | Exact `else<generation>` forms in `tsldata/primitives/bitwise/shifts.tsl:535-547`, `shifts.tsl:625-635`, `shifts.tsl:842-887`, `shifts.tsl:933-943`, `shifts.tsl:1222-1244`, `shifts.tsl:1268-1280`, `shifts.tsl:1465-1481`, and `shifts.tsl:1507-1518`; predicate-only plain-`else` evidence in `tsldata/primitives/conversion/repr_change.tsl:1210-1217`. | Select signed or unsigned shift behavior. | Type tag from typed M43 `GenerationTypeRef(kind="base.in")`, plus M42 branch provenance context. | Boolean `GenerationValue` derived from typed type query and pruned branch provenance. | No backend data for the predicate itself; selected branch bodies may contain backend requests. | implemented M48 | Implemented for exact `else<generation>` branch pruning only. | True/false pruning, selected-branch-only diagnostics, unsupported predicate/type diagnostics, missing type context, and raw-helper rejection. |
+| `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))` | Exact `else<generation>` forms in `tsldata/primitives/bitwise/shifts.tsl:535-547`, `shifts.tsl:625-635`, `shifts.tsl:842-887`, `shifts.tsl:933-943`, `shifts.tsl:1222-1244`, `shifts.tsl:1268-1280`, `shifts.tsl:1465-1481`, and `shifts.tsl:1507-1518`; plain-`else` evidence in `tsldata/primitives/conversion/repr_change.tsl:1210-1217`, with additional same-predicate evidence at `:540-649`, `:1093-1100`, and `:1160-1167`. | Select signed or unsigned branch behavior. | Type tag from typed M43 `GenerationTypeRef(kind="base.in")`, plus M42 branch provenance context. | Boolean `GenerationValue` derived from typed type query and pruned branch provenance. | No backend data for the predicate itself; selected branch bodies may contain backend requests. | M48 implemented `else<generation>`; M51 planned for exact plain `else` | M51 selects only the exact plain-`else` syntax for this predicate. Branch bodies, conversion parity, and broad plain-`else` support remain deferred. | True/false pruning, selected-branch-only diagnostics, unsupported predicate/type diagnostics, missing type context, raw-helper rejection, and no conversion-body lowering. |
 | `type<generation>(vector::register)` | `tsldata/primitives/load_store/load.tsl:39-45`, `load.tsl:59-67`, `store.tsl:56-61` | Resolve selected vector register type. | Backend id, extension, type tag, vector/register metadata. | `GenerationTypeRef(kind="vector.register")`. | Language type map. | required-later | Defer until vector register type rendering is selected. | Typed metadata fixtures; missing language-map diagnostics. |
 | `value<generation>(vector::length)` | `tsldata/primitives/load_store/load.tsl:41-43`, `tsldata/primitives/bitwise/shifts.tsl:50-53`, `shifts.tsl:218-221` | Resolve lane count for generated loops. | Extension, type tag, lane metadata. | `GenerationValue[int](kind="vector.length")`. | Extension/type metadata. | required-later | Defer with loop lowering. | Deterministic lane query tests after loop model exists. |
 | `value<generation>(vector::alignment)` | `tsldata/primitives/load_store/load.tsl:55-70`, `store.tsl:54-64`, `store.tsl:75-85` | Supply alignment value to selected aligned branch. | Extension, type tag, alignment metadata. | `GenerationValue[int](kind="vector.alignment")`. | Extension/type metadata. | required-later | Defer until aligned branch body rendering is selected. | Query tests plus missing alignment diagnostics. |
@@ -259,7 +259,7 @@ broad translation-map or language-map evaluation remain deferred. Renderers
 remain non-evaluating text emitters and must not parse raw generation-time
 helper text.
 
-## Post-M43 Through Post-M49 Direction
+## Post-M43 Through Post-M51 Direction
 
 The accepted post-M43 phase is numbered in the roadmap:
 
@@ -298,22 +298,28 @@ The accepted post-M43 phase is numbered in the roadmap:
   accepted typed coverage/report DTOs and must not add generation-time lowering,
   backend translation, renderer semantic inference, CLI/writer behavior, or
   compiler execution.
+- Milestone 51 is planned as the next generation-time semantic lowering slice.
+  It accepts only the exact M48 signedness predicate branch form with plain
+  `else`, over typed M43 `GenerationTypeRef(kind="base.in")` values. It must
+  not add conversion body lowering, backend translation, rendering, generated
+  output, or broad TSIL parsing.
 
 This phase does not make backend translation parse raw generation-time helper
 text and does not move suffix or type-spelling evaluation into renderers.
 
 ## Explicit Deferrals
 
-Deferred beyond the accepted M43-M49 slices and selected M50 plan:
+Deferred beyond the accepted M43-M50 slices and selected M51 plan:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
   types, generic vector lengths, aliases, and non-selected base forms.
 - Generation-time value queries for vector length, vector alignment, mask lane
   constants, and generic lengths.
-- Signedness branch pruning is implemented only for the exact M48 slice:
+- Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
-  plus `else<generation>` form over typed M43 `base.in` values; plain `else`,
+  plus `else<generation>` form over typed M43 `base.in` values. M51 is planned
+  to add only the same predicate with plain `else`; broader plain `else`,
   vector/generic predicates, and branch body semantics remain deferred.
 - Backend modifier translation remains limited to the M45 intrinsic suffix
   request over typed M43 inputs; prefix, infix, post, and `immediate(n)` remain

@@ -373,6 +373,10 @@ Milestone 48 implements the selected post-M47 lowering slice: evaluate only
 `if<generation> ... else<generation>` branches with M42-style provenance. It
 does not add backend translation, rendering behavior, broad TSIL parsing, or
 plain `else` branch support.
+Milestone 51 is planned to add only the same signedness predicate branch form
+with plain `else`. It remains lowering-only and must not add conversion body
+lowering, backend translation, rendering behavior, broad TSIL parsing, or
+generalized plain-`else` support.
 
 ## Stage 9: Backend Planning
 

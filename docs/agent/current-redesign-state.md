@@ -28,26 +28,27 @@ focused revision.
 Current required action:
 
 ```text
-Run the post-M50 planning-plus-review prompt.
+Await human acceptance of the post-M50 planning update.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m50-planning-plus-review-prompt.md
+docs/agent/runs/post-m50-acceptance-finalization-prompt.md
 ```
 
 Active planning target:
 
 ```text
-Next numbered milestone after Milestone 50; no Milestone 51 is selected yet.
+Milestone 51: Plain-Else Signedness Generation Branch Lowering Slice
 ```
 
 Next expected action:
 
 ```text
-Use planning and review subagents to select at most one next milestone or
-record an explicit deferral. Do not implement code from the planning prompt.
+After explicit human acceptance, the finalization prompt creates
+docs/agent/runs/m51-execution-review-loop-prompt.md and updates this state file
+to make M51 execution active.
 ```
 
 Accepted planning prompt:
@@ -84,6 +85,12 @@ Accepted M50 execution prompt:
 
 ```text
 docs/agent/runs/m50-execution-review-loop-prompt.md
+```
+
+Accepted post-M50 planning prompt:
+
+```text
+docs/agent/runs/post-m50-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -134,6 +141,19 @@ docs/agent/runs/m50-execution-review-loop-prompt.md
   at runtime.
 - M50 must not rerun parsing, selection, lowering, backend rendering, or test
   planning during adapter serialization.
+- Planned M51 is generation-time semantic lowering only.
+- Planned M51 accepts only the exact signedness predicate branch form
+  `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
+  with plain `else`.
+- Planned M51 reuses M48 signedness predicate evaluation, M42 branch provenance,
+  and typed M43 `GenerationTypeRef(kind="base.in")` inputs.
+- Planned M51 treats `tsldata/primitives/conversion/repr_change.tsl:1210-1217`
+  as branch-shape evidence only. Conversion body lowering remains out of scope.
+- Planned M51 must not add backend translation, rendering, generated output,
+  shift/conversion body parity, `switch<compile>`, `if<compile>`, direct
+  `intrin<...>`, `let`, `var`, calls, vector transforms, loops, generic
+  lengths, vector/register metadata, Rust, CLI/reporting, compiler execution,
+  generated-test execution, broad TSIL parsing, or broad plain-`else` support.
 
 ## Accepted Milestone 48
 
@@ -195,8 +215,10 @@ execution, or runtime reads from `frozen/`, raw legacy JSON, or raw TSL.
 - The retried evidence audit confirmed additional exact shift evidence ranges:
   `tsldata/primitives/bitwise/shifts.tsl:535-547`, `:625-635`, `:842-887`,
   `:933-943`, `:1222-1244`, `:1268-1280`, `:1465-1481`, and `:1507-1518`.
-- `tsldata/primitives/conversion/repr_change.tsl:1210-1217` is predicate
-  evidence only because it uses plain `else`, not `else<generation>`.
+- `tsldata/primitives/conversion/repr_change.tsl:1210-1217` is selected M51
+  branch-shape evidence only because it uses the M48 signedness predicate with
+  plain `else`. Its enclosing `switch<compile>` and branch bodies remain
+  out-of-scope conversion evidence.
 - M49 review follow-up: harden the no-file-read regression so it also catches
   `pathlib.Path.read_text()` style reads; source inspection found the renderer
   pure/in-memory, so this is non-blocking.
@@ -217,11 +239,18 @@ execution, or runtime reads from `frozen/`, raw legacy JSON, or raw TSL.
   note to `add_avx2_f32_coverage_row.provenance.md`. Existing selected legacy
   row, field-construction evidence, and redesign baseline citations were
   accepted for M50.
+- M51 planning follow-up: before execution, clarify whether
+  `tsldata/primitives/conversion/repr_change.tsl:1210-1217` is the canonical
+  fixture and the broader `repr_change.tsl` ranges are supporting evidence
+  only. This is non-blocking for human acceptance.
+- M51 docs follow-up: tighten `generation-time-semantic-lowering.md` wording
+  that says "report parity" remains deferred so it clearly means broad report
+  parity beyond the accepted M50 selected row.
 
 ## Stop Condition
 
 No stop condition is active. The workflow proceeds with the active post-M50
-planning-plus-review prompt.
+acceptance finalization prompt after human acceptance.
 
 ## Validation Expectations
 

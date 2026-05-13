@@ -78,7 +78,10 @@ reviewable:
 10. M49 is accepted as the generated C++ `add_i32_basic` test-source parity
    slice.
 11. M50 is accepted as the legacy coverage JSON adapter row slice.
-12. CLI workflow compatibility, coverage JSON adapter breadth beyond the
+12. M51 is selected for human acceptance as the exact plain-`else` signedness
+   branch-pruning syntax slice. It remains generation-time lowering only and is
+   not an output parity slice.
+13. CLI workflow compatibility, coverage JSON adapter breadth beyond the
    selected M50 row, executable generated tests, and broad generated-test parity
    remain deferred until explicitly selected as separate milestones.
 
@@ -89,10 +92,10 @@ typed suffix/type-spelling translation. It exercises the important parity
 boundaries without requiring full headers, full TSIL, all wrappers,
 generated-test execution, Rust parity, or broad report/documentation parity.
 M50 reintroduces only one selected report row while full report/documentation
-parity remains deferred. M48 is a post-output lowering prerequisite for later
-shift/conversion parity, not an
-additional generated-output target. M49 reintroduces only one generated C++
-test-source parity baseline and still does not add compiler execution.
+parity remains deferred. M48 and the selected M51 plan are post-output lowering
+prerequisites for later shift/conversion parity, not additional
+generated-output targets. M49 reintroduces only one generated C++ test-source
+parity baseline and still does not add compiler execution.
 
 ## Baseline Decisions
 
@@ -305,7 +308,7 @@ test-source parity baseline and still does not add compiler execution.
   integration.
 - C17 activation.
 - Full TSIL grammar, semantic calls, loops, variables, broad type/value
-  queries, generation-time conditions beyond the selected M42/M48 pruning
+  queries, generation-time conditions beyond the selected M42/M48/M51 pruning
   forms, and backend translation-map evaluation beyond the selected M40/M45/M46
   requests.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and

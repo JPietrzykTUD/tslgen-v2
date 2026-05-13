@@ -1287,6 +1287,11 @@ Consequences:
   from accepted typed report DTOs, keeps legacy string booleans at the adapter
   boundary, and does not rerun parser, selection, lowering, backend rendering,
   test rendering, CLI/writer, or compiler work.
+- Milestone 51 is selected as the exact plain-`else` syntax extension for the
+  M48 signedness branch-pruning slice. It stays in generation-time semantic
+  lowering over typed M43 `GenerationTypeRef(kind="base.in")` values and does
+  not add conversion body lowering, backend translation, rendering, generated
+  output, or broad TSIL parsing.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
