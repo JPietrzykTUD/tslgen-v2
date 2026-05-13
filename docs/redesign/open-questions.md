@@ -1246,8 +1246,8 @@ plain `else`. It stays in generation-time semantic lowering, consumes typed M43
 lowering, backend translation, rendering, broad TSIL parsing, or generalized
 plain-`else` support.
 
-The selected post-M51 plan is Milestone 52: extend the accepted concrete
-integer generation type and signedness semantics to
+Milestone 52 extends the accepted concrete integer generation type and
+signedness semantics to
 `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, and `ui64`. It remains
 lowering-only and does not add backend suffix/type-spelling expansion,
 vector/register metadata, branch-body lowering, generated output, or broad TSIL
@@ -1478,8 +1478,11 @@ evaluates only
 `GenerationTypeRef(kind="base.in")` values and prunes exact
 `if<generation> ... else<generation>` branches before backend translation.
 Milestone 51 adds only the same signedness predicate branch with plain `else`.
-The selected M52 plan extends only the accepted concrete integer
-type/signedness rules to selected 8/16/32/64-bit signed and unsigned tags.
+M52 extends only the accepted concrete integer type/signedness rules to
+selected 8/16/32/64-bit signed and unsigned tags.
+The selected post-M52 plan, M53, moves the accepted concrete integer semantic
+rule source to typed domain/catalog rule values consumed by lowering. It does
+not add new generation helper forms or backend translation behavior.
 Vector type/value queries, backend prefix/post/infix modifiers, `immediate(n)`,
 primitive calls, loops, direct intrinsics, generalized plain `else` branch
 syntax, backend suffix/type-spelling expansion for non-32-bit tags, and broader
@@ -1501,9 +1504,13 @@ renderer-local semantic inference.
 The accepted M51 lowering slice reopens only generation-time branch syntax for
 the exact signedness predicate with plain `else`; it does not reopen backend
 translation, backend rendering, or renderer-local semantic inference.
-The selected M52 plan reopens only the concrete integer type set for accepted
-generation-time type and signedness rules; it does not reopen backend
-translation, backend rendering, or renderer-local semantic inference.
+M52 reopens only the concrete integer type set for accepted generation-time
+type and signedness rules; it does not reopen backend translation, backend
+rendering, or renderer-local semantic inference.
+The selected post-M52 plan, M53, reopens only the ownership boundary for those
+accepted concrete integer rules; it does not reopen helper syntax, selected tag
+sets, backend translation, backend rendering, or renderer-local semantic
+inference.
 
 Required evidence:
 

@@ -1292,13 +1292,18 @@ Consequences:
   lowering over typed M43 `GenerationTypeRef(kind="base.in")` values and does
   not add conversion body lowering, backend translation, rendering, generated
   output, or broad TSIL parsing.
-- The selected-for-acceptance post-M51 plan, Milestone 52, extends only the
-  accepted concrete integer generation type/signedness semantics to the
+- Milestone 52 extends only the accepted concrete integer generation
+  type/signedness semantics to the
   8/16/32/64-bit signed and unsigned integer tags. Backend suffix/type-spelling
   expansion,
   vector/register metadata, rendering, generated output, branch-body lowering,
   Rust, CLI/reporting, and compiler execution remain separate future
   decisions.
+- The selected post-M52 plan, Milestone 53, moves the accepted concrete integer
+  semantic-rule source out of the lowering-private table and into typed
+  domain/catalog rule values. This is a rule-ownership boundary change only;
+  M52 behavior, selected tags, diagnostics, and backend/rendering deferrals must
+  remain stable.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

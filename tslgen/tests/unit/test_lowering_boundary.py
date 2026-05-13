@@ -142,7 +142,7 @@ prim<v:=(v,v)> lower_generation_signedness(left, right):
   tests []
   impls:
     scalar:
-      ?i32:
+      ?i?:
         requires []
         implementation:
           tsil "if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) { emit_return(left + right); } else<generation> { emit_return(right + left); }"
@@ -196,7 +196,7 @@ prim<v:=(v,v)> lower_generation_signedness_plain_else(left, right):
   tests []
   impls:
     scalar:
-      ?i32:
+      ?i?:
         requires []
         implementation:
           tsil "if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) { emit_return(left + right); } else { emit_return(right + left); }"
@@ -259,7 +259,7 @@ prim<v:=(v,v)> lower_generation_type_base(left, right):
   tests []
   impls:
     scalar:
-      ?i32:
+      ?i?:
         requires []
         implementation:
           tsil "type<generation>(base::in)"
@@ -268,7 +268,7 @@ prim<v:=(v,v)> lower_generation_type_signed(left, right):
   tests []
   impls:
     scalar:
-      ?i32:
+      ?i?:
         requires []
         implementation:
           tsil "type<generation>(base::signed_of(type<generation>(base::in)))"
@@ -277,7 +277,7 @@ prim<v:=(v,v)> lower_generation_type_unsigned(left, right):
   tests []
   impls:
     scalar:
-      ?i32:
+      ?i?:
         requires []
         implementation:
           tsil "type<generation>(base::unsigned_of(type<generation>(base::in)))"
@@ -472,6 +472,57 @@ prim<v:=(v,v)> lower_call(left, right):
           tsil "emit_return(foo(left, right));"
 """
 
+CONCRETE_INTEGER_TAGS = (
+    "si8",
+    "ui8",
+    "si16",
+    "ui16",
+    "si32",
+    "ui32",
+    "si64",
+    "ui64",
+)
+CONCRETE_INTEGER_LOWERING_ORDER = (
+    "si16",
+    "si32",
+    "si64",
+    "si8",
+    "ui16",
+    "ui32",
+    "ui64",
+    "ui8",
+)
+SIGNED_COMPANION_BY_TAG = {
+    "si8": "si8",
+    "ui8": "si8",
+    "si16": "si16",
+    "ui16": "si16",
+    "si32": "si32",
+    "ui32": "si32",
+    "si64": "si64",
+    "ui64": "si64",
+}
+UNSIGNED_COMPANION_BY_TAG = {
+    "si8": "ui8",
+    "ui8": "ui8",
+    "si16": "ui16",
+    "ui16": "ui16",
+    "si32": "ui32",
+    "ui32": "ui32",
+    "si64": "ui64",
+    "ui64": "ui64",
+}
+IS_SIGNED_BY_TAG = {
+    "si8": True,
+    "ui8": False,
+    "si16": True,
+    "ui16": False,
+    "si32": True,
+    "ui32": False,
+    "si64": True,
+    "ui64": False,
+}
+
 
 class LoweringBoundaryTests(unittest.TestCase):
     def selection_for(self, primitive_name: str) -> CandidateSelection:
@@ -533,7 +584,7 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(lowering_input.payload.classification, "tsil")
         self.assertTrue(lowering_input.payload.has_generation_condition)
 
-    def test_lowers_base_generation_type_query_for_si32_and_ui32(self) -> None:
+    def test_lowers_base_generation_type_query_for_concrete_integers(self) -> None:
         selection = self.selection_for("lower_generation_type_base")
 
         result = lower_candidates(selection)
@@ -544,13 +595,13 @@ class LoweringBoundaryTests(unittest.TestCase):
                 implementation.generation_type_refs[0]
                 for implementation in result.unwrap().implementations
             ),
-            (
-                GenerationTypeRef(kind="base.in", type_tag="si32"),
-                GenerationTypeRef(kind="base.in", type_tag="ui32"),
+            tuple(
+                GenerationTypeRef(kind="base.in", type_tag=type_tag)
+                for type_tag in CONCRETE_INTEGER_LOWERING_ORDER
             ),
         )
 
-    def test_lowers_signed_generation_type_query_for_si32_and_ui32(self) -> None:
+    def test_lowers_signed_generation_type_query_for_concrete_integers(self) -> None:
         selection = self.selection_for("lower_generation_type_signed")
 
         result = lower_candidates(selection)
@@ -561,21 +612,17 @@ class LoweringBoundaryTests(unittest.TestCase):
                 implementation.generation_type_refs[0]
                 for implementation in result.unwrap().implementations
             ),
-            (
+            tuple(
                 GenerationTypeRef(
                     kind="base.signed_of",
-                    type_tag="si32",
-                    source_type_tag="si32",
-                ),
-                GenerationTypeRef(
-                    kind="base.signed_of",
-                    type_tag="si32",
-                    source_type_tag="ui32",
-                ),
+                    type_tag=SIGNED_COMPANION_BY_TAG[type_tag],
+                    source_type_tag=type_tag,
+                )
+                for type_tag in CONCRETE_INTEGER_LOWERING_ORDER
             ),
         )
 
-    def test_lowers_unsigned_generation_type_query_for_si32_and_ui32(self) -> None:
+    def test_lowers_unsigned_generation_type_query_for_concrete_integers(self) -> None:
         selection = self.selection_for("lower_generation_type_unsigned")
 
         result = lower_candidates(selection)
@@ -586,17 +633,13 @@ class LoweringBoundaryTests(unittest.TestCase):
                 implementation.generation_type_refs[0]
                 for implementation in result.unwrap().implementations
             ),
-            (
+            tuple(
                 GenerationTypeRef(
                     kind="base.unsigned_of",
-                    type_tag="ui32",
-                    source_type_tag="si32",
-                ),
-                GenerationTypeRef(
-                    kind="base.unsigned_of",
-                    type_tag="ui32",
-                    source_type_tag="ui32",
-                ),
+                    type_tag=UNSIGNED_COMPANION_BY_TAG[type_tag],
+                    source_type_tag=type_tag,
+                )
+                for type_tag in CONCRETE_INTEGER_LOWERING_ORDER
             ),
         )
 
@@ -657,21 +700,93 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertTrue(second.is_ok, second.diagnostics)
         self.assertEqual(first.unwrap(), second.unwrap())
 
-    def test_resolves_generation_type_query_with_explicit_context(self) -> None:
-        result = resolve_generation_type_query(
-            "type<generation>(base::unsigned_of(type<generation>(base::in)))",
-            GenerationContext(type_tag_override="si32"),
-        )
+    def test_resolves_base_generation_type_query_for_each_concrete_integer(
+        self,
+    ) -> None:
+        for type_tag in CONCRETE_INTEGER_TAGS:
+            with self.subTest(type_tag=type_tag):
+                result = resolve_generation_type_query(
+                    "type<generation>(base::in)",
+                    GenerationContext(type_tag_override=type_tag),
+                )
 
-        self.assertTrue(result.is_ok, result.diagnostics)
-        self.assertEqual(
-            result.unwrap(),
-            GenerationTypeRef(
-                kind="base.unsigned_of",
-                type_tag="ui32",
-                source_type_tag="si32",
+                self.assertTrue(result.is_ok, result.diagnostics)
+                self.assertEqual(
+                    result.unwrap(),
+                    GenerationTypeRef(kind="base.in", type_tag=type_tag),
+                )
+
+    def test_resolves_signed_generation_type_query_for_each_concrete_integer(
+        self,
+    ) -> None:
+        for type_tag in CONCRETE_INTEGER_TAGS:
+            with self.subTest(type_tag=type_tag):
+                result = resolve_generation_type_query(
+                    "type<generation>(base::signed_of(type<generation>(base::in)))",
+                    GenerationContext(type_tag_override=type_tag),
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                self.assertEqual(
+                    result.unwrap(),
+                    GenerationTypeRef(
+                        kind="base.signed_of",
+                        type_tag=SIGNED_COMPANION_BY_TAG[type_tag],
+                        source_type_tag=type_tag,
+                    ),
+                )
+
+    def test_resolves_unsigned_generation_type_query_for_each_concrete_integer(
+        self,
+    ) -> None:
+        for type_tag in CONCRETE_INTEGER_TAGS:
+            with self.subTest(type_tag=type_tag):
+                result = resolve_generation_type_query(
+                    "type<generation>(base::unsigned_of(type<generation>(base::in)))",
+                    GenerationContext(type_tag_override=type_tag),
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                self.assertEqual(
+                    result.unwrap(),
+                    GenerationTypeRef(
+                        kind="base.unsigned_of",
+                        type_tag=UNSIGNED_COMPANION_BY_TAG[type_tag],
+                        source_type_tag=type_tag,
+                    ),
+                )
+
+    def test_generation_type_query_si32_ui32_regression_is_unchanged(self) -> None:
+        cases = (
+            (
+                "si32",
+                "type<generation>(base::unsigned_of(type<generation>(base::in)))",
+                GenerationTypeRef(
+                    kind="base.unsigned_of",
+                    type_tag="ui32",
+                    source_type_tag="si32",
+                ),
+            ),
+            (
+                "ui32",
+                "type<generation>(base::signed_of(type<generation>(base::in)))",
+                GenerationTypeRef(
+                    kind="base.signed_of",
+                    type_tag="si32",
+                    source_type_tag="ui32",
+                ),
             ),
         )
+
+        for type_tag, query, expected in cases:
+            with self.subTest(type_tag=type_tag, query=query):
+                result = resolve_generation_type_query(
+                    query,
+                    GenerationContext(type_tag_override=type_tag),
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                self.assertEqual(result.unwrap(), expected)
 
     def test_generation_type_query_reports_unsupported_shorthand(self) -> None:
         result = resolve_generation_type_query(
@@ -692,8 +807,16 @@ class LoweringBoundaryTests(unittest.TestCase):
     def test_generation_type_query_reports_unsupported_tags(self) -> None:
         cases = (
             ("f32", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("f64", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
             ("ptr", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("mask", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("imask", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
             ("?i?", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("?i64", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("si?", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("ui?", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("idqword", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("si128", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
         )
         for type_tag, code in cases:
             with self.subTest(type_tag=type_tag):
@@ -712,19 +835,21 @@ class LoweringBoundaryTests(unittest.TestCase):
                 self.assertIn(type_tag, result.diagnostics[0].message)
 
     def test_generation_type_query_reports_non_integer_companion_tag(self) -> None:
-        result = resolve_generation_type_query(
-            "type<generation>(base::signed_of(type<generation>(base::in)))",
-            GenerationContext(type_tag_override="f32"),
-        )
+        for type_tag in ("f32", "f64", "ptr", "mask", "imask"):
+            with self.subTest(type_tag=type_tag):
+                result = resolve_generation_type_query(
+                    "type<generation>(base::signed_of(type<generation>(base::in)))",
+                    GenerationContext(type_tag_override=type_tag),
+                )
 
-        self.assertFalse(result.is_ok)
-        assert_diagnostic(
-            self,
-            result.diagnostics[0],
-            code="TSL-LOWER-GEN-TYPE-NON-INTEGER",
-            severity="error",
-        )
-        self.assertIn("f32", result.diagnostics[0].message)
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code="TSL-LOWER-GEN-TYPE-NON-INTEGER",
+                    severity="error",
+                )
+                self.assertIn(type_tag, result.diagnostics[0].message)
 
     def test_generation_type_query_reports_unknown_type_tag(self) -> None:
         result = resolve_generation_type_query(
@@ -770,35 +895,37 @@ class LoweringBoundaryTests(unittest.TestCase):
         )
         self.assertIn("vector::register", result.diagnostics[0].message)
 
-    def test_prunes_signedness_generation_branch_for_si32_and_ui32(self) -> None:
+    def test_prunes_signedness_generation_branch_for_concrete_integers(self) -> None:
         selection = self.selection_for("lower_generation_signedness")
 
         result = lower_candidates(selection, LoweringRequest(backend_id="cpp"))
 
         self.assertTrue(result.is_ok, result.diagnostics)
         implementations = result.unwrap().implementations
-        self.assertEqual(len(implementations), 2)
+        self.assertEqual(len(implementations), 8)
+        signed_statement = (
+            TsilReturnStatement(
+                TsilBinaryExpression(
+                    operator="+",
+                    left=TsilParameterReference("left"),
+                    right=TsilParameterReference("right"),
+                )
+            ),
+        )
+        unsigned_statement = (
+            TsilReturnStatement(
+                TsilBinaryExpression(
+                    operator="+",
+                    left=TsilParameterReference("right"),
+                    right=TsilParameterReference("left"),
+                )
+            ),
+        )
         self.assertEqual(
             tuple(implementation.statements for implementation in implementations),
-            (
-                (
-                    TsilReturnStatement(
-                        TsilBinaryExpression(
-                            operator="+",
-                            left=TsilParameterReference("left"),
-                            right=TsilParameterReference("right"),
-                        )
-                    ),
-                ),
-                (
-                    TsilReturnStatement(
-                        TsilBinaryExpression(
-                            operator="+",
-                            left=TsilParameterReference("right"),
-                            right=TsilParameterReference("left"),
-                        )
-                    ),
-                ),
+            tuple(
+                signed_statement if IS_SIGNED_BY_TAG[type_tag] else unsigned_statement
+                for type_tag in CONCRETE_INTEGER_LOWERING_ORDER
             ),
         )
         self.assertEqual(
@@ -806,29 +933,53 @@ class LoweringBoundaryTests(unittest.TestCase):
                 implementation.generation_branches[0]
                 for implementation in implementations
             ),
-            (
+            tuple(
                 PrunedGenerationBranch(
                     condition=TsilTypeSignednessCondition(
-                        GenerationTypeRef(kind="base.in", type_tag="si32")
+                        GenerationTypeRef(kind="base.in", type_tag=type_tag)
                     ),
-                    selected_branch="true",
-                    statement_text="emit_return(left + right);",
-                    condition_location=selection.candidates[
-                        0
-                    ].variant.source.declaration.source_span.location,
-                ),
-                PrunedGenerationBranch(
-                    condition=TsilTypeSignednessCondition(
-                        GenerationTypeRef(kind="base.in", type_tag="ui32")
+                    selected_branch=(
+                        "true" if IS_SIGNED_BY_TAG[type_tag] else "false"
                     ),
-                    selected_branch="false",
-                    statement_text="emit_return(right + left);",
+                    statement_text=(
+                        "emit_return(left + right);"
+                        if IS_SIGNED_BY_TAG[type_tag]
+                        else "emit_return(right + left);"
+                    ),
                     condition_location=selection.candidates[
-                        1
+                        index
                     ].variant.source.declaration.source_span.location,
-                ),
+                )
+                for index, type_tag in enumerate(CONCRETE_INTEGER_LOWERING_ORDER)
             ),
         )
+
+    def test_signedness_generation_branch_si32_ui32_regression_is_unchanged(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_signedness")
+
+        cases = (("si32", "true"), ("ui32", "false"))
+        for type_tag, selected_branch in cases:
+            with self.subTest(type_tag=type_tag):
+                result = lower_candidates(
+                    selection,
+                    LoweringRequest(
+                        generation_context=GenerationContext(
+                            type_tag_override=type_tag,
+                        ),
+                    ),
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                branch = result.unwrap().implementations[0].generation_branches[0]
+                self.assertEqual(branch.selected_branch, selected_branch)
+                self.assertEqual(
+                    branch.condition,
+                    TsilTypeSignednessCondition(
+                        GenerationTypeRef(kind="base.in", type_tag=type_tag)
+                    ),
+                )
 
     def test_signedness_generation_branch_pruning_is_deterministic(self) -> None:
         selection = self.selection_for("lower_generation_signedness")
@@ -890,8 +1041,14 @@ class LoweringBoundaryTests(unittest.TestCase):
         selection = self.selection_for("lower_generation")
         cases = (
             ("f32", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("f64", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
             ("ptr", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("mask", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
             ("?i?", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("?i64", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("si?", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("ui?", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("idqword", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
             ("mystery", "TSL-LOWER-GEN-TYPE-TAG-UNKNOWN"),
         )
 
@@ -945,7 +1102,7 @@ class LoweringBoundaryTests(unittest.TestCase):
         )
         self.assertIn("vector::register", result.diagnostics[0].message)
 
-    def test_prunes_plain_else_signedness_generation_branch_for_si32_and_ui32(
+    def test_prunes_plain_else_signedness_generation_branch_for_concrete_integers(
         self,
     ) -> None:
         selection = self.selection_for("lower_generation_signedness_plain_else")
@@ -954,28 +1111,30 @@ class LoweringBoundaryTests(unittest.TestCase):
 
         self.assertTrue(result.is_ok, result.diagnostics)
         implementations = result.unwrap().implementations
-        self.assertEqual(len(implementations), 2)
+        self.assertEqual(len(implementations), 8)
+        signed_statement = (
+            TsilReturnStatement(
+                TsilBinaryExpression(
+                    operator="+",
+                    left=TsilParameterReference("left"),
+                    right=TsilParameterReference("right"),
+                )
+            ),
+        )
+        unsigned_statement = (
+            TsilReturnStatement(
+                TsilBinaryExpression(
+                    operator="+",
+                    left=TsilParameterReference("right"),
+                    right=TsilParameterReference("left"),
+                )
+            ),
+        )
         self.assertEqual(
             tuple(implementation.statements for implementation in implementations),
-            (
-                (
-                    TsilReturnStatement(
-                        TsilBinaryExpression(
-                            operator="+",
-                            left=TsilParameterReference("left"),
-                            right=TsilParameterReference("right"),
-                        )
-                    ),
-                ),
-                (
-                    TsilReturnStatement(
-                        TsilBinaryExpression(
-                            operator="+",
-                            left=TsilParameterReference("right"),
-                            right=TsilParameterReference("left"),
-                        )
-                    ),
-                ),
+            tuple(
+                signed_statement if IS_SIGNED_BY_TAG[type_tag] else unsigned_statement
+                for type_tag in CONCRETE_INTEGER_LOWERING_ORDER
             ),
         )
         self.assertEqual(
@@ -983,14 +1142,17 @@ class LoweringBoundaryTests(unittest.TestCase):
                 implementation.generation_branches[0].else_syntax
                 for implementation in implementations
             ),
-            ("else", "else"),
+            tuple("else" for _ in CONCRETE_INTEGER_LOWERING_ORDER),
         )
         self.assertEqual(
             tuple(
                 implementation.generation_branches[0].selected_branch
                 for implementation in implementations
             ),
-            ("true", "false"),
+            tuple(
+                "true" if IS_SIGNED_BY_TAG[type_tag] else "false"
+                for type_tag in CONCRETE_INTEGER_LOWERING_ORDER
+            ),
         )
 
     def test_plain_else_signedness_branch_pruning_is_deterministic(self) -> None:
@@ -1057,7 +1219,14 @@ class LoweringBoundaryTests(unittest.TestCase):
         selection = self.selection_for("lower_generation_signedness_plain_else")
         cases = (
             ("f32", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("f64", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
             ("ptr", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("mask", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("?i?", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("?i64", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("si?", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("ui?", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
+            ("idqword", "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED"),
             ("mystery", "TSL-LOWER-GEN-TYPE-TAG-UNKNOWN"),
         )
 

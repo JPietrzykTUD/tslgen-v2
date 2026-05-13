@@ -377,12 +377,15 @@ Milestone 51 adds only the same signedness predicate branch form with plain
 `else`. It remains lowering-only and must not add conversion body lowering,
 backend translation, rendering behavior, broad TSIL parsing, or generalized
 plain-`else` support.
-The selected-for-acceptance post-M51 plan, Milestone 52, extends only those
-accepted concrete integer generation-time type/signedness semantics to the full
-selected 8/16/32/64-bit signed and unsigned integer tag family. It remains
-lowering-only: backend translation still does not parse raw generation helper
-text, renderers still do not evaluate helpers, and generated output remains
-unchanged.
+Milestone 52 extends only those accepted concrete integer generation-time
+type/signedness semantics to the full selected 8/16/32/64-bit signed and
+unsigned integer tag family. It remains lowering-only: backend translation
+still does not parse raw generation helper text, renderers still do not
+evaluate helpers, and generated output remains unchanged.
+The selected post-M52 plan, Milestone 53, keeps Stage 8 behavior unchanged but
+moves the concrete integer generation rule source to typed domain/catalog rule
+values prepared before lowering consumes them. Stage 8 still must not read
+files, parse raw TSL, or infer broad type semantics from wildcard/group tags.
 
 ## Stage 9: Backend Planning
 

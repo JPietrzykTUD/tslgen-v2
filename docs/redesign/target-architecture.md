@@ -352,11 +352,15 @@ Current roadmap note:
   signedness branch form. It remains generation-time semantic lowering only
   and must not add broad TSIL parsing, backend translation, rendering, or
   conversion body parity.
-- The selected-for-acceptance post-M51 plan, Milestone 52, extends only the accepted
-  concrete-integer generation type/signedness semantics to selected
-  8/16/32/64-bit signed and unsigned integer tags. It remains lowering-only and
-  does not add backend suffix/type-spelling expansion, vector/register
-  metadata, rendering, generated output, or branch-body semantics.
+- Milestone 52 implements only the accepted concrete-integer generation
+  type/signedness semantics for selected 8/16/32/64-bit signed and unsigned
+  integer tags. It remains lowering-only and does not add backend
+  suffix/type-spelling expansion, vector/register metadata, rendering,
+  generated output, or branch-body semantics.
+- The selected post-M52 plan, Milestone 53, moves those concrete-integer
+  semantic rules to a typed domain/catalog rule source consumed by lowering.
+  It must preserve M52 behavior exactly and must not make backend translation
+  or rendering consume the broader rule source.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not
@@ -408,6 +412,8 @@ Does not:
 - Maintain broad hardcoded intrinsic/type lookup tables for semantic lowering.
 - Decide that a semantic helper such as `intrin_compose<add>` maps to a
   particular backend intrinsic name.
+- Infer generation-time type semantics from raw tag strings when a typed
+  domain/catalog rule source is required by the selected milestone.
 
 ### `rendering`
 

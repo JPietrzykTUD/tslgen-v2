@@ -691,6 +691,15 @@ Recommended first parity checks:
   backend suffix/type-spelling expansion, vector/register metadata, branch-body
   lowering, generated output, Rust, CLI/reporting, or compiler execution is
   part of this check.
+- Milestone 53: concrete integer generation rule-source tests should prove the
+  accepted M52 rule set is provided as deterministic typed domain/catalog rule
+  values rather than a lowering-private table. Tests should cover rule ordering,
+  missing singleton tags, missing companion pairs, inconsistent rule data,
+  wildcard/group selectors, unsupported floats/pointers/masks, unknown tags,
+  and concrete-looking unselected tags such as `si128`. Existing M52 lowering
+  behavior and diagnostics should remain unchanged. No backend translation
+  expansion, rendering, generated output, Rust, CLI/reporting, or compiler
+  execution is part of this check.
 
 Deferred parity checks:
 

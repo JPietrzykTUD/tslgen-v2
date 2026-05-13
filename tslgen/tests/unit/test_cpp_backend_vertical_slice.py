@@ -1098,6 +1098,17 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
                 "TSL-CPP-TRANSLATE-MODIFIER-TYPE-UNSUPPORTED",
             ),
             (
+                request(
+                    type_ref=GenerationTypeRef(
+                        kind="base.signed_of",
+                        type_tag="si64",
+                        source_type_tag="ui64",
+                    )
+                ),
+                snippets,
+                "TSL-CPP-TRANSLATE-MODIFIER-TYPE-UNSUPPORTED",
+            ),
+            (
                 request(intrinsic="sub"),
                 snippets,
                 "TSL-CPP-TRANSLATE-MODIFIER-INTRINSIC-UNSUPPORTED",
@@ -1389,6 +1400,11 @@ class CppBackendVerticalSliceTests(unittest.TestCase):
             ),
             (
                 request(type_ref=GenerationTypeRef(kind="base.in", type_tag="f32")),
+                entries,
+                "TSL-CPP-TRANSLATE-TYPE-SPELLING-TYPE-UNSUPPORTED",
+            ),
+            (
+                request(type_ref=GenerationTypeRef(kind="base.in", type_tag="si64")),
                 entries,
                 "TSL-CPP-TRANSLATE-TYPE-SPELLING-TYPE-UNSUPPORTED",
             ),

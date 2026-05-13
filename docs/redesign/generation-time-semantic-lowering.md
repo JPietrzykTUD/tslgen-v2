@@ -209,12 +209,19 @@ If a generation type query is evaluated without `type_tag_override`, without
 lowering emits `TSL-LOWER-GEN-TYPE-CONTEXT-MISSING`. The override is part of
 the immutable request-local `GenerationContext`; it is not global state.
 
-M43 supported type tags and companion behavior:
+M43 introduced this behavior for `si32` and `ui32`. M52 extends the same exact
+typed query forms to the selected concrete integer family:
 
 | Selected tag | `base::in` | signed companion | unsigned companion |
 | --- | --- | --- | --- |
+| `si8` | `si8` | `si8` | `ui8` |
+| `ui8` | `ui8` | `si8` | `ui8` |
+| `si16` | `si16` | `si16` | `ui16` |
+| `ui16` | `ui16` | `si16` | `ui16` |
 | `si32` | `si32` | `si32` | `ui32` |
 | `ui32` | `ui32` | `si32` | `ui32` |
+| `si64` | `si64` | `si64` | `ui64` |
+| `ui64` | `ui64` | `si64` | `ui64` |
 
 The exact accepted companion query forms are:
 
@@ -303,20 +310,26 @@ The accepted post-M43 phase is numbered in the roadmap:
   `else`, over typed M43 `GenerationTypeRef(kind="base.in")` values. It must
   not add conversion body lowering, backend translation, rendering, generated
   output, or broad TSIL parsing.
-- The selected post-M51 plan is Milestone 52. It extends only the accepted M43,
-  M48, and M51 generation-time type/signedness semantics from the selected
+- Milestone 52 extends only the accepted M43, M48, and M51 generation-time
+  type/signedness semantics from the selected
   `si32`/`ui32` pair to the concrete integer tag family
   `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, and `ui64`. It remains
   typed lowering only and must not add backend suffix/type-spelling expansion,
   generated output, branch-body semantics, vector/register metadata, or broad
   TSIL parsing.
+- The selected post-M52 plan, Milestone 53, moves ownership of those accepted
+  concrete integer generation rules from a lowering-private table to a typed
+  domain/catalog rule source. It must preserve M52 behavior exactly and must
+  not infer broad type semantics from raw tag spelling or wildcard/group
+  selectors.
 
 This phase does not make backend translation parse raw generation-time helper
 text and does not move suffix or type-spelling evaluation into renderers.
 
 ## Explicit Deferrals
 
-Deferred beyond the accepted M43-M51 slices and selected M52 plan:
+Deferred beyond the accepted M43-M52 slices and selected M53 rule-source
+boundary:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -333,7 +346,8 @@ Deferred beyond the accepted M43-M51 slices and selected M52 plan:
   deferred.
 - Backend suffix/type-spelling translation for concrete integer tags beyond the
   accepted selected M45/M46 `si32`/`ui32` behavior remains deferred even though
-  M52 selects generation-time type/signedness semantics for those tags.
+  M52 accepts generation-time type/signedness semantics for those tags and M53
+  only moves the rule source boundary.
 - Backend type/value requests whose inputs are still raw generation-time text.
 - Primitive-call lowering, loops, variables, aliases, casts, arrays, and
   branch-dependent backend output.

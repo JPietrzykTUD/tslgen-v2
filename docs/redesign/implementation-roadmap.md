@@ -4188,8 +4188,8 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance. Do not implement until this planning result is
-accepted.
+Accepted with follow-ups. The execution-review loop accepted the lowering-only
+behavior described here.
 
 Goal:
 
@@ -4329,7 +4329,7 @@ Documentation updates:
 
 - Update lowering behavior, pipeline design, behavioral spec, testing strategy,
   open questions, design decisions, frozen parity baselines, and
-  `docs/agent/current-redesign-state.md` for the selected M52 boundary.
+  `docs/agent/current-redesign-state.md` for the accepted M52 boundary.
 
 Validation commands:
 
@@ -4353,3 +4353,178 @@ Review risks:
 Dependencies on prior milestones:
 
 - Milestones 18, 40, 41, 42, 43, 48, and 51.
+
+## Post-M52 Planning Context
+
+Milestones 1 through 52 are accepted. Milestone 52:
+Concrete Integer Generation Type Semantics Slice completed with
+`Accept With Follow-Ups`.
+
+M52 intentionally kept concrete integer signed/unsigned semantics as typed
+rules instead of raw text rewriting. Its first implementation placed those
+typed rules in the lowering boundary. The post-M52 planning pass prioritizes
+cleaning that ownership boundary before adding any new helper behavior.
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Catalog-validated concrete integer generation rule source | Directly addresses the M52 rule ownership concern. `tsldata/detail/types.tsl` and typed catalog `TypeGroup` data already identify concrete integer singleton tags and wildcard/group selectors. | Low if it preserves M52 behavior exactly and passes immutable typed rules into lowering; medium if it infers broad type semantics from names or groups. | Select as M53. |
+| `type::size_bytes(type<generation>(base::in))` value query | Lowering-focused corpus evidence exists in IO, load/store array, and bit-count bodies. | Medium because it introduces a new generation value result model and evidence is embedded in broader loops/casts/conditions. | Defer until a value-query result model slice is selected. |
+| Backend suffix/type-spelling expansion for 8/16/64-bit integers | Useful after M52 because generation-time semantics now know those tags. | High now because it reopens M45/M46 translation limits and would mix rule-source cleanup with backend behavior. | Defer until after the rule-source boundary is clean. |
+| Vector/register metadata queries | Needed for later load/store and conversion work. | High because evidence is coupled to lane metadata, language maps, loops, casts, calls, and backend requests. | Defer. |
+| M49-M52 follow-up cleanup | Several non-blocking quality follow-ups remain. | Low individually, but they do not advance one coherent product/domain milestone. | Keep recorded as follow-ups. |
+
+## Milestone 53: Catalog-Validated Concrete Integer Generation Rule Source Slice
+
+Status:
+
+Selected for human acceptance. Do not implement until this planning result is
+accepted.
+
+Goal:
+
+Move the accepted M52 concrete integer generation type/signedness semantics out
+of the lowering-local private table and into an explicit typed domain/catalog
+rule source, while preserving M52 behavior exactly.
+
+M53 is an architectural boundary slice, not a behavior expansion. Generation
+lowering should consume immutable typed rule values prepared at a domain,
+catalog, or lowering-input boundary. Lowering must not read files, parse raw
+TSL, or infer arbitrary integer semantics from tag spelling.
+
+Scope:
+
+- Introduce a typed concrete integer generation rule model outside
+  `tslgen.lowering.boundary` for exactly:
+
+  ```text
+  si8, ui8, si16, ui16, si32, ui32, si64, ui64
+  ```
+
+- Validate or construct that rule source from typed catalog/type-group data
+  such as `TypeGroup` entries from `tsldata/detail/types.tsl`, while preserving
+  the exact accepted M52 rule set:
+
+  ```text
+  si8  <-> ui8
+  si16 <-> ui16
+  si32 <-> ui32
+  si64 <-> ui64
+  ```
+
+- Make generation-time lowering consume the typed rule source instead of owning
+  the private concrete-integer rule table.
+- Preserve all accepted M52 outputs for:
+
+  ```text
+  type<generation>(base::in)
+  type<generation>(base::signed_of(type<generation>(base::in)))
+  type<generation>(base::unsigned_of(type<generation>(base::in)))
+  ```
+
+  and exact M48/M51 signedness predicate branch pruning.
+
+- Preserve M52 diagnostics, deterministic ordering, branch provenance, and
+  selected-branch-only diagnostics unless a more precise rule-source diagnostic
+  is needed for missing or inconsistent rule data.
+- Keep backend-translation rejection of raw unresolved generation helpers and
+  renderer non-evaluation unchanged.
+
+Out of scope:
+
+- New generation-time helper forms such as `type::size_bytes`.
+- Backend suffix/type-spelling expansion beyond accepted M45/M46 `si32`/`ui32`
+  behavior.
+- C++ or Rust rendering, generated C++ or Rust output, generated test sources,
+  CLI/reporting, writer behavior, compiler execution, or generated-test
+  execution.
+- Treating wildcard or group selectors such as `?i?`, `?i64`, `si?`, `ui?`, or
+  `idqword` as selected concrete type tags during lowering.
+- Regex-derived acceptance of new concrete-looking tags such as `si128`.
+- Floats, masks, pointers, vector types, generic tags, backend-scoped type
+  requests, vector/register metadata, vector length/alignment, generic lengths,
+  aliases, casts, arrays, loops, calls, direct `intrin<...>`, `switch<compile>`,
+  `if<compile>`, generalized plain `else`, and branch-body semantics.
+- Runtime dependency on `frozen/`, raw legacy TSL, or legacy generator logic.
+
+Required inputs:
+
+- Typed catalog type-group data for the selected concrete integer singleton
+  tags and wildcard/group selectors.
+- Existing M43/M48/M51/M52 lowering behavior and tests.
+- Existing request-local generation context and selected candidate type tag
+  behavior.
+
+Expected outputs:
+
+- A deterministic typed concrete integer generation rule set with signed
+  companion, unsigned companion, and signedness facts.
+- Existing M52 `GenerationTypeRef` and pruned branch results unchanged.
+- Structured diagnostics for missing, incomplete, or inconsistent rule-source
+  data if selected lowering needs that rule data.
+
+Parity criterion:
+
+For all accepted M52 inputs, M53 must produce the same semantic lowering
+results and preserve the same unsupported selected-tag boundary. The only
+intended architectural change is rule ownership: concrete integer semantics
+move from a lowering-private table to a typed domain/catalog rule source.
+
+Evidence paths:
+
+- `tsldata/detail/types.tsl:2-9` for concrete integer singleton tags.
+- `tsldata/detail/types.tsl:10-16` and `:20-24` for wildcard/group selectors
+  that must remain unsupported as selected concrete lowering tags.
+- `tslgen/src/tslgen/domain/types.py` for typed `TypeGroup` values.
+- `tslgen/src/tslgen/domain/catalog.py` for typed catalog lookup/indexing.
+- Current M52 tests in `tslgen/tests/unit/test_lowering_boundary.py` for the
+  accepted behavior contract.
+
+Tests required:
+
+- Focused unit tests for the new typed rule source, including deterministic
+  rule ordering.
+- Rule-source validation tests for missing singleton tags, missing companion
+  pairs, inconsistent singleton/group data, wildcard/group selectors, floats,
+  pointers, masks, unknown tags, and concrete-looking unselected tags such as
+  `si128`.
+- Regression tests proving all M52 type-query and signedness branch behavior
+  remains unchanged.
+- Boundary tests proving backend translation still rejects raw unresolved
+  generation helpers and renderers remain non-evaluating.
+
+Golden fixtures required:
+
+- None. M53 is a semantic rule-source boundary slice and must not change
+  generated C++ or Rust output.
+
+Documentation updates:
+
+- Update lowering behavior, pipeline design, behavioral spec, testing strategy,
+  open questions, design decisions, frozen parity baselines, and
+  `docs/agent/current-redesign-state.md` for the selected M53 boundary.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- New focused rule-source test command selected by the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Accidentally making lowering read the catalog, filesystem, or raw TSL
+  directly.
+- Replacing explicit typed rules with broad regex/string inference.
+- Treating wildcard/group selectors as selected concrete type tags.
+- Changing accepted M52 diagnostics, provenance, or deterministic ordering
+  unintentionally.
+- Letting backend translation consume the broader rule source and expand
+  suffix/type-spelling behavior.
+- Creating a broad type-system abstraction beyond the selected rule-source
+  boundary.
+
+Dependencies on prior milestones:
+
+- Milestones 4, 18, 40, 41, 42, 43, 48, 51, and 52.

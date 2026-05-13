@@ -343,8 +343,9 @@ selected exact
 `type<generation>(base::signed_of(type<generation>(base::in)))`, and
 `type<generation>(base::unsigned_of(type<generation>(base::in)))` forms only;
 prose shorthand such as `base::signed_of(base::in)` is not accepted TSIL
-syntax. M43 supports only selected concrete tags `si32` and `ui32`, with
-`si32 -> ui32` and `ui32 -> si32` companion conversion. Missing type context,
+syntax. M43 introduced the behavior for `si32` and `ui32`; M52 extends it to
+`si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, and `ui64`, with typed
+signed/unsigned companions for each bit width. Missing type context,
 unknown tags, unsupported tags, non-integer companion requests, malformed
 queries, shorthand forms, and unsupported nested queries are structured
 diagnostics. `GenerationContext.type_tag_override` is the explicit
@@ -355,9 +356,13 @@ unsupported until selected by a later milestone. The
 unsupported behavior. Any C++ body-rendering milestone must consume this lowered
 model rather than raw TSIL text. Backend translation rejects unresolved raw
 generation helper text; renderer behavior remains unchanged and renderers do
-not parse or evaluate generation-time helpers. M43 does not expand C++ or Rust
-output and does not implement backend type spelling or backend
-suffix/prefix/post/infix/immediate evaluation.
+not parse or evaluate generation-time helpers. This lowering behavior does not
+expand C++ or Rust output and does not implement backend suffix, prefix, post,
+infix, immediate, or type-spelling translation for the new M52 integer tags.
+The selected post-M52 plan, M53, changes only ownership of the concrete integer
+generation rules: lowering should consume typed domain/catalog rule values
+rather than owning a private concrete-integer table, while preserving all M52
+behavior and unsupported selected-tag diagnostics.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
@@ -399,8 +404,7 @@ and selected-branch-only diagnostics, and must not add conversion body
 lowering, backend translation, rendering, generated output, broad TSIL parsing,
 or generalized plain-`else` support.
 
-The selected post-M51 plan is Milestone 52, a lowering-only concrete integer
-type/signedness expansion. M52 broadens the accepted M43
+Milestone 52 broadens the accepted M43
 `GenerationTypeRef(kind="base.in" | "base.signed_of" | "base.unsigned_of")`
 semantics and M48/M51 signedness branch pruning from `si32`/`ui32` to
 `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, and `ui64`. It must keep
@@ -408,6 +412,9 @@ wildcard/group tags such as `?i?`, `?i64`, `si?`, and `ui?` unsupported as
 selected concrete lowering tags, and it must not add backend suffix/type
 translation expansion, rendering, generated output, vector/register metadata,
 branch-body semantics, or broad TSIL parsing.
+The selected post-M52 plan, M53, keeps that same behavior but moves concrete
+integer semantic-rule ownership to a typed domain/catalog rule source consumed
+by lowering.
 
 Milestone 49 is the accepted generated C++ test-source parity slice for the
 single scalar `add_i32_basic` case. M49 consumes typed
@@ -864,7 +871,7 @@ Parity levels:
 | CLI/workflow parity: legacy scripts support generate/build/run/test modes, language selection, extension filters, primitive filters, docs toggles, clean mode, CPU-derived defaults, and target-specific behavior. | `frozen/run_all.sh`, `frozen/run_tests.py`, `frozen/tsl-gen/tsl_gen/app/cli.py` | `required-later` for broad workflow replacement; defer the first selected workflow until generated C++ behavior is corrected | Public API/CLI, explicit config, artifact writer, report/write stream contract | No broad compatibility shim, no build/test/run orchestration, no legacy flag parity | M35 inventory; deferred old M41 after M40 boundary correction unless limited to scalar output | CLI integration tests, stdout/stderr contract tests, temp output root, diagnostics for unsupported legacy flags, no runtime dependency on `frozen` |
 | Generated C++ output parity: legacy writes large header artifacts and CMake sidecars, including `tsl_native.hpp`, `tsl_generic.hpp`, `tsl_flags.cmake`, and `CMakeLists.txt`. | `frozen/out/tsl/tsl_native.hpp`, `frozen/out/tsl/tsl_generic.hpp`, `frozen/out/tsl/tsl_flags.cmake`, `frozen/out/tsl/CMakeLists.txt`, `frozen/generator_specs/backend_cpp.yaml` | `required-now` for selected `binary/add` excerpts and output layout; `required-later` for broad headers | Artifact descriptors, writer, C++ summary/declaration/body slices, M36 native header path/preamble slice, M37 scalar `add_binary` primary/specialization/wrapper slice, M39 transitional native `avx2/f32` output, M40 backend-call correction, and M47 selected native `avx2` `si32`/`ui32` output from M45/M46 translated values | Broad native output, masks, generic/combined templates, sidecars, generated tests, and shift/conversion output remain deferred; M48 is a lowering prerequisite and not an output slice | M35, M36, M37, M39 transitional, M40 correction, M45-M47; M48 implemented for lowering only | Golden excerpts or selected whole-file sections, semantic equivalence where exact whitespace is rejected, deterministic artifact order/digests, renderer consumes already-translated backend-call/suffix/type values |
 | Generated Rust output parity: legacy manifests/templates describe Rust primary/specialization/wrapper/trait generation. | `frozen/generator_specs/backend_rust.yaml`, `frozen/jinja/rust/**`, `frozen/examples/filter_count.rs` | `required-later` | Rust summary and body-free scalar trait signature slice | No Rust bodies, wrappers, tests, Cargo integration, or generated Rust output baseline | Future phase after C++ parity baseline | Rust golden fixtures selected from legacy templates or regenerated evidence, no Cargo/toolchain requirement in default tests |
-| TSIL semantic/lowering parity: legacy TSIL grammar and compiler handle calls, intrinsics, variables, loops, generation-time conditions, casts, type/value metadata, and cleanup passes. | `frozen/tsl-gen/tsl_gen/tsil.lark`, `frozen/tsl-gen/tsl_gen/tsil_engine/compiler.py`, `frozen/tsl-gen/tsl_gen/tsil_engine/passes/*.py`, `tsldata/primitives/**.tsl` | `required-now` for selected intrinsic-compose, base-type, and signedness branch-pruning slices; `required-later` for full semantic TSIL | Typed-opaque lowering, direct parameter-add mini-lowering, M38 selected intrinsic-compose helper lowering, M41 generation-time lowering contract, M42 aligned primitive-attribute branch pruning, M43 base type query values, M48 signedness branch pruning, M51 exact plain-`else` signedness branch support, and selected M52 concrete integer type/signedness expansion | No semantic primitive calls, loops, variables, broad type/value queries, direct intrinsics, broad `intrin_compose` metadata, generalized plain `else` generation branches, vector/register metadata, or branch body parity beyond selected pruning slices | M38 selected helper lowering, M40 translation/boundary correction, M41-M43 accepted lowering slices, M48 signedness pruning, M51 plain-`else` signedness branch slice, selected M52 concrete integer type/signedness slice | Unit lowering fixtures, unsupported-form diagnostics, deterministic lowered IR, selected-branch-only diagnostics, translation metadata tests, backend rejection of unresolved generation-time helpers, renderer non-evaluation |
+| TSIL semantic/lowering parity: legacy TSIL grammar and compiler handle calls, intrinsics, variables, loops, generation-time conditions, casts, type/value metadata, and cleanup passes. | `frozen/tsl-gen/tsl_gen/tsil.lark`, `frozen/tsl-gen/tsl_gen/tsil_engine/compiler.py`, `frozen/tsl-gen/tsl_gen/tsil_engine/passes/*.py`, `tsldata/primitives/**.tsl` | `required-now` for selected intrinsic-compose, base-type, and signedness branch-pruning slices; `required-later` for full semantic TSIL | Typed-opaque lowering, direct parameter-add mini-lowering, M38 selected intrinsic-compose helper lowering, M41 generation-time lowering contract, M42 aligned primitive-attribute branch pruning, M43 base type query values, M48 signedness branch pruning, M51 exact plain-`else` signedness branch support, M52 concrete integer type/signedness expansion, and selected M53 typed rule-source boundary | No semantic primitive calls, loops, variables, broad type/value queries, direct intrinsics, broad `intrin_compose` metadata, generalized plain `else` generation branches, vector/register metadata, or branch body parity beyond selected pruning slices | M38 selected helper lowering, M40 translation/boundary correction, M41-M43 accepted lowering slices, M48 signedness pruning, M51 plain-`else` signedness branch slice, M52 concrete integer type/signedness slice, selected M53 rule-source boundary | Unit lowering fixtures, unsupported-form diagnostics, deterministic lowered IR, selected-branch-only diagnostics, translation metadata tests, backend rejection of unresolved generation-time helpers, renderer non-evaluation |
 | Template-family coverage: legacy specs map many templates to primary and specialization templates. | `frozen/generator_specs/signatures.yaml`, `frozen/generator_specs/backend_cpp.yaml`, `frozen/jinja/cpp/spec_*.j2`, `tsldata/detail/templates.tsl` | `required-now` for `binary/add`; `required-later` for broad template families | Signature/template/attribute validation and narrow binary scalar rendering | No primary/specialization abstraction for broad template families; wrapper rules are not fully modeled | M35, M37, later family-specific milestones | Golden tests per selected family, unsupported-template diagnostics, no broad template engine until needed |
 | Generated test-source parity: legacy C++ tests include support/output headers, `gtest`, generated test functions, and `TEST(...)` registration. | `frozen/generator_specs/tests.yaml`, `frozen/jinja/cpp/test_file.j2`, `frozen/jinja/cpp/test_case.j2`, `frozen/tsl-gen/tsl_gen/backend/tests/planner.py` | `required-now` for the selected `add_i32_basic` C++ source fixture; `required-later` for broad generated tests | Test-source planning, metadata-style C++ test artifact, and selected M49 generated C++ `add_i32_basic` test-source parity slice | No compiler execution, full support-header policy, runtime lane/mask policy, `gtest` fetch policy, Rust tests, or broad generated-test framework parity | M29 metadata-style rendering; M49 generated C++ `add_i32_basic` source parity | Golden C++ test source and provenance, typed-plan rendering tests, unsupported diagnostics, deterministic rendering, no compiler execution |
 | Executable test behavior: legacy workflows configure CMake/Cargo, fetch or use googletest, cross-run ARM/SVE/NEON via qemu when available, and summarize runs. | `frozen/run_all.sh`, `frozen/run_tests.py`, `frozen/CMakeLists.txt` | `required-later`; not in this phase by default | Host-independent unit/golden tests; artifact writer; no compiler dependency | No compile/run orchestration, no toolchain abstraction, no host runtime policy | Future toolchain/test-execution phase | Optional `toolchain`/`slow` tests only, explicit compiler/qemu/rustup requirements, no default host dependency |

@@ -44,6 +44,17 @@ _TSIL_IDENTIFIER_RE = re.compile(rf"\A{_TSIL_IDENTIFIER}\Z")
 _CONCRETE_INTEGER_TAG_RE = re.compile(r"\A[su]i\d+\Z")
 _FLOAT_TAG_RE = re.compile(r"\Af\d+\Z")
 _WILDCARD_TYPE_TAG_RE = re.compile(r"\A(?:\?i\?|\?i\d+|[su]i\?|f\?)\Z")
+_TYPE_GROUP_TAGS = frozenset(
+    {
+        "bword",
+        "idqword",
+        "fdqword",
+        "arith",
+        "dqword",
+        "dword",
+        "qword",
+    }
+)
 _PRIMITIVE_ATTRIBUTE_CONDITION_RE = re.compile(
     rf"\A\s*value<generation>\(\s*primitive::attribute\(\s*"
     rf"({_TSIL_IDENTIFIER})\s*\)\s*\)\s*\Z"
@@ -299,6 +310,41 @@ class GenerationTypeRef:
     @property
     def key(self) -> tuple[str, str, str]:
         return (self.kind, self.type_tag, self.source_type_tag or "")
+
+
+@dataclass(frozen=True, slots=True)
+class _ConcreteIntegerGenerationTypeRule:
+    type_tag: str
+    signed_type_tag: str
+    unsigned_type_tag: str
+    is_signed: bool
+
+    @property
+    def key(self) -> tuple[str, str, str, bool]:
+        return (
+            self.type_tag,
+            self.signed_type_tag,
+            self.unsigned_type_tag,
+            self.is_signed,
+        )
+
+
+_CONCRETE_INTEGER_GENERATION_TYPE_RULES: tuple[
+    _ConcreteIntegerGenerationTypeRule,
+    ...,
+] = (
+    _ConcreteIntegerGenerationTypeRule("si8", "si8", "ui8", True),
+    _ConcreteIntegerGenerationTypeRule("ui8", "si8", "ui8", False),
+    _ConcreteIntegerGenerationTypeRule("si16", "si16", "ui16", True),
+    _ConcreteIntegerGenerationTypeRule("ui16", "si16", "ui16", False),
+    _ConcreteIntegerGenerationTypeRule("si32", "si32", "ui32", True),
+    _ConcreteIntegerGenerationTypeRule("ui32", "si32", "ui32", False),
+    _ConcreteIntegerGenerationTypeRule("si64", "si64", "ui64", True),
+    _ConcreteIntegerGenerationTypeRule("ui64", "si64", "ui64", False),
+)
+_SUPPORTED_GENERATION_TYPE_TAGS = tuple(
+    rule.type_tag for rule in _CONCRETE_INTEGER_GENERATION_TYPE_RULES
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -906,7 +952,7 @@ def _supported_generation_type_tag(
     query_text: str,
     location: SourceLocation | None,
 ) -> Result[None]:
-    if type_tag in {"si32", "ui32"}:
+    if _concrete_integer_generation_type_rule(type_tag) is not None:
         return Result.ok(None)
     if _known_unsupported_type_tag(type_tag):
         return Result.failure(
@@ -914,8 +960,9 @@ def _supported_generation_type_tag(
                 Diagnostic.error(
                     "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED",
                     "generation-time base type query supports only concrete "
-                    f"type tags 'si32' and 'ui32'; got {type_tag!r} for "
-                    f"query {query_text!r}",
+                    "integer type tags "
+                    f"{_quoted_join(_SUPPORTED_GENERATION_TYPE_TAGS)}; got "
+                    f"{type_tag!r} for query {query_text!r}",
                     location=location,
                 ),
             )
@@ -938,11 +985,12 @@ def _integer_companion_type_tag(
     query_text: str,
     location: SourceLocation | None,
 ) -> Result[str]:
-    if source_type_tag in {"si32", "ui32"}:
+    rule = _concrete_integer_generation_type_rule(source_type_tag)
+    if rule is not None:
         if kind == "base.signed_of":
-            return Result.ok("si32")
+            return Result.ok(rule.signed_type_tag)
         if kind == "base.unsigned_of":
-            return Result.ok("ui32")
+            return Result.ok(rule.unsigned_type_tag)
     if _is_non_integer_type_tag(source_type_tag):
         return Result.failure(
             (
@@ -966,6 +1014,7 @@ def _known_unsupported_type_tag(type_tag: str) -> bool:
         bool(_CONCRETE_INTEGER_TAG_RE.fullmatch(type_tag))
         or bool(_FLOAT_TAG_RE.fullmatch(type_tag))
         or bool(_WILDCARD_TYPE_TAG_RE.fullmatch(type_tag))
+        or type_tag in _TYPE_GROUP_TAGS
         or type_tag in {"ptr", "mask", "imask"}
     )
 
@@ -976,6 +1025,19 @@ def _is_non_integer_type_tag(type_tag: str) -> bool:
         "mask",
         "imask",
     }
+
+
+def _concrete_integer_generation_type_rule(
+    type_tag: str,
+) -> _ConcreteIntegerGenerationTypeRule | None:
+    for rule in _CONCRETE_INTEGER_GENERATION_TYPE_RULES:
+        if rule.type_tag == type_tag:
+            return rule
+    return None
+
+
+def _quoted_join(values: tuple[str, ...]) -> str:
+    return ", ".join(repr(value) for value in values)
 
 
 def _parse_generation_if(
@@ -1182,11 +1244,8 @@ def _resolve_type_signedness_condition(
             )
         )
 
-    if resolved_type_ref.type_tag == "si32":
-        value = True
-    elif resolved_type_ref.type_tag == "ui32":
-        value = False
-    else:
+    rule = _concrete_integer_generation_type_rule(resolved_type_ref.type_tag)
+    if rule is None:
         supported = _supported_generation_type_tag(
             resolved_type_ref.type_tag,
             type_query,
@@ -1199,7 +1258,7 @@ def _resolve_type_signedness_condition(
     return Result.ok(
         _ResolvedGenerationCondition(
             condition=TsilTypeSignednessCondition(resolved_type_ref),
-            value=value,
+            value=rule.is_signed,
         )
     )
 

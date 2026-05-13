@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 51 is accepted.
+Milestone 52 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -32,33 +32,38 @@ focused documentation revision.
 Post-M51 planning is accepted. It selected Milestone 52, and internal review
 returned `Accept With Follow-Ups` after a workflow handoff correction.
 
+The M52 execution-review loop returned `Accept With Follow-Ups` after a
+documentation wording cleanup.
+
+Post-M52 planning selected Milestone 53, and internal review returned
+`Accept With Follow-Ups` after a workflow handoff wording correction.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run the Milestone 52 execution-review loop.
+Await human acceptance of the post-M52 planning update.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m52-execution-review-loop-prompt.md
+docs/agent/runs/post-m52-acceptance-finalization-prompt.md
 ```
 
-Active executor milestone:
+Active planning target:
 
 ```text
-Milestone 52: Concrete Integer Generation Type Semantics Slice
+Milestone 53: Catalog-Validated Concrete Integer Generation Rule Source Slice
 ```
 
 Next expected action:
 
 ```text
-Execute and review M52. If internal review returns Accept or
-Accept With Follow-Ups, record the result, create the next concrete prompt
-under docs/agent/runs/, and update this state file. Do not start Milestone 53
-inside the M52 execution-review loop.
+After explicit human acceptance, the finalization prompt creates
+docs/agent/runs/m53-execution-review-loop-prompt.md and updates this state file
+to make M53 execution active.
 ```
 
 Accepted planning prompt:
@@ -125,6 +130,18 @@ Accepted post-M51 acceptance finalization prompt:
 
 ```text
 docs/agent/runs/post-m51-acceptance-finalization-prompt.md
+```
+
+Accepted M52 execution prompt:
+
+```text
+docs/agent/runs/m52-execution-review-loop-prompt.md
+```
+
+Post-M52 planning prompt:
+
+```text
+docs/agent/runs/post-m52-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -226,6 +243,18 @@ docs/agent/runs/post-m51-acceptance-finalization-prompt.md
   generic lengths, aliases, casts, arrays, loops, calls, direct `intrin<...>`,
   `switch<compile>`, `if<compile>`, generalized plain `else`, branch-body
   semantics, shift body parity, or conversion body parity.
+- Planned M53 is a semantic rule-source boundary slice only.
+- Planned M53 moves the accepted M52 concrete integer generation
+  type/signedness semantics from a lowering-private table into typed
+  domain/catalog rule values consumed by lowering.
+- Planned M53 must preserve M52 behavior, selected concrete tags, unsupported
+  wildcard/group selected-tag diagnostics, deterministic ordering, branch
+  provenance, and selected-branch-only diagnostics.
+- Planned M53 must not add new generation-time helper forms, backend
+  suffix/type-spelling expansion beyond M45/M46 `si32`/`ui32`, rendering,
+  generated output, generated test sources, CLI/reporting, writer behavior,
+  Rust, compiler execution, vector/register metadata, broad TSIL parsing,
+  branch-body semantics, or runtime dependency on `frozen/`.
 
 ## Accepted Milestone 48
 
@@ -297,6 +326,26 @@ translation, rendering, output generation, CLI/report/writer behavior, Rust,
 compiler execution, generated-test execution, conversion body lowering, and
 broader TSIL/plain-`else` support remain out of scope.
 
+## Accepted Milestone 52
+
+The Milestone 52 execution-review loop accepted with non-blocking follow-ups:
+
+```text
+Milestone 52: Concrete Integer Generation Type Semantics Slice
+```
+
+The slice is generation-time semantic lowering only. It extends the accepted
+M43/M48/M51 concrete integer type and signedness semantics from `si32`/`ui32`
+to `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, and `ui64` for the
+existing exact M43 type query forms and the existing exact M48/M51 signedness
+predicate branch forms. Signed/unsigned companion behavior is expressed through
+typed concrete-integer rules. Wildcard/group selectors remain unsupported as
+selected concrete type tags. Backend suffix/type-spelling translation remains
+limited to accepted M45/M46 `si32`/`ui32` behavior, and M52 adds no rendering,
+generated output, generated test sources, CLI/reporting, writer behavior, Rust,
+compiler execution, vector/register metadata, branch-body semantics, or broad
+TSIL parsing.
+
 ## Known Follow-Ups
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
@@ -336,11 +385,23 @@ broader TSIL/plain-`else` support remain out of scope.
 - M52 planning follow-up: the active M52 execution prompt explicitly preserves
   M45/M46 `si32`/`ui32` backend translation limits while M52 expands only
   generation-time lowering semantics.
+- M52 review follow-up: consider adding location assertions for the new and
+  expanded M52 diagnostic cases; current tests assert code/severity/message but
+  mostly not path, line, and column.
+- M53 planning follow-up: the M53 execution prompt should explicitly repeat the
+  broad TSIL parsing prohibition while moving only concrete integer rule-source
+  ownership.
+- Repo-wide evidence follow-up: `tslgen/tests/unit/test_backend_artifact_model.py`
+  still reads representative legacy backend manifest YAML from `frozen/` at
+  unit-test runtime. This predates M52 and M52 lowering code has no `frozen/`
+  runtime dependency, but a future cleanup may replace those reads with
+  redesign-owned fixtures if the strict no-`frozen/` test-runtime policy is
+  applied broadly.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the active M52
-execution-review loop prompt.
+No stop condition is active. The workflow proceeds with the active post-M52
+acceptance finalization prompt after human acceptance.
 
 ## Validation Expectations
 
