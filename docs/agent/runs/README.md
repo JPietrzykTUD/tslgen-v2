@@ -30,3 +30,17 @@ Stable, descriptive filenames are preferred, for example:
 
 See `docs/agent/next-run-prompt-protocol.md` for the required transition
 matrix and prompt-generation rules.
+
+
+## Execution-review loop prompts
+
+Implementation milestones may use a combined execution-review loop prompt named
+like:
+
+```text
+m48-execution-review-loop-prompt.md
+```
+
+Such prompts must explicitly spawn one write-capable executor, read-only review
+and audit subagents, a focused revision executor only if needed, and a next
+prompt generator after acceptance.

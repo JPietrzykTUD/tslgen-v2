@@ -19,3 +19,10 @@ Read-only role for milestone review.
   prompts under `docs/agent/runs/` and update
   `docs/agent/current-redesign-state.md` before finishing, unless the workflow
   intentionally stops.
+
+## Loop behavior
+
+Inside an execution-review loop, return only the verdict, blocking issues,
+non-blocking issues, required fixes, and suggested follow-ups. Do not implement
+fixes and do not update workflow state.
+

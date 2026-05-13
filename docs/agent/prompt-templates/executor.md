@@ -17,3 +17,11 @@ Final report must include:
 Next run prompt created: <path>
 Current state updated: yes/no
 ```
+
+## Executor-loop mode
+
+When used inside an orchestrated execution-review loop, the executor creates the
+implementation review packet but does not create the final next prompt. The
+orchestrator owns review, revision looping, state transitions, and next-prompt
+generation.
+

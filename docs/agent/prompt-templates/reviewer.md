@@ -25,3 +25,10 @@ Next run prompts created:
 - <path>
 Current state updated: yes/no
 ```
+
+## Reviewer-loop mode
+
+When used inside an orchestrated execution-review loop, the reviewer is read-only
+and returns a verdict plus issues. The reviewer does not create revision prompts
+or update state unless the active run prompt explicitly delegates that task.
+

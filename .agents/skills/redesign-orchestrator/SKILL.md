@@ -21,3 +21,9 @@ evidence, documentation, or boundary subagents.
 - Do not introduce runtime dependencies on `frozen/`.
 - Preserve typed semantic boundaries.
 - Report concise structured results.
+
+## Executor-review loop
+
+The orchestrator may coordinate a full executor-review-revision-next-prompt loop
+when the active run prompt explicitly requests it. Keep one write-capable agent
+active at a time and use read-only subagents for review/audit work.

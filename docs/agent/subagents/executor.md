@@ -14,3 +14,9 @@ Write-capable role for one milestone only.
   before finishing, unless the workflow intentionally stops.
 
 Do not run in parallel with another write-capable executor on the same files.
+
+## Revision loop responsibility
+
+When acting as a focused revision executor, modify only files required to fix the
+blocking review issues. Do not broaden scope and do not start later milestones.
+

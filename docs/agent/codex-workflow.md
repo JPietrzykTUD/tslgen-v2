@@ -78,6 +78,31 @@ prompt should be a finalization prompt. After acceptance, the finalization
 prompt creates the concrete executor, reviewer, planner, revision, or stop
 prompt required by the workflow state.
 
+## Orchestrated executor-review loop
+
+Implementation milestones may use a single Codex run prompt that drives the full
+executor -> reviewer -> revision -> next-prompt loop.
+
+The active run prompt must explicitly name each subagent and whether it is
+read-only or write-capable. Codex will not infer subagent use from role files
+alone.
+
+A typical implementation loop is:
+
+```text
+executor subagent writes the milestone
+-> validation auditor runs checks
+-> reviewer/evidence/docs/boundary auditors review
+-> orchestrator consolidates verdict
+-> focused revision executor runs only if needed
+-> focused re-review runs only on the fix
+-> next-prompt generator creates the next concrete run prompt
+```
+
+Executor-loop prompts are allowed to update `docs/agent/current-redesign-state.md`
+and create next prompts under `docs/agent/runs/`. They must not start the next
+implementation milestone.
+
 ## Drift controls
 
 - Do not combine implementation across pipeline ownership boundaries.

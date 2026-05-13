@@ -17,3 +17,11 @@ the orchestrator delegates that explicitly.
 - Before finishing, create the next concrete prompt under `docs/agent/runs/`
   and update `docs/agent/current-redesign-state.md` to point at it, unless the
   workflow intentionally stops.
+
+## Execution-review loop
+
+The orchestrator may run one full implementation loop: executor, read-only
+reviewer/auditors, focused revision executor if needed, focused re-review, and
+next prompt generation. It must keep write ownership single-agent and must not
+let reviewers/auditors modify files.
+

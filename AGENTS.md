@@ -167,6 +167,34 @@ Subagents must follow the same clean-redesign rules:
 The orchestrator owns final state updates to
 `docs/agent/current-redesign-state.md`.
 
+## Executor Review Loop
+
+Codex may run an orchestrated executor-review loop when the active run prompt
+explicitly asks for it.
+
+The loop is:
+
+```text
+single write-capable executor
+-> read-only reviewer/auditor subagents
+-> focused revision executor if `Needs Revision`
+-> focused re-review
+-> next-run prompt generation
+```
+
+Rules:
+
+- Only one write-capable executor or revision executor may modify a worktree at
+  a time.
+- Reviewer, validation-auditor, evidence-auditor, documentation-auditor, and
+  boundary-auditor subagents are read-only.
+- A revision executor may modify only files needed to fix the blocking review
+  issues.
+- The orchestrator owns the final verdict consolidation, state transition, and
+  next prompt creation under `docs/agent/runs/`.
+- If review returns `Return To Planner` or `Reject`, stop implementation and
+  create the appropriate planner/rollback prompt instead of continuing.
+
 ## Review Workflow
 
 Reviews must use `docs/agent/review-checklist.md`. Findings should focus on:

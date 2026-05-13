@@ -18,13 +18,13 @@ Milestone 48 execution is complete and awaiting review.
 Current required action:
 
 ```text
-Review Milestone 48.
+Run the Milestone 48 execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m48-review-prompt.md
+docs/agent/runs/m48-execution-review-loop-prompt.md
 ```
 
 Active review milestone:
@@ -36,8 +36,9 @@ Milestone 48: Signedness Type-Predicate Branch Pruning Slice
 Next expected action:
 
 ```text
-Milestone 48 reviewer returns a verdict, creates the next concrete run prompt
-under docs/agent/runs/, and updates this state file according to the verdict.
+The M48 execution-review loop consolidates a verdict. If accepted, it creates
+the next concrete prompt under docs/agent/runs/. If Needs Revision, it runs a
+focused revision loop.
 ```
 
 Accepted planning prompt:

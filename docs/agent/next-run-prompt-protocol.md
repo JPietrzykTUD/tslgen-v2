@@ -43,14 +43,41 @@ post-M47 planning ready for human acceptance
 | --- | --- |
 | Planning accepted | Executor prompt for the selected milestone. |
 | Planning needs revision | Docs revision prompt plus focused planning re-review prompt. |
-| Executor finished | Review prompt for the implemented milestone. |
+| Executor finished | Review prompt for the implemented milestone, or continue inside an active execution-review loop. |
 | Review accepted | Next planner/executor prompt based on roadmap state, or acceptance finalization prompt if human approval is required. |
 | Review accepted with follow-ups | Next prompt plus recorded follow-ups in state. |
-| Review needs revision | Narrow revision prompt plus focused re-review prompt. |
+| Review needs revision | Narrow revision prompt plus focused re-review prompt, or focused revision executor inside an active execution-review loop. |
 | Return to planner | Planner prompt for the design issue. |
 | Reject | Rollback/redesign prompt or explicit stop-state. |
 | Docs-only correction accepted | Next prompt from the restored workflow state. |
 | End of phase | Next planning prompt or explicit stop-state. |
+
+## Executor Review Loop Prompts
+
+An implementation milestone may use a single orchestrated loop prompt instead of
+separate executor and review prompts.
+
+Preferred filename pattern:
+
+```text
+m<N>-execution-review-loop-prompt.md
+```
+
+Such a prompt must include:
+
+- one write-capable executor task
+- read-only reviewer/auditor tasks
+- revision loop rules for `Needs Revision`
+- stop rules for `Return To Planner` and `Reject`
+- next-prompt generation rules for `Accept` and `Accept With Follow-Ups`
+
+The orchestrator must not mark the milestone accepted until the internal review
+verdict is `Accept` or `Accept With Follow-Ups`. When accepted, the orchestrator
+must create the next concrete prompt under `docs/agent/runs/` and update
+`docs/agent/current-redesign-state.md`.
+
+If human acceptance is required by local policy, the loop must create a
+finalization prompt instead of directly advancing the accepted-through milestone.
 
 ## Prompt Filename Rules
 

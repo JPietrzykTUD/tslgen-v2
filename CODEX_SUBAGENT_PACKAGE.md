@@ -11,7 +11,7 @@ Current action: post-M47 planning with internal subagent review.
 Primary prompt:
 
 ```text
-docs/agent/runs/post-m47-orchestrated-planning-plus-review-prompt.md
+docs/agent/runs/m48-execution-review-loop-prompt.md
 ```
 
 ## Included workflow files
@@ -30,3 +30,7 @@ docs/agent/runs/post-m47-orchestrated-planning-plus-review-prompt.md
 Extract this archive into the repository root after reverting to the accepted M47
 state. Then ask Codex to read `docs/agent/current-redesign-state.md` and run the
 active prompt.
+
+## Executor Review Loop
+
+The package now includes `docs/agent/runs/m48-execution-review-loop-prompt.md`, which drives executor, reviewer/auditor subagents, focused revision, and next-prompt generation.

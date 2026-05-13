@@ -76,6 +76,34 @@ Rules:
 - If implementation is needed, use one writer in one worktree; parallelize only
   read-only review, validation, evidence, and documentation audits.
 
+## Orchestrated Executor Review Loop
+
+Codex may use an orchestrated execution loop when the active run prompt requests
+it. This is the preferred mode for implementation milestones once the repo-local
+Codex workflow is installed.
+
+The loop is:
+
+1. Spawn or designate one write-capable executor for the selected milestone.
+2. Run the required validation.
+3. Spawn read-only reviewer/auditor subagents.
+4. Consolidate the review verdict.
+5. If the verdict is `Needs Revision`, spawn one focused revision executor and
+   then run a focused re-review. Repeat only for tightly scoped local fixes.
+6. If the verdict is `Accept` or `Accept With Follow-Ups`, update
+   `docs/agent/current-redesign-state.md` and create the next prompt under
+   `docs/agent/runs/`.
+7. If the verdict is `Return To Planner` or `Reject`, stop implementation and
+   create the appropriate planner, rollback, or redesign prompt.
+
+Rules:
+
+- Do not let reviewer/auditor subagents edit files.
+- Do not let two write-capable agents edit the same worktree concurrently.
+- Revision executors must fix only the blocking issues named by the review.
+- The orchestrator owns the final state transition and next-run prompt.
+- The loop must preserve the one-milestone-at-a-time rule.
+
 ## Planning Loop
 
 1. Select one milestone from `docs/redesign/implementation-roadmap.md`.

@@ -20,3 +20,11 @@ Final report must include:
 Next run prompt created: <path>
 Current state updated: yes/no
 ```
+
+## Execution-review loop ownership
+
+For implementation milestones, the orchestrator may run the full executor ->
+reviewer -> focused revision -> next-prompt loop. The orchestrator owns the
+single final verdict, revision loop control, state update, and next-run prompt
+generation.
+
