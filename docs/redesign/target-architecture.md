@@ -352,6 +352,11 @@ Current roadmap note:
   signedness branch form. It remains generation-time semantic lowering only
   and must not add broad TSIL parsing, backend translation, rendering, or
   conversion body parity.
+- The selected-for-acceptance post-M51 plan, Milestone 52, extends only the accepted
+  concrete-integer generation type/signedness semantics to selected
+  8/16/32/64-bit signed and unsigned integer tags. It remains lowering-only and
+  does not add backend suffix/type-spelling expansion, vector/register
+  metadata, rendering, generated output, or branch-body semantics.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

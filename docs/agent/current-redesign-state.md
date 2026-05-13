@@ -29,32 +29,35 @@ returned `Accept With Follow-Ups` after local planning-doc corrections.
 The M51 execution-review loop returned `Accept With Follow-Ups` after one
 focused documentation revision.
 
+Post-M51 planning selected Milestone 52, and internal review returned
+`Accept With Follow-Ups` after a workflow handoff correction.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run the post-M51 planning plus review prompt.
+Await human acceptance of the post-M51 planning update.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m51-planning-plus-review-prompt.md
+docs/agent/runs/post-m51-acceptance-finalization-prompt.md
 ```
 
 Active planning target:
 
 ```text
-Select Milestone 52 or record an explicit deferral.
+Milestone 52: Concrete Integer Generation Type Semantics Slice
 ```
 
 Next expected action:
 
 ```text
-Run docs-only post-M51 planning with planner, evidence, documentation, and
-boundary subagents, then internally review the planning result. If accepted,
-create a human-acceptance finalization prompt before activating execution.
+After explicit human acceptance, the finalization prompt creates
+docs/agent/runs/m52-execution-review-loop-prompt.md and updates this state file
+to make M52 execution active.
 ```
 
 Accepted planning prompt:
@@ -109,6 +112,12 @@ Accepted M51 execution prompt:
 
 ```text
 docs/agent/runs/m51-execution-review-loop-prompt.md
+```
+
+Accepted post-M51 planning prompt:
+
+```text
+docs/agent/runs/post-m51-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -186,6 +195,30 @@ docs/agent/runs/m51-execution-review-loop-prompt.md
   branch-shape evidence only. Its enclosing `switch<compile>` and branch
   bodies remain out of scope.
 - `frozen/` remains evidence only.
+- Planned M52 is generation-time semantic lowering only.
+- Planned M52 extends only the accepted M43/M48/M51 concrete integer
+  type/signedness semantics from `si32`/`ui32` to the selected concrete integer
+  tags `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, and `ui64`.
+- Planned M52 supports only the exact M43 type query forms
+  `type<generation>(base::in)`,
+  `type<generation>(base::signed_of(type<generation>(base::in)))`, and
+  `type<generation>(base::unsigned_of(type<generation>(base::in)))`.
+- Planned M52 supports only the exact M48/M51 signedness predicate branch forms
+  over typed `GenerationTypeRef(kind="base.in")` inputs, with
+  `else<generation>` or the M51 plain `else` spelling.
+- Planned M52 must express signed/unsigned companion behavior as typed rules or
+  typed evaluator functions, not raw text rewriting.
+- Planned M52 must keep wildcard/group selectors such as `?i?`, `?i64`, `si?`,
+  `ui?`, and `idqword` unsupported as selected concrete type tags during
+  lowering.
+- Planned M52 must not add backend translation expansion, including suffix or
+  type-spelling expansion beyond accepted M45/M46 `si32`/`ui32` behavior.
+- Planned M52 must not add C++ or Rust rendering, generated output, generated
+  test sources, CLI/reporting, writer behavior, compiler execution,
+  generated-test execution, vector/register metadata, vector length/alignment,
+  generic lengths, aliases, casts, arrays, loops, calls, direct `intrin<...>`,
+  `switch<compile>`, `if<compile>`, generalized plain `else`, branch-body
+  semantics, shift body parity, or conversion body parity.
 
 ## Accepted Milestone 48
 
@@ -293,11 +326,14 @@ broader TSIL/plain-`else` support remain out of scope.
   only after the condition resolves to the supported typed signedness predicate
   and rejects primitive-attribute or arbitrary plain-`else` forms, so this is
   non-blocking.
+- M52 planning follow-up: the M52 execution prompt should explicitly preserve
+  M45/M46 `si32`/`ui32` backend translation limits while M52 expands only
+  generation-time lowering semantics.
 
 ## Stop Condition
 
 No stop condition is active. The workflow proceeds with the active post-M51
-planning plus review prompt.
+acceptance finalization prompt after human acceptance.
 
 ## Validation Expectations
 

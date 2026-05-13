@@ -1246,16 +1246,23 @@ plain `else`. It stays in generation-time semantic lowering, consumes typed M43
 lowering, backend translation, rendering, broad TSIL parsing, or generalized
 plain-`else` support.
 
+The selected post-M51 plan is Milestone 52: extend the accepted concrete
+integer generation type and signedness semantics to
+`si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, and `ui64`. It remains
+lowering-only and does not add backend suffix/type-spelling expansion,
+vector/register metadata, branch-body lowering, generated output, or broad TSIL
+parsing.
+
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
-vector/register metadata, signedness branch forms beyond the exact M48/M51
-predicate/branch syntax, primitive calls, loops, variables, generation-time
-branches beyond the selected aligned primitive-attribute and signedness
-predicate conditions, type/value metadata beyond the selected base type query
-family, nested expressions, direct `intrin<...>` calls, helper families such
-as `io`, `mem`, `seq`, `pack`, and `algo`, Rust output, generated tests beyond
-the selected M49 source fixture, CLI/report parity, compiler execution, and
-broad native rendering.
+vector/register metadata, signedness branch forms beyond the exact M48/M51/M52
+predicate/branch syntax and selected concrete integer type set, primitive
+calls, loops, variables, generation-time branches beyond the selected aligned
+primitive-attribute and signedness predicate conditions, type/value metadata
+beyond the selected base type query family, nested expressions, direct
+`intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
+`algo`, Rust output, generated tests beyond the selected M49 source fixture,
+CLI/report parity, compiler execution, and broad native rendering.
 
 Required evidence:
 
@@ -1435,8 +1442,9 @@ Current roadmap direction:
 Status: Answered for Milestone 41, implemented for the first Milestone 42
 helper slice, narrowed for the Milestone 43 base type query slice, preserved by
 the numbered M44-M47 post-M43 phase, implemented for the M48 signedness
-branch-pruning slice, and implemented for the M51 exact plain-`else`
-signedness branch extension.
+branch-pruning slice, implemented for the M51 exact plain-`else` signedness
+branch extension, and selected for the M52 concrete integer type/signedness
+expansion.
 
 Why it matters:
 
@@ -1470,9 +1478,12 @@ evaluates only
 `GenerationTypeRef(kind="base.in")` values and prunes exact
 `if<generation> ... else<generation>` branches before backend translation.
 Milestone 51 adds only the same signedness predicate branch with plain `else`.
-Vector type/value queries, backend prefix/post/infix modifiers,
-`immediate(n)`, primitive calls, loops, direct intrinsics, generalized plain
-`else` branch syntax, and broader branch body semantics remain deferred.
+The selected M52 plan extends only the accepted concrete integer
+type/signedness rules to selected 8/16/32/64-bit signed and unsigned tags.
+Vector type/value queries, backend prefix/post/infix modifiers, `immediate(n)`,
+primitive calls, loops, direct intrinsics, generalized plain `else` branch
+syntax, backend suffix/type-spelling expansion for non-32-bit tags, and broader
+branch body semantics remain deferred.
 
 Milestones 44 through 47 preserve this decision. M45 and M46 are backend
 translation slices that consume typed M43 values; they do not parse raw
@@ -1489,6 +1500,9 @@ not reopen generation-time lowering, backend translation, backend rendering, or
 renderer-local semantic inference.
 The accepted M51 lowering slice reopens only generation-time branch syntax for
 the exact signedness predicate with plain `else`; it does not reopen backend
+translation, backend rendering, or renderer-local semantic inference.
+The selected M52 plan reopens only the concrete integer type set for accepted
+generation-time type and signedness rules; it does not reopen backend
 translation, backend rendering, or renderer-local semantic inference.
 
 Required evidence:

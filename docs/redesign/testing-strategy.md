@@ -677,6 +677,20 @@ Recommended first parity checks:
   renderer non-evaluation. No conversion body lowering, backend translation,
   rendering, generated output, Rust, CLI/reporting, or compiler execution is
   part of this check.
+- Milestone 52: concrete integer generation type/signedness tests should cover
+  `type<generation>(base::in)`,
+  `type<generation>(base::signed_of(type<generation>(base::in)))`,
+  `type<generation>(base::unsigned_of(type<generation>(base::in)))`, and the
+  exact M48/M51 signedness branch forms across `si8`, `ui8`, `si16`, `ui16`,
+  `si32`, `ui32`, `si64`, and `ui64`. Tests should prove signed tags choose
+  true branches, unsigned tags choose false branches, selected-branch-only
+  diagnostics remain intact, wildcard/group tags stay unsupported as selected
+  concrete tags, unsupported floats/pointers/masks/unknown tags keep explicit
+  diagnostics, repeated lowering is deterministic, backend translation still
+  rejects raw generation helpers, and renderers remain non-evaluating. No
+  backend suffix/type-spelling expansion, vector/register metadata, branch-body
+  lowering, generated output, Rust, CLI/reporting, or compiler execution is
+  part of this check.
 
 Deferred parity checks:
 

@@ -259,7 +259,7 @@ broad translation-map or language-map evaluation remain deferred. Renderers
 remain non-evaluating text emitters and must not parse raw generation-time
 helper text.
 
-## Post-M43 Through Post-M51 Direction
+## Post-M43 Through Post-M52 Direction
 
 The accepted post-M43 phase is numbered in the roadmap:
 
@@ -303,13 +303,20 @@ The accepted post-M43 phase is numbered in the roadmap:
   `else`, over typed M43 `GenerationTypeRef(kind="base.in")` values. It must
   not add conversion body lowering, backend translation, rendering, generated
   output, or broad TSIL parsing.
+- The selected post-M51 plan is Milestone 52. It extends only the accepted M43,
+  M48, and M51 generation-time type/signedness semantics from the selected
+  `si32`/`ui32` pair to the concrete integer tag family
+  `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, and `ui64`. It remains
+  typed lowering only and must not add backend suffix/type-spelling expansion,
+  generated output, branch-body semantics, vector/register metadata, or broad
+  TSIL parsing.
 
 This phase does not make backend translation parse raw generation-time helper
 text and does not move suffix or type-spelling evaluation into renderers.
 
 ## Explicit Deferrals
 
-Deferred beyond the accepted M43-M51 slices:
+Deferred beyond the accepted M43-M51 slices and selected M52 plan:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -324,6 +331,9 @@ Deferred beyond the accepted M43-M51 slices:
 - Backend modifier translation remains limited to the M45 intrinsic suffix
   request over typed M43 inputs; prefix, infix, post, and `immediate(n)` remain
   deferred.
+- Backend suffix/type-spelling translation for concrete integer tags beyond the
+  accepted selected M45/M46 `si32`/`ui32` behavior remains deferred even though
+  M52 selects generation-time type/signedness semantics for those tags.
 - Backend type/value requests whose inputs are still raw generation-time text.
 - Primitive-call lowering, loops, variables, aliases, casts, arrays, and
   branch-dependent backend output.

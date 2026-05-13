@@ -4151,11 +4151,11 @@ Dependencies on prior milestones:
 
 - Milestones 18, 30, 40, 41, 42, 43, and 48.
 
-## Post-M50 Planning Context
+## Post-M51 Planning Context
 
-Milestones 1 through 51 are accepted. The selected post-M50 planning result,
-Milestone 51: Plain-Else Signedness Generation Branch Lowering Slice, completed
-with `Accept With Follow-Ups`.
+Milestones 1 through 51 are accepted. Milestone 51:
+Plain-Else Signedness Generation Branch Lowering Slice completed with
+`Accept With Follow-Ups`.
 
 M49 reintroduced only the generated C++ test parity target from old M40 as a
 single-test source-rendering slice. M50 reintroduces only the selected legacy
@@ -4169,3 +4169,187 @@ M48 is constrained to generation-time semantic lowering over typed M43
 prefix/post/infix/immediate modifiers, vector/register metadata, Rust output,
 generated tests, compiler execution, and branch body semantics beyond the
 selected pruning result remain deferred.
+
+The post-M51 planning pass prioritizes lowering, per current project direction.
+The next slice should continue the typed generation-time semantic model without
+opening backend translation, rendering, output, CLI/reporting, Rust, compiler
+execution, generated-test execution, vector metadata, or broad TSIL parsing.
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Concrete integer generation type/signedness expansion | Builds directly on M43 `GenerationTypeRef` values and M48/M51 signedness branch pruning. Corpus evidence covers concrete 8/16/32/64-bit integer tags and signedness branches. | Low if kept to typed lowering and diagnostics; high if it expands backend suffix/type-spelling translation. | Select as M52. |
+| `type::size_bytes(type<generation>(base::in))` value query | Lowering-focused evidence exists in IO, bit-count, and array bodies. | Medium because it introduces a new general generation-value result model and surrounding bodies include broader unsupported constructs. | Defer until a value-query result slice is selected. |
+| Vector/register metadata queries | Needed for later load/store and conversion work. | High now because evidence is coupled to loops, casts, calls, language maps, vector/register metadata, and backend requests. | Defer. |
+| `packed` primitive-attribute branch pruning | Mechanically close to M42. | Low mechanically but low parity value now; likely invites mask/vector metadata work. | Defer until mask-store parity is selected. |
+
+## Milestone 52: Concrete Integer Generation Type Semantics Slice
+
+Status:
+
+Selected for human acceptance. Do not implement until this planning result is
+accepted.
+
+Goal:
+
+Extend the accepted generation-time lowering semantics from the selected
+`si32`/`ui32` pair to the concrete integer tag family:
+
+```text
+si8, ui8, si16, ui16, si32, ui32, si64, ui64
+```
+
+M52 remains generation-time semantic lowering only. It broadens the supported
+type set for already accepted exact helper forms; it does not add a new TSIL
+helper family, backend translation, rendering, or generated output.
+
+Scope:
+
+- Support the existing exact M43 generation type query forms for all selected
+  concrete integer tags:
+
+  ```text
+  type<generation>(base::in)
+  type<generation>(base::signed_of(type<generation>(base::in)))
+  type<generation>(base::unsigned_of(type<generation>(base::in)))
+  ```
+
+- Support the existing exact M48/M51 signedness predicate branch forms for all
+  selected concrete integer tags:
+
+  ```text
+  if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+    ...
+  } else<generation> {
+    ...
+  }
+  ```
+
+  and the M51 plain `else` spelling for the same exact predicate.
+
+- Express the concrete integer signed/unsigned companion mapping as typed rule
+  values or typed evaluator functions, not raw text rewriting:
+
+  ```text
+  si8  <-> ui8
+  si16 <-> ui16
+  si32 <-> ui32
+  si64 <-> ui64
+  ```
+
+- Preserve M42/M48/M51 branch provenance, deterministic ordering, and
+  selected-branch-only diagnostics.
+- Preserve backend-translation rejection of raw unresolved generation helpers
+  and renderer non-evaluation.
+
+Out of scope:
+
+- Backend translation expansion, including suffix, type-spelling, prefix, post,
+  infix, or immediate modifier support for non-32-bit integer tags.
+- C++ or Rust rendering, generated C++ or Rust output, generated test sources,
+  CLI/reporting, writer behavior, compiler execution, or generated-test
+  execution.
+- Treating wildcard or group selectors such as `?i?`, `?i64`, `si?`, `ui?`, or
+  `idqword` as selected concrete type tags during lowering.
+- Floats, masks, pointers, vector types, generic tags, backend-scoped type
+  requests, vector/register metadata, vector length/alignment, generic lengths,
+  aliases, casts, arrays, loops, calls, direct `intrin<...>`, `switch<compile>`,
+  `if<compile>`, generalized plain `else`, and branch-body semantics.
+- Shift or conversion body parity. Evidence from shifts and conversions is
+  type/signedness-helper evidence only.
+
+Required inputs:
+
+- M43 `GenerationTypeRef` model and context type-tag resolution.
+- M48 signedness predicate evaluator.
+- M51 plain-`else` branch syntax support.
+- Existing request-local `GenerationContext` type-tag override, selected
+  candidate default behavior, and implementation source location.
+
+Expected outputs:
+
+- `GenerationTypeRef(kind="base.in", type_tag=<selected concrete integer tag>)`.
+- `GenerationTypeRef(kind="base.signed_of", type_tag=<signed companion>,
+  source_type_tag=<selected concrete integer tag>)`.
+- `GenerationTypeRef(kind="base.unsigned_of", type_tag=<unsigned companion>,
+  source_type_tag=<selected concrete integer tag>)`.
+- Pruned signedness branches for signed and unsigned selected concrete integer
+  tags, for both `else<generation>` and M51 plain `else` forms.
+- Existing structured diagnostics for unsupported float, pointer, mask,
+  wildcard/group, unknown, malformed, shorthand, unsupported nested, and
+  unresolved-selected-branch cases.
+
+Parity criterion:
+
+For each selected concrete integer tag, generation-time type queries and
+signedness branches must produce the same typed semantic result as the accepted
+`si32`/`ui32` slice. Signed tags select the true branch; unsigned tags select
+the false branch. The behavior is derived from typed concrete-integer rules and
+typed M43/M48/M51 lowering values, never from backend/render text rewriting.
+
+Evidence paths:
+
+- `tsldata/detail/types.tsl:2-16` for concrete integer tags and integer groups.
+- `tsldata/primitives/arithmetic/fundamental.tsl:10-21` for accepted add tests
+  over 8/16/64-bit signed and unsigned types.
+- `tsldata/primitives/arithmetic/fundamental.tsl:47-90` for `?i?` intrinsic
+  suffix helper evidence using base signed companion queries.
+- `tsldata/primitives/bitwise/shifts.tsl:603-618` for shift tests over
+  8/16/64-bit integer tags.
+- `tsldata/primitives/bitwise/shifts.tsl:625-635` for exact signedness branch
+  evidence over `?i?`.
+- `tsldata/primitives/conversion/repr_change.tsl:1210-1217` for plain-`else`
+  signedness evidence in a `?i64` context. Branch bodies remain out of scope.
+- Legacy canonicalization and signedness evidence may be consulted in
+  `frozen/tsl-gen/tsl_gen/tsil_engine/expansion_support.py`, but `frozen/`
+  remains evidence only.
+
+Tests required:
+
+- Parameterized unit tests for `base::in`, `base::signed_of`, and
+  `base::unsigned_of` across all selected concrete integer tags.
+- Parameterized signedness branch pruning tests proving signed tags choose the
+  true branch and unsigned tags choose the false branch for both
+  `else<generation>` and plain `else`.
+- Regression tests proving accepted `si32`/`ui32` behavior is unchanged.
+- Diagnostic tests for `f32`, `f64`, `ptr`, mask tags, wildcard/group tags,
+  unknown tags, shorthand forms, unsupported nested queries, and unresolved
+  helpers in selected branches.
+- Determinism tests for repeated type-query and signedness branch lowering.
+- Boundary tests proving backend translation still rejects raw unresolved
+  generation helpers and renderers remain non-evaluating.
+
+Golden fixtures required:
+
+- None. M52 is a lowering slice and must not change generated C++ or Rust
+  output.
+
+Documentation updates:
+
+- Update lowering behavior, pipeline design, behavioral spec, testing strategy,
+  open questions, design decisions, frozen parity baselines, and
+  `docs/agent/current-redesign-state.md` for the selected M52 boundary.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Accidentally expanding backend suffix/type-spelling translation for
+  non-32-bit tags.
+- Treating type groups such as `?i?`, `?i64`, `si?`, or `ui?` as selected
+  concrete type tags.
+- Letting shift or conversion branch-body constructs enter scope because the
+  evidence appears inside shift/conversion bodies.
+- Moving signedness or companion-type inference into backend translation or
+  renderers.
+- Encoding concrete integer rules as raw string rewrites instead of typed
+  semantic rules.
+
+Dependencies on prior milestones:
+
+- Milestones 18, 40, 41, 42, 43, 48, and 51.

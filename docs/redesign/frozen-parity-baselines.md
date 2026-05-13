@@ -81,7 +81,10 @@ reviewable:
 12. M51 is accepted as the exact plain-`else` signedness branch-pruning syntax
    slice. It remains generation-time lowering only and is not an output parity
    slice.
-13. CLI workflow compatibility, coverage JSON adapter breadth beyond the
+13. M52 is selected for human acceptance as the concrete integer generation
+   type/signedness expansion slice. It remains generation-time lowering only
+   and is not an output parity slice.
+14. CLI workflow compatibility, coverage JSON adapter breadth beyond the
    selected M50 row, executable generated tests, and broad generated-test parity
    remain deferred until explicitly selected as separate milestones.
 
@@ -92,8 +95,8 @@ typed suffix/type-spelling translation. It exercises the important parity
 boundaries without requiring full headers, full TSIL, all wrappers,
 generated-test execution, Rust parity, or broad report/documentation parity.
 M50 reintroduces only one selected report row while full report/documentation
-parity remains deferred. M48 and M51 are post-output lowering prerequisites for
-later shift/conversion parity, not additional
+parity remains deferred. M48, M51, and the selected M52 plan are post-output
+lowering prerequisites for later shift/conversion parity, not additional
 generated-output targets. M49 reintroduces only one generated C++ test-source
 parity baseline and still does not add compiler execution.
 
