@@ -3681,12 +3681,167 @@ Implementation note:
 Milestone 48 should remain generation-time semantic lowering only. It should
 not change generated output or broaden backend translation.
 
+## Post-M48 Candidate Decision Table
+
+| Candidate slice | Evidence path and exact form | Required accepted inputs | Expected output/model | Pipeline owner | Risk and test strategy | Recommendation |
+| --- | --- | --- | --- | --- | --- | --- |
+| Generated C++ `add_i32_basic` test-source parity | `tsldata/primitives/arithmetic/fundamental.tsl:6` records the selected `add_i32_basic` test data. `frozen/jinja/cpp/test_file.j2:1-56`, `frozen/jinja/cpp/partials/test_common.j2:1-13`, `frozen/jinja/cpp/test_case.j2:51-63`, and `frozen/generator_specs/tests.yaml` provide legacy test-file, boolean test-function, binary test-case, and test-policy evidence. | Existing `TestSourcePlan` / `PlannedTestCase` values, M46 `BackendTypeSpelling` for selected C++ `si32 -> int32_t`, accepted scalar C++ wrapper naming from M37, artifact/golden infrastructure, and M35 parity baseline `CPP-ADD-I32-TEST`. | One deterministic redesign-owned C++ test-source artifact and golden fixture for the selected scalar `add_i32_basic` case. | Test-source rendering. | Medium. Tests must prove the renderer consumes typed test-plan and typed type-spelling data, is deterministic, preserves semantic evidence for test name/inputs/expected/wrapper-call intent/`TEST` registration, and does not compile, run, fetch `gtest`, read `frozen/`, infer type spellings locally, or broaden generated-test support. | Select as Milestone 49. |
+| Legacy coverage JSON adapter row | `frozen/out/reports/primitive_coverage.json:57762-57777` records the selected `add`, `avx2`, `cpp`, `f32` row. | Accepted coverage/report DTOs and deterministic JSON rendering. | One selected-row JSON adapter fixture. | Reporting. | Low to medium, but less directly tied to the accepted C++ generated API/output path than generated-test source parity. | Defer until after one generated-test source parity slice. |
+| CLI workflow compatibility | `frozen/run_all.sh`, `frozen/run_tests.py`, and legacy CLI evidence show broad workflows. | Accepted API/CLI, writer, selected output, and explicit workflow policy. | One generation-only workflow if selected later. | CLI/API boundary. | High if it tries to include build/test/run/docs/CPU detection. | Defer. |
+| Prefix/post/infix/immediate modifiers | `tsldata/primitives/bitwise/shifts.tsl`, `tsldata/primitives/conversion/repr_change.tsl`, and `frozen/tsl-gen/tsl_gen/resolver/render_support.py` show broad modifier behavior. | M44-M46 typed modifier boundaries plus selected family-specific fixtures. | Typed backend modifier results. | Backend translation. | Medium to high; not needed for the selected generated-test parity slice. | Defer. |
+| Vector/register metadata or shift/conversion output | Shift/conversion and load/store sources contain vector metadata, casts, loops, direct intrinsics, calls, and branch-body semantics. | Additional lowering/type/value metadata and backend translation slices. | Future semantic values or output slices. | Lowering plus later translation/rendering. | High if combined. | Defer. |
+| Executable generated tests and compiler orchestration | `frozen/run_tests.py` and `frozen/generator_specs/tests.yaml` show compile/run behavior. | Toolchain policy, optional dependency policy, generated-test source parity, and runtime harnesses. | Optional toolchain execution workflow. | Toolchain/test execution boundary. | High; must not enter default validation. | Explicitly defer. |
+
+## Milestone 49: Generated C++ Add I32 Test Source Parity Slice
+
+Status:
+
+Planned for human acceptance. Do not implement until this planning result is
+accepted.
+
+Goal:
+
+Render one deterministic, legacy-style C++ test source for the selected
+`add_i32_basic` case, consuming typed `TestSourcePlan` data rather than
+rescanning raw TSL or copying legacy templates. This reintroduces the old
+generated C++ test parity target as a narrow source-rendering slice, without
+compiler execution.
+
+Scope:
+
+- Backend: C++ only.
+- Primitive/test/type/extension: `add`, `add_i32_basic`, `si32`, scalar.
+- Produce a redesign-owned golden fixture:
+  `tslgen/tests/fixtures/golden/parity/cpp/add_i32_basic_test.cpp`.
+- Add fixture provenance that cites active source data and legacy evidence.
+- Render artifact kind `production_tests` at logical path
+  `tests/add_i32_basic_test.cpp`.
+- Preserve semantic parity for:
+  - test name `add_i32_basic`;
+  - two input vectors and one expected vector from `fundamental.tsl`;
+  - wrapper-call intent for `tsl::add<Vec>(...)`;
+  - `using Vec = tsl::simd<int32_t, scalar>` from an explicit typed C++
+    type-spelling input;
+  - legacy-style `TEST(...){ ASSERT_TRUE(...) }` registration intent.
+- Consume `TestSourcePlan` / `PlannedTestCase` or an equivalent typed test-plan
+  value. The renderer must not rescan raw TSL text.
+- Consume an explicit M46-style
+  `BackendTypeSpelling(backend_id="cpp", type_tag="si32", spelling="int32_t",
+  source_ref_kind="base.in")` value, or an equivalent immutable typed
+  type-spelling input. The renderer must not infer `int32_t` from `si32`.
+- Keep the existing metadata-style C++ production-test artifact stable unless
+  a local refactor is required to share typed rendering helpers.
+
+Out of scope:
+
+- Compiling or running generated tests.
+- Fetching, vendoring, configuring, or requiring `gtest`.
+- Full legacy support headers, runtime aligned buffers, lane resizing,
+  runtime-lane policy, or mask/test-manifest policy.
+- Broad generated-test parity beyond the selected scalar `add_i32_basic` case.
+- `add_i32_edge`, `ui32`, floating, AVX2, vector, mask, load/store, shift, or
+  conversion tests.
+- CLI/report/Rust work, output writing beyond existing test artifact paths, and
+  compiler/toolchain orchestration.
+- Backend translation changes, generation-time lowering changes, rendering
+  semantic inference, or broad C++ generated output expansion.
+- Runtime dependency on `frozen/` or importing/executing legacy templates.
+
+Required inputs:
+
+- Existing `TestSourcePlan` and `PlannedTestCase` values.
+- M46 typed C++ scalar type spelling for `GenerationTypeRef(kind="base.in",
+  type_tag="si32")`, producing `int32_t`.
+- Accepted scalar C++ `add<Vec>` wrapper contract from M37.
+- M29 production-test rendering boundary, including the rule that test source
+  rendering consumes typed test-plan data and does not compile or run tests.
+- M35 parity baseline entry `CPP-ADD-I32-TEST`.
+
+Expected outputs:
+
+- One deterministic in-memory C++ test-source artifact for the selected
+  `add_i32_basic` case with artifact kind `production_tests` and logical path
+  `tests/add_i32_basic_test.cpp`.
+- One golden fixture plus provenance file.
+- Structured diagnostics for wrong backend, wrong artifact kind, non-scalar
+  extension, unsupported type, unsupported case shape, extra metadata,
+  missing/ambiguous C++ type-spelling input, missing/zero/multiple selected
+  cases when the slice requires exactly one, malformed vectors, and attempts to
+  render unsupported legacy-test features.
+
+Parity criterion:
+
+The generated test source must be semantically equivalent to the selected
+legacy evidence for test name, input values, expected values, wrapper-call
+intent, `Vec` alias using the typed C++ `int32_t` spelling, boolean test
+function shape, and `TEST` registration intent. Exact byte-for-byte legacy
+template output is not selected.
+
+Evidence paths:
+
+- `tsldata/primitives/arithmetic/fundamental.tsl:6` for `add_i32_basic` input
+  and expected vectors.
+- `frozen/jinja/cpp/test_file.j2:1-56` for includes and `TEST(...)`
+  registration evidence.
+- `frozen/jinja/cpp/partials/test_common.j2:1-13` for the boolean test
+  function and `Vec` alias shape.
+- `frozen/jinja/cpp/test_case.j2:51-63` for binary test-case shape evidence.
+- `frozen/generator_specs/tests.yaml` for test-generation policy evidence.
+- `docs/redesign/frozen-parity-baselines.md` `CPP-ADD-I32-TEST` entry for the
+  selected baseline. `frozen/` remains evidence only.
+
+Tests required:
+
+- Golden fixture and provenance tests for
+  `add_i32_basic_test.cpp`.
+- Determinism tests for repeated rendering.
+- Unit tests proving rendering consumes `TestSourcePlan` / `PlannedTestCase`
+  data and an explicit typed type-spelling value, and does not read raw TSL or
+  `frozen/` templates.
+- Diagnostic tests for unsupported backend, artifact kind, extension, type,
+  case shape, extra metadata, malformed vector values, missing/ambiguous type
+  spelling, and wrong selected-case cardinality.
+- Regression test proving the existing metadata-style C++ production-test
+  artifact remains stable.
+
+Golden fixtures required:
+
+- `tslgen/tests/fixtures/golden/parity/cpp/add_i32_basic_test.cpp`
+- `tslgen/tests/fixtures/golden/parity/cpp/add_i32_basic_test.provenance.md`
+
+Documentation updates:
+
+- Update behavioral spec, testing strategy, pipeline design, target
+  architecture, open questions, design decisions, frozen parity baselines, and
+  `docs/agent/current-redesign-state.md` for the accepted M49 boundary.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_test_source_planning.py tslgen/tests/unit/test_cpp_production_test_rendering.py`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Accidentally making generated tests executable by default.
+- Pulling legacy Jinja templates into runtime logic.
+- Rendering from raw TSL instead of typed `TestSourcePlan` data.
+- Inferring `int32_t` or the `Vec` alias from local renderer maps instead of
+  consuming an explicit typed type-spelling value.
+- Depending on unsupported load/store helpers or support-header behavior as if
+  they were accepted.
+- Expanding from one selected `add_i32_basic` case into broad generated-test
+  parity.
+
+Dependencies on prior milestones:
+
+- Milestones 12, 17, 29, 35, 36, 37, 40, and 48.
+
 ## Deferred Parity Targets After Boundary Correction
 
 The following previously planned targets remain valid but are deliberately
 deferred until explicitly reintroduced as separate milestones:
 
-- Generated C++ test parity slice from old M40.
 - CLI workflow compatibility slice from old M41.
 - Legacy coverage JSON adapter slice from old M42.
 - Broader C++ or Rust backend rendering beyond the corrected M40 call IR.
@@ -3698,12 +3853,16 @@ paths, accepted redesign inputs, expected outputs, parity criterion, tests,
 golden fixtures, documentation updates, review risks, dependencies, and whether
 it replaces or adapts a deferred target.
 
-## Post-M48 Planning Needed
+## Recommended Next Milestone
 
-Milestones 1 through 48 are accepted. No Milestone 49 is selected yet.
+Milestones 1 through 48 are accepted. The recommended next executor milestone,
+after human acceptance of this planning pass, is Milestone 49: Generated C++
+Add I32 Test Source Parity Slice.
 
-The next action is a docs-only post-M48 planning pass that reviews the deferred
-targets below and selects at most one narrow next milestone.
+M49 reintroduces only the generated C++ test parity target from old M40 as a
+single-test source-rendering slice. CLI workflow compatibility, coverage JSON
+adapter work, broader C++/Rust rendering, executable generated tests, compiler
+execution, and broad generated-test framework parity remain deferred.
 
 M48 is constrained to generation-time semantic lowering over typed M43
 `GenerationTypeRef(kind="base.in")` inputs. Broader native rendering,

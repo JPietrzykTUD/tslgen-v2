@@ -648,12 +648,20 @@ Recommended first parity checks:
   type-query diagnostics, missing type context, unknown or unsupported type
   tags, non-integer signedness predicates, determinism, backend-translation
   rejection of raw unresolved generation helpers, and renderer non-evaluation.
+- Milestone 49: generated C++ `add_i32_basic` test-source parity tests should
+  cover the selected redesign-owned golden fixture and provenance, repeated
+  rendering determinism, typed `TestSourcePlan` consumption, explicit typed
+  C++ type-spelling consumption, unsupported backend/artifact
+  kind/extension/type/case-shape/metadata/vector/type-spelling diagnostics, and
+  regression coverage that the existing metadata-style C++ production-test
+  artifact remains stable. No compiler execution, `gtest` fetch, CLI workflow,
+  Rust test rendering, or broad generated-test parity is part of this check.
 
 Deferred parity checks:
 
-- Generated C++ `add_i32_basic` test-source golden tests from the old Milestone
-  40 remain deferred until generated-test source rendering is explicitly
-  reintroduced as its own milestone.
+- Generated C++ test-source parity beyond the selected M49 `add_i32_basic`
+  source fixture remains deferred until explicitly reintroduced as its own
+  milestone.
 - CLI compatibility workflow tests from the old Milestone 41 resume only after
   a selected CLI workflow is explicitly reintroduced as its own milestone.
 - Legacy-style coverage JSON adapter tests from the old Milestone 42 resume only

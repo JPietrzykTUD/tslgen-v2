@@ -707,7 +707,9 @@ grammar, type mapping, backend translation, and wrapper policy milestones.
 
 ## OQ-023: What Should The First Production Test Rendering Artifact Look Like?
 
-Status: Answered for the Milestone 29 production-test rendering slice
+Status: Answered for the Milestone 29 metadata-style production-test rendering
+slice and narrowed by the selected post-M48 M49 generated C++ `add_i32_basic`
+test-source parity plan.
 
 Why it matters:
 
@@ -723,9 +725,19 @@ slice. The artifact consumes `TestSourcePlan` and emits deterministic
 The records include test name, primitive, generated function name, candidate ID,
 extension metadata, type tag, lane metadata, input vectors, and expected vector.
 
+Milestone 49 reintroduces a legacy-style generated C++ test-source parity slice
+for only `add_i32_basic`. It must still consume typed `TestSourcePlan` /
+`PlannedTestCase` data plus explicit typed C++ type-spelling input, but the
+rendered source may preserve semantic evidence for wrapper-call intent, `Vec`
+alias shape, boolean test function shape, and `TEST(...){ ASSERT_TRUE(...) }`
+registration. It does not compile or run the test, infer type spellings
+locally, or broaden support-header, runtime-lane, mask, Rust, or full legacy
+framework policy.
+
 Deferred answers:
 
-- Executable generated assertions.
+- Executable generated assertions beyond the selected M49 semantic source
+  shape.
 - Lane resizing and runtime-lane policy.
 - Mask/test-manifest policy.
 - Compile/run orchestration.
@@ -740,9 +752,9 @@ Required evidence:
 
 Implementation blocked:
 
-Not for Milestone 29. Broader generated-test behavior remains blocked on future
-lane policy, assertion rendering, backend test harness, and execution
-milestones.
+Not for Milestone 29 and not for the selected M49 source-rendering parity
+slice. Broader generated-test behavior remains blocked on future lane policy,
+assertion rendering breadth, backend test harness, and execution milestones.
 
 ## OQ-024: How Complete Must Backend Manifests, Language Maps, And Translation Maps Be Before Broader Rendering?
 
@@ -1217,6 +1229,12 @@ generation result, and prunes with M42-style selected-branch provenance. It does
 not implement plain `else` conversion forms, backend translation, rendering,
 shift/conversion body parity, or broader TSIL expression semantics.
 
+The selected post-M48 plan is Milestone 49: generated C++ `add_i32_basic`
+test-source parity from typed `TestSourcePlan` data and explicit typed C++
+type-spelling input. It does not add TSIL semantics, backend translation,
+generated C++ implementation output, compiler execution, CLI/report parity, or
+broad generated-test framework support.
+
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
 vector/register metadata, signedness branch forms beyond the exact M48
@@ -1224,8 +1242,9 @@ predicate/branch syntax, primitive calls, loops, variables, generation-time
 branches beyond the selected aligned primitive-attribute and signedness
 predicate conditions, type/value metadata beyond the selected base type query
 family, nested expressions, direct `intrin<...>` calls, helper families such
-as `io`, `mem`, `seq`, `pack`, and `algo`, Rust output, generated tests,
-CLI/report parity, compiler execution, and broad native rendering.
+as `io`, `mem`, `seq`, `pack`, and `algo`, Rust output, generated tests beyond
+the selected M49 source fixture, CLI/report parity, compiler execution, and
+broad native rendering.
 
 Required evidence:
 
@@ -1253,10 +1272,13 @@ Backend translation must not parse raw
 `type<generation>(...)` text, and renderers must not evaluate generation-time
 helpers, suffixes, or type spelling locally. No for the M48
 signedness-pruning slice because it stays inside generation-time semantic
-lowering. Yes for broader TSIL
-constructs, broad native rendering, Rust output, generated tests, CLI/report
-parity, and compiler execution until their fixtures, expected models, and
-validation boundaries are selected.
+lowering. No for the selected M49 generated C++ `add_i32_basic` test-source
+parity plan because it consumes typed test-plan data and stays out of lowering,
+translation, generated implementation rendering semantics, and compiler
+execution; any type spelling used by its `Vec` alias must arrive as explicit
+typed input. Yes for broader TSIL constructs, broad native rendering, Rust
+output, generated-test breadth, CLI/report parity, and compiler execution until
+their fixtures, expected models, and validation boundaries are selected.
 
 ## OQ-033: Which Legacy CLI Workflow Should Be Supported First?
 
@@ -1324,9 +1346,9 @@ Required evidence:
 
 Implementation blocked:
 
-No for a future deferred generated-test source rendering milestone once it is
-reintroduced after backend-boundary correction. Yes for any milestone that
-compiles or runs generated tests.
+No for the selected M49 generated-test source rendering milestone because it
+does not compile or run generated tests. Yes for any milestone that compiles or
+runs generated tests.
 
 ## OQ-035: How Should Backend Intrinsic Composition Be Data-Driven?
 
@@ -1433,7 +1455,7 @@ scalar type queries:
 resolve to typed semantic type values before backend translation. Milestone 48
 evaluates only
 `value<generation>(type::is_signed(type<generation>(base::in)))` over M43
-`GenerationTypeRef(kind="base.in")` values and prune exact
+`GenerationTypeRef(kind="base.in")` values and prunes exact
 `if<generation> ... else<generation>` branches before backend translation.
 Vector type/value queries, backend prefix/post/infix modifiers, `immediate(n)`,
 primitive calls, loops, direct intrinsics, plain `else` branch syntax, and
@@ -1444,7 +1466,11 @@ translation slices that consume typed M43 values; they do not parse raw
 generation helper text. M47 is a rendering slice that consumes translated
 suffix/type-spelling values and must not evaluate helper or backend metadata
 semantics locally. M48 returns to generation-time semantic lowering and does
-not reopen the M45/M46 translation or M47 rendering boundaries.
+not reopen the M45/M46 translation or M47 rendering boundaries. The selected
+M49 generated-test source plan stays in test-source rendering and likewise does
+not reopen generation-time lowering, backend translation, or generated C++
+implementation rendering; C++ type spelling must arrive as typed input rather
+than renderer-local inference.
 
 Required evidence:
 

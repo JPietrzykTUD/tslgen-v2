@@ -40,9 +40,9 @@ Accepted redesign boundaries available for future parity slices:
 | `frozen/out/tsl/tsl_flags.cmake` | C++ | sidecar compile flags | output layout | all generated headers | required native extensions | n/a | CMake/C++ compiler only if execution is selected later | selected as required-flags sidecar evidence | semantic for required flag sets; byte-for-byte only for a selected generated input | deferred after native C++ parity |
 | `frozen/out/reports/primitive_coverage.json` | report | coverage JSON | row-oriented coverage | broad primitive catalog | broad extension matrix | broad type matrix | none | report parity evidence, not first output target | selected-row semantic/field parity; no whole-file byte parity | deferred until report parity is explicitly selected |
 | `frozen/out/reports/primitive_coverage.html` | report | coverage HTML | row table | broad primitive catalog | broad extension matrix | broad type matrix | none | documentation/report evidence only for now | redesign-owned HTML unless a later milestone selects exact rows | later docs/report milestone |
-| `frozen/jinja/cpp/test_file.j2` | C++ | generated test source evidence | test file wrapper | broad test families | selected test extension | selected test type | none for inspection; `gtest`/C++ only for optional execution | selected generated-test structure evidence | semantic equivalence for one generated test source | deferred until generated-test source rendering is explicitly selected |
-| `frozen/jinja/cpp/test_case.j2` | C++ | generated test case evidence | `binary` first; broad tests later | `fundamental/add` first | selected extension | `si32` first | none for inspection; `gtest`/C++ only for optional execution | selected generated-test behavior evidence | semantic equivalence for test name, inputs, expected values, wrapper call, and assertion shape | deferred until generated-test source rendering is explicitly selected |
-| `frozen/generator_specs/tests.yaml` | C++/Rust | test planning metadata | test support policy | broad primitive families | runtime and fixed-width extension policy | broad type matrix | none | test planning and runtime-lane evidence | semantic policy evidence; no direct golden output | deferred generated-test and later toolchain phase |
+| `frozen/jinja/cpp/test_file.j2` | C++ | generated test source evidence | test file wrapper | broad test families | selected test extension | selected test type | none for inspection; `gtest`/C++ only for optional execution | selected generated-test structure evidence | semantic equivalence for one generated test source | M49 for selected `add_i32_basic`; broader generated-test source rendering later |
+| `frozen/jinja/cpp/test_case.j2` | C++ | generated test case evidence | `binary` first; broad tests later | `fundamental/add` first | selected extension | `si32` first | none for inspection; `gtest`/C++ only for optional execution | selected generated-test behavior evidence | semantic equivalence for test name, inputs, expected values, wrapper call, and assertion shape | M49 for selected `add_i32_basic`; broader generated-test source rendering later |
+| `frozen/generator_specs/tests.yaml` | C++/Rust | test planning metadata | test support policy | broad primitive families | runtime and fixed-width extension policy | broad type matrix | none | test planning and runtime-lane evidence | semantic policy evidence; no direct golden output | M49 for selected C++ source fixture; broader generated-test and toolchain phases later |
 | `frozen/generator_specs/backend_cpp.yaml` | C++ | backend manifest evidence | primary, specialization, wrappers, combined templates | broad template families | all C++ supported extensions | broad type matrix | none | C++ backend metadata evidence | semantic manifest policy; no template-file architecture | M36, M37, M40 |
 | `frozen/generator_specs/backend_rust.yaml` | Rust | backend manifest evidence | primary, specialization, wrappers, trait | broad Rust families | Rust-supported extensions | broad type matrix | Cargo only for future execution | deferred Rust parity evidence | semantic manifest policy; no current output baseline | future Rust parity phase |
 | `frozen/generator_specs/wrapper_shapes.yaml` | C++/Rust | wrapper signature evidence | `binary` first; broad wrappers later | `fundamental/add` first | selected extension | selected type | none | selected wrapper relationship evidence | semantic equivalence for public wrapper signature and delegation | M37 |
@@ -72,23 +72,24 @@ reviewable:
    integer output expands.
 8. M47 is the accepted native integer add parity slice for `avx2` `si32` and
    `ui32`.
-9. Generated C++ tests, CLI workflow compatibility, and coverage JSON adapter
-   work remain deferred until explicitly selected as separate milestones.
+9. M48 is the accepted signedness predicate branch-pruning slice over typed M43
+   `base.in` values. It supports later shift/conversion parity and is not an
+   output parity slice.
+10. M49 is selected for human acceptance as the generated C++
+   `add_i32_basic` test-source parity slice.
+11. CLI workflow compatibility, coverage JSON adapter work, executable
+   generated tests, and broad generated-test parity remain deferred until
+   explicitly selected as separate milestones.
 
 This selected output target is small enough because it uses one primitive
 family, one template family, two scalar integer type tags, one native
 floating-point extension/type pair, and selected AVX2 integer output after
 typed suffix/type-spelling translation. It exercises the important parity
 boundaries without requiring full headers, full TSIL, all wrappers,
-generated-test execution, Rust parity, or report/documentation parity. M48 is
-a post-output lowering prerequisite for later shift/conversion parity, not an
-additional generated-output target.
-
-Post-M47 lowering prerequisite:
-
-- M48 is the selected signedness predicate branch-pruning slice over typed M43
-  `base.in` values. It supports later shift/conversion parity and is not an
-  output parity slice.
+generated-test execution, Rust parity, or report/documentation parity. M48 is a
+post-output lowering prerequisite for later shift/conversion parity, not an
+additional generated-output target. M49 reintroduces only one generated C++
+test-source parity baseline and still does not add compiler execution.
 
 ## Baseline Decisions
 
@@ -235,22 +236,29 @@ Post-M47 lowering prerequisite:
 
 - Exact behavior target: one generated C++ test source for `add_i32_basic`.
 - Legacy evidence paths: `frozen/jinja/cpp/test_file.j2`,
+  `frozen/jinja/cpp/partials/test_common.j2`,
   `frozen/jinja/cpp/test_case.j2`, and `frozen/generator_specs/tests.yaml`.
 - Source line ranges:
   - `tsldata/primitives/arithmetic/fundamental.tsl:6` for `add_i32_basic`
     inputs and expected values.
   - `frozen/jinja/cpp/test_file.j2:1-56` for include and `TEST(...)`
     registration structure.
+  - `frozen/jinja/cpp/partials/test_common.j2:1-13` for the boolean test
+    function and `Vec` alias shape.
   - `frozen/jinja/cpp/test_case.j2:51-63` for the `binary` test-case shape.
 - Fixture path in this milestone: none.
 - Proposed future fixture path:
   `tslgen/tests/fixtures/golden/parity/cpp/add_i32_basic_test.cpp`.
+- Proposed future provenance path:
+  `tslgen/tests/fixtures/golden/parity/cpp/add_i32_basic_test.provenance.md`.
 - Parity level: semantic equivalence for test name, selected primitive,
-  input vectors, expected vector, wrapper call, and assertion intent.
+  input vectors, expected vector, wrapper call, typed C++ `int32_t` spelling in
+  the `Vec` alias, boolean test function shape, and assertion/registration
+  intent.
   Byte-for-byte legacy template output is not selected.
-- Validation method: a future deferred generated-test milestone must render
-  deterministic test source from `TestSourcePlan` data and must not execute
-  compilers or `gtest` by default.
+- Validation method: M49 must render deterministic test source from
+  `TestSourcePlan` data and explicit typed C++ type-spelling input. It must not
+  execute compilers or `gtest` by default.
 - Known limitations: executable assertion framework breadth, mask resizing,
   runtime-lane tests, support headers, and compile/run orchestration remain
   deferred.

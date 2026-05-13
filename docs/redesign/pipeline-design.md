@@ -467,7 +467,12 @@ accepts a `LoweringPlan` for body definitions. It diagnoses missing or
 unsupported lowered data instead of lowering TSIL or rendering stubs. Milestone
 29 adds one C++ generated production-test artifact from `TestSourcePlan`
 metadata. That artifact is metadata-style source, not compiled or executable
-test orchestration. Milestone 31 may add one Rust production-shaped
+test orchestration. Milestone 49 is the selected post-M48 plan to add one
+legacy-style generated C++ `add_i32_basic` test-source fixture from typed
+`TestSourcePlan` data and explicit typed C++ type-spelling input; it remains
+source rendering only and does not compile, run, fetch `gtest`, infer type
+spellings locally, or broaden generated-test framework parity. Milestone 31 may
+add one Rust production-shaped
 declaration/signature slice. Each of these rendering slices must stay
 backend-owned and must not perform selection, lowering, execution, or writing.
 

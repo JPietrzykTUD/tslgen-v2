@@ -348,6 +348,12 @@ Current roadmap note:
   `type::is_signed(type<generation>(base::in))` branch pruning. It consumes
   typed M43 `GenerationTypeRef(kind="base.in")` values, reuses M42 branch
   provenance, and does not add backend translation or rendering behavior.
+- Milestone 49 is the selected post-M48 test-source rendering plan. It consumes
+  typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
+  type-spelling input for one C++ `add_i32_basic` source fixture. It must not
+  compile tests, execute toolchains, read legacy templates at runtime, infer
+  type spellings locally, or modify lowering/backend translation/generated
+  implementation rendering semantics.
 
 Does not:
 

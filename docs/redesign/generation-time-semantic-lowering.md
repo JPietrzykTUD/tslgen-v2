@@ -259,7 +259,7 @@ broad translation-map or language-map evaluation remain deferred. Renderers
 remain non-evaluating text emitters and must not parse raw generation-time
 helper text.
 
-## Post-M43 And Post-M47 Direction
+## Post-M43 Through Post-M49 Direction
 
 The accepted post-M43 phase is numbered in the roadmap:
 
@@ -290,13 +290,17 @@ The accepted post-M43 phase is numbered in the roadmap:
   M43 `GenerationTypeRef(kind="base.in")` values, prunes exact
   `if<generation> ... else<generation>` branches with M42-style provenance,
   and does not add backend translation or rendering behavior.
+- Milestone 49 is the selected post-M48 generated C++ test-source parity plan.
+  It consumes typed `TestSourcePlan` values plus an explicit typed C++ type
+  spelling value and must not add generation-time lowering, backend
+  translation, generated C++ implementation rendering, or compiler execution.
 
 This phase does not make backend translation parse raw generation-time helper
 text and does not move suffix or type-spelling evaluation into renderers.
 
 ## Explicit Deferrals
 
-Deferred beyond the accepted M43/M47 slices:
+Deferred beyond the accepted M43-M48 slices and selected M49 plan:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -313,5 +317,6 @@ Deferred beyond the accepted M43/M47 slices:
 - Backend type/value requests whose inputs are still raw generation-time text.
 - Primitive-call lowering, loops, variables, aliases, casts, arrays, and
   branch-dependent backend output.
-- Rust body rendering, generated-test parity, CLI compatibility, report parity,
-  artifact writer changes, and compiler/test execution.
+- Generated-test parity beyond the selected M49 `add_i32_basic` source slice,
+  Rust body rendering, CLI compatibility, report parity, artifact writer
+  changes, and compiler/test execution.
