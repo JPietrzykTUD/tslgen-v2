@@ -3686,7 +3686,7 @@ not change generated output or broaden backend translation.
 | Candidate slice | Evidence path and exact form | Required accepted inputs | Expected output/model | Pipeline owner | Risk and test strategy | Recommendation |
 | --- | --- | --- | --- | --- | --- | --- |
 | Generated C++ `add_i32_basic` test-source parity | `tsldata/primitives/arithmetic/fundamental.tsl:6` records the selected `add_i32_basic` test data. `frozen/jinja/cpp/test_file.j2:1-56`, `frozen/jinja/cpp/partials/test_common.j2:1-13`, `frozen/jinja/cpp/test_case.j2:51-63`, and `frozen/generator_specs/tests.yaml` provide legacy test-file, boolean test-function, binary test-case, and test-policy evidence. | Existing `TestSourcePlan` / `PlannedTestCase` values, M46 `BackendTypeSpelling` for selected C++ `si32 -> int32_t`, accepted scalar C++ wrapper naming from M37, artifact/golden infrastructure, and M35 parity baseline `CPP-ADD-I32-TEST`. | One deterministic redesign-owned C++ test-source artifact and golden fixture for the selected scalar `add_i32_basic` case. | Test-source rendering. | Medium. Tests must prove the renderer consumes typed test-plan and typed type-spelling data, is deterministic, preserves semantic evidence for test name/inputs/expected/wrapper-call intent/`TEST` registration, and does not compile, run, fetch `gtest`, read `frozen/`, infer type spellings locally, or broaden generated-test support. | Select as Milestone 49. |
-| Legacy coverage JSON adapter row | `frozen/out/reports/primitive_coverage.json:57762-57777` records the selected `add`, `avx2`, `cpp`, `f32` row. | Accepted coverage/report DTOs and deterministic JSON rendering. | One selected-row JSON adapter fixture. | Reporting. | Low to medium, but less directly tied to the accepted C++ generated API/output path than generated-test source parity. | Defer until after one generated-test source parity slice. |
+| Legacy coverage JSON adapter row | `frozen/out/reports/primitive_coverage.json:57762-57777` records the selected `add`, `avx2`, `cpp`, `f32` row. `frozen/tools/report_primitive_coverage.py:242-266` records the legacy field construction rules. | Accepted coverage/report DTOs and deterministic JSON rendering. | One selected-row JSON adapter fixture. | Reporting. | Low to medium. Tests must prove selected-row field mapping, stable string-valued legacy booleans at the adapter boundary, deterministic ordering, and no parser/selection/lowering/rendering rerun during serialization. | Select as Milestone 50. |
 | CLI workflow compatibility | `frozen/run_all.sh`, `frozen/run_tests.py`, and legacy CLI evidence show broad workflows. | Accepted API/CLI, writer, selected output, and explicit workflow policy. | One generation-only workflow if selected later. | CLI/API boundary. | High if it tries to include build/test/run/docs/CPU detection. | Defer. |
 | Prefix/post/infix/immediate modifiers | `tsldata/primitives/bitwise/shifts.tsl`, `tsldata/primitives/conversion/repr_change.tsl`, and `frozen/tsl-gen/tsl_gen/resolver/render_support.py` show broad modifier behavior. | M44-M46 typed modifier boundaries plus selected family-specific fixtures. | Typed backend modifier results. | Backend translation. | Medium to high; not needed for the selected generated-test parity slice. | Defer. |
 | Vector/register metadata or shift/conversion output | Shift/conversion and load/store sources contain vector metadata, casts, loops, direct intrinsics, calls, and branch-body semantics. | Additional lowering/type/value metadata and backend translation slices. | Future semantic values or output slices. | Lowering plus later translation/rendering. | High if combined. | Defer. |
@@ -3696,8 +3696,7 @@ not change generated output or broaden backend translation.
 
 Status:
 
-Planned for human acceptance. Do not implement until this planning result is
-accepted.
+Accepted in the Milestone 49 execution-review loop.
 
 Goal:
 
@@ -3786,7 +3785,10 @@ Evidence paths:
 - `frozen/jinja/cpp/partials/test_common.j2:1-13` for the boolean test
   function and `Vec` alias shape.
 - `frozen/jinja/cpp/test_case.j2:51-63` for binary test-case shape evidence.
-- `frozen/generator_specs/tests.yaml` for test-generation policy evidence.
+- `frozen/jinja/cpp/partials/test_vectors.j2:38-50` for store-vector
+  expansion evidence.
+- `frozen/generator_specs/tests.yaml:45-59` for test-generation policy
+  evidence.
 - `docs/redesign/frozen-parity-baselines.md` `CPP-ADD-I32-TEST` entry for the
   selected baseline. `frozen/` remains evidence only.
 
@@ -3843,7 +3845,7 @@ The following previously planned targets remain valid but are deliberately
 deferred until explicitly reintroduced as separate milestones:
 
 - CLI workflow compatibility slice from old M41.
-- Legacy coverage JSON adapter slice from old M42.
+- Legacy coverage JSON adapter breadth beyond the selected M50 row.
 - Broader C++ or Rust backend rendering beyond the corrected M40 call IR.
 - Executable generated tests and compile/run orchestration.
 
@@ -3853,16 +3855,169 @@ paths, accepted redesign inputs, expected outputs, parity criterion, tests,
 golden fixtures, documentation updates, review risks, dependencies, and whether
 it replaces or adapts a deferred target.
 
+## Milestone 50: Legacy Coverage JSON Adapter Row Slice
+
+Status:
+
+Planned for human acceptance. Do not implement until this planning result is
+accepted.
+
+Goal:
+
+Render one deterministic legacy-style coverage JSON adapter row for the
+selected `add` / `avx2` / `cpp` / `f32` baseline from accepted typed reporting
+data. This reintroduces only the selected row-level report parity target from
+old M42, without whole-report parity, HTML/site parity, CLI workflow changes, or
+pipeline reruns during serialization.
+
+Scope:
+
+- Reporting adapter only.
+- Selected row only: primitive `add`, extension `avx2`, language `cpp`, type
+  `f32`.
+- Produce selected legacy row fields in stable order:
+  - `effective_present`;
+  - `extension`;
+  - `has_intrinsic`;
+  - `has_lang_block`;
+  - `has_tsil`;
+  - `language`;
+  - `missing_effective`;
+  - `missing_intrinsic`;
+  - `missing_lang_block`;
+  - `missing_tsil`;
+  - `primitive`;
+  - `primitive_class`;
+  - `template`;
+  - `type`.
+- Emit legacy string-valued booleans only at the adapter/serialization boundary.
+  Internal reporting values must remain typed.
+- Add a redesign-owned golden fixture:
+  `tslgen/tests/fixtures/golden/parity/reports/add_avx2_f32_coverage_row.json`.
+- Add fixture provenance that cites active source/report data and legacy
+  evidence.
+- Keep the existing redesign coverage JSON and HTML report behavior stable.
+
+Out of scope:
+
+- Whole `primitive_coverage.json` parity, row-count parity, or broad coverage
+  matrix parity.
+- Coverage HTML, MkDocs/site output, or documentation-report parity.
+- CLI workflow compatibility, new CLI flags, stdout/stderr behavior changes, or
+  writer/report file writes.
+- Backend rendering, generation-time lowering, backend translation, generated
+  C++ implementation output, test-source rendering, Rust output, compiler
+  execution, or generated-test execution.
+- Runtime dependency on `frozen/`, legacy report tools, or raw legacy JSON.
+- Rerunning parsing, selection, lowering, backend rendering, or test planning
+  during adapter serialization.
+
+Required inputs:
+
+- Accepted `PipelineCoverageReport` / primitive coverage DTOs or equivalent
+  typed report data.
+- A new M50 typed adapter request and selected-row fact value, derived from
+  accepted report data, that carries the exact selected legacy-row facts for
+  `add` / `avx2` / `cpp` / `f32`, including template `v:=(v,v)`, primitive
+  class `fundamental`, `has_tsil=true`, `has_intrinsic=false`,
+  `has_lang_block=false`, and `effective_present=true`. Do not pass untyped
+  dictionaries as the adapter model.
+- Existing deterministic JSON rendering helpers.
+- M35 parity baseline entry `COVERAGE-ADD-AVX2-F32-ROW`.
+
+Expected outputs:
+
+- One typed legacy coverage-row adapter value or equivalent immutable adapter
+  result for the selected row.
+- One deterministic JSON artifact/string for that row, with stable field order
+  matching the selected legacy row field order.
+- One golden fixture plus provenance file.
+- Structured diagnostics for unsupported adapter request, missing selected row,
+  ambiguous selected row, missing required typed report fields, unavailable
+  primitive class/template metadata, and attempts to serialize from raw legacy
+  evidence instead of accepted report DTOs.
+
+Parity criterion:
+
+The selected adapter row must be semantically equivalent to
+`frozen/out/reports/primitive_coverage.json:57762-57777` for the listed fields
+and ordering. Whole-report byte-for-byte parity and full legacy field expansion
+are not selected.
+
+Evidence paths:
+
+- `frozen/out/reports/primitive_coverage.json:57762-57777` for the selected
+  legacy row.
+- `frozen/tools/report_primitive_coverage.py:242-266` for legacy field
+  construction and string-valued boolean evidence.
+- `docs/redesign/frozen-parity-baselines.md` `COVERAGE-ADD-AVX2-F32-ROW`
+  entry for the selected baseline. `frozen/` remains evidence only.
+
+Tests required:
+
+- Golden fixture and provenance tests for
+  `add_avx2_f32_coverage_row.json`.
+- Determinism tests for repeated adapter serialization.
+- Unit tests proving the adapter consumes accepted typed coverage/report DTOs
+  rather than raw legacy JSON or fresh parser/selection/lowering/rendering
+  runs.
+- Field mapping tests for selected `add`, `avx2`, `cpp`, `f32`,
+  `fundamental`, `v:=(v,v)`, `has_tsil=true`, `has_intrinsic=false`,
+  `has_lang_block=false`, and derived missing/effective fields.
+- Diagnostic tests for unsupported request, missing selected row, ambiguous
+  selected row, missing metadata, and raw legacy evidence/runtime-read attempts.
+- Regression tests proving existing redesign coverage JSON and HTML reports
+  remain stable.
+
+Golden fixtures required:
+
+- `tslgen/tests/fixtures/golden/parity/reports/add_avx2_f32_coverage_row.json`
+- `tslgen/tests/fixtures/golden/parity/reports/add_avx2_f32_coverage_row.provenance.md`
+
+Documentation updates:
+
+- Update behavioral spec, testing strategy, pipeline design, target
+  architecture, open questions, design decisions, frozen parity baselines, and
+  `docs/agent/current-redesign-state.md` for the accepted M50 boundary.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_coverage_reporting.py`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Accidentally expanding into whole-report parity or broad report matrix
+  coverage.
+- Treating legacy string booleans as the internal report model instead of
+  adapter output.
+- Inferring report facts from raw TSIL text or raw source files instead of
+  accepted typed report data.
+- Rerunning pipeline stages during serialization.
+- Changing CLI/report stdout, artifact writing, or HTML behavior.
+- Reading `frozen/` or legacy report JSON at runtime.
+
+Dependencies on prior milestones:
+
+- Implementation input dependencies: Milestones 15, 23, 24, and 25 reporting
+  DTO/JSON/API foundations.
+- Parity and chronology context only: Milestones 35, 39, 40, and 49. M50 must
+  not borrow backend-call, generated-output, or test-source rendering machinery
+  as implementation inputs.
+
 ## Recommended Next Milestone
 
-Milestones 1 through 48 are accepted. The recommended next executor milestone,
-after human acceptance of this planning pass, is Milestone 49: Generated C++
-Add I32 Test Source Parity Slice.
+Milestones 1 through 49 are accepted. The recommended next executor milestone,
+after human acceptance of this planning pass, is Milestone 50: Legacy Coverage
+JSON Adapter Row Slice.
 
-M49 reintroduces only the generated C++ test parity target from old M40 as a
-single-test source-rendering slice. CLI workflow compatibility, coverage JSON
-adapter work, broader C++/Rust rendering, executable generated tests, compiler
-execution, and broad generated-test framework parity remain deferred.
+M49 reintroduced only the generated C++ test parity target from old M40 as a
+single-test source-rendering slice. M50 reintroduces only the selected legacy
+coverage JSON row target from old M42 as a pure reporting-adapter slice. CLI
+workflow compatibility, whole-report coverage parity, coverage HTML/site parity,
+broader C++/Rust rendering, executable generated tests, compiler execution, and
+broad generated-test framework parity remain deferred.
 
 M48 is constrained to generation-time semantic lowering over typed M43
 `GenerationTypeRef(kind="base.in")` inputs. Broader native rendering,

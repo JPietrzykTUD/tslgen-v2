@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast
+from typing import Protocol, cast
 
 from tslgen.backends.cpp.naming import cpp_production_function_name
 from tslgen.core.diagnostics import (
@@ -19,7 +19,26 @@ from tslgen.testgen.planner import PlannedTestCase, TestSourcePlan
 
 CPP_TEST_BACKEND_ID = "cpp"
 CPP_TEST_ARTIFACT_KIND = "production_tests"
+CPP_ADD_I32_TEST_LOGICAL_PATH = "tests/add_i32_basic_test.cpp"
 SUPPORTED_CPP_TEST_TYPES = frozenset({"si32", "ui32"})
+
+
+class BackendTypeSpellingInput(Protocol):
+    @property
+    def backend_id(self) -> str:
+        ...
+
+    @property
+    def type_tag(self) -> str:
+        ...
+
+    @property
+    def spelling(self) -> str:
+        ...
+
+    @property
+    def source_ref_kind(self) -> str:
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +99,63 @@ def render_cpp_test_source_plan(plan: TestSourcePlan) -> Result[ArtifactSet]:
     )
 
 
+def render_cpp_add_i32_test_source_plan(
+    plan: TestSourcePlan,
+    type_spellings: tuple[BackendTypeSpellingInput, ...],
+) -> Result[ArtifactSet]:
+    """Render the M49 selected legacy-style C++ add_i32_basic test source."""
+
+    diagnostics: list[Diagnostic] = list(_plan_diagnostics(plan))
+    diagnostics.extend(_add_i32_plan_shape_diagnostics(plan))
+    spelling = _selected_add_i32_type_spelling(type_spellings)
+    diagnostics.extend(spelling.diagnostics)
+
+    record: CppProductionTestRecord | None = None
+    if not has_errors(diagnostics) and plan.test_cases:
+        planned_case = plan.test_cases[0]
+        case_record = _add_i32_record_for_case(planned_case)
+        diagnostics.extend(case_record.diagnostics)
+        if case_record.is_ok:
+            record = case_record.unwrap()
+
+    ordered = sort_diagnostics(diagnostics)
+    if has_errors(ordered):
+        return Result.failure(ordered)
+    if record is None or not spelling.is_ok:
+        return Result.failure(ordered)
+
+    descriptor = plan.descriptors[0]
+    artifact = Artifact(
+        logical_path=descriptor.logical_path,
+        content=_render_cpp_add_i32_test_source(
+            descriptor.logical_path.as_posix(),
+            record,
+            spelling.unwrap(),
+        ),
+        metadata=FrozenMap(
+            {
+                "artifact_kind": descriptor.kind,
+                "backend_id": CPP_TEST_BACKEND_ID,
+                "test_count": 1,
+                "test_names": (record.planned_case.declaration.test_name,),
+                "type_spelling": spelling.unwrap().spelling,
+            }
+        ),
+    )
+    return artifact_set_from_artifacts(
+        (artifact,),
+        metadata=FrozenMap(
+            {
+                "artifact_role": "production_test_sources",
+                "backend_id": CPP_TEST_BACKEND_ID,
+                "parity_slice": "cpp_add_i32_basic",
+                "test_count": 1,
+                "test_names": (record.planned_case.declaration.test_name,),
+            }
+        ),
+    )
+
+
 def _plan_diagnostics(plan: TestSourcePlan) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
     request_backend_ok = plan.request.backend_id == CPP_TEST_BACKEND_ID
@@ -127,6 +203,72 @@ def _plan_diagnostics(plan: TestSourcePlan) -> tuple[Diagnostic, ...]:
             )
         )
     return tuple(diagnostics)
+
+
+def _add_i32_plan_shape_diagnostics(plan: TestSourcePlan) -> tuple[Diagnostic, ...]:
+    diagnostics: list[Diagnostic] = []
+    if len(plan.test_cases) != 1:
+        diagnostics.append(
+            Diagnostic.error(
+                "TSL-TEST-RENDER-SELECTED-CASE-CARDINALITY",
+                "C++ add_i32_basic parity rendering requires exactly one "
+                f"planned test case; received {len(plan.test_cases)}",
+            )
+        )
+    if len(plan.descriptors) != 1:
+        diagnostics.append(
+            Diagnostic.error(
+                "TSL-TEST-RENDER-DESCRIPTOR",
+                "C++ add_i32_basic parity rendering requires exactly one "
+                f"artifact descriptor; received {len(plan.descriptors)}",
+            )
+        )
+    if plan.descriptors:
+        logical_path = plan.descriptors[0].logical_path.as_posix()
+        if logical_path != CPP_ADD_I32_TEST_LOGICAL_PATH:
+            diagnostics.append(
+                Diagnostic.error(
+                    "TSL-TEST-RENDER-LOGICAL-PATH",
+                    "C++ add_i32_basic parity rendering requires logical path "
+                    f"{CPP_ADD_I32_TEST_LOGICAL_PATH!r}; received {logical_path!r}",
+                )
+            )
+    return tuple(diagnostics)
+
+
+def _selected_add_i32_type_spelling(
+    type_spellings: tuple[BackendTypeSpellingInput, ...],
+) -> Result[BackendTypeSpellingInput]:
+    matches = tuple(
+        spelling
+        for spelling in type_spellings
+        if spelling.backend_id == CPP_TEST_BACKEND_ID
+        and spelling.type_tag == "si32"
+        and spelling.source_ref_kind == "base.in"
+    )
+    if not matches:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-TEST-RENDER-TYPE-SPELLING-MISSING",
+                    "C++ add_i32_basic parity rendering requires an explicit "
+                    "BackendTypeSpelling for backend 'cpp', type tag 'si32', "
+                    "and source ref kind 'base.in'",
+                ),
+            )
+        )
+    if len(matches) > 1:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-TEST-RENDER-TYPE-SPELLING-AMBIGUOUS",
+                    "C++ add_i32_basic parity rendering requires exactly one "
+                    "matching BackendTypeSpelling for cpp si32 base.in; "
+                    f"received {len(matches)}",
+                ),
+            )
+        )
+    return Result.ok(matches[0])
 
 
 def _record_for_case(
@@ -216,6 +358,98 @@ def _record_for_case(
     )
 
 
+def _add_i32_record_for_case(
+    planned_case: PlannedTestCase,
+) -> Result[CppProductionTestRecord]:
+    declaration = planned_case.declaration
+    diagnostics: list[Diagnostic] = []
+    if planned_case.backend_id != CPP_TEST_BACKEND_ID:
+        diagnostics.append(
+            Diagnostic.error(
+                "TSL-TEST-RENDER-BACKEND",
+                f"C++ add_i32_basic parity renderer cannot render planned "
+                f"test case {planned_case.test_case_id!r} for backend "
+                f"{planned_case.backend_id!r}",
+                location=declaration.source_location,
+            )
+        )
+    if planned_case.target_extension != "scalar":
+        diagnostics.append(
+            Diagnostic.error(
+                "TSL-TEST-RENDER-UNSUPPORTED-EXTENSION",
+                "C++ add_i32_basic parity rendering supports only the scalar "
+                f"extension; {planned_case.test_case_id!r} targets "
+                f"{planned_case.target_extension!r}",
+                location=declaration.source_location,
+            )
+        )
+    if planned_case.type_tag != "si32" or declaration.type_tag != "si32":
+        diagnostics.append(
+            Diagnostic.error(
+                "TSL-TEST-RENDER-UNSUPPORTED-TYPE",
+                "C++ add_i32_basic parity rendering supports only selected "
+                f"type tag 'si32'; {planned_case.test_case_id!r} uses "
+                f"{planned_case.type_tag!r}",
+                location=declaration.source_location,
+            )
+        )
+    if (
+        declaration.primitive_name != "add"
+        or declaration.test_name != "add_i32_basic"
+    ):
+        diagnostics.append(
+            Diagnostic.error(
+                "TSL-TEST-RENDER-UNSUPPORTED-CASE",
+                "C++ add_i32_basic parity rendering supports only primitive "
+                "'add' test 'add_i32_basic'",
+                location=declaration.source_location,
+            )
+        )
+    if declaration.attributes or declaration.extra_fields:
+        diagnostics.append(
+            Diagnostic.error(
+                "TSL-TEST-RENDER-UNSUPPORTED-METADATA",
+                "C++ add_i32_basic parity rendering does not support "
+                "attributes or extra test metadata",
+                location=declaration.source_location,
+            )
+        )
+    if declaration.to_type_tag is not None or declaration.to_extension_name is not None:
+        diagnostics.append(
+            Diagnostic.error(
+                "TSL-TEST-RENDER-UNSUPPORTED-CASE",
+                "C++ add_i32_basic parity rendering does not support "
+                "conversion-shaped test cases",
+                location=declaration.source_location,
+            )
+        )
+
+    vectors = _add_i32_binary_vectors(
+        declaration.case.inputs,
+        declaration.case.expected,
+        location=declaration.source_location,
+    )
+    diagnostics.extend(vectors.diagnostics)
+
+    ordered = sort_diagnostics(diagnostics)
+    if has_errors(ordered):
+        return Result.failure(ordered)
+    if not vectors.is_ok:
+        return Result.failure(ordered)
+
+    left_values, right_values, expected_values = vectors.unwrap()
+    return Result.ok(
+        CppProductionTestRecord(
+            planned_case=planned_case,
+            function_name="test_add_i32_basic",
+            left_values=left_values,
+            right_values=right_values,
+            expected_values=expected_values,
+        ),
+        diagnostics=ordered,
+    )
+
+
 def _binary_integer_vectors(
     inputs: tuple[CatalogValue, ...],
     expected: CatalogValue,
@@ -254,6 +488,51 @@ def _binary_integer_vectors(
                     "TSL-TEST-RENDER-UNSUPPORTED-CASE",
                     "C++ test renderer requires left, right, and expected "
                     "integer vectors to have matching lengths",
+                    location=location,
+                ),
+            )
+        )
+    return Result.ok((left, right, expected_vector))
+
+
+def _add_i32_binary_vectors(
+    inputs: tuple[CatalogValue, ...],
+    expected: CatalogValue,
+    *,
+    location: SourceLocation | None = None,
+) -> Result[tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]]]:
+    if len(inputs) != 2:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-TEST-RENDER-UNSUPPORTED-CASE",
+                    "C++ add_i32_basic parity rendering supports only binary "
+                    "test cases with exactly two input vectors",
+                    location=location,
+                ),
+            )
+        )
+    left = _integer_vector(inputs[0])
+    right = _integer_vector(inputs[1])
+    expected_vector = _integer_vector(expected)
+    if left is None or right is None or expected_vector is None:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-TEST-RENDER-MALFORMED-VECTOR",
+                    "C++ add_i32_basic parity rendering requires integer-vector "
+                    "left, right, and expected values",
+                    location=location,
+                ),
+            )
+        )
+    if len(left) != len(right) or len(left) != len(expected_vector):
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-TEST-RENDER-MALFORMED-VECTOR",
+                    "C++ add_i32_basic parity rendering requires left, right, "
+                    "and expected integer vectors to have matching lengths",
                     location=location,
                 ),
             )
@@ -320,6 +599,55 @@ def _render_cpp_test_source(
     return "\n".join(lines)
 
 
+def _render_cpp_add_i32_test_source(
+    logical_path: str,
+    record: CppProductionTestRecord,
+    type_spelling: BackendTypeSpellingInput,
+) -> str:
+    declaration = record.planned_case.declaration
+    lines = [
+        "// Generated by tslgen clean-room C++ test-source parity slice.",
+        "// Backend: cpp",
+        f"// Artifact: {logical_path}",
+        f"// Artifact kind: {CPP_TEST_ARTIFACT_KIND}",
+        "// Parity baseline: CPP-ADD-I32-TEST",
+        "",
+        "#include <cstddef>",
+        "#include <cstdint>",
+        "#include <gtest/gtest.h>",
+        "",
+        f"static bool {record.function_name}() {{",
+        f"  using Vec = tsl::simd<{type_spelling.spelling}, scalar>;",
+        "  constexpr std::size_t kCount = Vec::vector_element_count();",
+        f"  const {type_spelling.spelling} in_a[kCount] = "
+        f"{_cpp_array_initializer(record.left_values)};",
+        f"  const {type_spelling.spelling} in_b[kCount] = "
+        f"{_cpp_array_initializer(record.right_values)};",
+        f"  const {type_spelling.spelling} expected_values[kCount] = "
+        f"{_cpp_array_initializer(record.expected_values)};",
+        "",
+        "  auto a = tsl::load_aligned_false<Vec>(in_a);",
+        "  auto b = tsl::load_aligned_false<Vec>(in_b);",
+        "  auto c = tsl::add<Vec>(a, b);",
+        f"  {type_spelling.spelling} out[kCount] = {{}};",
+        "  tsl::store_aligned_false<Vec>(out, c);",
+        "",
+        "  for (std::size_t i = 0; i < kCount; ++i) {",
+        "    if (out[i] != expected_values[i]) {",
+        "      return false;",
+        "    }",
+        "  }",
+        "  return true;",
+        "}",
+        "",
+        f"TEST(TslGeneratedTests, {declaration.test_name}) {{",
+        f"  ASSERT_TRUE({record.function_name}());",
+        "}",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def _record_lines(record: CppProductionTestRecord) -> tuple[str, ...]:
     declaration = record.planned_case.declaration
     return (
@@ -358,6 +686,10 @@ def _artifact_set_metadata(
 
 def _vector_text(values: tuple[int, ...]) -> str:
     return f"[{', '.join(str(value) for value in values)}]"
+
+
+def _cpp_array_initializer(values: tuple[int, ...]) -> str:
+    return f"{{{', '.join(str(value) for value in values)}}}"
 
 
 def _cpp_string(value: str) -> str:

@@ -708,8 +708,8 @@ grammar, type mapping, backend translation, and wrapper policy milestones.
 ## OQ-023: What Should The First Production Test Rendering Artifact Look Like?
 
 Status: Answered for the Milestone 29 metadata-style production-test rendering
-slice and narrowed by the selected post-M48 M49 generated C++ `add_i32_basic`
-test-source parity plan.
+slice and the accepted M49 generated C++ `add_i32_basic` test-source parity
+slice.
 
 Why it matters:
 
@@ -728,7 +728,7 @@ extension metadata, type tag, lane metadata, input vectors, and expected vector.
 Milestone 49 reintroduces a legacy-style generated C++ test-source parity slice
 for only `add_i32_basic`. It must still consume typed `TestSourcePlan` /
 `PlannedTestCase` data plus explicit typed C++ type-spelling input, but the
-rendered source may preserve semantic evidence for wrapper-call intent, `Vec`
+rendered source must preserve semantic evidence for wrapper-call intent, `Vec`
 alias shape, boolean test function shape, and `TEST(...){ ASSERT_TRUE(...) }`
 registration. It does not compile or run the test, infer type spellings
 locally, or broaden support-header, runtime-lane, mask, Rust, or full legacy
@@ -1080,9 +1080,9 @@ Decision:
 Start with C++ `binary/add` excerpts from `frozen/out/tsl/tsl_native.hpp`,
 recorded in `docs/redesign/frozen-parity-baselines.md`. The selected baseline
 covers the `tsl/tsl_native.hpp` logical path, scalar `si32`/`ui32`
-`add_binary`, native `avx2/f32` `add_binary`, one future `add_i32_basic`
-generated test source, and one future legacy-style coverage JSON row. Whole-file
-header/report parity is not selected.
+`add_binary`, native `avx2/f32` `add_binary`, the accepted M49
+`add_i32_basic` generated test source, and the selected M50 legacy-style
+coverage JSON row. Whole-file header/report parity is not selected.
 
 Implementation blocked:
 
@@ -1229,11 +1229,16 @@ generation result, and prunes with M42-style selected-branch provenance. It does
 not implement plain `else` conversion forms, backend translation, rendering,
 shift/conversion body parity, or broader TSIL expression semantics.
 
-The selected post-M48 plan is Milestone 49: generated C++ `add_i32_basic`
-test-source parity from typed `TestSourcePlan` data and explicit typed C++
-type-spelling input. It does not add TSIL semantics, backend translation,
-generated C++ implementation output, compiler execution, CLI/report parity, or
-broad generated-test framework support.
+Milestone 49 is accepted as generated C++ `add_i32_basic` test-source parity
+from typed `TestSourcePlan` data and explicit typed C++ type-spelling input. It
+does not add TSIL semantics, backend translation, generated C++ implementation
+output, compiler execution, CLI/report parity, or broad generated-test
+framework support.
+
+The selected post-M49 plan is Milestone 50: one legacy coverage JSON adapter row
+for `add`, `avx2`, `cpp`, `f32`. It stays in reporting, consumes accepted typed
+coverage/report DTOs, and must not rerun parser, selection, lowering, backend
+rendering, test rendering, CLI/writer, or compiler work during serialization.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1466,11 +1471,14 @@ translation slices that consume typed M43 values; they do not parse raw
 generation helper text. M47 is a rendering slice that consumes translated
 suffix/type-spelling values and must not evaluate helper or backend metadata
 semantics locally. M48 returns to generation-time semantic lowering and does
-not reopen the M45/M46 translation or M47 rendering boundaries. The selected
-M49 generated-test source plan stays in test-source rendering and likewise does
+not reopen the M45/M46 translation or M47 rendering boundaries. The M49
+generated-test source slice stays in test-source rendering and likewise does
 not reopen generation-time lowering, backend translation, or generated C++
 implementation rendering; C++ type spelling must arrive as typed input rather
 than renderer-local inference.
+The selected M50 coverage JSON adapter row stays in reporting and likewise does
+not reopen generation-time lowering, backend translation, backend rendering, or
+renderer-local semantic inference.
 
 Required evidence:
 

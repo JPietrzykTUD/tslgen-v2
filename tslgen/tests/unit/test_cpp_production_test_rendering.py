@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
+from unittest.mock import patch
 import unittest
 
 from _golden import (
@@ -12,13 +14,29 @@ from _helpers import assert_diagnostic
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
 from tslgen.analysis.selection import SelectionRequest, plan_selection
 from tslgen.config.model import SourceConfig
+from tslgen.core.diagnostics import Diagnostic
+from tslgen.core.frozen_map import FrozenMap
 from tslgen.domain.catalog import Catalog, build_catalog
-from tslgen.io.artifacts import ArtifactSet
+from tslgen.io.artifacts import (
+    ArtifactDescriptor,
+    ArtifactSet,
+    artifact_plan_from_descriptors,
+)
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
+from tslgen.lowering.translations import BackendTypeSpelling
 from tslgen.syntax.ast import ParsedDocumentSet
 from tslgen.syntax.parser import parse_document, parse_sources
-from tslgen.testgen.cpp import render_cpp_test_source_plan
+from tslgen.testgen.cpp import (
+    render_cpp_add_i32_test_source_plan,
+    render_cpp_test_source_plan,
+)
+from tslgen.testgen.declarations import (
+    ProductionTestCase,
+    ProductionTestDeclaration,
+    normalize_test_declarations,
+)
 from tslgen.testgen.planner import (
+    PlannedTestCase,
     TestSourcePlanningRequest,
     TestSourcePlan,
     plan_test_sources,
@@ -33,6 +51,17 @@ CPP_PRODUCTION_TEST_GOLDEN = golden_artifact(
     "cpp",
     "production_tests.cpp",
 )
+CPP_ADD_I32_PARITY_GOLDEN = golden_artifact(
+    "tests/add_i32_basic_test.cpp",
+    "golden",
+    "parity",
+    "cpp",
+    "add_i32_basic_test.cpp",
+)
+FUNDAMENTAL_TSL_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "tsldata/primitives/arithmetic/fundamental.tsl"
+).as_posix()
 
 
 SUPPORTED_TEST_PRIMITIVES = """prim<v:=(v,v)> planned_add(left, right):
@@ -209,6 +238,134 @@ def make_test_source_plan(
     return planned.unwrap()
 
 
+def add_i32_type_spelling(*, spelling: str = "int32_t") -> BackendTypeSpelling:
+    return BackendTypeSpelling(
+        backend_id="cpp",
+        type_tag="si32",
+        spelling=spelling,
+        source_ref_kind="base.in",
+    )
+
+
+def add_i32_declaration_from_tsldata() -> ProductionTestDeclaration:
+    catalog = catalog_from_paths(
+        "tsldata/detail/flags.tsl",
+        "tsldata/detail/types.tsl",
+        "tsldata/detail/lane_sets.tsl",
+        "tsldata/extensions/extension.tsl",
+        "tsldata/detail/templates.tsl",
+        "tsldata/primitives/arithmetic/fundamental.tsl",
+    )
+    declarations = normalize_test_declarations(catalog)
+    if not declarations.is_ok:
+        raise AssertionError(declarations.diagnostics)
+    matches = tuple(
+        declaration
+        for declaration in declarations.unwrap()
+        if declaration.primitive_name == "add"
+        and declaration.test_name == "add_i32_basic"
+        and declaration.type_tag == "si32"
+    )
+    if len(matches) != 1:
+        raise AssertionError(f"expected one add_i32_basic declaration, got {matches!r}")
+    return matches[0]
+
+
+def make_add_i32_parity_plan(
+    *,
+    declaration: ProductionTestDeclaration | None = None,
+    backend_id: str = "cpp",
+    artifact_kind: str = "production_tests",
+    logical_path: str = "tests/add_i32_basic_test.cpp",
+    target_extension: str = "scalar",
+    type_tag: str = "si32",
+    cases: tuple[PlannedTestCase, ...] | None = None,
+) -> TestSourcePlan:
+    selected_declaration = declaration or add_i32_declaration_from_tsldata()
+    request = TestSourcePlanningRequest(
+        backend_id=backend_id,
+        primitive_names=("add",),
+        test_names=("add_i32_basic",),
+        artifact_kind=artifact_kind,
+        logical_path=PurePosixPath(logical_path),
+    )
+    planned_cases = cases
+    if planned_cases is None:
+        planned_cases = (
+            PlannedTestCase(
+                declaration=selected_declaration,
+                candidate_id=(
+                    "add<v:=(v,v)>[](left,right)|backend=cpp|target=scalar|"
+                    "source=scalar|type=si32|flags=none|impl=scalar/arith/tsil"
+                ),
+                backend_id=backend_id,
+                target_extension=target_extension,
+                source_extension="scalar",
+                type_tag=type_tag,
+            ),
+        )
+    descriptor = ArtifactDescriptor(
+        backend_id=backend_id,
+        kind=artifact_kind,
+        logical_path=PurePosixPath(logical_path),
+        candidate_ids=tuple(case.candidate_id for case in planned_cases),
+        metadata=FrozenMap(
+            {
+                "artifact_role": "production_test_sources",
+                "backend_id": backend_id,
+                "primitive_names": ("add",),
+                "test_case_ids": tuple(case.test_case_id for case in planned_cases),
+                "test_count": len(planned_cases),
+                "test_names": ("add_i32_basic",),
+            }
+        ),
+    )
+    artifact_plan = artifact_plan_from_descriptors(
+        backend_id,
+        (descriptor,),
+        metadata=FrozenMap(
+            {
+                "artifact_role": "production_test_sources",
+                "backend_id": backend_id,
+                "descriptor_count": 1,
+                "planned_test_count": len(planned_cases),
+            }
+        ),
+    )
+    if not artifact_plan.is_ok:
+        raise AssertionError(artifact_plan.diagnostics)
+    return TestSourcePlan(
+        request=request,
+        declarations=(selected_declaration,),
+        test_cases=planned_cases,
+        artifact_plan=artifact_plan.unwrap(),
+    )
+
+
+def render_add_i32_parity_plan(
+    plan: TestSourcePlan | None = None,
+    *,
+    type_spellings: tuple[BackendTypeSpelling, ...] | None = None,
+) -> ArtifactSet:
+    result = render_cpp_add_i32_test_source_plan(
+        plan or make_add_i32_parity_plan(),
+        type_spellings or (add_i32_type_spelling(),),
+    )
+    if not result.is_ok:
+        raise AssertionError(result.diagnostics)
+    return result.unwrap()
+
+
+def diagnostic_by_code(
+    result_diagnostics: tuple[Diagnostic, ...],
+    code: str,
+) -> Diagnostic:
+    for diagnostic in result_diagnostics:
+        if getattr(diagnostic, "code") == code:
+            return diagnostic
+    raise AssertionError(f"missing diagnostic {code!r}: {result_diagnostics!r}")
+
+
 def render_supported_plan() -> ArtifactSet:
     result = render_cpp_test_source_plan(
         make_test_source_plan(
@@ -244,6 +401,79 @@ class CppProductionTestRenderingTests(unittest.TestCase):
 
         assert_artifact_digest_map_stable(self, first, second)
         self.assertEqual(first.artifacts, second.artifacts)
+
+    def test_renders_add_i32_parity_test_source_golden(self) -> None:
+        artifacts = render_add_i32_parity_plan()
+
+        artifact = assert_artifact_matches_golden(
+            self,
+            artifacts,
+            CPP_ADD_I32_PARITY_GOLDEN,
+        )
+        self.assertEqual(artifact.metadata["backend_id"], "cpp")
+        self.assertEqual(artifact.metadata["artifact_kind"], "production_tests")
+        self.assertEqual(artifact.metadata["test_count"], 1)
+        self.assertEqual(artifact.metadata["type_spelling"], "int32_t")
+
+    def test_add_i32_parity_provenance_fixture_documents_evidence(self) -> None:
+        provenance = (
+            CPP_ADD_I32_PARITY_GOLDEN.fixture_path.with_suffix(".provenance.md")
+            .read_text(encoding="utf-8")
+        )
+
+        self.assertIn("CPP-ADD-I32-TEST", provenance)
+        self.assertIn("tsldata/primitives/arithmetic/fundamental.tsl:6", provenance)
+        self.assertIn("frozen/jinja/cpp/test_file.j2:1-56", provenance)
+        self.assertIn("frozen/jinja/cpp/partials/test_common.j2:1-13", provenance)
+        self.assertIn("frozen/jinja/cpp/test_case.j2:51-63", provenance)
+        self.assertIn("frozen/jinja/cpp/partials/test_vectors.j2:38-50", provenance)
+        self.assertIn("frozen/generator_specs/tests.yaml:45-59", provenance)
+        self.assertIn("BackendTypeSpelling", provenance)
+
+    def test_add_i32_parity_rendering_is_deterministic(self) -> None:
+        first = render_add_i32_parity_plan()
+        second = render_add_i32_parity_plan()
+
+        assert_artifact_digest_map_stable(self, first, second)
+        self.assertEqual(first.artifacts, second.artifacts)
+
+    def test_add_i32_parity_consumes_typed_plan_vectors(self) -> None:
+        declaration = add_i32_declaration_from_tsldata()
+        changed = replace(
+            declaration,
+            case=ProductionTestCase(
+                inputs=((101, 102), (1, 2)),
+                expected=(102, 104),
+            ),
+        )
+
+        artifacts = render_add_i32_parity_plan(make_add_i32_parity_plan(declaration=changed))
+        artifact = artifacts.artifacts_by_path["tests/add_i32_basic_test.cpp"]
+
+        self.assertIn("const int32_t in_a[kCount] = {101, 102};", artifact.content)
+        self.assertIn("const int32_t expected_values[kCount] = {102, 104};", artifact.content)
+
+    def test_add_i32_parity_consumes_explicit_type_spelling(self) -> None:
+        artifacts = render_add_i32_parity_plan(
+            type_spellings=(add_i32_type_spelling(spelling="explicit_i32"),),
+        )
+        artifact = artifacts.artifacts_by_path["tests/add_i32_basic_test.cpp"]
+
+        self.assertIn("using Vec = tsl::simd<explicit_i32, scalar>;", artifact.content)
+        self.assertNotIn("tsl::simd<int32_t, scalar>", artifact.content)
+
+    def test_add_i32_parity_rendering_does_not_read_tsl_or_frozen_templates(self) -> None:
+        plan = make_add_i32_parity_plan()
+        with patch("builtins.open", side_effect=AssertionError("unexpected file read")):
+            result = render_cpp_add_i32_test_source_plan(
+                plan,
+                (add_i32_type_spelling(),),
+            )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        artifact = result.unwrap().artifacts_by_path["tests/add_i32_basic_test.cpp"]
+        self.assertNotIn("frozen/", artifact.content)
+        self.assertNotIn("tsldata/", artifact.content)
 
     def test_diagnoses_unsupported_test_artifact_kind(self) -> None:
         plan = make_test_source_plan(
@@ -309,6 +539,265 @@ class CppProductionTestRenderingTests(unittest.TestCase):
             code="TSL-TEST-RENDER-UNSUPPORTED-CASE",
             severity="error",
         )
+
+    def test_add_i32_parity_diagnoses_unsupported_backend(self) -> None:
+        result = render_cpp_add_i32_test_source_plan(
+            make_add_i32_parity_plan(backend_id="rust"),
+            (add_i32_type_spelling(),),
+        )
+
+        self.assertFalse(result.is_ok)
+        diagnostic = diagnostic_by_code(result.diagnostics, "TSL-TEST-RENDER-BACKEND")
+        assert_diagnostic(self, diagnostic, code="TSL-TEST-RENDER-BACKEND", severity="error")
+        self.assertIn("rust", diagnostic.message)
+
+    def test_add_i32_parity_diagnoses_unsupported_artifact_kind(self) -> None:
+        result = render_cpp_add_i32_test_source_plan(
+            make_add_i32_parity_plan(artifact_kind="test_manifest"),
+            (add_i32_type_spelling(),),
+        )
+
+        self.assertFalse(result.is_ok)
+        diagnostic = diagnostic_by_code(
+            result.diagnostics,
+            "TSL-TEST-RENDER-UNSUPPORTED-ARTIFACT",
+        )
+        assert_diagnostic(
+            self,
+            diagnostic,
+            code="TSL-TEST-RENDER-UNSUPPORTED-ARTIFACT",
+            severity="error",
+        )
+        self.assertIn("test_manifest", diagnostic.message)
+
+    def test_add_i32_parity_diagnoses_unsupported_extension(self) -> None:
+        result = render_cpp_add_i32_test_source_plan(
+            make_add_i32_parity_plan(target_extension="avx2"),
+            (add_i32_type_spelling(),),
+        )
+
+        self.assertFalse(result.is_ok)
+        diagnostic = diagnostic_by_code(
+            result.diagnostics,
+            "TSL-TEST-RENDER-UNSUPPORTED-EXTENSION",
+        )
+        assert_diagnostic(
+            self,
+            diagnostic,
+            code="TSL-TEST-RENDER-UNSUPPORTED-EXTENSION",
+            severity="error",
+            path=FUNDAMENTAL_TSL_PATH,
+            line=2,
+            column=1,
+        )
+        self.assertIn("scalar", diagnostic.message)
+
+    def test_add_i32_parity_diagnoses_unsupported_type(self) -> None:
+        declaration = replace(add_i32_declaration_from_tsldata(), type_tag="ui32")
+        result = render_cpp_add_i32_test_source_plan(
+            make_add_i32_parity_plan(declaration=declaration, type_tag="ui32"),
+            (add_i32_type_spelling(),),
+        )
+
+        self.assertFalse(result.is_ok)
+        diagnostic = diagnostic_by_code(
+            result.diagnostics,
+            "TSL-TEST-RENDER-UNSUPPORTED-TYPE",
+        )
+        assert_diagnostic(
+            self,
+            diagnostic,
+            code="TSL-TEST-RENDER-UNSUPPORTED-TYPE",
+            severity="error",
+            path=FUNDAMENTAL_TSL_PATH,
+            line=2,
+            column=1,
+        )
+        self.assertIn("si32", diagnostic.message)
+
+    def test_add_i32_parity_diagnoses_unsupported_selected_case(self) -> None:
+        declaration = replace(add_i32_declaration_from_tsldata(), test_name="add_i32_edge")
+        result = render_cpp_add_i32_test_source_plan(
+            make_add_i32_parity_plan(declaration=declaration),
+            (add_i32_type_spelling(),),
+        )
+
+        self.assertFalse(result.is_ok)
+        diagnostic = diagnostic_by_code(
+            result.diagnostics,
+            "TSL-TEST-RENDER-UNSUPPORTED-CASE",
+        )
+        assert_diagnostic(
+            self,
+            diagnostic,
+            code="TSL-TEST-RENDER-UNSUPPORTED-CASE",
+            severity="error",
+            path=FUNDAMENTAL_TSL_PATH,
+            line=2,
+            column=1,
+        )
+        self.assertIn("add_i32_basic", diagnostic.message)
+
+    def test_add_i32_parity_diagnoses_unsupported_case_shape(self) -> None:
+        declaration = replace(
+            add_i32_declaration_from_tsldata(),
+            case=ProductionTestCase(inputs=((1, 2),), expected=(3, 4)),
+        )
+        result = render_cpp_add_i32_test_source_plan(
+            make_add_i32_parity_plan(declaration=declaration),
+            (add_i32_type_spelling(),),
+        )
+
+        self.assertFalse(result.is_ok)
+        diagnostic = diagnostic_by_code(
+            result.diagnostics,
+            "TSL-TEST-RENDER-UNSUPPORTED-CASE",
+        )
+        assert_diagnostic(
+            self,
+            diagnostic,
+            code="TSL-TEST-RENDER-UNSUPPORTED-CASE",
+            severity="error",
+            path=FUNDAMENTAL_TSL_PATH,
+            line=2,
+            column=1,
+        )
+        self.assertIn("exactly two input vectors", diagnostic.message)
+
+    def test_add_i32_parity_diagnoses_extra_metadata(self) -> None:
+        declaration = replace(
+            add_i32_declaration_from_tsldata(),
+            extra_fields=FrozenMap({"scale": 2}),
+        )
+        result = render_cpp_add_i32_test_source_plan(
+            make_add_i32_parity_plan(declaration=declaration),
+            (add_i32_type_spelling(),),
+        )
+
+        self.assertFalse(result.is_ok)
+        diagnostic = diagnostic_by_code(
+            result.diagnostics,
+            "TSL-TEST-RENDER-UNSUPPORTED-METADATA",
+        )
+        assert_diagnostic(
+            self,
+            diagnostic,
+            code="TSL-TEST-RENDER-UNSUPPORTED-METADATA",
+            severity="error",
+            path=FUNDAMENTAL_TSL_PATH,
+            line=2,
+            column=1,
+        )
+        self.assertIn("metadata", diagnostic.message)
+
+    def test_add_i32_parity_diagnoses_malformed_vector_values(self) -> None:
+        declaration = replace(
+            add_i32_declaration_from_tsldata(),
+            case=ProductionTestCase(inputs=((1, "bad"), (2, 3)), expected=(3, 4)),
+        )
+        result = render_cpp_add_i32_test_source_plan(
+            make_add_i32_parity_plan(declaration=declaration),
+            (add_i32_type_spelling(),),
+        )
+
+        self.assertFalse(result.is_ok)
+        diagnostic = diagnostic_by_code(
+            result.diagnostics,
+            "TSL-TEST-RENDER-MALFORMED-VECTOR",
+        )
+        assert_diagnostic(
+            self,
+            diagnostic,
+            code="TSL-TEST-RENDER-MALFORMED-VECTOR",
+            severity="error",
+            path=FUNDAMENTAL_TSL_PATH,
+            line=2,
+            column=1,
+        )
+        self.assertIn("integer-vector", diagnostic.message)
+
+    def test_add_i32_parity_diagnoses_missing_type_spelling(self) -> None:
+        result = render_cpp_add_i32_test_source_plan(make_add_i32_parity_plan(), ())
+
+        self.assertFalse(result.is_ok)
+        diagnostic = diagnostic_by_code(
+            result.diagnostics,
+            "TSL-TEST-RENDER-TYPE-SPELLING-MISSING",
+        )
+        assert_diagnostic(
+            self,
+            diagnostic,
+            code="TSL-TEST-RENDER-TYPE-SPELLING-MISSING",
+            severity="error",
+        )
+        self.assertIn("BackendTypeSpelling", diagnostic.message)
+
+    def test_add_i32_parity_diagnoses_ambiguous_type_spelling(self) -> None:
+        result = render_cpp_add_i32_test_source_plan(
+            make_add_i32_parity_plan(),
+            (add_i32_type_spelling(), add_i32_type_spelling(spelling="also_i32")),
+        )
+
+        self.assertFalse(result.is_ok)
+        diagnostic = diagnostic_by_code(
+            result.diagnostics,
+            "TSL-TEST-RENDER-TYPE-SPELLING-AMBIGUOUS",
+        )
+        assert_diagnostic(
+            self,
+            diagnostic,
+            code="TSL-TEST-RENDER-TYPE-SPELLING-AMBIGUOUS",
+            severity="error",
+        )
+        self.assertIn("exactly one", diagnostic.message)
+
+    def test_add_i32_parity_diagnoses_wrong_selected_case_cardinality(self) -> None:
+        declaration = add_i32_declaration_from_tsldata()
+        first = make_add_i32_parity_plan(declaration=declaration).test_cases[0]
+        second = PlannedTestCase(
+            declaration=declaration,
+            candidate_id=f"{first.candidate_id}|duplicate",
+            backend_id="cpp",
+            target_extension="scalar",
+            source_extension="scalar",
+            type_tag="si32",
+        )
+        result = render_cpp_add_i32_test_source_plan(
+            make_add_i32_parity_plan(declaration=declaration, cases=(first, second)),
+            (add_i32_type_spelling(),),
+        )
+
+        self.assertFalse(result.is_ok)
+        diagnostic = diagnostic_by_code(
+            result.diagnostics,
+            "TSL-TEST-RENDER-SELECTED-CASE-CARDINALITY",
+        )
+        assert_diagnostic(
+            self,
+            diagnostic,
+            code="TSL-TEST-RENDER-SELECTED-CASE-CARDINALITY",
+            severity="error",
+        )
+        self.assertIn("exactly one", diagnostic.message)
+
+    def test_add_i32_parity_diagnoses_zero_selected_cases(self) -> None:
+        result = render_cpp_add_i32_test_source_plan(
+            make_add_i32_parity_plan(cases=()),
+            (add_i32_type_spelling(),),
+        )
+
+        self.assertFalse(result.is_ok)
+        diagnostic = diagnostic_by_code(
+            result.diagnostics,
+            "TSL-TEST-RENDER-SELECTED-CASE-CARDINALITY",
+        )
+        assert_diagnostic(
+            self,
+            diagnostic,
+            code="TSL-TEST-RENDER-SELECTED-CASE-CARDINALITY",
+            severity="error",
+        )
+        self.assertIn("received 0", diagnostic.message)
 
 
 if __name__ == "__main__":

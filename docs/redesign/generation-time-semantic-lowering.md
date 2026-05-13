@@ -290,17 +290,21 @@ The accepted post-M43 phase is numbered in the roadmap:
   M43 `GenerationTypeRef(kind="base.in")` values, prunes exact
   `if<generation> ... else<generation>` branches with M42-style provenance,
   and does not add backend translation or rendering behavior.
-- Milestone 49 is the selected post-M48 generated C++ test-source parity plan.
+- Milestone 49 is accepted as the generated C++ test-source parity slice.
   It consumes typed `TestSourcePlan` values plus an explicit typed C++ type
   spelling value and must not add generation-time lowering, backend
   translation, generated C++ implementation rendering, or compiler execution.
+- Milestone 50 is the selected post-M49 reporting adapter slice. It consumes
+  accepted typed coverage/report DTOs and must not add generation-time lowering,
+  backend translation, renderer semantic inference, CLI/writer behavior, or
+  compiler execution.
 
 This phase does not make backend translation parse raw generation-time helper
 text and does not move suffix or type-spelling evaluation into renderers.
 
 ## Explicit Deferrals
 
-Deferred beyond the accepted M43-M48 slices and selected M49 plan:
+Deferred beyond the accepted M43-M49 slices and selected M50 plan:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask

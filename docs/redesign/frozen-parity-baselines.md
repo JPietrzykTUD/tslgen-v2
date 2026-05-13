@@ -38,7 +38,7 @@ Accepted redesign boundaries available for future parity slices:
 | `frozen/out/tsl/tsl_generic.hpp` | C++ | generated header | generic specializations and wrappers | broad primitive families | `generic` | sized generic type matrix | none for inspection; C++ compiler for optional execution | deferred generic parity evidence | semantic equivalence; no whole-file byte parity | later generic C++ milestone |
 | `frozen/out/tsl/CMakeLists.txt` | C++ | sidecar build metadata | output layout | all generated headers | selected generated header set | n/a | CMake only if execution is selected later | selected as output-layout sidecar evidence | byte-for-byte whole-file candidate when a future sidecar slice selects it | deferred after M36 |
 | `frozen/out/tsl/tsl_flags.cmake` | C++ | sidecar compile flags | output layout | all generated headers | required native extensions | n/a | CMake/C++ compiler only if execution is selected later | selected as required-flags sidecar evidence | semantic for required flag sets; byte-for-byte only for a selected generated input | deferred after native C++ parity |
-| `frozen/out/reports/primitive_coverage.json` | report | coverage JSON | row-oriented coverage | broad primitive catalog | broad extension matrix | broad type matrix | none | report parity evidence, not first output target | selected-row semantic/field parity; no whole-file byte parity | deferred until report parity is explicitly selected |
+| `frozen/out/reports/primitive_coverage.json` | report | coverage JSON | row-oriented coverage | broad primitive catalog | broad extension matrix | broad type matrix | none | report parity evidence, not first output target | selected-row semantic/field parity; no whole-file byte parity | M50 for selected `add`/`avx2`/`cpp`/`f32` row; broader coverage parity later |
 | `frozen/out/reports/primitive_coverage.html` | report | coverage HTML | row table | broad primitive catalog | broad extension matrix | broad type matrix | none | documentation/report evidence only for now | redesign-owned HTML unless a later milestone selects exact rows | later docs/report milestone |
 | `frozen/jinja/cpp/test_file.j2` | C++ | generated test source evidence | test file wrapper | broad test families | selected test extension | selected test type | none for inspection; `gtest`/C++ only for optional execution | selected generated-test structure evidence | semantic equivalence for one generated test source | M49 for selected `add_i32_basic`; broader generated-test source rendering later |
 | `frozen/jinja/cpp/test_case.j2` | C++ | generated test case evidence | `binary` first; broad tests later | `fundamental/add` first | selected extension | `si32` first | none for inspection; `gtest`/C++ only for optional execution | selected generated-test behavior evidence | semantic equivalence for test name, inputs, expected values, wrapper call, and assertion shape | M49 for selected `add_i32_basic`; broader generated-test source rendering later |
@@ -75,19 +75,23 @@ reviewable:
 9. M48 is the accepted signedness predicate branch-pruning slice over typed M43
    `base.in` values. It supports later shift/conversion parity and is not an
    output parity slice.
-10. M49 is selected for human acceptance as the generated C++
-   `add_i32_basic` test-source parity slice.
-11. CLI workflow compatibility, coverage JSON adapter work, executable
-   generated tests, and broad generated-test parity remain deferred until
-   explicitly selected as separate milestones.
+10. M49 is accepted as the generated C++ `add_i32_basic` test-source parity
+   slice.
+11. M50 is selected for human acceptance as the legacy coverage JSON adapter
+   row slice.
+12. CLI workflow compatibility, coverage JSON adapter breadth beyond the
+   selected M50 row, executable generated tests, and broad generated-test parity
+   remain deferred until explicitly selected as separate milestones.
 
 This selected output target is small enough because it uses one primitive
 family, one template family, two scalar integer type tags, one native
 floating-point extension/type pair, and selected AVX2 integer output after
 typed suffix/type-spelling translation. It exercises the important parity
 boundaries without requiring full headers, full TSIL, all wrappers,
-generated-test execution, Rust parity, or report/documentation parity. M48 is a
-post-output lowering prerequisite for later shift/conversion parity, not an
+generated-test execution, Rust parity, or broad report/documentation parity.
+M50 reintroduces only one selected report row while full report/documentation
+parity remains deferred. M48 is a post-output lowering prerequisite for later
+shift/conversion parity, not an
 additional generated-output target. M49 reintroduces only one generated C++
 test-source parity baseline and still does not add compiler execution.
 
@@ -180,6 +184,9 @@ test-source parity baseline and still does not add compiler execution.
   - `frozen/out/reports/primitive_coverage.json:57762-57777` records
     `add`, `avx2`, `cpp`, `f32`, `has_tsil=true`, and
     `effective_present=true`.
+- Report field construction evidence:
+  - `frozen/tools/report_primitive_coverage.py:242-266` records the selected
+    row field construction and string-valued boolean conversion.
 - Fixture path selected by M39:
   `tslgen/tests/fixtures/golden/parity/cpp/add_native_avx2_f32_excerpt.hpp`.
 - Fixture provenance:
@@ -237,7 +244,9 @@ test-source parity baseline and still does not add compiler execution.
 - Exact behavior target: one generated C++ test source for `add_i32_basic`.
 - Legacy evidence paths: `frozen/jinja/cpp/test_file.j2`,
   `frozen/jinja/cpp/partials/test_common.j2`,
-  `frozen/jinja/cpp/test_case.j2`, and `frozen/generator_specs/tests.yaml`.
+  `frozen/jinja/cpp/test_case.j2`,
+  `frozen/jinja/cpp/partials/test_vectors.j2`, and
+  `frozen/generator_specs/tests.yaml`.
 - Source line ranges:
   - `tsldata/primitives/arithmetic/fundamental.tsl:6` for `add_i32_basic`
     inputs and expected values.
@@ -246,10 +255,13 @@ test-source parity baseline and still does not add compiler execution.
   - `frozen/jinja/cpp/partials/test_common.j2:1-13` for the boolean test
     function and `Vec` alias shape.
   - `frozen/jinja/cpp/test_case.j2:51-63` for the `binary` test-case shape.
-- Fixture path in this milestone: none.
-- Proposed future fixture path:
+  - `frozen/jinja/cpp/partials/test_vectors.j2:38-50` for store-vector
+    expansion through `tsl::store_aligned_false<Vec>(...)`.
+  - `frozen/generator_specs/tests.yaml:45-59` for C++ test-generation policy
+    evidence.
+- Fixture path in this milestone:
   `tslgen/tests/fixtures/golden/parity/cpp/add_i32_basic_test.cpp`.
-- Proposed future provenance path:
+- Provenance path in this milestone:
   `tslgen/tests/fixtures/golden/parity/cpp/add_i32_basic_test.provenance.md`.
 - Parity level: semantic equivalence for test name, selected primitive,
   input vectors, expected vector, wrapper call, typed C++ `int32_t` spelling in
@@ -270,14 +282,17 @@ test-source parity baseline and still does not add compiler execution.
 - Legacy evidence path: `frozen/out/reports/primitive_coverage.json`.
 - Source line range:
   - `frozen/out/reports/primitive_coverage.json:57762-57777`.
-- Fixture path in this milestone: none.
-- Proposed future fixture path:
+- Field-construction evidence:
+  - `frozen/tools/report_primitive_coverage.py:242-266`.
+- Fixture path selected by M50:
   `tslgen/tests/fixtures/golden/parity/reports/add_avx2_f32_coverage_row.json`.
+- Provenance path selected by M50:
+  `tslgen/tests/fixtures/golden/parity/reports/add_avx2_f32_coverage_row.provenance.md`.
 - Parity level: selected-field semantic parity and stable field ordering for
   the adapter output. Whole-report row count parity is not selected.
-- Validation method: a future deferred report-adapter milestone must render
-  rows from accepted report DTOs and must not rerun parsing, selection,
-  lowering, or rendering during report serialization.
+- Validation method: M50 must render the selected row from accepted typed report
+  DTOs and must not rerun parsing, selection, lowering, or rendering during
+  report serialization.
 - Known limitations: full coverage matrix parity and HTML/site parity remain
   deferred.
 

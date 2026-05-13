@@ -656,6 +656,15 @@ Recommended first parity checks:
   regression coverage that the existing metadata-style C++ production-test
   artifact remains stable. No compiler execution, `gtest` fetch, CLI workflow,
   Rust test rendering, or broad generated-test parity is part of this check.
+- Milestone 50: legacy coverage JSON adapter row tests should cover the
+  selected `add` / `avx2` / `cpp` / `f32` golden row fixture and provenance,
+  selected field mapping, stable field ordering, deterministic serialization,
+  legacy string-valued booleans only at the adapter boundary, unsupported
+  request diagnostics, missing/ambiguous selected row diagnostics, missing
+  primitive class/template metadata diagnostics, no runtime `frozen/` reads, no
+  parser/selection/lowering/rendering reruns during serialization, and
+  regression coverage that existing redesign coverage JSON and HTML reports
+  remain stable.
 
 Deferred parity checks:
 
@@ -664,8 +673,8 @@ Deferred parity checks:
   milestone.
 - CLI compatibility workflow tests from the old Milestone 41 resume only after
   a selected CLI workflow is explicitly reintroduced as its own milestone.
-- Legacy-style coverage JSON adapter tests from the old Milestone 42 resume only
-  when report parity is reintroduced as its own milestone.
+- Legacy-style coverage JSON adapter tests beyond the selected M50 row remain
+  deferred until broader report parity is reintroduced as its own milestone.
 
 ## Review Expectations
 

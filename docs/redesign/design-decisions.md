@@ -1276,12 +1276,17 @@ Consequences:
   `if<generation> ... else<generation>` branches with M42-style provenance.
   It does not reopen backend suffix/type-spelling translation or renderer
   semantics.
-- Milestone 49 is the selected post-M48 generated C++ test-source parity plan.
+- Milestone 49 is accepted as the generated C++ test-source parity slice.
   It renders only one `add_i32_basic` source fixture from typed
   `TestSourcePlan` data and explicit typed C++ type-spelling input, preserves
   semantic evidence for wrapper-call and `TEST` registration intent, and does
   not compile, run, fetch `gtest`, read legacy templates at runtime, infer type
   spellings locally, or broaden generated-test parity.
+- Milestone 50 is the selected post-M49 reporting adapter slice. It renders
+  only one legacy-style coverage JSON row for `add` / `avx2` / `cpp` / `f32`
+  from accepted typed report DTOs, keeps legacy string booleans at the adapter
+  boundary, and does not rerun parser, selection, lowering, backend rendering,
+  test rendering, CLI/writer, or compiler work.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
