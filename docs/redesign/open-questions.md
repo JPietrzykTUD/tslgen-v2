@@ -1480,9 +1480,11 @@ evaluates only
 Milestone 51 adds only the same signedness predicate branch with plain `else`.
 M52 extends only the accepted concrete integer type/signedness rules to
 selected 8/16/32/64-bit signed and unsigned tags.
-The selected post-M52 plan, M53, moves the accepted concrete integer semantic
-rule source to typed domain/catalog rule values consumed by lowering. It does
-not add new generation helper forms or backend translation behavior.
+Milestone 53 moves the accepted concrete integer semantic rule source to typed
+domain/catalog rule values consumed by lowering. It does not add new generation
+helper forms or backend translation behavior. The selected post-M53 plan, M54,
+wires those rule values through the normal catalog/lowering-input path for
+pipeline-facing use.
 Vector type/value queries, backend prefix/post/infix modifiers, `immediate(n)`,
 primitive calls, loops, direct intrinsics, generalized plain `else` branch
 syntax, backend suffix/type-spelling expansion for non-32-bit tags, and broader
@@ -1507,10 +1509,11 @@ translation, backend rendering, or renderer-local semantic inference.
 M52 reopens only the concrete integer type set for accepted generation-time
 type and signedness rules; it does not reopen backend translation, backend
 rendering, or renderer-local semantic inference.
-The selected post-M52 plan, M53, reopens only the ownership boundary for those
-accepted concrete integer rules; it does not reopen helper syntax, selected tag
-sets, backend translation, backend rendering, or renderer-local semantic
-inference.
+Milestone 53 reopens only the ownership boundary for those accepted concrete
+integer rules; it does not reopen helper syntax, selected tag sets, backend
+translation, backend rendering, or renderer-local semantic inference. The
+selected post-M53 plan, M54, reopens only catalog-to-lowering wiring for that
+rule source.
 
 Required evidence:
 

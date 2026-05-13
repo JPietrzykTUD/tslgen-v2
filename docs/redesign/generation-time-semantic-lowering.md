@@ -317,19 +317,21 @@ The accepted post-M43 phase is numbered in the roadmap:
   typed lowering only and must not add backend suffix/type-spelling expansion,
   generated output, branch-body semantics, vector/register metadata, or broad
   TSIL parsing.
-- The selected post-M52 plan, Milestone 53, moves ownership of those accepted
-  concrete integer generation rules from a lowering-private table to a typed
-  domain/catalog rule source. It must preserve M52 behavior exactly and must
-  not infer broad type semantics from raw tag spelling or wildcard/group
-  selectors.
+- Milestone 53 is accepted. It moves ownership of those accepted concrete
+  integer generation rules from a lowering-private table to a typed
+  domain/catalog rule source, preserving M52 behavior exactly and keeping broad
+  type semantics from raw tag spelling or wildcard/group selectors
+  unsupported.
+- The selected post-M53 plan, Milestone 54, wires the M53 rule source through
+  the normal catalog/lowering-input path so lowering receives catalog-derived
+  rule values before evaluation.
 
 This phase does not make backend translation parse raw generation-time helper
 text and does not move suffix or type-spelling evaluation into renderers.
 
 ## Explicit Deferrals
 
-Deferred beyond the accepted M43-M52 slices and selected M53 rule-source
-boundary:
+Deferred beyond the accepted M43-M53 slices and selected M54 wiring boundary:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -346,8 +348,9 @@ boundary:
   deferred.
 - Backend suffix/type-spelling translation for concrete integer tags beyond the
   accepted selected M45/M46 `si32`/`ui32` behavior remains deferred even though
-  M52 accepts generation-time type/signedness semantics for those tags and M53
-  only moves the rule source boundary.
+  M52 accepts generation-time type/signedness semantics for those tags, M53
+  moves the rule source boundary, and M54 only wires catalog-derived rules into
+  lowering.
 - Backend type/value requests whose inputs are still raw generation-time text.
 - Primitive-call lowering, loops, variables, aliases, casts, arrays, and
   branch-dependent backend output.

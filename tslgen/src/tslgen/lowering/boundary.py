@@ -8,6 +8,12 @@ from tslgen.analysis.candidates import CandidateSelection, ImplementationCandida
 from tslgen.core.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslgen.core.frozen_map import FrozenMap
 from tslgen.core.result import Result
+from tslgen.domain.generation_rules import (
+    ConcreteIntegerGenerationRuleSet,
+    classify_concrete_integer_generation_type_tag,
+    default_concrete_integer_generation_rule_set,
+    is_non_integer_generation_type_tag,
+)
 from tslgen.domain.values import CatalogValue
 
 
@@ -41,20 +47,6 @@ _GENERATION_HELPER_MARKERS = (
 _GENERATION_TYPE_MARKER = "type<generation>"
 _TSIL_IDENTIFIER = r"[A-Za-z_][A-Za-z0-9_]*"
 _TSIL_IDENTIFIER_RE = re.compile(rf"\A{_TSIL_IDENTIFIER}\Z")
-_CONCRETE_INTEGER_TAG_RE = re.compile(r"\A[su]i\d+\Z")
-_FLOAT_TAG_RE = re.compile(r"\Af\d+\Z")
-_WILDCARD_TYPE_TAG_RE = re.compile(r"\A(?:\?i\?|\?i\d+|[su]i\?|f\?)\Z")
-_TYPE_GROUP_TAGS = frozenset(
-    {
-        "bword",
-        "idqword",
-        "fdqword",
-        "arith",
-        "dqword",
-        "dword",
-        "qword",
-    }
-)
 _PRIMITIVE_ATTRIBUTE_CONDITION_RE = re.compile(
     rf"\A\s*value<generation>\(\s*primitive::attribute\(\s*"
     rf"({_TSIL_IDENTIFIER})\s*\)\s*\)\s*\Z"
@@ -84,6 +76,9 @@ class GenerationContext:
     selected_type_tag: str | None = None
     type_tag_override: str | None = None
     use_candidate_type_tag: bool = True
+    concrete_integer_generation_rules: ConcreteIntegerGenerationRuleSet = field(
+        default_factory=default_concrete_integer_generation_rule_set
+    )
     implementation_source_location: SourceLocation | None = None
 
     def __post_init__(self) -> None:
@@ -310,41 +305,6 @@ class GenerationTypeRef:
     @property
     def key(self) -> tuple[str, str, str]:
         return (self.kind, self.type_tag, self.source_type_tag or "")
-
-
-@dataclass(frozen=True, slots=True)
-class _ConcreteIntegerGenerationTypeRule:
-    type_tag: str
-    signed_type_tag: str
-    unsigned_type_tag: str
-    is_signed: bool
-
-    @property
-    def key(self) -> tuple[str, str, str, bool]:
-        return (
-            self.type_tag,
-            self.signed_type_tag,
-            self.unsigned_type_tag,
-            self.is_signed,
-        )
-
-
-_CONCRETE_INTEGER_GENERATION_TYPE_RULES: tuple[
-    _ConcreteIntegerGenerationTypeRule,
-    ...,
-] = (
-    _ConcreteIntegerGenerationTypeRule("si8", "si8", "ui8", True),
-    _ConcreteIntegerGenerationTypeRule("ui8", "si8", "ui8", False),
-    _ConcreteIntegerGenerationTypeRule("si16", "si16", "ui16", True),
-    _ConcreteIntegerGenerationTypeRule("ui16", "si16", "ui16", False),
-    _ConcreteIntegerGenerationTypeRule("si32", "si32", "ui32", True),
-    _ConcreteIntegerGenerationTypeRule("ui32", "si32", "ui32", False),
-    _ConcreteIntegerGenerationTypeRule("si64", "si64", "ui64", True),
-    _ConcreteIntegerGenerationTypeRule("ui64", "si64", "ui64", False),
-)
-_SUPPORTED_GENERATION_TYPE_TAGS = tuple(
-    rule.type_tag for rule in _CONCRETE_INTEGER_GENERATION_TYPE_RULES
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -722,6 +682,7 @@ def _context_for_candidate(
         selected_type_tag=selected_type_tag,
         type_tag_override=context.type_tag_override,
         use_candidate_type_tag=context.use_candidate_type_tag,
+        concrete_integer_generation_rules=context.concrete_integer_generation_rules,
         implementation_source_location=(
             context.implementation_source_location or item.source_location
         ),
@@ -779,7 +740,12 @@ def _generation_type_ref_from_inner(
         )
         if not type_tag.is_ok:
             return Result.failure(type_tag.diagnostics)
-        return _base_in_type_ref(type_tag.unwrap(), query_text, location)
+        return _base_in_type_ref(
+            type_tag.unwrap(),
+            context.concrete_integer_generation_rules,
+            query_text,
+            location,
+        )
 
     helper_forms: tuple[tuple[str, GenerationTypeRefKind], ...] = (
         ("base::signed_of", "base.signed_of"),
@@ -836,6 +802,7 @@ def _generation_type_ref_from_inner(
         companion = _integer_companion_type_tag(
             source_type_tag.unwrap(),
             kind,
+            context.concrete_integer_generation_rules,
             query_text,
             location,
         )
@@ -938,10 +905,11 @@ def _effective_generation_type_tag(
 
 def _base_in_type_ref(
     type_tag: str,
+    rule_set: ConcreteIntegerGenerationRuleSet,
     query_text: str,
     location: SourceLocation | None,
 ) -> Result[GenerationTypeRef]:
-    supported = _supported_generation_type_tag(type_tag, query_text, location)
+    supported = _supported_generation_type_tag(type_tag, rule_set, query_text, location)
     if not supported.is_ok:
         return Result.failure(supported.diagnostics)
     return Result.ok(GenerationTypeRef(kind="base.in", type_tag=type_tag))
@@ -949,19 +917,20 @@ def _base_in_type_ref(
 
 def _supported_generation_type_tag(
     type_tag: str,
+    rule_set: ConcreteIntegerGenerationRuleSet,
     query_text: str,
     location: SourceLocation | None,
 ) -> Result[None]:
-    if _concrete_integer_generation_type_rule(type_tag) is not None:
+    if rule_set.rule_for(type_tag) is not None:
         return Result.ok(None)
-    if _known_unsupported_type_tag(type_tag):
+    if classify_concrete_integer_generation_type_tag(type_tag) == "unsupported":
         return Result.failure(
             (
                 Diagnostic.error(
                     "TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED",
                     "generation-time base type query supports only concrete "
                     "integer type tags "
-                    f"{_quoted_join(_SUPPORTED_GENERATION_TYPE_TAGS)}; got "
+                    f"{_quoted_join(rule_set.supported_type_tags)}; got "
                     f"{type_tag!r} for query {query_text!r}",
                     location=location,
                 ),
@@ -982,16 +951,17 @@ def _supported_generation_type_tag(
 def _integer_companion_type_tag(
     source_type_tag: str,
     kind: GenerationTypeRefKind,
+    rule_set: ConcreteIntegerGenerationRuleSet,
     query_text: str,
     location: SourceLocation | None,
 ) -> Result[str]:
-    rule = _concrete_integer_generation_type_rule(source_type_tag)
+    rule = rule_set.rule_for(source_type_tag)
     if rule is not None:
         if kind == "base.signed_of":
             return Result.ok(rule.signed_type_tag)
         if kind == "base.unsigned_of":
             return Result.ok(rule.unsigned_type_tag)
-    if _is_non_integer_type_tag(source_type_tag):
+    if is_non_integer_generation_type_tag(source_type_tag):
         return Result.failure(
             (
                 Diagnostic.error(
@@ -1003,37 +973,15 @@ def _integer_companion_type_tag(
                 ),
             )
         )
-    supported = _supported_generation_type_tag(source_type_tag, query_text, location)
+    supported = _supported_generation_type_tag(
+        source_type_tag,
+        rule_set,
+        query_text,
+        location,
+    )
     if supported.is_ok:
         raise AssertionError("supported companion type tags must be handled directly")
     return Result.failure(supported.diagnostics)
-
-
-def _known_unsupported_type_tag(type_tag: str) -> bool:
-    return (
-        bool(_CONCRETE_INTEGER_TAG_RE.fullmatch(type_tag))
-        or bool(_FLOAT_TAG_RE.fullmatch(type_tag))
-        or bool(_WILDCARD_TYPE_TAG_RE.fullmatch(type_tag))
-        or type_tag in _TYPE_GROUP_TAGS
-        or type_tag in {"ptr", "mask", "imask"}
-    )
-
-
-def _is_non_integer_type_tag(type_tag: str) -> bool:
-    return bool(_FLOAT_TAG_RE.fullmatch(type_tag)) or type_tag in {
-        "ptr",
-        "mask",
-        "imask",
-    }
-
-
-def _concrete_integer_generation_type_rule(
-    type_tag: str,
-) -> _ConcreteIntegerGenerationTypeRule | None:
-    for rule in _CONCRETE_INTEGER_GENERATION_TYPE_RULES:
-        if rule.type_tag == type_tag:
-            return rule
-    return None
 
 
 def _quoted_join(values: tuple[str, ...]) -> str:
@@ -1244,10 +1192,11 @@ def _resolve_type_signedness_condition(
             )
         )
 
-    rule = _concrete_integer_generation_type_rule(resolved_type_ref.type_tag)
+    rule = context.concrete_integer_generation_rules.rule_for(resolved_type_ref.type_tag)
     if rule is None:
         supported = _supported_generation_type_tag(
             resolved_type_ref.type_tag,
+            context.concrete_integer_generation_rules,
             type_query,
             item.source_location,
         )

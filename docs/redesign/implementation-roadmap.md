@@ -4379,8 +4379,8 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance. Do not implement until this planning result is
-accepted.
+Accepted. The M53 execution-review loop returned `Accept With Follow-Ups` after
+one focused documentation revision.
 
 Goal:
 
@@ -4528,3 +4528,190 @@ Review risks:
 Dependencies on prior milestones:
 
 - Milestones 4, 18, 40, 41, 42, 43, 48, 51, and 52.
+
+## Post-M53 Planning Context
+
+Milestones 1 through 53 are accepted. Milestone 53:
+Catalog-Validated Concrete Integer Generation Rule Source Slice completed with
+`Accept With Follow-Ups`.
+
+M53 moved the accepted M52 concrete integer generation type/signedness
+semantics from a lowering-private table into typed domain/catalog rule values.
+The M53 review left a non-blocking follow-up: normal pipeline-facing lowering
+usage should wire catalog-derived rule values through the lowering input path
+instead of relying on the synthetic default rule source.
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Catalog-derived concrete integer generation rule pipeline wiring | Directly completes the M53 rule-source ownership boundary by passing typed catalog-derived rules into normal lowering use. | Low if kept to catalog/lowering-input wiring; medium if it becomes a broad pipeline rewrite or generic rule registry. | Select as M54. |
+| Backend suffix/type-spelling expansion for 8/16/64-bit integers | Useful after M52/M53 because generation-time semantics now know those tags. | Medium because it reopens M45/M46 backend translation limits. | Defer until catalog-derived rule wiring is normal. |
+| `type::size_bytes(type<generation>(base::in))` value query | Lowering-focused corpus evidence exists in IO, load/store array, and bit-count bodies. | Medium to high because it introduces a new generation value family and evidence is embedded in loops/casts/memory operations. | Defer until a value-query result model slice is selected. |
+| Vector/register metadata queries | Needed for later load/store and conversion work. | High because evidence is coupled to lane metadata, language maps, loops, casts, calls, and backend requests. | Defer. |
+| Direct `intrin<...>` / broader semantic TSIL helper slices | Important for later parity. | High because it touches placeholder semantics, modifier resolution, and broader TSIL parsing. | Defer. |
+| Broader generated tests, CLI/reporting breadth, Rust output, and compiler/toolchain orchestration | All remain useful parity families. | Medium to high and orthogonal to the current lowering rule-source boundary. | Defer. |
+| M49-M53 follow-up cleanup | Several non-blocking quality follow-ups remain. | Low individually, but they do not all form one coherent milestone. | Keep recorded as follow-ups unless one becomes a selected architectural slice. |
+
+## Milestone 54: Catalog-Derived Concrete Integer Generation Rule Pipeline Wiring Slice
+
+Status:
+
+Selected for human acceptance. Do not implement until this planning result is
+accepted.
+
+Goal:
+
+Wire the accepted M53 concrete integer generation rule source through the
+normal catalog/lowering-input path so generation lowering consumes
+catalog-derived `ConcreteIntegerGenerationRuleSet` values for normal
+pipeline-facing use, rather than silently relying on the synthetic default rule
+source.
+
+M54 is a pipeline/lowering-input wiring slice, not a behavior expansion. It
+must preserve M52/M53 lowering behavior exactly while proving the accepted rule
+source can be built from typed catalog `TypeGroup` data and supplied to
+lowering before evaluation.
+
+Scope:
+
+- Build or expose the concrete integer generation rule set from accepted typed
+  catalog/type-group data for exactly:
+
+  ```text
+  si8, ui8, si16, ui16, si32, ui32, si64, ui64
+  ```
+
+- Thread that immutable rule set through the normal lowering-input path, such
+  as `GenerationContext` / `LoweringRequest` construction or a focused
+  pipeline/API adapter.
+- Preserve the useful request-local default for unit tests only if normal
+  pipeline-facing use has an explicit catalog-derived rule path.
+- Prove selected lowering consumes an explicitly supplied catalog-derived rule
+  set and does not hide missing or inconsistent explicit rule data behind the
+  synthetic default.
+- Preserve all accepted M52/M53 outputs for:
+
+  ```text
+  type<generation>(base::in)
+  type<generation>(base::signed_of(type<generation>(base::in)))
+  type<generation>(base::unsigned_of(type<generation>(base::in)))
+  ```
+
+  and exact M48/M51 signedness predicate branch pruning.
+
+- Preserve M52/M53 diagnostics, deterministic ordering, branch provenance, and
+  selected-branch-only diagnostics unless an explicit catalog-derived
+  rule-source diagnostic is required for missing or inconsistent rule data.
+- Keep backend-translation rejection of raw unresolved generation helpers and
+  renderer non-evaluation unchanged.
+
+Out of scope:
+
+- New generation-time helper forms such as `type::size_bytes`.
+- Backend suffix/type-spelling expansion beyond accepted M45/M46 `si32`/`ui32`
+  behavior.
+- C++ or Rust rendering, generated C++ or Rust output, generated test sources,
+  CLI/reporting, writer behavior, compiler execution, or generated-test
+  execution.
+- Broad generic semantic-rule registries or plugin systems before a second rule
+  family demonstrates the need.
+- Treating wildcard or group selectors such as `?i?`, `?i64`, `si?`, `ui?`,
+  `idqword`, `dword`, or `qword` as selected concrete type tags during
+  lowering.
+- Regex-derived acceptance of new concrete-looking tags such as `si128`.
+- Floats, masks, pointers, vector types, generic tags, backend-scoped type
+  requests, vector/register metadata, vector length/alignment, generic lengths,
+  aliases, casts, arrays, loops, calls, direct `intrin<...>`, `switch<compile>`,
+  `if<compile>`, generalized plain `else`, and branch-body semantics.
+- Lowering reading files, parsing raw TSL, querying the catalog during
+  evaluation, or importing/executing `frozen/`.
+
+Required inputs:
+
+- Typed catalog `TypeGroup` data from `tsldata/detail/types.tsl`.
+- Existing M53 `ConcreteIntegerGenerationRuleSet` / rule values and diagnostics.
+- Existing selection/lowering request data, `GenerationContext`, and
+  `LoweringRequest` behavior.
+- Existing M43/M48/M51/M52/M53 lowering behavior and tests.
+
+Expected outputs:
+
+- A catalog-derived concrete integer generation rule set passed into lowering
+  through a normal pipeline-facing path.
+- Existing M52/M53 `GenerationTypeRef` and pruned branch results unchanged.
+- Structured diagnostics for missing, incomplete, unsupported, or inconsistent
+  explicit rule-source data without hidden fallback to defaults.
+
+Parity criterion:
+
+For all accepted M52/M53 inputs, M54 must produce the same semantic lowering
+results. The only intended architectural change is wiring: normal
+pipeline-facing lowering receives the concrete integer generation rules derived
+from typed catalog data before lowering evaluates helper forms.
+
+Evidence paths:
+
+- `tsldata/detail/types.tsl:2-9` for concrete integer singleton tags.
+- `tsldata/detail/types.tsl:10-16`, `:20-24`, and `:25-26` for wildcard/group
+  selectors that must remain unsupported as selected concrete lowering tags.
+- `tslgen/src/tslgen/domain/generation_rules.py` for typed M53 rule-source
+  values and builder behavior.
+- `tslgen/src/tslgen/domain/types.py` for typed `TypeGroup` values.
+- `tslgen/src/tslgen/domain/catalog.py` for typed catalog lookup/indexing.
+- `tslgen/src/tslgen/lowering/boundary.py` for `GenerationContext`,
+  `LoweringRequest`, and lowering consumption of typed rule values.
+- Current M52/M53 tests in `tslgen/tests/unit/test_lowering_boundary.py` and
+  `tslgen/tests/unit/test_concrete_integer_generation_rules.py`.
+
+Tests required:
+
+- Focused unit tests proving catalog/type-group data can build the rule set and
+  that repeated construction is deterministic.
+- A lowering or pipeline-facing adapter test proving an explicitly
+  catalog-derived `ConcreteIntegerGenerationRuleSet` is consumed by lowering.
+- Negative tests proving missing singleton tags, missing companion pairs,
+  inconsistent singleton/group data, wildcard/group selected tags, floats,
+  pointers, masks, unknown tags, and concrete-looking unselected tags such as
+  `si128` produce structured diagnostics without hidden default fallback.
+- Regression tests proving all M52/M53 type-query and signedness branch
+  behavior remains unchanged.
+- Boundary tests proving backend translation still rejects raw unresolved
+  generation helpers and renderers remain non-evaluating.
+
+Golden fixtures required:
+
+- None. M54 is a pipeline/lowering-input wiring slice and must not change
+  generated C++ or Rust output.
+
+Documentation updates:
+
+- Update lowering behavior, pipeline design, behavioral spec, testing strategy,
+  open questions, design decisions, frozen parity baselines, and
+  `docs/agent/current-redesign-state.md` for the selected M54 boundary.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_concrete_integer_generation_rules.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- New focused pipeline/lowering-input wiring test command selected by the
+  executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Accidentally adding a broad semantic-rule registry before a second rule
+  family exists.
+- Letting lowering read files, parse raw TSL, or query the catalog during
+  evaluation instead of consuming typed input values.
+- Silently falling back to synthetic defaults when explicit catalog-derived rule
+  data is missing or inconsistent.
+- Expanding backend suffix/type-spelling translation or generated output under
+  the guise of wiring.
+- Changing accepted M52/M53 diagnostics, provenance, or deterministic ordering
+  unintentionally.
+
+Dependencies on prior milestones:
+
+- Milestones 4, 18, 40, 41, 42, 43, 48, 51, 52, and 53.

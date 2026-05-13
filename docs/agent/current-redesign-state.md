@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 52 is accepted.
+Milestone 53 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -35,35 +35,41 @@ returned `Accept With Follow-Ups` after a workflow handoff correction.
 The M52 execution-review loop returned `Accept With Follow-Ups` after a
 documentation wording cleanup.
 
-Post-M52 planning selected Milestone 53, and internal review returned
-`Accept With Follow-Ups` after a workflow handoff wording correction.
+Post-M52 planning is accepted. It selected Milestone 53, and internal review
+returned `Accept With Follow-Ups` after a workflow handoff wording correction.
+
+The M53 execution-review loop returned `Accept With Follow-Ups` after one
+focused documentation revision.
+
+Post-M53 planning is accepted. It selected Milestone 54, and internal review
+returned `Accept With Follow-Ups` after a workflow handoff correction.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Await human acceptance of the post-M52 planning update.
+Run the Milestone 54 execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m52-acceptance-finalization-prompt.md
+docs/agent/runs/m54-execution-review-loop-prompt.md
 ```
 
-Active planning target:
+Active executor milestone:
 
 ```text
-Milestone 53: Catalog-Validated Concrete Integer Generation Rule Source Slice
+Milestone 54: Catalog-Derived Concrete Integer Generation Rule Pipeline Wiring Slice
 ```
 
 Next expected action:
 
 ```text
-After explicit human acceptance, the finalization prompt creates
-docs/agent/runs/m53-execution-review-loop-prompt.md and updates this state file
-to make M53 execution active.
+Execute the active M54 prompt. If the internal execution-review loop accepts
+M54, create the next concrete prompt under docs/agent/runs/ without starting
+Milestone 55.
 ```
 
 Accepted planning prompt:
@@ -138,10 +144,34 @@ Accepted M52 execution prompt:
 docs/agent/runs/m52-execution-review-loop-prompt.md
 ```
 
-Post-M52 planning prompt:
+Accepted post-M52 planning prompt:
 
 ```text
 docs/agent/runs/post-m52-planning-plus-review-prompt.md
+```
+
+Accepted post-M52 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m52-acceptance-finalization-prompt.md
+```
+
+Accepted M53 execution prompt:
+
+```text
+docs/agent/runs/m53-execution-review-loop-prompt.md
+```
+
+Post-M53 planning prompt:
+
+```text
+docs/agent/runs/post-m53-planning-plus-review-prompt.md
+```
+
+Accepted post-M53 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m53-acceptance-finalization-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -243,18 +273,61 @@ docs/agent/runs/post-m52-planning-plus-review-prompt.md
   generic lengths, aliases, casts, arrays, loops, calls, direct `intrin<...>`,
   `switch<compile>`, `if<compile>`, generalized plain `else`, branch-body
   semantics, shift body parity, or conversion body parity.
-- Planned M53 is a semantic rule-source boundary slice only.
-- Planned M53 moves the accepted M52 concrete integer generation
-  type/signedness semantics from a lowering-private table into typed
-  domain/catalog rule values consumed by lowering.
-- Planned M53 must preserve M52 behavior, selected concrete tags, unsupported
-  wildcard/group selected-tag diagnostics, deterministic ordering, branch
-  provenance, and selected-branch-only diagnostics.
-- Planned M53 must not add new generation-time helper forms, backend
-  suffix/type-spelling expansion beyond M45/M46 `si32`/`ui32`, rendering,
-  generated output, generated test sources, CLI/reporting, writer behavior,
-  Rust, compiler execution, vector/register metadata, broad TSIL parsing,
-  branch-body semantics, or runtime dependency on `frozen/`.
+- M53 is a semantic rule-source boundary slice only.
+- M53 moves the accepted M52 concrete integer generation type/signedness
+  semantics from a lowering-private table into typed domain/catalog rule values
+  consumed by lowering.
+- M53 must preserve behavior exactly for
+  `type<generation>(base::in)`,
+  `type<generation>(base::signed_of(type<generation>(base::in)))`,
+  `type<generation>(base::unsigned_of(type<generation>(base::in)))`, and the
+  exact M48/M51 signedness predicate branch forms.
+- M53 must preserve exactly the selected concrete tags `si8`, `ui8`, `si16`,
+  `ui16`, `si32`, `ui32`, `si64`, and `ui64`.
+- M53 must preserve M52 diagnostics, deterministic ordering, branch provenance,
+  and selected-branch-only diagnostics unless a narrower rule-source diagnostic
+  is required for missing or inconsistent rule data.
+- M53 must preserve backend-translation rejection of raw unresolved generation
+  helpers and renderer non-evaluation.
+- M53 must preserve M45/M46 backend translation limits and must not expand
+  suffix or type-spelling translation beyond accepted selected `si32`/`ui32`
+  behavior.
+- M53 must not infer broad integer semantics from regex or tag spelling alone.
+- M53 must not treat wildcard/group selectors such as `?i?`, `?i64`, `si?`,
+  `ui?`, and `idqword` as selected concrete type tags during lowering.
+- M53 must not add new generation-time helper forms, backend translation
+  expansion, C++ or Rust rendering, generated output, generated test sources,
+  CLI/reporting, writer behavior, compiler execution, generated-test
+  execution, vector/register metadata, vector length/alignment, generic
+  lengths, aliases, casts, arrays, loops, calls, direct `intrin<...>`,
+  `switch<compile>`, `if<compile>`, generalized plain `else`, branch-body
+  semantics, broad TSIL parsing, or runtime dependency on `frozen/`.
+- M54 is a pipeline/lowering-input wiring slice only.
+- M54 wires the accepted M53 `ConcreteIntegerGenerationRuleSet` through
+  the normal catalog/lowering-input path for pipeline-facing use.
+- M54 must build or expose concrete integer generation rules from typed
+  catalog/type-group data before lowering evaluation.
+- M54 must preserve all accepted M52/M53 type-query and signedness
+  branch behavior, diagnostics, deterministic ordering, branch provenance, and
+  selected-branch-only diagnostics unless an explicit catalog-derived
+  rule-source diagnostic is required.
+- M54 must prove explicit catalog-derived rule data is consumed by
+  lowering and that missing or inconsistent explicit rule data is not hidden by
+  a synthetic default fallback.
+- M54 must preserve M45/M46 backend translation limits and must not
+  expand suffix or type-spelling translation beyond accepted selected
+  `si32`/`ui32` behavior.
+- M54 must not add new generation-time helper forms, backend translation
+  expansion, C++ or Rust rendering, generated output, generated test sources,
+  CLI/reporting, writer behavior, compiler execution, generated-test
+  execution, vector/register metadata, vector length/alignment, generic
+  lengths, aliases, casts, arrays, loops, calls, direct `intrin<...>`,
+  `switch<compile>`, `if<compile>`, generalized plain `else`, branch-body
+  semantics, broad TSIL parsing, broad generic semantic-rule registries, or
+  runtime dependency on `frozen/`.
+- M54 must not make lowering read files, parse raw TSL, query the
+  catalog during evaluation, or infer broad integer semantics from regex, tag
+  spelling, wildcard/group selectors, or concrete-looking unselected tags.
 
 ## Accepted Milestone 48
 
@@ -346,6 +419,27 @@ generated output, generated test sources, CLI/reporting, writer behavior, Rust,
 compiler execution, vector/register metadata, branch-body semantics, or broad
 TSIL parsing.
 
+## Accepted Milestone 53
+
+The Milestone 53 execution-review loop accepted with non-blocking follow-ups:
+
+```text
+Milestone 53: Catalog-Validated Concrete Integer Generation Rule Source Slice
+```
+
+The slice is a semantic rule-source boundary only. It moves the accepted M52
+concrete integer generation type/signedness semantics from a lowering-private
+table into typed `ConcreteIntegerGenerationRuleSet` / rule values in the domain
+layer, consumed by lowering through `GenerationContext`. It preserves M52
+`GenerationTypeRef` outputs, signedness branch pruning, diagnostics,
+deterministic ordering, branch provenance, and selected-branch-only diagnostics
+for `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, and `ui64`.
+Wildcard/group selectors and concrete-looking unselected tags remain
+unsupported. M53 adds no new generation-time helper forms, backend translation
+expansion, rendering, generated output, generated test sources, CLI/reporting,
+writer behavior, Rust, compiler execution, broad TSIL parsing, or runtime
+dependency on `frozen/`.
+
 ## Known Follow-Ups
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
@@ -388,9 +482,25 @@ TSIL parsing.
 - M52 review follow-up: consider adding location assertions for the new and
   expanded M52 diagnostic cases; current tests assert code/severity/message but
   mostly not path, line, and column.
-- M53 planning follow-up: the M53 execution prompt should explicitly repeat the
-  broad TSIL parsing prohibition while moving only concrete integer rule-source
-  ownership.
+- M53 planning follow-up: addressed in
+  `docs/agent/runs/m53-execution-review-loop-prompt.md`, which explicitly
+  repeats the broad TSIL parsing prohibition while moving only concrete integer
+  rule-source ownership.
+- M53 review follow-up: a future pipeline/lowering-input slice should wire
+  catalog-derived concrete integer generation rules through the normal pipeline
+  path instead of relying on the synthetic default rule source; consider adding
+  a focused test proving lowering consumes an explicitly catalog-built rule set.
+  The post-M53 planning pass selected this wiring as the planned M54 scope.
+- M53 review follow-up: consider enforcing the exact selected-tag and
+  companion-pair invariants in `ConcreteIntegerGenerationRuleSet` construction
+  or making validated construction the only supported path.
+- M53 review follow-up: add available source locations to
+  `TSL-DOMAIN-GEN-RULE-*` diagnostics when `TypeGroup` source spans are
+  available, especially unsupported selected-tag diagnostics.
+- M53 docs/evidence follow-up: sync broader redesign docs from selected-plan
+  wording to accepted/implemented M53 wording, and consider widening
+  unsupported group-selector evidence beyond `tsldata/detail/types.tsl:20-24`
+  if `dword` and `qword` remain part of known unsupported group classification.
 - Repo-wide evidence follow-up: `tslgen/tests/unit/test_backend_artifact_model.py`
   still reads representative legacy backend manifest YAML from `frozen/` at
   unit-test runtime. This predates M52 and M52 lowering code has no `frozen/`
@@ -400,8 +510,8 @@ TSIL parsing.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the active post-M52
-acceptance finalization prompt after human acceptance.
+No stop condition is active. The workflow proceeds with the active M54
+execution-review loop prompt.
 
 ## Validation Expectations
 

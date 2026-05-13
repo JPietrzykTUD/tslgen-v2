@@ -272,6 +272,7 @@ Inputs:
 - Translation maps.
 - Language type maps.
 - Backend capabilities.
+- Typed generation-time semantic rule sources, when selected by a milestone.
 
 Outputs:
 
@@ -382,10 +383,13 @@ type/signedness semantics to the full selected 8/16/32/64-bit signed and
 unsigned integer tag family. It remains lowering-only: backend translation
 still does not parse raw generation helper text, renderers still do not
 evaluate helpers, and generated output remains unchanged.
-The selected post-M52 plan, Milestone 53, keeps Stage 8 behavior unchanged but
-moves the concrete integer generation rule source to typed domain/catalog rule
-values prepared before lowering consumes them. Stage 8 still must not read
-files, parse raw TSL, or infer broad type semantics from wildcard/group tags.
+Milestone 53 keeps Stage 8 behavior unchanged but moves the concrete integer
+generation rule source to typed domain/catalog rule values prepared before
+lowering consumes them. The selected post-M53 plan, Milestone 54, wires those
+catalog-derived rule values through the normal lowering-input path for
+pipeline-facing use. Stage 8 still must not read files, parse raw TSL, query
+the catalog during evaluation, or infer broad type semantics from
+wildcard/group tags.
 
 ## Stage 9: Backend Planning
 

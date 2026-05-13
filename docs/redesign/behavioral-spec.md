@@ -359,10 +359,12 @@ generation helper text; renderer behavior remains unchanged and renderers do
 not parse or evaluate generation-time helpers. This lowering behavior does not
 expand C++ or Rust output and does not implement backend suffix, prefix, post,
 infix, immediate, or type-spelling translation for the new M52 integer tags.
-The selected post-M52 plan, M53, changes only ownership of the concrete integer
-generation rules: lowering should consume typed domain/catalog rule values
-rather than owning a private concrete-integer table, while preserving all M52
-behavior and unsupported selected-tag diagnostics.
+Milestone 53 changes only ownership of the concrete integer generation rules:
+lowering consumes typed domain/catalog rule values rather than owning a private
+concrete-integer table, while preserving all M52 behavior and unsupported
+selected-tag diagnostics. The selected post-M53 plan, M54, wires those typed
+rules through the normal catalog/lowering-input path for pipeline-facing
+lowering use.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
@@ -412,9 +414,10 @@ wildcard/group tags such as `?i?`, `?i64`, `si?`, and `ui?` unsupported as
 selected concrete lowering tags, and it must not add backend suffix/type
 translation expansion, rendering, generated output, vector/register metadata,
 branch-body semantics, or broad TSIL parsing.
-The selected post-M52 plan, M53, keeps that same behavior but moves concrete
-integer semantic-rule ownership to a typed domain/catalog rule source consumed
-by lowering.
+Milestone 53 keeps that same behavior but moves concrete integer semantic-rule
+ownership to a typed domain/catalog rule source consumed by lowering. The
+selected post-M53 plan, M54, keeps behavior unchanged while passing
+catalog-derived rule values into lowering before evaluation.
 
 Milestone 49 is the accepted generated C++ test-source parity slice for the
 single scalar `add_i32_basic` case. M49 consumes typed

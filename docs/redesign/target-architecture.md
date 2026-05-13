@@ -37,6 +37,7 @@ tslgen/
     domain/
       catalog.py
       primitives.py
+      generation_rules.py
       signatures.py
       templates.py
       types.py
@@ -357,10 +358,13 @@ Current roadmap note:
   integer tags. It remains lowering-only and does not add backend
   suffix/type-spelling expansion, vector/register metadata, rendering,
   generated output, or branch-body semantics.
-- The selected post-M52 plan, Milestone 53, moves those concrete-integer
-  semantic rules to a typed domain/catalog rule source consumed by lowering.
-  It must preserve M52 behavior exactly and must not make backend translation
-  or rendering consume the broader rule source.
+- Milestone 53 moves those concrete-integer semantic rules to a typed
+  domain/catalog rule source consumed by lowering. It preserves M52 behavior
+  exactly and does not make backend translation or rendering consume the
+  broader rule source.
+- The selected post-M53 plan, Milestone 54, wires the M53 rule source through
+  the normal catalog/lowering-input path while preserving the same lowering
+  behavior and side-effect boundaries.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

@@ -700,6 +700,14 @@ Recommended first parity checks:
   behavior and diagnostics should remain unchanged. No backend translation
   expansion, rendering, generated output, Rust, CLI/reporting, or compiler
   execution is part of this check.
+- Milestone 54: catalog-derived concrete integer generation rule wiring tests
+  should prove normal pipeline-facing lowering receives an explicitly
+  catalog-derived `ConcreteIntegerGenerationRuleSet`, preserves all accepted
+  M52/M53 type-query and signedness branch behavior, reports
+  `TSL-DOMAIN-GEN-RULE-*` diagnostics for missing or inconsistent explicit
+  rule data without hidden default fallback, and remains deterministic. No
+  backend translation expansion, rendering, generated output, Rust,
+  CLI/reporting, or compiler execution is part of this check.
 
 Deferred parity checks:
 

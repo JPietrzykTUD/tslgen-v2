@@ -1299,11 +1299,13 @@ Consequences:
   vector/register metadata, rendering, generated output, branch-body lowering,
   Rust, CLI/reporting, and compiler execution remain separate future
   decisions.
-- The selected post-M52 plan, Milestone 53, moves the accepted concrete integer
-  semantic-rule source out of the lowering-private table and into typed
-  domain/catalog rule values. This is a rule-ownership boundary change only;
-  M52 behavior, selected tags, diagnostics, and backend/rendering deferrals must
-  remain stable.
+- Milestone 53 moves the accepted concrete integer semantic-rule source out of
+  the lowering-private table and into typed domain/catalog rule values. This is
+  a rule-ownership boundary change only; M52 behavior, selected tags,
+  diagnostics, and backend/rendering deferrals remain stable.
+- The selected post-M53 plan, Milestone 54, wires those rule values through the
+  normal catalog/lowering-input path for pipeline-facing use without changing
+  helper semantics or backend/rendering boundaries.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

@@ -84,7 +84,10 @@ reviewable:
 13. M52 is accepted as the concrete integer generation type/signedness
    expansion slice. It remains generation-time lowering only and is not an
    output parity slice.
-14. CLI workflow compatibility, coverage JSON adapter breadth beyond the
+14. M53 is accepted as the catalog-validated concrete integer generation
+   rule-source slice. It remains a semantic rule-source boundary only and is
+   not an output parity slice.
+15. CLI workflow compatibility, coverage JSON adapter breadth beyond the
    selected M50 row, executable generated tests, and broad generated-test parity
    remain deferred until explicitly selected as separate milestones.
 
@@ -312,9 +315,9 @@ and still does not add compiler execution.
 - C17 activation.
 - Full TSIL grammar, semantic calls, loops, variables, broad type/value
   queries, generation-time conditions beyond the selected M42/M48/M51 pruning
-  forms, concrete integer rule-source ownership beyond the selected M53 plan,
-  and backend translation-map evaluation beyond the selected M40/M45/M46
-  requests.
+  forms, concrete integer rule-source behavior beyond accepted M53 ownership
+  and selected M54 catalog-to-lowering wiring, and backend translation-map
+  evaluation beyond the selected M40/M45/M46 requests.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and
   googletest download or vendoring.
 - Full legacy CLI drop-in compatibility and `run_all.sh` replacement.
