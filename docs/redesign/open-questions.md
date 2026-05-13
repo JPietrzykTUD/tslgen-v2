@@ -1240,11 +1240,11 @@ for `add`, `avx2`, `cpp`, `f32`. It stays in reporting, consumes accepted typed
 coverage/report DTOs, and must not rerun parser, selection, lowering, backend
 rendering, test rendering, CLI/writer, or compiler work during serialization.
 
-The selected post-M50 plan is Milestone 51: accept only the exact M48
-signedness predicate branch form with plain `else`. It stays in generation-time
-semantic lowering, consumes typed M43 `GenerationTypeRef(kind="base.in")`
-values, and does not add conversion body lowering, backend translation,
-rendering, broad TSIL parsing, or generalized plain-`else` support.
+Milestone 51 is accepted as the exact M48 signedness predicate branch form with
+plain `else`. It stays in generation-time semantic lowering, consumes typed M43
+`GenerationTypeRef(kind="base.in")` values, and does not add conversion body
+lowering, backend translation, rendering, broad TSIL parsing, or generalized
+plain-`else` support.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1435,8 +1435,8 @@ Current roadmap direction:
 Status: Answered for Milestone 41, implemented for the first Milestone 42
 helper slice, narrowed for the Milestone 43 base type query slice, preserved by
 the numbered M44-M47 post-M43 phase, implemented for the M48 signedness
-branch-pruning slice, and selected for the M51 exact plain-`else` signedness
-branch extension.
+branch-pruning slice, and implemented for the M51 exact plain-`else`
+signedness branch extension.
 
 Why it matters:
 
@@ -1469,8 +1469,8 @@ evaluates only
 `value<generation>(type::is_signed(type<generation>(base::in)))` over M43
 `GenerationTypeRef(kind="base.in")` values and prunes exact
 `if<generation> ... else<generation>` branches before backend translation.
-Milestone 51 is selected to add only the same signedness predicate branch with
-plain `else`. Vector type/value queries, backend prefix/post/infix modifiers,
+Milestone 51 adds only the same signedness predicate branch with plain `else`.
+Vector type/value queries, backend prefix/post/infix modifiers,
 `immediate(n)`, primitive calls, loops, direct intrinsics, generalized plain
 `else` branch syntax, and broader branch body semantics remain deferred.
 
@@ -1487,7 +1487,7 @@ than renderer-local inference.
 The selected M50 coverage JSON adapter row stays in reporting and likewise does
 not reopen generation-time lowering, backend translation, backend rendering, or
 renderer-local semantic inference.
-The selected M51 lowering slice reopens only generation-time branch syntax for
+The accepted M51 lowering slice reopens only generation-time branch syntax for
 the exact signedness predicate with plain `else`; it does not reopen backend
 translation, backend rendering, or renderer-local semantic inference.
 

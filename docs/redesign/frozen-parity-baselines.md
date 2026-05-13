@@ -78,9 +78,9 @@ reviewable:
 10. M49 is accepted as the generated C++ `add_i32_basic` test-source parity
    slice.
 11. M50 is accepted as the legacy coverage JSON adapter row slice.
-12. M51 is selected for human acceptance as the exact plain-`else` signedness
-   branch-pruning syntax slice. It remains generation-time lowering only and is
-   not an output parity slice.
+12. M51 is accepted as the exact plain-`else` signedness branch-pruning syntax
+   slice. It remains generation-time lowering only and is not an output parity
+   slice.
 13. CLI workflow compatibility, coverage JSON adapter breadth beyond the
    selected M50 row, executable generated tests, and broad generated-test parity
    remain deferred until explicitly selected as separate milestones.
@@ -92,8 +92,8 @@ typed suffix/type-spelling translation. It exercises the important parity
 boundaries without requiring full headers, full TSIL, all wrappers,
 generated-test execution, Rust parity, or broad report/documentation parity.
 M50 reintroduces only one selected report row while full report/documentation
-parity remains deferred. M48 and the selected M51 plan are post-output lowering
-prerequisites for later shift/conversion parity, not additional
+parity remains deferred. M48 and M51 are post-output lowering prerequisites for
+later shift/conversion parity, not additional
 generated-output targets. M49 reintroduces only one generated C++ test-source
 parity baseline and still does not add compiler execution.
 

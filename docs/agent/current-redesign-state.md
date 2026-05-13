@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 50 is accepted.
+Milestone 51 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -26,32 +26,35 @@ focused revision.
 Post-M50 planning is accepted. It selected Milestone 51, and internal review
 returned `Accept With Follow-Ups` after local planning-doc corrections.
 
+The M51 execution-review loop returned `Accept With Follow-Ups` after one
+focused documentation revision.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run the Milestone 51 execution-review loop.
+Run the post-M51 planning plus review prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m51-execution-review-loop-prompt.md
+docs/agent/runs/post-m51-planning-plus-review-prompt.md
 ```
 
-Active executor milestone:
+Active planning target:
 
 ```text
-Milestone 51: Plain-Else Signedness Generation Branch Lowering Slice
+Select Milestone 52 or record an explicit deferral.
 ```
 
 Next expected action:
 
 ```text
-Execute and internally review M51. If accepted, record follow-ups if needed,
-mark accepted through Milestone 51, and create the next concrete run prompt.
-Do not start Milestone 52 from the M51 execution-review loop.
+Run docs-only post-M51 planning with planner, evidence, documentation, and
+boundary subagents, then internally review the planning result. If accepted,
+create a human-acceptance finalization prompt before activating execution.
 ```
 
 Accepted planning prompt:
@@ -100,6 +103,12 @@ Accepted post-M50 acceptance finalization prompt:
 
 ```text
 docs/agent/runs/post-m50-acceptance-finalization-prompt.md
+```
+
+Accepted M51 execution prompt:
+
+```text
+docs/agent/runs/m51-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -231,22 +240,22 @@ generation-time lowering, backend translation, generated C++ implementation
 output, test-source rendering, Rust output, compiler execution, generated-test
 execution, or runtime reads from `frozen/`, raw legacy JSON, or raw TSL.
 
-## Active Milestone 51
+## Accepted Milestone 51
 
-The accepted post-M50 planning result selected:
+The Milestone 51 execution-review loop accepted with non-blocking follow-ups:
 
 ```text
 Milestone 51: Plain-Else Signedness Generation Branch Lowering Slice
 ```
 
-M51 is now active for execution through
-`docs/agent/runs/m51-execution-review-loop-prompt.md`. The slice is
-generation-time semantic lowering only. It extends the accepted M48 signedness
-predicate branch pruning behavior to the documented plain `else` form for the
-exact M48 predicate over typed M43 `base.in` values. Backend translation,
-rendering, output generation, CLI/report/writer behavior, Rust, compiler
-execution, generated-test execution, and broader TSIL/plain-`else` support
-remain out of scope.
+The slice is generation-time semantic lowering only. It extends the accepted
+M48 signedness predicate branch pruning behavior to the documented plain
+`else` form for the exact M48 predicate over typed M43 `base.in` values.
+`PrunedGenerationBranch` records the accepted else syntax, and existing
+`else<generation>` signedness branch behavior remains supported. Backend
+translation, rendering, output generation, CLI/report/writer behavior, Rust,
+compiler execution, generated-test execution, conversion body lowering, and
+broader TSIL/plain-`else` support remain out of scope.
 
 ## Known Follow-Ups
 
@@ -279,18 +288,16 @@ remain out of scope.
   note to `add_avx2_f32_coverage_row.provenance.md`. Existing selected legacy
   row, field-construction evidence, and redesign baseline citations were
   accepted for M50.
-- M51 planning clarification: `tsldata/primitives/conversion/repr_change.tsl:1210-1217`
-  is the representative branch-shape evidence for M51; broader
-  `repr_change.tsl` ranges are supporting evidence only and do not expand M51
-  scope.
-- M51 docs follow-up: tighten `generation-time-semantic-lowering.md` wording
-  that says "report parity" remains deferred so it clearly means broad report
-  parity beyond the accepted M50 selected row.
+- M51 review follow-up: consider gating plain `else` earlier in the lowering
+  parser for an even tighter boundary. Current behavior accepts plain `else`
+  only after the condition resolves to the supported typed signedness predicate
+  and rejects primitive-attribute or arbitrary plain-`else` forms, so this is
+  non-blocking.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the active M51
-execution-review loop prompt.
+No stop condition is active. The workflow proceeds with the active post-M51
+planning plus review prompt.
 
 ## Validation Expectations
 

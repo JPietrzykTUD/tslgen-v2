@@ -348,9 +348,9 @@ Current roadmap note:
   `type::is_signed(type<generation>(base::in))` branch pruning. It consumes
   typed M43 `GenerationTypeRef(kind="base.in")` values, reuses M42 branch
   provenance, and does not add backend translation or rendering behavior.
-- Milestone 51 is planned as the exact plain-`else` syntax extension for that
-  same signedness branch form. It remains generation-time semantic lowering
-  only and must not add broad TSIL parsing, backend translation, rendering, or
+- Milestone 51 implements the exact plain-`else` syntax extension for that same
+  signedness branch form. It remains generation-time semantic lowering only
+  and must not add broad TSIL parsing, backend translation, rendering, or
   conversion body parity.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++

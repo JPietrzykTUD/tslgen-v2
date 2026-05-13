@@ -20,6 +20,7 @@ type PayloadClassification = Literal[
 ]
 type LoweringStatus = Literal["lowered", "unsupported"]
 type GenerationBranchChoice = Literal["true", "false"]
+type GenerationElseSyntax = Literal["else<generation>", "else"]
 type GenerationTypeRefKind = Literal[
     "base.in",
     "base.signed_of",
@@ -260,6 +261,7 @@ class PrunedGenerationBranch:
     condition: TsilGenerationCondition
     selected_branch: GenerationBranchChoice
     statement_text: str
+    else_syntax: GenerationElseSyntax = "else<generation>"
     condition_location: SourceLocation | None = None
 
     def __post_init__(self) -> None:
@@ -277,6 +279,7 @@ class PrunedGenerationBranch:
             self.condition.key,
             self.selected_branch,
             self.statement_text,
+            self.else_syntax,
             location_key,
         )
 
@@ -582,6 +585,7 @@ class _ParsedGenerationIf:
     condition_text: str
     true_branch_text: str
     false_branch_text: str
+    else_syntax: GenerationElseSyntax
 
 
 @dataclass(frozen=True, slots=True)
@@ -604,6 +608,11 @@ def _prune_generation_branch(
     if not condition.is_ok:
         return Result.failure(condition.diagnostics)
     resolved_condition = condition.unwrap()
+    if (
+        parsed_branch.else_syntax == "else"
+        and not isinstance(resolved_condition.condition, TsilTypeSignednessCondition)
+    ):
+        return Result.failure((_unsupported_plain_else_generation_branch(item),))
 
     selected_branch: GenerationBranchChoice = (
         "true" if resolved_condition.value else "false"
@@ -618,6 +627,7 @@ def _prune_generation_branch(
             condition=resolved_condition.condition,
             selected_branch=selected_branch,
             statement_text=statement_text,
+            else_syntax=parsed_branch.else_syntax,
             condition_location=item.source_location,
         )
     )
@@ -994,10 +1004,18 @@ def _parse_generation_if(
     true_branch_text = stripped[cursor + 1:true_end].strip()
 
     cursor = _skip_whitespace(stripped, true_end + 1)
-    else_marker = "else<generation>"
-    if not stripped.startswith(else_marker, cursor):
+    else_syntax: GenerationElseSyntax
+    else_generation_marker = "else<generation>"
+    plain_else_marker = "else"
+    if stripped.startswith(else_generation_marker, cursor):
+        else_syntax = "else<generation>"
+        cursor += len(else_generation_marker)
+    elif stripped.startswith(plain_else_marker, cursor):
+        else_syntax = "else"
+        cursor += len(plain_else_marker)
+    else:
         return Result.failure((_malformed_generation_if_diagnostic(item),))
-    cursor = _skip_whitespace(stripped, cursor + len(else_marker))
+    cursor = _skip_whitespace(stripped, cursor)
     if cursor >= len(stripped) or stripped[cursor] != "{":
         return Result.failure((_malformed_generation_if_diagnostic(item),))
     false_end = _matching_delimiter(stripped, cursor, "{", "}")
@@ -1013,6 +1031,7 @@ def _parse_generation_if(
             condition_text=condition_text,
             true_branch_text=true_branch_text,
             false_branch_text=false_branch_text,
+            else_syntax=else_syntax,
         )
     )
 
@@ -1351,7 +1370,8 @@ def _malformed_generation_if_diagnostic(
         "TSL-LOWER-GEN-IF-MALFORMED",
         "generation-time branch pruning supports only branches shaped as "
         "'if<generation>(<supported condition>) { ... } else<generation> "
-        "{ ... }'",
+        "{ ... }', plus plain 'else { ... }' for the exact signedness "
+        "predicate branch form",
         location=item.source_location,
     )
 
@@ -1367,6 +1387,19 @@ def _unsupported_generation_condition_diagnostic(
         "'value<generation>(type::is_signed(type<generation>(base::in)))'; "
         "got "
         f"{condition_text!r}",
+        location=item.source_location,
+    )
+
+
+def _unsupported_plain_else_generation_branch(
+    item: LoweringInput,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-IF-UNSUPPORTED",
+        "plain 'else' generation branch syntax is supported only for "
+        "'if<generation>(value<generation>(type::is_signed("
+        "type<generation>(base::in))))'; use 'else<generation>' for other "
+        "supported generation-time branch forms",
         location=item.source_location,
     )
 
