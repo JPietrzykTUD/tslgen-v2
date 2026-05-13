@@ -8,22 +8,28 @@ or accepted planning passes.
 
 Milestone 47 is accepted.
 
+Post-M47 planning is accepted. The accepted planning result selected
+Milestone 48 as the next executor milestone.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Human review/acceptance of the formal M48 planning pass. Do not implement M48
-until the plan is accepted.
+Execute Milestone 48.
 ```
 
-Primary prompt:
+Active executor milestone:
+
+```text
+Milestone 48: Signedness Type-Predicate Branch Pruning Slice
+```
+
+Accepted planning prompt:
 
 ```text
 docs/agent/runs/post-m47-orchestrated-planning-plus-review-prompt.md
 ```
-
-This prompt has been run as the planning source for M48.
 
 ## Current Boundary Rules
 
@@ -36,16 +42,19 @@ This prompt has been run as the planning source for M48.
   output.
 - Renderers must not infer suffixes, type spellings, generation-time helper
   semantics, or backend modifier semantics.
-- Backend translation must not parse raw `type<generation>(...)` text.
+- Renderers must not evaluate generation-time helpers.
+- Backend translation must not parse raw generation helper text.
 - Future semantic behavior must be expressed as typed rules or typed evaluator
   functions over explicit IR/domain values.
-- Planned M48 consumes typed M43 `GenerationTypeRef(kind="base.in")` values for
-  signedness predicate branch pruning and remains generation-time semantic
-  lowering only.
+- M48 is generation-time semantic lowering only.
+- M48 consumes typed M43 `GenerationTypeRef(kind="base.in")` values for
+  signedness predicate branch pruning.
+- M48 includes no backend translation, rendering, generated output,
+  CLI/report/writer, Rust, or compiler execution work.
 
-## Selected Next Milestone Candidate
+## Active Executor Milestone
 
-The post-M47 planning pass selected:
+The accepted post-M47 planning pass selected:
 
 ```text
 Milestone 48: Signedness Type-Predicate Branch Pruning Slice
@@ -60,7 +69,8 @@ plain `else` conversion syntax, or broad shift/conversion body lowering.
 
 ## Known Follow-Ups
 
-- Human acceptance is still required before execution.
+- Older post-M34 wording around "do not define M35 yet" may be cleaned up
+  later. This is non-blocking for M48 execution.
 - The retried evidence audit confirmed additional exact shift evidence ranges:
   `tsldata/primitives/bitwise/shifts.tsl:535-547`, `:625-635`, `:842-887`,
   `:933-943`, `:1222-1244`, `:1268-1280`, `:1465-1481`, and `:1507-1518`.
