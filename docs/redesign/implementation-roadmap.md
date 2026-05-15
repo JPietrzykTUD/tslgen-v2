@@ -5305,8 +5305,8 @@ Candidate comparison:
 
 Status:
 
-Implemented and under execution review. Do not broaden this slice during
-review.
+Accepted. The M58 execution-review loop returned `Accept With Follow-Ups`
+after one focused documentation revision.
 
 Goal:
 
@@ -5456,26 +5456,38 @@ Dependencies on prior milestones:
 
 - Milestones 41, 42, 43, 48, 51, 52, 53, 54, 55, 56, and 57.
 
-## Draft Staged Lowering Path After M58
+## Post-M58 Planning Result
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Size-byte equality generation branch-chain pruning | M57 resolves exact `type.size_bytes == 2/4/8` predicates and M58 exposes them through typed stage records. The SVE array evidence has exactly this no-final-else branch chain. | Medium if it becomes broad `else if<generation>` parsing, selected-body handoff, or direct SVE/body lowering; low to medium if it consumes typed M57/M58 predicate outputs and keeps bodies opaque. | Select as M59. |
+| Opaque selected branch body handoff | Needed after branch-chain pruning so later body-lowering slices see only selected branch text. | Medium if kept opaque; high if it starts parsing direct intrinsics, assignments, arrays, loops, calls, vector metadata, or renderer/backend semantics. | Defer until after M59 branch-chain pruning. |
+| Small M58 staged-predicate reuse cleanup | M58 review noted that M59 should not duplicate private staged predicate assembly or consume raw recognition text. | Low if used only as a tiny enabling cleanup; medium if it becomes a standalone refactor milestone. | Fold only the minimal enabling cleanup into M59 if needed; do not select separately. |
+| Direct `intrin<...>` / SVE body lowering | Present around and inside the same array evidence. | High because it touches direct backend calls, vector predicates, body semantics, and rendering/output concerns. | Defer. |
+| M49-M58 follow-up cleanup | Several accepted follow-ups remain. | Low individually, but cleanup does not form the next lowering architecture milestone. | Keep recorded as follow-ups unless one is selected separately. |
+
+## Staged Lowering Path After M58
 
 This path is recorded now because the post-M56 planning discussion identified a
 clear architectural direction: generation-time lowering should proceed through
 small typed stages rather than repeatedly recognizing entire surrounding
-strings. With M58 implemented and under execution review, the following
-milestones remain draft candidates and must still be reviewed and accepted one
-at a time before execution.
+strings. With M58 accepted, M59 is selected for human acceptance and the
+following milestones must still be reviewed and accepted one at a time before
+execution.
 
-### Draft Milestone 59: Size-Byte Equality Generation Branch-Chain Pruning Slice
+### Milestone 59: Size-Byte Equality Generation Branch-Chain Pruning Slice
 
 Status:
 
-Future candidate after M58. Do not implement until selected by a later
-planning pass.
+Selected for human acceptance. Do not implement until this planning result is
+accepted.
 
 Goal:
 
-Consume typed M57 size-byte equality predicate results to prune exactly the SVE
-array no-final-else branch chain:
+Consume typed M57/M58 size-byte equality predicate stage results to prune
+exactly the SVE array no-final-else branch chain:
 
 ```text
 if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 2) { ... }
@@ -5483,25 +5495,83 @@ else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in
 else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 8) { ... }
 ```
 
+M59 should prove the accepted staged lowering contract is useful for
+control-flow pruning without reparsing raw generation helper text in backend
+translation, renderers, or a second broad branch-chain evaluator.
+
 Scope:
 
-- Consume typed predicate results from M57 instead of evaluating comparisons
-  inside the branch-chain parser.
+- Consume typed predicate results and stage records from M57/M58 instead of
+  evaluating comparisons inside the branch-chain parser.
+- Recognize only the exact no-final-else chain shape from
+  `tsldata/primitives/load_store/array.tsl:107-109`, with arms in the
+  documented `== 2`, `== 4`, then `== 8` order.
 - Select the matching arm for byte sizes `2`, `4`, or `8`.
-- Record explicit no-match provenance for byte size `1`.
-- Keep branch bodies opaque.
+- Record explicit no-match provenance for byte size `1` without synthesizing a
+  final `else`.
+- Keep all branch bodies opaque; M59 may preserve selected-arm text/provenance
+  as part of the pruning result, but it must not introduce the M60 selected
+  body handoff contract.
+- If M59 needs access to staged predicate details outside `_lower_input`, make
+  the smallest typed reuse cleanup needed to avoid duplicating private staged
+  predicate assembly or re-evaluating raw helper text.
 - Preserve M42/M48/M51 selected-branch-only diagnostic principles where they
   apply to the selected chain.
 
 Out of scope:
 
 - Standalone comparison evaluation.
-- Broad `else if<generation>` syntax.
-- Final `else`, reordered chains, missing/duplicate arms, nested branches, or
-  broad no-final-else policy.
-- Direct-intrinsic/body lowering, SVE array body lowering, vector metadata,
-  backend translation, rendering, output, generated tests, CLI/reporting, Rust,
-  compiler execution, broad TSIL parsing, or runtime dependency on `frozen/`.
+- Broad `else if<generation>` syntax beyond the exact selected chain shape.
+- Final `else`, reordered chains, missing arms, duplicate arms, nested
+  branches, or broad no-final-else policy.
+- Opaque selected branch body handoff as a reusable input to later body-lowering
+  stages.
+- Direct-intrinsic/body lowering, SVE array body lowering, assignments,
+  variables, arrays, calls, casts, loops, vector/register metadata,
+  `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, backend uninit values, backend
+  translation, rendering, output, generated tests, CLI/reporting, writer
+  behavior, Rust, compiler execution, broad TSIL parsing, or runtime
+  dependency on `frozen/`.
+- Lowering-time file reads, raw TSL parsing, or catalog queries during
+  evaluation.
+
+Required inputs:
+
+- M55 `GenerationValue(kind="type.size_bytes")` behavior.
+- M57 `GenerationPredicate(kind="type.size_bytes.equals")` behavior for
+  literals `2`, `4`, and `8`.
+- M58 typed `GenerationLoweringStage` records for helper/expression
+  recognition, typed generation values, typed generation predicates, and
+  generation control-flow pruning.
+- Existing M42/M48/M51 branch-pruning provenance and selected-branch-only
+  diagnostic principles.
+
+Expected outputs:
+
+- A typed branch-chain pruning result or equivalent typed stage record that
+  identifies the selected arm for byte sizes `2`, `4`, and `8`.
+- Explicit no-match provenance for byte size `1`.
+- Opaque selected-arm body text/provenance retained only as pruning metadata,
+  not as a general selected-body handoff contract.
+- No backend translation, rendering, or generated artifact output.
+
+Parity criterion:
+
+M59 proves exactly the SVE size-byte branch-chain control-flow decision can be
+made from typed lowering predicate/stage outputs. It does not claim SVE body,
+direct intrinsic, vector metadata, backend translation, rendering, generated
+output, or compiler parity.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:107-109` for the exact SVE
+  no-final-else size-byte branch chain.
+- Accepted M57 tests and implementation for `type.size_bytes == 2/4/8`
+  predicates.
+- Accepted M58 tests and implementation for typed generation stage records.
+- `docs/redesign/generation-time-semantic-lowering.md` staged lowering
+  direction.
 
 Tests required:
 
@@ -5511,13 +5581,47 @@ Tests required:
 - `si8`/`ui8` produce explicit no-match provenance with no synthesized else.
 - Unselected/no-match branch bodies do not emit nested helper diagnostics.
 - Rejection tests for unsupported branch-chain shapes.
+- Determinism tests for selected arm and no-match provenance.
+- Regression tests proving M55/M57/M58 value, predicate, and stage outputs
+  remain unchanged.
+- Backend raw-helper rejection and renderer non-evaluation regressions.
+
+Golden fixtures required:
+
+- None. M59 is a lowering/control-flow pruning slice and must not change
+  generated C++ or Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M59 branch-chain pruning test command selected by the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Evaluating branch-chain comparisons through raw helper text instead of typed
+  M57/M58 predicate/stage outputs.
+- Turning exact branch-chain recognition into broad `else if<generation>` or
+  general comparison parsing.
+- Combining M59 with M60 selected-body handoff.
+- Inspecting, parsing, or diagnosing unselected opaque branch bodies.
+- Pulling in direct intrinsics, SVE statements, vector metadata, backend
+  translation, rendering, output, generated tests, CLI/reporting, Rust,
+  compiler execution, broad TSIL parsing, or runtime `frozen/` use.
+- Making lowering evaluation read files, parse raw TSL, query the catalog, or
+  construct catalog-derived rule data during evaluation.
+
+Dependencies on prior milestones:
+
+- Milestones 41, 42, 43, 48, 51, 52, 53, 54, 55, 57, and 58.
 
 ### Draft Milestone 60: Opaque Selected Branch Body Handoff Slice
 
 Status:
 
-Future candidate after branch-chain pruning. Do not implement until selected by
-a later planning pass.
+Future candidate after M59 branch-chain pruning. Do not implement until
+selected by a later planning pass.
 
 Goal:
 

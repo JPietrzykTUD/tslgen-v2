@@ -385,6 +385,10 @@ Current roadmap note:
   later control-flow pruning consumes typed values and predicates rather than
   raw helper text. The contract is exposed as deterministic typed stage records
   on lowered implementations and does not require backend or renderer changes.
+- The selected post-M58 plan, Milestone 59, should consume those typed stage
+  records for exactly the documented SVE size-byte branch chain only. It must
+  keep branch bodies opaque and avoid selected-body handoff, direct-intrinsic
+  lowering, backend translation, rendering, output, and compiler work.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

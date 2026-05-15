@@ -419,6 +419,11 @@ values, accepted generation predicates, generation control-flow pruning, and
 selected-body lowering. Future branch-chain pruning can consume the typed M57
 predicate stage output directly; backend translation and rendering still do not
 evaluate generation helpers.
+The selected post-M58 plan, Milestone 59, should consume those typed predicate
+stage outputs for only the documented SVE size-byte no-final-else branch chain.
+M59 remains lowering-only and must not add selected-body handoff, direct
+intrinsic/SVE body semantics, backend translation, rendering, or generated
+output.
 
 ## Stage 9: Backend Planning
 

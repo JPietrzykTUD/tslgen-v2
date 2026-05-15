@@ -1270,6 +1270,12 @@ M57 adds only exact size-byte equality predicate lowering for
 `type.size_bytes == 2/4/8`. It records typed boolean predicate values, but
 still does not prune branch chains, lower SVE array bodies, direct intrinsics,
 vector metadata, backend translation, or rendering.
+Milestone 58 adds the accepted typed staged lowering contract so later
+control-flow can consume typed predicate stage outputs instead of raw helper
+text. The selected post-M58 plan, M59, is limited to the exact SVE size-byte
+branch-chain pruning slice and still defers selected-body handoff, direct
+intrinsics, SVE body semantics, vector metadata, backend translation,
+rendering, and generated output until separate accepted milestones.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1279,8 +1285,8 @@ calls, loops, variables, generation-time branches beyond the selected aligned
 primitive-attribute and signedness predicate conditions, type/value metadata
 beyond the selected base type query family, M55 size-byte value query,
 accepted M56 exact size-bytes-times-eight expression, accepted M57 exact
-size-byte equality predicates, branch-chain pruning over those predicates, and
-other nested
+size-byte equality predicates, branch-chain pruning beyond the selected narrow
+M59 candidate over those predicates, and other nested
 expressions, direct `intrin<...>` calls, helper families such as
 `io`, `mem`, `seq`, `pack`, and `algo`, Rust output, generated tests beyond the
 selected M49 source fixture, CLI/report parity, compiler execution, and broad

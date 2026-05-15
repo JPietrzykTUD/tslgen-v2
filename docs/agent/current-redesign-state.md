@@ -80,40 +80,45 @@ stage contract, not a cosmetic wrapper or broad central string evaluator.
 The M58 execution-review loop returned `Accept With Follow-Ups` after one
 focused documentation revision.
 
+Post-M58 planning selected
+`Milestone 59: Size-Byte Equality Generation Branch-Chain Pruning Slice`, and
+internal review returned `Needs Revision` only for workflow handoff wording
+that was corrected locally.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run the post-M58 planning + review prompt.
+Await human acceptance of the post-M58 planning result.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m58-planning-plus-review-prompt.md
+docs/agent/runs/post-m58-acceptance-finalization-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The workflow is in post-M58 planning; no executor milestone is active.
+None. Milestone 59 is selected for human acceptance but is not active for
+execution until accepted.
 ```
 
 Latest review verdict:
 
 ```text
-The M58 execution-review loop returned Accept With Follow-Ups after one focused
-documentation revision.
+Post-M58 planning internal review found no M59 boundary blocker; the only
+blocking issue was stale workflow handoff state, corrected before final report.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M58 planning + review prompt. Focus on lowering, select at
-most one next numbered milestone or explicitly defer, and do not implement
-code. If planning is accepted internally but requires human acceptance, create
-the appropriate post-M58 acceptance finalization prompt.
+If the user accepts the post-M58 planning result, run the active finalization
+prompt to create the Milestone 59 execution-review loop prompt. Do not execute
+M59 until acceptance is explicit.
 ```
 
 Accepted planning prompt:
@@ -300,6 +305,12 @@ Active post-M58 planning prompt:
 
 ```text
 docs/agent/runs/post-m58-planning-plus-review-prompt.md
+```
+
+Active post-M58 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m58-acceptance-finalization-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -884,8 +895,8 @@ on `frozen/`.
   that M57 predicate lowering is accepted.
 - Post-M56 staged-lowering planning note: the intended value -> predicate ->
   control-flow -> selected-body lowering path remains the guiding sequence.
-  M58 accepted the stage-boundary contract; M59/M60 remain draft candidates
-  only until a later planning pass selects one.
+  M58 accepted the stage-boundary contract; post-M58 planning selected M59 for
+  human acceptance while M60 remains a draft candidate.
 - M57 review follow-up: keep the private top-level generation binary scanner
   narrow. It may recognize unsupported operators only to reject them and must
   not become a general comparison parser without a selected milestone.
@@ -902,12 +913,15 @@ on `frozen/`.
 - M58 extensibility follow-up: if M59 needs staged predicate resolution outside
   `_lower_input`, refine a reusable typed staged-predicate result instead of
   duplicating the private stage assembly.
+- Post-M58 planning follow-up: the eventual M59 executor prompt must keep any
+  M58 staged-predicate reuse cleanup explicitly subordinate to the exact
+  branch-chain pruning slice.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the post-M58
-planning + review prompt. M59/M60 remain draft planning candidates
-only and must not be started unless a later planning pass accepts one of them.
+No stop condition is active. The workflow is waiting for human acceptance of
+the post-M58 planning result. M59 is selected for human acceptance but must not
+be executed until accepted. M60 remains a draft planning candidate.
 
 ## Validation Expectations
 

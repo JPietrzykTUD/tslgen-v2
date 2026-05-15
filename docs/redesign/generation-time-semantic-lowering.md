@@ -426,6 +426,13 @@ typed predicate stage output directly instead of reparsing the raw
 pruning, new helper forms, new comparison or arithmetic semantics, selected body
 handoff policy, backend translation, rendering, or generated output.
 
+The selected post-M58 plan, M59, should consume those typed predicate stage
+outputs for exactly the documented SVE size-byte no-final-else branch chain in
+`tsldata/primitives/load_store/array.tsl:107-109`. It remains a future
+execution slice until accepted and must not introduce broad
+`else if<generation>` parsing, body handoff, direct-intrinsic/SVE body
+lowering, backend translation, rendering, or generated output.
+
 ## Explicit Deferrals
 
 Deferred beyond the accepted M43-M57 slices:
@@ -440,7 +447,8 @@ Deferred beyond the accepted M43-M57 slices:
   M56 exact `type.size_bytes * 8` expression. Comparisons over generation
   values remain deferred except for the accepted M57 exact
   `type.size_bytes == 2/4/8` predicates. Branch-chain pruning over those
-  predicates, general `else if<generation>` syntax, final-else policy, and
+  predicates is selected for post-M58 human acceptance as a narrow M59
+  candidate, but general `else if<generation>` syntax, final-else policy, and
   broad branch pruning based on generation values remain deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`

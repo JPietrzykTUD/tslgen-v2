@@ -745,6 +745,14 @@ Recommended first parity checks:
   through the staged contract. Tests continue proving raw helper rejection,
   renderer non-evaluation, deterministic stage output, and no M57 size-byte
   branch-chain pruning.
+- The selected post-M58 plan, Milestone 59, should test only the exact
+  size-byte equality branch-chain pruning slice: `si16`/`ui16` select `== 2`,
+  `si32`/`ui32`/`f32` select `== 4`, `si64`/`ui64`/`f64` select `== 8`, and
+  `si8`/`ui8` record explicit no-match provenance without synthesizing a final
+  `else`. Tests should also prove unsupported branch-chain shapes are rejected,
+  branch bodies remain opaque, unselected/no-match bodies are not diagnosed,
+  M55/M57/M58 outputs remain unchanged, raw-helper rejection and renderer
+  non-evaluation are preserved, and no generated output changes.
 
 Deferred parity checks:
 

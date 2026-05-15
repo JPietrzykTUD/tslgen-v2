@@ -391,6 +391,10 @@ helper/expression recognition, typed generation values, typed generation
 predicates, generation control-flow pruning, and selected-body lowering
 inspectable as typed values. Later control-flow slices can consume the typed
 predicate stage results without reparsing raw generation helper text.
+The selected post-M58 plan, Milestone 59, is limited to consuming those typed
+predicate stage results for the exact SVE size-byte no-final-else branch chain.
+It should not add broad `else if<generation>` parsing, selected-body handoff,
+direct-intrinsic/SVE body lowering, backend translation, rendering, or output.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
