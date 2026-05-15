@@ -5325,12 +5325,18 @@ M58 should not add new helper semantics. It should organize the accepted M55
 `type.size_bytes` value, M56 `type.size_bits` value, and M57
 `type.size_bytes.equals` predicate results so future branch pruning consumes
 typed results instead of reparsing raw generation helper text.
+The goal is an extendable and maintainable stage contract, not a cosmetic
+wrapper around existing functions and not a broad replacement evaluator.
 
 Scope:
 
 - Define or refine typed records for the generation-time lowering stage
   boundary, including expression recognition, resolved value results, and
   resolved predicate results where needed.
+- Give each introduced or refined stage boundary explicit typed inputs and
+  outputs so later lowering stages can be added locally.
+- Show how a later branch-chain pruning slice can consume typed predicate or
+  staged results without backend/rendering changes.
 - Preserve existing M55/M56/M57 observable lowered outputs exactly.
 - Preserve existing M42/M48/M51 generation branch-pruning behavior exactly.
 - Keep `LoweringPlan` / `LoweredImplementation` public behavior stable unless a
@@ -5374,6 +5380,9 @@ Expected outputs:
 - A typed staged-lowering contract or equivalent explicit stage records that
   make accepted generation values and predicates available to later
   control-flow pruning without backend/renderers evaluating helpers.
+- A maintainable extension path for future lowering stages, especially M59
+  branch-chain pruning, without concentrating future behavior in one broad
+  central string-matching or `if`/`elif` evaluator.
 - Unchanged accepted M42/M48/M51/M55/M56/M57 lowering behavior.
 - No generated C++ or Rust artifacts.
 
@@ -5429,6 +5438,8 @@ Review risks:
 
 - Turning M58 into a broad lowering refactor without a typed behavioral
   contract.
+- Producing only a cosmetic wrapper that does not make future stages easier to
+  add or review.
 - Accidentally adding branch-chain pruning, `else if<generation>`, no-match
   policy, or selected body handoff.
 - Adding general expression parsing or a second evaluator instead of typed

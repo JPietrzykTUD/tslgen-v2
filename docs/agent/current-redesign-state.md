@@ -68,47 +68,48 @@ are not active for execution.
 The M57 execution-review loop returned `Accept With Follow-Ups` with no
 blocking implementation issues and no focused revision.
 
-Post-M57 planning is ready for human acceptance. It selected
+Post-M57 planning is accepted. It selected
 `Milestone 58: Generation-Time Lowering Stage Pipeline Boundary Slice`, and
 internal review returned `Accept With Follow-Ups` after local state wording
 corrections.
+
+A user-requested workflow correction sharpened the M58 handoff: the generated
+M58 execution prompt must require an extendable, maintainable typed lowering
+stage contract, not a cosmetic wrapper or broad central string evaluator.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Await human acceptance of the post-M57 planning update, then run the post-M57
-acceptance finalization prompt.
+Execute the Milestone 58 execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m57-acceptance-finalization-prompt.md
+docs/agent/runs/m58-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Milestone 58 is selected for human acceptance but is not active for
-execution yet.
+Milestone 58: Generation-Time Lowering Stage Pipeline Boundary Slice
 ```
 
 Latest review verdict:
 
 ```text
-Post-M57 planning update: Accept With Follow-Ups after local state wording
-corrections; ready for human acceptance.
+Post-M57 planning update accepted by user; M58 is active for execution.
 ```
 
 Next expected action:
 
 ```text
-If the user explicitly accepts the post-M57 planning update, execute the active
-acceptance finalization prompt. It should create the Milestone 58
-execution-review loop prompt and update this state file without implementing
-M58.
+Run the active M58 execution-review loop prompt. If M58 is accepted, update
+this state file, record follow-ups, and create the next concrete run prompt
+under docs/agent/runs/ without starting M59 unless a later planning pass
+accepts it.
 ```
 
 Accepted planning prompt:
@@ -273,16 +274,22 @@ Accepted M57 execution-review loop prompt:
 docs/agent/runs/m57-execution-review-loop-prompt.md
 ```
 
-Active post-M57 planning prompt:
+Accepted post-M57 planning prompt:
 
 ```text
 docs/agent/runs/post-m57-planning-plus-review-prompt.md
 ```
 
-Active post-M57 acceptance finalization prompt:
+Accepted post-M57 acceptance finalization prompt:
 
 ```text
 docs/agent/runs/post-m57-acceptance-finalization-prompt.md
+```
+
+Active M58 execution-review loop prompt:
+
+```text
+docs/agent/runs/m58-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -498,6 +505,29 @@ docs/agent/runs/post-m57-acceptance-finalization-prompt.md
   no-final-else branch policy, or branch-body semantics.
 - M57 must not make lowering read files, parse raw TSL, or query the
   catalog during evaluation.
+- M58 is generation-time semantic lowering stage-boundary work only.
+- M58 must introduce a genuinely extendable and maintainable typed staged
+  lowering contract, not merely rename or wrap current functions and not create
+  a broad central string-matching or `if`/`elif` evaluator.
+- M58 must give introduced or refined stage boundaries explicit typed inputs
+  and outputs suitable for future stages.
+- M58 organizes the accepted M55 `GenerationValue(kind="type.size_bytes")`,
+  M56 `GenerationValue(kind="type.size_bits")`, and M57
+  `GenerationPredicate(kind="type.size_bytes.equals")` results so later
+  control-flow pruning can consume typed results without backend/rendering
+  changes or raw helper re-evaluation.
+- M58 must preserve accepted M55/M56/M57 observable lowered outputs exactly and
+  preserve accepted M42/M48/M51 generation branch-pruning behavior exactly.
+- M58 must not add new generation-time helper semantics, new arithmetic,
+  comparison, or predicate semantics, size-byte equality branch-chain pruning,
+  `else if<generation>` support, no-match provenance, selected branch body
+  handoff, direct `intrin<...>` / SVE body lowering, vector/register metadata,
+  backend translation expansion, rendering, generated output, generated test
+  sources, CLI/reporting, writer behavior, Rust, compiler execution, broad
+  TSIL parsing, or runtime dependency on `frozen/`.
+- M58 must not make lowering read files, parse raw TSL, or query the catalog
+  during evaluation; catalog-derived rule construction must remain before
+  evaluation.
 
 ## Accepted Milestone 48
 
@@ -825,10 +855,9 @@ on `frozen/`.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M57 acceptance
-finalization only after explicit human acceptance. M58 is selected for human
-acceptance but must not be executed unless the planning result is accepted and
-finalized. M59/M60 remain draft planning candidates only.
+No stop condition is active. The workflow proceeds with the M58
+execution-review loop. M59/M60 remain draft planning candidates only and must
+not be started unless a later planning pass accepts one of them.
 
 ## Validation Expectations
 

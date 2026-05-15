@@ -25,7 +25,9 @@ acceptance while M59/M60 remain draft candidates only.
 Remaining follow-ups are non-blocking:
 
 ```text
-Keep M58 behavior-preserving and avoid broad lowering refactors.
+Keep M58 behavior-preserving while making the lowering stage contract
+extendable and maintainable; avoid both cosmetic wrappers and broad lowering
+refactors.
 M57 evidence/test follow-up: add explicit unsupported-tag predicate coverage
 for bword and fdqword later.
 ```
@@ -68,13 +70,33 @@ The M58 active prompt must preserve these constraints:
 
 - Generation-time semantic lowering stage boundary only.
 - No new generation-time helper semantics.
+- M58 must introduce a genuinely extendable and maintainable staged lowering
+  contract, not merely rename or wrap the current functions.
+- Each stage boundary introduced or refined by M58 must have explicit typed
+  inputs and outputs suitable for future stages.
 - Define or refine typed stage records around accepted M55 values, M56 values,
   and M57 predicates so later control-flow pruning consumes typed results
   instead of reparsing raw generation helper text.
+- Future stages, especially M59 branch-chain pruning, must be able to consume
+  typed predicate results without backend/rendering changes and without
+  re-evaluating raw generation helper text.
 - Preserve existing M55/M56/M57 observable lowered outputs exactly.
 - Preserve existing M42/M48/M51 branch-pruning behavior exactly.
 - Preserve backend raw-helper rejection and renderer non-evaluation.
 - Keep catalog-derived rule construction before lowering evaluation.
+
+The M58 active prompt must make these acceptance criteria explicit:
+
+- The result is a typed stage contract or equivalent explicit stage records
+  that make adding later lowering stages local and predictable.
+- Adding a future helper family or future control-flow pruning stage should not
+  require backend or renderer changes.
+- The implementation must not concentrate future extensibility into one broad
+  central `if`/`elif` evaluator or broad string-matching dispatcher.
+- The executor should document how a later M59 branch-chain pruning slice would
+  consume the M58 typed predicate/stage output.
+- Tests must prove accepted M55/M56/M57 behavior is unchanged through the
+  staged contract and that no branch-chain pruning was added.
 
 Boundary reminders for M58:
 
