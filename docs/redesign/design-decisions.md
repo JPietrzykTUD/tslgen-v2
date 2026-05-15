@@ -1326,9 +1326,11 @@ Consequences:
   boolean predicate values and keeps branch-chain pruning, broad
   `else if<generation>`, direct-intrinsic/body lowering, vector metadata,
   backend translation, rendering, and output deferred.
-- The selected post-M57 plan, Milestone 58, should make the value ->
-  predicate -> control-flow lowering stage contract explicit without adding new
-  helper semantics or branch-chain pruning.
+- Milestone 58 makes the value -> predicate -> control-flow lowering stage
+  contract explicit through typed stage records on lowered implementations. It
+  preserves accepted helper behavior while giving later branch-chain pruning a
+  typed predicate output to consume without backend/rendering changes or raw
+  helper reparsing.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

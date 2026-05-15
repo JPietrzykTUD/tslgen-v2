@@ -385,6 +385,12 @@ predicates comparing the M55 typed `type.size_bytes` value to `2`, `4`, and
 chains, add `else if<generation>` support, lower direct intrinsics or branch
 bodies, add general comparison evaluation, or change backend translation or
 rendering.
+Milestone 58 keeps those semantics unchanged and adds an explicit staged
+lowering contract to the lowered implementation model. The staged outputs make
+helper/expression recognition, typed generation values, typed generation
+predicates, generation control-flow pruning, and selected-body lowering
+inspectable as typed values. Later control-flow slices can consume the typed
+predicate stage results without reparsing raw generation helper text.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic

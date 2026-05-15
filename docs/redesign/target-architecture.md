@@ -381,9 +381,10 @@ Current roadmap note:
   predicate values and must not prune branch chains, lower direct intrinsics,
   lower SVE array body statements, add vector metadata, backend translation,
   rendering, or generated output.
-- The selected post-M57 plan, Milestone 58, should make the generation-time
-  lowering stage contract explicit so later control-flow pruning consumes typed
-  values and predicates rather than raw helper text.
+- Milestone 58 makes the generation-time lowering stage contract explicit so
+  later control-flow pruning consumes typed values and predicates rather than
+  raw helper text. The contract is exposed as deterministic typed stage records
+  on lowered implementations and does not require backend or renderer changes.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

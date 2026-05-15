@@ -18,6 +18,8 @@ from tslgen.domain.types import TypeGroup
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
 from tslgen.lowering import (
     GenerationContext,
+    GenerationExpressionRecognition,
+    GenerationLoweringStage,
     GenerationPredicate,
     GenerationTypeRef,
     GenerationValue,
@@ -1284,6 +1286,36 @@ class LoweringBoundaryTests(unittest.TestCase):
             SCALAR_SIZE_BYTES_BY_TAG,
         )
 
+    def test_size_bytes_value_is_visible_through_stage_contract(self) -> None:
+        selection = self.selection_for("lower_generation_size_bytes_override")
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation = result.unwrap().implementations[0]
+        value = GenerationValue(kind="type.size_bytes", value=4, type_tag="si32")
+        self.assertEqual(implementation.generation_values, (value,))
+        self.assertEqual(implementation.generation_predicates, ())
+        self.assertEqual(
+            implementation.generation_stages,
+            (
+                GenerationLoweringStage(
+                    stage="helper_expression_recognition",
+                    output=GenerationExpressionRecognition(
+                        kind="generation.value",
+                        source_text=(
+                            "value<generation>(type::size_bytes("
+                            "type<generation>(base::in)))"
+                        ),
+                    ),
+                ),
+                GenerationLoweringStage(
+                    stage="typed_generation_value",
+                    output=value,
+                ),
+            ),
+        )
+
     def test_resolves_size_bytes_generation_value_query_for_each_selected_scalar(
         self,
     ) -> None:
@@ -1577,6 +1609,22 @@ class LoweringBoundaryTests(unittest.TestCase):
             },
             SCALAR_SIZE_BITS_BY_TAG,
         )
+
+    def test_size_bits_value_is_visible_through_stage_contract(self) -> None:
+        selection = self.selection_for("lower_generation_size_bits_override")
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation = result.unwrap().implementations[0]
+        value = GenerationValue(kind="type.size_bits", value=32, type_tag="si32")
+        self.assertEqual(implementation.generation_values, (value,))
+        self.assertEqual(implementation.generation_predicates, ())
+        self.assertEqual(
+            tuple(stage.stage for stage in implementation.generation_stages),
+            ("helper_expression_recognition", "typed_generation_value"),
+        )
+        self.assertEqual(implementation.generation_stages[1].output, value)
 
     def test_resolves_size_bytes_times_eight_generation_value_for_each_scalar(
         self,
@@ -1924,6 +1972,35 @@ class LoweringBoundaryTests(unittest.TestCase):
                         SCALAR_SIZE_BYTES_BY_TAG[predicate.type_tag] == literal,
                     )
 
+    def test_size_byte_predicate_stage_exposes_typed_value_then_predicate(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_equals_override")
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation = result.unwrap().implementations[0]
+        value = GenerationValue(kind="type.size_bytes", value=4, type_tag="si32")
+        predicate = GenerationPredicate(
+            kind="type.size_bytes.equals",
+            literal=8,
+            value=False,
+            type_tag="si32",
+        )
+        self.assertEqual(implementation.generation_values, ())
+        self.assertEqual(implementation.generation_predicates, (predicate,))
+        self.assertEqual(
+            tuple(stage.stage for stage in implementation.generation_stages),
+            (
+                "helper_expression_recognition",
+                "typed_generation_value",
+                "typed_generation_predicate",
+            ),
+        )
+        self.assertEqual(implementation.generation_stages[1].output, value)
+        self.assertEqual(implementation.generation_stages[2].output, predicate)
+
     def test_resolves_size_byte_equality_generation_predicate_truth_table(
         self,
     ) -> None:
@@ -2115,6 +2192,10 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertTrue(first.is_ok, first.diagnostics)
         self.assertTrue(second.is_ok, second.diagnostics)
         self.assertEqual(first.unwrap(), second.unwrap())
+        self.assertEqual(
+            first.unwrap().implementations[0].generation_stages,
+            second.unwrap().implementations[0].generation_stages,
+        )
 
     def test_size_byte_equality_predicate_reports_malformed_syntax(self) -> None:
         result = resolve_generation_predicate_query(
@@ -2528,6 +2609,59 @@ class LoweringBoundaryTests(unittest.TestCase):
             ),
         )
 
+    def test_signedness_branch_stage_contract_preserves_m48_and_m51_outputs(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "lower_generation_signedness",
+                "ui32",
+                "else<generation>",
+                "false",
+                "emit_return(right + left);",
+            ),
+            (
+                "lower_generation_signedness_plain_else",
+                "si32",
+                "else",
+                "true",
+                "emit_return(left + right);",
+            ),
+        )
+
+        for primitive_name, type_tag, else_syntax, choice, statement_text in cases:
+            with self.subTest(primitive_name=primitive_name):
+                selection = self.selection_for(primitive_name)
+
+                result = lower_candidates(
+                    selection,
+                    LoweringRequest(
+                        generation_context=GenerationContext(
+                            type_tag_override=type_tag,
+                        ),
+                    ),
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                implementation = result.unwrap().implementations[0]
+                branch = implementation.generation_branches[0]
+                self.assertEqual(branch.else_syntax, else_syntax)
+                self.assertEqual(branch.selected_branch, choice)
+                self.assertEqual(branch.statement_text, statement_text)
+                self.assertEqual(
+                    tuple(stage.stage for stage in implementation.generation_stages),
+                    (
+                        "helper_expression_recognition",
+                        "generation_control_flow_pruning",
+                        "selected_body_lowering",
+                    ),
+                )
+                self.assertEqual(implementation.generation_stages[1].output, branch)
+                self.assertEqual(
+                    implementation.generation_stages[2].output,
+                    implementation.statements[0],
+                )
+
     def test_plain_else_signedness_branch_pruning_is_deterministic(self) -> None:
         selection = self.selection_for("lower_generation_signedness_plain_else")
 
@@ -2748,6 +2882,22 @@ class LoweringBoundaryTests(unittest.TestCase):
                     0
                 ].variant.source.declaration.source_span.location,
             ),
+        )
+        self.assertEqual(
+            tuple(stage.stage for stage in implementation.generation_stages),
+            (
+                "helper_expression_recognition",
+                "generation_control_flow_pruning",
+                "selected_body_lowering",
+            ),
+        )
+        self.assertEqual(
+            implementation.generation_stages[1].output,
+            implementation.generation_branches[0],
+        )
+        self.assertEqual(
+            implementation.generation_stages[2].output,
+            implementation.statements[0],
         )
 
     def test_generation_branch_pruning_is_deterministic(self) -> None:

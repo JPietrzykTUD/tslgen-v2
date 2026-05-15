@@ -40,11 +40,30 @@ type GenerationTypeRefKind = Literal[
 ]
 type GenerationValueKind = Literal["type.size_bytes", "type.size_bits"]
 type GenerationPredicateKind = Literal["type.size_bytes.equals"]
+type GenerationRecognitionKind = Literal[
+    "generation.value",
+    "generation.predicate",
+    "generation.control_flow",
+]
+type GenerationLoweringStageName = Literal[
+    "helper_expression_recognition",
+    "typed_generation_value",
+    "typed_generation_predicate",
+    "generation_control_flow_pruning",
+    "selected_body_lowering",
+]
 type TsilBinaryOperator = Literal["+"]
 type TsilExpression = (
     TsilParameterReference | TsilBinaryExpression | TsilIntrinsicComposeExpression
 )
 type TsilStatement = TsilReturnStatement
+type GenerationLoweringStageOutput = (
+    GenerationExpressionRecognition
+    | GenerationValue
+    | GenerationPredicate
+    | PrunedGenerationBranch
+    | TsilStatement
+)
 
 _GENERATION_CONDITION_MARKER = "if<generation>"
 _GENERATION_HELPER_MARKERS = (
@@ -397,6 +416,50 @@ class GenerationPredicate:
 
 
 @dataclass(frozen=True, slots=True)
+class GenerationExpressionRecognition:
+    kind: GenerationRecognitionKind
+    source_text: str
+
+    def __post_init__(self) -> None:
+        if not self.source_text.strip():
+            raise ValueError("generation recognition source text must be non-empty")
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return (self.kind, self.source_text)
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationLoweringStage:
+    stage: GenerationLoweringStageName
+    output: GenerationLoweringStageOutput
+
+    def __post_init__(self) -> None:
+        expected: tuple[type[object], ...]
+        if self.stage == "helper_expression_recognition":
+            expected = (GenerationExpressionRecognition,)
+        elif self.stage == "typed_generation_value":
+            expected = (GenerationValue,)
+        elif self.stage == "typed_generation_predicate":
+            expected = (GenerationPredicate,)
+        elif self.stage == "generation_control_flow_pruning":
+            expected = (PrunedGenerationBranch,)
+        elif self.stage == "selected_body_lowering":
+            expected = (TsilReturnStatement,)
+        else:
+            raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
+        if not isinstance(self.output, expected):
+            raise TypeError(
+                f"{self.stage} stage requires output type "
+                f"{', '.join(item.__name__ for item in expected)}"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (self.stage, self.output.key)
+
+
+@dataclass(frozen=True, slots=True)
 class LoweredImplementation:
     candidate_id: str
     status: LoweringStatus
@@ -405,6 +468,7 @@ class LoweredImplementation:
     generation_type_refs: tuple[GenerationTypeRef, ...] = ()
     generation_values: tuple[GenerationValue, ...] = ()
     generation_predicates: tuple[GenerationPredicate, ...] = ()
+    generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.candidate_id:
@@ -430,6 +494,11 @@ class LoweredImplementation:
             "generation_predicates",
             tuple(self.generation_predicates),
         )
+        object.__setattr__(
+            self,
+            "generation_stages",
+            tuple(self.generation_stages),
+        )
 
     @property
     def key(self) -> tuple[object, ...]:
@@ -441,6 +510,7 @@ class LoweredImplementation:
             tuple(type_ref.key for type_ref in self.generation_type_refs),
             tuple(value.key for value in self.generation_values),
             tuple(predicate.key for predicate in self.generation_predicates),
+            tuple(stage.key for stage in self.generation_stages),
         )
 
 
@@ -610,15 +680,81 @@ def resolve_generation_predicate_query(
         if location is not None
         else generation_context.implementation_source_location
     )
+    staged = _resolve_generation_predicate_query_staged(
+        query_text,
+        generation_context,
+        selected_candidate_type_tag=selected_candidate_type_tag,
+        location=diagnostic_location,
+    )
+    if not staged.is_ok:
+        return Result.failure(staged.diagnostics)
+    return Result.ok(staged.unwrap().predicate)
+
+
+@dataclass(frozen=True, slots=True)
+class _StagedGenerationPredicate:
+    predicate: GenerationPredicate
+    generation_values: tuple[GenerationValue, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "generation_values", tuple(self.generation_values))
+
+
+def _recognition_stage(
+    kind: GenerationRecognitionKind,
+    source_text: str,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="helper_expression_recognition",
+        output=GenerationExpressionRecognition(
+            kind=kind,
+            source_text=source_text.strip(),
+        ),
+    )
+
+
+def _generation_value_stage(value: GenerationValue) -> GenerationLoweringStage:
+    return GenerationLoweringStage(stage="typed_generation_value", output=value)
+
+
+def _generation_predicate_stage(
+    predicate: GenerationPredicate,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="typed_generation_predicate",
+        output=predicate,
+    )
+
+
+def _generation_control_flow_stage(
+    branch: PrunedGenerationBranch,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="generation_control_flow_pruning",
+        output=branch,
+    )
+
+
+def _selected_body_stage(statement: TsilStatement) -> GenerationLoweringStage:
+    return GenerationLoweringStage(stage="selected_body_lowering", output=statement)
+
+
+def _resolve_generation_predicate_query_staged(
+    query_text: str,
+    context: GenerationContext,
+    *,
+    selected_candidate_type_tag: str | None,
+    location: SourceLocation | None,
+) -> Result[_StagedGenerationPredicate]:
     query = query_text.strip()
-    parsed = _parse_generation_value_predicate_expression(query, diagnostic_location)
+    parsed = _parse_generation_value_predicate_expression(query, location)
     if not parsed.is_ok:
         return Result.failure(parsed.diagnostics)
 
     expression = parsed.unwrap()
     if not expression.left_operand or not expression.right_operand:
         return Result.failure(
-            (_malformed_generation_predicate_diagnostic(query, diagnostic_location),)
+            (_malformed_generation_predicate_diagnostic(query, location),)
         )
     if expression.operator != "==":
         return Result.failure(
@@ -626,7 +762,7 @@ def resolve_generation_predicate_query(
                 _unsupported_generation_predicate_operator_diagnostic(
                     query,
                     expression.operator,
-                    diagnostic_location,
+                    location,
                 ),
             )
         )
@@ -636,7 +772,7 @@ def resolve_generation_predicate_query(
                 _unsupported_generation_predicate_operand_diagnostic(
                     query,
                     expression.left_operand,
-                    diagnostic_location,
+                    location,
                 ),
             )
         )
@@ -646,19 +782,19 @@ def resolve_generation_predicate_query(
                 _unsupported_generation_predicate_literal_diagnostic(
                     query,
                     expression.right_operand,
-                    diagnostic_location,
+                    location,
                 ),
             )
         )
 
-    inner = _generation_value_query_inner(expression.left_operand, diagnostic_location)
+    inner = _generation_value_query_inner(expression.left_operand, location)
     if not inner.is_ok:
         return Result.failure(
             (
                 _unsupported_generation_predicate_operand_diagnostic(
                     query,
                     expression.left_operand,
-                    diagnostic_location,
+                    location,
                 ),
             )
         )
@@ -669,16 +805,16 @@ def resolve_generation_predicate_query(
                 _unsupported_generation_predicate_operand_diagnostic(
                     query,
                     expression.left_operand,
-                    diagnostic_location,
+                    location,
                 ),
             )
         )
     size_bytes = _generation_value_from_inner(
         inner_text,
         expression.left_operand,
-        generation_context,
+        context,
         selected_candidate_type_tag=selected_candidate_type_tag,
-        location=diagnostic_location,
+        location=location,
     )
     if not size_bytes.is_ok:
         return Result.failure(size_bytes.diagnostics)
@@ -690,17 +826,20 @@ def resolve_generation_predicate_query(
                 _unsupported_generation_predicate_operand_diagnostic(
                     query,
                     expression.left_operand,
-                    diagnostic_location,
+                    location,
                 ),
             )
         )
     literal = int(expression.right_operand)
     return Result.ok(
-        GenerationPredicate(
-            kind="type.size_bytes.equals",
-            literal=literal,
-            value=value.value == literal,
-            type_tag=value.type_tag,
+        _StagedGenerationPredicate(
+            predicate=GenerationPredicate(
+                kind="type.size_bytes.equals",
+                literal=literal,
+                value=value.value == literal,
+                type_tag=value.type_tag,
+            ),
+            generation_values=(value,),
         )
     )
 
@@ -762,11 +901,20 @@ def _lower_input(
     if generation_predicate is not None:
         if not generation_predicate.is_ok:
             return Result.failure(generation_predicate.diagnostics)
+        staged_predicate = generation_predicate.unwrap()
         return Result.ok(
             LoweredImplementation(
                 candidate_id=item.candidate_id,
                 status="lowered",
-                generation_predicates=(generation_predicate.unwrap(),),
+                generation_predicates=(staged_predicate.predicate,),
+                generation_stages=(
+                    _recognition_stage("generation.predicate", text),
+                    *(
+                        _generation_value_stage(value)
+                        for value in staged_predicate.generation_values
+                    ),
+                    _generation_predicate_stage(staged_predicate.predicate),
+                ),
             )
         )
 
@@ -774,15 +922,21 @@ def _lower_input(
     if generation_value is not None:
         if not generation_value.is_ok:
             return Result.failure(generation_value.diagnostics)
+        value = generation_value.unwrap()
         return Result.ok(
             LoweredImplementation(
                 candidate_id=item.candidate_id,
                 status="lowered",
-                generation_values=(generation_value.unwrap(),),
+                generation_values=(value,),
+                generation_stages=(
+                    _recognition_stage("generation.value", text),
+                    _generation_value_stage(value),
+                ),
             )
         )
 
     generation_branches: tuple[PrunedGenerationBranch, ...] = ()
+    generation_stages: tuple[GenerationLoweringStage, ...] = ()
     if item.payload.has_generation_condition:
         if _GENERATION_CONDITION_MARKER not in text:
             return Result.failure((_unresolved_selected_branch_diagnostic(item, text),))
@@ -792,19 +946,28 @@ def _lower_input(
         branch = pruned.unwrap()
         text = branch.statement_text
         generation_branches = (branch,)
+        generation_stages = (
+            _recognition_stage("generation.control_flow", item.payload.text or text),
+            _generation_control_flow_stage(branch),
+        )
         if _has_generation_helper(text):
             return Result.failure((_unresolved_selected_branch_diagnostic(item, text),))
 
     statement = _mini_return_statement(item, text)
     if not statement.is_ok:
         return Result.failure(statement.diagnostics)
+    lowered_statement = statement.unwrap()
 
     return Result.ok(
         LoweredImplementation(
             candidate_id=item.candidate_id,
             status="lowered",
-            statements=(statement.unwrap(),),
+            statements=(lowered_statement,),
             generation_branches=generation_branches,
+            generation_stages=(
+                *generation_stages,
+                _selected_body_stage(lowered_statement),
+            ),
         )
     )
 
@@ -837,7 +1000,7 @@ def _lower_generation_predicate_query_payload(
     item: LoweringInput,
     request: LoweringRequest,
     text: str,
-) -> Result[GenerationPredicate] | None:
+) -> Result[_StagedGenerationPredicate] | None:
     if _GENERATION_VALUE_MARKER not in text:
         return None
     stripped = text.strip()
@@ -851,7 +1014,7 @@ def _lower_generation_predicate_query_payload(
         if request.generation_context.use_candidate_type_tag
         else None
     )
-    return resolve_generation_predicate_query(
+    return _resolve_generation_predicate_query_staged(
         stripped,
         context,
         selected_candidate_type_tag=selected_candidate_type_tag,

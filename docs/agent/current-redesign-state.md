@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 57 is accepted.
+Milestone 58 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -77,39 +77,43 @@ A user-requested workflow correction sharpened the M58 handoff: the generated
 M58 execution prompt must require an extendable, maintainable typed lowering
 stage contract, not a cosmetic wrapper or broad central string evaluator.
 
+The M58 execution-review loop returned `Accept With Follow-Ups` after one
+focused documentation revision.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute the Milestone 58 execution-review loop.
+Run the post-M58 planning + review prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m58-execution-review-loop-prompt.md
+docs/agent/runs/post-m58-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 58: Generation-Time Lowering Stage Pipeline Boundary Slice
+None. The workflow is in post-M58 planning; no executor milestone is active.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M57 planning update accepted by user; M58 is active for execution.
+The M58 execution-review loop returned Accept With Follow-Ups after one focused
+documentation revision.
 ```
 
 Next expected action:
 
 ```text
-Run the active M58 execution-review loop prompt. If M58 is accepted, update
-this state file, record follow-ups, and create the next concrete run prompt
-under docs/agent/runs/ without starting M59 unless a later planning pass
-accepts it.
+Run the active post-M58 planning + review prompt. Focus on lowering, select at
+most one next numbered milestone or explicitly defer, and do not implement
+code. If planning is accepted internally but requires human acceptance, create
+the appropriate post-M58 acceptance finalization prompt.
 ```
 
 Accepted planning prompt:
@@ -286,10 +290,16 @@ Accepted post-M57 acceptance finalization prompt:
 docs/agent/runs/post-m57-acceptance-finalization-prompt.md
 ```
 
-Active M58 execution-review loop prompt:
+Accepted M58 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m58-execution-review-loop-prompt.md
+```
+
+Active post-M58 planning prompt:
+
+```text
+docs/agent/runs/post-m58-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -746,6 +756,36 @@ rendering, generated output, generated test sources, CLI/reporting/writer
 behavior, Rust, compiler execution, broad TSIL parsing, or runtime dependency
 on `frozen/`.
 
+## Accepted Milestone 58
+
+The Milestone 58 execution-review loop accepted with non-blocking follow-ups
+after one focused documentation revision:
+
+```text
+Milestone 58: Generation-Time Lowering Stage Pipeline Boundary Slice
+```
+
+The slice is generation-time semantic lowering stage-boundary work only. It
+adds an explicit typed staged contract for accepted lowering outputs:
+helper/expression recognition, typed generation values, typed generation
+predicates, generation control-flow pruning, and selected-body lowering.
+
+M58 exposes this contract through typed stage records on lowered
+implementations while preserving the accepted observable fields for M55
+`GenerationValue(kind="type.size_bytes")`, M56
+`GenerationValue(kind="type.size_bits")`, M57
+`GenerationPredicate(kind="type.size_bytes.equals")`, and M42/M48/M51 branch
+pruning. Future branch-chain pruning should consume typed predicate/stage
+results without backend/rendering changes or raw helper re-evaluation.
+
+M58 adds no new generation-time helper semantics, arithmetic/comparison
+semantics, size-byte branch-chain pruning, `else if<generation>` support,
+no-match provenance, selected branch body handoff, direct `intrin<...>` / SVE
+body lowering, vector/register metadata, backend translation expansion,
+rendering, generated output, generated test sources, CLI/reporting/writer
+behavior, Rust, compiler execution, broad TSIL parsing, or runtime dependency
+on `frozen/`.
+
 ## Known Follow-Ups
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
@@ -844,20 +884,30 @@ on `frozen/`.
   that M57 predicate lowering is accepted.
 - Post-M56 staged-lowering planning note: the intended value -> predicate ->
   control-flow -> selected-body lowering path remains the guiding sequence.
-  Post-M57 planning has selected M58 for human acceptance; M59/M60 remain draft
-  candidates only.
+  M58 accepted the stage-boundary contract; M59/M60 remain draft candidates
+  only until a later planning pass selects one.
 - M57 review follow-up: keep the private top-level generation binary scanner
   narrow. It may recognize unsupported operators only to reject them and must
   not become a general comparison parser without a selected milestone.
 - M57 evidence/test follow-up: add explicit unsupported-tag predicate coverage
   for `bword` and `fdqword`, matching the cited group evidence in
   `tsldata/detail/types.tsl:20-26`.
+- M58 boundary follow-up: a future M59 branch-chain slice must consume typed
+  `GenerationValue` / `GenerationPredicate` stage outputs, not the raw
+  `GenerationExpressionRecognition.source_text` provenance.
+- M58 boundary follow-up: future opaque selected-body handoff should introduce
+  its own typed body record rather than stretching the current
+  `selected_body_lowering` stage beyond its accepted `TsilReturnStatement`
+  output.
+- M58 extensibility follow-up: if M59 needs staged predicate resolution outside
+  `_lower_input`, refine a reusable typed staged-predicate result instead of
+  duplicating the private stage assembly.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the M58
-execution-review loop. M59/M60 remain draft planning candidates only and must
-not be started unless a later planning pass accepts one of them.
+No stop condition is active. The workflow proceeds with the post-M58
+planning + review prompt. M59/M60 remain draft planning candidates
+only and must not be started unless a later planning pass accepts one of them.
 
 ## Validation Expectations
 

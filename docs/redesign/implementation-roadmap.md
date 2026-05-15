@@ -5305,8 +5305,8 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance. Do not implement until this planning result is
-accepted.
+Implemented and under execution review. Do not broaden this slice during
+review.
 
 Goal:
 
@@ -5380,6 +5380,10 @@ Expected outputs:
 - A typed staged-lowering contract or equivalent explicit stage records that
   make accepted generation values and predicates available to later
   control-flow pruning without backend/renderers evaluating helpers.
+- The concrete M58 implementation exposes this contract as deterministic typed
+  stage records on lowered implementations: helper/expression recognition,
+  typed generation values, typed generation predicates, generation control-flow
+  pruning, and selected-body lowering.
 - A maintainable extension path for future lowering stages, especially M59
   branch-chain pruning, without concentrating future behavior in one broad
   central string-matching or `if`/`elif` evaluator.
@@ -5457,9 +5461,9 @@ Dependencies on prior milestones:
 This path is recorded now because the post-M56 planning discussion identified a
 clear architectural direction: generation-time lowering should proceed through
 small typed stages rather than repeatedly recognizing entire surrounding
-strings. M58 is now selected for human acceptance. The following milestones
-remain draft candidates and must still be reviewed and accepted one at a time
-before execution.
+strings. With M58 implemented and under execution review, the following
+milestones remain draft candidates and must still be reviewed and accepted one
+at a time before execution.
 
 ### Draft Milestone 59: Size-Byte Equality Generation Branch-Chain Pruning Slice
 

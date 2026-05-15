@@ -739,12 +739,12 @@ Recommended first parity checks:
   operands, wildcard or group selected tags, and branch-chain/body lowering
   while preserving M42/M48/M51 and M52-M56 behavior, raw-helper rejection, and
   renderer non-evaluation.
-- Milestone 58 planning selects a generation-time lowering stage boundary.
-  Tests should prove M55/M56 value results, M57 predicate results, and
-  M42/M48/M51 branch pruning are unchanged while accepted values and predicates
-  are visible through the staged contract. Tests should continue proving raw
-  helper rejection, renderer non-evaluation, deterministic stage output, and no
-  M57 size-byte branch-chain pruning.
+- Milestone 58 tests cover the generation-time lowering stage boundary. They
+  prove M55/M56 value results, M57 predicate results, and M42/M48/M51 branch
+  pruning are unchanged while accepted values and predicates are visible
+  through the staged contract. Tests continue proving raw helper rejection,
+  renderer non-evaluation, deterministic stage output, and no M57 size-byte
+  branch-chain pruning.
 
 Deferred parity checks:
 

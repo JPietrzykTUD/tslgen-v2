@@ -3,6 +3,8 @@
 from tslgen.lowering.boundary import (
     ClassifiedPayload,
     GenerationContext,
+    GenerationExpressionRecognition,
+    GenerationLoweringStage,
     GenerationPredicate,
     GenerationTypeRef,
     GenerationValue,
@@ -36,6 +38,8 @@ from tslgen.lowering.translations import (
 __all__ = [
     "ClassifiedPayload",
     "GenerationContext",
+    "GenerationExpressionRecognition",
+    "GenerationLoweringStage",
     "GenerationPredicate",
     "GenerationTypeRef",
     "GenerationValue",

@@ -411,6 +411,21 @@ separate traversal immediately, but each milestone should expose typed outputs
 that the next step can consume without reparsing raw helper text in backend
 translation or renderers.
 
+Milestone 58 makes that contract concrete for the accepted M55-M57 path by
+recording deterministic generation-lowering stage outputs on lowered
+implementations. The stage records expose helper/expression recognition,
+accepted typed generation values, accepted typed generation predicates,
+generation control-flow pruning, and selected-body lowering as typed values.
+For the M57 size-byte equality predicates, the staged output carries the
+underlying M55 `GenerationValue(kind="type.size_bytes")` and the resulting
+`GenerationPredicate(kind="type.size_bytes.equals")`, while the legacy
+`generation_values` and `generation_predicates` observable fields remain
+unchanged. A future M59 branch-chain pruning slice can therefore consume the
+typed predicate stage output directly instead of reparsing the raw
+`value<generation>(...) == ...` helper text. M58 does not add branch-chain
+pruning, new helper forms, new comparison or arithmetic semantics, selected body
+handoff policy, backend translation, rendering, or generated output.
+
 ## Explicit Deferrals
 
 Deferred beyond the accepted M43-M57 slices:

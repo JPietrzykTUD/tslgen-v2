@@ -411,9 +411,14 @@ results. Branch-chain pruning, `else if<generation>`, selected-arm/no-match
 provenance, branch bodies, direct intrinsics, SVE array semantics, vector
 metadata, backend translation, rendering, and output remain outside Stage 8's
 M57 work.
-The selected post-M57 plan, Milestone 58, should make Stage 8's
-value -> predicate -> control-flow contract explicit without changing accepted
-M42/M48/M51/M55/M56/M57 behavior or adding new helper semantics.
+Milestone 58 makes Stage 8's value -> predicate -> control-flow contract
+explicit without changing accepted M42/M48/M51/M55/M56/M57 behavior or adding
+new helper semantics. Lowered implementations now expose deterministic typed
+generation-stage records for helper/expression recognition, accepted generation
+values, accepted generation predicates, generation control-flow pruning, and
+selected-body lowering. Future branch-chain pruning can consume the typed M57
+predicate stage output directly; backend translation and rendering still do not
+evaluate generation helpers.
 
 ## Stage 9: Backend Planning
 
