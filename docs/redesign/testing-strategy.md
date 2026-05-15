@@ -720,12 +720,12 @@ Recommended first parity checks:
   remain non-evaluating. No arithmetic/comparison lowering, branch pruning from
   size values, backend translation expansion, rendering, generated output,
   Rust, CLI/reporting, or compiler execution is part of this check.
-- Milestone 56 planning selects only the exact
+- Milestone 56 tests cover only the exact
   `value<generation>(type::size_bytes(type<generation>(base::in))) * 8`
-  arithmetic expression. If accepted, tests should prove it lowers to
-  deterministic typed integer bit-width values for selected scalar tags:
+  arithmetic expression. They prove it lowers to deterministic typed integer
+  bit-width values for selected scalar tags:
   `si8`/`ui8 -> 8`, `si16`/`ui16 -> 16`, `si32`/`ui32`/`f32 -> 32`, and
-  `si64`/`ui64`/`f64 -> 64`. Tests should reject reversed operands, unsupported
+  `si64`/`ui64`/`f64 -> 64`. Tests reject reversed operands, unsupported
   literals/operators, nested arithmetic, comparisons, branch pruning, and
   surrounding body lowering while preserving M52-M55 behavior, raw-helper
   rejection, and renderer non-evaluation.

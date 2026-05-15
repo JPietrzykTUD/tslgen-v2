@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 55 is accepted.
+Milestone 56 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -56,38 +56,41 @@ focused revision.
 Post-M55 planning is accepted. It selected Milestone 56, and internal review
 returned `Accept With Follow-Ups` after local planning-doc corrections.
 
+The M56 execution-review loop returned `Accept With Follow-Ups` with no
+blocking implementation issues and no focused revision.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run the Milestone 56 execution-review loop.
+Run the post-M56 planning-plus-review prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m56-execution-review-loop-prompt.md
+docs/agent/runs/post-m56-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 56: Size-Bytes Times-Eight Generation Value Arithmetic Slice
+None. Milestone 57 has not been selected. The active prompt is a docs-only
+post-M56 planning pass.
 ```
 
-Planning review verdict:
+Latest review verdict:
 
 ```text
-Accept With Follow-Ups
+M56 execution-review loop: Accept With Follow-Ups
 ```
 
 Next expected action:
 
 ```text
-Execute the active M56 execution-review loop prompt. If internal review accepts
-M56, create the next concrete prompt under docs/agent/runs/ without starting
-Milestone 57.
+Execute the active post-M56 planning-plus-review prompt. Do not implement code
+unless a later accepted planning result explicitly selects an executor task.
 ```
 
 Accepted planning prompt:
@@ -228,10 +231,16 @@ Accepted post-M55 acceptance finalization prompt:
 docs/agent/runs/post-m55-acceptance-finalization-prompt.md
 ```
 
-Active M56 execution-review loop prompt:
+Accepted M56 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m56-execution-review-loop-prompt.md
+```
+
+Active post-M56 planning prompt:
+
+```text
+docs/agent/runs/post-m56-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -585,6 +594,31 @@ translation expansion, rendering, generated output, generated test sources,
 CLI/reporting/writer behavior, Rust, compiler execution, generated-test
 execution, broad TSIL parsing, or runtime dependency on `frozen/`.
 
+## Accepted Milestone 56
+
+The Milestone 56 execution-review loop accepted with non-blocking follow-ups:
+
+```text
+Milestone 56: Size-Bytes Times-Eight Generation Value Arithmetic Slice
+```
+
+The slice is generation-time semantic lowering only. It resolves exactly
+`value<generation>(type::size_bytes(type<generation>(base::in))) * 8` to typed
+`GenerationValue(kind="type.size_bits", value=<bits>, type_tag=<tag>)` values
+by reusing the accepted M55 `type.size_bytes` value and explicit scalar
+size-byte rules. The accepted bit values are `si8`/`ui8 -> 8`,
+`si16`/`ui16 -> 16`, `si32`/`ui32`/`f32 -> 32`, and
+`si64`/`ui64`/`f64 -> 64`.
+
+M56 preserves M55 context precedence and the M52-M55 generation-time lowering
+boundaries. It adds no general arithmetic engine, operators beyond the exact
+selected `* 8` form, reversed operands, arbitrary literals, comparisons,
+branch pruning, `else if<generation>`, branch-chain syntax, surrounding body
+lowering, backend translation, rendering, generated output, generated test
+sources, CLI/reporting/writer behavior, Rust, compiler execution,
+generated-test execution, vector/register metadata, broad TSIL parsing, or
+runtime dependency on `frozen/`.
+
 ## Known Follow-Ups
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
@@ -666,13 +700,24 @@ execution, broad TSIL parsing, or runtime dependency on `frozen/`.
   `== 2`, `== 4`, and `== 8` remains a strong future lowering candidate, but
   it is deferred from M56 because it also opens `else if<generation>` branch
   chain syntax and selected-branch pruning policy.
+- M56 docs/evidence follow-up: normalize remaining pre-acceptance wording in
+  `docs/redesign/implementation-roadmap.md`,
+  `docs/redesign/behavioral-spec.md`,
+  `docs/redesign/frozen-parity-baselines.md`, and related
+  `docs/redesign/open-questions.md` M56 mentions.
+- M56 docs follow-up: add or update the helper inventory entry for the exact
+  M56 `type.size_bytes * 8` bit-width expression.
+- M56 review follow-up: consider tightening the arithmetic probe so a
+  non-arithmetic value query with an unmatched closing parenthesis keeps M55
+  malformed-query diagnostics separate from M56 arithmetic diagnostics.
+- M56 test follow-up: add an explicit chained/mixed arithmetic rejection case,
+  such as a `* 8 * 2` expression after the selected size-bytes value query.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the active M56
-execution-review loop prompt. Do not start Milestone 57 until M56 has been
-executed, reviewed, accepted, and a later planning prompt has selected the next
-milestone.
+No stop condition is active. The workflow proceeds with the active post-M56
+planning-plus-review prompt. Do not start Milestone 57 until that planning
+prompt has selected a next milestone and the selected plan has been accepted.
 
 ## Validation Expectations
 

@@ -374,8 +374,7 @@ integer generation value, not rendered text. Float tags are selected only for
 this exact size-bytes query; M55 does not broaden standalone `base.in` or
 signed/unsigned companion behavior to floats. Group and wildcard selectors
 remain unsupported as selected scalar tags.
-The selected post-M55 plan, Milestone 56, extends this lowering boundary only
-for the exact expression
+Milestone 56 extends this lowering boundary only for the exact expression
 `value<generation>(type::size_bytes(type<generation>(base::in))) * 8`,
 producing typed scalar bit-width generation values. It does not add general
 arithmetic, value comparisons, branch pruning, `else if<generation>`, body

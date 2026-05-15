@@ -333,6 +333,24 @@ prim<v:=(v,v)> lower_generation_size_bytes_override(left, right):
         implementation:
           tsil "value<generation>(type::size_bytes(type<generation>(base::in)))"
 
+prim<v:=(v,v)> lower_generation_size_bits(left, right):
+  tests []
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "value<generation>(type::size_bytes(type<generation>(base::in)))*8"
+
+prim<v:=(v,v)> lower_generation_size_bits_override(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "value<generation>(type::size_bytes(type<generation>(base::in)))*8"
+
 prim<v:=ptr>[aligned=true] lower_generation_aligned_true(ptr):
   tests []
   impls:
@@ -575,6 +593,10 @@ SCALAR_SIZE_BYTES_BY_TAG = {
     "si64": 8,
     "ui64": 8,
     "f64": 8,
+}
+SCALAR_SIZE_BITS_BY_TAG = {
+    type_tag: size_bytes * 8
+    for type_tag, size_bytes in SCALAR_SIZE_BYTES_BY_TAG.items()
 }
 
 
@@ -1441,6 +1463,355 @@ class LoweringBoundaryTests(unittest.TestCase):
 
     def test_size_bytes_generation_value_query_reports_unsupported_tags(self) -> None:
         query = "value<generation>(type::size_bytes(type<generation>(base::in)))"
+        cases = (
+            ("ptr", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("mask", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("imask", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("?i?", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("?i64", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("si?", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("ui?", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("f?", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("arith", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("dword", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("qword", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("idqword", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("dqword", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("si128", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("mystery", "TSL-LOWER-GEN-VALUE-TAG-UNKNOWN"),
+        )
+
+        for type_tag, code in cases:
+            with self.subTest(type_tag=type_tag):
+                result = resolve_generation_value_query(
+                    query,
+                    GenerationContext(type_tag_override=type_tag),
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
+                self.assertIn(type_tag, result.diagnostics[0].message)
+
+    def test_lowers_size_bytes_times_eight_generation_value_for_selected_scalars(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_bits")
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementations = result.unwrap().implementations
+        self.assertEqual(len(implementations), len(SCALAR_SIZE_BITS_BY_TAG))
+        for implementation in implementations:
+            self.assertEqual(implementation.statements, ())
+            self.assertEqual(implementation.generation_type_refs, ())
+            self.assertEqual(len(implementation.generation_values), 1)
+            value = implementation.generation_values[0]
+            self.assertEqual(value.kind, "type.size_bits")
+            self.assertEqual(value.value, SCALAR_SIZE_BITS_BY_TAG[value.type_tag])
+
+        self.assertEqual(
+            {
+                implementation.generation_values[0].type_tag: (
+                    implementation.generation_values[0].value
+                )
+                for implementation in implementations
+            },
+            SCALAR_SIZE_BITS_BY_TAG,
+        )
+
+    def test_resolves_size_bytes_times_eight_generation_value_for_each_scalar(
+        self,
+    ) -> None:
+        query = "value<generation>(type::size_bytes(type<generation>(base::in)))*8"
+
+        for type_tag, size_bits in SCALAR_SIZE_BITS_BY_TAG.items():
+            with self.subTest(type_tag=type_tag):
+                result = resolve_generation_value_query(
+                    query,
+                    GenerationContext(type_tag_override=type_tag),
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                self.assertEqual(
+                    result.unwrap(),
+                    GenerationValue(
+                        kind="type.size_bits",
+                        value=size_bits,
+                        type_tag=type_tag,
+                    ),
+                )
+
+    def test_size_bits_expression_accepts_floats_without_broadening_type_queries(
+        self,
+    ) -> None:
+        query = "value<generation>(type::size_bytes(type<generation>(base::in))) * 8"
+
+        for type_tag, size_bits in (("f32", 32), ("f64", 64)):
+            with self.subTest(type_tag=type_tag):
+                value = resolve_generation_value_query(
+                    query,
+                    GenerationContext(type_tag_override=type_tag),
+                )
+                base_type = resolve_generation_type_query(
+                    "type<generation>(base::in)",
+                    GenerationContext(type_tag_override=type_tag),
+                )
+                signed_type = resolve_generation_type_query(
+                    "type<generation>(base::signed_of(type<generation>(base::in)))",
+                    GenerationContext(type_tag_override=type_tag),
+                )
+
+                self.assertTrue(value.is_ok, value.diagnostics)
+                self.assertEqual(value.unwrap().value, size_bits)
+                self.assertEqual(value.unwrap().kind, "type.size_bits")
+                self.assertFalse(base_type.is_ok)
+                assert_diagnostic(
+                    self,
+                    base_type.diagnostics[0],
+                    code="TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED",
+                    severity="error",
+                )
+                self.assertFalse(signed_type.is_ok)
+                assert_diagnostic(
+                    self,
+                    signed_type.diagnostics[0],
+                    code="TSL-LOWER-GEN-TYPE-NON-INTEGER",
+                    severity="error",
+                )
+
+    def test_size_bits_expression_uses_context_precedence(self) -> None:
+        selection = self.selection_for("lower_generation_size_bits_override")
+        query = "value<generation>(type::size_bytes(type<generation>(base::in))) * 8"
+
+        override_result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(
+                    selected_type_tag="ui16",
+                    type_tag_override="f64",
+                ),
+            ),
+        )
+        selected_context_result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(selected_type_tag="ui16"),
+            ),
+        )
+        candidate_default_result = lower_candidates(selection)
+        direct_candidate_result = resolve_generation_value_query(
+            query,
+            GenerationContext(),
+            selected_candidate_type_tag="si8",
+        )
+
+        self.assertTrue(override_result.is_ok, override_result.diagnostics)
+        self.assertEqual(
+            override_result.unwrap().implementations[0].generation_values,
+            (GenerationValue(kind="type.size_bits", value=64, type_tag="f64"),),
+        )
+        self.assertTrue(
+            selected_context_result.is_ok,
+            selected_context_result.diagnostics,
+        )
+        self.assertEqual(
+            selected_context_result.unwrap().implementations[0].generation_values,
+            (GenerationValue(kind="type.size_bits", value=16, type_tag="ui16"),),
+        )
+        self.assertTrue(
+            candidate_default_result.is_ok,
+            candidate_default_result.diagnostics,
+        )
+        self.assertEqual(
+            candidate_default_result.unwrap().implementations[0].generation_values,
+            (GenerationValue(kind="type.size_bits", value=32, type_tag="si32"),),
+        )
+        self.assertTrue(direct_candidate_result.is_ok, direct_candidate_result.diagnostics)
+        self.assertEqual(
+            direct_candidate_result.unwrap(),
+            GenerationValue(kind="type.size_bits", value=8, type_tag="si8"),
+        )
+
+    def test_size_bits_expression_reports_missing_type_context(self) -> None:
+        selection = self.selection_for("lower_generation_size_bits_override")
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(use_candidate_type_tag=False),
+            ),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-VALUE-CONTEXT-MISSING",
+            severity="error",
+        )
+
+    def test_size_bits_expression_uses_explicit_scalar_size_rules(self) -> None:
+        catalog = catalog_with_primitives(LOWERING_FIXTURE)
+        si32_size_rules = build_scalar_size_bytes_generation_rule_set(
+            tuple(group for group in catalog.type_groups if group.name == "si32"),
+            selected_type_tags=("si32",),
+        )
+        if not si32_size_rules.is_ok:
+            raise AssertionError(si32_size_rules.diagnostics)
+        selection = self.selection_for("lower_generation_size_bits_override")
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(
+                    type_tag_override="f64",
+                    scalar_size_bytes_generation_rules=si32_size_rules.unwrap(),
+                ),
+            ),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED",
+            severity="error",
+        )
+        self.assertIn("'si32'", result.diagnostics[0].message)
+        self.assertIn("'f64'", result.diagnostics[0].message)
+
+    def test_size_bits_expression_is_deterministic(self) -> None:
+        selection = self.selection_for("lower_generation_size_bits")
+
+        first = lower_candidates(selection)
+        second = lower_candidates(selection)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+
+    def test_size_bits_expression_reports_malformed_arithmetic(self) -> None:
+        result = resolve_generation_value_query(
+            "value<generation>(type::size_bytes(type<generation>(base::in))) *",
+            GenerationContext(type_tag_override="si32"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-VALUE-ARITH-MALFORMED",
+            severity="error",
+        )
+
+    def test_size_bits_expression_reports_unsupported_operators(self) -> None:
+        left = "value<generation>(type::size_bytes(type<generation>(base::in)))"
+        cases = (
+            f"{left} / 8",
+            f"{left} + 8",
+            f"{left} - 8",
+            f"{left} % 8",
+            f"{left} == 8",
+        )
+
+        for query in cases:
+            with self.subTest(query=query):
+                result = resolve_generation_value_query(
+                    query,
+                    GenerationContext(type_tag_override="si32"),
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code="TSL-LOWER-GEN-VALUE-ARITH-OPERATOR",
+                    severity="error",
+                )
+
+    def test_size_bits_expression_reports_unsupported_literals(self) -> None:
+        left = "value<generation>(type::size_bytes(type<generation>(base::in)))"
+        cases = (
+            f"{left} * 4",
+            f"{left} * 16",
+            f"{left} * (8)",
+            f"{left} * value<generation>(type::size_bytes(type<generation>(base::in)))",
+        )
+
+        for query in cases:
+            with self.subTest(query=query):
+                result = resolve_generation_value_query(
+                    query,
+                    GenerationContext(type_tag_override="si32"),
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code="TSL-LOWER-GEN-VALUE-ARITH-LITERAL",
+                    severity="error",
+                )
+
+    def test_size_bits_expression_reports_unsupported_operands(self) -> None:
+        value_query = "value<generation>(type::size_bytes(type<generation>(base::in)))"
+        cases = (
+            f"8 * {value_query}",
+            f"({value_query}) * 8",
+        )
+
+        for query in cases:
+            with self.subTest(query=query):
+                result = resolve_generation_value_query(
+                    query,
+                    GenerationContext(type_tag_override="si32"),
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code="TSL-LOWER-GEN-VALUE-ARITH-OPERAND",
+                    severity="error",
+                )
+
+    def test_size_bits_expression_reports_unsupported_nested_operand(self) -> None:
+        result = resolve_generation_value_query(
+            "value<generation>(type::size_bytes("
+            "type<generation>(base::signed_of(type<generation>(base::in))))) * 8",
+            GenerationContext(type_tag_override="si32"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-VALUE-NESTED-UNSUPPORTED",
+            severity="error",
+        )
+
+    def test_size_bits_expression_reports_unsupported_value_forms(self) -> None:
+        result = resolve_generation_value_query(
+            "value<generation>(vector::length) * 8",
+            GenerationContext(type_tag_override="si32"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-VALUE-UNSUPPORTED",
+            severity="error",
+        )
+
+    def test_size_bits_expression_reports_unsupported_tags(self) -> None:
+        query = "value<generation>(type::size_bytes(type<generation>(base::in))) * 8"
         cases = (
             ("ptr", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
             ("mask", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),

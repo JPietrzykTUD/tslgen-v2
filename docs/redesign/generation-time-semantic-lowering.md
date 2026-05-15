@@ -334,7 +334,7 @@ The accepted post-M43 phase is numbered in the roadmap:
   typed generation integer value for explicit selected scalar tags. It does not
   broaden standalone `base.in` or signed/unsigned companion behavior to floats
   and does not lower the surrounding bodies where the helper appears.
-- The selected post-M55 plan, Milestone 56, introduces only the exact
+- Milestone 56 introduces only the exact
   `value<generation>(type::size_bytes(type<generation>(base::in))) * 8`
   arithmetic expression as a typed generation integer value for selected scalar
   bit widths. It reuses the M55 typed value and scalar size-byte rules, and
@@ -344,6 +344,10 @@ The accepted post-M43 phase is numbered in the roadmap:
 M55 typed semantic result:
 
 - `GenerationValue(kind="type.size_bytes", value=<bytes>, type_tag=<selected tag>)`
+
+M56 typed semantic result:
+
+- `GenerationValue(kind="type.size_bits", value=<bits>, type_tag=<selected tag>)`
 
 M55 diagnostics:
 
@@ -358,6 +362,13 @@ M55 diagnostics:
 - `TSL-DOMAIN-GEN-SIZE-RULE-TAG-UNKNOWN`
 - `TSL-DOMAIN-GEN-SIZE-RULE-SINGLETON-MISSING`
 - `TSL-DOMAIN-GEN-SIZE-RULE-SINGLETON-INCONSISTENT`
+
+M56 additional diagnostics:
+
+- `TSL-LOWER-GEN-VALUE-ARITH-MALFORMED`
+- `TSL-LOWER-GEN-VALUE-ARITH-OPERATOR`
+- `TSL-LOWER-GEN-VALUE-ARITH-LITERAL`
+- `TSL-LOWER-GEN-VALUE-ARITH-OPERAND`
 
 This phase does not make backend translation parse raw generation-time helper
 text and does not move suffix or type-spelling evaluation into renderers.

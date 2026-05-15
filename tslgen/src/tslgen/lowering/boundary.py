@@ -38,7 +38,7 @@ type GenerationTypeRefKind = Literal[
     "base.signed_of",
     "base.unsigned_of",
 ]
-type GenerationValueKind = Literal["type.size_bytes"]
+type GenerationValueKind = Literal["type.size_bytes", "type.size_bits"]
 type TsilBinaryOperator = Literal["+"]
 type TsilExpression = (
     TsilParameterReference | TsilBinaryExpression | TsilIntrinsicComposeExpression
@@ -547,6 +547,14 @@ def resolve_generation_value_query(
         else generation_context.implementation_source_location
     )
     query = query_text.strip()
+    size_bits = _generation_size_bits_value_expression(
+        query,
+        generation_context,
+        selected_candidate_type_tag=selected_candidate_type_tag,
+        location=diagnostic_location,
+    )
+    if size_bits is not None:
+        return size_bits
     inner = _generation_value_query_inner(query, diagnostic_location)
     if not inner.is_ok:
         return Result.failure(inner.diagnostics)
@@ -733,6 +741,13 @@ class _ParsedGenerationIf:
 class _ResolvedGenerationCondition:
     condition: TsilGenerationCondition
     value: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _ParsedGenerationValueArithmeticExpression:
+    operator: str
+    left_operand: str
+    right_operand: str
 
 
 def _prune_generation_branch(
@@ -1011,6 +1026,125 @@ def _generation_value_query_inner(
             (_malformed_generation_value_query_diagnostic(query_text, location),)
         )
     return Result.ok(query[cursor + 1:query_end].strip())
+
+
+def _generation_size_bits_value_expression(
+    query: str,
+    context: GenerationContext,
+    *,
+    selected_candidate_type_tag: str | None,
+    location: SourceLocation | None,
+) -> Result[GenerationValue] | None:
+    parsed = _parse_generation_value_arithmetic_expression(query, location)
+    if parsed is None:
+        return None
+    if not parsed.is_ok:
+        return Result.failure(parsed.diagnostics)
+
+    expression = parsed.unwrap()
+    if not expression.left_operand or not expression.right_operand:
+        return Result.failure(
+            (_malformed_generation_value_arithmetic_diagnostic(query, location),)
+        )
+    if expression.operator != "*":
+        return Result.failure(
+            (
+                _unsupported_generation_value_arithmetic_operator_diagnostic(
+                    query,
+                    expression.operator,
+                    location,
+                ),
+            )
+        )
+    if not expression.left_operand.startswith(_GENERATION_VALUE_MARKER):
+        return Result.failure(
+            (
+                _unsupported_generation_value_arithmetic_operand_diagnostic(
+                    query,
+                    expression.left_operand,
+                    location,
+                ),
+            )
+        )
+    if expression.right_operand != "8":
+        return Result.failure(
+            (
+                _unsupported_generation_value_arithmetic_literal_diagnostic(
+                    query,
+                    expression.right_operand,
+                    location,
+                ),
+            )
+        )
+
+    inner = _generation_value_query_inner(expression.left_operand, location)
+    if not inner.is_ok:
+        return Result.failure(inner.diagnostics)
+    size_bytes = _generation_value_from_inner(
+        inner.unwrap(),
+        expression.left_operand,
+        context,
+        selected_candidate_type_tag=selected_candidate_type_tag,
+        location=location,
+    )
+    if not size_bytes.is_ok:
+        return Result.failure(size_bytes.diagnostics)
+
+    value = size_bytes.unwrap()
+    if value.kind != "type.size_bytes":
+        return Result.failure(
+            (
+                _unsupported_generation_value_arithmetic_operand_diagnostic(
+                    query,
+                    expression.left_operand,
+                    location,
+                ),
+            )
+        )
+    return Result.ok(
+        GenerationValue(
+            kind="type.size_bits",
+            value=value.value * 8,
+            type_tag=value.type_tag,
+        )
+    )
+
+
+def _parse_generation_value_arithmetic_expression(
+    query: str,
+    location: SourceLocation | None,
+) -> Result[_ParsedGenerationValueArithmeticExpression] | None:
+    depth = 0
+    index = 0
+    while index < len(query):
+        character = query[index]
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth < 0:
+                return Result.failure(
+                    (_malformed_generation_value_arithmetic_diagnostic(query, location),)
+                )
+        elif depth == 0:
+            if query.startswith("==", index):
+                return Result.ok(
+                    _ParsedGenerationValueArithmeticExpression(
+                        operator="==",
+                        left_operand=query[:index].strip(),
+                        right_operand=query[index + 2:].strip(),
+                    )
+                )
+            if character in ("*", "/", "+", "-", "%"):
+                return Result.ok(
+                    _ParsedGenerationValueArithmeticExpression(
+                        operator=character,
+                        left_operand=query[:index].strip(),
+                        right_operand=query[index + 1:].strip(),
+                    )
+                )
+        index += 1
+    return None
 
 
 def _generation_value_from_inner(
@@ -1826,7 +1960,9 @@ def _unsupported_generation_value_query_diagnostic(
         "TSL-LOWER-GEN-VALUE-UNSUPPORTED",
         "generation-time value lowering supports only "
         "'value<generation>(type::size_bytes("
-        "type<generation>(base::in)))'; "
+        "type<generation>(base::in)))' and the exact "
+        "'value<generation>(type::size_bytes("
+        "type<generation>(base::in))) * 8' expression; "
         f"got {query_text!r}",
         location=location,
     )
@@ -1842,6 +1978,60 @@ def _unsupported_nested_generation_value_query_diagnostic(
         "generation-time scalar size-bytes lowering supports only nested "
         "'type<generation>(base::in)' input; got nested query "
         f"{nested_text!r} in {query_text!r}",
+        location=location,
+    )
+
+
+def _malformed_generation_value_arithmetic_diagnostic(
+    query_text: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-VALUE-ARITH-MALFORMED",
+        "generation-time scalar bit-width value arithmetic must be shaped as "
+        "'value<generation>(type::size_bytes(type<generation>(base::in))) * 8'; "
+        f"got {query_text!r}",
+        location=location,
+    )
+
+
+def _unsupported_generation_value_arithmetic_operator_diagnostic(
+    query_text: str,
+    operator: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-VALUE-ARITH-OPERATOR",
+        "generation-time scalar bit-width value arithmetic supports only the "
+        f"exact '*' operator with right literal 8; got operator {operator!r} "
+        f"in {query_text!r}",
+        location=location,
+    )
+
+
+def _unsupported_generation_value_arithmetic_literal_diagnostic(
+    query_text: str,
+    literal_text: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-VALUE-ARITH-LITERAL",
+        "generation-time scalar bit-width value arithmetic supports only the "
+        f"exact right literal '8'; got {literal_text!r} in {query_text!r}",
+        location=location,
+    )
+
+
+def _unsupported_generation_value_arithmetic_operand_diagnostic(
+    query_text: str,
+    operand_text: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-VALUE-ARITH-OPERAND",
+        "generation-time scalar bit-width value arithmetic supports only "
+        "the M55 scalar size-bytes query as the left operand; got "
+        f"{operand_text!r} in {query_text!r}",
         location=location,
     )
 

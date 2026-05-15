@@ -399,12 +399,11 @@ integer generation value for selected scalar tags only; Stage 8 still does not
 evaluate arithmetic/comparison expressions around that value, lower enclosing
 IO/array/loop/cast/call/direct-intrinsic bodies, or pass raw generation helper
 text into backend translation or renderers.
-The selected post-M55 plan, Milestone 56, reopens only the exact
-`type.size_bytes * 8` value-arithmetic expression inside Stage 8. It should
-consume the M55 typed value and produce another typed generation integer value;
-comparisons, branch pruning, `else if<generation>`, surrounding body lowering,
-backend translation, rendering, and output remain outside Stage 8's selected
-M56 work.
+Milestone 56 reopens only the exact `type.size_bytes * 8` value-arithmetic
+expression inside Stage 8. It consumes the M55 typed value and produces another
+typed generation integer value; comparisons, branch pruning,
+`else if<generation>`, surrounding body lowering, backend translation,
+rendering, and output remain outside Stage 8's M56 work.
 
 ## Stage 9: Backend Planning
 

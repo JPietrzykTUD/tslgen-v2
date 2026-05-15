@@ -1315,7 +1315,7 @@ Consequences:
   singleton tags, returns a typed integer generation value, and keeps float
   support scoped to this query instead of broadening standalone `base.in` or
   signed/unsigned companion semantics.
-- The selected post-M55 plan, Milestone 56, introduces only the exact
+- Milestone 56 introduces only the exact
   `value<generation>(type::size_bytes(type<generation>(base::in))) * 8`
   arithmetic expression as another typed generation integer value. It keeps
   general expression parsing, comparisons, branch pruning, `else if<generation>`,
