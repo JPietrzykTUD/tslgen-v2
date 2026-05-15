@@ -4946,8 +4946,7 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance. Do not implement until this planning result is
-accepted.
+Accepted by the M56 execution-review loop with `Accept With Follow-Ups`.
 
 Goal:
 
@@ -5106,3 +5105,328 @@ Review risks:
 Dependencies on prior milestones:
 
 - Milestones 4, 18, 40, 41, 42, 43, 48, 51, 52, 53, 54, and 55.
+
+## Post-M56 Planning Context
+
+Milestones 1 through 56 are accepted. Milestone 56:
+Size-Bytes Times-Eight Generation Value Arithmetic Slice completed with
+`Accept With Follow-Ups` and no focused revision.
+
+M56 introduced a typed scalar bit-width generation value while keeping
+comparisons and branch pruning out of scope. The next requested planning
+direction is still lowering-focused. User review of the first post-M56 plan
+identified that size-byte comparison evaluation should be separated from
+branch-chain pruning so lowering can proceed through smaller typed steps.
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Size-byte equality generation predicate lowering | Directly extends M55 by evaluating exact `type.size_bytes == 2`, `== 4`, and `== 8` predicates as typed boolean generation predicate results before any branch-chain policy. | Low to medium if restricted to exact predicates and typed results; high if it becomes general comparison parsing or branch pruning. | Select as revised M57. |
+| Size-byte equality generation branch-chain pruning | Needed for the SVE array branch chain after predicate lowering exists. | Medium because it combines comparison consumption, `else if<generation>` chain syntax, selected/no-match provenance, and no-final-else policy. | Defer until after M57 predicate lowering. |
+| Vector/register metadata queries | Needed for later load/store and conversion body parity. | High because evidence is coupled to vector length/alignment, language maps, loops, casts, calls, and backend requests. | Defer. |
+| Backend suffix/type-spelling expansion for 8/16/64-bit integers | Useful after M52-M56 typed lowering semantics. | Medium because it reopens M45/M46 backend translation limits and moves away from the requested lowering focus. | Defer. |
+| Direct `intrin<...>` / SVE body lowering | Appears inside the selected M57 evidence branches. | High because it touches direct backend calls, vector predicates, statement semantics, and rendering/output concerns. | Defer. |
+| M49-M56 follow-up cleanup | Several non-blocking quality follow-ups remain. | Low individually, but they do not form the next lowering milestone. | Keep recorded as follow-ups unless one becomes a selected architectural slice. |
+
+## Milestone 57: Size-Byte Equality Generation Predicate Lowering Slice
+
+Status:
+
+Selected for human acceptance. Do not implement until this planning result is
+accepted.
+
+Goal:
+
+Extend generation-time semantic lowering with exact scalar size-byte equality
+predicates over M55 scalar size-byte values:
+
+```text
+value<generation>(type::size_bytes(type<generation>(base::in))) == 2
+value<generation>(type::size_bytes(type<generation>(base::in))) == 4
+value<generation>(type::size_bytes(type<generation>(base::in))) == 8
+```
+
+M57 should produce typed predicate results only. It must not prune branch
+chains, introduce `else if<generation>` syntax, or lower any surrounding SVE
+array body or direct intrinsic branch body.
+
+Scope:
+
+- Consume M55 typed `GenerationValue(kind="type.size_bytes")` behavior and
+  explicit scalar size-byte rules.
+- Support only the exact `==` predicates where the left operand is the M55
+  size-byte value query and the right operand is one of the integer literals
+  `2`, `4`, or `8`.
+- Produce deterministic boolean predicate results for selected scalar tags:
+
+  ```text
+  si8/ui8 -> false for 2/4/8
+  si16/ui16 -> true only for 2
+  si32/ui32/f32 -> true only for 4
+  si64/ui64/f64 -> true only for 8
+  ```
+
+- Carry the result as a typed generation predicate, such as
+  `GenerationPredicate(kind="type.size_bytes.equals", literal=<int>,
+  value=<bool>, type_tag=<tag>)` or an equivalent immutable value object.
+- Preserve M55/M56 context precedence and scalar-size rule behavior.
+- Preserve backend-translation rejection of raw unresolved generation helpers
+  and renderer non-evaluation.
+
+Out of scope:
+
+- Branch pruning, `if<generation>` parsing, `else if<generation>` syntax,
+  branch-chain pruning, selected-arm/no-match provenance, final `else`, broad
+  no-final-else policy, and branch-body semantics.
+- Standalone comparison forms outside the exact selected predicates.
+- General comparison expression evaluation.
+- Operators other than the exact selected `==` predicates.
+- Literals other than `2`, `4`, and `8`.
+- Reversed comparisons such as `2 == value<generation>(...)`.
+- Nested, chained, parenthesized, bit-width, arithmetic, or mixed comparisons.
+- Lowering the SVE array body, assignments, variables, arrays, calls, casts,
+  loops, `emit_return`, `intrin<svptrue_b*>`, `intrin<svst1>`, direct
+  `intrin<...>`, `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, backend uninit values, or vector
+  predicate semantics.
+- Backend suffix/type-spelling expansion, backend type/value translation,
+  C++ or Rust rendering, generated output, generated test sources,
+  CLI/reporting, writer behavior, compiler execution, generated-test
+  execution, vector/register metadata, broad TSIL parsing, or runtime
+  dependency on `frozen/`.
+- Lowering reading files, parsing raw TSL, or querying the catalog during
+  evaluation.
+
+Required inputs:
+
+- M55 typed `GenerationValue(kind="type.size_bytes")` behavior.
+- M55 scalar size-byte rules from typed catalog/type-group data.
+- M54 catalog-to-lowering request wiring for size-byte rules.
+- Existing `GenerationContext` and `LoweringRequest` behavior.
+- Existing M52-M56 lowering behavior and tests.
+
+Expected outputs:
+
+- A typed boolean predicate result for each exact selected size-byte equality
+  predicate.
+- Structured diagnostics for malformed predicate syntax, unsupported
+  operators, unsupported literals, reversed operands, unsupported nested or
+  mixed operands, missing type context, unsupported or unknown tags, and
+  malformed or incomplete explicit scalar size rule data reused from M55.
+- Existing M42/M48/M51/M52/M53/M54/M55/M56 lowering results unchanged.
+
+Parity criterion:
+
+For the exact selected predicates, M57 resolves boolean predicate values before
+any future branch pruning, backend translation, or rendering. It does not claim
+broad SVE array, load/store, direct-intrinsic, vector metadata, branch-chain,
+or generated-output parity.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:107-109` for the exact size-byte
+  equality predicates with literals `2`, `4`, and `8` inside a future
+  branch-chain context.
+- `tsldata/detail/types.tsl:2-9` for integer singleton tags.
+- `tsldata/detail/types.tsl:17-19` for `f32` and `f64` singleton tags plus the
+  `f?` group that remains unsupported as a selected tag.
+- `tsldata/detail/types.tsl:10-16`, `:20-26` for wildcard/group selectors that
+  must remain unsupported as selected scalar tags.
+- `frozen/tsl-gen/tsl_gen/tsil.lark` may remain syntax evidence for
+  comparison shape only if needed; `frozen/` must not become runtime input.
+
+Tests required:
+
+- Unit tests proving each selected scalar tag produces the expected boolean
+  value for `== 2`, `== 4`, and `== 8`.
+- Unit tests proving `si8`/`ui8` return `false` for all selected predicates
+  without involving branch-chain no-match policy.
+- Diagnostics for malformed predicates, unsupported operators, unsupported
+  literals, reversed comparisons, nested or mixed operands, unsupported
+  wildcard/group tags, pointers, masks, unknown tags, and concrete-looking
+  unselected tags such as `si128`.
+- Regression tests proving accepted M42/M48/M51 branch pruning and M52-M56
+  type/value lowering behavior remains unchanged.
+- Boundary tests proving M57 does not parse or prune `if<generation>` /
+  `else if<generation>` chains.
+- Boundary tests proving backend translation still rejects raw unresolved
+  generation helpers and renderers remain non-evaluating.
+- Determinism tests for repeated predicate lowering.
+
+Golden fixtures required:
+
+- None. M57 is a lowering/predicate slice and must not change generated C++ or
+  Rust output.
+
+Documentation updates:
+
+- Update lowering behavior, generation-time helper inventory, pipeline design,
+  behavioral spec, testing strategy, open questions, design decisions, frozen
+  parity baselines, and `docs/agent/current-redesign-state.md` for the revised
+  M57 predicate boundary. Keep branch-chain pruning recorded as future work.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused size-byte equality predicate test command selected by the
+  executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Accidentally introducing broad comparison parsing or branch-chain syntax.
+- Pulling in `if<generation>`, `else if<generation>`, selected-arm/no-match
+  provenance, direct intrinsics, assignments, or branch-body semantics.
+- Treating `si8`/`ui8` false predicates as branch-chain no-match behavior.
+- Pulling in vector/register metadata, SVE predicate semantics, backend
+  translation, rendering, generated output, CLI/reporting, Rust, or
+  compiler/test execution.
+- Inferring sizes from tag spelling, wildcard/group selectors, or regex
+  instead of consuming typed M55 rules and values.
+
+Dependencies on prior milestones:
+
+- Milestones 4, 18, 40, 41, 42, 43, 48, 51, 52, 53, 54, 55, and 56.
+
+## Draft Staged Lowering Path After M57
+
+This path is recorded now because the post-M56 planning discussion identified a
+clear architectural direction: generation-time lowering should proceed through
+small typed stages rather than repeatedly recognizing entire surrounding
+strings. Only M57 is selected for human acceptance. The following milestones
+are draft candidates and must still be reviewed and accepted one at a time
+before execution.
+
+### Draft Milestone 58: Generation-Time Lowering Stage Pipeline Boundary Slice
+
+Status:
+
+Future candidate. Do not implement until selected by a later planning pass.
+
+Goal:
+
+Make the value -> predicate -> control-flow lowering path explicit as a staged
+typed contract. M58 should not add new helper semantics. It should organize the
+accepted M55/M56 values and M57 predicates so future branch pruning consumes
+typed results rather than reparsing raw generation helper text.
+
+Scope:
+
+- Define the stage contract for generation-time semantic lowering:
+
+  ```text
+  helper/expression recognition
+  -> typed generation values
+  -> typed generation predicates
+  -> generation control-flow pruning
+  -> selected body lowering
+  ```
+
+- Introduce or refine typed records for intermediate generation expressions,
+  resolved generation values, and resolved predicates where needed.
+- Preserve existing M42/M48/M51 branch pruning and M52-M57 value/predicate
+  behavior exactly.
+- Prove backend translation still rejects raw unresolved generation helpers and
+  renderers remain non-evaluating.
+
+Out of scope:
+
+- New helper forms.
+- New arithmetic, comparison, or branch-chain semantics.
+- Backend translation, rendering, output, CLI/reporting, Rust, compiler
+  execution, direct-intrinsic lowering, SVE body lowering, vector metadata, or
+  broad TSIL parsing.
+
+Tests required:
+
+- Regression tests showing M55/M56/M57 results are unchanged.
+- Tests proving the staged contract exposes typed values and predicates without
+  requiring renderers or backend translation to evaluate helpers.
+- Determinism and raw-helper rejection tests.
+
+### Draft Milestone 59: Size-Byte Equality Generation Branch-Chain Pruning Slice
+
+Status:
+
+Future candidate after M57 and, if needed, M58. Do not implement until selected
+by a later planning pass.
+
+Goal:
+
+Consume typed M57 size-byte equality predicate results to prune exactly the SVE
+array no-final-else branch chain:
+
+```text
+if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 2) { ... }
+else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 4) { ... }
+else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 8) { ... }
+```
+
+Scope:
+
+- Consume typed predicate results from M57 instead of evaluating comparisons
+  inside the branch-chain parser.
+- Select the matching arm for byte sizes `2`, `4`, or `8`.
+- Record explicit no-match provenance for byte size `1`.
+- Keep branch bodies opaque.
+- Preserve M42/M48/M51 selected-branch-only diagnostic principles where they
+  apply to the selected chain.
+
+Out of scope:
+
+- Standalone comparison evaluation.
+- Broad `else if<generation>` syntax.
+- Final `else`, reordered chains, missing/duplicate arms, nested branches, or
+  broad no-final-else policy.
+- Direct-intrinsic/body lowering, SVE array body lowering, vector metadata,
+  backend translation, rendering, output, generated tests, CLI/reporting, Rust,
+  compiler execution, broad TSIL parsing, or runtime dependency on `frozen/`.
+
+Tests required:
+
+- `si16`/`ui16` select the `== 2` arm.
+- `si32`/`ui32`/`f32` select the `== 4` arm.
+- `si64`/`ui64`/`f64` select the `== 8` arm.
+- `si8`/`ui8` produce explicit no-match provenance with no synthesized else.
+- Unselected/no-match branch bodies do not emit nested helper diagnostics.
+- Rejection tests for unsupported branch-chain shapes.
+
+### Draft Milestone 60: Opaque Selected Branch Body Handoff Slice
+
+Status:
+
+Future candidate after branch-chain pruning. Do not implement until selected by
+a later planning pass.
+
+Goal:
+
+Create a typed handoff for selected branch bodies so future body-lowering
+slices can consume only the branch text chosen by prior generation-time
+control-flow pruning. This milestone should still keep the body opaque and
+must not lower direct intrinsics or SVE statements.
+
+Scope:
+
+- Represent a selected generation branch body as an explicit typed lowering
+  input, preserving source/provenance.
+- Prove unselected branch bodies are not inspected by later lowering steps.
+- Define diagnostics for unsupported selected body forms without parsing
+  deferred direct-intrinsic or SVE semantics.
+
+Out of scope:
+
+- Direct `intrin<...>` lowering.
+- Assignment, variable, array, loop, call, cast, `emit_return`,
+  `value<generation>(vector::length)`, `value<generation>(vector::alignment)`,
+  backend uninit, SVE predicate, backend translation, rendering, output,
+  generated tests, CLI/reporting, Rust, compiler execution, broad TSIL parsing,
+  or runtime dependency on `frozen/`.
+
+Tests required:
+
+- Selected body provenance and deterministic handoff tests.
+- Tests proving unselected bodies are ignored.
+- Unsupported selected-body diagnostics.
+- Regression tests preserving M57/M59 predicate and branch-chain behavior.

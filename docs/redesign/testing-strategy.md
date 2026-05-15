@@ -729,6 +729,16 @@ Recommended first parity checks:
   literals/operators, nested arithmetic, comparisons, branch pruning, and
   surrounding body lowering while preserving M52-M55 behavior, raw-helper
   rejection, and renderer non-evaluation.
+- Milestone 57 planning selects only exact size-byte equality predicates from
+  `tsldata/primitives/load_store/array.tsl:107-109`. Tests should prove each
+  selected scalar tag produces the expected boolean result for `== 2`, `== 4`,
+  and `== 8`: `si16`/`ui16` true only for `== 2`,
+  `si32`/`ui32`/`f32` true only for `== 4`, `si64`/`ui64`/`f64` true only for
+  `== 8`, and `si8`/`ui8` false for all selected predicates. Tests should
+  reject unsupported operators, literals, reversed comparisons, nested or mixed
+  operands, wildcard or group selected tags, and branch-chain/body lowering
+  while preserving M42/M48/M51 and M52-M56 behavior, raw-helper rejection, and
+  renderer non-evaluation.
 
 Deferred parity checks:
 

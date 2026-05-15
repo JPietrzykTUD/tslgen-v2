@@ -93,11 +93,14 @@ reviewable:
 16. M55 is a generation-time semantic lowering
     slice for the exact scalar size-byte value query. It produces typed
     generation values and is not an output parity slice.
-17. The selected post-M55 plan, M56, is a generation-time semantic lowering
-    slice for the exact scalar size-bytes-times-eight arithmetic value
-    expression. It remains pending human acceptance and is not an output parity
+17. M56 is accepted as a generation-time semantic lowering slice for the exact
+    scalar size-bytes-times-eight arithmetic value expression. It is not an
+    output parity slice.
+18. The revised post-M56 plan, M57, is a generation-time semantic lowering
+    slice for exact size-byte equality predicates over `== 2`, `== 4`, and
+    `== 8`. It remains pending human acceptance and is not an output parity
     slice.
-18. CLI workflow compatibility, coverage JSON adapter breadth beyond the
+19. CLI workflow compatibility, coverage JSON adapter breadth beyond the
     selected M50 row, executable generated tests, and broad generated-test parity
     remain deferred until explicitly selected as separate milestones.
 
@@ -327,10 +330,10 @@ and still does not add compiler execution.
   queries, generation-time conditions beyond the selected M42/M48/M51 pruning
   forms, concrete integer rule-source behavior beyond accepted M53 ownership
   and M54 catalog-to-lowering wiring, scalar value queries beyond the selected
-  M55 size-byte helper, arithmetic over generation values beyond the selected
-  M56 exact size-bytes-times-eight plan if accepted, comparisons over
-  generation values, and backend translation-map evaluation beyond the selected
-  M40/M45/M46 requests.
+  M55 size-byte helper, arithmetic over generation values beyond accepted M56,
+  comparisons over generation values beyond the selected M57 exact size-byte
+  equality predicate plan, branch-chain pruning over those predicates, and
+  backend translation-map evaluation beyond the selected M40/M45/M46 requests.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and
   googletest download or vendoring.
 - Full legacy CLI drop-in compatibility and `run_all.sh` replacement.

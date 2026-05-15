@@ -1321,6 +1321,11 @@ Consequences:
   general expression parsing, comparisons, branch pruning, `else if<generation>`,
   surrounding body lowering, backend translation, rendering, and output
   deferred.
+- The revised post-M56 plan, Milestone 57, introduces only exact size-byte
+  equality predicates over literals `2`, `4`, and `8`. It records typed
+  boolean predicate values and keeps branch-chain pruning, broad
+  `else if<generation>`, direct-intrinsic/body lowering, vector metadata,
+  backend translation, rendering, and output deferred.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

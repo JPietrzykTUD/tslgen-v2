@@ -1158,8 +1158,8 @@ Status: Answered for the Milestone 41 contract, Milestone 42 aligned-branch
 slice, accepted/implemented Milestone 43 base type query slice, and
 implemented Milestone 48 signedness branch-pruning slice. Narrowed, but not
 closed, by the M44-M47 post-M43 native integer sequence and subsequent
-M51-M55 lowering slices. The selected post-M55 plan, M56, narrows only the
-exact size-bytes-times-eight value arithmetic expression; broader helper
+M51-M56 lowering slices. The revised post-M56 plan, M57, narrows only exact
+size-byte equality predicates over `== 2`, `== 4`, and `== 8`; broader helper
 families remain open until selected by future milestones.
 
 Why it matters:
@@ -1262,10 +1262,14 @@ the exact scalar size-byte value query
 selected scalar singleton tags. It produces a typed integer generation value
 and does not lower surrounding IO, memory, array, bit-count, conflict, loop,
 cast, call, direct-intrinsic, arithmetic, comparison, or branch bodies.
-The selected post-M55 plan, M56, adds only the exact
+Milestone 56 adds only the exact
 `value<generation>(type::size_bytes(type<generation>(base::in))) * 8`
 arithmetic expression as a typed generation value; it does not lower
 surrounding bodies or branch chains.
+The revised post-M56 plan, M57, adds only exact size-byte equality predicate
+lowering for `type.size_bytes == 2/4/8`. It records typed boolean predicate
+values, but still does not prune branch chains, lower SVE array bodies, direct
+intrinsics, vector metadata, backend translation, or rendering.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1273,8 +1277,10 @@ vector/register metadata, signedness branch forms beyond the exact M48/M51/M52
 predicate/branch syntax and selected concrete integer type set, primitive
 calls, loops, variables, generation-time branches beyond the selected aligned
 primitive-attribute and signedness predicate conditions, type/value metadata
-beyond the selected base type query family, M55 size-byte value query, and
-selected M56 exact size-bytes-times-eight expression, other nested
+beyond the selected base type query family, M55 size-byte value query,
+selected M56 exact size-bytes-times-eight expression, selected M57 exact
+size-byte equality predicates, branch-chain pruning over those predicates, and
+other nested
 expressions, direct `intrin<...>` calls, helper families such as
 `io`, `mem`, `seq`, `pack`, and `algo`, Rust output, generated tests beyond the
 selected M49 source fixture, CLI/report parity, compiler execution, and broad
@@ -1464,9 +1470,11 @@ expansion, moved to typed M53 rule-source values, and wired through the normal
 catalog/lowering-input path by M54. M55 adds only
 the exact scalar
 `value<generation>(type::size_bytes(type<generation>(base::in)))`
-generation-value query before backend translation. The selected post-M55 plan,
-M56, adds only the exact size-bytes-times-eight generation-value arithmetic
-expression before backend translation and remains pending human acceptance.
+generation-value query before backend translation. Milestone 56 adds only the
+exact size-bytes-times-eight generation-value arithmetic expression before
+backend translation. The revised post-M56 plan, M57, adds only exact
+size-byte equality predicates over `== 2`, `== 4`, and `== 8`; it keeps branch
+chains, body lowering, backend translation, and rendering deferred.
 
 Why it matters:
 
@@ -1543,12 +1551,17 @@ M54 wiring slice reopens only catalog-to-lowering wiring for that rule source.
 M55 reopens only one scalar generation-value helper; it does
 not reopen backend translation, rendering, output, broad TSIL parsing,
 generation-value arithmetic/comparisons, or surrounding body lowering.
-The selected post-M55 plan, M56, reopens only the exact scalar
+Milestone 56 reopens only the exact scalar
 `value<generation>(type::size_bytes(type<generation>(base::in))) * 8`
 arithmetic expression. It does not reopen general arithmetic, comparisons,
 branch pruning, `else if<generation>`, surrounding body lowering, backend
 translation, rendering, output, broad TSIL parsing, or runtime dependency on
 `frozen/`.
+The revised post-M56 plan, M57, reopens only exact
+`type.size_bytes == 2/4/8` predicates. It does not reopen branch pruning,
+broad `else if<generation>`, final-else policy, direct-intrinsic/body
+lowering, backend translation, rendering, output, broad TSIL parsing, or
+runtime dependency on `frozen/`.
 
 Required evidence:
 

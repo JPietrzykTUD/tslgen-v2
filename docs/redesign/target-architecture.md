@@ -371,11 +371,16 @@ Current roadmap note:
   rules for selected scalar tags and must not broaden backend translation,
   rendering, vector metadata, branch-body lowering, or standalone float
   `base.in`/companion semantics.
-- The selected post-M55 plan, Milestone 56, adds only the exact
+- Milestone 56 adds only the exact
   `value<generation>(type::size_bytes(type<generation>(base::in))) * 8`
   arithmetic expression as typed generation-time lowering output. It must not
   become general expression parsing, comparison/branch pruning, backend
   translation, rendering, vector metadata, or body lowering.
+- The revised post-M56 plan, Milestone 57, adds only exact size-byte equality
+  predicate lowering for `== 2`, `== 4`, and `== 8`. It records typed boolean
+  predicate values and must not prune branch chains, lower direct intrinsics,
+  lower SVE array body statements, add vector metadata, backend translation,
+  rendering, or generated output.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not
