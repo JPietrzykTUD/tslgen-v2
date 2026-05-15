@@ -47,22 +47,21 @@ returned `Accept With Follow-Ups` after a workflow handoff correction.
 The M54 execution-review loop returned `Accept With Follow-Ups` with no
 blocking implementation issues and no focused revision.
 
-Post-M54 planning is ready for human acceptance. It selected Milestone 55, and
-internal review returned `Accept With Follow-Ups` after local planning-doc
-updates.
+Post-M54 planning is accepted. It selected Milestone 55, and internal review
+returned `Accept With Follow-Ups` after local planning-doc updates.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Await human acceptance of the post-M54 planning update.
+Run the Milestone 55 execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m54-acceptance-finalization-prompt.md
+docs/agent/runs/m55-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
@@ -80,9 +79,9 @@ Accept With Follow-Ups
 Next expected action:
 
 ```text
-If the user accepts the post-M54 planning update, execute the active
-finalization prompt to create the M55 execution-review loop prompt. Do not
-start Milestone 55 until acceptance is explicit.
+Execute the active M55 prompt. If the internal execution-review loop accepts
+M55, create the next concrete prompt under docs/agent/runs/ without starting
+Milestone 56.
 ```
 
 Accepted planning prompt:
@@ -193,16 +192,22 @@ Accepted M54 execution prompt:
 docs/agent/runs/m54-execution-review-loop-prompt.md
 ```
 
-Active post-M54 planning prompt:
+Accepted post-M54 planning prompt:
 
 ```text
 docs/agent/runs/post-m54-planning-plus-review-prompt.md
 ```
 
-Post-M54 acceptance finalization prompt:
+Accepted post-M54 acceptance finalization prompt:
 
 ```text
 docs/agent/runs/post-m54-acceptance-finalization-prompt.md
+```
+
+Active M55 execution prompt:
+
+```text
+docs/agent/runs/m55-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -359,27 +364,27 @@ docs/agent/runs/post-m54-acceptance-finalization-prompt.md
 - M54 must not make lowering read files, parse raw TSL, query the
   catalog during evaluation, or infer broad integer semantics from regex, tag
   spelling, wildcard/group selectors, or concrete-looking unselected tags.
-- Planned M55 is generation-time semantic lowering only.
-- Planned M55 selects exactly
+- M55 is generation-time semantic lowering only.
+- M55 selects exactly
   `value<generation>(type::size_bytes(type<generation>(base::in)))`.
-- Planned M55 produces typed integer generation values for explicit selected
+- M55 produces typed integer generation values for explicit selected
   scalar tags: `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`,
   `f32`, and `f64`.
-- Planned M55 must use explicit scalar size-byte rule/value records and must
+- M55 must use explicit scalar size-byte rule/value records and must
   not reuse or mutate `ConcreteIntegerGenerationRuleSet` for float size
   semantics.
-- Planned M55 accepts `f32` and `f64` only for the exact size-bytes value query
+- M55 accepts `f32` and `f64` only for the exact size-bytes value query
   and must not broaden standalone `type<generation>(base::in)` or
   signed/unsigned companion behavior to floats.
-- Planned M55 must not infer sizes from regex, tag spelling, wildcard/group
+- M55 must not infer sizes from regex, tag spelling, wildcard/group
   selectors, or unselected concrete-looking tags such as `si128`.
-- Planned M55 must not add arithmetic or comparisons over generation values,
+- M55 must not add arithmetic or comparisons over generation values,
   branch pruning from size values, enclosing body lowering, backend
   translation expansion, rendering, generated output, generated test sources,
   CLI/reporting, writer behavior, Rust, compiler execution, generated-test
   execution, vector/register metadata, loops, casts, calls, direct
   `intrin<...>`, broad TSIL parsing, or runtime dependency on `frozen/`.
-- Planned M55 must not make lowering read files, parse raw TSL, or query the
+- M55 must not make lowering read files, parse raw TSL, or query the
   catalog during evaluation.
 
 ## Accepted Milestone 48
@@ -589,8 +594,8 @@ compiler execution, broad TSIL parsing, or runtime dependency on `frozen/`.
 
 ## Stop Condition
 
-No stop condition is active. The workflow awaits human acceptance of the
-post-M54 planning update.
+No stop condition is active. The workflow proceeds with the active M55
+execution-review loop prompt.
 
 ## Validation Expectations
 
