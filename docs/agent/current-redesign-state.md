@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 56 is accepted.
+Milestone 57 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -65,39 +65,43 @@ roadmap also records draft staged-lowering follow-on candidates for a stage
 pipeline boundary, branch-chain pruning, and opaque selected-body handoff; they
 are not active for execution.
 
+The M57 execution-review loop returned `Accept With Follow-Ups` with no
+blocking implementation issues and no focused revision.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute the Milestone 57 execution-review loop.
+Run post-M57 planning plus internal review, focusing on the next lowering
+slice.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m57-execution-review-loop-prompt.md
+docs/agent/runs/post-m57-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 57: Size-Byte Equality Generation Predicate Lowering Slice
+None. Milestone 57 is accepted; the next milestone must be selected by
+post-M57 planning.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M56 planning revision accepted by user; M57 is active for execution.
+M57 execution-review loop: Accept With Follow-Ups.
 ```
 
 Next expected action:
 
 ```text
-Run the active M57 execution-review loop prompt. If M57 is accepted, update
-this state file, record follow-ups, and create the next concrete run prompt
-under docs/agent/runs/ without starting M58 unless a later planning pass
-accepts it.
+Run the active post-M57 planning-plus-review prompt. The planning pass should
+focus on lowering and select at most one next milestone for human acceptance,
+or record an explicit deferral/stop condition.
 ```
 
 Accepted planning prompt:
@@ -256,10 +260,16 @@ Accepted post-M56 acceptance finalization prompt:
 docs/agent/runs/post-m56-acceptance-finalization-prompt.md
 ```
 
-Active M57 execution-review loop prompt:
+Accepted M57 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m57-execution-review-loop-prompt.md
+```
+
+Active post-M57 planning prompt:
+
+```text
+docs/agent/runs/post-m57-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -659,6 +669,40 @@ sources, CLI/reporting/writer behavior, Rust, compiler execution,
 generated-test execution, vector/register metadata, broad TSIL parsing, or
 runtime dependency on `frozen/`.
 
+## Accepted Milestone 57
+
+The Milestone 57 execution-review loop accepted with non-blocking follow-ups:
+
+```text
+Milestone 57: Size-Byte Equality Generation Predicate Lowering Slice
+```
+
+The slice is generation-time semantic lowering only. It resolves exactly the
+M57 size-byte equality predicates:
+
+```text
+value<generation>(type::size_bytes(type<generation>(base::in))) == 2
+value<generation>(type::size_bytes(type<generation>(base::in))) == 4
+value<generation>(type::size_bytes(type<generation>(base::in))) == 8
+```
+
+M57 produces typed boolean
+`GenerationPredicate(kind="type.size_bytes.equals", literal=<int>,
+value=<bool>, type_tag=<tag>)` values by reusing the accepted M55
+`GenerationValue(kind="type.size_bytes")` path and explicit scalar size-byte
+rules. The accepted truth table is `si8`/`ui8 -> false for all selected
+predicates`, `si16`/`ui16 -> true only for == 2`,
+`si32`/`ui32`/`f32 -> true only for == 4`, and
+`si64`/`ui64`/`f64 -> true only for == 8`.
+
+M57 preserves M55/M56 context precedence and M52-M56 boundaries. It adds no
+branch pruning, `if<generation>` parsing, `else if<generation>`, branch-chain
+syntax, selected-arm/no-match provenance, general comparison parser, standalone
+comparison forms outside the exact selected predicates, backend translation,
+rendering, generated output, generated test sources, CLI/reporting/writer
+behavior, Rust, compiler execution, broad TSIL parsing, or runtime dependency
+on `frozen/`.
+
 ## Known Follow-Ups
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
@@ -753,18 +797,32 @@ runtime dependency on `frozen/`.
 - M56 test follow-up: add an explicit chained/mixed arithmetic rejection case,
   such as a `* 8 * 2` expression after the selected size-bytes value query.
 - Post-M56 planning revision follow-up: branch-chain pruning over the selected
-  size-byte equality predicates remains a strong future lowering candidate once
-  M57 predicate lowering is accepted.
+  size-byte equality predicates remains a strong future lowering candidate now
+  that M57 predicate lowering is accepted.
 - Post-M56 staged-lowering planning note: draft M58/M59/M60 roadmap entries
   outline the intended value -> predicate -> control-flow -> selected-body
   lowering path. These are planning candidates only and must still be reviewed
   and accepted one at a time.
+- M57 review follow-up: keep the private top-level generation binary scanner
+  narrow. It may recognize unsupported operators only to reject them and must
+  not become a general comparison parser without a selected milestone.
+- M57 docs follow-up: normalize stale planned/pending M57 wording and concrete
+  predicate diagnostic lists in redesign docs such as
+  `docs/redesign/generation-time-semantic-lowering.md`,
+  `docs/redesign/behavioral-spec.md`,
+  `docs/redesign/testing-strategy.md`,
+  `docs/redesign/open-questions.md`, and
+  `docs/redesign/design-decisions.md`.
+- M57 evidence/test follow-up: add explicit unsupported-tag predicate coverage
+  for `bword` and `fdqword`, matching the cited group evidence in
+  `tsldata/detail/types.tsl:20-26`.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the M57
-execution-review loop. M58/M59/M60 remain draft planning candidates only and
-must not be started unless a later planning pass accepts one of them.
+No stop condition is active. The workflow proceeds with post-M57 planning plus
+internal review, focused on lowering. M58/M59/M60 remain draft planning
+candidates only and must not be started unless a later planning pass accepts
+one of them.
 
 ## Validation Expectations
 

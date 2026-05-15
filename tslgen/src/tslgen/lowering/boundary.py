@@ -39,6 +39,7 @@ type GenerationTypeRefKind = Literal[
     "base.unsigned_of",
 ]
 type GenerationValueKind = Literal["type.size_bytes", "type.size_bits"]
+type GenerationPredicateKind = Literal["type.size_bytes.equals"]
 type TsilBinaryOperator = Literal["+"]
 type TsilExpression = (
     TsilParameterReference | TsilBinaryExpression | TsilIntrinsicComposeExpression
@@ -374,6 +375,28 @@ class GenerationValue:
 
 
 @dataclass(frozen=True, slots=True)
+class GenerationPredicate:
+    kind: GenerationPredicateKind
+    literal: int
+    value: bool
+    type_tag: str
+
+    def __post_init__(self) -> None:
+        if isinstance(self.literal, bool) or not isinstance(self.literal, int):
+            raise ValueError("generation predicate literal must be an integer")
+        if self.literal not in (2, 4, 8):
+            raise ValueError("generation predicate literal must be 2, 4, or 8")
+        if not isinstance(self.value, bool):
+            raise ValueError("generation predicate payload must be boolean")
+        if not self.type_tag:
+            raise ValueError("generation predicate type tag must be non-empty")
+
+    @property
+    def key(self) -> tuple[str, int, bool, str]:
+        return (self.kind, self.literal, self.value, self.type_tag)
+
+
+@dataclass(frozen=True, slots=True)
 class LoweredImplementation:
     candidate_id: str
     status: LoweringStatus
@@ -381,6 +404,7 @@ class LoweredImplementation:
     generation_branches: tuple[PrunedGenerationBranch, ...] = ()
     generation_type_refs: tuple[GenerationTypeRef, ...] = ()
     generation_values: tuple[GenerationValue, ...] = ()
+    generation_predicates: tuple[GenerationPredicate, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.candidate_id:
@@ -401,6 +425,11 @@ class LoweredImplementation:
             "generation_values",
             tuple(self.generation_values),
         )
+        object.__setattr__(
+            self,
+            "generation_predicates",
+            tuple(self.generation_predicates),
+        )
 
     @property
     def key(self) -> tuple[object, ...]:
@@ -411,6 +440,7 @@ class LoweredImplementation:
             tuple(branch.key for branch in self.generation_branches),
             tuple(type_ref.key for type_ref in self.generation_type_refs),
             tuple(value.key for value in self.generation_values),
+            tuple(predicate.key for predicate in self.generation_predicates),
         )
 
 
@@ -567,6 +597,114 @@ def resolve_generation_value_query(
     )
 
 
+def resolve_generation_predicate_query(
+    query_text: str,
+    context: GenerationContext | None = None,
+    *,
+    selected_candidate_type_tag: str | None = None,
+    location: SourceLocation | None = None,
+) -> Result[GenerationPredicate]:
+    generation_context = context or GenerationContext()
+    diagnostic_location = (
+        location
+        if location is not None
+        else generation_context.implementation_source_location
+    )
+    query = query_text.strip()
+    parsed = _parse_generation_value_predicate_expression(query, diagnostic_location)
+    if not parsed.is_ok:
+        return Result.failure(parsed.diagnostics)
+
+    expression = parsed.unwrap()
+    if not expression.left_operand or not expression.right_operand:
+        return Result.failure(
+            (_malformed_generation_predicate_diagnostic(query, diagnostic_location),)
+        )
+    if expression.operator != "==":
+        return Result.failure(
+            (
+                _unsupported_generation_predicate_operator_diagnostic(
+                    query,
+                    expression.operator,
+                    diagnostic_location,
+                ),
+            )
+        )
+    if not expression.left_operand.startswith(_GENERATION_VALUE_MARKER):
+        return Result.failure(
+            (
+                _unsupported_generation_predicate_operand_diagnostic(
+                    query,
+                    expression.left_operand,
+                    diagnostic_location,
+                ),
+            )
+        )
+    if expression.right_operand not in ("2", "4", "8"):
+        return Result.failure(
+            (
+                _unsupported_generation_predicate_literal_diagnostic(
+                    query,
+                    expression.right_operand,
+                    diagnostic_location,
+                ),
+            )
+        )
+
+    inner = _generation_value_query_inner(expression.left_operand, diagnostic_location)
+    if not inner.is_ok:
+        return Result.failure(
+            (
+                _unsupported_generation_predicate_operand_diagnostic(
+                    query,
+                    expression.left_operand,
+                    diagnostic_location,
+                ),
+            )
+        )
+    inner_text = inner.unwrap()
+    if _parse_generation_value_call(inner_text, "type::size_bytes") is None:
+        return Result.failure(
+            (
+                _unsupported_generation_predicate_operand_diagnostic(
+                    query,
+                    expression.left_operand,
+                    diagnostic_location,
+                ),
+            )
+        )
+    size_bytes = _generation_value_from_inner(
+        inner_text,
+        expression.left_operand,
+        generation_context,
+        selected_candidate_type_tag=selected_candidate_type_tag,
+        location=diagnostic_location,
+    )
+    if not size_bytes.is_ok:
+        return Result.failure(size_bytes.diagnostics)
+
+    value = size_bytes.unwrap()
+    if value.kind != "type.size_bytes":
+        return Result.failure(
+            (
+                _unsupported_generation_predicate_operand_diagnostic(
+                    query,
+                    expression.left_operand,
+                    diagnostic_location,
+                ),
+            )
+        )
+    literal = int(expression.right_operand)
+    return Result.ok(
+        GenerationPredicate(
+            kind="type.size_bytes.equals",
+            literal=literal,
+            value=value.value == literal,
+            type_tag=value.type_tag,
+        )
+    )
+
+
 def _classify_payload(candidate: ImplementationCandidate) -> Result[ClassifiedPayload]:
     body = candidate.implementation.body
     text = body.text
@@ -613,6 +751,22 @@ def _lower_input(
                 candidate_id=item.candidate_id,
                 status="lowered",
                 generation_type_refs=(type_ref.unwrap(),),
+            )
+        )
+
+    generation_predicate = _lower_generation_predicate_query_payload(
+        item,
+        request,
+        text,
+    )
+    if generation_predicate is not None:
+        if not generation_predicate.is_ok:
+            return Result.failure(generation_predicate.diagnostics)
+        return Result.ok(
+            LoweredImplementation(
+                candidate_id=item.candidate_id,
+                status="lowered",
+                generation_predicates=(generation_predicate.unwrap(),),
             )
         )
 
@@ -672,6 +826,32 @@ def _lower_generation_type_query_payload(
         else None
     )
     return resolve_generation_type_query(
+        stripped,
+        context,
+        selected_candidate_type_tag=selected_candidate_type_tag,
+        location=item.source_location,
+    )
+
+
+def _lower_generation_predicate_query_payload(
+    item: LoweringInput,
+    request: LoweringRequest,
+    text: str,
+) -> Result[GenerationPredicate] | None:
+    if _GENERATION_VALUE_MARKER not in text:
+        return None
+    stripped = text.strip()
+    if not stripped.startswith(_GENERATION_VALUE_MARKER):
+        return None
+    if not _has_top_level_generation_comparison_operator(stripped):
+        return None
+    context = _context_for_candidate(item, request)
+    selected_candidate_type_tag = (
+        item.candidate.type_tag
+        if request.generation_context.use_candidate_type_tag
+        else None
+    )
+    return resolve_generation_predicate_query(
         stripped,
         context,
         selected_candidate_type_tag=selected_candidate_type_tag,
@@ -745,6 +925,13 @@ class _ResolvedGenerationCondition:
 
 @dataclass(frozen=True, slots=True)
 class _ParsedGenerationValueArithmeticExpression:
+    operator: str
+    left_operand: str
+    right_operand: str
+
+
+@dataclass(frozen=True, slots=True)
+class _ParsedGenerationValuePredicateExpression:
     operator: str
     left_operand: str
     right_operand: str
@@ -1144,6 +1331,82 @@ def _parse_generation_value_arithmetic_expression(
                     )
                 )
         index += 1
+    return None
+
+
+def _parse_generation_value_predicate_expression(
+    query: str,
+    location: SourceLocation | None,
+) -> Result[_ParsedGenerationValuePredicateExpression]:
+    parsed = _parse_top_level_generation_binary_expression(
+        query,
+        include_arithmetic=True,
+    )
+    if parsed is None:
+        return Result.failure((_malformed_generation_predicate_diagnostic(query, location),))
+    operator, left_operand, right_operand = parsed
+    return Result.ok(
+        _ParsedGenerationValuePredicateExpression(
+            operator=operator,
+            left_operand=left_operand,
+            right_operand=right_operand,
+        )
+    )
+
+
+def _has_top_level_generation_comparison_operator(query: str) -> bool:
+    parsed = _parse_top_level_generation_binary_expression(
+        query,
+        include_arithmetic=False,
+    )
+    return parsed is not None and parsed[0] in ("==", "!=", "<=", ">=", "<", ">")
+
+
+def _parse_top_level_generation_binary_expression(
+    query: str,
+    *,
+    include_arithmetic: bool,
+) -> tuple[str, str, str] | None:
+    depth = 0
+    index = 0
+    while index < len(query):
+        if query.startswith(_GENERATION_VALUE_MARKER, index):
+            index += len(_GENERATION_VALUE_MARKER)
+            continue
+        if query.startswith(_GENERATION_TYPE_MARKER, index):
+            index += len(_GENERATION_TYPE_MARKER)
+            continue
+
+        character = query[index]
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth < 0:
+                return None
+        elif depth == 0:
+            for operator in ("==", "!=", "<=", ">="):
+                if query.startswith(operator, index):
+                    return (
+                        operator,
+                        query[:index].strip(),
+                        query[index + len(operator):].strip(),
+                    )
+            if character in ("<", ">"):
+                return (
+                    character,
+                    query[:index].strip(),
+                    query[index + 1:].strip(),
+                )
+            if include_arithmetic and character in ("*", "/", "+", "-", "%"):
+                return (
+                    character,
+                    query[:index].strip(),
+                    query[index + 1:].strip(),
+                )
+        index += 1
+    if depth != 0:
+        return None
     return None
 
 
@@ -2030,6 +2293,60 @@ def _unsupported_generation_value_arithmetic_operand_diagnostic(
     return Diagnostic.error(
         "TSL-LOWER-GEN-VALUE-ARITH-OPERAND",
         "generation-time scalar bit-width value arithmetic supports only "
+        "the M55 scalar size-bytes query as the left operand; got "
+        f"{operand_text!r} in {query_text!r}",
+        location=location,
+    )
+
+
+def _malformed_generation_predicate_diagnostic(
+    query_text: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-PREDICATE-MALFORMED",
+        "generation-time scalar size-byte equality predicate must be shaped as "
+        "'value<generation>(type::size_bytes(type<generation>(base::in))) == "
+        "2|4|8'; got "
+        f"{query_text!r}",
+        location=location,
+    )
+
+
+def _unsupported_generation_predicate_operator_diagnostic(
+    query_text: str,
+    operator: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-PREDICATE-OPERATOR",
+        "generation-time scalar size-byte equality predicate supports only "
+        f"the exact '==' operator; got operator {operator!r} in {query_text!r}",
+        location=location,
+    )
+
+
+def _unsupported_generation_predicate_literal_diagnostic(
+    query_text: str,
+    literal_text: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-PREDICATE-LITERAL",
+        "generation-time scalar size-byte equality predicate supports only "
+        f"right literal '2', '4', or '8'; got {literal_text!r} in {query_text!r}",
+        location=location,
+    )
+
+
+def _unsupported_generation_predicate_operand_diagnostic(
+    query_text: str,
+    operand_text: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-PREDICATE-OPERAND",
+        "generation-time scalar size-byte equality predicate supports only "
         "the M55 scalar size-bytes query as the left operand; got "
         f"{operand_text!r} in {query_text!r}",
         location=location,

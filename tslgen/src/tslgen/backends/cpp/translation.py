@@ -584,6 +584,7 @@ def _unresolved_generation_helper_diagnostic(
         lowered.generation_branches
         or lowered.generation_type_refs
         or lowered.generation_values
+        or lowered.generation_predicates
     ):
         return None
     return Diagnostic.error(

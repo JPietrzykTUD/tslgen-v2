@@ -3,6 +3,7 @@
 from tslgen.lowering.boundary import (
     ClassifiedPayload,
     GenerationContext,
+    GenerationPredicate,
     GenerationTypeRef,
     GenerationValue,
     LoweredImplementation,
@@ -20,6 +21,7 @@ from tslgen.lowering.boundary import (
     build_catalog_lowering_request,
     lower_candidates,
     prepare_lowering_inputs,
+    resolve_generation_predicate_query,
     resolve_generation_type_query,
     resolve_generation_value_query,
 )
@@ -34,6 +36,7 @@ from tslgen.lowering.translations import (
 __all__ = [
     "ClassifiedPayload",
     "GenerationContext",
+    "GenerationPredicate",
     "GenerationTypeRef",
     "GenerationValue",
     "LoweredImplementation",
@@ -56,6 +59,7 @@ __all__ = [
     "build_catalog_lowering_request",
     "lower_candidates",
     "prepare_lowering_inputs",
+    "resolve_generation_predicate_query",
     "resolve_generation_type_query",
     "resolve_generation_value_query",
 ]
