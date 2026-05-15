@@ -404,13 +404,16 @@ expression inside Stage 8. It consumes the M55 typed value and produces another
 typed generation integer value; comparisons, branch pruning,
 `else if<generation>`, surrounding body lowering, backend translation,
 rendering, and output remain outside Stage 8's M56 work.
-The revised post-M56 plan, Milestone 57, reopens only exact
-`type.size_bytes == 2/4/8` predicate evaluation inside Stage 8. It should
-consume the M55 typed size-byte value and produce typed boolean predicate
+Milestone 57 reopens only exact `type.size_bytes == 2/4/8` predicate
+evaluation inside Stage 8. It consumes the M55 typed size-byte value and
+produces typed boolean predicate
 results. Branch-chain pruning, `else if<generation>`, selected-arm/no-match
 provenance, branch bodies, direct intrinsics, SVE array semantics, vector
 metadata, backend translation, rendering, and output remain outside Stage 8's
 M57 work.
+The selected post-M57 plan, Milestone 58, should make Stage 8's
+value -> predicate -> control-flow contract explicit without changing accepted
+M42/M48/M51/M55/M56/M57 behavior or adding new helper semantics.
 
 ## Stage 9: Backend Planning
 

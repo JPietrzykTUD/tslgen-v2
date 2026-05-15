@@ -5126,15 +5126,14 @@ Candidate comparison:
 | Size-byte equality generation branch-chain pruning | Needed for the SVE array branch chain after predicate lowering exists. | Medium because it combines comparison consumption, `else if<generation>` chain syntax, selected/no-match provenance, and no-final-else policy. | Defer until after M57 predicate lowering. |
 | Vector/register metadata queries | Needed for later load/store and conversion body parity. | High because evidence is coupled to vector length/alignment, language maps, loops, casts, calls, and backend requests. | Defer. |
 | Backend suffix/type-spelling expansion for 8/16/64-bit integers | Useful after M52-M56 typed lowering semantics. | Medium because it reopens M45/M46 backend translation limits and moves away from the requested lowering focus. | Defer. |
-| Direct `intrin<...>` / SVE body lowering | Appears inside the selected M57 evidence branches. | High because it touches direct backend calls, vector predicates, statement semantics, and rendering/output concerns. | Defer. |
+| Direct `intrin<...>` / SVE body lowering | Appears inside the M57 evidence branches. | High because it touches direct backend calls, vector predicates, statement semantics, and rendering/output concerns. | Defer. |
 | M49-M56 follow-up cleanup | Several non-blocking quality follow-ups remain. | Low individually, but they do not form the next lowering milestone. | Keep recorded as follow-ups unless one becomes a selected architectural slice. |
 
 ## Milestone 57: Size-Byte Equality Generation Predicate Lowering Slice
 
 Status:
 
-Selected for human acceptance. Do not implement until this planning result is
-accepted.
+Accepted with follow-ups.
 
 Goal:
 
@@ -5290,68 +5289,173 @@ Dependencies on prior milestones:
 
 - Milestones 4, 18, 40, 41, 42, 43, 48, 51, 52, 53, 54, 55, and 56.
 
-## Draft Staged Lowering Path After M57
+## Post-M57 Planning Result
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Generation-time lowering stage pipeline boundary | Makes the accepted M55 value, M56 arithmetic-value, and M57 predicate results explicit as staged typed outputs before any branch-chain pruning. This directly addresses the staged lowering architecture and lets later control-flow consume typed results instead of reparsing raw helper text. | Low to medium if behavior-preserving; high if it becomes a broad refactor or second evaluator. | Select as M58. |
+| Size-byte equality generation branch-chain pruning | Evidence exists in the SVE array chain and it is the next behavioral consumer of M57 predicates. | Medium because it combines `else if<generation>` chain syntax, no-match provenance for byte size `1`, selected-arm policy, and opaque body handling. | Defer until after M58 stage boundary. |
+| Opaque selected branch body handoff | Needed after branch-chain pruning so later body-lowering slices see only selected branch text. | Medium if kept opaque; high if it starts parsing direct intrinsics, assignments, arrays, loops, calls, vector metadata, or renderer/backend semantics. | Defer until after branch-chain pruning. |
+| Direct `intrin<...>` / SVE body lowering | Present inside the same array evidence. | High because it touches direct backend calls, vector predicates, body semantics, and rendering/output concerns. | Defer. |
+| M49-M57 follow-up cleanup | Several accepted follow-ups remain. | Low individually, but cleanup does not form the next lowering architecture milestone. | Keep recorded as follow-ups unless one is selected separately. |
+
+## Milestone 58: Generation-Time Lowering Stage Pipeline Boundary Slice
+
+Status:
+
+Selected for human acceptance. Do not implement until this planning result is
+accepted.
+
+Goal:
+
+Make the generation-time semantic lowering stage contract explicit around the
+accepted helper/expression work:
+
+```text
+helper/expression recognition
+-> typed generation values
+-> typed generation predicates
+-> generation control-flow pruning
+-> selected body lowering
+```
+
+M58 should not add new helper semantics. It should organize the accepted M55
+`type.size_bytes` value, M56 `type.size_bits` value, and M57
+`type.size_bytes.equals` predicate results so future branch pruning consumes
+typed results instead of reparsing raw generation helper text.
+
+Scope:
+
+- Define or refine typed records for the generation-time lowering stage
+  boundary, including expression recognition, resolved value results, and
+  resolved predicate results where needed.
+- Preserve existing M55/M56/M57 observable lowered outputs exactly.
+- Preserve existing M42/M48/M51 generation branch-pruning behavior exactly.
+- Keep `LoweringPlan` / `LoweredImplementation` public behavior stable unless a
+  narrow typed stage result must be exposed.
+- Prove backend translation still rejects raw unresolved generation helpers and
+  renderers remain non-evaluating.
+- Keep catalog-derived rule construction before lowering evaluation; lowering
+  evaluation must consume typed request/context values only.
+
+Out of scope:
+
+- New generation-time helper forms.
+- New arithmetic, comparison, or predicate semantics.
+- Size-byte equality branch-chain pruning.
+- `else if<generation>` support.
+- No-match provenance for size-byte branch chains.
+- Final `else`, broad no-final-else policy, nested generation branches, or
+  broad generation control-flow semantics.
+- Opaque selected branch body handoff.
+- Direct `intrin<...>` / SVE body lowering, assignments, variables, arrays,
+  loops, calls, casts, vector/register metadata, vector length/alignment, or
+  backend uninit values.
+- Backend translation expansion, rendering, generated output, generated test
+  sources, CLI/reporting, writer behavior, Rust, compiler execution,
+  generated-test execution, broad TSIL parsing, or runtime dependency on
+  `frozen/`.
+- Lowering-time file reads, raw TSL parsing, or catalog queries during
+  evaluation.
+
+Required inputs:
+
+- M53/M54 typed rule-source and catalog-derived lowering request wiring.
+- M55 `GenerationValue(kind="type.size_bytes")` behavior.
+- M56 `GenerationValue(kind="type.size_bits")` behavior.
+- M57 `GenerationPredicate(kind="type.size_bytes.equals")` behavior.
+- Existing M42/M48/M51 branch-pruning behavior and provenance.
+- Existing backend raw-helper rejection and renderer non-evaluation tests.
+
+Expected outputs:
+
+- A typed staged-lowering contract or equivalent explicit stage records that
+  make accepted generation values and predicates available to later
+  control-flow pruning without backend/renderers evaluating helpers.
+- Unchanged accepted M42/M48/M51/M55/M56/M57 lowering behavior.
+- No generated C++ or Rust artifacts.
+
+Parity criterion:
+
+M58 proves the value -> predicate -> control-flow path is represented by typed
+lowering-stage values. It does not claim branch-chain, SVE array, direct
+intrinsic, selected body, backend translation, rendering, generated output, or
+compiler parity.
+
+Evidence paths:
+
+- Accepted M55/M56/M57 lowering tests and implementation for existing typed
+  values and predicates.
+- `tsldata/primitives/load_store/array.tsl:107-109` as future consumer
+  evidence showing why predicates must be handed to control-flow as typed
+  values before branch-chain pruning.
+- `docs/redesign/generation-time-semantic-lowering.md` staged lowering
+  direction.
+- `frozen/tsl-gen/tsl_gen/tsil.lark` may remain optional syntax evidence only;
+  `frozen/` must not become runtime input.
+
+Tests required:
+
+- Regression tests proving M55, M56, and M57 lowered results are unchanged.
+- Regression tests proving M42/M48/M51 branch-pruning results are unchanged.
+- Tests proving accepted generation values and predicates are visible through
+  the staged contract.
+- Tests proving M57 array branch-chain input still does not prune in M58.
+- Backend raw-helper rejection and renderer non-evaluation regressions.
+- Determinism tests for the staged outputs.
+
+Golden fixtures required:
+
+- None. M58 is a lowering-stage contract slice and must not change generated
+  C++ or Rust output.
+
+Documentation updates:
+
+- Update the roadmap, generation-time lowering contract, behavioral spec,
+  pipeline design, target architecture, testing strategy, open questions,
+  design decisions, frozen parity baselines, and `docs/agent/current-redesign-state.md`
+  for the selected M58 boundary.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused stage-boundary lowering test command selected by the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Turning M58 into a broad lowering refactor without a typed behavioral
+  contract.
+- Accidentally adding branch-chain pruning, `else if<generation>`, no-match
+  policy, or selected body handoff.
+- Adding general expression parsing or a second evaluator instead of typed
+  records over accepted semantics.
+- Letting backend translation/rendering evaluate generation helpers.
+- Making lowering evaluation read files, parse raw TSL, query the catalog, or
+  depend on `frozen/`.
+
+Dependencies on prior milestones:
+
+- Milestones 41, 42, 43, 48, 51, 52, 53, 54, 55, 56, and 57.
+
+## Draft Staged Lowering Path After M58
 
 This path is recorded now because the post-M56 planning discussion identified a
 clear architectural direction: generation-time lowering should proceed through
 small typed stages rather than repeatedly recognizing entire surrounding
-strings. Only M57 is selected for human acceptance. The following milestones
-are draft candidates and must still be reviewed and accepted one at a time
+strings. M58 is now selected for human acceptance. The following milestones
+remain draft candidates and must still be reviewed and accepted one at a time
 before execution.
-
-### Draft Milestone 58: Generation-Time Lowering Stage Pipeline Boundary Slice
-
-Status:
-
-Future candidate. Do not implement until selected by a later planning pass.
-
-Goal:
-
-Make the value -> predicate -> control-flow lowering path explicit as a staged
-typed contract. M58 should not add new helper semantics. It should organize the
-accepted M55/M56 values and M57 predicates so future branch pruning consumes
-typed results rather than reparsing raw generation helper text.
-
-Scope:
-
-- Define the stage contract for generation-time semantic lowering:
-
-  ```text
-  helper/expression recognition
-  -> typed generation values
-  -> typed generation predicates
-  -> generation control-flow pruning
-  -> selected body lowering
-  ```
-
-- Introduce or refine typed records for intermediate generation expressions,
-  resolved generation values, and resolved predicates where needed.
-- Preserve existing M42/M48/M51 branch pruning and M52-M57 value/predicate
-  behavior exactly.
-- Prove backend translation still rejects raw unresolved generation helpers and
-  renderers remain non-evaluating.
-
-Out of scope:
-
-- New helper forms.
-- New arithmetic, comparison, or branch-chain semantics.
-- Backend translation, rendering, output, CLI/reporting, Rust, compiler
-  execution, direct-intrinsic lowering, SVE body lowering, vector metadata, or
-  broad TSIL parsing.
-
-Tests required:
-
-- Regression tests showing M55/M56/M57 results are unchanged.
-- Tests proving the staged contract exposes typed values and predicates without
-  requiring renderers or backend translation to evaluate helpers.
-- Determinism and raw-helper rejection tests.
 
 ### Draft Milestone 59: Size-Byte Equality Generation Branch-Chain Pruning Slice
 
 Status:
 
-Future candidate after M57 and, if needed, M58. Do not implement until selected
-by a later planning pass.
+Future candidate after M58. Do not implement until selected by a later
+planning pass.
 
 Goal:
 

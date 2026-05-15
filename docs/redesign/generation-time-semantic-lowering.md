@@ -74,7 +74,7 @@ behavior without treating the whole corpus as implemented.
 | `value<generation>(vector::alignment)` | `tsldata/primitives/load_store/load.tsl:55-70`, `store.tsl:54-64`, `store.tsl:75-85` | Supply alignment value to selected aligned branch. | Extension, type tag, alignment metadata. | `GenerationValue[int](kind="vector.alignment")`. | Extension/type metadata. | required-later | Defer until aligned branch body rendering is selected. | Query tests plus missing alignment diagnostics. |
 | `value<generation>(type::size_bytes(type<generation>(base::in)))` | `tsldata/primitives/io/out.tsl:43-52`, `tsldata/primitives/bitwise/bit_counts.tsl:99`, `tsldata/primitives/load_store/array.tsl:107-109`, `tsldata/primitives/misc/conflict.tsl:79` | Resolve the selected scalar base type byte size. | Selected type tag plus explicit scalar size-byte rules for selected singleton scalar tags. | `GenerationValue[int](kind="type.size_bytes")`. | No backend data for the value itself. Later backend/rendering may consume already-lowered values only after separate slices. | implemented by M55 | M55 selects only the exact nested `base::in` query for `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`, `f32`, and `f64`. | Byte-value tests, float scope tests, unsupported group/wildcard diagnostics, missing context/rule diagnostics, determinism, raw-helper rejection, and no surrounding body lowering. |
 | `value<generation>(type::size_bytes(type<generation>(base::in))) * 8` | `tsldata/primitives/io/out.tsl:43`, `:46`, `:48`, `:50`, `:52`, `:70`, `:73`, `:75`, `:77`, `:79`; `tsldata/primitives/misc/conflict.tsl:79` | Resolve selected scalar base type bit width from the accepted typed size-byte value. | Selected type tag plus explicit scalar size-byte rules for selected singleton scalar tags. | `GenerationValue[int](kind="type.size_bits")`. | No backend data for the value itself. | implemented by M56 | M56 selects only this exact left-associated `size_bytes * 8` expression and does not add general arithmetic or branch pruning. | Bit-width tests, unsupported operator/literal/operand diagnostics, context precedence, determinism, raw-helper rejection, and no surrounding body lowering. |
-| `value<generation>(type::size_bytes(type<generation>(base::in))) == 2`, `== 4`, and `== 8` | `tsldata/primitives/load_store/array.tsl:107-109` | Resolve exact scalar size-byte equality predicates before any branch-chain policy. | Selected type tag plus explicit scalar size-byte rules for selected singleton scalar tags. | Typed boolean predicate value, for example `GenerationPredicate(kind="type.size_bytes.equals")`. | No backend data for the predicate itself. | selected as revised M57 pending acceptance | M57 selects only these exact predicates. Branch-chain pruning and `else if<generation>` remain deferred. | Predicate truth-table tests for 2/4/8, unsupported operator/literal/operand diagnostics, determinism, raw-helper rejection, and no branch-chain/body lowering. |
+| `value<generation>(type::size_bytes(type<generation>(base::in))) == 2`, `== 4`, and `== 8` | `tsldata/primitives/load_store/array.tsl:107-109` | Resolve exact scalar size-byte equality predicates before any branch-chain policy. | Selected type tag plus explicit scalar size-byte rules for selected singleton scalar tags. | Typed boolean predicate value, for example `GenerationPredicate(kind="type.size_bytes.equals")`. | No backend data for the predicate itself. | implemented by M57 | M57 selects only these exact predicates. Branch-chain pruning and `else if<generation>` remain deferred. | Predicate truth-table tests for 2/4/8, unsupported operator/literal/operand diagnostics, determinism, raw-helper rejection, and no branch-chain/body lowering. |
 | `type<generation>(base::in)` | `tsldata/primitives/bitwise/shifts.tsl:38-40`, `shifts.tsl:150`, `tsldata/primitives/conversion/repr_change.tsl:1210-1225` | Resolve selected primitive base type. | Type tag and active vector type. | `GenerationTypeRef(kind="base.in")`. | No backend data to resolve the semantic type; later backend spelling uses language maps. | implemented M43 | Selected by Milestone 43 as part of the base type query family. | Type-query diagnostics for missing type tag. |
 | `type<generation>(base::signed_of(type<generation>(base::in)))` and `type<generation>(base::unsigned_of(type<generation>(base::in)))` | `tsldata/primitives/arithmetic/fundamental.tsl:47-90`, `tsldata/primitives/bitwise/shifts.tsl:38-40`, `shifts.tsl:63-82` | Convert selected base type to signed/unsigned companion. | Type tag and integer signedness rules. | `GenerationTypeRef(kind="base.signed_of")` or `base.unsigned_of`. | No backend data to resolve the semantic type; later suffix translation uses translation maps. | implemented M43 | Milestone 43 accepts only these exact nested forms. Prose shorthand such as `base::signed_of(base::in)` is not accepted TSIL syntax. | Query tests for selected integer tags; unsupported float/pointer/generic conversion diagnostics. |
 | `type<generation>(vector::transform_extension(...))` and `vector::as_extension(...)` | `tsldata/primitives/conversion/repr_change.tsl:121-128`, `tsldata/primitives/bitwise/shifts.tsl:875-880`, `shifts.tsl:1222-1240` | Build related vector types for conversion or reinterpret paths. | Current extension, target extension, type tag, vector family/width. | `GenerationTypeRef(kind="vector.transform_extension")`. | Extension metadata and language type map. | required-later | Defer until conversion parity slice. | Fixture-driven type transformation tests. |
@@ -342,7 +342,7 @@ The accepted post-M43 phase is numbered in the roadmap:
   bit widths. It reuses the M55 typed value and scalar size-byte rules, and
   does not add comparisons, branch pruning, `else if<generation>`, body
   lowering, backend translation, or rendering.
-- The revised post-M56 plan, Milestone 57, introduces only exact size-byte
+- Milestone 57 introduces only exact size-byte
   equality predicates over
   `value<generation>(type::size_bytes(type<generation>(base::in))) == 2`,
   `== 4`, and `== 8`. It reuses the M55 typed value and scalar size-byte
@@ -378,26 +378,28 @@ M56 additional diagnostics:
 - `TSL-LOWER-GEN-VALUE-ARITH-LITERAL`
 - `TSL-LOWER-GEN-VALUE-ARITH-OPERAND`
 
-M57 planned diagnostics:
+M57 additional diagnostics:
 
-- malformed size-byte equality predicate syntax
-- unsupported comparison operators, literals, reversed operands, and nested or
-  mixed operands
-- missing type context, unsupported or unknown selected tags, and malformed
-  scalar size-byte rules reused from M55
+- `TSL-LOWER-GEN-PREDICATE-MALFORMED`
+- `TSL-LOWER-GEN-PREDICATE-OPERATOR`
+- `TSL-LOWER-GEN-PREDICATE-LITERAL`
+- `TSL-LOWER-GEN-PREDICATE-OPERAND`
+
+M57 also reuses M55 missing type context, unsupported/unknown selected tag, and
+malformed scalar size-byte rule diagnostics.
 
 This phase does not make backend translation parse raw generation-time helper
 text and does not move suffix or type-spelling evaluation into renderers.
 
 ## Planned Staged Lowering Direction
 
-Post-M56 planning revised M57 to keep size-byte equality predicate lowering
+Post-M56 and post-M57 planning keep size-byte equality predicate lowering
 separate from branch-chain pruning. The intended direction is:
 
 1. Recognize exact selected generation helper expressions.
 2. Resolve typed generation values, such as M55 `type.size_bytes` and M56
    `type.size_bits`.
-3. Resolve typed generation predicates, starting with revised M57
+3. Resolve typed generation predicates, starting with accepted M57
    `type.size_bytes == 2/4/8`.
 4. Consume typed predicate results for control-flow pruning in a later
    branch-chain milestone.
@@ -411,8 +413,7 @@ translation or renderers.
 
 ## Explicit Deferrals
 
-Deferred beyond the accepted M43-M56 slices and the selected M57 exact
-size-byte equality predicate boundary:
+Deferred beyond the accepted M43-M57 slices:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -422,7 +423,7 @@ size-byte equality predicate boundary:
   constants, and generic lengths.
 - Arithmetic over generation values remains deferred except for the accepted
   M56 exact `type.size_bytes * 8` expression. Comparisons over generation
-  values remain deferred except for the selected M57 exact
+  values remain deferred except for the accepted M57 exact
   `type.size_bytes == 2/4/8` predicates. Branch-chain pruning over those
   predicates, general `else if<generation>` syntax, final-else policy, and
   broad branch pruning based on generation values remain deferred.

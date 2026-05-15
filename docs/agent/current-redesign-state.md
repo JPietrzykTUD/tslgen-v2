@@ -68,40 +68,47 @@ are not active for execution.
 The M57 execution-review loop returned `Accept With Follow-Ups` with no
 blocking implementation issues and no focused revision.
 
+Post-M57 planning is ready for human acceptance. It selected
+`Milestone 58: Generation-Time Lowering Stage Pipeline Boundary Slice`, and
+internal review returned `Accept With Follow-Ups` after local state wording
+corrections.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M57 planning plus internal review, focusing on the next lowering
-slice.
+Await human acceptance of the post-M57 planning update, then run the post-M57
+acceptance finalization prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m57-planning-plus-review-prompt.md
+docs/agent/runs/post-m57-acceptance-finalization-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Milestone 57 is accepted; the next milestone must be selected by
-post-M57 planning.
+None. Milestone 58 is selected for human acceptance but is not active for
+execution yet.
 ```
 
 Latest review verdict:
 
 ```text
-M57 execution-review loop: Accept With Follow-Ups.
+Post-M57 planning update: Accept With Follow-Ups after local state wording
+corrections; ready for human acceptance.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M57 planning-plus-review prompt. The planning pass should
-focus on lowering and select at most one next milestone for human acceptance,
-or record an explicit deferral/stop condition.
+If the user explicitly accepts the post-M57 planning update, execute the active
+acceptance finalization prompt. It should create the Milestone 58
+execution-review loop prompt and update this state file without implementing
+M58.
 ```
 
 Accepted planning prompt:
@@ -270,6 +277,12 @@ Active post-M57 planning prompt:
 
 ```text
 docs/agent/runs/post-m57-planning-plus-review-prompt.md
+```
+
+Active post-M57 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m57-acceptance-finalization-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -799,30 +812,23 @@ on `frozen/`.
 - Post-M56 planning revision follow-up: branch-chain pruning over the selected
   size-byte equality predicates remains a strong future lowering candidate now
   that M57 predicate lowering is accepted.
-- Post-M56 staged-lowering planning note: draft M58/M59/M60 roadmap entries
-  outline the intended value -> predicate -> control-flow -> selected-body
-  lowering path. These are planning candidates only and must still be reviewed
-  and accepted one at a time.
+- Post-M56 staged-lowering planning note: the intended value -> predicate ->
+  control-flow -> selected-body lowering path remains the guiding sequence.
+  Post-M57 planning has selected M58 for human acceptance; M59/M60 remain draft
+  candidates only.
 - M57 review follow-up: keep the private top-level generation binary scanner
   narrow. It may recognize unsupported operators only to reject them and must
   not become a general comparison parser without a selected milestone.
-- M57 docs follow-up: normalize stale planned/pending M57 wording and concrete
-  predicate diagnostic lists in redesign docs such as
-  `docs/redesign/generation-time-semantic-lowering.md`,
-  `docs/redesign/behavioral-spec.md`,
-  `docs/redesign/testing-strategy.md`,
-  `docs/redesign/open-questions.md`, and
-  `docs/redesign/design-decisions.md`.
 - M57 evidence/test follow-up: add explicit unsupported-tag predicate coverage
   for `bword` and `fdqword`, matching the cited group evidence in
   `tsldata/detail/types.tsl:20-26`.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M57 planning plus
-internal review, focused on lowering. M58/M59/M60 remain draft planning
-candidates only and must not be started unless a later planning pass accepts
-one of them.
+No stop condition is active. The workflow proceeds with post-M57 acceptance
+finalization only after explicit human acceptance. M58 is selected for human
+acceptance but must not be executed unless the planning result is accepted and
+finalized. M59/M60 remain draft planning candidates only.
 
 ## Validation Expectations
 

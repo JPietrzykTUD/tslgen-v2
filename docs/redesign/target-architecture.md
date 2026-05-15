@@ -376,11 +376,14 @@ Current roadmap note:
   arithmetic expression as typed generation-time lowering output. It must not
   become general expression parsing, comparison/branch pruning, backend
   translation, rendering, vector metadata, or body lowering.
-- The revised post-M56 plan, Milestone 57, adds only exact size-byte equality
+- Milestone 57 adds only exact size-byte equality
   predicate lowering for `== 2`, `== 4`, and `== 8`. It records typed boolean
   predicate values and must not prune branch chains, lower direct intrinsics,
   lower SVE array body statements, add vector metadata, backend translation,
   rendering, or generated output.
+- The selected post-M57 plan, Milestone 58, should make the generation-time
+  lowering stage contract explicit so later control-flow pruning consumes typed
+  values and predicates rather than raw helper text.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

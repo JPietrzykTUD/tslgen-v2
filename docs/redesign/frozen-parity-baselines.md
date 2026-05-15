@@ -96,10 +96,9 @@ reviewable:
 17. M56 is accepted as a generation-time semantic lowering slice for the exact
     scalar size-bytes-times-eight arithmetic value expression. It is not an
     output parity slice.
-18. The revised post-M56 plan, M57, is a generation-time semantic lowering
-    slice for exact size-byte equality predicates over `== 2`, `== 4`, and
-    `== 8`. It remains pending human acceptance and is not an output parity
-    slice.
+18. M57 is accepted as a generation-time semantic lowering slice for exact
+    size-byte equality predicates over `== 2`, `== 4`, and `== 8`. It is not
+    an output parity slice.
 19. CLI workflow compatibility, coverage JSON adapter breadth beyond the
     selected M50 row, executable generated tests, and broad generated-test parity
     remain deferred until explicitly selected as separate milestones.
@@ -331,8 +330,8 @@ and still does not add compiler execution.
   forms, concrete integer rule-source behavior beyond accepted M53 ownership
   and M54 catalog-to-lowering wiring, scalar value queries beyond the selected
   M55 size-byte helper, arithmetic over generation values beyond accepted M56,
-  comparisons over generation values beyond the selected M57 exact size-byte
-  equality predicate plan, branch-chain pruning over those predicates, and
+  comparisons over generation values beyond the accepted M57 exact size-byte
+  equality predicate slice, branch-chain pruning over those predicates, and
   backend translation-map evaluation beyond the selected M40/M45/M46 requests.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and
   googletest download or vendoring.

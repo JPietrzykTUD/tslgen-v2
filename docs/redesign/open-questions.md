@@ -1158,9 +1158,9 @@ Status: Answered for the Milestone 41 contract, Milestone 42 aligned-branch
 slice, accepted/implemented Milestone 43 base type query slice, and
 implemented Milestone 48 signedness branch-pruning slice. Narrowed, but not
 closed, by the M44-M47 post-M43 native integer sequence and subsequent
-M51-M56 lowering slices. The revised post-M56 plan, M57, narrows only exact
-size-byte equality predicates over `== 2`, `== 4`, and `== 8`; broader helper
-families remain open until selected by future milestones.
+M51-M57 lowering slices. M57 narrows only exact size-byte equality predicates
+over `== 2`, `== 4`, and `== 8`; broader helper families remain open until
+selected by future milestones.
 
 Why it matters:
 
@@ -1266,10 +1266,10 @@ Milestone 56 adds only the exact
 `value<generation>(type::size_bytes(type<generation>(base::in))) * 8`
 arithmetic expression as a typed generation value; it does not lower
 surrounding bodies or branch chains.
-The revised post-M56 plan, M57, adds only exact size-byte equality predicate
-lowering for `type.size_bytes == 2/4/8`. It records typed boolean predicate
-values, but still does not prune branch chains, lower SVE array bodies, direct
-intrinsics, vector metadata, backend translation, or rendering.
+M57 adds only exact size-byte equality predicate lowering for
+`type.size_bytes == 2/4/8`. It records typed boolean predicate values, but
+still does not prune branch chains, lower SVE array bodies, direct intrinsics,
+vector metadata, backend translation, or rendering.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1278,7 +1278,7 @@ predicate/branch syntax and selected concrete integer type set, primitive
 calls, loops, variables, generation-time branches beyond the selected aligned
 primitive-attribute and signedness predicate conditions, type/value metadata
 beyond the selected base type query family, M55 size-byte value query,
-selected M56 exact size-bytes-times-eight expression, selected M57 exact
+accepted M56 exact size-bytes-times-eight expression, accepted M57 exact
 size-byte equality predicates, branch-chain pruning over those predicates, and
 other nested
 expressions, direct `intrin<...>` calls, helper families such as
@@ -1472,7 +1472,7 @@ the exact scalar
 `value<generation>(type::size_bytes(type<generation>(base::in)))`
 generation-value query before backend translation. Milestone 56 adds only the
 exact size-bytes-times-eight generation-value arithmetic expression before
-backend translation. The revised post-M56 plan, M57, adds only exact
+backend translation. M57 adds only exact
 size-byte equality predicates over `== 2`, `== 4`, and `== 8`; it keeps branch
 chains, body lowering, backend translation, and rendering deferred.
 
@@ -1557,7 +1557,7 @@ arithmetic expression. It does not reopen general arithmetic, comparisons,
 branch pruning, `else if<generation>`, surrounding body lowering, backend
 translation, rendering, output, broad TSIL parsing, or runtime dependency on
 `frozen/`.
-The revised post-M56 plan, M57, reopens only exact
+M57 reopens only exact
 `type.size_bytes == 2/4/8` predicates. It does not reopen branch pruning,
 broad `else if<generation>`, final-else policy, direct-intrinsic/body
 lowering, backend translation, rendering, output, broad TSIL parsing, or
