@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 54 is accepted.
+Milestone 55 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -50,24 +50,32 @@ blocking implementation issues and no focused revision.
 Post-M54 planning is accepted. It selected Milestone 55, and internal review
 returned `Accept With Follow-Ups` after local planning-doc updates.
 
+The M55 execution-review loop returned `Accept With Follow-Ups` after one
+focused revision.
+
+Post-M55 planning selected Milestone 56, and internal review returned
+`Accept With Follow-Ups` after local planning-doc corrections.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run the Milestone 55 execution-review loop.
+Await human acceptance of the post-M55 planning update, then run the
+post-M55 acceptance finalization prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m55-execution-review-loop-prompt.md
+docs/agent/runs/post-m55-acceptance-finalization-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 55: Base Scalar Size-Bytes Generation Value Query Slice
+None. Milestone 56 is selected for human acceptance but is not active for
+execution yet.
 ```
 
 Planning review verdict:
@@ -79,9 +87,10 @@ Accept With Follow-Ups
 Next expected action:
 
 ```text
-Execute the active M55 prompt. If the internal execution-review loop accepts
-M55, create the next concrete prompt under docs/agent/runs/ without starting
-Milestone 56.
+If the user explicitly accepts the post-M55 planning update, execute the active
+acceptance finalization prompt. It should create the Milestone 56
+execution-review loop prompt and update this state file without implementing
+M56.
 ```
 
 Accepted planning prompt:
@@ -204,10 +213,22 @@ Accepted post-M54 acceptance finalization prompt:
 docs/agent/runs/post-m54-acceptance-finalization-prompt.md
 ```
 
-Active M55 execution prompt:
+Accepted M55 execution prompt:
 
 ```text
 docs/agent/runs/m55-execution-review-loop-prompt.md
+```
+
+Accepted post-M55 planning prompt:
+
+```text
+docs/agent/runs/post-m55-planning-plus-review-prompt.md
+```
+
+Active post-M55 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m55-acceptance-finalization-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -386,6 +407,22 @@ docs/agent/runs/m55-execution-review-loop-prompt.md
   `intrin<...>`, broad TSIL parsing, or runtime dependency on `frozen/`.
 - M55 must not make lowering read files, parse raw TSL, or query the
   catalog during evaluation.
+- Planned M56 is generation-time semantic lowering only.
+- Planned M56 selects exactly
+  `value<generation>(type::size_bytes(type<generation>(base::in))) * 8`.
+- Planned M56 consumes the M55 typed `GenerationValue(kind="type.size_bytes")`
+  behavior and explicit scalar size-byte rules to produce typed scalar
+  bit-width generation values.
+- Planned M56 must not add general arithmetic, operators other than the exact
+  selected `* 8` expression, reversed operands, arbitrary literals,
+  comparisons such as `== 2`, branch pruning, `else if<generation>`,
+  branch-chain syntax, surrounding body lowering, backend translation,
+  rendering, generated output, generated test sources, CLI/reporting, writer
+  behavior, Rust, compiler execution, generated-test execution,
+  vector/register metadata, broad TSIL parsing, or runtime dependency on
+  `frozen/`.
+- Planned M56 must not make lowering read files, parse raw TSL, or query the
+  catalog during evaluation.
 
 ## Accepted Milestone 48
 
@@ -517,6 +554,34 @@ renderer non-evaluation. M54 adds no new helper forms, backend translation
 expansion, rendering, generated output, CLI/reporting/writer behavior, Rust,
 compiler execution, broad TSIL parsing, or runtime dependency on `frozen/`.
 
+## Accepted Milestone 55
+
+The Milestone 55 execution-review loop accepted with non-blocking follow-ups:
+
+```text
+Milestone 55: Base Scalar Size-Bytes Generation Value Query Slice
+```
+
+The slice is generation-time semantic lowering only. It resolves exactly
+`value<generation>(type::size_bytes(type<generation>(base::in)))` to typed
+`GenerationValue(kind="type.size_bytes", value=<bytes>, type_tag=<tag>)`
+values for selected scalar tags `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`,
+`si64`, `ui64`, `f32`, and `f64`. The accepted byte values are
+`si8`/`ui8 -> 1`, `si16`/`ui16 -> 2`, `si32`/`ui32`/`f32 -> 4`, and
+`si64`/`ui64`/`f64 -> 8`.
+
+M55 uses explicit scalar size-byte rule/value records derived from typed
+catalog/type-group data before lowering evaluation. It preserves standalone
+`type<generation>(base::in)` and signed/unsigned companion behavior as
+integer-only; `f32` and `f64` are accepted only for the exact size-bytes value
+query. The focused revision tightened exact-query parsing so
+`value<generation>(type::size_bytes(type<generation>(base::in),))` is rejected
+with a stable arity diagnostic. M55 adds no generation-value arithmetic or
+comparisons, branch pruning from size values, enclosing body lowering, backend
+translation expansion, rendering, generated output, generated test sources,
+CLI/reporting/writer behavior, Rust, compiler execution, generated-test
+execution, broad TSIL parsing, or runtime dependency on `frozen/`.
+
 ## Known Follow-Ups
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
@@ -587,15 +652,22 @@ compiler execution, broad TSIL parsing, or runtime dependency on `frozen/`.
   `qword` selected tags. The implementation already classifies them as
   unsupported group selectors; the extra tests would tighten traceability to
   `tsldata/detail/types.tsl:25-26`.
-- Post-M54 planning follow-up: M55 may include `f32` and `f64` only for the
-  exact scalar size-bytes value query. It must not broaden standalone
-  `type<generation>(base::in)` or signed/unsigned companion behavior to
-  floats.
+- M55 review follow-up: consider tightening the shared generation-call
+  argument splitter so earlier helper families also reject empty/trailing
+  arguments consistently. M55 fixed the selected value-query path with a strict
+  parser and regression test.
+- M55 evidence follow-up: the already-used M55 execution prompt's IO evidence
+  citation can be tightened later to name `tsldata/primitives/io/out.tsl:22`
+  for the float test; the roadmap citation has been corrected.
+- Post-M55 planning follow-up: exact size-byte equality branch pruning over
+  `== 2`, `== 4`, and `== 8` remains a strong future lowering candidate, but
+  it is deferred from M56 because it also opens `else if<generation>` branch
+  chain syntax and selected-branch pruning policy.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the active M55
-execution-review loop prompt.
+No stop condition is active. The workflow proceeds with the active post-M55
+acceptance finalization prompt after explicit human acceptance.
 
 ## Validation Expectations
 

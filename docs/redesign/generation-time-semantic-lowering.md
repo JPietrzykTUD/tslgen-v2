@@ -72,7 +72,7 @@ behavior without treating the whole corpus as implemented.
 | `type<generation>(vector::register)` | `tsldata/primitives/load_store/load.tsl:39-45`, `load.tsl:59-67`, `store.tsl:56-61` | Resolve selected vector register type. | Backend id, extension, type tag, vector/register metadata. | `GenerationTypeRef(kind="vector.register")`. | Language type map. | required-later | Defer until vector register type rendering is selected. | Typed metadata fixtures; missing language-map diagnostics. |
 | `value<generation>(vector::length)` | `tsldata/primitives/load_store/load.tsl:41-43`, `tsldata/primitives/bitwise/shifts.tsl:50-53`, `shifts.tsl:218-221` | Resolve lane count for generated loops. | Extension, type tag, lane metadata. | `GenerationValue[int](kind="vector.length")`. | Extension/type metadata. | required-later | Defer with loop lowering. | Deterministic lane query tests after loop model exists. |
 | `value<generation>(vector::alignment)` | `tsldata/primitives/load_store/load.tsl:55-70`, `store.tsl:54-64`, `store.tsl:75-85` | Supply alignment value to selected aligned branch. | Extension, type tag, alignment metadata. | `GenerationValue[int](kind="vector.alignment")`. | Extension/type metadata. | required-later | Defer until aligned branch body rendering is selected. | Query tests plus missing alignment diagnostics. |
-| `value<generation>(type::size_bytes(type<generation>(base::in)))` | `tsldata/primitives/io/out.tsl:43-52`, `tsldata/primitives/bitwise/bit_counts.tsl:99`, `tsldata/primitives/load_store/array.tsl:107-109`, `tsldata/primitives/misc/conflict.tsl:79` | Resolve the selected scalar base type byte size. | Selected type tag plus explicit scalar size-byte rules for selected singleton scalar tags. | `GenerationValue[int](kind="type.size_bytes")`. | No backend data for the value itself. Later backend/rendering may consume already-lowered values only after separate slices. | selected M55 pending acceptance | M55 selects only the exact nested `base::in` query for `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`, `f32`, and `f64`. | Byte-value tests, float scope tests, unsupported group/wildcard diagnostics, missing context/rule diagnostics, determinism, raw-helper rejection, and no surrounding body lowering. |
+| `value<generation>(type::size_bytes(type<generation>(base::in)))` | `tsldata/primitives/io/out.tsl:43-52`, `tsldata/primitives/bitwise/bit_counts.tsl:99`, `tsldata/primitives/load_store/array.tsl:107-109`, `tsldata/primitives/misc/conflict.tsl:79` | Resolve the selected scalar base type byte size. | Selected type tag plus explicit scalar size-byte rules for selected singleton scalar tags. | `GenerationValue[int](kind="type.size_bytes")`. | No backend data for the value itself. Later backend/rendering may consume already-lowered values only after separate slices. | implemented by M55 | M55 selects only the exact nested `base::in` query for `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`, `f32`, and `f64`. | Byte-value tests, float scope tests, unsupported group/wildcard diagnostics, missing context/rule diagnostics, determinism, raw-helper rejection, and no surrounding body lowering. |
 | `type<generation>(base::in)` | `tsldata/primitives/bitwise/shifts.tsl:38-40`, `shifts.tsl:150`, `tsldata/primitives/conversion/repr_change.tsl:1210-1225` | Resolve selected primitive base type. | Type tag and active vector type. | `GenerationTypeRef(kind="base.in")`. | No backend data to resolve the semantic type; later backend spelling uses language maps. | implemented M43 | Selected by Milestone 43 as part of the base type query family. | Type-query diagnostics for missing type tag. |
 | `type<generation>(base::signed_of(type<generation>(base::in)))` and `type<generation>(base::unsigned_of(type<generation>(base::in)))` | `tsldata/primitives/arithmetic/fundamental.tsl:47-90`, `tsldata/primitives/bitwise/shifts.tsl:38-40`, `shifts.tsl:63-82` | Convert selected base type to signed/unsigned companion. | Type tag and integer signedness rules. | `GenerationTypeRef(kind="base.signed_of")` or `base.unsigned_of`. | No backend data to resolve the semantic type; later suffix translation uses translation maps. | implemented M43 | Milestone 43 accepts only these exact nested forms. Prose shorthand such as `base::signed_of(base::in)` is not accepted TSIL syntax. | Query tests for selected integer tags; unsupported float/pointer/generic conversion diagnostics. |
 | `type<generation>(vector::transform_extension(...))` and `vector::as_extension(...)` | `tsldata/primitives/conversion/repr_change.tsl:121-128`, `tsldata/primitives/bitwise/shifts.tsl:875-880`, `shifts.tsl:1222-1240` | Build related vector types for conversion or reinterpret paths. | Current extension, target extension, type tag, vector family/width. | `GenerationTypeRef(kind="vector.transform_extension")`. | Extension metadata and language type map. | required-later | Defer until conversion parity slice. | Fixture-driven type transformation tests. |
@@ -169,7 +169,7 @@ Selection method:
 | Immediate and generic-parameter value family | `tsldata/primitives/conversion/repr_change.tsl:1-10` for `sImm_type`; `tsldata/primitives/conversion/repr_change.tsl:121-128` and `:1188-1225` for `generic::length(OutVec)`; `tsldata/primitives/conversion/repr_change.tsl:352-370` and `:908-918` for `immediate(n)=...`; `tsldata/primitives/bitwise/shifts.tsl:1-10` for shift immediates. | `value<generation>(generic::length(OutVec))`, immediate modifier values such as `index` or a literal, selected generic parameters such as `ToBase`, `ToExtension`, and `index`. | Generic parameter bindings, immediate parameter roles, type aliases, selected extension/type context, parameter list, implementation source location. | `GenerationValue[int]`, `GenerationValue[GenericParamRef]`, or typed immediate-modifier value. | Requires compile switches, generic parameter scope, aliases, calls, and modifier parsing that are outside M42. | Some forms later require backend translation maps for modifier emission. | Not needed for current `binary/add`. | Important for conversion/extract/insert, but not the next smallest parity slice. | High. | Scope tests for generic bindings, immediate position validation, missing parameter diagnostics, and deterministic generic length once alias/type scope exists. | Defer. |
 | Second primitive-attribute branch | `store.tsl:177-188` and `196-213`; M42 already implements the aligned attribute shape. | `if<generation>(value<generation>(primitive::attribute(packed))) { ... } else<generation> { ... }`. | Primitive attributes, selected candidate id, implementation source location; useful mask-store lowering also needs mask roles and vector metadata. | Boolean primitive-attribute generation value plus pruned branch provenance. | Small code change if generalized from `aligned`, but selected branch bodies still contain unsupported masks, vector types, loops, and backend scalar casts. | None for the condition; branch bodies later need backend/type metadata. | Not needed. | Only useful when mask store parity is selected. | Low implementation risk, low parity value now. | Reuse M42 branch tests for `packed`, plus mask-store selected-branch diagnostics when mask parity exists. | Defer. |
 
-## Selected Next Helper Slice
+## Milestone 43 Selected Helper Slice
 
 Milestone 43 implements the base scalar type query family:
 
@@ -267,7 +267,7 @@ broad translation-map or language-map evaluation remain deferred. Renderers
 remain non-evaluating text emitters and must not parse raw generation-time
 helper text.
 
-## Post-M43 Through Post-M52 Direction
+## Post-M43 Through Selected Post-M55 Direction
 
 The accepted post-M43 phase is numbered in the roadmap:
 
@@ -329,28 +329,54 @@ The accepted post-M43 phase is numbered in the roadmap:
   before evaluation and passes them through `GenerationContext`; malformed or
   incomplete explicit catalog data reports rule-source diagnostics instead of
   falling back to synthetic defaults.
-- The selected post-M54 plan, Milestone 55, introduces the exact scalar
+- Milestone 55 introduces the exact scalar
   `value<generation>(type::size_bytes(type<generation>(base::in)))` query as a
   typed generation integer value for explicit selected scalar tags. It does not
   broaden standalone `base.in` or signed/unsigned companion behavior to floats
   and does not lower the surrounding bodies where the helper appears.
+- The selected post-M55 plan, Milestone 56, introduces only the exact
+  `value<generation>(type::size_bytes(type<generation>(base::in))) * 8`
+  arithmetic expression as a typed generation integer value for selected scalar
+  bit widths. It reuses the M55 typed value and scalar size-byte rules, and
+  does not add comparisons, branch pruning, `else if<generation>`, body
+  lowering, backend translation, or rendering.
+
+M55 typed semantic result:
+
+- `GenerationValue(kind="type.size_bytes", value=<bytes>, type_tag=<selected tag>)`
+
+M55 diagnostics:
+
+- `TSL-LOWER-GEN-VALUE-MALFORMED`
+- `TSL-LOWER-GEN-VALUE-UNSUPPORTED`
+- `TSL-LOWER-GEN-VALUE-NESTED-UNSUPPORTED`
+- `TSL-LOWER-GEN-VALUE-ARITY`
+- `TSL-LOWER-GEN-VALUE-CONTEXT-MISSING`
+- `TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED`
+- `TSL-LOWER-GEN-VALUE-TAG-UNKNOWN`
+- `TSL-DOMAIN-GEN-SIZE-RULE-TAG-UNSUPPORTED`
+- `TSL-DOMAIN-GEN-SIZE-RULE-TAG-UNKNOWN`
+- `TSL-DOMAIN-GEN-SIZE-RULE-SINGLETON-MISSING`
+- `TSL-DOMAIN-GEN-SIZE-RULE-SINGLETON-INCONSISTENT`
 
 This phase does not make backend translation parse raw generation-time helper
 text and does not move suffix or type-spelling evaluation into renderers.
 
 ## Explicit Deferrals
 
-Deferred beyond the accepted M43-M54 slices and the selected M55 value-query
-boundary:
+Deferred beyond the accepted M43-M55 slices and the selected M56 exact
+value-arithmetic boundary:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
   types, generic vector lengths, aliases, and non-selected base forms.
-- Generation-time value queries other than the selected M55 scalar
+- Generation-time value queries other than the M55 scalar
   size-bytes form, including vector length, vector alignment, mask lane
   constants, and generic lengths.
-- Arithmetic or comparisons over generation values, including `* 8`, `== 2`,
-  `else if<generation>`, and branch pruning based on size-byte values.
+- Arithmetic over generation values remains deferred except for the selected
+  M56 exact `type.size_bytes * 8` expression. Comparisons over generation
+  values, including `== 2`, `else if<generation>`, and branch pruning based on
+  size-byte values, remain deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only

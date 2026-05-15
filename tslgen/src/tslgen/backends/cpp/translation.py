@@ -581,7 +581,9 @@ def _unresolved_generation_helper_diagnostic(
         return None
     lowered = lowering_plan.implementations_by_candidate_id.get(candidate.candidate_id)
     if lowered is not None and (
-        lowered.generation_branches or lowered.generation_type_refs
+        lowered.generation_branches
+        or lowered.generation_type_refs
+        or lowered.generation_values
     ):
         return None
     return Diagnostic.error(

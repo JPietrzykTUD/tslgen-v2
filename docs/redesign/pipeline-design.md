@@ -391,7 +391,7 @@ through the normal lowering-input path for pipeline-facing use by constructing
 `ConcreteIntegerGenerationRuleSet`. Stage 8 still must not read
 files, parse raw TSL, query the catalog during evaluation, or infer broad type
 semantics from wildcard/group tags.
-The selected post-M54 plan, Milestone 55, keeps Stage 8 as the owner of
+Milestone 55 keeps Stage 8 as the owner of
 generation-time scalar value evaluation by adding exactly
 `value<generation>(type::size_bytes(type<generation>(base::in)))` over an
 explicit typed scalar size-byte rule source. The lowered result is a typed
@@ -399,6 +399,12 @@ integer generation value for selected scalar tags only; Stage 8 still does not
 evaluate arithmetic/comparison expressions around that value, lower enclosing
 IO/array/loop/cast/call/direct-intrinsic bodies, or pass raw generation helper
 text into backend translation or renderers.
+The selected post-M55 plan, Milestone 56, reopens only the exact
+`type.size_bytes * 8` value-arithmetic expression inside Stage 8. It should
+consume the M55 typed value and produce another typed generation integer value;
+comparisons, branch pruning, `else if<generation>`, surrounding body lowering,
+backend translation, rendering, and output remain outside Stage 8's selected
+M56 work.
 
 ## Stage 9: Backend Planning
 

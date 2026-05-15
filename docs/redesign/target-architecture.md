@@ -365,12 +365,17 @@ Current roadmap note:
 - Milestone 54 wires the M53 rule source through the normal
   catalog/lowering-input path while preserving the same lowering behavior and
   side-effect boundaries.
-- The selected post-M54 plan, Milestone 55, adds only the exact scalar
+- Milestone 55 adds only the exact scalar
   `value<generation>(type::size_bytes(type<generation>(base::in)))` value query
   as typed generation-time lowering output. It uses explicit scalar size-byte
   rules for selected scalar tags and must not broaden backend translation,
   rendering, vector metadata, branch-body lowering, or standalone float
   `base.in`/companion semantics.
+- The selected post-M55 plan, Milestone 56, adds only the exact
+  `value<generation>(type::size_bytes(type<generation>(base::in))) * 8`
+  arithmetic expression as typed generation-time lowering output. It must not
+  become general expression parsing, comparison/branch pruning, backend
+  translation, rendering, vector metadata, or body lowering.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

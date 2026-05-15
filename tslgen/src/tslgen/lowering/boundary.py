@@ -11,9 +11,13 @@ from tslgen.core.result import Result
 from tslgen.domain.catalog import Catalog
 from tslgen.domain.generation_rules import (
     ConcreteIntegerGenerationRuleSet,
+    ScalarSizeBytesGenerationRuleSet,
     build_concrete_integer_generation_rule_set_from_catalog,
+    build_scalar_size_bytes_generation_rule_set_from_catalog,
     classify_concrete_integer_generation_type_tag,
+    classify_scalar_size_bytes_generation_type_tag,
     default_concrete_integer_generation_rule_set,
+    default_scalar_size_bytes_generation_rule_set,
     is_non_integer_generation_type_tag,
 )
 from tslgen.domain.values import CatalogValue
@@ -34,6 +38,7 @@ type GenerationTypeRefKind = Literal[
     "base.signed_of",
     "base.unsigned_of",
 ]
+type GenerationValueKind = Literal["type.size_bytes"]
 type TsilBinaryOperator = Literal["+"]
 type TsilExpression = (
     TsilParameterReference | TsilBinaryExpression | TsilIntrinsicComposeExpression
@@ -47,6 +52,7 @@ _GENERATION_HELPER_MARKERS = (
     "value<generation>",
 )
 _GENERATION_TYPE_MARKER = "type<generation>"
+_GENERATION_VALUE_MARKER = "value<generation>"
 _TSIL_IDENTIFIER = r"[A-Za-z_][A-Za-z0-9_]*"
 _TSIL_IDENTIFIER_RE = re.compile(rf"\A{_TSIL_IDENTIFIER}\Z")
 _PRIMITIVE_ATTRIBUTE_CONDITION_RE = re.compile(
@@ -80,6 +86,9 @@ class GenerationContext:
     use_candidate_type_tag: bool = True
     concrete_integer_generation_rules: ConcreteIntegerGenerationRuleSet = field(
         default_factory=default_concrete_integer_generation_rule_set
+    )
+    scalar_size_bytes_generation_rules: ScalarSizeBytesGenerationRuleSet = field(
+        default_factory=default_scalar_size_bytes_generation_rule_set
     )
     implementation_source_location: SourceLocation | None = None
 
@@ -189,17 +198,24 @@ def build_catalog_lowering_request(
 ) -> Result[LoweringRequest]:
     """Build a lowering request with generation rules derived before evaluation."""
 
-    rules = build_concrete_integer_generation_rule_set_from_catalog(catalog)
-    if not rules.is_ok:
-        return Result.failure(rules.diagnostics)
+    concrete_rules = build_concrete_integer_generation_rule_set_from_catalog(catalog)
+    scalar_size_rules = build_scalar_size_bytes_generation_rule_set_from_catalog(catalog)
+    diagnostics = (*concrete_rules.diagnostics, *scalar_size_rules.diagnostics)
+    if has_errors(diagnostics):
+        return Result.failure(sort_diagnostics(diagnostics))
 
-    rule_set = rules.unwrap()
+    concrete_rule_set = concrete_rules.unwrap()
+    scalar_size_rule_set = scalar_size_rules.unwrap()
     context = (
-        GenerationContext(concrete_integer_generation_rules=rule_set)
+        GenerationContext(
+            concrete_integer_generation_rules=concrete_rule_set,
+            scalar_size_bytes_generation_rules=scalar_size_rule_set,
+        )
         if generation_context is None
         else replace(
             generation_context,
-            concrete_integer_generation_rules=rule_set,
+            concrete_integer_generation_rules=concrete_rule_set,
+            scalar_size_bytes_generation_rules=scalar_size_rule_set,
         )
     )
     return Result.ok(
@@ -341,12 +357,30 @@ class GenerationTypeRef:
 
 
 @dataclass(frozen=True, slots=True)
+class GenerationValue:
+    kind: GenerationValueKind
+    value: int
+    type_tag: str
+
+    def __post_init__(self) -> None:
+        if isinstance(self.value, bool) or not isinstance(self.value, int):
+            raise ValueError("generation value payload must be an integer")
+        if not self.type_tag:
+            raise ValueError("generation value type tag must be non-empty")
+
+    @property
+    def key(self) -> tuple[str, int, str]:
+        return (self.kind, self.value, self.type_tag)
+
+
+@dataclass(frozen=True, slots=True)
 class LoweredImplementation:
     candidate_id: str
     status: LoweringStatus
     statements: tuple[TsilStatement, ...] = ()
     generation_branches: tuple[PrunedGenerationBranch, ...] = ()
     generation_type_refs: tuple[GenerationTypeRef, ...] = ()
+    generation_values: tuple[GenerationValue, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.candidate_id:
@@ -362,6 +396,11 @@ class LoweredImplementation:
             "generation_type_refs",
             tuple(self.generation_type_refs),
         )
+        object.__setattr__(
+            self,
+            "generation_values",
+            tuple(self.generation_values),
+        )
 
     @property
     def key(self) -> tuple[object, ...]:
@@ -371,6 +410,7 @@ class LoweredImplementation:
             tuple(statement.key for statement in self.statements),
             tuple(branch.key for branch in self.generation_branches),
             tuple(type_ref.key for type_ref in self.generation_type_refs),
+            tuple(value.key for value in self.generation_values),
         )
 
 
@@ -493,6 +533,32 @@ def resolve_generation_type_query(
     )
 
 
+def resolve_generation_value_query(
+    query_text: str,
+    context: GenerationContext | None = None,
+    *,
+    selected_candidate_type_tag: str | None = None,
+    location: SourceLocation | None = None,
+) -> Result[GenerationValue]:
+    generation_context = context or GenerationContext()
+    diagnostic_location = (
+        location
+        if location is not None
+        else generation_context.implementation_source_location
+    )
+    query = query_text.strip()
+    inner = _generation_value_query_inner(query, diagnostic_location)
+    if not inner.is_ok:
+        return Result.failure(inner.diagnostics)
+    return _generation_value_from_inner(
+        inner.unwrap(),
+        query,
+        generation_context,
+        selected_candidate_type_tag=selected_candidate_type_tag,
+        location=diagnostic_location,
+    )
+
+
 def _classify_payload(candidate: ImplementationCandidate) -> Result[ClassifiedPayload]:
     body = candidate.implementation.body
     text = body.text
@@ -542,6 +608,18 @@ def _lower_input(
             )
         )
 
+    generation_value = _lower_generation_value_query_payload(item, request, text)
+    if generation_value is not None:
+        if not generation_value.is_ok:
+            return Result.failure(generation_value.diagnostics)
+        return Result.ok(
+            LoweredImplementation(
+                candidate_id=item.candidate_id,
+                status="lowered",
+                generation_values=(generation_value.unwrap(),),
+            )
+        )
+
     generation_branches: tuple[PrunedGenerationBranch, ...] = ()
     if item.payload.has_generation_condition:
         if _GENERATION_CONDITION_MARKER not in text:
@@ -586,6 +664,30 @@ def _lower_generation_type_query_payload(
         else None
     )
     return resolve_generation_type_query(
+        stripped,
+        context,
+        selected_candidate_type_tag=selected_candidate_type_tag,
+        location=item.source_location,
+    )
+
+
+def _lower_generation_value_query_payload(
+    item: LoweringInput,
+    request: LoweringRequest,
+    text: str,
+) -> Result[GenerationValue] | None:
+    if _GENERATION_VALUE_MARKER not in text:
+        return None
+    stripped = text.strip()
+    if not stripped.startswith(_GENERATION_VALUE_MARKER):
+        return None
+    context = _context_for_candidate(item, request)
+    selected_candidate_type_tag = (
+        item.candidate.type_tag
+        if request.generation_context.use_candidate_type_tag
+        else None
+    )
+    return resolve_generation_value_query(
         stripped,
         context,
         selected_candidate_type_tag=selected_candidate_type_tag,
@@ -716,6 +818,9 @@ def _context_for_candidate(
         type_tag_override=context.type_tag_override,
         use_candidate_type_tag=context.use_candidate_type_tag,
         concrete_integer_generation_rules=context.concrete_integer_generation_rules,
+        scalar_size_bytes_generation_rules=(
+            context.scalar_size_bytes_generation_rules
+        ),
         implementation_source_location=(
             context.implementation_source_location or item.source_location
         ),
@@ -874,6 +979,95 @@ def _generation_type_ref_from_inner(
     )
 
 
+def _generation_value_query_inner(
+    query_text: str,
+    location: SourceLocation | None,
+) -> Result[str]:
+    query = query_text.strip()
+    if not query.startswith(_GENERATION_VALUE_MARKER):
+        return Result.failure(
+            (
+                _unsupported_generation_value_query_diagnostic(
+                    query_text,
+                    location,
+                ),
+            )
+        )
+
+    cursor = len(_GENERATION_VALUE_MARKER)
+    cursor = _skip_whitespace(query, cursor)
+    if cursor >= len(query) or query[cursor] != "(":
+        return Result.failure(
+            (_malformed_generation_value_query_diagnostic(query_text, location),)
+        )
+    query_end = _matching_delimiter(query, cursor, "(", ")")
+    if query_end is None:
+        return Result.failure(
+            (_malformed_generation_value_query_diagnostic(query_text, location),)
+        )
+    tail = query[query_end + 1:].strip()
+    if tail:
+        return Result.failure(
+            (_malformed_generation_value_query_diagnostic(query_text, location),)
+        )
+    return Result.ok(query[cursor + 1:query_end].strip())
+
+
+def _generation_value_from_inner(
+    inner: str,
+    query_text: str,
+    context: GenerationContext,
+    *,
+    selected_candidate_type_tag: str | None,
+    location: SourceLocation | None,
+) -> Result[GenerationValue]:
+    parsed = _parse_generation_value_call(inner, "type::size_bytes")
+    if parsed is None:
+        return Result.failure(
+            (_unsupported_generation_value_query_diagnostic(query_text, location),)
+        )
+    if len(parsed) != 1:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-GEN-VALUE-ARITY",
+                    "generation-time scalar size-bytes value query requires "
+                    "exactly one nested type query argument; got "
+                    f"{len(parsed)} in {query_text!r}",
+                    location=location,
+                ),
+            )
+        )
+
+    nested = parsed[0].strip()
+    nested_inner = _generation_type_query_inner(nested, location)
+    if not nested_inner.is_ok or nested_inner.unwrap() != "base::in":
+        return Result.failure(
+            (
+                _unsupported_nested_generation_value_query_diagnostic(
+                    query_text,
+                    nested,
+                    location,
+                ),
+            )
+        )
+
+    type_tag = _effective_generation_value_type_tag(
+        context,
+        selected_candidate_type_tag=selected_candidate_type_tag,
+        query_text=query_text,
+        location=location,
+    )
+    if not type_tag.is_ok:
+        return Result.failure(type_tag.diagnostics)
+    return _type_size_bytes_generation_value(
+        type_tag.unwrap(),
+        context.scalar_size_bytes_generation_rules,
+        query_text,
+        location,
+    )
+
+
 def _parse_generation_type_call(text: str, function_name: str) -> tuple[str, ...] | None:
     stripped = text.strip()
     if not stripped.startswith(function_name):
@@ -885,6 +1079,19 @@ def _parse_generation_type_call(text: str, function_name: str) -> tuple[str, ...
     if close_index is None or stripped[close_index + 1:].strip():
         return ()
     return _split_generation_type_arguments(stripped[open_index + 1:close_index])
+
+
+def _parse_generation_value_call(text: str, function_name: str) -> tuple[str, ...] | None:
+    stripped = text.strip()
+    if not stripped.startswith(function_name):
+        return None
+    open_index = _skip_whitespace(stripped, len(function_name))
+    if open_index >= len(stripped) or stripped[open_index] != "(":
+        return None
+    close_index = _matching_delimiter(stripped, open_index, "(", ")")
+    if close_index is None or stripped[close_index + 1:].strip():
+        return ()
+    return _split_generation_value_arguments(stripped[open_index + 1:close_index])
 
 
 def _split_generation_type_arguments(text: str) -> tuple[str, ...]:
@@ -909,6 +1116,28 @@ def _split_generation_type_arguments(text: str) -> tuple[str, ...]:
     return tuple(arguments)
 
 
+def _split_generation_value_arguments(text: str) -> tuple[str, ...]:
+    arguments: list[str] = []
+    start = 0
+    depth = 0
+    for index, character in enumerate(text):
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth < 0:
+                return ()
+        elif character == "," and depth == 0:
+            arguments.append(text[start:index].strip())
+            start = index + 1
+    if depth != 0:
+        return ()
+    tail = text[start:].strip()
+    if tail or arguments:
+        arguments.append(tail)
+    return tuple(arguments)
+
+
 def _effective_generation_type_tag(
     context: GenerationContext,
     *,
@@ -929,6 +1158,34 @@ def _effective_generation_type_tag(
                     "generation-time type query requires a selected candidate "
                     "type tag or GenerationContext.type_tag_override; query "
                     f"was {query_text!r}",
+                    location=location,
+                ),
+            )
+        )
+    return Result.ok(type_tag)
+
+
+def _effective_generation_value_type_tag(
+    context: GenerationContext,
+    *,
+    selected_candidate_type_tag: str | None,
+    query_text: str,
+    location: SourceLocation | None,
+) -> Result[str]:
+    type_tag = (
+        context.type_tag_override
+        or context.selected_type_tag
+        or selected_candidate_type_tag
+    )
+    if type_tag is None:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-GEN-VALUE-CONTEXT-MISSING",
+                    "generation-time scalar size-bytes value query requires a "
+                    "selected candidate type tag or "
+                    "GenerationContext.type_tag_override; query was "
+                    f"{query_text!r}",
                     location=location,
                 ),
             )
@@ -976,6 +1233,47 @@ def _supported_generation_type_tag(
                 "TSL-LOWER-GEN-TYPE-TAG-UNKNOWN",
                 "generation-time base type query received unknown type tag "
                 f"{type_tag!r} for query {query_text!r}",
+                location=location,
+            ),
+        )
+    )
+
+
+def _type_size_bytes_generation_value(
+    type_tag: str,
+    rule_set: ScalarSizeBytesGenerationRuleSet,
+    query_text: str,
+    location: SourceLocation | None,
+) -> Result[GenerationValue]:
+    rule = rule_set.rule_for(type_tag)
+    if rule is not None:
+        return Result.ok(
+            GenerationValue(
+                kind="type.size_bytes",
+                value=rule.size_bytes,
+                type_tag=rule.type_tag,
+            )
+        )
+    status = classify_scalar_size_bytes_generation_type_tag(type_tag)
+    if status in ("selected", "unsupported"):
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED",
+                    "generation-time scalar size-bytes value query supports "
+                    "only selected scalar type tags "
+                    f"{_quoted_join(rule_set.supported_type_tags)}; got "
+                    f"{type_tag!r} for query {query_text!r}",
+                    location=location,
+                ),
+            )
+        )
+    return Result.failure(
+        (
+            Diagnostic.error(
+                "TSL-LOWER-GEN-VALUE-TAG-UNKNOWN",
+                "generation-time scalar size-bytes value query received "
+                f"unknown type tag {type_tag!r} for query {query_text!r}",
                 location=location,
             ),
         )
@@ -1502,6 +1800,47 @@ def _unsupported_nested_generation_type_query_diagnostic(
         "TSL-LOWER-GEN-TYPE-NESTED-UNSUPPORTED",
         "generation-time signed/unsigned companion lowering supports only "
         "nested 'type<generation>(base::in)' input; got nested query "
+        f"{nested_text!r} in {query_text!r}",
+        location=location,
+    )
+
+
+def _malformed_generation_value_query_diagnostic(
+    query_text: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-VALUE-MALFORMED",
+        "generation-time value query must be shaped as "
+        "'value<generation>(...)'; got "
+        f"{query_text!r}",
+        location=location,
+    )
+
+
+def _unsupported_generation_value_query_diagnostic(
+    query_text: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-VALUE-UNSUPPORTED",
+        "generation-time value lowering supports only "
+        "'value<generation>(type::size_bytes("
+        "type<generation>(base::in)))'; "
+        f"got {query_text!r}",
+        location=location,
+    )
+
+
+def _unsupported_nested_generation_value_query_diagnostic(
+    query_text: str,
+    nested_text: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-GEN-VALUE-NESTED-UNSUPPORTED",
+        "generation-time scalar size-bytes lowering supports only nested "
+        "'type<generation>(base::in)' input; got nested query "
         f"{nested_text!r} in {query_text!r}",
         location=location,
     )

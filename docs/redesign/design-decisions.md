@@ -1308,13 +1308,19 @@ Consequences:
   backend/rendering boundaries. The focused adapter builds a
   `LoweringRequest` with explicit catalog-derived concrete integer rules before
   lowering evaluates generation-time helpers.
-- The selected post-M54 plan, Milestone 55, introduces only the exact scalar
+- Milestone 55 introduces only the exact scalar
   size-byte generation value query
   `value<generation>(type::size_bytes(type<generation>(base::in)))`. It uses
   explicit scalar size-byte rules for selected integer and `f32`/`f64`
   singleton tags, returns a typed integer generation value, and keeps float
   support scoped to this query instead of broadening standalone `base.in` or
   signed/unsigned companion semantics.
+- The selected post-M55 plan, Milestone 56, introduces only the exact
+  `value<generation>(type::size_bytes(type<generation>(base::in))) * 8`
+  arithmetic expression as another typed generation integer value. It keeps
+  general expression parsing, comparisons, branch pruning, `else if<generation>`,
+  surrounding body lowering, backend translation, rendering, and output
+  deferred.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

@@ -4,6 +4,7 @@ from tslgen.lowering.boundary import (
     ClassifiedPayload,
     GenerationContext,
     GenerationTypeRef,
+    GenerationValue,
     LoweredImplementation,
     LoweringInput,
     LoweringInputSet,
@@ -20,6 +21,7 @@ from tslgen.lowering.boundary import (
     lower_candidates,
     prepare_lowering_inputs,
     resolve_generation_type_query,
+    resolve_generation_value_query,
 )
 from tslgen.lowering.translations import (
     BackendIntrinsicModifier,
@@ -33,6 +35,7 @@ __all__ = [
     "ClassifiedPayload",
     "GenerationContext",
     "GenerationTypeRef",
+    "GenerationValue",
     "LoweredImplementation",
     "LoweringInput",
     "LoweringInputSet",
@@ -54,4 +57,5 @@ __all__ = [
     "lower_candidates",
     "prepare_lowering_inputs",
     "resolve_generation_type_query",
+    "resolve_generation_value_query",
 ]

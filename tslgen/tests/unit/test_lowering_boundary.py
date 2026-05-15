@@ -10,12 +10,16 @@ from tslgen.analysis.selection import SelectionRequest, plan_selection
 from tslgen.config.model import SourceConfig
 from tslgen.core.frozen_map import FrozenMap
 from tslgen.domain.catalog import Catalog, build_catalog
-from tslgen.domain.generation_rules import build_concrete_integer_generation_rule_set
+from tslgen.domain.generation_rules import (
+    build_concrete_integer_generation_rule_set,
+    build_scalar_size_bytes_generation_rule_set,
+)
 from tslgen.domain.types import TypeGroup
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
 from tslgen.lowering import (
     GenerationContext,
     GenerationTypeRef,
+    GenerationValue,
     LoweringRequest,
     PrunedGenerationBranch,
     TsilBinaryExpression,
@@ -28,6 +32,7 @@ from tslgen.lowering import (
     lower_candidates,
     prepare_lowering_inputs,
     resolve_generation_type_query,
+    resolve_generation_value_query,
 )
 from tslgen.syntax.ast import ParsedDocumentSet
 from tslgen.syntax.parser import parse_document, parse_sources
@@ -310,6 +315,24 @@ prim<v:=(v,v)> lower_generation_type_override(left, right):
         implementation:
           tsil "type<generation>(base::in)"
 
+prim<v:=(v,v)> lower_generation_size_bytes(left, right):
+  tests []
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "value<generation>(type::size_bytes(type<generation>(base::in)))"
+
+prim<v:=(v,v)> lower_generation_size_bytes_override(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "value<generation>(type::size_bytes(type<generation>(base::in)))"
+
 prim<v:=ptr>[aligned=true] lower_generation_aligned_true(ptr):
   tests []
   impls:
@@ -541,6 +564,18 @@ IS_SIGNED_BY_TAG = {
     "si64": True,
     "ui64": False,
 }
+SCALAR_SIZE_BYTES_BY_TAG = {
+    "si8": 1,
+    "ui8": 1,
+    "si16": 2,
+    "ui16": 2,
+    "si32": 4,
+    "ui32": 4,
+    "f32": 4,
+    "si64": 8,
+    "ui64": 8,
+    "f64": 8,
+}
 
 
 class LoweringBoundaryTests(unittest.TestCase):
@@ -745,6 +780,94 @@ class LoweringBoundaryTests(unittest.TestCase):
             severity="error",
         )
         self.assertIn("'si32', 'ui32'", result.diagnostics[0].message)
+        self.assertNotIn("'ui64'", result.diagnostics[0].message)
+
+    def test_catalog_lowering_request_wires_scalar_size_byte_rules(
+        self,
+    ) -> None:
+        catalog = catalog_with_primitives(LOWERING_FIXTURE)
+        selection = self.selection_for("lower_generation_size_bytes")
+
+        request = build_catalog_lowering_request(catalog, backend_id="cpp")
+
+        self.assertTrue(request.is_ok, request.diagnostics)
+        lowering_request = request.unwrap()
+        rule_set = (
+            lowering_request.generation_context.scalar_size_bytes_generation_rules
+        )
+        self.assertEqual(
+            rule_set.supported_type_tags,
+            tuple(SCALAR_SIZE_BYTES_BY_TAG),
+        )
+
+        result = lower_candidates(selection, lowering_request)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertIs(
+            result.unwrap().request.generation_context.scalar_size_bytes_generation_rules,
+            rule_set,
+        )
+        self.assertEqual(
+            {
+                implementation.generation_values[0].type_tag: (
+                    implementation.generation_values[0].value
+                )
+                for implementation in result.unwrap().implementations
+            },
+            SCALAR_SIZE_BYTES_BY_TAG,
+        )
+
+    def test_catalog_lowering_request_reports_missing_scalar_size_rule_data_without_default(
+        self,
+    ) -> None:
+        catalog = catalog_with_primitives(LOWERING_FIXTURE)
+        missing_f64 = catalog_with_type_groups(
+            catalog,
+            tuple(group for group in catalog.type_groups if group.name != "f64"),
+        )
+
+        request = build_catalog_lowering_request(missing_f64, backend_id="cpp")
+
+        self.assertFalse(request.is_ok)
+        self.assertIn(
+            "TSL-DOMAIN-GEN-SIZE-RULE-SINGLETON-MISSING",
+            {diagnostic.code for diagnostic in request.diagnostics},
+        )
+        self.assertTrue(
+            any("f64" in diagnostic.message for diagnostic in request.diagnostics)
+        )
+
+    def test_explicit_scalar_size_rules_do_not_fall_back_to_default(
+        self,
+    ) -> None:
+        catalog = catalog_with_primitives(LOWERING_FIXTURE)
+        si32_size_rules = build_scalar_size_bytes_generation_rule_set(
+            tuple(group for group in catalog.type_groups if group.name == "si32"),
+            selected_type_tags=("si32",),
+        )
+        if not si32_size_rules.is_ok:
+            raise AssertionError(si32_size_rules.diagnostics)
+        selection = self.selection_for("lower_generation_size_bytes_override")
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(
+                    type_tag_override="f64",
+                    scalar_size_bytes_generation_rules=si32_size_rules.unwrap(),
+                ),
+            ),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED",
+            severity="error",
+        )
+        self.assertIn("'si32'", result.diagnostics[0].message)
+        self.assertIn("'f64'", result.diagnostics[0].message)
         self.assertNotIn("'ui64'", result.diagnostics[0].message)
 
     def test_lowers_base_generation_type_query_for_concrete_integers(self) -> None:
@@ -1057,6 +1180,300 @@ class LoweringBoundaryTests(unittest.TestCase):
             severity="error",
         )
         self.assertIn("vector::register", result.diagnostics[0].message)
+
+    def test_lowers_size_bytes_generation_value_query_for_selected_scalar_tags(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_bytes")
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementations = result.unwrap().implementations
+        self.assertEqual(len(implementations), len(SCALAR_SIZE_BYTES_BY_TAG))
+        for implementation in implementations:
+            self.assertEqual(implementation.statements, ())
+            self.assertEqual(implementation.generation_type_refs, ())
+            self.assertEqual(len(implementation.generation_values), 1)
+            value = implementation.generation_values[0]
+            self.assertEqual(value.kind, "type.size_bytes")
+            self.assertEqual(value.value, SCALAR_SIZE_BYTES_BY_TAG[value.type_tag])
+
+        self.assertEqual(
+            {
+                implementation.generation_values[0].type_tag: (
+                    implementation.generation_values[0].value
+                )
+                for implementation in implementations
+            },
+            SCALAR_SIZE_BYTES_BY_TAG,
+        )
+
+    def test_resolves_size_bytes_generation_value_query_for_each_selected_scalar(
+        self,
+    ) -> None:
+        query = "value<generation>(type::size_bytes(type<generation>(base::in)))"
+
+        for type_tag, size_bytes in SCALAR_SIZE_BYTES_BY_TAG.items():
+            with self.subTest(type_tag=type_tag):
+                result = resolve_generation_value_query(
+                    query,
+                    GenerationContext(type_tag_override=type_tag),
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                self.assertEqual(
+                    result.unwrap(),
+                    GenerationValue(
+                        kind="type.size_bytes",
+                        value=size_bytes,
+                        type_tag=type_tag,
+                    ),
+                )
+
+    def test_size_bytes_query_accepts_floats_without_broadening_type_queries(
+        self,
+    ) -> None:
+        query = "value<generation>(type::size_bytes(type<generation>(base::in)))"
+
+        for type_tag, size_bytes in (("f32", 4), ("f64", 8)):
+            with self.subTest(type_tag=type_tag):
+                value = resolve_generation_value_query(
+                    query,
+                    GenerationContext(type_tag_override=type_tag),
+                )
+                base_type = resolve_generation_type_query(
+                    "type<generation>(base::in)",
+                    GenerationContext(type_tag_override=type_tag),
+                )
+                signed_type = resolve_generation_type_query(
+                    "type<generation>(base::signed_of(type<generation>(base::in)))",
+                    GenerationContext(type_tag_override=type_tag),
+                )
+
+                self.assertTrue(value.is_ok, value.diagnostics)
+                self.assertEqual(value.unwrap().value, size_bytes)
+                self.assertFalse(base_type.is_ok)
+                assert_diagnostic(
+                    self,
+                    base_type.diagnostics[0],
+                    code="TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED",
+                    severity="error",
+                )
+                self.assertFalse(signed_type.is_ok)
+                assert_diagnostic(
+                    self,
+                    signed_type.diagnostics[0],
+                    code="TSL-LOWER-GEN-TYPE-NON-INTEGER",
+                    severity="error",
+                )
+
+    def test_size_bytes_generation_value_query_uses_context_precedence(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_bytes_override")
+        query = "value<generation>(type::size_bytes(type<generation>(base::in)))"
+
+        override_result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(
+                    selected_type_tag="ui16",
+                    type_tag_override="f64",
+                ),
+            ),
+        )
+        selected_context_result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(selected_type_tag="ui16"),
+            ),
+        )
+        candidate_default_result = lower_candidates(selection)
+        direct_candidate_result = resolve_generation_value_query(
+            query,
+            GenerationContext(),
+            selected_candidate_type_tag="si8",
+        )
+
+        self.assertTrue(override_result.is_ok, override_result.diagnostics)
+        self.assertEqual(
+            override_result.unwrap().implementations[0].generation_values,
+            (GenerationValue(kind="type.size_bytes", value=8, type_tag="f64"),),
+        )
+        self.assertTrue(
+            selected_context_result.is_ok,
+            selected_context_result.diagnostics,
+        )
+        self.assertEqual(
+            selected_context_result.unwrap().implementations[0].generation_values,
+            (GenerationValue(kind="type.size_bytes", value=2, type_tag="ui16"),),
+        )
+        self.assertTrue(
+            candidate_default_result.is_ok,
+            candidate_default_result.diagnostics,
+        )
+        self.assertEqual(
+            candidate_default_result.unwrap().implementations[0].generation_values,
+            (GenerationValue(kind="type.size_bytes", value=4, type_tag="si32"),),
+        )
+        self.assertTrue(direct_candidate_result.is_ok, direct_candidate_result.diagnostics)
+        self.assertEqual(
+            direct_candidate_result.unwrap(),
+            GenerationValue(kind="type.size_bytes", value=1, type_tag="si8"),
+        )
+
+    def test_size_bytes_generation_value_query_reports_missing_type_context(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_bytes_override")
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(use_candidate_type_tag=False),
+            ),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-VALUE-CONTEXT-MISSING",
+            severity="error",
+        )
+
+    def test_size_bytes_generation_value_query_is_deterministic(self) -> None:
+        selection = self.selection_for("lower_generation_size_bytes")
+
+        first = lower_candidates(selection)
+        second = lower_candidates(selection)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+
+    def test_size_bytes_generation_value_query_reports_malformed_query(self) -> None:
+        result = resolve_generation_value_query(
+            "value<generation>(type::size_bytes(type<generation>(base::in))",
+            GenerationContext(type_tag_override="si32"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-VALUE-MALFORMED",
+            severity="error",
+        )
+
+    def test_size_bytes_generation_value_query_reports_wrong_arity(self) -> None:
+        result = resolve_generation_value_query(
+            "value<generation>(type::size_bytes("
+            "type<generation>(base::in), type<generation>(base::in)))",
+            GenerationContext(type_tag_override="si32"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-VALUE-ARITY",
+            severity="error",
+        )
+
+    def test_size_bytes_generation_value_query_rejects_trailing_comma(self) -> None:
+        result = resolve_generation_value_query(
+            "value<generation>(type::size_bytes("
+            "type<generation>(base::in),))",
+            GenerationContext(type_tag_override="si32"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-VALUE-ARITY",
+            severity="error",
+        )
+
+    def test_size_bytes_generation_value_query_reports_unsupported_nested_operands(
+        self,
+    ) -> None:
+        cases = (
+            "type<generation>(base::signed_of(type<generation>(base::in)))",
+            "type<generation>(base::unsigned_of(type<generation>(base::in)))",
+            "type<generation>(vector::register)",
+            "base::in",
+        )
+
+        for nested in cases:
+            with self.subTest(nested=nested):
+                result = resolve_generation_value_query(
+                    f"value<generation>(type::size_bytes({nested}))",
+                    GenerationContext(type_tag_override="si32"),
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code="TSL-LOWER-GEN-VALUE-NESTED-UNSUPPORTED",
+                    severity="error",
+                )
+                self.assertIn(nested, result.diagnostics[0].message)
+
+    def test_size_bytes_generation_value_query_reports_unsupported_value_forms(
+        self,
+    ) -> None:
+        result = resolve_generation_value_query(
+            "value<generation>(vector::length)",
+            GenerationContext(type_tag_override="si32"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-VALUE-UNSUPPORTED",
+            severity="error",
+        )
+
+    def test_size_bytes_generation_value_query_reports_unsupported_tags(self) -> None:
+        query = "value<generation>(type::size_bytes(type<generation>(base::in)))"
+        cases = (
+            ("ptr", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("mask", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("imask", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("?i?", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("?i64", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("si?", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("ui?", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("f?", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("arith", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("dword", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("qword", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("idqword", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("dqword", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("si128", "TSL-LOWER-GEN-VALUE-TAG-UNSUPPORTED"),
+            ("mystery", "TSL-LOWER-GEN-VALUE-TAG-UNKNOWN"),
+        )
+
+        for type_tag, code in cases:
+            with self.subTest(type_tag=type_tag):
+                result = resolve_generation_value_query(
+                    query,
+                    GenerationContext(type_tag_override=type_tag),
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
+                self.assertIn(type_tag, result.diagnostics[0].message)
 
     def test_prunes_signedness_generation_branch_for_concrete_integers(self) -> None:
         selection = self.selection_for("lower_generation_signedness")

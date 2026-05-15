@@ -4744,8 +4744,8 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance. Do not implement until this planning result is
-accepted.
+Accepted. The M55 execution-review loop returned `Accept With Follow-Ups`
+after one focused revision for strict exact-query parsing.
 
 Goal:
 
@@ -4851,8 +4851,9 @@ Evidence paths:
   the `f?` group that remains unsupported as a selected tag.
 - `tsldata/detail/types.tsl:10-16`, `:20-26` for wildcard/group selectors that
   must remain unsupported as selected scalar tags.
-- `tsldata/primitives/io/out.tsl:7` and `:43-52` for `arith` IO evidence with
-  integer and float tests using the exact helper.
+- `tsldata/primitives/io/out.tsl:7`, `:22`, and `:43-52` for `arith` IO
+  evidence with integer and float tests plus implementation use of the exact
+  helper.
 - `tsldata/primitives/bitwise/bit_counts.tsl:91-99` for float bit-count
   evidence using the exact helper.
 - `tsldata/primitives/load_store/array.tsl:101-109` for array/SVE comparison
@@ -4915,3 +4916,193 @@ Review risks:
 Dependencies on prior milestones:
 
 - Milestones 4, 18, 40, 41, 42, 43, 48, 51, 52, 53, and 54.
+
+## Post-M55 Planning Context
+
+Milestones 1 through 55 are accepted. Milestone 55:
+Base Scalar Size-Bytes Generation Value Query Slice completed with
+`Accept With Follow-Ups` after one focused revision for strict exact-query
+parsing.
+
+M55 introduced a typed scalar size-byte generation value. The next lowering
+step can build directly on that typed value, but should not combine value
+arithmetic, value comparisons, branch-chain syntax, branch pruning, body
+lowering, backend translation, rendering, output, or toolchain behavior in one
+milestone.
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Size-bytes times-eight generation value arithmetic | Directly extends M55 by deriving bit-width values from the typed `type.size_bytes` value. Evidence appears in IO and conflict bodies as `value<generation>(type::size_bytes(type<generation>(base::in))) * 8`. | Low to medium if restricted to one exact expression and typed value output; high if it becomes broad expression parsing or body lowering. | Select as M56. |
+| Size-byte equality branch pruning over `== 2`, `== 4`, and `== 8` | Evidence exists in the SVE array branch chain. It would advance toward branch pruning over typed generation values. | Medium to high because it combines comparison semantics, `else if<generation>` chain syntax, selected-branch provenance, direct intrinsics in branch bodies, and no-final-else policy questions. | Defer until after the exact arithmetic value slice or select separately with tight branch-chain scope. |
+| Vector/register metadata queries | Needed for later load/store and conversion work. | High because evidence is coupled to lane metadata, language maps, loops, casts, calls, and backend requests. | Defer. |
+| Backend suffix/type-spelling expansion for 8/16/64-bit integers | Useful after M52-M55 typed lowering semantics. | Medium because it reopens M45/M46 backend translation limits and moves away from the current lowering focus. | Defer. |
+| Direct `intrin<...>` / broader semantic TSIL helper slices | Important for later parity. | High because it touches placeholder semantics, modifier resolution, direct backend calls, and broad TSIL parsing. | Defer. |
+| Broader generated tests, CLI/reporting breadth, Rust output, and compiler/toolchain orchestration | Useful parity families, but orthogonal to the current lowering direction. | Medium to high depending on slice. | Defer. |
+| M49-M55 follow-up cleanup | Several non-blocking quality follow-ups remain. | Low individually, but they do not form the next lowering milestone. | Keep recorded as follow-ups unless one becomes a selected architectural slice. |
+
+## Milestone 56: Size-Bytes Times-Eight Generation Value Arithmetic Slice
+
+Status:
+
+Selected for human acceptance. Do not implement until this planning result is
+accepted.
+
+Goal:
+
+Extend M55's typed generation-time scalar value result with exactly one
+arithmetic expression:
+
+```text
+value<generation>(type::size_bytes(type<generation>(base::in))) * 8
+```
+
+M56 is a generation-time semantic lowering slice only. It should produce a
+typed integer generation value representing the selected scalar base type's bit
+width. It must not lower the surrounding IO, conflict, loop, cast, call,
+direct-intrinsic, branch, array, or memory bodies where the expression appears.
+
+Scope:
+
+- Reuse the M55 exact nested size-byte query and scalar size-byte rule source.
+- Support only the exact `size_bytes * 8` expression where the left operand is
+  the M55 value query and the right operand is the integer literal `8`.
+- Produce deterministic bit-width values:
+
+  ```text
+  si8/ui8 -> 8
+  si16/ui16 -> 16
+  si32/ui32/f32 -> 32
+  si64/ui64/f64 -> 64
+  ```
+
+- Carry the result as a typed generation value, such as
+  `GenerationValue(kind="type.size_bits", value=<int>, type_tag=<tag>)` or an
+  equivalent immutable value object.
+- Preserve M55 context precedence: explicit override, context selected tag,
+  then selected candidate tag when enabled.
+- Preserve all accepted M52-M55 type-query, signedness branch, rule-source,
+  catalog-wiring, and size-byte query behavior.
+- Accept `f32` and `f64` only through the M55 exact size-bytes operand. M56
+  must not broaden standalone `type<generation>(base::in)` or
+  `base::signed_of` / `base::unsigned_of` behavior to floats.
+- Preserve backend-translation rejection of raw unresolved generation helpers
+  and renderer non-evaluation.
+
+Out of scope:
+
+- General arithmetic expression parsing.
+- Operators other than this exact `*` expression.
+- Literal values other than `8`.
+- Reversed operands such as `8 * value<generation>(...)`.
+- Parenthesized, nested, chained, divided, added, subtracted, modulo, unary, or
+  mixed arithmetic expressions.
+- Comparisons such as `== 2`, `== 4`, or `== 8`.
+- Branch pruning based on size values, `else if<generation>`, branch-chain
+  syntax, or no-final-else branch policy.
+- Lowering enclosing IO, conflict, array, bit-count, horizontal, conversion,
+  mask, load/store, loop, cast, call, direct `intrin<...>`,
+  `switch<compile>`, `if<compile>`, or memory-copy bodies.
+- Backend suffix/type-spelling expansion, backend type/value translation,
+  C++ or Rust rendering, generated output, generated test sources,
+  CLI/reporting, writer behavior, compiler execution, generated-test
+  execution, vector/register metadata, broad TSIL parsing, or runtime
+  dependency on `frozen/`.
+- Lowering reading files, parsing raw TSL, or querying the catalog during
+  evaluation.
+
+Required inputs:
+
+- M55 typed `GenerationValue(kind="type.size_bytes")` behavior.
+- M55 scalar size-byte rules from typed catalog/type-group data.
+- Existing `GenerationContext` and `LoweringRequest` behavior.
+- Existing M43/M48/M51/M52/M53/M54/M55 lowering behavior and tests.
+
+Expected outputs:
+
+- A typed generation value result for the exact `size_bytes * 8` expression.
+- Structured diagnostics for malformed arithmetic expression syntax,
+  unsupported operators, unsupported literals, unsupported operands, missing
+  type context, unsupported or unknown tags, and malformed or incomplete
+  explicit scalar size rule data reused from M55.
+- Existing M52-M55 lowering results unchanged.
+
+Parity criterion:
+
+For the exact selected expression, M56 resolves the scalar bit width before
+backend translation or rendering. For surrounding corpus bodies, M56 may still
+report unsupported-body or unresolved-helper diagnostics; it does not claim
+broad IO, conflict, array, bit-count, memory-copy, loop, cast, call,
+branch-chain, or direct-intrinsic parity.
+
+Evidence paths:
+
+- `tsldata/primitives/io/out.tsl:43`, `:46`, `:48`, `:50`, `:52`, `:70`,
+  `:73`, `:75`, `:77`, and `:79` for IO uses of the exact size-byte query
+  multiplied by `8`.
+- `tsldata/primitives/misc/conflict.tsl:79` for conflict logic using the exact
+  size-byte query multiplied by `8`.
+- `tsldata/detail/types.tsl:2-9` for integer singleton tags.
+- `tsldata/detail/types.tsl:17-19` for `f32` and `f64` singleton tags plus the
+  `f?` group that remains unsupported as a selected tag.
+- `tsldata/detail/types.tsl:10-16`, `:20-26` for wildcard/group selectors that
+  must remain unsupported as selected scalar tags.
+- `frozen/tsl-gen/tsl_gen/tsil.lark` may remain syntax evidence for arithmetic
+  shape only; `frozen/` must not become runtime input.
+
+Tests required:
+
+- Unit tests proving the exact expression returns `8`, `16`, `32`, or `64` for
+  every selected scalar tag.
+- Tests proving `f32` and `f64` are accepted only through the exact M55
+  size-byte operand and do not broaden standalone `base.in` or signed/unsigned
+  companion behavior.
+- Context precedence tests for type-tag override, context-selected tag, and
+  selected candidate default.
+- Diagnostics for malformed arithmetic expression syntax, unsupported
+  operators, unsupported literals, reversed operands, unsupported nested
+  operands, unsupported wildcard/group tags, pointers, masks, unknown tags, and
+  concrete-looking unselected tags such as `si128`.
+- Regression tests proving all accepted M52-M55 type-query, signedness branch,
+  rule-source, catalog-wiring, and size-byte query behavior remains unchanged.
+- Boundary tests proving backend translation still rejects raw unresolved
+  generation helpers and renderers remain non-evaluating.
+- Determinism tests for repeated expression lowering.
+
+Golden fixtures required:
+
+- None. M56 is a lowering/value-expression slice and must not change generated
+  C++ or Rust output.
+
+Documentation updates:
+
+- Update lowering behavior, generation-time helper inventory, pipeline design,
+  behavioral spec, testing strategy, open questions, design decisions, frozen
+  parity baselines, and `docs/agent/current-redesign-state.md` for the selected
+  M56 boundary.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused size-bytes times-eight generation value test command selected by
+  the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Accidentally introducing broad expression parsing.
+- Accepting reversed operands, arbitrary literals, or unrelated arithmetic
+  operators.
+- Pulling in size-value comparisons, branch pruning, or `else if<generation>`.
+- Lowering enclosing IO/conflict bodies instead of only the selected
+  generation-time value expression.
+- Inferring sizes from tag spelling, wildcard/group selectors, or regex instead
+  of consuming typed M55 rules and values.
+- Expanding backend translation, rendering, generated output, CLI/reporting,
+  Rust, or compiler/test execution under the guise of value-expression support.
+
+Dependencies on prior milestones:
+
+- Milestones 4, 18, 40, 41, 42, 43, 48, 51, 52, 53, 54, and 55.
