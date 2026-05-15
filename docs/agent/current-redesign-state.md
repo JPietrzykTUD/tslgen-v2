@@ -53,29 +53,27 @@ returned `Accept With Follow-Ups` after local planning-doc updates.
 The M55 execution-review loop returned `Accept With Follow-Ups` after one
 focused revision.
 
-Post-M55 planning selected Milestone 56, and internal review returned
-`Accept With Follow-Ups` after local planning-doc corrections.
+Post-M55 planning is accepted. It selected Milestone 56, and internal review
+returned `Accept With Follow-Ups` after local planning-doc corrections.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Await human acceptance of the post-M55 planning update, then run the
-post-M55 acceptance finalization prompt.
+Run the Milestone 56 execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m55-acceptance-finalization-prompt.md
+docs/agent/runs/m56-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Milestone 56 is selected for human acceptance but is not active for
-execution yet.
+Milestone 56: Size-Bytes Times-Eight Generation Value Arithmetic Slice
 ```
 
 Planning review verdict:
@@ -87,10 +85,9 @@ Accept With Follow-Ups
 Next expected action:
 
 ```text
-If the user explicitly accepts the post-M55 planning update, execute the active
-acceptance finalization prompt. It should create the Milestone 56
-execution-review loop prompt and update this state file without implementing
-M56.
+Execute the active M56 execution-review loop prompt. If internal review accepts
+M56, create the next concrete prompt under docs/agent/runs/ without starting
+Milestone 57.
 ```
 
 Accepted planning prompt:
@@ -183,7 +180,7 @@ Accepted M53 execution prompt:
 docs/agent/runs/m53-execution-review-loop-prompt.md
 ```
 
-Post-M53 planning prompt:
+Accepted post-M53 planning prompt:
 
 ```text
 docs/agent/runs/post-m53-planning-plus-review-prompt.md
@@ -225,10 +222,16 @@ Accepted post-M55 planning prompt:
 docs/agent/runs/post-m55-planning-plus-review-prompt.md
 ```
 
-Active post-M55 acceptance finalization prompt:
+Accepted post-M55 acceptance finalization prompt:
 
 ```text
 docs/agent/runs/post-m55-acceptance-finalization-prompt.md
+```
+
+Active M56 execution-review loop prompt:
+
+```text
+docs/agent/runs/m56-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -407,13 +410,13 @@ docs/agent/runs/post-m55-acceptance-finalization-prompt.md
   `intrin<...>`, broad TSIL parsing, or runtime dependency on `frozen/`.
 - M55 must not make lowering read files, parse raw TSL, or query the
   catalog during evaluation.
-- Planned M56 is generation-time semantic lowering only.
-- Planned M56 selects exactly
+- M56 is generation-time semantic lowering only.
+- M56 selects exactly
   `value<generation>(type::size_bytes(type<generation>(base::in))) * 8`.
-- Planned M56 consumes the M55 typed `GenerationValue(kind="type.size_bytes")`
+- M56 consumes the M55 typed `GenerationValue(kind="type.size_bytes")`
   behavior and explicit scalar size-byte rules to produce typed scalar
   bit-width generation values.
-- Planned M56 must not add general arithmetic, operators other than the exact
+- M56 must not add general arithmetic, operators other than the exact
   selected `* 8` expression, reversed operands, arbitrary literals,
   comparisons such as `== 2`, branch pruning, `else if<generation>`,
   branch-chain syntax, surrounding body lowering, backend translation,
@@ -421,7 +424,7 @@ docs/agent/runs/post-m55-acceptance-finalization-prompt.md
   behavior, Rust, compiler execution, generated-test execution,
   vector/register metadata, broad TSIL parsing, or runtime dependency on
   `frozen/`.
-- Planned M56 must not make lowering read files, parse raw TSL, or query the
+- M56 must not make lowering read files, parse raw TSL, or query the
   catalog during evaluation.
 
 ## Accepted Milestone 48
@@ -666,8 +669,10 @@ execution, broad TSIL parsing, or runtime dependency on `frozen/`.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the active post-M55
-acceptance finalization prompt after explicit human acceptance.
+No stop condition is active. The workflow proceeds with the active M56
+execution-review loop prompt. Do not start Milestone 57 until M56 has been
+executed, reviewed, accepted, and a later planning prompt has selected the next
+milestone.
 
 ## Validation Expectations
 
