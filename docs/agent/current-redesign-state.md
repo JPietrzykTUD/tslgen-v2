@@ -59,7 +59,7 @@ returned `Accept With Follow-Ups` after local planning-doc corrections.
 The M56 execution-review loop returned `Accept With Follow-Ups` with no
 blocking implementation issues and no focused revision.
 
-Post-M56 planning was revised after user feedback to select
+Post-M56 planning is accepted after user-requested revision. It selected
 `Milestone 57: Size-Byte Equality Generation Predicate Lowering Slice`. The
 roadmap also records draft staged-lowering follow-on candidates for a stage
 pipeline boundary, branch-chain pruning, and opaque selected-body handoff; they
@@ -70,36 +70,34 @@ are not active for execution.
 Current required action:
 
 ```text
-Await human acceptance of the post-M56 planning update, then run the
-post-M56 acceptance finalization prompt.
+Execute the Milestone 57 execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m56-acceptance-finalization-prompt.md
+docs/agent/runs/m57-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Milestone 57 is selected for human acceptance but is not active for
-execution yet.
+Milestone 57: Size-Byte Equality Generation Predicate Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-Post-M56 planning revision: ready for human acceptance
+Post-M56 planning revision accepted by user; M57 is active for execution.
 ```
 
 Next expected action:
 
 ```text
-If the user explicitly accepts the post-M56 planning update, execute the active
-acceptance finalization prompt. It should create the Milestone 57
-execution-review loop prompt and update this state file without implementing
-M57.
+Run the active M57 execution-review loop prompt. If M57 is accepted, update
+this state file, record follow-ups, and create the next concrete run prompt
+under docs/agent/runs/ without starting M58 unless a later planning pass
+accepts it.
 ```
 
 Accepted planning prompt:
@@ -252,10 +250,16 @@ Accepted post-M56 planning prompt:
 docs/agent/runs/post-m56-planning-plus-review-prompt.md
 ```
 
-Active post-M56 acceptance finalization prompt:
+Accepted post-M56 acceptance finalization prompt:
 
 ```text
 docs/agent/runs/post-m56-acceptance-finalization-prompt.md
+```
+
+Active M57 execution-review loop prompt:
+
+```text
+docs/agent/runs/m57-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -450,26 +454,26 @@ docs/agent/runs/post-m56-acceptance-finalization-prompt.md
   `frozen/`.
 - M56 must not make lowering read files, parse raw TSL, or query the
   catalog during evaluation.
-- Planned M57 is generation-time semantic lowering only.
-- Planned M57 selects exactly the size-byte equality generation predicates
+- M57 is generation-time semantic lowering only.
+- M57 selects exactly the size-byte equality generation predicates
   `value<generation>(type::size_bytes(type<generation>(base::in))) == 2`,
   `== 4`, and `== 8`.
-- Planned M57 consumes the M55 typed
+- M57 consumes the M55 typed
   `GenerationValue(kind="type.size_bytes")` behavior and explicit scalar
   size-byte rules to produce typed boolean generation predicate values.
-- Planned M57 treats `si8`/`ui8` byte size `1` as `false` for all selected
+- M57 treats `si8`/`ui8` byte size `1` as `false` for all selected
   predicates and must not introduce branch-chain no-match policy.
-- Planned M57 must not add branch pruning, `if<generation>` parsing,
+- M57 must not add branch pruning, `if<generation>` parsing,
   `else if<generation>`, selected-arm/no-match provenance, direct
   `intrin<...>` calls, assignments, SVE array/load-store bodies, vector
   metadata, backend translation, rendering, generated output, generated test
   sources, CLI/reporting, writer behavior, Rust, compiler execution,
   generated-test execution, broad TSIL parsing, or runtime dependency on
   `frozen/`.
-- Planned M57 must not add standalone comparison forms outside the exact
+- M57 must not add standalone comparison forms outside the exact
   selected predicates, general comparison parsing, final `else`, broad
   no-final-else branch policy, or branch-body semantics.
-- Planned M57 must not make lowering read files, parse raw TSL, or query the
+- M57 must not make lowering read files, parse raw TSL, or query the
   catalog during evaluation.
 
 ## Accepted Milestone 48
@@ -758,9 +762,9 @@ runtime dependency on `frozen/`.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M56 acceptance
-finalization only after explicit human acceptance. If the selected plan is not
-accepted, revise planning instead of starting implementation.
+No stop condition is active. The workflow proceeds with the M57
+execution-review loop. M58/M59/M60 remain draft planning candidates only and
+must not be started unless a later planning pass accepts one of them.
 
 ## Validation Expectations
 
