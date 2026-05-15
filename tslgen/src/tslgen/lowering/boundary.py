@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import re
 from typing import Literal
 
@@ -8,8 +8,10 @@ from tslgen.analysis.candidates import CandidateSelection, ImplementationCandida
 from tslgen.core.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslgen.core.frozen_map import FrozenMap
 from tslgen.core.result import Result
+from tslgen.domain.catalog import Catalog
 from tslgen.domain.generation_rules import (
     ConcreteIntegerGenerationRuleSet,
+    build_concrete_integer_generation_rule_set_from_catalog,
     classify_concrete_integer_generation_type_tag,
     default_concrete_integer_generation_rule_set,
     is_non_integer_generation_type_tag,
@@ -176,6 +178,37 @@ class LoweringInputSet:
             "inputs_by_candidate_id",
             FrozenMap((item.candidate_id, item) for item in inputs),
         )
+
+
+def build_catalog_lowering_request(
+    catalog: Catalog,
+    *,
+    strategy: LoweringStrategy = "mini_tsil",
+    backend_id: str | None = None,
+    generation_context: GenerationContext | None = None,
+) -> Result[LoweringRequest]:
+    """Build a lowering request with generation rules derived before evaluation."""
+
+    rules = build_concrete_integer_generation_rule_set_from_catalog(catalog)
+    if not rules.is_ok:
+        return Result.failure(rules.diagnostics)
+
+    rule_set = rules.unwrap()
+    context = (
+        GenerationContext(concrete_integer_generation_rules=rule_set)
+        if generation_context is None
+        else replace(
+            generation_context,
+            concrete_integer_generation_rules=rule_set,
+        )
+    )
+    return Result.ok(
+        LoweringRequest(
+            strategy=strategy,
+            backend_id=backend_id,
+            generation_context=context,
+        )
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -923,7 +956,8 @@ def _supported_generation_type_tag(
 ) -> Result[None]:
     if rule_set.rule_for(type_tag) is not None:
         return Result.ok(None)
-    if classify_concrete_integer_generation_type_tag(type_tag) == "unsupported":
+    status = classify_concrete_integer_generation_type_tag(type_tag)
+    if status in ("selected", "unsupported"):
         return Result.failure(
             (
                 Diagnostic.error(

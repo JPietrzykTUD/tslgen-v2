@@ -701,13 +701,25 @@ Recommended first parity checks:
   expansion, rendering, generated output, Rust, CLI/reporting, or compiler
   execution is part of this check.
 - Milestone 54: catalog-derived concrete integer generation rule wiring tests
-  should prove normal pipeline-facing lowering receives an explicitly
+  prove normal pipeline-facing lowering receives an explicitly
   catalog-derived `ConcreteIntegerGenerationRuleSet`, preserves all accepted
   M52/M53 type-query and signedness branch behavior, reports
   `TSL-DOMAIN-GEN-RULE-*` diagnostics for missing or inconsistent explicit
   rule data without hidden default fallback, and remains deterministic. No
   backend translation expansion, rendering, generated output, Rust,
   CLI/reporting, or compiler execution is part of this check.
+- Milestone 55: scalar size-byte generation value tests should prove exactly
+  `value<generation>(type::size_bytes(type<generation>(base::in)))` lowers to
+  deterministic typed integer values for selected scalar tags:
+  `si8`/`ui8 -> 1`, `si16`/`ui16 -> 2`, `si32`/`ui32`/`f32 -> 4`, and
+  `si64`/`ui64`/`f64 -> 8`. Tests should prove `f32`/`f64` are accepted only
+  for this exact query, unsupported wildcard/group tags and unknown tags
+  diagnose cleanly, malformed or incomplete explicit scalar size rule data does
+  not fall back to defaults, existing M52-M54 integer behavior is unchanged,
+  backend translation rejects raw unresolved generation helpers, and renderers
+  remain non-evaluating. No arithmetic/comparison lowering, branch pruning from
+  size values, backend translation expansion, rendering, generated output,
+  Rust, CLI/reporting, or compiler execution is part of this check.
 
 Deferred parity checks:
 

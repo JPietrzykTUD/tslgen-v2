@@ -13,6 +13,7 @@ from tslgen.core.diagnostics import (
 from tslgen.core.frozen_map import FrozenMap
 from tslgen.core.ordering import stable_sorted
 from tslgen.core.result import Result
+from tslgen.domain.catalog import Catalog
 from tslgen.domain.types import TypeGroup
 
 
@@ -178,6 +179,12 @@ def build_concrete_integer_generation_rule_set(
                 )
             )
     return Result.ok(ConcreteIntegerGenerationRuleSet(tuple(rules)))
+
+
+def build_concrete_integer_generation_rule_set_from_catalog(
+    catalog: Catalog,
+) -> Result[ConcreteIntegerGenerationRuleSet]:
+    return build_concrete_integer_generation_rule_set(catalog.type_groups)
 
 
 def default_concrete_integer_generation_rule_set() -> ConcreteIntegerGenerationRuleSet:

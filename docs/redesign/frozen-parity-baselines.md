@@ -85,11 +85,17 @@ reviewable:
    expansion slice. It remains generation-time lowering only and is not an
    output parity slice.
 14. M53 is accepted as the catalog-validated concrete integer generation
-   rule-source slice. It remains a semantic rule-source boundary only and is
-   not an output parity slice.
-15. CLI workflow compatibility, coverage JSON adapter breadth beyond the
-   selected M50 row, executable generated tests, and broad generated-test parity
-   remain deferred until explicitly selected as separate milestones.
+    rule-source slice. It remains a semantic rule-source boundary only and is
+    not an output parity slice.
+15. M54 is accepted as the catalog-derived concrete integer rule pipeline
+    wiring slice. It wires the M53 rule source through the normal
+    lowering-input path and is not an output parity slice.
+16. The selected post-M54 plan, M55, is a generation-time semantic lowering
+    slice for the exact scalar size-byte value query. It produces typed
+    generation values and is not an output parity slice.
+17. CLI workflow compatibility, coverage JSON adapter breadth beyond the
+    selected M50 row, executable generated tests, and broad generated-test parity
+    remain deferred until explicitly selected as separate milestones.
 
 This selected output target is small enough because it uses one primitive
 family, one template family, two scalar integer type tags, one native
@@ -316,8 +322,9 @@ and still does not add compiler execution.
 - Full TSIL grammar, semantic calls, loops, variables, broad type/value
   queries, generation-time conditions beyond the selected M42/M48/M51 pruning
   forms, concrete integer rule-source behavior beyond accepted M53 ownership
-  and selected M54 catalog-to-lowering wiring, and backend translation-map
-  evaluation beyond the selected M40/M45/M46 requests.
+  and M54 catalog-to-lowering wiring, scalar value queries beyond the selected
+  M55 size-byte helper, arithmetic/comparisons over generation values, and
+  backend translation-map evaluation beyond the selected M40/M45/M46 requests.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and
   googletest download or vendoring.
 - Full legacy CLI drop-in compatibility and `run_all.sh` replacement.

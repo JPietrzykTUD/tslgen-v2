@@ -385,11 +385,20 @@ still does not parse raw generation helper text, renderers still do not
 evaluate helpers, and generated output remains unchanged.
 Milestone 53 keeps Stage 8 behavior unchanged but moves the concrete integer
 generation rule source to typed domain/catalog rule values prepared before
-lowering consumes them. The selected post-M53 plan, Milestone 54, wires those
-catalog-derived rule values through the normal lowering-input path for
-pipeline-facing use. Stage 8 still must not read files, parse raw TSL, query
-the catalog during evaluation, or infer broad type semantics from
-wildcard/group tags.
+lowering consumes them. Milestone 54 wires those catalog-derived rule values
+through the normal lowering-input path for pipeline-facing use by constructing
+`LoweringRequest` values with an explicit catalog-derived
+`ConcreteIntegerGenerationRuleSet`. Stage 8 still must not read
+files, parse raw TSL, query the catalog during evaluation, or infer broad type
+semantics from wildcard/group tags.
+The selected post-M54 plan, Milestone 55, keeps Stage 8 as the owner of
+generation-time scalar value evaluation by adding exactly
+`value<generation>(type::size_bytes(type<generation>(base::in)))` over an
+explicit typed scalar size-byte rule source. The lowered result is a typed
+integer generation value for selected scalar tags only; Stage 8 still does not
+evaluate arithmetic/comparison expressions around that value, lower enclosing
+IO/array/loop/cast/call/direct-intrinsic bodies, or pass raw generation helper
+text into backend translation or renderers.
 
 ## Stage 9: Backend Planning
 

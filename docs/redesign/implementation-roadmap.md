@@ -4180,7 +4180,7 @@ Candidate comparison:
 | Candidate | Why considered | Boundary risk | Decision |
 | --- | --- | --- | --- |
 | Concrete integer generation type/signedness expansion | Builds directly on M43 `GenerationTypeRef` values and M48/M51 signedness branch pruning. Corpus evidence covers concrete 8/16/32/64-bit integer tags and signedness branches. | Low if kept to typed lowering and diagnostics; high if it expands backend suffix/type-spelling translation. | Select as M52. |
-| `type::size_bytes(type<generation>(base::in))` value query | Lowering-focused evidence exists in IO, bit-count, and array bodies. | Medium because it introduces a new general generation-value result model and surrounding bodies include broader unsupported constructs. | Defer until a value-query result slice is selected. |
+| `value<generation>(type::size_bytes(type<generation>(base::in)))` value query | Lowering-focused evidence exists in IO, bit-count, and array bodies. | Medium because it introduces a new general generation-value result model and surrounding bodies include broader unsupported constructs. | Defer until a value-query result slice is selected. |
 | Vector/register metadata queries | Needed for later load/store and conversion work. | High now because evidence is coupled to loops, casts, calls, language maps, vector/register metadata, and backend requests. | Defer. |
 | `packed` primitive-attribute branch pruning | Mechanically close to M42. | Low mechanically but low parity value now; likely invites mask/vector metadata work. | Defer until mask-store parity is selected. |
 
@@ -4370,7 +4370,7 @@ Candidate comparison:
 | Candidate | Why considered | Boundary risk | Decision |
 | --- | --- | --- | --- |
 | Catalog-validated concrete integer generation rule source | Directly addresses the M52 rule ownership concern. `tsldata/detail/types.tsl` and typed catalog `TypeGroup` data already identify concrete integer singleton tags and wildcard/group selectors. | Low if it preserves M52 behavior exactly and passes immutable typed rules into lowering; medium if it infers broad type semantics from names or groups. | Select as M53. |
-| `type::size_bytes(type<generation>(base::in))` value query | Lowering-focused corpus evidence exists in IO, load/store array, and bit-count bodies. | Medium because it introduces a new generation value result model and evidence is embedded in broader loops/casts/conditions. | Defer until a value-query result model slice is selected. |
+| `value<generation>(type::size_bytes(type<generation>(base::in)))` value query | Lowering-focused corpus evidence exists in IO, load/store array, and bit-count bodies. | Medium because it introduces a new generation value result model and evidence is embedded in broader loops/casts/conditions. | Defer until a value-query result model slice is selected. |
 | Backend suffix/type-spelling expansion for 8/16/64-bit integers | Useful after M52 because generation-time semantics now know those tags. | High now because it reopens M45/M46 translation limits and would mix rule-source cleanup with backend behavior. | Defer until after the rule-source boundary is clean. |
 | Vector/register metadata queries | Needed for later load/store and conversion work. | High because evidence is coupled to lane metadata, language maps, loops, casts, calls, and backend requests. | Defer. |
 | M49-M52 follow-up cleanup | Several non-blocking quality follow-ups remain. | Low individually, but they do not advance one coherent product/domain milestone. | Keep recorded as follow-ups. |
@@ -4547,7 +4547,7 @@ Candidate comparison:
 | --- | --- | --- | --- |
 | Catalog-derived concrete integer generation rule pipeline wiring | Directly completes the M53 rule-source ownership boundary by passing typed catalog-derived rules into normal lowering use. | Low if kept to catalog/lowering-input wiring; medium if it becomes a broad pipeline rewrite or generic rule registry. | Select as M54. |
 | Backend suffix/type-spelling expansion for 8/16/64-bit integers | Useful after M52/M53 because generation-time semantics now know those tags. | Medium because it reopens M45/M46 backend translation limits. | Defer until catalog-derived rule wiring is normal. |
-| `type::size_bytes(type<generation>(base::in))` value query | Lowering-focused corpus evidence exists in IO, load/store array, and bit-count bodies. | Medium to high because it introduces a new generation value family and evidence is embedded in loops/casts/memory operations. | Defer until a value-query result model slice is selected. |
+| `value<generation>(type::size_bytes(type<generation>(base::in)))` value query | Lowering-focused corpus evidence exists in IO, load/store array, and bit-count bodies. | Medium to high because it introduces a new generation value family and evidence is embedded in loops/casts/memory operations. | Defer until a value-query result model slice is selected. |
 | Vector/register metadata queries | Needed for later load/store and conversion work. | High because evidence is coupled to lane metadata, language maps, loops, casts, calls, and backend requests. | Defer. |
 | Direct `intrin<...>` / broader semantic TSIL helper slices | Important for later parity. | High because it touches placeholder semantics, modifier resolution, and broader TSIL parsing. | Defer. |
 | Broader generated tests, CLI/reporting breadth, Rust output, and compiler/toolchain orchestration | All remain useful parity families. | Medium to high and orthogonal to the current lowering rule-source boundary. | Defer. |
@@ -4557,8 +4557,10 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance. Do not implement until this planning result is
-accepted.
+Accepted. The M54 execution-review loop returned `Accept With Follow-Ups` with
+no blocking implementation issues and no focused revision. The remaining
+follow-up is to add explicit `dword` / `qword` negative selected-tag test
+subcases for tighter evidence traceability.
 
 Goal:
 
@@ -4715,3 +4717,201 @@ Review risks:
 Dependencies on prior milestones:
 
 - Milestones 4, 18, 40, 41, 42, 43, 48, 51, 52, and 53.
+
+## Post-M54 Planning Context
+
+Milestones 1 through 54 are accepted. Milestone 54:
+Catalog-Derived Concrete Integer Generation Rule Pipeline Wiring Slice
+completed with `Accept With Follow-Ups`.
+
+M54 made the accepted M53 concrete-integer rule source available through the
+normal catalog/lowering-input path. The next lowering step can now introduce a
+small typed generation-value result without letting backend translation or
+renderers evaluate generation-time helper text.
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Base scalar size-bytes generation value query | Directly advances generation-time semantic lowering by adding the first typed scalar generation-value result. Evidence exists in IO, bit-count, array, and conflict bodies for the exact `value<generation>(type::size_bytes(type<generation>(base::in)))` helper. | Medium if it broadens into loops, arithmetic, branch comparisons, vector metadata, backend translation, or float companion semantics. Low to medium if kept to one exact query and explicit scalar size-byte rules. | Select as M55. |
+| Backend suffix/type-spelling expansion for 8/16/64-bit integers | Useful now that integer generation semantics and rule wiring exist. | Medium because it reopens M45/M46 backend translation limits and moves away from the current lowering focus. | Defer. |
+| Vector/register metadata queries | Needed for future load/store and conversion work. | High because evidence is coupled to lane metadata, language maps, loops, casts, calls, masks, and backend requests. | Defer. |
+| Direct `intrin<...>` / broader semantic TSIL helper slices | Important for later parity. | High because it touches placeholder semantics, modifier resolution, direct backend calls, and broader TSIL parsing. | Defer. |
+| Broader generated tests, CLI/reporting breadth, Rust output, and compiler/toolchain orchestration | Useful parity families, but orthogonal to the current lowering direction. | Medium to high depending on slice. | Defer. |
+| M49-M54 follow-up cleanup | Several non-blocking quality follow-ups remain. | Low individually, but they do not form the next lowering milestone. | Keep recorded as follow-ups unless one becomes a selected architectural slice. |
+
+## Milestone 55: Base Scalar Size-Bytes Generation Value Query Slice
+
+Status:
+
+Selected for human acceptance. Do not implement until this planning result is
+accepted.
+
+Goal:
+
+Introduce the first typed generation-time scalar value result in semantic
+lowering by supporting exactly:
+
+```text
+value<generation>(type::size_bytes(type<generation>(base::in)))
+```
+
+M55 is a generation-time semantic lowering slice only. It must produce a typed
+integer generation value for the selected base scalar tag and must not lower the
+surrounding IO, memory, array, branch-comparison, cast, loop, call, or direct
+intrinsic bodies where the helper appears.
+
+Scope:
+
+- Add an explicit typed scalar size-byte rule/value source for exactly:
+
+  ```text
+  si8, ui8, si16, ui16, si32, ui32, si64, ui64, f32, f64
+  ```
+
+- Produce deterministic byte values:
+
+  ```text
+  si8/ui8 -> 1
+  si16/ui16 -> 2
+  si32/ui32/f32 -> 4
+  si64/ui64/f64 -> 8
+  ```
+
+- Resolve the exact nested helper through the existing selected type-tag
+  context precedence: explicit override, context selected tag, then selected
+  candidate tag when enabled.
+- Carry the result as a typed generation value, such as
+  `GenerationValue(kind="type.size_bytes", value=<int>, type_tag=<tag>)` or an
+  equivalent immutable value object.
+- Build or expose the scalar size-byte rule/value source from typed
+  catalog/type-group data before lowering evaluation, following the M54
+  lowering-input pattern.
+- Preserve M52-M54 behavior exactly for concrete-integer type refs,
+  signed/unsigned companion refs, and signedness branch pruning.
+- Accept `f32` and `f64` only for this exact size-bytes value query. M55 must
+  not make standalone `type<generation>(base::in)` or
+  `base::signed_of` / `base::unsigned_of` accept floats unless a later
+  milestone explicitly selects that behavior.
+- Preserve backend-translation rejection of raw unresolved generation helpers
+  and renderer non-evaluation.
+
+Out of scope:
+
+- Reusing or mutating `ConcreteIntegerGenerationRuleSet` for float size
+  semantics. M55 should use explicit scalar size-byte rule/value records.
+- Inferring sizes from regex, tag spelling, wildcard/group selectors, or
+  unselected concrete-looking tags such as `si128`.
+- Treating `arith`, `f?`, `?i?`, `?i64`, `si?`, `ui?`, `dword`, `qword`,
+  `idqword`, `dqword`, or other group selectors as selected scalar tags during
+  lowering.
+- `type::size_bytes(...)` over `base::signed_of`, `base::unsigned_of`,
+  `vector::imask`, `vector::register`, backend types, aliases, casts, arrays,
+  generics, pointers, masks, or vector metadata.
+- Generation-value arithmetic or comparisons such as `* 8`, `== 2`,
+  `else if<generation>`, or branch pruning based on size-byte values.
+- Lowering enclosing IO, memory-copy, array, bit-count, conflict, conversion,
+  load/store, loop, cast, call, direct `intrin<...>`, `switch<compile>`, or
+  `if<compile>` bodies.
+- Backend suffix/type-spelling expansion, backend type/value translation,
+  C++ or Rust rendering, generated output, generated test sources,
+  CLI/reporting, writer behavior, compiler execution, generated-test
+  execution, broad TSIL parsing, or runtime dependency on `frozen/`.
+- Lowering reading files, parsing raw TSL, or querying the catalog during
+  evaluation.
+
+Required inputs:
+
+- Typed catalog `TypeGroup` singleton data from `tsldata/detail/types.tsl`.
+- Existing selection/lowering request data, `GenerationContext`, and
+  `LoweringRequest` behavior.
+- Existing M54 catalog/lowering-input wiring pattern.
+- Existing M43/M48/M51/M52/M53/M54 lowering behavior and tests.
+
+Expected outputs:
+
+- A typed scalar size-byte rule/value source for selected scalar tags.
+- A typed generation value result for the exact size-bytes query.
+- Structured diagnostics for missing type context, malformed query syntax,
+  wrong arity, unsupported operands, unsupported selected tags, unknown tags,
+  and malformed or incomplete explicit scalar size rule data.
+- Existing M52-M54 integer type/signedness lowering results unchanged.
+
+Parity criterion:
+
+For the exact selected helper, M55 resolves the scalar byte size before backend
+translation or rendering. For surrounding corpus bodies, M55 may still report
+unsupported-body or unresolved-helper diagnostics; it does not claim broad IO,
+array, bit-count, memory-copy, loop, cast, call, or branch-body parity.
+
+Evidence paths:
+
+- `tsldata/detail/types.tsl:2-9` for integer singleton tags.
+- `tsldata/detail/types.tsl:17-19` for `f32` and `f64` singleton tags plus
+  the `f?` group that remains unsupported as a selected tag.
+- `tsldata/detail/types.tsl:10-16`, `:20-26` for wildcard/group selectors that
+  must remain unsupported as selected scalar tags.
+- `tsldata/primitives/io/out.tsl:7` and `:43-52` for `arith` IO evidence with
+  integer and float tests using the exact helper.
+- `tsldata/primitives/bitwise/bit_counts.tsl:91-99` for float bit-count
+  evidence using the exact helper.
+- `tsldata/primitives/load_store/array.tsl:101-109` for array/SVE comparison
+  evidence. M55 selects only the nested value query, not the comparisons or
+  branch bodies.
+- `tsldata/primitives/misc/conflict.tsl:59-79` for integer conflict evidence.
+- `frozen/` remains evidence only and is not needed for the selected M55 slice.
+
+Tests required:
+
+- Unit tests proving the exact query returns `1`, `2`, `4`, or `8` for every
+  selected scalar tag.
+- Tests proving `f32` and `f64` are accepted only for the exact size-bytes
+  query and do not broaden standalone `base.in` or signed/unsigned companion
+  behavior.
+- Context precedence tests for type-tag override, context-selected tag, and
+  selected candidate default.
+- Diagnostics for missing type context, malformed value query syntax, wrong
+  arity, unsupported nested operands, unsupported wildcard/group tags,
+  pointers, masks, unknown tags, and concrete-looking unselected tags such as
+  `si128`.
+- Tests proving malformed or incomplete explicit scalar size rule data is not
+  hidden by a synthetic fallback.
+- Regression tests proving all accepted M52-M54 type-query, signedness branch,
+  rule-source, and catalog-wiring behavior remains unchanged.
+- Boundary tests proving backend translation still rejects raw unresolved
+  generation helpers and renderers remain non-evaluating.
+- Determinism tests for repeated query and rule construction.
+
+Golden fixtures required:
+
+- None. M55 is a lowering/value-query slice and must not change generated C++
+  or Rust output.
+
+Documentation updates:
+
+- Update lowering behavior, generation-time helper inventory, pipeline design,
+  behavioral spec, testing strategy, open questions, design decisions, frozen
+  parity baselines, and `docs/agent/current-redesign-state.md` for the
+  selected M55 boundary.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused scalar size-byte rule/value test command selected by the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Accidentally broadening standalone `type<generation>(base::in)` to floats or
+  broadening signed/unsigned companion semantics to floats.
+- Reusing integer companion rules for scalar size semantics instead of adding
+  explicit typed scalar size-byte rules.
+- Inferring sizes from tag spelling, wildcard/group selectors, or regex.
+- Lowering arithmetic/comparison/body constructs around the selected helper.
+- Expanding backend translation, rendering, generated output, CLI/reporting,
+  Rust, or compiler/test execution under the guise of value-query support.
+
+Dependencies on prior milestones:
+
+- Milestones 4, 18, 40, 41, 42, 43, 48, 51, 52, 53, and 54.

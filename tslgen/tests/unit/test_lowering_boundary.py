@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 import unittest
 
@@ -9,6 +10,8 @@ from tslgen.analysis.selection import SelectionRequest, plan_selection
 from tslgen.config.model import SourceConfig
 from tslgen.core.frozen_map import FrozenMap
 from tslgen.domain.catalog import Catalog, build_catalog
+from tslgen.domain.generation_rules import build_concrete_integer_generation_rule_set
+from tslgen.domain.types import TypeGroup
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
 from tslgen.lowering import (
     GenerationContext,
@@ -21,6 +24,7 @@ from tslgen.lowering import (
     TsilPrimitiveAttributeCondition,
     TsilReturnStatement,
     TsilTypeSignednessCondition,
+    build_catalog_lowering_request,
     lower_candidates,
     prepare_lowering_inputs,
     resolve_generation_type_query,
@@ -94,6 +98,21 @@ def catalog_with_primitives(text: str) -> Catalog:
         primitives=primitive_catalog.primitives,
         entries=base.entries,
         source_metadata=base.source_metadata,
+    )
+
+
+def catalog_with_type_groups(
+    catalog: Catalog,
+    type_groups: tuple[TypeGroup, ...],
+) -> Catalog:
+    return Catalog(
+        type_groups=type_groups,
+        lane_sets=catalog.lane_sets,
+        extensions=catalog.extensions,
+        templates=catalog.templates,
+        primitives=catalog.primitives,
+        entries=catalog.entries,
+        source_metadata=catalog.source_metadata,
     )
 
 
@@ -583,6 +602,150 @@ class LoweringBoundaryTests(unittest.TestCase):
         lowering_input = result.unwrap().inputs[0]
         self.assertEqual(lowering_input.payload.classification, "tsil")
         self.assertTrue(lowering_input.payload.has_generation_condition)
+
+    def test_builds_lowering_request_with_catalog_derived_generation_rules(
+        self,
+    ) -> None:
+        catalog = catalog_with_primitives(LOWERING_FIXTURE)
+        selection = self.selection_for("lower_generation_type_unsigned")
+
+        request = build_catalog_lowering_request(catalog, backend_id="cpp")
+
+        self.assertTrue(request.is_ok, request.diagnostics)
+        lowering_request = request.unwrap()
+        self.assertEqual(lowering_request.backend_id, "cpp")
+        rule_set = (
+            lowering_request.generation_context.concrete_integer_generation_rules
+        )
+        self.assertEqual(
+            rule_set.supported_type_tags,
+            CONCRETE_INTEGER_TAGS,
+        )
+
+        result = lower_candidates(selection, lowering_request)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertIs(
+            result.unwrap().request.generation_context.concrete_integer_generation_rules,
+            rule_set,
+        )
+        self.assertEqual(
+            tuple(
+                implementation.generation_type_refs[0]
+                for implementation in result.unwrap().implementations
+            ),
+            tuple(
+                GenerationTypeRef(
+                    kind="base.unsigned_of",
+                    type_tag=UNSIGNED_COMPANION_BY_TAG[type_tag],
+                    source_type_tag=type_tag,
+                )
+                for type_tag in CONCRETE_INTEGER_LOWERING_ORDER
+            ),
+        )
+
+    def test_catalog_lowering_request_preserves_request_local_context(
+        self,
+    ) -> None:
+        catalog = catalog_with_primitives(LOWERING_FIXTURE)
+        selection = self.selection_for("lower_generation_type_override")
+        base_context = GenerationContext(
+            type_tag_override="ui64",
+            use_candidate_type_tag=False,
+        )
+
+        request = build_catalog_lowering_request(
+            catalog,
+            backend_id="cpp",
+            generation_context=base_context,
+        )
+
+        self.assertTrue(request.is_ok, request.diagnostics)
+        result = lower_candidates(selection, request.unwrap())
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(
+            result.unwrap().implementations[0].generation_type_refs,
+            (GenerationTypeRef(kind="base.in", type_tag="ui64"),),
+        )
+
+    def test_catalog_lowering_request_reports_missing_rule_data_without_default(
+        self,
+    ) -> None:
+        catalog = catalog_with_primitives(LOWERING_FIXTURE)
+        missing_ui64 = catalog_with_type_groups(
+            catalog,
+            tuple(group for group in catalog.type_groups if group.name != "ui64"),
+        )
+
+        request = build_catalog_lowering_request(missing_ui64, backend_id="cpp")
+
+        self.assertFalse(request.is_ok)
+        self.assertIn(
+            "TSL-DOMAIN-GEN-RULE-SINGLETON-MISSING",
+            {diagnostic.code for diagnostic in request.diagnostics},
+        )
+        self.assertTrue(
+            any("ui64" in diagnostic.message for diagnostic in request.diagnostics)
+        )
+
+    def test_catalog_lowering_request_reports_inconsistent_rule_data_without_default(
+        self,
+    ) -> None:
+        catalog = catalog_with_primitives(LOWERING_FIXTURE)
+        inconsistent = catalog_with_type_groups(
+            catalog,
+            tuple(
+                replace(group, members=("ui32",))
+                if group.name == "si32"
+                else group
+                for group in catalog.type_groups
+            ),
+        )
+
+        request = build_catalog_lowering_request(inconsistent, backend_id="cpp")
+
+        self.assertFalse(request.is_ok)
+        self.assertIn(
+            "TSL-DOMAIN-GEN-RULE-SINGLETON-INCONSISTENT",
+            {diagnostic.code for diagnostic in request.diagnostics},
+        )
+
+    def test_explicit_catalog_derived_rules_do_not_fall_back_to_default(
+        self,
+    ) -> None:
+        catalog = catalog_with_primitives(LOWERING_FIXTURE)
+        pair_rules = build_concrete_integer_generation_rule_set(
+            tuple(
+                group
+                for group in catalog.type_groups
+                if group.name in ("si32", "ui32")
+            ),
+            selected_type_tags=("si32", "ui32"),
+        )
+        if not pair_rules.is_ok:
+            raise AssertionError(pair_rules.diagnostics)
+        selection = self.selection_for("lower_generation_type_override")
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(
+                    type_tag_override="si64",
+                    concrete_integer_generation_rules=pair_rules.unwrap(),
+                ),
+            ),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED",
+            severity="error",
+        )
+        self.assertIn("'si32', 'ui32'", result.diagnostics[0].message)
+        self.assertNotIn("'ui64'", result.diagnostics[0].message)
 
     def test_lowers_base_generation_type_query_for_concrete_integers(self) -> None:
         selection = self.selection_for("lower_generation_type_base")

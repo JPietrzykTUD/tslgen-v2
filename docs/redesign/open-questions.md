@@ -1252,6 +1252,14 @@ signedness semantics to
 lowering-only and does not add backend suffix/type-spelling expansion,
 vector/register metadata, branch-body lowering, generated output, or broad TSIL
 parsing.
+Milestone 53 moves those concrete integer rules into typed domain/catalog rule
+values, and Milestone 54 wires the catalog-derived rule source through the
+normal lowering-input path. The selected post-M54 plan, Milestone 55, adds only
+the exact scalar size-byte value query
+`value<generation>(type::size_bytes(type<generation>(base::in)))` for explicit
+selected scalar singleton tags. It produces a typed integer generation value
+and does not lower surrounding IO, memory, array, bit-count, conflict, loop,
+cast, call, direct-intrinsic, arithmetic, comparison, or branch bodies.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1259,10 +1267,11 @@ vector/register metadata, signedness branch forms beyond the exact M48/M51/M52
 predicate/branch syntax and selected concrete integer type set, primitive
 calls, loops, variables, generation-time branches beyond the selected aligned
 primitive-attribute and signedness predicate conditions, type/value metadata
-beyond the selected base type query family, nested expressions, direct
-`intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
-`algo`, Rust output, generated tests beyond the selected M49 source fixture,
-CLI/report parity, compiler execution, and broad native rendering.
+beyond the selected base type query family and selected M55 size-byte value
+query, nested expressions, direct `intrin<...>` calls, helper families such as
+`io`, `mem`, `seq`, `pack`, and `algo`, Rust output, generated tests beyond the
+selected M49 source fixture, CLI/report parity, compiler execution, and broad
+native rendering.
 
 Required evidence:
 
@@ -1443,8 +1452,12 @@ Status: Answered for Milestone 41, implemented for the first Milestone 42
 helper slice, narrowed for the Milestone 43 base type query slice, preserved by
 the numbered M44-M47 post-M43 phase, implemented for the M48 signedness
 branch-pruning slice, implemented for the M51 exact plain-`else` signedness
-branch extension, and selected for the M52 concrete integer type/signedness
-expansion.
+branch extension, implemented for the M52 concrete integer type/signedness
+expansion, moved to typed M53 rule-source values, and wired through the normal
+catalog/lowering-input path by M54. The selected post-M54 plan, M55, adds only
+the exact scalar
+`value<generation>(type::size_bytes(type<generation>(base::in)))`
+generation-value query before backend translation.
 
 Why it matters:
 
@@ -1482,9 +1495,14 @@ M52 extends only the accepted concrete integer type/signedness rules to
 selected 8/16/32/64-bit signed and unsigned tags.
 Milestone 53 moves the accepted concrete integer semantic rule source to typed
 domain/catalog rule values consumed by lowering. It does not add new generation
-helper forms or backend translation behavior. The selected post-M53 plan, M54,
-wires those rule values through the normal catalog/lowering-input path for
-pipeline-facing use.
+helper forms or backend translation behavior. Milestone 54 wires those rule
+values through the normal catalog/lowering-input path for pipeline-facing use
+by constructing lowering requests with explicit catalog-derived rules.
+The selected M55 plan resolves only
+`value<generation>(type::size_bytes(type<generation>(base::in)))` to a typed
+integer generation value for explicit selected scalar singleton tags; it does
+not broaden standalone float `base.in` type refs, signed/unsigned companion
+semantics, or backend translation.
 Vector type/value queries, backend prefix/post/infix modifiers, `immediate(n)`,
 primitive calls, loops, direct intrinsics, generalized plain `else` branch
 syntax, backend suffix/type-spelling expansion for non-32-bit tags, and broader
@@ -1512,8 +1530,10 @@ rendering, or renderer-local semantic inference.
 Milestone 53 reopens only the ownership boundary for those accepted concrete
 integer rules; it does not reopen helper syntax, selected tag sets, backend
 translation, backend rendering, or renderer-local semantic inference. The
-selected post-M53 plan, M54, reopens only catalog-to-lowering wiring for that
-rule source.
+M54 wiring slice reopens only catalog-to-lowering wiring for that rule source.
+The selected M55 plan reopens only one scalar generation-value helper; it does
+not reopen backend translation, rendering, output, broad TSIL parsing,
+generation-value arithmetic/comparisons, or surrounding body lowering.
 
 Required evidence:
 

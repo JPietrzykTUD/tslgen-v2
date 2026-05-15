@@ -72,8 +72,9 @@ behavior without treating the whole corpus as implemented.
 | `type<generation>(vector::register)` | `tsldata/primitives/load_store/load.tsl:39-45`, `load.tsl:59-67`, `store.tsl:56-61` | Resolve selected vector register type. | Backend id, extension, type tag, vector/register metadata. | `GenerationTypeRef(kind="vector.register")`. | Language type map. | required-later | Defer until vector register type rendering is selected. | Typed metadata fixtures; missing language-map diagnostics. |
 | `value<generation>(vector::length)` | `tsldata/primitives/load_store/load.tsl:41-43`, `tsldata/primitives/bitwise/shifts.tsl:50-53`, `shifts.tsl:218-221` | Resolve lane count for generated loops. | Extension, type tag, lane metadata. | `GenerationValue[int](kind="vector.length")`. | Extension/type metadata. | required-later | Defer with loop lowering. | Deterministic lane query tests after loop model exists. |
 | `value<generation>(vector::alignment)` | `tsldata/primitives/load_store/load.tsl:55-70`, `store.tsl:54-64`, `store.tsl:75-85` | Supply alignment value to selected aligned branch. | Extension, type tag, alignment metadata. | `GenerationValue[int](kind="vector.alignment")`. | Extension/type metadata. | required-later | Defer until aligned branch body rendering is selected. | Query tests plus missing alignment diagnostics. |
+| `value<generation>(type::size_bytes(type<generation>(base::in)))` | `tsldata/primitives/io/out.tsl:43-52`, `tsldata/primitives/bitwise/bit_counts.tsl:99`, `tsldata/primitives/load_store/array.tsl:107-109`, `tsldata/primitives/misc/conflict.tsl:79` | Resolve the selected scalar base type byte size. | Selected type tag plus explicit scalar size-byte rules for selected singleton scalar tags. | `GenerationValue[int](kind="type.size_bytes")`. | No backend data for the value itself. Later backend/rendering may consume already-lowered values only after separate slices. | selected M55 pending acceptance | M55 selects only the exact nested `base::in` query for `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`, `f32`, and `f64`. | Byte-value tests, float scope tests, unsupported group/wildcard diagnostics, missing context/rule diagnostics, determinism, raw-helper rejection, and no surrounding body lowering. |
 | `type<generation>(base::in)` | `tsldata/primitives/bitwise/shifts.tsl:38-40`, `shifts.tsl:150`, `tsldata/primitives/conversion/repr_change.tsl:1210-1225` | Resolve selected primitive base type. | Type tag and active vector type. | `GenerationTypeRef(kind="base.in")`. | No backend data to resolve the semantic type; later backend spelling uses language maps. | implemented M43 | Selected by Milestone 43 as part of the base type query family. | Type-query diagnostics for missing type tag. |
-| `type<generation>(base::signed_of(type<generation>(base::in)))` and `type<generation>(base::unsigned_of(type<generation>(base::in)))` | `tsldata/primitives/arithmetic/fundamental.tsl:47-90`, `tsldata/primitives/bitwise/shifts.tsl:38-40`, `shifts.tsl:63-82` | Convert selected base type to signed/unsigned companion. | Type tag and integer signedness rules. | `GenerationTypeRef(kind="base.signed_of")` or `base.unsigned_of`. | No backend data to resolve the semantic type; later suffix translation uses translation maps. | implemented M43 | Milestone 43 accepts only these exact nested forms. Prose shorthand such as `base::signed_of(base::in)` is not accepted TSIL syntax. | Query tests for selected scalar tags; unsupported float/pointer/generic conversion diagnostics. |
+| `type<generation>(base::signed_of(type<generation>(base::in)))` and `type<generation>(base::unsigned_of(type<generation>(base::in)))` | `tsldata/primitives/arithmetic/fundamental.tsl:47-90`, `tsldata/primitives/bitwise/shifts.tsl:38-40`, `shifts.tsl:63-82` | Convert selected base type to signed/unsigned companion. | Type tag and integer signedness rules. | `GenerationTypeRef(kind="base.signed_of")` or `base.unsigned_of`. | No backend data to resolve the semantic type; later suffix translation uses translation maps. | implemented M43 | Milestone 43 accepts only these exact nested forms. Prose shorthand such as `base::signed_of(base::in)` is not accepted TSIL syntax. | Query tests for selected integer tags; unsupported float/pointer/generic conversion diagnostics. |
 | `type<generation>(vector::transform_extension(...))` and `vector::as_extension(...)` | `tsldata/primitives/conversion/repr_change.tsl:121-128`, `tsldata/primitives/bitwise/shifts.tsl:875-880`, `shifts.tsl:1222-1240` | Build related vector types for conversion or reinterpret paths. | Current extension, target extension, type tag, vector family/width. | `GenerationTypeRef(kind="vector.transform_extension")`. | Extension metadata and language type map. | required-later | Defer until conversion parity slice. | Fixture-driven type transformation tests. |
 | `type<generation>(vector::mask_underlying_t)` | `tsldata/primitives/load_store/store.tsl:177-188`, `store.tsl:196-210` | Resolve mask storage word type. | Mask parameter role, vector mask metadata. | `GenerationTypeRef(kind="vector.mask_underlying_t")`. | Language type map and vector mask metadata. | required-later | Defer until mask store parity. | Mask metadata tests. |
 | `value<generation>(mask::lane::all_true)` | `tsldata/primitives/bitwise/bit_ops.tsl` search result for `mask::lane::all_true` | Supply all-true mask lane literal. | Mask lane count and representation. | `GenerationValue[int|string](kind="mask.lane.all_true")`. | Mask metadata. | explicitly-deferred | Defer until mask helper parity. | Mask fixture and metadata diagnostics. |
@@ -322,22 +323,34 @@ The accepted post-M43 phase is numbered in the roadmap:
   domain/catalog rule source, preserving M52 behavior exactly and keeping broad
   type semantics from raw tag spelling or wildcard/group selectors
   unsupported.
-- The selected post-M53 plan, Milestone 54, wires the M53 rule source through
-  the normal catalog/lowering-input path so lowering receives catalog-derived
-  rule values before evaluation.
+- Milestone 54 wires the M53 rule source through the normal catalog/lowering
+  input path. A focused lowering request adapter builds catalog-derived
+  `ConcreteIntegerGenerationRuleSet` values from typed `Catalog.type_groups`
+  before evaluation and passes them through `GenerationContext`; malformed or
+  incomplete explicit catalog data reports rule-source diagnostics instead of
+  falling back to synthetic defaults.
+- The selected post-M54 plan, Milestone 55, introduces the exact scalar
+  `value<generation>(type::size_bytes(type<generation>(base::in)))` query as a
+  typed generation integer value for explicit selected scalar tags. It does not
+  broaden standalone `base.in` or signed/unsigned companion behavior to floats
+  and does not lower the surrounding bodies where the helper appears.
 
 This phase does not make backend translation parse raw generation-time helper
 text and does not move suffix or type-spelling evaluation into renderers.
 
 ## Explicit Deferrals
 
-Deferred beyond the accepted M43-M53 slices and selected M54 wiring boundary:
+Deferred beyond the accepted M43-M54 slices and the selected M55 value-query
+boundary:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
   types, generic vector lengths, aliases, and non-selected base forms.
-- Generation-time value queries for vector length, vector alignment, mask lane
+- Generation-time value queries other than the selected M55 scalar
+  size-bytes form, including vector length, vector alignment, mask lane
   constants, and generic lengths.
+- Arithmetic or comparisons over generation values, including `* 8`, `== 2`,
+  `else if<generation>`, and branch pruning based on size-byte values.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only
@@ -350,7 +363,7 @@ Deferred beyond the accepted M43-M53 slices and selected M54 wiring boundary:
   accepted selected M45/M46 `si32`/`ui32` behavior remains deferred even though
   M52 accepts generation-time type/signedness semantics for those tags, M53
   moves the rule source boundary, and M54 only wires catalog-derived rules into
-  lowering.
+  lowering input.
 - Backend type/value requests whose inputs are still raw generation-time text.
 - Primitive-call lowering, loops, variables, aliases, casts, arrays, and
   branch-dependent backend output.

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 53 is accepted.
+Milestone 54 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -44,32 +44,45 @@ focused documentation revision.
 Post-M53 planning is accepted. It selected Milestone 54, and internal review
 returned `Accept With Follow-Ups` after a workflow handoff correction.
 
+The M54 execution-review loop returned `Accept With Follow-Ups` with no
+blocking implementation issues and no focused revision.
+
+Post-M54 planning is ready for human acceptance. It selected Milestone 55, and
+internal review returned `Accept With Follow-Ups` after local planning-doc
+updates.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run the Milestone 54 execution-review loop.
+Await human acceptance of the post-M54 planning update.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m54-execution-review-loop-prompt.md
+docs/agent/runs/post-m54-acceptance-finalization-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 54: Catalog-Derived Concrete Integer Generation Rule Pipeline Wiring Slice
+Milestone 55: Base Scalar Size-Bytes Generation Value Query Slice
+```
+
+Planning review verdict:
+
+```text
+Accept With Follow-Ups
 ```
 
 Next expected action:
 
 ```text
-Execute the active M54 prompt. If the internal execution-review loop accepts
-M54, create the next concrete prompt under docs/agent/runs/ without starting
-Milestone 55.
+If the user accepts the post-M54 planning update, execute the active
+finalization prompt to create the M55 execution-review loop prompt. Do not
+start Milestone 55 until acceptance is explicit.
 ```
 
 Accepted planning prompt:
@@ -172,6 +185,24 @@ Accepted post-M53 acceptance finalization prompt:
 
 ```text
 docs/agent/runs/post-m53-acceptance-finalization-prompt.md
+```
+
+Accepted M54 execution prompt:
+
+```text
+docs/agent/runs/m54-execution-review-loop-prompt.md
+```
+
+Active post-M54 planning prompt:
+
+```text
+docs/agent/runs/post-m54-planning-plus-review-prompt.md
+```
+
+Post-M54 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m54-acceptance-finalization-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -328,6 +359,28 @@ docs/agent/runs/post-m53-acceptance-finalization-prompt.md
 - M54 must not make lowering read files, parse raw TSL, query the
   catalog during evaluation, or infer broad integer semantics from regex, tag
   spelling, wildcard/group selectors, or concrete-looking unselected tags.
+- Planned M55 is generation-time semantic lowering only.
+- Planned M55 selects exactly
+  `value<generation>(type::size_bytes(type<generation>(base::in)))`.
+- Planned M55 produces typed integer generation values for explicit selected
+  scalar tags: `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`,
+  `f32`, and `f64`.
+- Planned M55 must use explicit scalar size-byte rule/value records and must
+  not reuse or mutate `ConcreteIntegerGenerationRuleSet` for float size
+  semantics.
+- Planned M55 accepts `f32` and `f64` only for the exact size-bytes value query
+  and must not broaden standalone `type<generation>(base::in)` or
+  signed/unsigned companion behavior to floats.
+- Planned M55 must not infer sizes from regex, tag spelling, wildcard/group
+  selectors, or unselected concrete-looking tags such as `si128`.
+- Planned M55 must not add arithmetic or comparisons over generation values,
+  branch pruning from size values, enclosing body lowering, backend
+  translation expansion, rendering, generated output, generated test sources,
+  CLI/reporting, writer behavior, Rust, compiler execution, generated-test
+  execution, vector/register metadata, loops, casts, calls, direct
+  `intrin<...>`, broad TSIL parsing, or runtime dependency on `frozen/`.
+- Planned M55 must not make lowering read files, parse raw TSL, or query the
+  catalog during evaluation.
 
 ## Accepted Milestone 48
 
@@ -440,6 +493,25 @@ expansion, rendering, generated output, generated test sources, CLI/reporting,
 writer behavior, Rust, compiler execution, broad TSIL parsing, or runtime
 dependency on `frozen/`.
 
+## Accepted Milestone 54
+
+The Milestone 54 execution-review loop accepted with non-blocking follow-ups:
+
+```text
+Milestone 54: Catalog-Derived Concrete Integer Generation Rule Pipeline Wiring Slice
+```
+
+The slice wires the accepted M53
+`ConcreteIntegerGenerationRuleSet` through a normal catalog/lowering-input path
+for pipeline-facing use. It exposes catalog-derived rule construction from
+typed `Catalog.type_groups` and builds `LoweringRequest` values carrying those
+immutable rules before lowering evaluation. It preserves M52/M53 type-query and
+signedness-branch behavior, diagnostics, deterministic ordering, branch
+provenance, selected-branch-only diagnostics, backend raw-helper rejection, and
+renderer non-evaluation. M54 adds no new helper forms, backend translation
+expansion, rendering, generated output, CLI/reporting/writer behavior, Rust,
+compiler execution, broad TSIL parsing, or runtime dependency on `frozen/`.
+
 ## Known Follow-Ups
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
@@ -486,11 +558,10 @@ dependency on `frozen/`.
   `docs/agent/runs/m53-execution-review-loop-prompt.md`, which explicitly
   repeats the broad TSIL parsing prohibition while moving only concrete integer
   rule-source ownership.
-- M53 review follow-up: a future pipeline/lowering-input slice should wire
-  catalog-derived concrete integer generation rules through the normal pipeline
-  path instead of relying on the synthetic default rule source; consider adding
-  a focused test proving lowering consumes an explicitly catalog-built rule set.
-  The post-M53 planning pass selected this wiring as the planned M54 scope.
+- M53 review follow-up addressed by M54: catalog-derived concrete integer
+  generation rules are now wired through a normal catalog/lowering-input path,
+  with focused tests proving lowering consumes explicit catalog-built rules
+  instead of hiding bad explicit rule data behind the synthetic default.
 - M53 review follow-up: consider enforcing the exact selected-tag and
   companion-pair invariants in `ConcreteIntegerGenerationRuleSet` construction
   or making validated construction the only supported path.
@@ -507,11 +578,19 @@ dependency on `frozen/`.
   runtime dependency, but a future cleanup may replace those reads with
   redesign-owned fixtures if the strict no-`frozen/` test-runtime policy is
   applied broadly.
+- M54 review follow-up: add explicit negative test subcases for `dword` and
+  `qword` selected tags. The implementation already classifies them as
+  unsupported group selectors; the extra tests would tighten traceability to
+  `tsldata/detail/types.tsl:25-26`.
+- Post-M54 planning follow-up: M55 may include `f32` and `f64` only for the
+  exact scalar size-bytes value query. It must not broaden standalone
+  `type<generation>(base::in)` or signed/unsigned companion behavior to
+  floats.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the active M54
-execution-review loop prompt.
+No stop condition is active. The workflow awaits human acceptance of the
+post-M54 planning update.
 
 ## Validation Expectations
 

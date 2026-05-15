@@ -1303,9 +1303,18 @@ Consequences:
   the lowering-private table and into typed domain/catalog rule values. This is
   a rule-ownership boundary change only; M52 behavior, selected tags,
   diagnostics, and backend/rendering deferrals remain stable.
-- The selected post-M53 plan, Milestone 54, wires those rule values through the
-  normal catalog/lowering-input path for pipeline-facing use without changing
-  helper semantics or backend/rendering boundaries.
+- Milestone 54 wires those rule values through the normal catalog/lowering
+  input path for pipeline-facing use without changing helper semantics or
+  backend/rendering boundaries. The focused adapter builds a
+  `LoweringRequest` with explicit catalog-derived concrete integer rules before
+  lowering evaluates generation-time helpers.
+- The selected post-M54 plan, Milestone 55, introduces only the exact scalar
+  size-byte generation value query
+  `value<generation>(type::size_bytes(type<generation>(base::in)))`. It uses
+  explicit scalar size-byte rules for selected integer and `f32`/`f64`
+  singleton tags, returns a typed integer generation value, and keeps float
+  support scoped to this query instead of broadening standalone `base.in` or
+  signed/unsigned companion semantics.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

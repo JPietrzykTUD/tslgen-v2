@@ -7,11 +7,12 @@ from _helpers import assert_diagnostic
 from tslgen.config.model import SourceConfig
 from tslgen.core.diagnostics import SourceLocation, SourceSpan
 from tslgen.core.frozen_map import FrozenMap
-from tslgen.domain.catalog import build_catalog
+from tslgen.domain.catalog import Catalog, build_catalog
 from tslgen.domain.generation_rules import (
     SELECTED_CONCRETE_INTEGER_GENERATION_TYPE_TAGS,
     ConcreteIntegerGenerationTypeRule,
     build_concrete_integer_generation_rule_set,
+    build_concrete_integer_generation_rule_set_from_catalog,
 )
 from tslgen.domain.types import TypeGroup
 from tslgen.io.sources import load_sources
@@ -60,6 +61,10 @@ def accepted_singleton_groups() -> tuple[TypeGroup, ...]:
 
 
 def catalog_type_groups_from_tsldata() -> tuple[TypeGroup, ...]:
+    return catalog_from_tsldata_types().type_groups
+
+
+def catalog_from_tsldata_types() -> Catalog:
     sources = load_sources(
         SourceConfig(
             explicit_paths=(Path("tsldata/detail/types.tsl"),),
@@ -74,7 +79,7 @@ def catalog_type_groups_from_tsldata() -> tuple[TypeGroup, ...]:
     catalog = build_catalog(parsed.unwrap())
     if not catalog.is_ok:
         raise AssertionError(catalog.diagnostics)
-    return catalog.unwrap().type_groups
+    return catalog.unwrap()
 
 
 class ConcreteIntegerGenerationRuleSourceTests(unittest.TestCase):
@@ -90,6 +95,24 @@ class ConcreteIntegerGenerationRuleSourceTests(unittest.TestCase):
             rule_set.supported_type_tags,
             SELECTED_CONCRETE_INTEGER_GENERATION_TYPE_TAGS,
         )
+
+    def test_builds_accepted_rule_set_from_catalog(self) -> None:
+        result = build_concrete_integer_generation_rule_set_from_catalog(
+            catalog_from_tsldata_types()
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(result.unwrap().rules, EXPECTED_RULES)
+
+    def test_catalog_rule_set_construction_is_deterministic(self) -> None:
+        catalog = catalog_from_tsldata_types()
+
+        first = build_concrete_integer_generation_rule_set_from_catalog(catalog)
+        second = build_concrete_integer_generation_rule_set_from_catalog(catalog)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
 
     def test_rule_ordering_is_deterministic_from_unsorted_type_groups(self) -> None:
         first = build_concrete_integer_generation_rule_set(

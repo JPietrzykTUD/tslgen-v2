@@ -362,9 +362,15 @@ Current roadmap note:
   domain/catalog rule source consumed by lowering. It preserves M52 behavior
   exactly and does not make backend translation or rendering consume the
   broader rule source.
-- The selected post-M53 plan, Milestone 54, wires the M53 rule source through
-  the normal catalog/lowering-input path while preserving the same lowering
-  behavior and side-effect boundaries.
+- Milestone 54 wires the M53 rule source through the normal
+  catalog/lowering-input path while preserving the same lowering behavior and
+  side-effect boundaries.
+- The selected post-M54 plan, Milestone 55, adds only the exact scalar
+  `value<generation>(type::size_bytes(type<generation>(base::in)))` value query
+  as typed generation-time lowering output. It uses explicit scalar size-byte
+  rules for selected scalar tags and must not broaden backend translation,
+  rendering, vector metadata, branch-body lowering, or standalone float
+  `base.in`/companion semantics.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not
