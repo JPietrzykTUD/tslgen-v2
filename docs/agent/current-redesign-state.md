@@ -85,40 +85,42 @@ Post-M58 planning selected
 internal review returned `Needs Revision` only for workflow handoff wording
 that was corrected locally.
 
+Post-M58 planning is accepted. It selected
+`Milestone 59: Size-Byte Equality Generation Branch-Chain Pruning Slice`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Await human acceptance of the post-M58 planning result.
+Execute the Milestone 59 execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m58-acceptance-finalization-prompt.md
+docs/agent/runs/m59-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Milestone 59 is selected for human acceptance but is not active for
-execution until accepted.
+Milestone 59: Size-Byte Equality Generation Branch-Chain Pruning Slice
 ```
 
 Latest review verdict:
 
 ```text
-Post-M58 planning internal review found no M59 boundary blocker; the only
-blocking issue was stale workflow handoff state, corrected before final report.
+Post-M58 planning accepted by user; M59 is active for execution.
 ```
 
 Next expected action:
 
 ```text
-If the user accepts the post-M58 planning result, run the active finalization
-prompt to create the Milestone 59 execution-review loop prompt. Do not execute
-M59 until acceptance is explicit.
+Run the active M59 execution-review loop prompt. If M59 is accepted, update
+this state file, record follow-ups, and create the next concrete run prompt
+under docs/agent/runs/ without starting M60 unless a later planning pass
+accepts it.
 ```
 
 Accepted planning prompt:
@@ -311,6 +313,12 @@ Active post-M58 acceptance finalization prompt:
 
 ```text
 docs/agent/runs/post-m58-acceptance-finalization-prompt.md
+```
+
+Active M59 execution-review loop prompt:
+
+```text
+docs/agent/runs/m59-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -549,6 +557,35 @@ docs/agent/runs/post-m58-acceptance-finalization-prompt.md
 - M58 must not make lowering read files, parse raw TSL, or query the catalog
   during evaluation; catalog-derived rule construction must remain before
   evaluation.
+- M59 is generation-time semantic lowering control-flow pruning only.
+- M59 must consume typed M57/M58 predicate and stage outputs instead of
+  re-evaluating raw generation helper text.
+- M59 selects only the exact no-final-else SVE size-byte chain from
+  `tsldata/primitives/load_store/array.tsl:107-109`, with documented
+  `== 2`, `== 4`, and `== 8` arm order.
+- M59 selects matching arms for byte sizes `2`, `4`, and `8`.
+- M59 records explicit no-match provenance for byte size `1` without
+  synthesizing a final `else`.
+- M59 keeps all branch bodies opaque and must not introduce the M60 selected
+  body handoff contract.
+- M59 may include only the smallest typed reuse cleanup needed to avoid
+  duplicating private staged-predicate assembly or re-evaluating raw helper
+  text.
+- M59 must preserve accepted M55/M57/M58 value, predicate, and stage outputs,
+  backend raw-helper rejection, and renderer non-evaluation.
+- M59 must not add broad `else if<generation>` syntax beyond the exact
+  selected chain shape, final `else`, reordered chains, missing arms, duplicate
+  arms, nested branches, broad no-final-else policy, standalone comparison
+  evaluation, general comparison parsing, M60 opaque selected branch body
+  handoff, direct `intrin<...>` / SVE body lowering, assignments, variables,
+  arrays, calls, casts, loops, vector/register metadata,
+  `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, backend uninit values, backend
+  translation, rendering, output, generated tests, CLI/reporting, writer
+  behavior, Rust, compiler execution, broad TSIL parsing, or runtime
+  dependency on `frozen/`.
+- M59 must not make lowering read files, parse raw TSL, or query the catalog
+  during evaluation.
 
 ## Accepted Milestone 48
 
@@ -919,9 +956,9 @@ on `frozen/`.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is waiting for human acceptance of
-the post-M58 planning result. M59 is selected for human acceptance but must not
-be executed until accepted. M60 remains a draft planning candidate.
+No stop condition is active. The workflow proceeds with the M59
+execution-review loop. M60 remains a draft planning candidate only and must not
+be started unless a later planning pass accepts it.
 
 ## Validation Expectations
 
