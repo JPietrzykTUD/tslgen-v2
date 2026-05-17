@@ -760,11 +760,12 @@ Recommended first parity checks:
   boundary-level invalid handoff-state diagnostics, M57/M58/M59 regressions,
   raw-helper rejection, renderer non-evaluation, and no generated output or
   golden-file changes.
-- The selected post-M60 plan, Milestone 61, should test only selected-body
-  assignment-form recognition from M60 handoff values: deterministic
+- Milestone 61 tests only selected-body assignment-form recognition from M60
+  handoff values: deterministic
   recognition for the `pg = intrin<svptrue_b16/b32/b64>();` selected bodies,
-  explicit no-body/no-form behavior for `si8`/`ui8`, unsupported-form and
-  malformed-body diagnostics, unselected bodies remaining uninspected,
+  explicit no-selected-body/no-form behavior for `si8`/`ui8`,
+  unsupported-form and malformed-body diagnostics, unselected bodies remaining
+  uninspected,
   M57-M60 regressions, raw-helper rejection, renderer non-evaluation, and no
   generated output or golden-file changes.
 

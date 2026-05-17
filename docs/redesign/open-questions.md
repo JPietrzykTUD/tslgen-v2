@@ -1274,10 +1274,10 @@ Milestone 58 adds the accepted typed staged lowering contract so later
 control-flow can consume typed predicate stage outputs instead of raw helper
 text. Milestone 59 accepts the exact SVE size-byte branch-chain pruning slice.
 Milestone 60 accepts only opaque selected-body handoff as a typed/provenanced
-boundary. The selected post-M60 plan, M61, narrows the next step to exact
-selected-body assignment-form recognition and still defers direct intrinsics,
-SVE body semantics, vector metadata, backend translation, rendering, and
-generated output until separate accepted milestones.
+boundary. M61 narrows the next step to exact selected-body assignment-form
+recognition and still defers direct intrinsics, SVE body semantics, vector
+metadata, backend translation, rendering, and generated output until separate
+accepted milestones.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1289,7 +1289,7 @@ beyond the selected base type query family, M55 size-byte value query,
 accepted M56 exact size-bytes-times-eight expression, accepted M57 exact
 size-byte equality predicates, branch-chain pruning beyond the accepted narrow
 M59 slice over those predicates, selected body handling beyond the accepted
-opaque M60 handoff and selected M61 assignment-form recognition plan, and other
+opaque M60 handoff and M61 assignment-form recognition slice, and other
 nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
 `algo`, Rust output, generated tests beyond the selected M49 source fixture,

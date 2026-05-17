@@ -5759,8 +5759,8 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance. Do not implement until this planning result is
-accepted.
+Active execution slice after accepted post-M60 planning. Acceptance still
+belongs to the M61 execution-review loop.
 
 Goal:
 
@@ -5793,9 +5793,10 @@ Scope:
   slices; do not validate, translate, or semantically lower it.
 - Represent `si8`/`ui8` byte-size `1` no-match handoffs explicitly without
   synthesizing a body or recognized form.
-- Diagnose only invalid selected-body form-recognition state, such as missing
-  provenance, unsupported handoff source, extra statements, unsupported target
-  shape, unsupported RHS shape, or malformed selected body text.
+- Diagnose only invalid selected-body form-recognition state, such as an
+  unsupported handoff source, extra statements, unsupported target shape,
+  unsupported RHS shape, or malformed selected body text. Missing selected body
+  text and missing source provenance remain M60 handoff-boundary invariants.
 
 Out of scope:
 
@@ -5832,6 +5833,9 @@ Expected outputs:
   equivalent typed stage output, carrying the preserved M60 handoff identity
   and selected-body provenance plus form-level metadata for the assignment
   target and opaque RHS/direct-intrinsic token text.
+- The concrete M61 implementation exposes the recognized selected assignment
+  forms, and explicit no-selected-body/no-form cases, through the distinct
+  `selected_body_form_recognition` stage.
 - A distinct no-selected-body/no-recognized-form result for byte-size `1`
   no-match cases.
 - Boundary-level diagnostics for invalid recognition state only.
@@ -5862,17 +5866,18 @@ Tests required:
 - Selected `== 2`, `== 4`, and `== 8` M60 handoffs recognize the exact
   assignment-form bodies for `svptrue_b16`, `svptrue_b32`, and `svptrue_b64`
   while preserving original text/provenance.
-- `si8` and `ui8` no-match handoffs produce explicit no-body/no-form results.
+- `si8` and `ui8` no-match handoffs produce explicit
+  no-selected-body/no-form results.
 - Unsupported selected-body forms, extra statements, malformed assignment
-  text, missing selected body text, missing provenance, and unsupported source
-  stage diagnostics remain boundary-level and do not classify direct intrinsic
-  or SVE semantics.
+  text, and unsupported source-stage diagnostics remain boundary-level and do
+  not classify direct intrinsic or SVE semantics.
 - Unselected branch bodies remain uninspected and do not emit body-form
   diagnostics.
 - Regression tests preserve M57 predicates, M58 stage records, M59
   branch-chain pruning/no-match behavior, M60 handoff behavior, backend
   raw-helper rejection, and renderer non-evaluation.
-- Determinism tests for recognized form metadata and no-body/no-form results.
+- Determinism tests for recognized form metadata and
+  no-selected-body/no-form results.
 
 Golden fixtures required:
 
@@ -5910,4 +5915,5 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m60-acceptance-finalization-prompt.md`
+- Completed by `docs/agent/runs/m61-execution-review-loop-prompt.md`; the
+  workflow now continues through post-M61 planning.

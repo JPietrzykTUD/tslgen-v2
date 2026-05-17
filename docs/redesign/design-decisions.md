@@ -1339,11 +1339,11 @@ Consequences:
   It carries selected body text and provenance from M59 pruning without parsing
   or lowering body semantics and without stretching M59 pruning metadata into
   the reusable handoff contract.
-- The selected post-M60 plan, Milestone 61, keeps the next step as typed
-  selected-body assignment-form recognition only. It should consume M60
-  handoff values and emit form metadata, not assignment semantics, direct
-  intrinsic/SVE IR, backend translation input, renderer-ready IR, or broad
-  TSIL body parsing.
+- Milestone 61 keeps the next step as typed selected-body assignment-form
+  recognition only. It consumes M60 handoff values and emits form metadata
+  through a distinct `selected_body_form_recognition` stage, not assignment
+  semantics, direct intrinsic/SVE IR, backend translation input, renderer-ready
+  IR, or broad TSIL body parsing.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

@@ -51,9 +51,14 @@ type GenerationLoweringStageName = Literal[
     "typed_generation_predicate",
     "generation_control_flow_pruning",
     "selected_body_lowering",
+    "selected_body_form_recognition",
 ]
 type GenerationSelectedBranchBodyHandoff = (
     OpaqueSelectedBranchBodyHandoff | NoSelectedBranchBodyHandoff
+)
+type GenerationSelectedBranchBodyAssignmentRecognition = (
+    SelectedBranchBodyAssignmentFormRecognition
+    | NoSelectedBranchBodyAssignmentFormRecognition
 )
 type TsilBinaryOperator = Literal["+"]
 type TsilExpression = (
@@ -68,6 +73,8 @@ type GenerationLoweringStageOutput = (
     | GenerationSizeByteBranchChainPruning
     | OpaqueSelectedBranchBodyHandoff
     | NoSelectedBranchBodyHandoff
+    | SelectedBranchBodyAssignmentFormRecognition
+    | NoSelectedBranchBodyAssignmentFormRecognition
     | TsilStatement
 )
 
@@ -95,6 +102,15 @@ _INTRIN_COMPOSE_RETURN_RE = re.compile(
 )
 _INTRIN_COMPOSE_MARKER_RE = re.compile(r"\bintrin_compose\s*<")
 _EMIT_RETURN_HEAD_RE = re.compile(r"\A\s*emit_return\s*\(")
+_SELECTED_BODY_ASSIGNMENT_TARGET = "pg"
+_SELECTED_BODY_ASSIGNMENT_DIRECT_INTRINSIC_TOKENS = (
+    "svptrue_b16",
+    "svptrue_b32",
+    "svptrue_b64",
+)
+_SELECTED_BODY_ASSIGNMENT_RHS_RE = re.compile(
+    rf"\Aintrin\s*<\s*({_TSIL_IDENTIFIER})\s*>\s*\(\s*\)\Z"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -476,6 +492,117 @@ class NoSelectedBranchBodyHandoff:
 
 
 @dataclass(frozen=True, slots=True)
+class SelectedBranchBodyAssignmentFormRecognition:
+    candidate_id: str
+    selected_type_tag: str
+    selected_literal: int
+    originating_branch_chain_id: str
+    original_opaque_body_text: str
+    selected_statement_location: SourceLocation
+    assignment_target_text: str
+    opaque_rhs_text: str
+    direct_intrinsic_token_text: str
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id:
+            raise ValueError(
+                "selected-body assignment form candidate id must be non-empty"
+            )
+        if not self.selected_type_tag:
+            raise ValueError(
+                "selected-body assignment form type tag must be non-empty"
+            )
+        if self.selected_literal not in (2, 4, 8):
+            raise ValueError(
+                "selected-body assignment form literal must be 2, 4, or 8"
+            )
+        if not self.originating_branch_chain_id:
+            raise ValueError(
+                "selected-body assignment form branch-chain id must be non-empty"
+            )
+        if not self.original_opaque_body_text.strip():
+            raise ValueError(
+                "selected-body assignment form original body text must be non-empty"
+            )
+        if self.selected_statement_location is None:
+            raise ValueError(
+                "selected-body assignment form requires selected statement location"
+            )
+        if self.assignment_target_text != _SELECTED_BODY_ASSIGNMENT_TARGET:
+            raise ValueError(
+                "selected-body assignment form target must be exact text 'pg'"
+            )
+        if not self.opaque_rhs_text:
+            raise ValueError(
+                "selected-body assignment form RHS text must be non-empty"
+            )
+        if self.direct_intrinsic_token_text not in (
+            _SELECTED_BODY_ASSIGNMENT_DIRECT_INTRINSIC_TOKENS
+        ):
+            raise ValueError(
+                "selected-body assignment form direct intrinsic token is unsupported"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "selected_branch_body_assignment_form",
+            self.candidate_id,
+            self.selected_type_tag,
+            self.selected_literal,
+            self.originating_branch_chain_id,
+            self.original_opaque_body_text,
+            self.selected_statement_location.sort_key(),
+            self.assignment_target_text,
+            self.opaque_rhs_text,
+            self.direct_intrinsic_token_text,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NoSelectedBranchBodyAssignmentFormRecognition:
+    candidate_id: str
+    selected_type_tag: str
+    source_location: SourceLocation
+    originating_branch_chain_id: str
+    attempted_literals: tuple[int, ...] = (2, 4, 8)
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id:
+            raise ValueError(
+                "no-selected-body assignment form candidate id must be non-empty"
+            )
+        if not self.selected_type_tag:
+            raise ValueError(
+                "no-selected-body assignment form type tag must be non-empty"
+            )
+        if self.source_location is None:
+            raise ValueError(
+                "no-selected-body assignment form requires source location"
+            )
+        if not self.originating_branch_chain_id:
+            raise ValueError(
+                "no-selected-body assignment form branch-chain id must be non-empty"
+            )
+        object.__setattr__(self, "attempted_literals", tuple(self.attempted_literals))
+        if self.attempted_literals != (2, 4, 8):
+            raise ValueError(
+                "no-selected-body assignment form attempted literals must be 2, 4, 8"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "no_selected_branch_body_assignment_form",
+            self.candidate_id,
+            self.selected_type_tag,
+            self.source_location.sort_key(),
+            self.originating_branch_chain_id,
+            self.attempted_literals,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class PrunedGenerationBranch:
     condition: TsilGenerationCondition
     selected_branch: GenerationBranchChoice
@@ -594,6 +721,11 @@ class GenerationLoweringStage:
                 OpaqueSelectedBranchBodyHandoff,
                 NoSelectedBranchBodyHandoff,
             )
+        elif self.stage == "selected_body_form_recognition":
+            expected = (
+                SelectedBranchBodyAssignmentFormRecognition,
+                NoSelectedBranchBodyAssignmentFormRecognition,
+            )
         else:
             raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
         if not isinstance(self.output, expected):
@@ -618,6 +750,9 @@ class LoweredImplementation:
     generation_predicates: tuple[GenerationPredicate, ...] = ()
     generation_branch_chains: tuple[GenerationSizeByteBranchChainPruning, ...] = ()
     selected_branch_body_handoffs: tuple[GenerationSelectedBranchBodyHandoff, ...] = ()
+    selected_branch_body_assignment_forms: tuple[
+        GenerationSelectedBranchBodyAssignmentRecognition, ...
+    ] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -656,6 +791,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "selected_branch_body_assignment_forms",
+            tuple(self.selected_branch_body_assignment_forms),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -672,6 +812,9 @@ class LoweredImplementation:
             tuple(predicate.key for predicate in self.generation_predicates),
             tuple(chain.key for chain in self.generation_branch_chains),
             tuple(handoff.key for handoff in self.selected_branch_body_handoffs),
+            tuple(
+                form.key for form in self.selected_branch_body_assignment_forms
+            ),
             tuple(stage.key for stage in self.generation_stages),
         )
 
@@ -853,6 +996,35 @@ def handoff_opaque_selected_branch_body(
     )
 
 
+def recognize_selected_branch_body_assignment_form(
+    source: GenerationSelectedBranchBodyHandoff | GenerationLoweringStage,
+) -> Result[GenerationSelectedBranchBodyAssignmentRecognition]:
+    handoff = _selected_body_assignment_handoff_source(source)
+    if not handoff.is_ok:
+        return Result.failure(handoff.diagnostics)
+
+    selected_body_handoff = handoff.unwrap()
+    if isinstance(selected_body_handoff, NoSelectedBranchBodyHandoff):
+        return Result.ok(
+            NoSelectedBranchBodyAssignmentFormRecognition(
+                candidate_id=selected_body_handoff.candidate_id,
+                selected_type_tag=selected_body_handoff.selected_type_tag,
+                source_location=selected_body_handoff.source_location,
+                originating_branch_chain_id=(
+                    selected_body_handoff.originating_branch_chain_id
+                ),
+                attempted_literals=selected_body_handoff.attempted_literals,
+            )
+        )
+
+    recognized = _recognize_opaque_selected_branch_body_assignment_form(
+        selected_body_handoff,
+    )
+    if not recognized.is_ok:
+        return Result.failure(recognized.diagnostics)
+    return Result.ok(recognized.unwrap())
+
+
 def resolve_generation_type_query(
     query_text: str,
     context: GenerationContext | None = None,
@@ -1002,6 +1174,15 @@ def _selected_body_stage(
     return GenerationLoweringStage(stage="selected_body_lowering", output=output)
 
 
+def _selected_body_form_recognition_stage(
+    output: GenerationSelectedBranchBodyAssignmentRecognition,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="selected_body_form_recognition",
+        output=output,
+    )
+
+
 def _stage_output_location(
     output: GenerationLoweringStageOutput,
 ) -> SourceLocation | None:
@@ -1018,8 +1199,12 @@ def _stage_output_location(
         (
             OpaqueSelectedBranchBodyHandoff,
             NoSelectedBranchBodyHandoff,
+            SelectedBranchBodyAssignmentFormRecognition,
+            NoSelectedBranchBodyAssignmentFormRecognition,
         ),
     ):
+        if isinstance(output, SelectedBranchBodyAssignmentFormRecognition):
+            return output.selected_statement_location
         return output.source_location
     return None
 
@@ -1038,6 +1223,155 @@ def _originating_branch_chain_id(
         f"{candidate_id}:generation-size-byte-branch-chain:"
         f"{pruning.type_tag}:{literal_key}:{location_key}"
     )
+
+
+def _selected_body_assignment_handoff_source(
+    source: GenerationSelectedBranchBodyHandoff | GenerationLoweringStage,
+) -> Result[GenerationSelectedBranchBodyHandoff]:
+    if isinstance(source, (OpaqueSelectedBranchBodyHandoff, NoSelectedBranchBodyHandoff)):
+        return Result.ok(source)
+    if (
+        source.stage == "selected_body_lowering"
+        and isinstance(
+            source.output,
+            (OpaqueSelectedBranchBodyHandoff, NoSelectedBranchBodyHandoff),
+        )
+    ):
+        return Result.ok(source.output)
+    return Result.failure(
+        (
+            Diagnostic.error(
+                "TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED",
+                "selected-body assignment-form recognition consumes only typed "
+                "OpaqueSelectedBranchBodyHandoff or NoSelectedBranchBodyHandoff "
+                "values, or the selected_body_lowering stage output containing "
+                "one of those values",
+                location=_stage_output_location(source.output),
+            ),
+        )
+    )
+
+
+def _recognize_opaque_selected_branch_body_assignment_form(
+    handoff: OpaqueSelectedBranchBodyHandoff,
+) -> Result[SelectedBranchBodyAssignmentFormRecognition]:
+    parsed = _parse_selected_body_assignment_form(
+        handoff.opaque_body_text,
+        handoff.source_location,
+    )
+    if not parsed.is_ok:
+        return Result.failure(parsed.diagnostics)
+    assignment_target_text, opaque_rhs_text, direct_intrinsic_token_text = (
+        parsed.unwrap()
+    )
+    return Result.ok(
+        SelectedBranchBodyAssignmentFormRecognition(
+            candidate_id=handoff.candidate_id,
+            selected_type_tag=handoff.selected_type_tag,
+            selected_literal=handoff.selected_literal,
+            originating_branch_chain_id=handoff.originating_branch_chain_id,
+            original_opaque_body_text=handoff.opaque_body_text,
+            selected_statement_location=handoff.source_location,
+            assignment_target_text=assignment_target_text,
+            opaque_rhs_text=opaque_rhs_text,
+            direct_intrinsic_token_text=direct_intrinsic_token_text,
+        )
+    )
+
+
+def _parse_selected_body_assignment_form(
+    body_text: str,
+    location: SourceLocation | None,
+) -> Result[tuple[str, str, str]]:
+    stripped = body_text.strip()
+    if stripped.count(";") > 1:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-SELECTED-BODY-FORM-EXTRA-STATEMENTS",
+                    "selected-body assignment-form recognition supports only one "
+                    "selected statement",
+                    location=location,
+                ),
+            )
+        )
+    if not stripped.endswith(";"):
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-SELECTED-BODY-FORM-MALFORMED",
+                    "selected-body assignment-form recognition supports only "
+                    "'pg = intrin<svptrue_b16|svptrue_b32|svptrue_b64>();'",
+                    location=location,
+                ),
+            )
+        )
+
+    statement_text = stripped[:-1].strip()
+    if "=" not in statement_text:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-SELECTED-BODY-FORM-MALFORMED",
+                    "selected-body assignment-form recognition requires one "
+                    "assignment statement",
+                    location=location,
+                ),
+            )
+        )
+
+    target_text, rhs_text = (
+        part.strip()
+        for part in statement_text.split("=", 1)
+    )
+    if not target_text or not rhs_text:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-SELECTED-BODY-FORM-MALFORMED",
+                    "selected-body assignment-form recognition requires both "
+                    "assignment target text and RHS text",
+                    location=location,
+                ),
+            )
+        )
+    if target_text != _SELECTED_BODY_ASSIGNMENT_TARGET:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-SELECTED-BODY-FORM-TARGET-UNSUPPORTED",
+                    "selected-body assignment-form recognition supports only "
+                    "the exact assignment target text 'pg'; got "
+                    f"{target_text!r}",
+                    location=location,
+                ),
+            )
+        )
+
+    match = _SELECTED_BODY_ASSIGNMENT_RHS_RE.fullmatch(rhs_text)
+    if match is None:
+        return Result.failure(
+            (
+                _unsupported_selected_body_assignment_rhs_diagnostic(
+                    rhs_text,
+                    location,
+                ),
+            )
+        )
+    direct_intrinsic_token_text = match.group(1)
+    if direct_intrinsic_token_text not in (
+        _SELECTED_BODY_ASSIGNMENT_DIRECT_INTRINSIC_TOKENS
+    ):
+        return Result.failure(
+            (
+                _unsupported_selected_body_assignment_rhs_diagnostic(
+                    rhs_text,
+                    location,
+                ),
+            )
+        )
+
+    return Result.ok((target_text, rhs_text, direct_intrinsic_token_text))
 
 
 def _resolve_generation_predicate_query_staged(
@@ -1254,6 +1588,10 @@ def _lower_input(
             if not selected_body_handoff.is_ok:
                 return Result.failure(selected_body_handoff.diagnostics)
             handoff = selected_body_handoff.unwrap()
+            assignment_form = recognize_selected_branch_body_assignment_form(handoff)
+            if not assignment_form.is_ok:
+                return Result.failure(assignment_form.diagnostics)
+            recognized_assignment_form = assignment_form.unwrap()
             return Result.ok(
                 LoweredImplementation(
                     candidate_id=item.candidate_id,
@@ -1261,6 +1599,9 @@ def _lower_input(
                     generation_predicates=staged_chain.generation_predicates,
                     generation_branch_chains=(staged_chain.pruning,),
                     selected_branch_body_handoffs=(handoff,),
+                    selected_branch_body_assignment_forms=(
+                        recognized_assignment_form,
+                    ),
                     generation_stages=(
                         _recognition_stage(
                             "generation.control_flow",
@@ -1276,6 +1617,9 @@ def _lower_input(
                         ),
                         control_flow_stage,
                         _selected_body_stage(handoff),
+                        _selected_body_form_recognition_stage(
+                            recognized_assignment_form,
+                        ),
                     ),
                 )
             )
@@ -2747,6 +3091,20 @@ def _malformed_generation_if_diagnostic(
         "predicate branch form, and the exact no-final-else size-byte "
         "branch chain with == 2, == 4, then == 8 arms",
         location=item.source_location,
+    )
+
+
+def _unsupported_selected_body_assignment_rhs_diagnostic(
+    rhs_text: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-SELECTED-BODY-FORM-RHS-UNSUPPORTED",
+        "selected-body assignment-form recognition supports only opaque RHS "
+        "text shaped as 'intrin<svptrue_b16>()', 'intrin<svptrue_b32>()', "
+        "or 'intrin<svptrue_b64>()'; got "
+        f"{rhs_text!r}",
+        location=location,
     )
 
 

@@ -394,11 +394,11 @@ Current roadmap note:
   from accepted M59 pruning output. It remains separate from TSIL/body semantic
   lowering, direct-intrinsic/SVE body handling, backend translation, rendering,
   output, and compiler work.
-- The selected post-M60 plan, Milestone 61, should add only a typed
-  selected-body assignment-form recognition record from M60 handoff values. It
-  must stay a form-classification boundary and must not produce `TsilStatement`
-  values, backend intrinsic calls, translation requests, rendered code, or
-  generated artifacts.
+- Milestone 61 adds only a typed selected-body assignment-form recognition
+  record from M60 handoff values through the distinct
+  `selected_body_form_recognition` stage. It stays a form-classification
+  boundary and must not produce `TsilStatement` values, backend intrinsic
+  calls, translation requests, rendered code, or generated artifacts.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

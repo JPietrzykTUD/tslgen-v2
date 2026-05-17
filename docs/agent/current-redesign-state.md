@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 60 is accepted.
+Milestone 61 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -106,39 +106,42 @@ Post-M60 planning is accepted. It selected
 internal review returned `Accept With Follow-Ups` after local state wording
 corrections.
 
+The M61 execution-review loop returned `Accept With Follow-Ups` after one
+focused revision.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute the Milestone 61 execution-review loop.
+Run the post-M61 planning-plus-review prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m61-execution-review-loop-prompt.md
+docs/agent/runs/post-m61-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 61: Selected Branch Body Assignment Form Recognition Slice
+None. Post-M61 planning is active; no executor milestone is selected yet.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M60 planning accepted by user; M61 is active for execution.
+The M61 execution-review loop returned Accept With Follow-Ups after one focused
+revision.
 ```
 
 Next expected action:
 
 ```text
-Run the active M61 execution-review loop prompt. If M61 is accepted, update
-this state file, record follow-ups, and create the next concrete run prompt
-under docs/agent/runs/ without starting a later milestone unless a later
-planning pass accepts it.
+Run the active post-M61 planning-plus-review prompt. Use the specified
+subagent workflow, do not implement code, and create the next concrete prompt
+under docs/agent/runs/ according to the accepted planning result.
 ```
 
 Accepted planning prompt:
@@ -369,10 +372,16 @@ Accepted post-M60 acceptance finalization prompt:
 docs/agent/runs/post-m60-acceptance-finalization-prompt.md
 ```
 
-Active M61 execution-review loop prompt:
+Accepted M61 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m61-execution-review-loop-prompt.md
+```
+
+Active post-M61 planning prompt:
+
+```text
+docs/agent/runs/post-m61-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -984,6 +993,36 @@ CLI/reporting/writer behavior, Rust, compiler execution, broad TSIL parsing,
 runtime dependency on `frozen/`, lowering-time file reads, raw TSL parsing, or
 catalog queries during evaluation.
 
+## Accepted Milestone 61
+
+The Milestone 61 execution-review loop accepted with non-blocking follow-ups
+after one focused revision:
+
+```text
+Milestone 61: Selected Branch Body Assignment Form Recognition Slice
+```
+
+The slice is generation-time lowering form-recognition work only. It consumes
+typed M60 `OpaqueSelectedBranchBodyHandoff` and
+`NoSelectedBranchBodyHandoff` values and exposes selected-body assignment-form
+metadata through a distinct `selected_body_form_recognition` stage.
+
+For the selected `== 2`, `== 4`, and `== 8` branch bodies, M61 recognizes only
+the exact `pg = intrin<svptrue_b16/b32/b64>();` single-statement assignment
+forms and preserves candidate id, selected type tag, selected literal,
+originating branch-chain identity, original opaque body text, statement
+provenance, assignment target text, opaque RHS text, and direct-intrinsic token
+text as form metadata. For byte-size `1` no-match cases, it records an
+explicit no-selected-body/no-form result.
+
+M61 does not lower assignment semantics, validate direct intrinsics, infer SVE
+predicate meaning, map byte-size literals to intrinsic suffixes, inspect
+unselected branch bodies, or synthesize a body/form for `si8`/`ui8` no-match
+cases. It adds no backend translation, rendering, output, generated tests,
+CLI/reporting/writer behavior, Rust, compiler execution, broad TSIL parsing,
+runtime dependency on `frozen/`, lowering-time file reads, raw TSL parsing, or
+catalog queries during evaluation.
+
 ## Known Follow-Ups
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
@@ -1161,28 +1200,34 @@ catalog queries during evaluation.
 - M60 docs follow-up addressed by post-M60 planning: refresh
   `docs/redesign/behavioral-spec.md` so the parity table includes
   M58/M59/M60 and narrows remaining gaps to broader branch-chain pruning
-  beyond M59 and body handling beyond the M60 opaque handoff plus selected
-  M61 form-recognition plan.
+  beyond M59 and body handling beyond the M60 opaque handoff plus M61
+  form-recognition slice.
 - M60 docs follow-up addressed by post-M60 planning: refresh
   `docs/redesign/generation-time-semantic-lowering.md` and
   `docs/redesign/open-questions.md` so lowering and open-question summaries
-  are current through M60 and the selected M61 plan.
+  are current through M60 and M61 form recognition.
 - M60 docs follow-up addressed by post-M60 planning: refresh
   `docs/redesign/frozen-parity-baselines.md` from selected opaque handoff
   candidate wording to accepted M60 opaque handoff wording while keeping
-  broader body handling deferred beyond the selected M61 form-recognition plan.
-- Post-M60 planning follow-up: M61 must remain a single selected-body
-  assignment-form recognition boundary. It must not become direct intrinsic
-  lowering, SVE predicate semantic lowering, assignment lowering, backend
-  translation input, renderer-ready IR, or broad TSIL parsing.
-- Post-M60 planning follow-up: the M61 executor should introduce a distinct
-  typed form-recognition value or stage envelope rather than stretching
-  `selected_body_lowering` into a mixed semantic dispatcher.
+  broader body handling deferred beyond the M61 form-recognition slice.
+- Post-M60 planning follow-up addressed by M61: M61 remained a single
+  selected-body assignment-form recognition boundary and did not become direct
+  intrinsic lowering, SVE predicate semantic lowering, assignment lowering,
+  backend translation input, renderer-ready IR, or broad TSIL parsing.
+- Post-M60 planning follow-up addressed by M61: the implementation introduced
+  a distinct typed form-recognition value and `selected_body_form_recognition`
+  stage rather than stretching `selected_body_lowering` into a mixed semantic
+  dispatcher.
+- M61 extensibility follow-up: future body-lowering slices may want an explicit
+  typed unsupported selected-body-form result if they need to distinguish
+  unsupported selected bodies from hard diagnostics.
+- M61 extensibility follow-up: if later slices need exact statement spans,
+  split `selected_statement_location` from the inherited M60 handoff/source
+  provenance rather than overloading the same location.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the M61
-execution-review loop.
+No stop condition is active. The workflow proceeds with post-M61 planning.
 
 ## Validation Expectations
 

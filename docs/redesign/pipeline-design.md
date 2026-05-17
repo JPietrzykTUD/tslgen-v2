@@ -430,10 +430,10 @@ pruning result into a distinct typed opaque body handoff. It does not invoke
 mini TSIL lowering, produce direct-intrinsic/SVE `TsilStatement` values, parse
 unselected bodies, or change backend translation, rendering, generated output,
 CLI/reporting/writer behavior, Rust, or compiler execution.
-The selected post-M60 plan, Milestone 61, should add only a typed
-selected-body assignment-form recognition record from M60 handoff values. That
-record is a staged lowering classification boundary, not TSIL/body semantic
-lowering and not backend/rendering input.
+Milestone 61 adds only a typed selected-body assignment-form recognition record
+from M60 handoff values. That record is exposed through the distinct
+`selected_body_form_recognition` stage as a staged lowering classification
+boundary, not TSIL/body semantic lowering and not backend/rendering input.
 
 ## Stage 9: Backend Planning
 

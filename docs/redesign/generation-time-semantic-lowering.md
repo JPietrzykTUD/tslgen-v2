@@ -407,9 +407,9 @@ separate from branch-chain pruning. The accepted staged direction is:
    before any body-specific lowering slice; M60 accepted this opaque handoff
    boundary.
 6. Recognize exactly selected body forms from the M60 handoff as typed
-   form-recognition records before any semantic body lowering. The selected
-   post-M60 plan, M61, keeps this recognition boundary limited to the exact
-   selected assignment form in the SVE size-byte branch bodies.
+   form-recognition records before any semantic body lowering. M61 keeps this
+   recognition boundary limited to the exact selected assignment form in the
+   SVE size-byte branch bodies.
 
 This staged path is a semantic contract. It does not require every step to be a
 separate traversal immediately, but each milestone should expose typed outputs
@@ -448,22 +448,32 @@ casts, loops, vector metadata, backend values, renderer output, generated
 artifacts, CLI/reporting/writer behavior, Rust, compiler execution, broad
 TSIL, or runtime `frozen/` evidence.
 
-The selected post-M60 plan, M61, is selected-body assignment-form recognition.
-It should consume only typed M60 handoff values and recognize exactly the
-selected single-statement forms
+Milestone 61 is selected-body assignment-form recognition. It consumes only
+typed M60 handoff values and recognizes exactly the selected single-statement
+forms
 `pg = intrin<svptrue_b16>();`, `pg = intrin<svptrue_b32>();`, and
 `pg = intrin<svptrue_b64>();` from
-`tsldata/primitives/load_store/array.tsl:107-109`. M61 should preserve the
+`tsldata/primitives/load_store/array.tsl:107-109`. M61 preserves the
 assignment target, opaque RHS/direct-intrinsic token text, original body text,
-and provenance as typed form metadata. It must not lower assignment semantics,
-validate direct intrinsics, infer SVE predicate meaning, inspect unselected
-branch bodies, feed backend translation or rendering, add generated output, or
-parse broad TSIL body syntax.
+and provenance as typed form metadata through a distinct
+`selected_body_form_recognition` stage. It must not lower assignment semantics,
+validate direct intrinsics, infer SVE predicate meaning, map selected size-byte
+literals to intrinsic token text, inspect unselected branch bodies, feed backend
+translation or rendering, add generated output, or parse broad TSIL body
+syntax.
+
+M61 diagnostics:
+
+- `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
+- `TSL-LOWER-SELECTED-BODY-FORM-EXTRA-STATEMENTS`
+- `TSL-LOWER-SELECTED-BODY-FORM-MALFORMED`
+- `TSL-LOWER-SELECTED-BODY-FORM-TARGET-UNSUPPORTED`
+- `TSL-LOWER-SELECTED-BODY-FORM-RHS-UNSUPPORTED`
 
 ## Explicit Deferrals
 
 Deferred beyond the implemented M43-M60 semantic-lowering slices and the
-selected M61 form-recognition plan:
+current M61 form-recognition slice:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -476,8 +486,8 @@ selected M61 form-recognition plan:
   values remain deferred except for the accepted M57 exact
   `type.size_bytes == 2/4/8` predicates. Branch-chain pruning over those
   predicates is implemented only for the exact M59 SVE size-byte no-final-else
-  branch chain; M60 adds only opaque selected-body handoff, and M61 is selected
-  only for exact selected assignment-form recognition. General
+  branch chain; M60 adds only opaque selected-body handoff, and M61 adds only
+  exact selected assignment-form recognition. General
   `else if<generation>` syntax, final-else policy, broad branch pruning based
   on generation values, assignment semantics, direct-intrinsic/SVE semantics,
   and broad body lowering remain deferred.
