@@ -442,14 +442,13 @@ target/token/text/provenance fields, must not derive semantics by matching
 preserved original body text, and must not create backend translation requests,
 renderer-ready expressions, generated output, broad TSIL body lowering, or
 SVE/backend intrinsic semantics.
-Post-M62 planning selects Milestone 63 as the following Stage 8 boundary: it
-consumes only M62 `selected_body_ir_lowering` outputs and wraps selected
-body-IR or no-body-IR values in a backend-neutral selected-body envelope with
-a deterministic typed sequence. For M63, the selected sequence is exact and
-singleton. M63 must not parse surrounding SVE-looking statements from the
-array corpus, lower direct-intrinsic/SVE semantics, introduce backend
-translation or renderer-ready IR, emit generated output, or broaden TSIL body
-lowering.
+Milestone 63 is accepted as the following Stage 8 boundary: it consumes only
+M62 `selected_body_ir_lowering` outputs and wraps selected body-IR or
+no-body-IR values in a backend-neutral selected-body envelope with a
+deterministic typed sequence. For M63, the selected sequence is exact and
+singleton. M63 must not parse surrounding SVE-looking statements from the array
+corpus, lower direct-intrinsic/SVE semantics, introduce backend translation or
+renderer-ready IR, emit generated output, or broaden TSIL body lowering.
 
 ## Stage 9: Backend Planning
 

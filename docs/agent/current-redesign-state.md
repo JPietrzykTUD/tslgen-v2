@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 62 is accepted.
+Milestone 63 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -127,40 +127,44 @@ review returned `Accept With Follow-Ups` after local planning-doc updates.
 Post-M62 planning is accepted. It selected
 `Milestone 63: Backend-Neutral Selected Body Envelope IR Slice`.
 
+The M63 execution-review loop returned `Accept With Follow-Ups` with no
+blocking implementation issues and no focused revision.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 63.
+Run post-M63 planning, focusing on lowering.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m63-execution-review-loop-prompt.md
+docs/agent/runs/post-m63-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 63: Backend-Neutral Selected Body Envelope IR Slice
+None. Post-M63 planning is active; no executor milestone is selected yet.
 ```
 
 Latest review verdict:
 
 ```text
-The post-M62 planning review returned Accept With Follow-Ups after local
-planning-doc updates. Follow-up: M62's unsupported-source diagnostic test still
-asserts code/severity but not location/message text.
+The M63 execution-review loop returned Accept With Follow-Ups. Follow-up:
+M62's unsupported-source diagnostic test still asserts code/severity but not
+location/message text.
 ```
 
 Next expected action:
 
 ```text
-Run the active M63 execution-review loop prompt. Use the specified single
-write-capable executor followed by read-only review/audit subagents. Do not
-start M64.
+Run the active post-M63 planning-plus-review prompt. Use the specified
+subagent workflow, prefer lowering-focused candidates, do not implement code,
+and create the next concrete prompt under docs/agent/runs/ according to the
+accepted planning result.
 ```
 
 Accepted planning prompt:
@@ -427,10 +431,16 @@ Accepted post-M62 acceptance finalization prompt:
 docs/agent/runs/post-m62-acceptance-finalization-prompt.md
 ```
 
-Active M63 execution-review loop prompt:
+Accepted M63 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m63-execution-review-loop-prompt.md
+```
+
+Active post-M63 planning prompt:
+
+```text
+docs/agent/runs/post-m63-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1362,7 +1372,8 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with M63 execution.
+No stop condition is active. The workflow proceeds with post-M63 planning,
+focused on lowering.
 
 ## Validation Expectations
 

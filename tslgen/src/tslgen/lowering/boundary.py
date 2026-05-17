@@ -53,6 +53,7 @@ type GenerationLoweringStageName = Literal[
     "selected_body_lowering",
     "selected_body_form_recognition",
     "selected_body_ir_lowering",
+    "selected_body_envelope_lowering",
 ]
 type GenerationSelectedBranchBodyHandoff = (
     OpaqueSelectedBranchBodyHandoff | NoSelectedBranchBodyHandoff
@@ -63,6 +64,9 @@ type GenerationSelectedBranchBodyAssignmentRecognition = (
 )
 type GenerationSelectedBranchBodyIr = (
     SelectedAssignmentDirectIntrinsicBodyIr | NoSelectedAssignmentDirectIntrinsicBodyIr
+)
+type GenerationSelectedBodyEnvelopeIr = (
+    SelectedBodyEnvelopeIr | NoSelectedBodyEnvelopeIr
 )
 type TsilBinaryOperator = Literal["+"]
 type TsilExpression = (
@@ -81,6 +85,8 @@ type GenerationLoweringStageOutput = (
     | NoSelectedBranchBodyAssignmentFormRecognition
     | SelectedAssignmentDirectIntrinsicBodyIr
     | NoSelectedAssignmentDirectIntrinsicBodyIr
+    | SelectedBodyEnvelopeIr
+    | NoSelectedBodyEnvelopeIr
     | TsilStatement
 )
 
@@ -729,6 +735,167 @@ class NoSelectedAssignmentDirectIntrinsicBodyIr:
 
 
 @dataclass(frozen=True, slots=True)
+class SelectedBodyEnvelopeEntry:
+    source_body_ir: SelectedAssignmentDirectIntrinsicBodyIr
+    candidate_id: str
+    selected_type_tag: str
+    selected_literal: int
+    originating_branch_chain_id: str
+    original_opaque_body_text: str
+    source_location: SourceLocation
+    assignment_target_text: str
+    opaque_rhs_text: str
+    direct_intrinsic_token_text: str
+    direct_intrinsic_argument_texts: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_body_ir, SelectedAssignmentDirectIntrinsicBodyIr):
+            raise TypeError("selected body envelope entry requires M62 body IR")
+        object.__setattr__(
+            self,
+            "direct_intrinsic_argument_texts",
+            tuple(self.direct_intrinsic_argument_texts),
+        )
+        if (
+            self.candidate_id != self.source_body_ir.candidate_id
+            or self.selected_type_tag != self.source_body_ir.selected_type_tag
+            or self.selected_literal != self.source_body_ir.selected_literal
+            or self.originating_branch_chain_id
+            != self.source_body_ir.originating_branch_chain_id
+            or self.original_opaque_body_text
+            != self.source_body_ir.original_opaque_body_text
+            or self.source_location != self.source_body_ir.source_location
+            or self.assignment_target_text
+            != self.source_body_ir.assignment_target_text
+            or self.opaque_rhs_text != self.source_body_ir.opaque_rhs_text
+            or self.direct_intrinsic_token_text
+            != self.source_body_ir.direct_intrinsic_token_text
+            or self.direct_intrinsic_argument_texts
+            != self.source_body_ir.direct_intrinsic_argument_texts
+        ):
+            raise ValueError(
+                "selected body envelope entry facts must match source M62 body IR"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "selected_body_envelope_entry",
+            self.source_body_ir.key,
+            self.candidate_id,
+            self.selected_type_tag,
+            self.selected_literal,
+            self.originating_branch_chain_id,
+            self.original_opaque_body_text,
+            self.source_location.sort_key(),
+            self.assignment_target_text,
+            self.opaque_rhs_text,
+            self.direct_intrinsic_token_text,
+            self.direct_intrinsic_argument_texts,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class SelectedBodyEnvelopeIr:
+    candidate_id: str
+    selected_type_tag: str
+    source_location: SourceLocation
+    originating_branch_chain_id: str
+    entries: tuple[SelectedBodyEnvelopeEntry, ...]
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id:
+            raise ValueError("selected body envelope candidate id must be non-empty")
+        if not self.selected_type_tag:
+            raise ValueError("selected body envelope type tag must be non-empty")
+        if self.source_location is None:
+            raise ValueError("selected body envelope requires source location")
+        if not self.originating_branch_chain_id:
+            raise ValueError("selected body envelope branch-chain id must be non-empty")
+        object.__setattr__(self, "entries", tuple(self.entries))
+        if len(self.entries) != 1:
+            raise ValueError("selected body envelope must contain exactly one entry")
+        entry = self.entries[0]
+        if (
+            entry.candidate_id != self.candidate_id
+            or entry.selected_type_tag != self.selected_type_tag
+            or entry.source_location != self.source_location
+            or entry.originating_branch_chain_id != self.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "selected body envelope entry provenance must match envelope"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "selected_body_envelope_ir",
+            self.candidate_id,
+            self.selected_type_tag,
+            self.source_location.sort_key(),
+            self.originating_branch_chain_id,
+            tuple(entry.key for entry in self.entries),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NoSelectedBodyEnvelopeIr:
+    source_body_ir: NoSelectedAssignmentDirectIntrinsicBodyIr
+    candidate_id: str
+    selected_type_tag: str
+    source_location: SourceLocation
+    originating_branch_chain_id: str
+    attempted_literals: tuple[int, ...] = (2, 4, 8)
+    entries: tuple[SelectedBodyEnvelopeEntry, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_body_ir, NoSelectedAssignmentDirectIntrinsicBodyIr):
+            raise TypeError("no selected body envelope requires M62 no-body IR")
+        if not self.candidate_id:
+            raise ValueError("no selected body envelope candidate id must be non-empty")
+        if not self.selected_type_tag:
+            raise ValueError("no selected body envelope type tag must be non-empty")
+        if self.source_location is None:
+            raise ValueError("no selected body envelope requires source location")
+        if not self.originating_branch_chain_id:
+            raise ValueError(
+                "no selected body envelope branch-chain id must be non-empty"
+            )
+        object.__setattr__(self, "attempted_literals", tuple(self.attempted_literals))
+        object.__setattr__(self, "entries", tuple(self.entries))
+        if self.entries:
+            raise ValueError("no selected body envelope must not contain entries")
+        if self.attempted_literals != (2, 4, 8):
+            raise ValueError(
+                "no selected body envelope attempted literals must be 2, 4, 8"
+            )
+        if (
+            self.candidate_id != self.source_body_ir.candidate_id
+            or self.selected_type_tag != self.source_body_ir.selected_type_tag
+            or self.source_location != self.source_body_ir.source_location
+            or self.originating_branch_chain_id
+            != self.source_body_ir.originating_branch_chain_id
+            or self.attempted_literals != self.source_body_ir.attempted_literals
+        ):
+            raise ValueError(
+                "no selected body envelope facts must match source M62 no-body IR"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "no_selected_body_envelope_ir",
+            self.source_body_ir.key,
+            self.candidate_id,
+            self.selected_type_tag,
+            self.source_location.sort_key(),
+            self.originating_branch_chain_id,
+            self.attempted_literals,
+            tuple(entry.key for entry in self.entries),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class PrunedGenerationBranch:
     condition: TsilGenerationCondition
     selected_branch: GenerationBranchChoice
@@ -857,6 +1024,11 @@ class GenerationLoweringStage:
                 SelectedAssignmentDirectIntrinsicBodyIr,
                 NoSelectedAssignmentDirectIntrinsicBodyIr,
             )
+        elif self.stage == "selected_body_envelope_lowering":
+            expected = (
+                SelectedBodyEnvelopeIr,
+                NoSelectedBodyEnvelopeIr,
+            )
         else:
             raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
         if not isinstance(self.output, expected):
@@ -885,6 +1057,7 @@ class LoweredImplementation:
         GenerationSelectedBranchBodyAssignmentRecognition, ...
     ] = ()
     selected_branch_body_irs: tuple[GenerationSelectedBranchBodyIr, ...] = ()
+    selected_body_envelopes: tuple[GenerationSelectedBodyEnvelopeIr, ...] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -933,6 +1106,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "selected_body_envelopes",
+            tuple(self.selected_body_envelopes),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -953,6 +1131,7 @@ class LoweredImplementation:
                 form.key for form in self.selected_branch_body_assignment_forms
             ),
             tuple(body_ir.key for body_ir in self.selected_branch_body_irs),
+            tuple(envelope.key for envelope in self.selected_body_envelopes),
             tuple(stage.key for stage in self.generation_stages),
         )
 
@@ -1198,6 +1377,77 @@ def lower_selected_branch_body_ir(
     )
 
 
+def lower_selected_body_envelope(
+    source: GenerationSelectedBranchBodyIr | GenerationLoweringStage,
+) -> Result[GenerationSelectedBodyEnvelopeIr]:
+    body_ir_result = _selected_body_envelope_source(source)
+    if not body_ir_result.is_ok:
+        return Result.failure(body_ir_result.diagnostics)
+
+    body_ir = body_ir_result.unwrap()
+    if isinstance(body_ir, NoSelectedAssignmentDirectIntrinsicBodyIr):
+        diagnostic = _validate_no_selected_body_envelope_source(body_ir)
+        if diagnostic is not None:
+            return Result.failure((diagnostic,))
+        try:
+            return Result.ok(
+                NoSelectedBodyEnvelopeIr(
+                    source_body_ir=body_ir,
+                    candidate_id=body_ir.candidate_id,
+                    selected_type_tag=body_ir.selected_type_tag,
+                    source_location=body_ir.source_location,
+                    originating_branch_chain_id=body_ir.originating_branch_chain_id,
+                    attempted_literals=body_ir.attempted_literals,
+                    entries=(),
+                )
+            )
+        except (TypeError, ValueError) as exc:
+            return Result.failure(
+                (
+                    _inconsistent_selected_body_envelope_diagnostic(
+                        str(exc),
+                        body_ir.source_location,
+                    ),
+                )
+            )
+
+    diagnostic = _validate_selected_body_envelope_source(body_ir)
+    if diagnostic is not None:
+        return Result.failure((diagnostic,))
+    try:
+        entry = SelectedBodyEnvelopeEntry(
+            source_body_ir=body_ir,
+            candidate_id=body_ir.candidate_id,
+            selected_type_tag=body_ir.selected_type_tag,
+            selected_literal=body_ir.selected_literal,
+            originating_branch_chain_id=body_ir.originating_branch_chain_id,
+            original_opaque_body_text=body_ir.original_opaque_body_text,
+            source_location=body_ir.source_location,
+            assignment_target_text=body_ir.assignment_target_text,
+            opaque_rhs_text=body_ir.opaque_rhs_text,
+            direct_intrinsic_token_text=body_ir.direct_intrinsic_token_text,
+            direct_intrinsic_argument_texts=body_ir.direct_intrinsic_argument_texts,
+        )
+        return Result.ok(
+            SelectedBodyEnvelopeIr(
+                candidate_id=body_ir.candidate_id,
+                selected_type_tag=body_ir.selected_type_tag,
+                source_location=body_ir.source_location,
+                originating_branch_chain_id=body_ir.originating_branch_chain_id,
+                entries=(entry,),
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        return Result.failure(
+            (
+                _inconsistent_selected_body_envelope_diagnostic(
+                    str(exc),
+                    body_ir.source_location,
+                ),
+            )
+        )
+
+
 def resolve_generation_type_query(
     query_text: str,
     context: GenerationContext | None = None,
@@ -1365,6 +1615,15 @@ def _selected_body_ir_stage(
     )
 
 
+def _selected_body_envelope_stage(
+    output: GenerationSelectedBodyEnvelopeIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="selected_body_envelope_lowering",
+        output=output,
+    )
+
+
 def _stage_output_location(
     output: GenerationLoweringStageOutput,
 ) -> SourceLocation | None:
@@ -1386,6 +1645,8 @@ def _stage_output_location(
             NoSelectedBranchBodyAssignmentFormRecognition,
             SelectedAssignmentDirectIntrinsicBodyIr,
             NoSelectedAssignmentDirectIntrinsicBodyIr,
+            SelectedBodyEnvelopeIr,
+            NoSelectedBodyEnvelopeIr,
         ),
     ):
         return output.source_location
@@ -1470,6 +1731,134 @@ def _selected_body_ir_recognition_source(
             ),
         )
     )
+
+
+def _selected_body_envelope_source(
+    source: GenerationSelectedBranchBodyIr | GenerationLoweringStage,
+) -> Result[GenerationSelectedBranchBodyIr]:
+    if isinstance(
+        source,
+        (
+            SelectedAssignmentDirectIntrinsicBodyIr,
+            NoSelectedAssignmentDirectIntrinsicBodyIr,
+        ),
+    ):
+        return Result.ok(source)
+    if isinstance(source, GenerationLoweringStage):
+        if (
+            source.stage == "selected_body_ir_lowering"
+            and isinstance(
+                source.output,
+                (
+                    SelectedAssignmentDirectIntrinsicBodyIr,
+                    NoSelectedAssignmentDirectIntrinsicBodyIr,
+                ),
+            )
+        ):
+            return Result.ok(source.output)
+        location = _stage_output_location(source.output)
+    else:
+        location = None
+    return Result.failure(
+        (
+            Diagnostic.error(
+                "TSL-LOWER-SELECTED-BODY-ENVELOPE-SOURCE-UNSUPPORTED",
+                "selected-body envelope lowering consumes only typed "
+                "SelectedAssignmentDirectIntrinsicBodyIr or "
+                "NoSelectedAssignmentDirectIntrinsicBodyIr values, or the "
+                "selected_body_ir_lowering stage output containing one of "
+                "those M62 values",
+                location=location,
+            ),
+        )
+    )
+
+
+def _validate_selected_body_envelope_source(
+    body_ir: SelectedAssignmentDirectIntrinsicBodyIr,
+) -> Diagnostic | None:
+    if not body_ir.candidate_id:
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "selected M62 body IR candidate id must be non-empty",
+            body_ir.source_location,
+        )
+    if not body_ir.selected_type_tag:
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "selected M62 body IR type tag must be non-empty",
+            body_ir.source_location,
+        )
+    if body_ir.selected_literal not in (2, 4, 8):
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "selected M62 body IR literal must be 2, 4, or 8",
+            body_ir.source_location,
+        )
+    if not body_ir.originating_branch_chain_id:
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "selected M62 body IR branch-chain id must be non-empty",
+            body_ir.source_location,
+        )
+    if not body_ir.original_opaque_body_text.strip():
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "selected M62 body IR original body text must be non-empty",
+            body_ir.source_location,
+        )
+    if body_ir.source_location is None:
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "selected M62 body IR requires source location",
+            None,
+        )
+    if not body_ir.assignment_target_text:
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "selected M62 body IR assignment target text must be non-empty",
+            body_ir.source_location,
+        )
+    if not body_ir.opaque_rhs_text:
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "selected M62 body IR RHS text must be non-empty",
+            body_ir.source_location,
+        )
+    if not body_ir.direct_intrinsic_token_text:
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "selected M62 body IR direct intrinsic token text must be non-empty",
+            body_ir.source_location,
+        )
+    if tuple(body_ir.direct_intrinsic_argument_texts) != ():
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "selected M62 body IR must carry an explicit empty argument list",
+            body_ir.source_location,
+        )
+    return None
+
+
+def _validate_no_selected_body_envelope_source(
+    body_ir: NoSelectedAssignmentDirectIntrinsicBodyIr,
+) -> Diagnostic | None:
+    if not body_ir.candidate_id:
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "no-body M62 IR candidate id must be non-empty",
+            body_ir.source_location,
+        )
+    if not body_ir.selected_type_tag:
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "no-body M62 IR type tag must be non-empty",
+            body_ir.source_location,
+        )
+    if body_ir.source_location is None:
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "no-body M62 IR requires source location",
+            None,
+        )
+    if not body_ir.originating_branch_chain_id:
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "no-body M62 IR branch-chain id must be non-empty",
+            body_ir.source_location,
+        )
+    if tuple(body_ir.attempted_literals) != (2, 4, 8):
+        return _inconsistent_selected_body_envelope_diagnostic(
+            "no-body M62 IR attempted literals must be 2, 4, 8",
+            body_ir.source_location,
+        )
+    return None
 
 
 def _recognize_opaque_selected_branch_body_assignment_form(
@@ -1818,6 +2207,10 @@ def _lower_input(
             if not body_ir_result.is_ok:
                 return Result.failure(body_ir_result.diagnostics)
             body_ir = body_ir_result.unwrap()
+            envelope_result = lower_selected_body_envelope(body_ir)
+            if not envelope_result.is_ok:
+                return Result.failure(envelope_result.diagnostics)
+            envelope = envelope_result.unwrap()
             return Result.ok(
                 LoweredImplementation(
                     candidate_id=item.candidate_id,
@@ -1829,6 +2222,7 @@ def _lower_input(
                         recognized_assignment_form,
                     ),
                     selected_branch_body_irs=(body_ir,),
+                    selected_body_envelopes=(envelope,),
                     generation_stages=(
                         _recognition_stage(
                             "generation.control_flow",
@@ -1848,6 +2242,7 @@ def _lower_input(
                             recognized_assignment_form,
                         ),
                         _selected_body_ir_stage(body_ir),
+                        _selected_body_envelope_stage(envelope),
                     ),
                 )
             )
@@ -3332,6 +3727,18 @@ def _unsupported_selected_body_assignment_rhs_diagnostic(
         "text shaped as 'intrin<svptrue_b16>()', 'intrin<svptrue_b32>()', "
         "or 'intrin<svptrue_b64>()'; got "
         f"{rhs_text!r}",
+        location=location,
+    )
+
+
+def _inconsistent_selected_body_envelope_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-SELECTED-BODY-ENVELOPE-INCONSISTENT",
+        "selected-body envelope lowering received inconsistent M62 body IR "
+        f"boundary state: {detail}",
         location=location,
     )
 

@@ -22,6 +22,7 @@ from tslgen.lowering import (
     GenerationExpressionRecognition,
     GenerationLoweringStage,
     NoSelectedAssignmentDirectIntrinsicBodyIr,
+    NoSelectedBodyEnvelopeIr,
     NoSelectedBranchBodyAssignmentFormRecognition,
     NoSelectedBranchBodyHandoff,
     OpaqueSelectedBranchBodyHandoff,
@@ -33,6 +34,8 @@ from tslgen.lowering import (
     LoweringRequest,
     PrunedGenerationBranch,
     SelectedAssignmentDirectIntrinsicBodyIr,
+    SelectedBodyEnvelopeEntry,
+    SelectedBodyEnvelopeIr,
     SelectedBranchBodyAssignmentFormRecognition,
     TsilBinaryExpression,
     TsilIntrinsicComposeExpression,
@@ -44,6 +47,7 @@ from tslgen.lowering import (
     handoff_opaque_selected_branch_body,
     lower_candidates,
     lower_selected_branch_body_ir,
+    lower_selected_body_envelope,
     prepare_lowering_inputs,
     recognize_selected_branch_body_assignment_form,
     resolve_generation_predicate_query,
@@ -757,6 +761,28 @@ class LoweringBoundaryTests(unittest.TestCase):
             opaque_body_text=body_text,
             source_location=SourceLocation(Path("array.tsl"), 107, 15),
             originating_branch_chain_id="candidate-1:chain",
+        )
+
+    def selected_body_ir(
+        self,
+        *,
+        selected_type_tag: str = "si16",
+        selected_literal: int = 2,
+        token_text: str = "svptrue_b16",
+        rhs_text: str = "intrin<svptrue_b16>()",
+        original_body_text: str = "pg = intrin<svptrue_b16>();",
+    ) -> SelectedAssignmentDirectIntrinsicBodyIr:
+        return SelectedAssignmentDirectIntrinsicBodyIr(
+            candidate_id="candidate-1",
+            selected_type_tag=selected_type_tag,
+            selected_literal=selected_literal,
+            originating_branch_chain_id="candidate-1:chain",
+            original_opaque_body_text=original_body_text,
+            source_location=SourceLocation(Path("array.tsl"), 107, 15),
+            assignment_target_text="pg",
+            opaque_rhs_text=rhs_text,
+            direct_intrinsic_token_text=token_text,
+            direct_intrinsic_argument_texts=(),
         )
 
     def test_prepares_typed_lowering_inputs_from_selected_candidates(self) -> None:
@@ -2471,8 +2497,10 @@ class LoweringBoundaryTests(unittest.TestCase):
                     1,
                 )
                 self.assertEqual(len(implementation.selected_branch_body_irs), 1)
+                self.assertEqual(len(implementation.selected_body_envelopes), 1)
                 assignment_form = implementation.selected_branch_body_assignment_forms[0]
                 body_ir = implementation.selected_branch_body_irs[0]
+                envelope = implementation.selected_body_envelopes[0]
                 if expected_literal is None:
                     assert isinstance(handoff, NoSelectedBranchBodyHandoff)
                     self.assertEqual(handoff.selected_type_tag, type_tag)
@@ -2483,6 +2511,9 @@ class LoweringBoundaryTests(unittest.TestCase):
                     self.assertEqual(assignment_form.selected_type_tag, type_tag)
                     assert isinstance(body_ir, NoSelectedAssignmentDirectIntrinsicBodyIr)
                     self.assertEqual(body_ir.selected_type_tag, type_tag)
+                    assert isinstance(envelope, NoSelectedBodyEnvelopeIr)
+                    self.assertEqual(envelope.selected_type_tag, type_tag)
+                    self.assertEqual(envelope.entries, ())
                 else:
                     assert isinstance(handoff, OpaqueSelectedBranchBodyHandoff)
                     self.assertEqual(handoff.selected_type_tag, type_tag)
@@ -2508,6 +2539,10 @@ class LoweringBoundaryTests(unittest.TestCase):
                         body_ir.original_opaque_body_text,
                         expected_body_by_literal[expected_literal],
                     )
+                    assert isinstance(envelope, SelectedBodyEnvelopeIr)
+                    self.assertEqual(envelope.selected_type_tag, type_tag)
+                    self.assertEqual(len(envelope.entries), 1)
+                    self.assertEqual(envelope.entries[0].source_body_ir, body_ir)
                 self.assertEqual(tuple(arm.literal for arm in chain.arms), (2, 4, 8))
                 self.assertEqual(
                     tuple(predicate.literal for predicate in implementation.generation_predicates),
@@ -2529,15 +2564,17 @@ class LoweringBoundaryTests(unittest.TestCase):
                         "selected_body_lowering",
                         "selected_body_form_recognition",
                         "selected_body_ir_lowering",
+                        "selected_body_envelope_lowering",
                     ),
                 )
-                self.assertEqual(implementation.generation_stages[-4].output, chain)
-                self.assertEqual(implementation.generation_stages[-3].output, handoff)
+                self.assertEqual(implementation.generation_stages[-5].output, chain)
+                self.assertEqual(implementation.generation_stages[-4].output, handoff)
                 self.assertEqual(
-                    implementation.generation_stages[-2].output,
+                    implementation.generation_stages[-3].output,
                     assignment_form,
                 )
-                self.assertEqual(implementation.generation_stages[-1].output, body_ir)
+                self.assertEqual(implementation.generation_stages[-2].output, body_ir)
+                self.assertEqual(implementation.generation_stages[-1].output, envelope)
 
     def test_size_byte_branch_chain_records_no_match_without_final_else(
         self,
@@ -2584,6 +2621,16 @@ class LoweringBoundaryTests(unittest.TestCase):
         for body_ir in no_match_body_irs:
             assert isinstance(body_ir, NoSelectedAssignmentDirectIntrinsicBodyIr)
             self.assertEqual(body_ir.attempted_literals, (2, 4, 8))
+        no_match_envelopes = tuple(
+            implementation.selected_body_envelopes[0]
+            for implementation in result.unwrap().implementations
+            if implementation.generation_branch_chains[0].type_tag in ("si8", "ui8")
+        )
+        self.assertEqual(len(no_match_envelopes), 2)
+        for envelope in no_match_envelopes:
+            assert isinstance(envelope, NoSelectedBodyEnvelopeIr)
+            self.assertEqual(envelope.attempted_literals, (2, 4, 8))
+            self.assertEqual(envelope.entries, ())
 
     def test_size_byte_branch_chain_uses_typed_stage_predicates(
         self,
@@ -2630,10 +2677,10 @@ class LoweringBoundaryTests(unittest.TestCase):
         )
         self.assertEqual(implementation.generation_predicates, predicates)
         self.assertEqual(
-            tuple(stage.output for stage in implementation.generation_stages[1:-3]),
+            tuple(stage.output for stage in implementation.generation_stages[1:-4]),
             (value, *predicates, chain),
         )
-        handoff = implementation.generation_stages[-3].output
+        handoff = implementation.generation_stages[-4].output
         assert isinstance(handoff, OpaqueSelectedBranchBodyHandoff)
         self.assertEqual(handoff.candidate_id, implementation.candidate_id)
         self.assertEqual(handoff.selected_type_tag, "ui16")
@@ -2641,13 +2688,13 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(handoff.opaque_body_text, "pg = intrin<svptrue_b16>();")
         self.assertEqual(handoff.source_location, chain.condition_location)
         self.assertIn(implementation.candidate_id, handoff.originating_branch_chain_id)
-        form = implementation.generation_stages[-2].output
+        form = implementation.generation_stages[-3].output
         assert isinstance(form, SelectedBranchBodyAssignmentFormRecognition)
         self.assertEqual(form.candidate_id, implementation.candidate_id)
         self.assertEqual(form.assignment_target_text, "pg")
         self.assertEqual(form.opaque_rhs_text, "intrin<svptrue_b16>()")
         self.assertEqual(form.direct_intrinsic_token_text, "svptrue_b16")
-        body_ir = implementation.generation_stages[-1].output
+        body_ir = implementation.generation_stages[-2].output
         assert isinstance(body_ir, SelectedAssignmentDirectIntrinsicBodyIr)
         self.assertEqual(body_ir.candidate_id, implementation.candidate_id)
         self.assertEqual(body_ir.assignment_target_text, "pg")
@@ -2732,7 +2779,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 self.assertEqual(form.opaque_rhs_text, rhs_text)
                 self.assertEqual(form.direct_intrinsic_token_text, token_text)
                 self.assertEqual(
-                    implementation.generation_stages[-2],
+                    implementation.generation_stages[-3],
                     GenerationLoweringStage(
                         stage="selected_body_form_recognition",
                         output=form,
@@ -2741,7 +2788,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 body_ir = implementation.selected_branch_body_irs[0]
                 assert isinstance(body_ir, SelectedAssignmentDirectIntrinsicBodyIr)
                 self.assertEqual(
-                    implementation.generation_stages[-1],
+                    implementation.generation_stages[-2],
                     GenerationLoweringStage(
                         stage="selected_body_ir_lowering",
                         output=body_ir,
@@ -2946,6 +2993,199 @@ class LoweringBoundaryTests(unittest.TestCase):
             ),
         )
 
+    def test_selected_body_envelope_records_are_lowered(self) -> None:
+        cases = (
+            ("si16", 2, "svptrue_b16", "intrin<svptrue_b16>()"),
+            ("ui32", 4, "svptrue_b32", "intrin<svptrue_b32>()"),
+            ("f64", 8, "svptrue_b64", "intrin<svptrue_b64>()"),
+        )
+
+        for type_tag, literal, token_text, rhs_text in cases:
+            with self.subTest(token_text=token_text):
+                body_ir = self.selected_body_ir(
+                    selected_type_tag=type_tag,
+                    selected_literal=literal,
+                    token_text=token_text,
+                    rhs_text=rhs_text,
+                    original_body_text=f"pg = {rhs_text};",
+                )
+
+                result = lower_selected_body_envelope(
+                    GenerationLoweringStage(
+                        stage="selected_body_ir_lowering",
+                        output=body_ir,
+                    )
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                envelope = result.unwrap()
+                assert isinstance(envelope, SelectedBodyEnvelopeIr)
+                self.assertEqual(envelope.candidate_id, body_ir.candidate_id)
+                self.assertEqual(envelope.selected_type_tag, type_tag)
+                self.assertEqual(envelope.source_location, body_ir.source_location)
+                self.assertEqual(
+                    envelope.originating_branch_chain_id,
+                    body_ir.originating_branch_chain_id,
+                )
+                self.assertEqual(len(envelope.entries), 1)
+                entry = envelope.entries[0]
+                assert isinstance(entry, SelectedBodyEnvelopeEntry)
+                self.assertIs(entry.source_body_ir, body_ir)
+                self.assertEqual(entry.selected_literal, literal)
+                self.assertEqual(entry.assignment_target_text, "pg")
+                self.assertEqual(entry.opaque_rhs_text, rhs_text)
+                self.assertEqual(entry.direct_intrinsic_token_text, token_text)
+                self.assertEqual(entry.direct_intrinsic_argument_texts, ())
+                self.assertEqual(entry.original_opaque_body_text, f"pg = {rhs_text};")
+
+    def test_no_body_ir_lowers_to_no_selected_body_envelope(self) -> None:
+        for type_tag in ("si8", "ui8"):
+            with self.subTest(type_tag=type_tag):
+                body_ir = NoSelectedAssignmentDirectIntrinsicBodyIr(
+                    candidate_id=f"{type_tag}-candidate",
+                    selected_type_tag=type_tag,
+                    source_location=SourceLocation(Path("array.tsl"), 107, 15),
+                    originating_branch_chain_id=f"{type_tag}:chain",
+                    attempted_literals=(2, 4, 8),
+                )
+
+                result = lower_selected_body_envelope(body_ir)
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                envelope = result.unwrap()
+                assert isinstance(envelope, NoSelectedBodyEnvelopeIr)
+                self.assertIs(envelope.source_body_ir, body_ir)
+                self.assertEqual(envelope.candidate_id, f"{type_tag}-candidate")
+                self.assertEqual(envelope.selected_type_tag, type_tag)
+                self.assertEqual(envelope.attempted_literals, (2, 4, 8))
+                self.assertEqual(envelope.entries, ())
+
+    def test_selected_body_envelope_preserves_m62_facts_without_reparsing(
+        self,
+    ) -> None:
+        body_ir = self.selected_body_ir(
+            selected_type_tag="si16",
+            selected_literal=2,
+            token_text="svptrue_b16",
+            rhs_text="intrin<svptrue_b16>()",
+            original_body_text="mask = value<generation>(vector::length);",
+        )
+
+        result = lower_selected_body_envelope(body_ir)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        envelope = result.unwrap()
+        assert isinstance(envelope, SelectedBodyEnvelopeIr)
+        entry = envelope.entries[0]
+        self.assertEqual(
+            entry.original_opaque_body_text,
+            "mask = value<generation>(vector::length);",
+        )
+        self.assertEqual(entry.assignment_target_text, "pg")
+        self.assertEqual(entry.opaque_rhs_text, "intrin<svptrue_b16>()")
+        self.assertEqual(entry.direct_intrinsic_token_text, "svptrue_b16")
+
+    def test_selected_body_envelope_preserves_literal_token_mismatch(self) -> None:
+        body_ir = self.selected_body_ir(
+            selected_type_tag="f64",
+            selected_literal=8,
+            token_text="svptrue_b16",
+            rhs_text="intrin<svptrue_b16>()",
+            original_body_text="pg = intrin<svptrue_b16>();",
+        )
+
+        result = lower_selected_body_envelope(body_ir)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        envelope = result.unwrap()
+        assert isinstance(envelope, SelectedBodyEnvelopeIr)
+        entry = envelope.entries[0]
+        self.assertEqual(entry.selected_literal, 8)
+        self.assertEqual(entry.direct_intrinsic_token_text, "svptrue_b16")
+
+    def test_selected_body_envelope_lowering_is_deterministic(self) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+
+        first = lower_candidates(selection)
+        second = lower_candidates(selection)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(
+            tuple(
+                implementation.selected_body_envelopes
+                for implementation in first.unwrap().implementations
+            ),
+            tuple(
+                implementation.selected_body_envelopes
+                for implementation in second.unwrap().implementations
+            ),
+        )
+
+    def test_selected_body_envelope_rejects_unsupported_source_stage(self) -> None:
+        form = NoSelectedBranchBodyAssignmentFormRecognition(
+            candidate_id="candidate-1",
+            selected_type_tag="si8",
+            source_location=SourceLocation(Path("array.tsl"), 107, 15),
+            originating_branch_chain_id="candidate-1:chain",
+            attempted_literals=(2, 4, 8),
+        )
+        stage = GenerationLoweringStage(
+            stage="selected_body_form_recognition",
+            output=form,
+        )
+
+        result = lower_selected_body_envelope(stage)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-SELECTED-BODY-ENVELOPE-SOURCE-UNSUPPORTED",
+            severity="error",
+            path="array.tsl",
+            line=107,
+            column=15,
+        )
+        self.assertIn("M62 values", result.diagnostics[0].message)
+
+    def test_selected_body_envelope_reports_inconsistent_boundary_state(
+        self,
+    ) -> None:
+        body_ir = object.__new__(SelectedAssignmentDirectIntrinsicBodyIr)
+        object.__setattr__(body_ir, "candidate_id", "candidate-1")
+        object.__setattr__(body_ir, "selected_type_tag", "si16")
+        object.__setattr__(body_ir, "selected_literal", 2)
+        object.__setattr__(body_ir, "originating_branch_chain_id", "candidate-1:chain")
+        object.__setattr__(
+            body_ir,
+            "original_opaque_body_text",
+            "pg = intrin<svptrue_b16>();",
+        )
+        object.__setattr__(
+            body_ir,
+            "source_location",
+            SourceLocation(Path("array.tsl"), 107, 15),
+        )
+        object.__setattr__(body_ir, "assignment_target_text", "pg")
+        object.__setattr__(body_ir, "opaque_rhs_text", "intrin<svptrue_b16>()")
+        object.__setattr__(body_ir, "direct_intrinsic_token_text", "svptrue_b16")
+        object.__setattr__(body_ir, "direct_intrinsic_argument_texts", ("unexpected",))
+
+        result = lower_selected_body_envelope(body_ir)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-SELECTED-BODY-ENVELOPE-INCONSISTENT",
+            severity="error",
+            path="array.tsl",
+            line=107,
+            column=15,
+        )
+        self.assertIn("empty argument list", result.diagnostics[0].message)
+
     def test_opaque_handoff_rejects_unsupported_source_stage(self) -> None:
         statement = TsilReturnStatement(
             TsilBinaryExpression(
@@ -3131,9 +3371,11 @@ class LoweringBoundaryTests(unittest.TestCase):
             self.assertEqual(len(implementation.selected_branch_body_irs), 1)
             body_ir = implementation.selected_branch_body_irs[0]
             self.assertIsInstance(body_ir, NoSelectedAssignmentDirectIntrinsicBodyIr)
-            self.assertIs(implementation.generation_stages[-3].output, handoff)
-            self.assertIs(implementation.generation_stages[-2].output, form)
-            self.assertIs(implementation.generation_stages[-1].output, body_ir)
+            envelope = implementation.selected_body_envelopes[0]
+            self.assertIs(implementation.generation_stages[-4].output, handoff)
+            self.assertIs(implementation.generation_stages[-3].output, form)
+            self.assertIs(implementation.generation_stages[-2].output, body_ir)
+            self.assertIs(implementation.generation_stages[-1].output, envelope)
             self.assertNotIsInstance(
                 handoff,
                 TsilReturnStatement,

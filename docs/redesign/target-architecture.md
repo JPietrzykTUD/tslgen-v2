@@ -405,14 +405,14 @@ Current roadmap note:
   remains separate from SVE predicate semantics, backend intrinsic IR,
   translation requests, renderer-ready IR, generated output, broad TSIL body
   parsing, and lowering-time file/catalog reads.
-- Post-M62 planning selects Milestone 63 to add a backend-neutral
-  selected-body envelope boundary over M62 typed selected-body IR/no-body-IR
-  values. M63 introduces a deterministic typed sequence with only the exact
-  singleton M62 entry for selected cases and an explicit no-body envelope for
-  no-body cases. It must keep SVE-looking corpus text as evidence only and
-  must not add direct-intrinsic/SVE semantics, surrounding array/declaration/
-  store/return lowering, backend translation, rendering, generated output, or
-  broad TSIL parsing.
+- Milestone 63 is accepted as a backend-neutral selected-body envelope
+  boundary over M62 typed selected-body IR/no-body-IR values. M63 introduces a
+  deterministic typed sequence with only the exact singleton M62 entry for
+  selected cases and an explicit no-body envelope for no-body cases. It keeps
+  SVE-looking corpus text as evidence only and must not add
+  direct-intrinsic/SVE semantics, surrounding array/declaration/store/return
+  lowering, backend translation, rendering, generated output, or broad TSIL
+  parsing.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

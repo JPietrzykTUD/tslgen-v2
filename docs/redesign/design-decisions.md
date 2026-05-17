@@ -1359,7 +1359,7 @@ Consequences:
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
 - Broad modifier support, primitive calls, direct intrinsics beyond the
-  accepted M62 unresolved body-IR shape, selected M63 singleton envelope
+  accepted M62 unresolved body-IR shape, accepted M63 singleton envelope
   shape, and Rust body rendering remain deferred until their own helper slices
   are selected.
 - Future native rendering milestones must state which helper IR and translation
