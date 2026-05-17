@@ -1349,11 +1349,18 @@ Consequences:
   records into unresolved selected-body IR, not a raw-text dispatcher, backend
   intrinsic request, SVE predicate semantic evaluator, or renderer-ready
   representation.
+- Milestone 63 adds a backend-neutral selected-body envelope/sequence boundary
+  over M62 typed selected-body IR values before adding more body semantics. It
+  is a composition point for future body slices, not a direct-intrinsic
+  evaluator, SVE semantic layer, backend translation input, renderer input, or
+  broad TSIL parser. SVE-looking `array.tsl` text is evidence for the need for
+  the boundary, not an architectural dependency.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
 - Broad modifier support, primitive calls, direct intrinsics beyond the
-  accepted M62 unresolved body-IR shape, and Rust body rendering remain
-  deferred until their own helper slices are selected.
+  accepted M62 unresolved body-IR shape, selected M63 singleton envelope
+  shape, and Rust body rendering remain deferred until their own helper slices
+  are selected.
 - Future native rendering milestones must state which helper IR and translation
   data they consume before adding generated output.

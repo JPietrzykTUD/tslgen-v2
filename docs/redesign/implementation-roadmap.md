@@ -6103,3 +6103,178 @@ Next concrete prompt:
 - The M62 execution-review loop owns acceptance for this milestone. If M62 is
   accepted, update workflow state and create the next concrete post-M62 prompt
   under `docs/agent/runs/`. Do not start M63.
+
+## Post-M62 Planning Result
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Backend-neutral selected body envelope IR | M62 now exposes an unresolved typed selected-body IR/no-body-IR result, but future body-specific lowering needs a composable whole-body boundary before additional statement forms are added. | Low to medium if it only wraps typed M62 outputs in a stable sequence envelope; high if it reparses preserved text, recognizes surrounding array statements, or treats SVE tokens as architecture. | Select as M63. |
+| Direct-intrinsic/SVE semantic lowering | The selected M62 body IR carries `svptrue_b16/b32/b64` token text. | High because it would combine intrinsic validation, SVE predicate meaning, byte-size-to-token inference, backend translation pressure, and rendering/output pressure. | Defer. |
+| Vector length/alignment generation values | The surrounding array evidence includes `value<generation>(vector::length)` and `value<generation>(vector::alignment)`. | Medium to high because it leaves the selected-body pipeline and pulls in declaration/array semantics before a body envelope exists. | Defer. |
+| Broad array-body or multi-statement TSIL lowering | `tsldata/primitives/load_store/array.tsl:105-111` contains a real ordered body shape around the accepted M57-M62 branch chain. | Very high because it would parse declarations, assignments, stores, returns, arrays, direct intrinsics, and backend values in one milestone. | Defer. |
+| M62 diagnostic follow-up cleanup | M62 review recorded a non-blocking diagnostic-location/message test gap. | Low, but it does not move the lowering architecture forward. | Keep recorded unless selected separately. |
+
+### Milestone 63: Backend-Neutral Selected Body Envelope IR Slice
+
+Status:
+
+Selected for human acceptance after post-M62 planning.
+
+Goal:
+
+Wrap the accepted M62 selected-body IR or no-body-IR result in a deterministic
+backend-neutral selected-body envelope containing an ordered sequence of typed
+body IR entries. M63 makes the post-M62 body-lowering boundary extendable
+without turning M62 into a central dispatcher or reparsing raw selected body
+text.
+
+For this slice, the only selected sequence entry is the existing M62
+`SelectedAssignmentDirectIntrinsicBodyIr`; the sequence is exact and singleton.
+Byte-size `1` no-selected-body cases produce an explicit no-body envelope.
+
+Scope:
+
+- Consume only M62 `selected_body_ir_lowering` outputs or equivalent typed
+  M62 values: `SelectedAssignmentDirectIntrinsicBodyIr` and
+  `NoSelectedAssignmentDirectIntrinsicBodyIr`.
+- Expose the result through a distinct post-M62 stage, such as
+  `selected_body_envelope_lowering`.
+- Produce typed envelope/sequence records with stable ordering, candidate
+  identity, selected type/literal facts, branch-chain identity, source
+  location, and provenance already carried by M62.
+- Preserve M62 assignment target text, unresolved direct-intrinsic token text,
+  explicit empty argument list, original RHS/body text, and source/provenance
+  only as typed facts within the one selected entry.
+- Represent byte-size `1` no-selected-body/no-body-IR cases as explicit
+  no-body envelope values without synthesizing body text or statements.
+- Diagnose only invalid M63 boundary state, such as unsupported M62 source
+  stage/type or inconsistent selected/no-body envelope input.
+
+M63 treats the SVE-looking tokens and surrounding array body in
+`tsldata/primitives/load_store/array.tsl:105-111` as corpus evidence for a
+needed body boundary only. `svptrue_b16/b32/b64`, `pg`, `svbool_t`, `svst1`,
+vector metadata, backend uninit values, and `emit_return` must not become
+architectural concepts or semantic lowering rules in M63.
+
+Out of scope:
+
+- Parsing or matching preserved original selected-body text to derive
+  semantics.
+- Direct-intrinsic semantic validation, SVE predicate/vector/register
+  semantics, proving that `pg` has any particular type or scope, or inferring
+  byte-size-to-`svptrue_b*` mappings.
+- Backend intrinsic IR, backend translation requests, renderer-ready
+  expression/body IR, rendering, generated C++/Rust output, generated tests,
+  CLI/reporting/writer behavior, compiler execution, or Rust.
+- Assignment binding, declaration handling, variable scope, array
+  construction, stores, calls, casts, loops, returns, `emit_return`, backend
+  uninit values, `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, non-zero-argument direct intrinsics,
+  or broad multi-statement TSIL body lowering.
+- Broad TSIL parsing, lowering-time file reads, raw TSL parsing, catalog
+  queries during evaluation, runtime dependency on `frozen/`, dictionaries or
+  raw string keys as downstream semantic models, and backend-specific branches
+  in the envelope stage.
+
+Required input:
+
+- M62 `SelectedAssignmentDirectIntrinsicBodyIr` and
+  `NoSelectedAssignmentDirectIntrinsicBodyIr` outputs from the distinct
+  `selected_body_ir_lowering` stage. M63 may rely on provenance and selected
+  facts already present on those values, but it must not separately consume
+  M60 handoff text or M61 form-recognition records.
+
+Expected outputs:
+
+- A distinct typed selected-body envelope value, such as
+  `SelectedBodyEnvelopeIr`, carrying a deterministic statement sequence.
+- A typed one-entry sequence for selected cases, with that entry wrapping the
+  M62 unresolved assignment/direct-intrinsic body IR facts.
+- A distinct no-selected-body envelope value for no-body-IR cases.
+- Boundary-level diagnostics for invalid M63 input state only.
+- No `TsilStatement`, `BackendIntrinsicCall`, backend translation request,
+  renderer-ready body, rendered code, generated artifact, SVE semantic object,
+  or array/store/return statement IR.
+
+Parity criterion:
+
+M63 proves accepted M62 body IR can be carried through a maintainable,
+backend-neutral whole-body envelope boundary without implementing SVE
+semantics, direct intrinsic semantics, broad statement lowering, backend
+translation, rendering, generated output, or compiler parity.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:107-109` for the exact selected
+  M57-M62 branch bodies that become the singleton selected sequence entry.
+- `tsldata/primitives/load_store/array.tsl:105-111` as evidence that the
+  accepted selected body appears inside a larger ordered body, while the
+  surrounding declaration, initialization, store, and return forms remain
+  out of scope.
+- Accepted M57 size-byte equality predicate lowering.
+- Accepted M58 staged lowering contract.
+- Accepted M59 exact branch-chain pruning.
+- Accepted M60 opaque selected-body handoff.
+- Accepted M61 selected assignment-form recognition.
+- Accepted M62 unresolved selected assignment/direct-intrinsic body IR.
+- `docs/redesign/generation-time-semantic-lowering.md` staged lowering
+  direction.
+
+Tests required:
+
+- Selected M62 records for `svptrue_b16`, `svptrue_b32`, and `svptrue_b64`
+  produce deterministic selected-body envelopes with exactly one typed
+  sequence entry.
+- The one selected entry preserves M62 target/token/text/provenance, selected
+  type/literal facts, branch identity, source location, and explicit empty
+  argument list without reparsing original body text.
+- `si8` and `ui8` M62 no-body-IR results produce explicit no-body envelopes
+  without synthesizing statements.
+- A synthetic mismatch between selected byte-size literal and
+  direct-intrinsic token text is preserved inside the envelope without
+  diagnosis or correction, proving M63 still does not infer token semantics.
+- Unsupported M62 source/type or inconsistent M62 boundary state produces
+  structured M63 diagnostics without classifying SVE/backend semantics.
+- Repeated envelope lowering is deterministic.
+- Regression tests preserve M57 predicates, M58 stage records, M59 pruning,
+  M60 handoff, M61 form recognition, M62 body IR, backend raw-helper
+  rejection, renderer non-evaluation, and no generated output.
+
+Golden fixtures required:
+
+- None. M63 is a lowering/body-envelope IR slice and must not change generated
+  C++ or Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M63 selected body envelope test command selected by the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Re-reading preserved body text or consuming M60/M61 raw text instead of M62
+  typed body IR values.
+- Turning the envelope into a cosmetic wrapper without stable typed sequence
+  contracts and future extension points.
+- Letting SVE evidence hardwire architecture, class names, stage names,
+  branch logic, or semantic rules.
+- Adding direct-intrinsic semantics, byte-size-to-token inference,
+  assignment/declaration/call/store/return semantics, vector metadata, backend
+  translation, rendering, generated output, or broad TSIL parsing.
+- Using dictionaries, raw string dispatch, backend-specific branches, file
+  reads, raw TSL parsing, catalog queries, or runtime `frozen/` evidence during
+  lowering evaluation.
+
+Dependencies on prior milestones:
+
+- Milestones 41, 42, 43, 48, 51, 52, 53, 54, 55, 57, 58, 59, 60, 61, and 62.
+
+Next concrete prompt:
+
+- If the post-M62 planning result is accepted, update workflow state and create
+  `docs/agent/runs/m63-execution-review-loop-prompt.md`. Do not start M63
+  until the acceptance-finalization prompt records acceptance.

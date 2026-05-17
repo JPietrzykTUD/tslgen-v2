@@ -478,6 +478,19 @@ preserved body text, validate intrinsic names, infer `type.size_bytes` to
 `svptrue_b*` mappings, prove SVE predicate meaning for `pg`, create backend
 translation requests, feed renderers, or emit generated output.
 
+Milestone 63 is selected as the next lowering boundary. It consumes only M62
+`selected_body_ir_lowering` outputs and wraps the selected-body IR or no-body
+IR result in a backend-neutral selected-body envelope with a deterministic
+typed statement sequence. For M63, the selected sequence is exact and
+singleton: it contains only the existing M62
+`SelectedAssignmentDirectIntrinsicBodyIr`; byte-size `1` cases produce an
+explicit no-body envelope. M63 treats the SVE-looking array body in
+`tsldata/primitives/load_store/array.tsl:105-111` as evidence for a needed
+whole-body boundary, not as architecture. It must not parse surrounding
+statements, lower direct-intrinsic semantics, infer SVE predicate meaning,
+map byte sizes to intrinsic tokens, add vector length/alignment semantics,
+feed backend translation or rendering, or emit generated output.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
@@ -490,9 +503,15 @@ M62 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-IR-SOURCE-UNSUPPORTED`
 
+Planned M63 diagnostics:
+
+- `TSL-LOWER-SELECTED-BODY-ENVELOPE-SOURCE-UNSUPPORTED`
+- `TSL-LOWER-SELECTED-BODY-ENVELOPE-INCONSISTENT`
+
 ## Explicit Deferrals
 
-Deferred beyond the implemented M43-M62 semantic-lowering slices:
+Deferred beyond the implemented M43-M62 semantic-lowering slices and selected
+M63 body-envelope boundary:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -506,12 +525,14 @@ Deferred beyond the implemented M43-M62 semantic-lowering slices:
   `type.size_bytes == 2/4/8` predicates. Branch-chain pruning over those
   predicates is implemented only for the exact M59 SVE size-byte no-final-else
   branch chain; M60 adds only opaque selected-body handoff, M61 adds only
-  exact selected assignment-form recognition, and M62 adds only unresolved
-  typed body IR for that recognized form. General
+  exact selected assignment-form recognition, M62 adds only unresolved typed
+  body IR for that recognized form, and selected M63 adds only a
+  backend-neutral envelope/sequence boundary over those M62 typed values.
+  General
   `else if<generation>` syntax, final-else policy, broad branch pruning based
   on generation values, assignment semantics beyond that selected IR shape,
-  broad direct-intrinsic/SVE semantics, backend intrinsic lowering, and broad
-  body lowering remain deferred.
+  broad direct-intrinsic/SVE semantics, backend intrinsic lowering, surrounding
+  declaration/store/return semantics, and broad body lowering remain deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only

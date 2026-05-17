@@ -120,40 +120,47 @@ Post-M61 planning is accepted. It selected
 The M62 execution-review loop returned `Accept With Follow-Ups` after one
 focused documentation revision.
 
+Post-M62 planning selected
+`Milestone 63: Backend-Neutral Selected Body Envelope IR Slice`, and internal
+review returned `Accept With Follow-Ups` after local planning-doc updates.
+
+Post-M62 planning is accepted. It selected
+`Milestone 63: Backend-Neutral Selected Body Envelope IR Slice`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run the post-M62 planning-plus-review prompt, focusing on lowering.
+Execute Milestone 63.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m62-planning-plus-review-prompt.md
+docs/agent/runs/m63-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Post-M62 planning is active; no executor milestone is selected yet.
+Milestone 63: Backend-Neutral Selected Body Envelope IR Slice
 ```
 
 Latest review verdict:
 
 ```text
-The M62 execution-review loop returned Accept With Follow-Ups after one
-focused documentation revision.
+The post-M62 planning review returned Accept With Follow-Ups after local
+planning-doc updates. Follow-up: M62's unsupported-source diagnostic test still
+asserts code/severity but not location/message text.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M62 planning-plus-review prompt. Use the specified
-subagent workflow, prefer lowering-focused candidates, do not implement code,
-and create the next concrete prompt under docs/agent/runs/ according to the
-accepted planning result.
+Run the active M63 execution-review loop prompt. Use the specified single
+write-capable executor followed by read-only review/audit subagents. Do not
+start M64.
 ```
 
 Accepted planning prompt:
@@ -408,10 +415,22 @@ Accepted M62 execution-review loop prompt:
 docs/agent/runs/m62-execution-review-loop-prompt.md
 ```
 
-Active post-M62 planning prompt:
+Completed post-M62 planning prompt:
 
 ```text
 docs/agent/runs/post-m62-planning-plus-review-prompt.md
+```
+
+Accepted post-M62 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m62-acceptance-finalization-prompt.md
+```
+
+Active M63 execution-review loop prompt:
+
+```text
+docs/agent/runs/m63-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -743,6 +762,33 @@ docs/agent/runs/post-m62-planning-plus-review-prompt.md
   behavior, Rust, compiler execution, broad TSIL parsing, runtime dependency
   on `frozen/`, lowering-time file reads, raw TSL parsing, or catalog queries
   during evaluation.
+- M63 is generation-time lowering/body-envelope IR work only.
+- M63 must consume only accepted typed M62 `selected_body_ir_lowering` outputs
+  or equivalent typed M62 values: `SelectedAssignmentDirectIntrinsicBodyIr`
+  and `NoSelectedAssignmentDirectIntrinsicBodyIr`.
+- M63 must expose a distinct post-M62 stage or typed value, such as
+  `selected_body_envelope_lowering`, rather than stretching M62 body IR into a
+  mixed dispatcher.
+- M63 must produce a backend-neutral selected-body envelope with deterministic
+  ordering. For selected cases, the typed sequence is exact and singleton,
+  wrapping only the existing M62 selected assignment/direct-intrinsic body IR.
+- M63 must produce an explicit no-body envelope for M62 no-body-IR cases
+  without synthesizing statements or body text.
+- M63 may preserve M62 target text, direct-intrinsic token text, explicit
+  empty argument list, original RHS/body text, selected type/literal, source
+  location, branch identity, and provenance as typed facts.
+- SVE-looking corpus text is evidence only. M63 must not make `svptrue_b*`,
+  `pg`, `svbool_t`, `svst1`, vector metadata, backend uninit values, or
+  `emit_return` architectural concepts or semantic rules.
+- M63 must not parse preserved body text to derive semantics, validate direct
+  intrinsics, infer SVE predicate/vector semantics, map byte sizes to
+  intrinsic tokens, add assignment binding, declaration handling, variable
+  scope, array/store/return lowering, vector length/alignment, backend
+  translation, rendering, output, generated tests, CLI/report/writer behavior,
+  Rust, compiler execution, broad TSIL parsing, lowering-time file reads, raw
+  TSL parsing, catalog queries, runtime `frozen/` use, dictionaries/raw string
+  keys as downstream semantic models, or backend-specific branches in the
+  envelope stage.
 
 ## Accepted Milestone 48
 
@@ -1316,8 +1362,7 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M62 planning,
-focused on lowering.
+No stop condition is active. The workflow proceeds with M63 execution.
 
 ## Validation Expectations
 

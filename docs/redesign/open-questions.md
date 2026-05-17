@@ -1279,6 +1279,11 @@ accepts only unresolved typed selected assignment/direct-intrinsic body IR
 from the M61 records; direct-intrinsic semantics, SVE body semantics, vector
 metadata, backend translation, rendering, and generated output remain deferred
 until separate accepted milestones.
+Post-M62 planning selects M63 as a backend-neutral selected-body envelope over
+M62 typed body IR values. It adds a deterministic singleton sequence for the
+accepted M62 selected body and an explicit no-body envelope for no-body cases,
+but still treats the surrounding SVE-looking array corpus text as evidence
+only.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1291,7 +1296,8 @@ accepted M56 exact size-bytes-times-eight expression, accepted M57 exact
 size-byte equality predicates, branch-chain pruning beyond the accepted narrow
 M59 slice over those predicates, selected body handling beyond the accepted
 opaque M60 handoff, M61 assignment-form recognition slice, and accepted M62
-unresolved body-IR shape, and other nested expressions, direct
+unresolved body-IR shape plus selected M63 singleton envelope shape, and other
+nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
 `algo`, Rust output, generated tests beyond the selected M49 source fixture,
 CLI/report parity, compiler execution, and broad native rendering.

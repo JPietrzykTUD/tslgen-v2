@@ -776,6 +776,15 @@ Recommended first parity checks:
   not mapped to intrinsic tokens, unsupported M62 source/form diagnostics,
   M57-M61 regressions, raw-helper rejection, renderer non-evaluation, and no
   generated output or golden-file changes.
+- Milestone 63 tests only the backend-neutral selected-body envelope over M62
+  body IR values: deterministic selected envelopes with exactly one typed
+  sequence entry for `svptrue_b16`, `svptrue_b32`, and `svptrue_b64`,
+  explicit no-body envelopes for `si8`/`ui8`, preservation of M62
+  target/token/text/provenance and selected facts without reparsing original
+  body text, mismatch preservation proving no byte-size-to-token inference,
+  unsupported source/type or inconsistent-envelope diagnostics, M57-M62
+  regressions, raw-helper rejection, renderer non-evaluation, and no generated
+  output or golden-file changes.
 
 Deferred parity checks:
 
