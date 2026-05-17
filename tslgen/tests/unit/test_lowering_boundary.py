@@ -20,6 +20,8 @@ from tslgen.lowering import (
     GenerationContext,
     GenerationExpressionRecognition,
     GenerationLoweringStage,
+    NoSelectedBranchBodyHandoff,
+    OpaqueSelectedBranchBodyHandoff,
     GenerationPredicate,
     GenerationSizeByteBranchChainArm,
     GenerationSizeByteBranchChainPruning,
@@ -34,6 +36,7 @@ from tslgen.lowering import (
     TsilReturnStatement,
     TsilTypeSignednessCondition,
     build_catalog_lowering_request,
+    handoff_opaque_selected_branch_body,
     lower_candidates,
     prepare_lowering_inputs,
     resolve_generation_predicate_query,
@@ -2410,6 +2413,8 @@ class LoweringBoundaryTests(unittest.TestCase):
                 self.assertEqual(implementation.generation_branches, ())
                 self.assertEqual(len(implementation.generation_branch_chains), 1)
                 chain = implementation.generation_branch_chains[0]
+                self.assertEqual(len(implementation.selected_branch_body_handoffs), 1)
+                handoff = implementation.selected_branch_body_handoffs[0]
                 expected_literal = size_bytes if size_bytes in (2, 4, 8) else None
                 self.assertEqual(chain.selected_literal, expected_literal)
                 self.assertEqual(
@@ -2420,6 +2425,17 @@ class LoweringBoundaryTests(unittest.TestCase):
                         else None
                     ),
                 )
+                if expected_literal is None:
+                    assert isinstance(handoff, NoSelectedBranchBodyHandoff)
+                    self.assertEqual(handoff.selected_type_tag, type_tag)
+                else:
+                    assert isinstance(handoff, OpaqueSelectedBranchBodyHandoff)
+                    self.assertEqual(handoff.selected_type_tag, type_tag)
+                    self.assertEqual(handoff.selected_literal, expected_literal)
+                    self.assertEqual(
+                        handoff.opaque_body_text,
+                        expected_body_by_literal[expected_literal],
+                    )
                 self.assertEqual(tuple(arm.literal for arm in chain.arms), (2, 4, 8))
                 self.assertEqual(
                     tuple(predicate.literal for predicate in implementation.generation_predicates),
@@ -2438,9 +2454,11 @@ class LoweringBoundaryTests(unittest.TestCase):
                         "typed_generation_predicate",
                         "typed_generation_predicate",
                         "generation_control_flow_pruning",
+                        "selected_body_lowering",
                     ),
                 )
-                self.assertEqual(implementation.generation_stages[-1].output, chain)
+                self.assertEqual(implementation.generation_stages[-2].output, chain)
+                self.assertEqual(implementation.generation_stages[-1].output, handoff)
 
     def test_size_byte_branch_chain_records_no_match_without_final_else(
         self,
@@ -2460,6 +2478,15 @@ class LoweringBoundaryTests(unittest.TestCase):
             self.assertIsNone(chain.selected_literal)
             self.assertIsNone(chain.selected_statement_text)
             self.assertEqual(tuple(arm.literal for arm in chain.arms), (2, 4, 8))
+        no_match_handoffs = tuple(
+            implementation.selected_branch_body_handoffs[0]
+            for implementation in result.unwrap().implementations
+            if implementation.generation_branch_chains[0].type_tag in ("si8", "ui8")
+        )
+        self.assertEqual(len(no_match_handoffs), 2)
+        for handoff in no_match_handoffs:
+            assert isinstance(handoff, NoSelectedBranchBodyHandoff)
+            self.assertEqual(handoff.attempted_literals, (2, 4, 8))
 
     def test_size_byte_branch_chain_uses_typed_stage_predicates(
         self,
@@ -2506,8 +2533,133 @@ class LoweringBoundaryTests(unittest.TestCase):
         )
         self.assertEqual(implementation.generation_predicates, predicates)
         self.assertEqual(
-            tuple(stage.output for stage in implementation.generation_stages[1:]),
+            tuple(stage.output for stage in implementation.generation_stages[1:-1]),
             (value, *predicates, chain),
+        )
+        handoff = implementation.generation_stages[-1].output
+        assert isinstance(handoff, OpaqueSelectedBranchBodyHandoff)
+        self.assertEqual(handoff.candidate_id, implementation.candidate_id)
+        self.assertEqual(handoff.selected_type_tag, "ui16")
+        self.assertEqual(handoff.selected_literal, 2)
+        self.assertEqual(handoff.opaque_body_text, "pg = intrin<svptrue_b16>();")
+        self.assertEqual(handoff.source_location, chain.condition_location)
+        self.assertIn(implementation.candidate_id, handoff.originating_branch_chain_id)
+
+    def test_selected_size_byte_branch_bodies_are_opaque_handoffs(self) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation_by_tag = {
+            implementation.generation_branch_chains[0].type_tag: implementation
+            for implementation in result.unwrap().implementations
+        }
+        cases = (
+            ("si16", 2, "pg = intrin<svptrue_b16>();"),
+            ("ui32", 4, "pg = intrin<svptrue_b32>();"),
+            ("f64", 8, "pg = intrin<svptrue_b64>();"),
+        )
+        for type_tag, literal, body_text in cases:
+            with self.subTest(type_tag=type_tag):
+                implementation = implementation_by_tag[type_tag]
+                handoff = implementation.selected_branch_body_handoffs[0]
+                chain = implementation.generation_branch_chains[0]
+
+                assert isinstance(handoff, OpaqueSelectedBranchBodyHandoff)
+                self.assertEqual(handoff.candidate_id, implementation.candidate_id)
+                self.assertEqual(handoff.selected_type_tag, type_tag)
+                self.assertEqual(handoff.selected_literal, literal)
+                self.assertEqual(handoff.opaque_body_text, body_text)
+                self.assertEqual(handoff.source_location, chain.condition_location)
+                self.assertIn(
+                    "generation-size-byte-branch-chain",
+                    handoff.originating_branch_chain_id,
+                )
+                self.assertEqual(implementation.statements, ())
+
+    def test_size_byte_handoff_is_deterministic(self) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+
+        first = lower_candidates(selection)
+        second = lower_candidates(selection)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(
+            tuple(
+                implementation.selected_branch_body_handoffs
+                for implementation in first.unwrap().implementations
+            ),
+            tuple(
+                implementation.selected_branch_body_handoffs
+                for implementation in second.unwrap().implementations
+            ),
+        )
+
+    def test_opaque_handoff_rejects_unsupported_source_stage(self) -> None:
+        statement = TsilReturnStatement(
+            TsilBinaryExpression(
+                operator="+",
+                left=TsilParameterReference("left"),
+                right=TsilParameterReference("right"),
+            )
+        )
+        stage = GenerationLoweringStage(
+            stage="selected_body_lowering",
+            output=statement,
+        )
+
+        result = handoff_opaque_selected_branch_body("candidate-1", stage)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-HANDOFF-SOURCE-UNSUPPORTED",
+            severity="error",
+        )
+
+    def test_opaque_handoff_requires_branch_chain_provenance(self) -> None:
+        predicates = tuple(
+            GenerationPredicate(
+                kind="type.size_bytes.equals",
+                literal=literal,
+                value=literal == 2,
+                type_tag="si16",
+            )
+            for literal in (2, 4, 8)
+        )
+        chain = GenerationSizeByteBranchChainPruning(
+            arms=tuple(
+                GenerationSizeByteBranchChainArm(
+                    literal=literal,
+                    predicate=predicate,
+                    statement_text={
+                        2: "pg = intrin<svptrue_b16>();",
+                        4: "pg = intrin<svptrue_b32>();",
+                        8: "pg = intrin<svptrue_b64>();",
+                    }[literal],
+                )
+                for literal, predicate in zip((2, 4, 8), predicates, strict=True)
+            ),
+            type_tag="si16",
+            selected_literal=2,
+            selected_statement_text="pg = intrin<svptrue_b16>();",
+        )
+        stage = GenerationLoweringStage(
+            stage="generation_control_flow_pruning",
+            output=chain,
+        )
+
+        result = handoff_opaque_selected_branch_body("candidate-1", stage)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-HANDOFF-PROVENANCE-MISSING",
+            severity="error",
         )
 
     def test_size_byte_branch_chain_bodies_remain_opaque(self) -> None:
@@ -2520,9 +2672,14 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertTrue(result.is_ok, result.diagnostics)
         for implementation in result.unwrap().implementations:
             self.assertEqual(implementation.statements, ())
-            self.assertNotIn(
-                "selected_body_lowering",
-                tuple(stage.stage for stage in implementation.generation_stages),
+            self.assertEqual(len(implementation.selected_branch_body_handoffs), 1)
+            self.assertIs(
+                implementation.generation_stages[-1].output,
+                implementation.selected_branch_body_handoffs[0],
+            )
+            self.assertNotIsInstance(
+                implementation.generation_stages[-1].output,
+                TsilReturnStatement,
             )
 
     def test_size_byte_branch_chain_pruning_is_deterministic(self) -> None:

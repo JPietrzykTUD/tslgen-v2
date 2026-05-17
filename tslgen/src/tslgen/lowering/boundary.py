@@ -52,6 +52,9 @@ type GenerationLoweringStageName = Literal[
     "generation_control_flow_pruning",
     "selected_body_lowering",
 ]
+type GenerationSelectedBranchBodyHandoff = (
+    OpaqueSelectedBranchBodyHandoff | NoSelectedBranchBodyHandoff
+)
 type TsilBinaryOperator = Literal["+"]
 type TsilExpression = (
     TsilParameterReference | TsilBinaryExpression | TsilIntrinsicComposeExpression
@@ -63,6 +66,8 @@ type GenerationLoweringStageOutput = (
     | GenerationPredicate
     | PrunedGenerationBranch
     | GenerationSizeByteBranchChainPruning
+    | OpaqueSelectedBranchBodyHandoff
+    | NoSelectedBranchBodyHandoff
     | TsilStatement
 )
 
@@ -392,6 +397,85 @@ class GenerationSizeByteBranchChainPruning:
 
 
 @dataclass(frozen=True, slots=True)
+class OpaqueSelectedBranchBodyHandoff:
+    candidate_id: str
+    selected_type_tag: str
+    selected_literal: int
+    opaque_body_text: str
+    source_location: SourceLocation
+    originating_branch_chain_id: str
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id:
+            raise ValueError("opaque selected-body handoff candidate id must be non-empty")
+        if not self.selected_type_tag:
+            raise ValueError(
+                "opaque selected-body handoff selected type tag must be non-empty"
+            )
+        if self.selected_literal not in (2, 4, 8):
+            raise ValueError(
+                "opaque selected-body handoff literal must be 2, 4, or 8"
+            )
+        if not self.opaque_body_text.strip():
+            raise ValueError("opaque selected-body handoff body text must be non-empty")
+        if self.source_location is None:
+            raise ValueError("opaque selected-body handoff requires source location")
+        if not self.originating_branch_chain_id:
+            raise ValueError(
+                "opaque selected-body handoff branch-chain id must be non-empty"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "opaque_selected_branch_body",
+            self.candidate_id,
+            self.selected_type_tag,
+            self.selected_literal,
+            self.opaque_body_text,
+            self.source_location.sort_key(),
+            self.originating_branch_chain_id,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NoSelectedBranchBodyHandoff:
+    candidate_id: str
+    selected_type_tag: str
+    source_location: SourceLocation
+    originating_branch_chain_id: str
+    attempted_literals: tuple[int, ...] = (2, 4, 8)
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id:
+            raise ValueError("no-selected-body handoff candidate id must be non-empty")
+        if not self.selected_type_tag:
+            raise ValueError(
+                "no-selected-body handoff selected type tag must be non-empty"
+            )
+        if self.source_location is None:
+            raise ValueError("no-selected-body handoff requires source location")
+        if not self.originating_branch_chain_id:
+            raise ValueError(
+                "no-selected-body handoff branch-chain id must be non-empty"
+            )
+        object.__setattr__(self, "attempted_literals", tuple(self.attempted_literals))
+        if self.attempted_literals != (2, 4, 8):
+            raise ValueError("no-selected-body handoff attempted literals must be 2, 4, 8")
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "no_selected_branch_body",
+            self.candidate_id,
+            self.selected_type_tag,
+            self.source_location.sort_key(),
+            self.originating_branch_chain_id,
+            self.attempted_literals,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class PrunedGenerationBranch:
     condition: TsilGenerationCondition
     selected_branch: GenerationBranchChoice
@@ -505,7 +589,11 @@ class GenerationLoweringStage:
         elif self.stage == "generation_control_flow_pruning":
             expected = (PrunedGenerationBranch, GenerationSizeByteBranchChainPruning)
         elif self.stage == "selected_body_lowering":
-            expected = (TsilReturnStatement,)
+            expected = (
+                TsilReturnStatement,
+                OpaqueSelectedBranchBodyHandoff,
+                NoSelectedBranchBodyHandoff,
+            )
         else:
             raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
         if not isinstance(self.output, expected):
@@ -529,6 +617,7 @@ class LoweredImplementation:
     generation_values: tuple[GenerationValue, ...] = ()
     generation_predicates: tuple[GenerationPredicate, ...] = ()
     generation_branch_chains: tuple[GenerationSizeByteBranchChainPruning, ...] = ()
+    selected_branch_body_handoffs: tuple[GenerationSelectedBranchBodyHandoff, ...] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -562,6 +651,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "selected_branch_body_handoffs",
+            tuple(self.selected_branch_body_handoffs),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -577,6 +671,7 @@ class LoweredImplementation:
             tuple(value.key for value in self.generation_values),
             tuple(predicate.key for predicate in self.generation_predicates),
             tuple(chain.key for chain in self.generation_branch_chains),
+            tuple(handoff.key for handoff in self.selected_branch_body_handoffs),
             tuple(stage.key for stage in self.generation_stages),
         )
 
@@ -671,6 +766,90 @@ def lower_candidates(
             implementations=tuple(implementations),
         ),
         diagnostics=ordered,
+    )
+
+
+def handoff_opaque_selected_branch_body(
+    candidate_id: str,
+    stage: GenerationLoweringStage,
+) -> Result[GenerationSelectedBranchBodyHandoff]:
+    if not candidate_id:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-HANDOFF-CANDIDATE-MISSING",
+                    "opaque selected-body handoff requires a candidate id",
+                ),
+            )
+        )
+    if (
+        stage.stage != "generation_control_flow_pruning"
+        or not isinstance(stage.output, GenerationSizeByteBranchChainPruning)
+    ):
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-HANDOFF-SOURCE-UNSUPPORTED",
+                    "opaque selected-body handoff consumes only typed "
+                    "GenerationSizeByteBranchChainPruning output from the "
+                    "generation_control_flow_pruning stage",
+                    location=_stage_output_location(stage.output),
+                ),
+            )
+        )
+
+    pruning = stage.output
+    if pruning.condition_location is None:
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-HANDOFF-PROVENANCE-MISSING",
+                    "opaque selected-body handoff requires branch-chain "
+                    "source provenance",
+                ),
+            )
+        )
+
+    originating_branch_chain_id = _originating_branch_chain_id(
+        candidate_id,
+        pruning,
+    )
+    if pruning.selected_literal is None:
+        return Result.ok(
+            NoSelectedBranchBodyHandoff(
+                candidate_id=candidate_id,
+                selected_type_tag=pruning.type_tag,
+                source_location=pruning.condition_location,
+                originating_branch_chain_id=originating_branch_chain_id,
+                attempted_literals=tuple(arm.literal for arm in pruning.arms),
+            )
+        )
+
+    if not (pruning.selected_statement_text or "").strip():
+        return Result.failure(
+            (
+                Diagnostic.error(
+                    "TSL-LOWER-HANDOFF-BODY-MISSING",
+                    "opaque selected-body handoff requires selected branch "
+                    "body text for matched branch-chain pruning",
+                    location=pruning.condition_location,
+                ),
+            )
+        )
+
+    selected_literal = pruning.selected_literal
+    body_text = pruning.selected_statement_text
+    if selected_literal is None or body_text is None:
+        raise AssertionError("selected branch handoff state was checked above")
+    return Result.ok(
+        OpaqueSelectedBranchBodyHandoff(
+            candidate_id=candidate_id,
+            selected_type_tag=pruning.type_tag,
+            selected_literal=selected_literal,
+            opaque_body_text=body_text,
+            source_location=pruning.condition_location,
+            originating_branch_chain_id=originating_branch_chain_id,
+        )
     )
 
 
@@ -817,8 +996,48 @@ def _generation_control_flow_stage(
     )
 
 
-def _selected_body_stage(statement: TsilStatement) -> GenerationLoweringStage:
-    return GenerationLoweringStage(stage="selected_body_lowering", output=statement)
+def _selected_body_stage(
+    output: TsilStatement | GenerationSelectedBranchBodyHandoff,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(stage="selected_body_lowering", output=output)
+
+
+def _stage_output_location(
+    output: GenerationLoweringStageOutput,
+) -> SourceLocation | None:
+    if isinstance(
+        output,
+        (
+            PrunedGenerationBranch,
+            GenerationSizeByteBranchChainPruning,
+        ),
+    ):
+        return output.condition_location
+    if isinstance(
+        output,
+        (
+            OpaqueSelectedBranchBodyHandoff,
+            NoSelectedBranchBodyHandoff,
+        ),
+    ):
+        return output.source_location
+    return None
+
+
+def _originating_branch_chain_id(
+    candidate_id: str,
+    pruning: GenerationSizeByteBranchChainPruning,
+) -> str:
+    location_key = (
+        pruning.condition_location.sort_key()
+        if pruning.condition_location is not None
+        else ("", 0, 0, 0, 0)
+    )
+    literal_key = ",".join(str(arm.literal) for arm in pruning.arms)
+    return (
+        f"{candidate_id}:generation-size-byte-branch-chain:"
+        f"{pruning.type_tag}:{literal_key}:{location_key}"
+    )
 
 
 def _resolve_generation_predicate_query_staged(
@@ -1027,12 +1246,21 @@ def _lower_input(
             if not branch_chain.is_ok:
                 return Result.failure(branch_chain.diagnostics)
             staged_chain = branch_chain.unwrap()
+            control_flow_stage = _generation_control_flow_stage(staged_chain.pruning)
+            selected_body_handoff = handoff_opaque_selected_branch_body(
+                item.candidate_id,
+                control_flow_stage,
+            )
+            if not selected_body_handoff.is_ok:
+                return Result.failure(selected_body_handoff.diagnostics)
+            handoff = selected_body_handoff.unwrap()
             return Result.ok(
                 LoweredImplementation(
                     candidate_id=item.candidate_id,
                     status="lowered",
                     generation_predicates=staged_chain.generation_predicates,
                     generation_branch_chains=(staged_chain.pruning,),
+                    selected_branch_body_handoffs=(handoff,),
                     generation_stages=(
                         _recognition_stage(
                             "generation.control_flow",
@@ -1046,7 +1274,8 @@ def _lower_input(
                             _generation_predicate_stage(predicate)
                             for predicate in staged_chain.generation_predicates
                         ),
-                        _generation_control_flow_stage(staged_chain.pruning),
+                        control_flow_stage,
+                        _selected_body_stage(handoff),
                     ),
                 )
             )

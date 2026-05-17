@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 59 is accepted.
+Milestone 60 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -98,39 +98,43 @@ returned `Accept With Follow-Ups` after workflow handoff corrections.
 Post-M59 planning is accepted. It selected
 `Milestone 60: Opaque Selected Branch Body Handoff Slice`.
 
+The M60 execution-review loop returned `Accept With Follow-Ups` with no
+blocking implementation issues and no focused revision.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute the Milestone 60 execution-review loop.
+Run the post-M60 planning-plus-review prompt with a lowering focus.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m60-execution-review-loop-prompt.md
+docs/agent/runs/post-m60-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 60: Opaque Selected Branch Body Handoff Slice
+None. Post-M60 planning is active; no executor milestone is selected yet.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M59 planning accepted by user; M60 is active for execution.
+The M60 execution-review loop returned Accept With Follow-Ups. Non-blocking
+follow-ups are recorded below.
 ```
 
 Next expected action:
 
 ```text
-Run the active M60 execution-review loop prompt. If M60 is accepted, update
-this state file, record follow-ups, and create the next concrete run prompt
-under docs/agent/runs/ without starting a later milestone unless a later
-planning pass accepts it.
+Run the active post-M60 planning-plus-review prompt. Focus the next candidate
+on generation-time lowering, use the specified subagent workflow, do not
+implement code, and create the next concrete prompt under docs/agent/runs/
+according to the accepted planning result.
 ```
 
 Accepted planning prompt:
@@ -331,22 +335,28 @@ Accepted M59 execution-review loop prompt:
 docs/agent/runs/m59-execution-review-loop-prompt.md
 ```
 
-Active post-M59 planning prompt:
+Accepted post-M59 planning prompt:
 
 ```text
 docs/agent/runs/post-m59-planning-plus-review-prompt.md
 ```
 
-Active post-M59 acceptance finalization prompt:
+Accepted post-M59 acceptance finalization prompt:
 
 ```text
 docs/agent/runs/post-m59-acceptance-finalization-prompt.md
 ```
 
-Active M60 execution-review loop prompt:
+Accepted M60 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m60-execution-review-loop-prompt.md
+```
+
+Active post-M60 planning prompt:
+
+```text
+docs/agent/runs/post-m60-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -910,6 +920,32 @@ standalone comparison evaluation, backend translation, rendering, output,
 CLI/reporting/writer behavior, Rust, compiler execution, broad TSIL parsing,
 or runtime dependency on `frozen/`.
 
+## Accepted Milestone 60
+
+The Milestone 60 execution-review loop accepted with non-blocking follow-ups:
+
+```text
+Milestone 60: Opaque Selected Branch Body Handoff Slice
+```
+
+The slice is generation-time semantic lowering only. It consumes typed M59
+`GenerationSizeByteBranchChainPruning` / `generation_control_flow_pruning`
+stage output and creates distinct typed opaque selected-body handoff records.
+
+For byte sizes `2`, `4`, and `8`, M60 preserves candidate id, selected type
+tag, selected literal, opaque body text, source/provenance, and originating
+branch-chain identity. For byte size `1`, M60 records an explicit no-match
+handoff and does not synthesize a selected body.
+
+M60 keeps branch bodies opaque. It does not parse or lower selected or
+unselected branch-body semantics, does not invoke mini TSIL lowering for the
+branch-chain path, and does not produce direct-intrinsic/SVE `TsilStatement`
+values. It preserves backend raw-helper rejection and renderer
+non-evaluation, and adds no backend translation, rendering, output,
+CLI/reporting/writer behavior, Rust, compiler execution, broad TSIL parsing,
+runtime dependency on `frozen/`, lowering-time file reads, raw TSL parsing, or
+catalog queries during evaluation.
+
 ## Known Follow-Ups
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
@@ -1033,8 +1069,9 @@ or runtime dependency on `frozen/`.
   non-size-byte `else if<generation>` chain.
 - M59 boundary follow-up: consider adding an explicit nested branch-chain
   rejection test.
-- M59 extensibility follow-up: M60 should introduce a distinct typed selected
-  branch body handoff record instead of expanding
+- M59 extensibility follow-up addressed by M60: the accepted M60
+  implementation introduced distinct typed selected body handoff records
+  instead of expanding
   `GenerationSizeByteBranchChainPruning.selected_statement_text` into a body
   handoff contract.
 - M59 extensibility follow-up: consider a small naming or comment cleanup
@@ -1056,15 +1093,45 @@ or runtime dependency on `frozen/`.
 - Post-M59 planning follow-up: the M60 executor must introduce a distinct typed
   opaque selected-body handoff value instead of expanding M59 pruning metadata
   into the reusable body-handoff contract.
-- Post-M59 docs follow-up: `open-questions.md` and
-  `frozen-parity-baselines.md` use "selected opaque M60 handoff candidate";
-  a future wording cleanup may say "M60 selected-for-human-acceptance opaque
-  handoff" to make the acceptance state extra explicit.
+- M60 validation follow-up: consider direct unit assertions for
+  `TSL-LOWER-HANDOFF-BODY-MISSING` and
+  `TSL-LOWER-HANDOFF-CANDIDATE-MISSING`. Existing M60 tests cover unsupported
+  source-stage and missing-provenance diagnostics.
+- M60 validation follow-up: one boundary audit observed a package-boundary
+  build failure while running `python -m tslgen.tooling.validation`; the
+  validation auditor and orchestrator reruns passed, so this is non-blocking
+  unless it recurs.
+- M60 extensibility follow-up: future body-lowering slices may want a clearer
+  stage split or envelope because `selected_body_lowering` now carries both
+  opaque handoff values and already-lowered `TsilReturnStatement` values.
+- M60 extensibility follow-up: consider renaming
+  `NoSelectedBranchBodyHandoff.selected_type_tag` to a less ambiguous
+  `candidate_type_tag` or `evaluated_type_tag`.
+- M60 extensibility follow-up: future control-flow forms should extend through
+  typed source records rather than turning the M60 handoff helper into a broad
+  dispatcher or raw-text evaluator.
+- M60 evidence follow-up: add a short fixture comment clarifying that the
+  `vector::length` body-helper fixture is synthetic opacity coverage, not
+  corpus evidence for M60 body semantics.
+- M60 docs follow-up: update remaining pre-acceptance/status wording in
+  `docs/redesign/implementation-roadmap.md`,
+  `docs/redesign/target-architecture.md`,
+  `docs/redesign/testing-strategy.md`, and
+  `docs/redesign/design-decisions.md`.
+- M60 docs follow-up: refresh `docs/redesign/behavioral-spec.md` so the
+  parity table includes M58/M59/M60 and narrows remaining gaps to broader
+  branch-chain pruning beyond M59 and body handling beyond the M60 opaque
+  handoff.
+- M60 docs follow-up: refresh `docs/redesign/generation-time-semantic-lowering.md`
+  and `docs/redesign/open-questions.md` so lowering and open-question summaries
+  are current through M60.
+- M60 docs follow-up: refresh `docs/redesign/frozen-parity-baselines.md` from
+  "selected opaque handoff candidate" wording to accepted/implemented M60
+  opaque handoff wording while keeping broader body handling deferred.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the M60
-execution-review loop.
+No stop condition is active. The workflow proceeds with post-M60 planning.
 
 ## Validation Expectations
 
