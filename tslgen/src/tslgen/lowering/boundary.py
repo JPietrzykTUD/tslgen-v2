@@ -203,16 +203,107 @@ class GenerationContext:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactArrayBodyEnvelopeSkeletonKey:
+    candidate_id: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id:
+            raise ValueError("array-body envelope skeleton key candidate id must be non-empty")
+        if not self.selected_type_tag:
+            raise ValueError("array-body envelope skeleton key type tag must be non-empty")
+        if not self.originating_branch_chain_id:
+            raise ValueError(
+                "array-body envelope skeleton key branch-chain id must be non-empty"
+            )
+
+    @property
+    def key(self) -> tuple[str, str, str]:
+        return (
+            self.candidate_id,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ExactArrayBodyEnvelopeSkeletonRequirement:
+    candidate_id: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+    source_location: SourceLocation | None = None
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id:
+            raise ValueError(
+                "array-body envelope skeleton requirement candidate id must be non-empty"
+            )
+        if not self.selected_type_tag:
+            raise ValueError(
+                "array-body envelope skeleton requirement type tag must be non-empty"
+            )
+        if not self.originating_branch_chain_id:
+            raise ValueError(
+                "array-body envelope skeleton requirement branch-chain id must be non-empty"
+            )
+
+    @property
+    def lookup_key(self) -> ExactArrayBodyEnvelopeSkeletonKey:
+        return ExactArrayBodyEnvelopeSkeletonKey(
+            candidate_id=self.candidate_id,
+            selected_type_tag=self.selected_type_tag,
+            originating_branch_chain_id=self.originating_branch_chain_id,
+        )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        location_key = (
+            self.source_location.sort_key()
+            if self.source_location is not None
+            else ()
+        )
+        return (*self.lookup_key.key, location_key)
+
+
+@dataclass(frozen=True, slots=True)
 class LoweringRequest:
     strategy: LoweringStrategy = "mini_tsil"
     backend_id: str | None = None
     generation_context: GenerationContext = field(default_factory=GenerationContext)
+    array_body_envelope_skeletons: tuple[ExactArrayBodyEnvelopeSkeleton, ...] = ()
+    required_array_body_envelope_skeletons: tuple[
+        ExactArrayBodyEnvelopeSkeletonRequirement, ...
+    ] = ()
 
     def __post_init__(self) -> None:
         if self.strategy not in ("mini_tsil", "typed_opaque"):
             raise ValueError(f"unknown lowering strategy: {self.strategy!r}")
         if self.backend_id is not None and not self.backend_id:
             raise ValueError("lowering backend id must be non-empty when provided")
+        object.__setattr__(
+            self,
+            "array_body_envelope_skeletons",
+            tuple(
+                sorted(
+                    self.array_body_envelope_skeletons,
+                    key=lambda skeleton: (
+                        _array_body_envelope_skeleton_lookup_key(skeleton).key,
+                        skeleton.key,
+                    ),
+                )
+            ),
+        )
+        object.__setattr__(
+            self,
+            "required_array_body_envelope_skeletons",
+            tuple(
+                sorted(
+                    self.required_array_body_envelope_skeletons,
+                    key=lambda requirement: requirement.key,
+                )
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1424,6 +1515,55 @@ class LoweringPlan:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class _ArrayBodyEnvelopeSkeletonLookup:
+    skeletons: tuple[
+        tuple[ExactArrayBodyEnvelopeSkeletonKey, ExactArrayBodyEnvelopeSkeleton],
+        ...
+    ]
+    requirements: tuple[
+        tuple[
+            ExactArrayBodyEnvelopeSkeletonKey,
+            ExactArrayBodyEnvelopeSkeletonRequirement,
+        ],
+        ...
+    ]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "skeletons",
+            tuple(sorted(self.skeletons, key=lambda item: item[0].key)),
+        )
+        object.__setattr__(
+            self,
+            "requirements",
+            tuple(sorted(self.requirements, key=lambda item: item[0].key)),
+        )
+
+    @property
+    def skeleton_keys(self) -> tuple[ExactArrayBodyEnvelopeSkeletonKey, ...]:
+        return tuple(key for key, _skeleton in self.skeletons)
+
+    def skeleton_for(
+        self,
+        lookup_key: ExactArrayBodyEnvelopeSkeletonKey,
+    ) -> ExactArrayBodyEnvelopeSkeleton | None:
+        for key, skeleton in self.skeletons:
+            if key == lookup_key:
+                return skeleton
+        return None
+
+    def requirement_for(
+        self,
+        lookup_key: ExactArrayBodyEnvelopeSkeletonKey,
+    ) -> ExactArrayBodyEnvelopeSkeletonRequirement | None:
+        for key, requirement in self.requirements:
+            if key == lookup_key:
+                return requirement
+        return None
+
+
 def prepare_lowering_inputs(
     selection: CandidateSelection,
     request: LoweringRequest | None = None,
@@ -1478,13 +1618,28 @@ def lower_candidates(
         )
 
     diagnostics: list[Diagnostic] = []
+    skeleton_lookup_result = _build_array_body_envelope_skeleton_lookup(
+        lowering_inputs.request,
+    )
+    diagnostics.extend(skeleton_lookup_result.diagnostics)
+    if not skeleton_lookup_result.is_ok:
+        ordered = sort_diagnostics(diagnostics)
+        return Result.failure(ordered)
+    skeleton_lookup = skeleton_lookup_result.unwrap()
     implementations: list[LoweredImplementation] = []
     for item in lowering_inputs.inputs:
-        lowered = _lower_input(item, lowering_inputs.request)
+        lowered = _lower_input(item, lowering_inputs.request, skeleton_lookup)
         diagnostics.extend(lowered.diagnostics)
         if lowered.is_ok:
             implementations.append(lowered.unwrap())
 
+    if not has_errors(tuple(diagnostics)):
+        diagnostics.extend(
+            _unused_array_body_envelope_skeleton_diagnostics(
+                skeleton_lookup,
+                tuple(implementations),
+            )
+        )
     ordered = sort_diagnostics(diagnostics)
     if has_errors(ordered):
         return Result.failure(ordered)
@@ -2020,6 +2175,154 @@ def _originating_branch_chain_id(
     )
 
 
+def _array_body_envelope_skeleton_lookup_key(
+    skeleton: ExactArrayBodyEnvelopeSkeleton,
+) -> ExactArrayBodyEnvelopeSkeletonKey:
+    return ExactArrayBodyEnvelopeSkeletonKey(
+        candidate_id=skeleton.candidate_id,
+        selected_type_tag=skeleton.selected_type_tag,
+        originating_branch_chain_id=skeleton.originating_branch_chain_id,
+    )
+
+
+def _array_body_envelope_m63_lookup_key(
+    envelope: GenerationSelectedBodyEnvelopeIr,
+) -> ExactArrayBodyEnvelopeSkeletonKey:
+    return ExactArrayBodyEnvelopeSkeletonKey(
+        candidate_id=envelope.candidate_id,
+        selected_type_tag=envelope.selected_type_tag,
+        originating_branch_chain_id=envelope.originating_branch_chain_id,
+    )
+
+
+def _build_array_body_envelope_skeleton_lookup(
+    request: LoweringRequest,
+) -> Result[_ArrayBodyEnvelopeSkeletonLookup]:
+    diagnostics: list[Diagnostic] = []
+    skeletons_by_key: dict[
+        ExactArrayBodyEnvelopeSkeletonKey,
+        ExactArrayBodyEnvelopeSkeleton,
+    ] = {}
+    for skeleton in request.array_body_envelope_skeletons:
+        lookup_key = _array_body_envelope_skeleton_lookup_key(skeleton)
+        existing = skeletons_by_key.get(lookup_key)
+        if existing is None:
+            skeletons_by_key[lookup_key] = skeleton
+            continue
+        diagnostics.append(
+            _duplicate_array_body_envelope_skeleton_diagnostic(
+                lookup_key,
+                skeleton,
+                conflicting=existing != skeleton,
+            )
+        )
+
+    requirements_by_key: dict[
+        ExactArrayBodyEnvelopeSkeletonKey,
+        ExactArrayBodyEnvelopeSkeletonRequirement,
+    ] = {}
+    for requirement in request.required_array_body_envelope_skeletons:
+        requirements_by_key.setdefault(requirement.lookup_key, requirement)
+
+    ordered = sort_diagnostics(diagnostics)
+    if has_errors(ordered):
+        return Result.failure(ordered)
+    return Result.ok(
+        _ArrayBodyEnvelopeSkeletonLookup(
+            skeletons=tuple(
+                sorted(
+                    skeletons_by_key.items(),
+                    key=lambda item: item[0].key,
+                )
+            ),
+            requirements=tuple(
+                sorted(
+                    requirements_by_key.items(),
+                    key=lambda item: item[0].key,
+                )
+            ),
+        ),
+        diagnostics=ordered,
+    )
+
+
+def _assemble_matching_array_body_envelope(
+    envelope_stage: GenerationLoweringStage,
+    skeleton_lookup: _ArrayBodyEnvelopeSkeletonLookup,
+) -> Result[ExactArrayBodyEnvelopeIr | None]:
+    if not isinstance(
+        envelope_stage.output,
+        (SelectedBodyEnvelopeIr, NoSelectedBodyEnvelopeIr),
+    ):
+        raise TypeError("array-body envelope integration requires an M63 stage")
+
+    lookup_key = _array_body_envelope_m63_lookup_key(envelope_stage.output)
+    skeleton = skeleton_lookup.skeleton_for(lookup_key)
+    if skeleton is None:
+        requirement = skeleton_lookup.requirement_for(lookup_key)
+        if requirement is None:
+            return Result.ok(None)
+        return Result.failure(
+            (
+                _missing_array_body_envelope_skeleton_diagnostic(
+                    requirement,
+                    envelope_stage.output,
+                ),
+            )
+        )
+
+    assembled = assemble_exact_array_body_envelope(envelope_stage, skeleton)
+    if not assembled.is_ok:
+        return Result.failure(assembled.diagnostics)
+    return Result.ok(assembled.unwrap())
+
+
+def _unused_array_body_envelope_skeleton_diagnostics(
+    skeleton_lookup: _ArrayBodyEnvelopeSkeletonLookup,
+    implementations: tuple[LoweredImplementation, ...],
+) -> tuple[Diagnostic, ...]:
+    if not skeleton_lookup.skeleton_keys:
+        return ()
+
+    envelope_keys = tuple(
+        _array_body_envelope_m63_lookup_key(envelope)
+        for implementation in implementations
+        for envelope in implementation.selected_body_envelopes
+    )
+    used_keys = {
+        ExactArrayBodyEnvelopeSkeletonKey(
+            candidate_id=envelope.candidate_id,
+            selected_type_tag=envelope.selected_type_tag,
+            originating_branch_chain_id=envelope.originating_branch_chain_id,
+        )
+        for implementation in implementations
+        for envelope in implementation.array_body_envelopes
+    }
+    diagnostics: list[Diagnostic] = []
+    for skeleton_key in skeleton_lookup.skeleton_keys:
+        if skeleton_key in used_keys:
+            continue
+        skeleton = skeleton_lookup.skeleton_for(skeleton_key)
+        if skeleton is None:
+            raise AssertionError("array-body skeleton lookup key disappeared")
+        if any(
+            envelope_key.candidate_id == skeleton_key.candidate_id
+            for envelope_key in envelope_keys
+        ):
+            diagnostics.append(
+                _mismatched_array_body_envelope_skeleton_diagnostic(
+                    skeleton_key,
+                    skeleton,
+                    envelope_keys,
+                )
+            )
+            continue
+        diagnostics.append(
+            _orphan_array_body_envelope_skeleton_diagnostic(skeleton_key, skeleton)
+        )
+    return tuple(diagnostics)
+
+
 def _selected_body_assignment_handoff_source(
     source: GenerationSelectedBranchBodyHandoff | GenerationLoweringStage,
 ) -> Result[GenerationSelectedBranchBodyHandoff]:
@@ -2279,6 +2582,88 @@ def _array_body_envelope_shape_unsupported_diagnostic(
         "TSL-LOWER-ARRAY-BODY-ENVELOPE-SHAPE-UNSUPPORTED",
         detail,
         location=location,
+    )
+
+
+def _duplicate_array_body_envelope_skeleton_diagnostic(
+    lookup_key: ExactArrayBodyEnvelopeSkeletonKey,
+    skeleton: ExactArrayBodyEnvelopeSkeleton,
+    *,
+    conflicting: bool,
+) -> Diagnostic:
+    code = (
+        "TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-CONFLICT"
+        if conflicting
+        else "TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-DUPLICATE"
+    )
+    detail = "conflicting" if conflicting else "duplicate"
+    return Diagnostic.error(
+        code,
+        f"array-body envelope skeleton input has a {detail} skeleton for "
+        f"candidate {lookup_key.candidate_id!r}, selected type tag "
+        f"{lookup_key.selected_type_tag!r}, and branch-chain identity "
+        f"{lookup_key.originating_branch_chain_id!r}; provide exactly one "
+        "typed skeleton for that envelope key",
+        location=skeleton.source_location,
+    )
+
+
+def _missing_array_body_envelope_skeleton_diagnostic(
+    requirement: ExactArrayBodyEnvelopeSkeletonRequirement,
+    envelope: GenerationSelectedBodyEnvelopeIr,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-MISSING",
+        "array-body envelope skeleton input is required for candidate "
+        f"{envelope.candidate_id!r}, selected type tag "
+        f"{envelope.selected_type_tag!r}, and branch-chain identity "
+        f"{envelope.originating_branch_chain_id!r}, but no matching typed "
+        "ExactArrayBodyEnvelopeSkeleton was supplied",
+        location=requirement.source_location or envelope.source_location,
+    )
+
+
+def _orphan_array_body_envelope_skeleton_diagnostic(
+    lookup_key: ExactArrayBodyEnvelopeSkeletonKey,
+    skeleton: ExactArrayBodyEnvelopeSkeleton,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-ORPHAN",
+        "array-body envelope skeleton input was supplied for candidate "
+        f"{lookup_key.candidate_id!r}, selected type tag "
+        f"{lookup_key.selected_type_tag!r}, and branch-chain identity "
+        f"{lookup_key.originating_branch_chain_id!r}, but normal lowering "
+        "produced no M63 selected-body envelope for that candidate",
+        location=skeleton.source_location,
+    )
+
+
+def _mismatched_array_body_envelope_skeleton_diagnostic(
+    lookup_key: ExactArrayBodyEnvelopeSkeletonKey,
+    skeleton: ExactArrayBodyEnvelopeSkeleton,
+    envelope_keys: tuple[ExactArrayBodyEnvelopeSkeletonKey, ...],
+) -> Diagnostic:
+    candidate_envelope_keys = tuple(
+        envelope_key
+        for envelope_key in envelope_keys
+        if envelope_key.candidate_id == lookup_key.candidate_id
+    )
+    expected = tuple(
+        (
+            envelope_key.selected_type_tag,
+            envelope_key.originating_branch_chain_id,
+        )
+        for envelope_key in candidate_envelope_keys
+    )
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-PROVENANCE-MISMATCH",
+        "array-body envelope skeleton input did not match the M63 envelope "
+        "provenance for candidate "
+        f"{lookup_key.candidate_id!r}; got selected type tag "
+        f"{lookup_key.selected_type_tag!r} and branch-chain identity "
+        f"{lookup_key.originating_branch_chain_id!r}, expected one of "
+        f"{expected!r}",
+        location=skeleton.source_location,
     )
 
 
@@ -2628,6 +3013,7 @@ def _classify_payload(candidate: ImplementationCandidate) -> Result[ClassifiedPa
 def _lower_input(
     item: LoweringInput,
     request: LoweringRequest,
+    skeleton_lookup: _ArrayBodyEnvelopeSkeletonLookup,
 ) -> Result[LoweredImplementation]:
     if item.payload.classification != "tsil":
         return Result.failure((_unsupported_payload_diagnostic(item),))
@@ -2719,6 +3105,22 @@ def _lower_input(
             if not envelope_result.is_ok:
                 return Result.failure(envelope_result.diagnostics)
             envelope = envelope_result.unwrap()
+            envelope_stage = _selected_body_envelope_stage(envelope)
+            array_envelope_result = _assemble_matching_array_body_envelope(
+                envelope_stage,
+                skeleton_lookup,
+            )
+            if not array_envelope_result.is_ok:
+                return Result.failure(array_envelope_result.diagnostics)
+            array_envelope = array_envelope_result.unwrap()
+            array_body_envelopes = (
+                (array_envelope,) if array_envelope is not None else ()
+            )
+            array_body_stages = (
+                (_array_body_envelope_slot_assembly_stage(array_envelope),)
+                if array_envelope is not None
+                else ()
+            )
             return Result.ok(
                 LoweredImplementation(
                     candidate_id=item.candidate_id,
@@ -2731,6 +3133,7 @@ def _lower_input(
                     ),
                     selected_branch_body_irs=(body_ir,),
                     selected_body_envelopes=(envelope,),
+                    array_body_envelopes=array_body_envelopes,
                     generation_stages=(
                         _recognition_stage(
                             "generation.control_flow",
@@ -2750,7 +3153,8 @@ def _lower_input(
                             recognized_assignment_form,
                         ),
                         _selected_body_ir_stage(body_ir),
-                        _selected_body_envelope_stage(envelope),
+                        envelope_stage,
+                        *array_body_stages,
                     ),
                 )
             )

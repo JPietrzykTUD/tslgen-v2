@@ -458,9 +458,9 @@ declarations, arrays, stores, returns, `svbool_t`, `svst1`, vector
 length/alignment, backend uninit values, direct-intrinsic/SVE semantics,
 backend translation, renderer-ready IR, generated output, or broad TSIL body
 syntax.
-Milestone 65 is selected as the follow-on Stage 8 pipeline-integration slice:
-it wires typed/provenanced M64 skeleton input and accepted M63 envelopes
-through the normal lowering pipeline so `LoweredImplementation` carries
+Milestone 65 is accepted as the Stage 8 pipeline-integration slice: it wires
+typed/provenanced M64 skeleton input and accepted M63 envelopes through the
+normal lowering pipeline so `LoweredImplementation` carries
 `array_body_envelopes` and a deterministic `array_body_envelope_slot_assembly`
 stage. M65 must not produce skeletons from raw body text, parse broad TSIL,
 lower slot semantics, introduce backend translation or renderer-ready IR, emit

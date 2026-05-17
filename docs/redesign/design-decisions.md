@@ -1360,8 +1360,8 @@ Consequences:
   a deterministic ordered whole-body slot envelope, while keeping surrounding
   slots opaque and non-semantic so later milestones can refine one slot at a
   time.
-- Milestone 65 selects pipeline integration for the accepted M64 envelope
-  before semantic slot lowering. It should make normal lowering produce
+- Milestone 65 is accepted as pipeline integration for the accepted M64
+  envelope before semantic slot lowering. It makes normal lowering produce
   `ExactArrayBodyEnvelopeIr` and the `array_body_envelope_slot_assembly` stage
   from typed/provenanced skeleton input, without turning `lower_candidates`
   into a raw-text dispatcher and without adding skeleton recognition or
@@ -1371,7 +1371,7 @@ Consequences:
   than a renderer table.
 - Broad modifier support, primitive calls, direct intrinsics beyond the
   accepted M62 unresolved body-IR shape, accepted M63 singleton envelope
-  shape, accepted M64 exact structural slot envelope, selected M65 pipeline
+  shape, accepted M64 exact structural slot envelope, accepted M65 pipeline
   integration, and Rust body rendering remain deferred until their own helper
   slices are selected.
 - Future native rendering milestones must state which helper IR and translation

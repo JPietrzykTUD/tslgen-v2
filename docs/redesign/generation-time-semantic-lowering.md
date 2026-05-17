@@ -503,8 +503,8 @@ stores, `tmp.data()`, `emit_return`, vector length/alignment, backend uninit
 values, backend translation, rendering, generated output, or broad TSIL body
 syntax.
 
-Milestone 65 is selected as the next pipeline-integration boundary. It wires
-the accepted M64 exact array-body envelope into the normal staged lowering
+Milestone 65 is accepted as the pipeline-integration boundary. It wires the
+accepted M64 exact array-body envelope into the normal staged lowering
 pipeline by consuming typed/provenanced `ExactArrayBodyEnvelopeSkeleton` input
 plus accepted M63 selected/no-body envelopes, producing
 `LoweredImplementation.array_body_envelopes`, and appending the
@@ -537,10 +537,28 @@ M64 diagnostics:
 - `TSL-LOWER-ARRAY-BODY-ENVELOPE-SLOT-ORDER`
 - `TSL-LOWER-ARRAY-BODY-ENVELOPE-PROVENANCE-MISMATCH`
 
+M65 diagnostics:
+
+- `TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-MISSING`: required typed skeleton
+  input is absent for a candidate whose lowering contract requires M65
+  envelope integration.
+- `TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-DUPLICATE`: more than one identical
+  skeleton is supplied for the same candidate, selected type tag, and
+  branch-chain identity.
+- `TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-CONFLICT`: more than one different
+  skeleton is supplied for the same candidate, selected type tag, and
+  branch-chain identity.
+- `TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-ORPHAN`: a skeleton is supplied for
+  a candidate or branch path that has no accepted M63 selected/no-body
+  envelope to assemble.
+- `TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-PROVENANCE-MISMATCH`: the supplied
+  skeleton and M63 envelope disagree on candidate id, selected type tag,
+  branch-chain identity, or source provenance required for assembly.
+
 ## Explicit Deferrals
 
-Deferred beyond the implemented M43-M64 semantic-lowering and structural
-slot-assembly slices and selected M65 pipeline-integration slice:
+Deferred beyond the implemented M43-M65 semantic-lowering, structural
+slot-assembly, and pipeline-integration slices:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -558,7 +576,7 @@ slot-assembly slices and selected M65 pipeline-integration slice:
   body IR for that recognized form, and M63 adds only a backend-neutral
   envelope/sequence boundary over those M62 typed values. Accepted M64 adds
   only exact structural array-body slot assembly around M63 envelopes, and
-  selected M65 wires that typed envelope into the normal lowering pipeline
+  accepted M65 wires that typed envelope into the normal lowering pipeline
   without adding skeleton recognition or slot semantics. General
   `else if<generation>` syntax, final-else policy, broad branch pruning based
   on generation values, assignment semantics beyond that selected IR shape,

@@ -799,10 +799,11 @@ Recommended first parity checks:
   `lower_candidates` populates `array_body_envelopes` from typed/provenanced
   M64 skeleton input, appends the `array_body_envelope_slot_assembly` stage
   after `selected_body_envelope_lowering`, preserves selected and no-body M63
-  cases, reports duplicate/missing/mismatched skeleton diagnostics, preserves
-  existing M57-M64 outputs and ordering, proves deterministic repeated normal
-  lowering runs, keeps raw-helper rejection and renderer non-evaluation, and
-  changes no generated output or golden files.
+  cases, reports missing required skeleton, duplicate skeleton, conflicting
+  skeleton, orphan skeleton, and skeleton provenance-mismatch diagnostics,
+  preserves existing M57-M64 outputs and ordering, proves deterministic
+  repeated normal lowering runs, keeps raw-helper rejection and renderer
+  non-evaluation, and changes no generated output or golden files.
 
 Deferred parity checks:
 

@@ -6474,7 +6474,7 @@ Candidate comparison:
 
 | Candidate | Why considered | Boundary risk | Decision |
 | --- | --- | --- | --- |
-| Exact array body envelope pipeline integration | M64 defines `ExactArrayBodyEnvelopeIr`, `ExactArrayBodyEnvelopeSkeleton`, and the `array_body_envelope_slot_assembly` stage, but normal `lower_candidates` still stops at M63 unless callers invoke M64 assembly directly. Wiring typed skeleton input through normal lowering makes M64 usable by later body slices. | Medium if framed as typed pipeline wiring; high if it starts recognizing skeletons from raw body text or becomes a new raw-text dispatcher. | Select as M65. |
+| Exact array body envelope pipeline integration | M64 defines `ExactArrayBodyEnvelopeIr`, `ExactArrayBodyEnvelopeSkeleton`, and the `array_body_envelope_slot_assembly` stage, but normal `lower_candidates` still stops at M63 unless callers invoke M64 assembly directly. Wiring typed skeleton input through normal lowering makes M64 usable by later body slices. | Medium if framed as typed pipeline wiring; high if it starts recognizing skeletons from raw body text or becomes a new raw-text dispatcher. | Accepted as M65 after the execution-review loop. |
 | Exact skeleton-producing recognition | A future source/input adapter must eventually prove where exact skeletons come from. | High now because it invites broad TSIL parsing or exact-shape recognition from raw body text before the pipeline can consume typed skeletons cleanly. | Defer. |
 | First slot-specific lowering | M64 gives future slot-specific lowering named attachment points. | High now because normal lowering does not yet produce M64 envelopes, and slot lowering could pull in declaration, array, store, return, vector, or SVE semantics too early. | Defer until M64 is pipeline-reachable. |
 | Vector length/alignment helper semantics | The opaque array-initialization slot contains `value<generation>(vector::length)` and `value<generation>(vector::alignment)`. | Medium to high because it introduces vector metadata semantics before the whole-body envelope is produced by the normal pipeline. | Defer. |
@@ -6483,7 +6483,7 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance after post-M64 planning.
+Accepted.
 
 Goal:
 
@@ -6512,10 +6512,10 @@ Scope:
   immediately after the accepted M63 `selected_body_envelope_lowering` stage.
 - Preserve existing M57-M64 values, diagnostics, ordering, selected/no-body
   behavior, and backend raw-helper/rendering regressions.
-- Diagnose only M65 integration state, such as missing required skeleton input,
-  duplicate/conflicting skeletons, skeletons supplied for candidates without
-  an M63 envelope, and candidate/type/branch provenance mismatch. Unsupported
-  skeleton shape should continue through existing M64 diagnostics.
+- Diagnose only M65 integration state: missing required skeletons, duplicate
+  skeletons, conflicting skeletons, orphan skeletons supplied for candidates
+  without an M63 envelope, and skeleton/envelope provenance mismatches.
+  Unsupported skeleton shape should continue through existing M64 diagnostics.
 
 Out of scope:
 
@@ -6588,11 +6588,12 @@ Tests required:
   assemble through normal lowering.
 - `si8` and `ui8` no-body envelopes assemble through normal lowering without
   synthesized selected branch text.
-- No-skeleton input preserves existing M63-only behavior unless the selected
+- No-skeleton input preserves existing M63-only behavior unless the accepted
   M65 input contract explicitly marks a skeleton as required for the
   candidate.
-- Duplicate/conflicting skeletons and skeleton/envelope provenance mismatches
-  produce structured diagnostics with source location and actionable messages.
+- The M65 diagnostic matrix covers missing required skeletons, duplicate
+  skeletons, conflicting skeletons, orphan skeletons, and skeleton/envelope
+  provenance mismatches with source locations and actionable messages.
 - Unsupported or non-exact skeleton shape continues to report existing M64
   diagnostics.
 - Existing M57/M58/M59/M60/M61/M62/M63/M64 behavior remains unchanged.
@@ -6609,7 +6610,7 @@ Golden fixtures required:
 Validation commands:
 
 - `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
-- A focused M65 pipeline-integration test command selected by the executor.
+- A focused M65 pipeline-integration test command used by the executor.
 - `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
 - `git diff --check`
 
@@ -6620,18 +6621,14 @@ Review risks:
 - Treating M64 slot labels or opaque source text as semantic statements.
 - Combining integration with slot-specific lowering, vector metadata, SVE
   predicate/direct-intrinsic semantics, backend translation, or rendering.
-- Silently skipping missing or mismatched skeleton input when the selected
+- Silently skipping missing or mismatched skeleton input when the accepted
   integration contract requires it.
 
 Dependencies on prior milestones:
 
 - Milestones 57, 58, 59, 60, 61, 62, 63, and 64.
 
-Next concrete prompt:
+Completion note:
 
-- If the post-M64 planning result is accepted, update workflow state and
-  create `docs/agent/runs/post-m64-acceptance-finalization-prompt.md`. That
-  finalization prompt will create
-  `docs/agent/runs/m65-execution-review-loop-prompt.md` after explicit human
-  acceptance. Do not start M65 until the acceptance-finalization prompt records
-  acceptance.
+- M65 is accepted after the execution-review loop. Follow-on milestone
+  selection is intentionally outside this M65 section.

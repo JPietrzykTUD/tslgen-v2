@@ -22,6 +22,7 @@ from tslgen.lowering import (
     ExactArrayBodyEnvelopeOpaqueSlot,
     ExactArrayBodyEnvelopeSelectedSlot,
     ExactArrayBodyEnvelopeSkeleton,
+    ExactArrayBodyEnvelopeSkeletonRequirement,
     ExactArrayBodyEnvelopeSkeletonSlot,
     GenerationContext,
     GenerationExpressionRecognition,
@@ -904,6 +905,20 @@ class LoweringBoundaryTests(unittest.TestCase):
             originating_branch_chain_id=branch_chain_id,
             slots=slots,
             is_exact_array_body_shape=exact,
+        )
+
+    def exact_array_body_skeleton_for_envelope(
+        self,
+        envelope: SelectedBodyEnvelopeIr | NoSelectedBodyEnvelopeIr,
+        *,
+        exact: bool = True,
+        branch_chain_id: str | None = None,
+    ) -> ExactArrayBodyEnvelopeSkeleton:
+        return self.exact_array_body_skeleton(
+            candidate_id=envelope.candidate_id,
+            selected_type_tag=envelope.selected_type_tag,
+            branch_chain_id=branch_chain_id or envelope.originating_branch_chain_id,
+            exact=exact,
         )
 
     def test_prepares_typed_lowering_inputs_from_selected_candidates(self) -> None:
@@ -3306,6 +3321,261 @@ class LoweringBoundaryTests(unittest.TestCase):
             column=15,
         )
         self.assertIn("empty argument list", result.diagnostics[0].message)
+
+    def test_lower_candidates_assembles_exact_array_body_envelopes_from_typed_skeletons(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+        baseline = lower_candidates(selection)
+        self.assertTrue(baseline.is_ok, baseline.diagnostics)
+        skeletons = tuple(
+            self.exact_array_body_skeleton_for_envelope(envelope)
+            for implementation in baseline.unwrap().implementations
+            for envelope in implementation.selected_body_envelopes
+        )
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(array_body_envelope_skeletons=skeletons),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementations = result.unwrap().implementations
+        self.assertEqual(len(implementations), len(skeletons))
+        selected_tokens: set[str] = set()
+        no_body_tags: set[str] = set()
+        for baseline_impl, implementation in zip(
+            baseline.unwrap().implementations,
+            implementations,
+            strict=True,
+        ):
+            with self.subTest(candidate_id=implementation.candidate_id):
+                self.assertEqual(len(implementation.array_body_envelopes), 1)
+                array_envelope = implementation.array_body_envelopes[0]
+                self.assertIs(implementation.generation_stages[-1].output, array_envelope)
+                self.assertEqual(
+                    implementation.generation_stages[-1].stage,
+                    "array_body_envelope_slot_assembly",
+                )
+                self.assertEqual(
+                    tuple(stage.stage for stage in implementation.generation_stages[:-1]),
+                    tuple(stage.stage for stage in baseline_impl.generation_stages),
+                )
+                self.assertEqual(
+                    tuple(stage.output for stage in implementation.generation_stages[:-1]),
+                    tuple(stage.output for stage in baseline_impl.generation_stages),
+                )
+                self.assertEqual(
+                    implementation.generation_stages[-2].stage,
+                    "selected_body_envelope_lowering",
+                )
+                nested = array_envelope.selected_body_slot.selected_body_envelope
+                self.assertIs(nested, implementation.selected_body_envelopes[0])
+                if isinstance(nested, SelectedBodyEnvelopeIr):
+                    selected_tokens.add(nested.entries[0].direct_intrinsic_token_text)
+                else:
+                    self.assertIsInstance(nested, NoSelectedBodyEnvelopeIr)
+                    self.assertEqual(nested.entries, ())
+                    no_body_tags.add(nested.selected_type_tag)
+
+        self.assertEqual(
+            selected_tokens,
+            {"svptrue_b16", "svptrue_b32", "svptrue_b64"},
+        )
+        self.assertEqual(no_body_tags, {"si8", "ui8"})
+
+    def test_lower_candidates_without_skeletons_preserves_m63_only_behavior(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        for implementation in result.unwrap().implementations:
+            with self.subTest(candidate_id=implementation.candidate_id):
+                self.assertEqual(implementation.array_body_envelopes, ())
+                self.assertEqual(
+                    tuple(stage.stage for stage in implementation.generation_stages),
+                    (
+                        "helper_expression_recognition",
+                        "typed_generation_value",
+                        "typed_generation_predicate",
+                        "typed_generation_predicate",
+                        "typed_generation_predicate",
+                        "generation_control_flow_pruning",
+                        "selected_body_lowering",
+                        "selected_body_form_recognition",
+                        "selected_body_ir_lowering",
+                        "selected_body_envelope_lowering",
+                    ),
+                )
+
+    def test_lower_candidates_reports_missing_required_array_body_skeleton(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+        baseline = lower_candidates(selection)
+        self.assertTrue(baseline.is_ok, baseline.diagnostics)
+        envelope = next(
+            implementation.selected_body_envelopes[0]
+            for implementation in baseline.unwrap().implementations
+            if implementation.selected_body_envelopes[0].selected_type_tag == "si16"
+        )
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                required_array_body_envelope_skeletons=(
+                    ExactArrayBodyEnvelopeSkeletonRequirement(
+                        candidate_id=envelope.candidate_id,
+                        selected_type_tag=envelope.selected_type_tag,
+                        originating_branch_chain_id=(
+                            envelope.originating_branch_chain_id
+                        ),
+                        source_location=SourceLocation(Path("request.tsl"), 12, 3),
+                    ),
+                ),
+            ),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-MISSING",
+            severity="error",
+            path="request.tsl",
+            line=12,
+            column=3,
+        )
+        self.assertIn(envelope.candidate_id, result.diagnostics[0].message)
+        self.assertIn(envelope.selected_type_tag, result.diagnostics[0].message)
+
+    def test_lower_candidates_reports_duplicate_and_conflicting_array_body_skeletons(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+        baseline = lower_candidates(selection)
+        self.assertTrue(baseline.is_ok, baseline.diagnostics)
+        envelope = baseline.unwrap().implementations[0].selected_body_envelopes[0]
+        skeleton = self.exact_array_body_skeleton_for_envelope(envelope)
+
+        cases = (
+            (
+                "duplicate",
+                (skeleton, skeleton),
+                "TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-DUPLICATE",
+            ),
+            (
+                "conflict",
+                (skeleton, replace(skeleton, is_exact_array_body_shape=False)),
+                "TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-CONFLICT",
+            ),
+        )
+        for name, skeletons, code in cases:
+            with self.subTest(name=name):
+                result = lower_candidates(
+                    selection,
+                    LoweringRequest(array_body_envelope_skeletons=skeletons),
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                    path="tsldata/primitives/load_store/array.tsl",
+                    line=105,
+                    column=15,
+                )
+                self.assertIn("exactly one", result.diagnostics[0].message)
+
+    def test_lower_candidates_reports_orphan_array_body_skeletons(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_add")
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                array_body_envelope_skeletons=(self.exact_array_body_skeleton(),),
+            ),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-ORPHAN",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+            column=15,
+        )
+        self.assertIn("no M63 selected-body envelope", result.diagnostics[0].message)
+
+    def test_lower_candidates_reports_array_body_skeleton_provenance_mismatch(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+        baseline = lower_candidates(selection)
+        self.assertTrue(baseline.is_ok, baseline.diagnostics)
+        envelope = baseline.unwrap().implementations[0].selected_body_envelopes[0]
+        skeleton = self.exact_array_body_skeleton_for_envelope(
+            envelope,
+            branch_chain_id="other-branch-chain",
+        )
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(array_body_envelope_skeletons=(skeleton,)),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-PROVENANCE-MISMATCH",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+            column=15,
+        )
+        self.assertIn("M63 envelope provenance", result.diagnostics[0].message)
+
+    def test_lower_candidates_preserves_m64_non_exact_skeleton_diagnostic(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+        baseline = lower_candidates(selection)
+        self.assertTrue(baseline.is_ok, baseline.diagnostics)
+        envelope = baseline.unwrap().implementations[0].selected_body_envelopes[0]
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                array_body_envelope_skeletons=(
+                    self.exact_array_body_skeleton_for_envelope(
+                        envelope,
+                        exact=False,
+                    ),
+                ),
+            ),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-BODY-ENVELOPE-SHAPE-UNSUPPORTED",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+            column=15,
+        )
+        self.assertIn("exact", result.diagnostics[0].message)
 
     def test_exact_array_body_envelopes_assemble_selected_m63_slots(
         self,
