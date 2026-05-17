@@ -335,7 +335,7 @@ and still does not add compiler execution.
   slice over those predicates, selected branch body handling beyond the
   accepted opaque M60 handoff, M61 assignment-form recognition slice, and
   accepted M62 unresolved body-IR shape plus accepted M63 singleton envelope
-  shape and selected M64 exact structural slot envelope, and backend
+  shape and accepted M64 exact structural slot envelope, and backend
   translation-map evaluation beyond the selected M40/M45/M46 requests.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and
   googletest download or vendoring.

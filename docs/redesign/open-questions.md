@@ -1283,12 +1283,12 @@ M63 accepts a backend-neutral selected-body envelope over M62 typed body IR
 values. It adds a deterministic singleton sequence for the accepted M62
 selected body and an explicit no-body envelope for no-body cases, but still
 treats the surrounding SVE-looking array corpus text as evidence only.
-Post-M63 planning selects M64 as exact structural array-body slot assembly
-around M63 envelopes. It would add deterministic opaque pre/post slots for the
-exact `array.tsl:105-111` body evidence and a branch slot referencing the M63
-selected/no-body envelope, but it still would not answer semantic questions
-about declarations, arrays, direct intrinsics, SVE predicates, stores, returns,
-vector metadata, backend values, translation, or rendering.
+Milestone 64 is accepted as exact structural array-body slot assembly around
+M63 envelopes. It adds deterministic opaque pre/post slots for the exact
+`array.tsl:105-111` body evidence and a branch slot referencing the M63
+selected/no-body envelope, but it still leaves semantic questions about
+declarations, arrays, direct intrinsics, SVE predicates, stores, returns,
+vector metadata, backend values, translation, and rendering open.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1300,9 +1300,9 @@ beyond the selected base type query family, M55 size-byte value query,
 accepted M56 exact size-bytes-times-eight expression, accepted M57 exact
 size-byte equality predicates, branch-chain pruning beyond the accepted narrow
 M59 slice over those predicates, selected body handling beyond the accepted
-opaque M60 handoff, M61 assignment-form recognition slice, and accepted M62
-unresolved body-IR shape plus accepted M63 singleton envelope shape, selected
-body handling beyond the proposed M64 exact structural slot envelope, and other
+opaque M60 handoff, M61 assignment-form recognition slice, accepted M62
+unresolved body-IR shape, accepted M63 singleton envelope shape, accepted M64
+exact structural slot envelope, and other
 nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
 `algo`, Rust output, generated tests beyond the selected M49 source fixture,

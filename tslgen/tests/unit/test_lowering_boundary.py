@@ -18,6 +18,11 @@ from tslgen.domain.generation_rules import (
 from tslgen.domain.types import TypeGroup
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
 from tslgen.lowering import (
+    ExactArrayBodyEnvelopeIr,
+    ExactArrayBodyEnvelopeOpaqueSlot,
+    ExactArrayBodyEnvelopeSelectedSlot,
+    ExactArrayBodyEnvelopeSkeleton,
+    ExactArrayBodyEnvelopeSkeletonSlot,
     GenerationContext,
     GenerationExpressionRecognition,
     GenerationLoweringStage,
@@ -43,6 +48,7 @@ from tslgen.lowering import (
     TsilPrimitiveAttributeCondition,
     TsilReturnStatement,
     TsilTypeSignednessCondition,
+    assemble_exact_array_body_envelope,
     build_catalog_lowering_request,
     handoff_opaque_selected_branch_body,
     lower_candidates,
@@ -732,6 +738,33 @@ SIZE_BYTE_EQUALITY_PRIMITIVE_BY_LITERAL = {
     4: "lower_generation_size_byte_equals_4",
     8: "lower_generation_size_byte_equals_8",
 }
+ARRAY_BODY_SLOT_LABELS = (
+    "opaque_pre_branch_array_initialization",
+    "opaque_pre_branch_predicate_initialization",
+    "selected_body_envelope",
+    "opaque_post_branch_store_call",
+    "opaque_post_branch_return_emission",
+)
+ARRAY_BODY_OPAQUE_TEXT_BY_LABEL = {
+    "opaque_pre_branch_array_initialization": (
+        "var<typed>(array_type<type<generation>(base::in), "
+        "value<generation>(vector::length), "
+        "value<generation>(vector::alignment)>, tmp, "
+        "value<backend>(uninit::array))"
+    ),
+    "opaque_pre_branch_predicate_initialization": (
+        "svbool_t pg = intrin<svptrue_b8>();"
+    ),
+    "opaque_post_branch_store_call": "intrin<svst1>(pg, tmp.data(), a);",
+    "opaque_post_branch_return_emission": " emit_return(tmp) ;",
+}
+ARRAY_BODY_SLOT_LINE_BY_LABEL = {
+    "opaque_pre_branch_array_initialization": 105,
+    "opaque_pre_branch_predicate_initialization": 106,
+    "selected_body_envelope": 107,
+    "opaque_post_branch_store_call": 110,
+    "opaque_post_branch_return_emission": 111,
+}
 
 
 class LoweringBoundaryTests(unittest.TestCase):
@@ -783,6 +816,94 @@ class LoweringBoundaryTests(unittest.TestCase):
             opaque_rhs_text=rhs_text,
             direct_intrinsic_token_text=token_text,
             direct_intrinsic_argument_texts=(),
+        )
+
+    def selected_body_envelope(
+        self,
+        *,
+        selected_type_tag: str = "si16",
+        selected_literal: int = 2,
+        token_text: str = "svptrue_b16",
+        rhs_text: str = "intrin<svptrue_b16>()",
+        original_body_text: str = "pg = intrin<svptrue_b16>();",
+        candidate_id: str = "candidate-1",
+        branch_chain_id: str = "candidate-1:chain",
+    ) -> SelectedBodyEnvelopeIr:
+        body_ir = self.selected_body_ir(
+            selected_type_tag=selected_type_tag,
+            selected_literal=selected_literal,
+            token_text=token_text,
+            rhs_text=rhs_text,
+            original_body_text=original_body_text,
+        )
+        if candidate_id != "candidate-1" or branch_chain_id != "candidate-1:chain":
+            body_ir = replace(
+                body_ir,
+                candidate_id=candidate_id,
+                originating_branch_chain_id=branch_chain_id,
+            )
+        result = lower_selected_body_envelope(body_ir)
+        if not result.is_ok:
+            raise AssertionError(result.diagnostics)
+        envelope = result.unwrap()
+        assert isinstance(envelope, SelectedBodyEnvelopeIr)
+        return envelope
+
+    def no_selected_body_envelope(
+        self,
+        selected_type_tag: str = "si8",
+    ) -> NoSelectedBodyEnvelopeIr:
+        body_ir = NoSelectedAssignmentDirectIntrinsicBodyIr(
+            candidate_id="candidate-1",
+            selected_type_tag=selected_type_tag,
+            source_location=SourceLocation(Path("array.tsl"), 107, 15),
+            originating_branch_chain_id="candidate-1:chain",
+            attempted_literals=(2, 4, 8),
+        )
+        result = lower_selected_body_envelope(body_ir)
+        if not result.is_ok:
+            raise AssertionError(result.diagnostics)
+        envelope = result.unwrap()
+        assert isinstance(envelope, NoSelectedBodyEnvelopeIr)
+        return envelope
+
+    def exact_array_body_skeleton(
+        self,
+        *,
+        candidate_id: str = "candidate-1",
+        selected_type_tag: str = "si16",
+        branch_chain_id: str = "candidate-1:chain",
+        labels: tuple[str, ...] = ARRAY_BODY_SLOT_LABELS,
+        ordinals: tuple[int, ...] = (0, 1, 2, 3, 4),
+        exact: bool = True,
+    ) -> ExactArrayBodyEnvelopeSkeleton:
+        slots = tuple(
+            ExactArrayBodyEnvelopeSkeletonSlot(
+                label=label,  # type: ignore[arg-type]
+                ordinal=ordinal,
+                source_location=SourceLocation(
+                    Path("tsldata/primitives/load_store/array.tsl"),
+                    ARRAY_BODY_SLOT_LINE_BY_LABEL.get(label, 105),
+                    15,
+                ),
+                candidate_id=candidate_id,
+                selected_type_tag=selected_type_tag,
+                originating_branch_chain_id=branch_chain_id,
+                opaque_source_text=ARRAY_BODY_OPAQUE_TEXT_BY_LABEL.get(label),
+            )
+            for ordinal, label in zip(ordinals, labels, strict=True)
+        )
+        return ExactArrayBodyEnvelopeSkeleton(
+            candidate_id=candidate_id,
+            selected_type_tag=selected_type_tag,
+            source_location=SourceLocation(
+                Path("tsldata/primitives/load_store/array.tsl"),
+                105,
+                15,
+            ),
+            originating_branch_chain_id=branch_chain_id,
+            slots=slots,
+            is_exact_array_body_shape=exact,
         )
 
     def test_prepares_typed_lowering_inputs_from_selected_candidates(self) -> None:
@@ -3185,6 +3306,371 @@ class LoweringBoundaryTests(unittest.TestCase):
             column=15,
         )
         self.assertIn("empty argument list", result.diagnostics[0].message)
+
+    def test_exact_array_body_envelopes_assemble_selected_m63_slots(
+        self,
+    ) -> None:
+        cases = (
+            ("si16", 2, "svptrue_b16", "intrin<svptrue_b16>()"),
+            ("si32", 4, "svptrue_b32", "intrin<svptrue_b32>()"),
+            ("si64", 8, "svptrue_b64", "intrin<svptrue_b64>()"),
+        )
+
+        for type_tag, literal, token_text, rhs_text in cases:
+            with self.subTest(type_tag=type_tag):
+                envelope = self.selected_body_envelope(
+                    selected_type_tag=type_tag,
+                    selected_literal=literal,
+                    token_text=token_text,
+                    rhs_text=rhs_text,
+                    original_body_text=f"pg = {rhs_text};",
+                )
+                skeleton = self.exact_array_body_skeleton(
+                    selected_type_tag=type_tag,
+                )
+
+                result = assemble_exact_array_body_envelope(
+                    GenerationLoweringStage(
+                        stage="selected_body_envelope_lowering",
+                        output=envelope,
+                    ),
+                    skeleton,
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                array_envelope = result.unwrap()
+                assert isinstance(array_envelope, ExactArrayBodyEnvelopeIr)
+                self.assertEqual(array_envelope.candidate_id, "candidate-1")
+                self.assertEqual(array_envelope.selected_type_tag, type_tag)
+                self.assertEqual(
+                    array_envelope.originating_branch_chain_id,
+                    "candidate-1:chain",
+                )
+                self.assertEqual(
+                    tuple(slot.label for slot in array_envelope.slots),
+                    ARRAY_BODY_SLOT_LABELS,
+                )
+                self.assertEqual(
+                    tuple(slot.ordinal for slot in array_envelope.slots),
+                    (0, 1, 2, 3, 4),
+                )
+                selected_slot = array_envelope.selected_body_slot
+                self.assertIsInstance(
+                    selected_slot,
+                    ExactArrayBodyEnvelopeSelectedSlot,
+                )
+                self.assertIs(selected_slot.selected_body_envelope, envelope)
+                self.assertEqual(
+                    selected_slot.originating_branch_chain_id,
+                    envelope.originating_branch_chain_id,
+                )
+                self.assertEqual(
+                    envelope.entries[0].direct_intrinsic_token_text,
+                    token_text,
+                )
+                for slot in array_envelope.slots:
+                    self.assertEqual(slot.candidate_id, "candidate-1")
+                    self.assertEqual(slot.selected_type_tag, type_tag)
+                    self.assertEqual(
+                        slot.originating_branch_chain_id,
+                        "candidate-1:chain",
+                    )
+                    if isinstance(slot, ExactArrayBodyEnvelopeOpaqueSlot):
+                        self.assertEqual(
+                            slot.opaque_source_text,
+                            ARRAY_BODY_OPAQUE_TEXT_BY_LABEL[slot.label],
+                        )
+                        self.assertEqual(
+                            slot.source_location.line,
+                            ARRAY_BODY_SLOT_LINE_BY_LABEL[slot.label],
+                        )
+
+    def test_exact_array_body_envelope_carries_no_body_m63_without_synthesis(
+        self,
+    ) -> None:
+        for type_tag in ("si8", "ui8"):
+            with self.subTest(type_tag=type_tag):
+                envelope = self.no_selected_body_envelope(type_tag)
+                skeleton = self.exact_array_body_skeleton(
+                    selected_type_tag=type_tag,
+                )
+
+                result = assemble_exact_array_body_envelope(envelope, skeleton)
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                array_envelope = result.unwrap()
+                selected_slot = array_envelope.selected_body_slot
+                self.assertIs(selected_slot.selected_body_envelope, envelope)
+                self.assertIsInstance(
+                    selected_slot.selected_body_envelope,
+                    NoSelectedBodyEnvelopeIr,
+                )
+                self.assertEqual(envelope.entries, ())
+                self.assertFalse(hasattr(selected_slot, "opaque_source_text"))
+                self.assertEqual(
+                    tuple(
+                        slot.opaque_source_text
+                        for slot in array_envelope.slots
+                        if isinstance(slot, ExactArrayBodyEnvelopeOpaqueSlot)
+                    ),
+                    (
+                        ARRAY_BODY_OPAQUE_TEXT_BY_LABEL[
+                            "opaque_pre_branch_array_initialization"
+                        ],
+                        ARRAY_BODY_OPAQUE_TEXT_BY_LABEL[
+                            "opaque_pre_branch_predicate_initialization"
+                        ],
+                        ARRAY_BODY_OPAQUE_TEXT_BY_LABEL[
+                            "opaque_post_branch_store_call"
+                        ],
+                        ARRAY_BODY_OPAQUE_TEXT_BY_LABEL[
+                            "opaque_post_branch_return_emission"
+                        ],
+                    ),
+                )
+
+    def test_exact_array_body_envelope_no_body_assembly_is_deterministic(
+        self,
+    ) -> None:
+        for type_tag in ("si8", "ui8"):
+            with self.subTest(type_tag=type_tag):
+                envelope = self.no_selected_body_envelope(type_tag)
+                skeleton = self.exact_array_body_skeleton(
+                    selected_type_tag=type_tag,
+                )
+
+                first = assemble_exact_array_body_envelope(envelope, skeleton)
+                second = assemble_exact_array_body_envelope(envelope, skeleton)
+
+                self.assertTrue(first.is_ok, first.diagnostics)
+                self.assertTrue(second.is_ok, second.diagnostics)
+                first_envelope = first.unwrap()
+                second_envelope = second.unwrap()
+                self.assertEqual(first_envelope, second_envelope)
+                self.assertEqual(
+                    tuple(slot.label for slot in first_envelope.slots),
+                    ARRAY_BODY_SLOT_LABELS,
+                )
+                self.assertIs(
+                    first_envelope.selected_body_slot.selected_body_envelope,
+                    envelope,
+                )
+                self.assertIsInstance(
+                    first_envelope.selected_body_slot.selected_body_envelope,
+                    NoSelectedBodyEnvelopeIr,
+                )
+
+    def test_exact_array_body_envelope_preserves_literal_token_mismatch(
+        self,
+    ) -> None:
+        envelope = self.selected_body_envelope(
+            selected_type_tag="f64",
+            selected_literal=8,
+            token_text="svptrue_b16",
+            rhs_text="intrin<svptrue_b16>()",
+            original_body_text="pg = intrin<svptrue_b16>();",
+        )
+        skeleton = self.exact_array_body_skeleton(selected_type_tag="f64")
+
+        result = assemble_exact_array_body_envelope(envelope, skeleton)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        array_envelope = result.unwrap()
+        nested = array_envelope.selected_body_slot.selected_body_envelope
+        assert isinstance(nested, SelectedBodyEnvelopeIr)
+        self.assertIs(nested, envelope)
+        self.assertEqual(nested.entries[0].selected_literal, 8)
+        self.assertEqual(nested.entries[0].direct_intrinsic_token_text, "svptrue_b16")
+
+    def test_exact_array_body_envelope_slot_assembly_is_deterministic(
+        self,
+    ) -> None:
+        envelope = self.selected_body_envelope()
+        skeleton = self.exact_array_body_skeleton()
+
+        first = assemble_exact_array_body_envelope(envelope, skeleton)
+        second = assemble_exact_array_body_envelope(envelope, skeleton)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+        self.assertEqual(
+            GenerationLoweringStage(
+                stage="array_body_envelope_slot_assembly",
+                output=first.unwrap(),
+            ).output,
+            first.unwrap(),
+        )
+
+    def test_exact_array_body_envelope_rejects_unsupported_source_stage(
+        self,
+    ) -> None:
+        body_ir = self.selected_body_ir()
+        stage = GenerationLoweringStage(
+            stage="selected_body_ir_lowering",
+            output=body_ir,
+        )
+
+        result = assemble_exact_array_body_envelope(
+            stage,
+            self.exact_array_body_skeleton(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-BODY-ENVELOPE-SOURCE-UNSUPPORTED",
+            severity="error",
+            path="array.tsl",
+            line=107,
+            column=15,
+        )
+        self.assertIn("M63", result.diagnostics[0].message)
+
+    def test_exact_array_body_envelope_rejects_invalid_skeleton_shapes(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "missing",
+                ARRAY_BODY_SLOT_LABELS[:-1],
+                (0, 1, 2, 3),
+                "TSL-LOWER-ARRAY-BODY-ENVELOPE-SHAPE-UNSUPPORTED",
+            ),
+            (
+                "duplicate",
+                (
+                    "opaque_pre_branch_array_initialization",
+                    "opaque_pre_branch_predicate_initialization",
+                    "selected_body_envelope",
+                    "opaque_post_branch_store_call",
+                    "opaque_post_branch_store_call",
+                ),
+                (0, 1, 2, 3, 4),
+                "TSL-LOWER-ARRAY-BODY-ENVELOPE-SHAPE-UNSUPPORTED",
+            ),
+            (
+                "duplicate_selected_body_slot",
+                (
+                    "opaque_pre_branch_array_initialization",
+                    "opaque_pre_branch_predicate_initialization",
+                    "selected_body_envelope",
+                    "selected_body_envelope",
+                    "opaque_post_branch_return_emission",
+                ),
+                (0, 1, 2, 3, 4),
+                "TSL-LOWER-ARRAY-BODY-ENVELOPE-SHAPE-UNSUPPORTED",
+            ),
+            (
+                "extra",
+                (
+                    *ARRAY_BODY_SLOT_LABELS,
+                    "opaque_post_branch_return_emission",
+                ),
+                (0, 1, 2, 3, 4, 5),
+                "TSL-LOWER-ARRAY-BODY-ENVELOPE-SHAPE-UNSUPPORTED",
+            ),
+            (
+                "reordered",
+                (
+                    "opaque_pre_branch_predicate_initialization",
+                    "opaque_pre_branch_array_initialization",
+                    "selected_body_envelope",
+                    "opaque_post_branch_store_call",
+                    "opaque_post_branch_return_emission",
+                ),
+                (0, 1, 2, 3, 4),
+                "TSL-LOWER-ARRAY-BODY-ENVELOPE-SLOT-ORDER",
+            ),
+            (
+                "wrong_ordinal",
+                ARRAY_BODY_SLOT_LABELS,
+                (0, 1, 3, 2, 4),
+                "TSL-LOWER-ARRAY-BODY-ENVELOPE-SLOT-ORDER",
+            ),
+        )
+        envelope = self.selected_body_envelope()
+
+        for name, labels, ordinals, code in cases:
+            with self.subTest(name=name):
+                skeleton = self.exact_array_body_skeleton(
+                    labels=labels,
+                    ordinals=ordinals,
+                )
+
+                result = assemble_exact_array_body_envelope(envelope, skeleton)
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                    path="tsldata/primitives/load_store/array.tsl",
+                    line=105,
+                    column=15,
+                )
+                if name == "duplicate_selected_body_slot":
+                    self.assertIn(
+                        "exactly one of each M64 slot label",
+                        result.diagnostics[0].message,
+                    )
+
+    def test_exact_array_body_envelope_rejects_non_exact_skeleton(
+        self,
+    ) -> None:
+        envelope = self.selected_body_envelope()
+        skeleton = self.exact_array_body_skeleton(exact=False)
+
+        result = assemble_exact_array_body_envelope(envelope, skeleton)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-BODY-ENVELOPE-SHAPE-UNSUPPORTED",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+            column=15,
+        )
+        self.assertIn("exact", result.diagnostics[0].message)
+
+    def test_exact_array_body_envelope_reports_provenance_mismatch(
+        self,
+    ) -> None:
+        cases = (
+            ("other-candidate", "si16", "candidate-1:chain"),
+            ("candidate-1", "ui16", "candidate-1:chain"),
+            ("candidate-1", "si16", "other-chain"),
+        )
+        envelope = self.selected_body_envelope()
+
+        for candidate_id, selected_type_tag, branch_chain_id in cases:
+            with self.subTest(
+                candidate_id=candidate_id,
+                selected_type_tag=selected_type_tag,
+                branch_chain_id=branch_chain_id,
+            ):
+                skeleton = self.exact_array_body_skeleton(
+                    candidate_id=candidate_id,
+                    selected_type_tag=selected_type_tag,
+                    branch_chain_id=branch_chain_id,
+                )
+
+                result = assemble_exact_array_body_envelope(envelope, skeleton)
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code="TSL-LOWER-ARRAY-BODY-ENVELOPE-PROVENANCE-MISMATCH",
+                    severity="error",
+                    path="tsldata/primitives/load_store/array.tsl",
+                    line=105,
+                    column=15,
+                )
 
     def test_opaque_handoff_rejects_unsupported_source_stage(self) -> None:
         statement = TsilReturnStatement(

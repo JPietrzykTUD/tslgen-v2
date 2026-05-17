@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 63 is accepted.
+Milestone 64 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -137,40 +137,44 @@ review returned `Accept With Follow-Ups` after local planning-doc updates.
 Post-M63 planning is accepted. It selected
 `Milestone 64: Exact Array Body Envelope Slot Assembly Slice`.
 
+The M64 execution-review loop returned `Accept With Follow-Ups` after one
+focused revision.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 64.
+Plan the next milestone after M64.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m64-execution-review-loop-prompt.md
+docs/agent/runs/post-m64-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 64: Exact Array Body Envelope Slot Assembly Slice
+None. The next task is post-M64 planning.
 ```
 
 Latest review verdict:
 
 ```text
-The post-M63 planning review returned Accept With Follow-Ups after local
-planning-doc updates. Follow-up: M62's unsupported-source diagnostic test still
-asserts code/severity but not location/message text.
+The M64 execution-review loop returned Accept With Follow-Ups after one
+focused revision. Blocking test-coverage and stale-doc wording findings were
+resolved before acceptance.
 ```
 
 Next expected action:
 
 ```text
-Run the active M64 execution-review loop prompt. Use the specified single
-write-capable executor followed by read-only review/audit subagents. Do not
-start M65.
+Run the active post-M64 planning-plus-review prompt. Focus the next milestone
+on lowering. Use the specified read-only planning/review/audit subagents and
+do not implement code unless that active prompt explicitly selects an executor
+task. Do not start M65 execution.
 ```
 
 Accepted planning prompt:
@@ -455,10 +459,16 @@ Accepted post-M63 acceptance finalization prompt:
 docs/agent/runs/post-m63-acceptance-finalization-prompt.md
 ```
 
-Active M64 execution-review loop prompt:
+Accepted M64 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m64-execution-review-loop-prompt.md
+```
+
+Active post-M64 planning prompt:
+
+```text
+docs/agent/runs/post-m64-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1409,10 +1419,27 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   text for the unsupported M62 source/boundary diagnostic. The current test
   asserts diagnostic code and severity, and validation found this
   non-blocking.
+- M64 boundary follow-up: a future skeleton-producing slice should clearly own
+  the proof that an in-memory typed exact array-body skeleton corresponds to
+  `tsldata/primitives/load_store/array.tsl:105-111`; M64 accepts typed
+  skeleton input and does not broadly parse TSIL.
+- M64 extensibility follow-up: decide in a later pipeline-integration slice
+  whether `lower_candidates` should populate `array_body_envelopes` and append
+  the `array_body_envelope_slot_assembly` stage automatically. M64 provides
+  the typed value/stage boundary and direct assembly API.
+- M64 extensibility follow-up: future slot-specific lowerers should consume the
+  enclosing `ExactArrayBodyEnvelopeIr`, not standalone slots, and must keep
+  `opaque_source_text` as provenance rather than a raw-text dispatcher.
+- M64 validation follow-up: consider tightening message assertions for more
+  invalid-skeleton diagnostics. The focused revision added direct duplicate
+  `selected_body_envelope` slot message coverage.
+- M64 evidence follow-up: consider adding a small fixture comment tying the
+  inlined opaque array-body test snippets to
+  `tsldata/primitives/load_store/array.tsl:105-111`.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with M64 execution.
+No stop condition is active. The workflow proceeds with post-M64 planning.
 
 ## Validation Expectations
 

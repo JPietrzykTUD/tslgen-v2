@@ -491,7 +491,7 @@ statements, lower direct-intrinsic semantics, infer SVE predicate meaning,
 map byte sizes to intrinsic tokens, add vector length/alignment semantics,
 feed backend translation or rendering, or emit generated output.
 
-Milestone 64 is selected as the next structural lowering boundary. It consumes
+Milestone 64 is accepted as the structural lowering boundary. It consumes
 accepted typed M63 `selected_body_envelope_lowering` outputs and assembles the
 exact ordered array-body shape evidenced by
 `tsldata/primitives/load_store/array.tsl:105-111` into a deterministic typed
@@ -520,7 +520,7 @@ M63 diagnostics:
 - `TSL-LOWER-SELECTED-BODY-ENVELOPE-SOURCE-UNSUPPORTED`
 - `TSL-LOWER-SELECTED-BODY-ENVELOPE-INCONSISTENT`
 
-Planned M64 diagnostics:
+M64 diagnostics:
 
 - `TSL-LOWER-ARRAY-BODY-ENVELOPE-SOURCE-UNSUPPORTED`
 - `TSL-LOWER-ARRAY-BODY-ENVELOPE-SHAPE-UNSUPPORTED`
@@ -529,8 +529,8 @@ Planned M64 diagnostics:
 
 ## Explicit Deferrals
 
-Deferred beyond the implemented M43-M63 semantic-lowering slices and selected
-M64 structural slot-assembly boundary:
+Deferred beyond the implemented M43-M64 semantic-lowering and structural
+slot-assembly slices:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -546,7 +546,7 @@ M64 structural slot-assembly boundary:
   branch chain; M60 adds only opaque selected-body handoff, M61 adds only
   exact selected assignment-form recognition, M62 adds only unresolved typed
   body IR for that recognized form, and M63 adds only a backend-neutral
-  envelope/sequence boundary over those M62 typed values. Selected M64 adds
+  envelope/sequence boundary over those M62 typed values. Accepted M64 adds
   only exact structural array-body slot assembly around M63 envelopes. General
   `else if<generation>` syntax, final-else policy, broad branch pruning based
   on generation values, assignment semantics beyond that selected IR shape,

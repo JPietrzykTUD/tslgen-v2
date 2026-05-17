@@ -449,7 +449,7 @@ deterministic typed sequence. For M63, the selected sequence is exact and
 singleton. M63 must not parse surrounding SVE-looking statements from the array
 corpus, lower direct-intrinsic/SVE semantics, introduce backend translation or
 renderer-ready IR, emit generated output, or broaden TSIL body lowering.
-Post-M63 planning selects Milestone 64 as the next Stage 8 boundary: it
+Milestone 64 is accepted as the next Stage 8 boundary: it
 consumes typed M63 selected-body envelopes and assembles only the exact
 `array.tsl:105-111` structural skeleton into a deterministic ordered slot
 envelope. The surrounding pre/post slots are opaque provenance slots, and the

@@ -2,6 +2,11 @@
 
 from tslgen.lowering.boundary import (
     ClassifiedPayload,
+    ExactArrayBodyEnvelopeIr,
+    ExactArrayBodyEnvelopeOpaqueSlot,
+    ExactArrayBodyEnvelopeSelectedSlot,
+    ExactArrayBodyEnvelopeSkeleton,
+    ExactArrayBodyEnvelopeSkeletonSlot,
     GenerationContext,
     GenerationExpressionRecognition,
     GenerationLoweringStage,
@@ -31,6 +36,7 @@ from tslgen.lowering.boundary import (
     TsilPrimitiveAttributeCondition,
     TsilReturnStatement,
     TsilTypeSignednessCondition,
+    assemble_exact_array_body_envelope,
     build_catalog_lowering_request,
     handoff_opaque_selected_branch_body,
     lower_candidates,
@@ -52,6 +58,11 @@ from tslgen.lowering.translations import (
 
 __all__ = [
     "ClassifiedPayload",
+    "ExactArrayBodyEnvelopeIr",
+    "ExactArrayBodyEnvelopeOpaqueSlot",
+    "ExactArrayBodyEnvelopeSelectedSlot",
+    "ExactArrayBodyEnvelopeSkeleton",
+    "ExactArrayBodyEnvelopeSkeletonSlot",
     "GenerationContext",
     "GenerationExpressionRecognition",
     "GenerationLoweringStage",
@@ -86,6 +97,7 @@ __all__ = [
     "BackendTypeSpelling",
     "BackendTypeSpellingRequest",
     "TranslatedIntrinsicCall",
+    "assemble_exact_array_body_envelope",
     "build_catalog_lowering_request",
     "handoff_opaque_selected_branch_body",
     "lower_candidates",

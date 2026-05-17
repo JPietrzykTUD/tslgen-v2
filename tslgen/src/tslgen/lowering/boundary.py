@@ -54,6 +54,7 @@ type GenerationLoweringStageName = Literal[
     "selected_body_form_recognition",
     "selected_body_ir_lowering",
     "selected_body_envelope_lowering",
+    "array_body_envelope_slot_assembly",
 ]
 type GenerationSelectedBranchBodyHandoff = (
     OpaqueSelectedBranchBodyHandoff | NoSelectedBranchBodyHandoff
@@ -67,6 +68,16 @@ type GenerationSelectedBranchBodyIr = (
 )
 type GenerationSelectedBodyEnvelopeIr = (
     SelectedBodyEnvelopeIr | NoSelectedBodyEnvelopeIr
+)
+type ExactArrayBodyEnvelopeSlotLabel = Literal[
+    "opaque_pre_branch_array_initialization",
+    "opaque_pre_branch_predicate_initialization",
+    "selected_body_envelope",
+    "opaque_post_branch_store_call",
+    "opaque_post_branch_return_emission",
+]
+type ExactArrayBodyEnvelopeSlot = (
+    ExactArrayBodyEnvelopeOpaqueSlot | ExactArrayBodyEnvelopeSelectedSlot
 )
 type TsilBinaryOperator = Literal["+"]
 type TsilExpression = (
@@ -87,7 +98,27 @@ type GenerationLoweringStageOutput = (
     | NoSelectedAssignmentDirectIntrinsicBodyIr
     | SelectedBodyEnvelopeIr
     | NoSelectedBodyEnvelopeIr
+    | ExactArrayBodyEnvelopeIr
     | TsilStatement
+)
+
+_EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS: tuple[
+    ExactArrayBodyEnvelopeSlotLabel, ...
+] = (
+    "opaque_pre_branch_array_initialization",
+    "opaque_pre_branch_predicate_initialization",
+    "selected_body_envelope",
+    "opaque_post_branch_store_call",
+    "opaque_post_branch_return_emission",
+)
+_EXACT_ARRAY_BODY_ENVELOPE_SLOT_ORDINALS = tuple(
+    range(len(_EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS))
+)
+_EXACT_ARRAY_BODY_ENVELOPE_OPAQUE_SLOT_LABELS = (
+    "opaque_pre_branch_array_initialization",
+    "opaque_pre_branch_predicate_initialization",
+    "opaque_post_branch_store_call",
+    "opaque_post_branch_return_emission",
 )
 
 _GENERATION_CONDITION_MARKER = "if<generation>"
@@ -896,6 +927,235 @@ class NoSelectedBodyEnvelopeIr:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactArrayBodyEnvelopeSkeletonSlot:
+    label: ExactArrayBodyEnvelopeSlotLabel
+    ordinal: int
+    source_location: SourceLocation
+    candidate_id: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+    opaque_source_text: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.label not in _EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS:
+            raise ValueError("array-body envelope skeleton slot label is unsupported")
+        if isinstance(self.ordinal, bool) or not isinstance(self.ordinal, int):
+            raise ValueError("array-body envelope skeleton slot ordinal must be an int")
+        if self.source_location is None:
+            raise ValueError("array-body envelope skeleton slot requires source location")
+        if not self.candidate_id:
+            raise ValueError("array-body envelope skeleton slot candidate id must be non-empty")
+        if not self.selected_type_tag:
+            raise ValueError("array-body envelope skeleton slot type tag must be non-empty")
+        if not self.originating_branch_chain_id:
+            raise ValueError(
+                "array-body envelope skeleton slot branch-chain id must be non-empty"
+            )
+        if (
+            self.label in _EXACT_ARRAY_BODY_ENVELOPE_OPAQUE_SLOT_LABELS
+            and not (self.opaque_source_text or "").strip()
+        ):
+            raise ValueError(
+                "array-body envelope opaque skeleton slots require source text"
+            )
+        if self.label == "selected_body_envelope" and self.opaque_source_text is not None:
+            raise ValueError(
+                "array-body envelope selected skeleton slot must not carry body text"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_body_envelope_skeleton_slot",
+            self.label,
+            self.ordinal,
+            self.source_location.sort_key(),
+            self.candidate_id,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+            self.opaque_source_text or "",
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ExactArrayBodyEnvelopeSkeleton:
+    candidate_id: str
+    selected_type_tag: str
+    source_location: SourceLocation
+    originating_branch_chain_id: str
+    slots: tuple[ExactArrayBodyEnvelopeSkeletonSlot, ...]
+    is_exact_array_body_shape: bool = True
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id:
+            raise ValueError("array-body envelope skeleton candidate id must be non-empty")
+        if not self.selected_type_tag:
+            raise ValueError("array-body envelope skeleton type tag must be non-empty")
+        if self.source_location is None:
+            raise ValueError("array-body envelope skeleton requires source location")
+        if not self.originating_branch_chain_id:
+            raise ValueError(
+                "array-body envelope skeleton branch-chain id must be non-empty"
+            )
+        object.__setattr__(self, "slots", tuple(self.slots))
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_body_envelope_skeleton",
+            self.candidate_id,
+            self.selected_type_tag,
+            self.source_location.sort_key(),
+            self.originating_branch_chain_id,
+            tuple(slot.key for slot in self.slots),
+            self.is_exact_array_body_shape,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ExactArrayBodyEnvelopeOpaqueSlot:
+    label: ExactArrayBodyEnvelopeSlotLabel
+    ordinal: int
+    opaque_source_text: str
+    source_location: SourceLocation
+    candidate_id: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+
+    def __post_init__(self) -> None:
+        if self.label not in _EXACT_ARRAY_BODY_ENVELOPE_OPAQUE_SLOT_LABELS:
+            raise ValueError("array-body envelope opaque slot label is unsupported")
+        if self.ordinal not in _EXACT_ARRAY_BODY_ENVELOPE_SLOT_ORDINALS:
+            raise ValueError("array-body envelope slot ordinal is unsupported")
+        if not self.opaque_source_text.strip():
+            raise ValueError("array-body envelope opaque slot text must be non-empty")
+        if self.source_location is None:
+            raise ValueError("array-body envelope opaque slot requires source location")
+        if not self.candidate_id:
+            raise ValueError("array-body envelope opaque slot candidate id must be non-empty")
+        if not self.selected_type_tag:
+            raise ValueError("array-body envelope opaque slot type tag must be non-empty")
+        if not self.originating_branch_chain_id:
+            raise ValueError(
+                "array-body envelope opaque slot branch-chain id must be non-empty"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_body_envelope_opaque_slot",
+            self.label,
+            self.ordinal,
+            self.opaque_source_text,
+            self.source_location.sort_key(),
+            self.candidate_id,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ExactArrayBodyEnvelopeSelectedSlot:
+    label: Literal["selected_body_envelope"]
+    ordinal: int
+    selected_body_envelope: GenerationSelectedBodyEnvelopeIr
+    source_location: SourceLocation
+    candidate_id: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+
+    def __post_init__(self) -> None:
+        if self.label != "selected_body_envelope":
+            raise ValueError(
+                "array-body envelope selected slot label must be selected_body_envelope"
+            )
+        if self.ordinal not in _EXACT_ARRAY_BODY_ENVELOPE_SLOT_ORDINALS:
+            raise ValueError("array-body envelope selected slot ordinal is unsupported")
+        if not isinstance(
+            self.selected_body_envelope,
+            (SelectedBodyEnvelopeIr, NoSelectedBodyEnvelopeIr),
+        ):
+            raise TypeError("array-body envelope selected slot requires M63 envelope")
+        if self.source_location is None:
+            raise ValueError("array-body envelope selected slot requires source location")
+        if (
+            self.candidate_id != self.selected_body_envelope.candidate_id
+            or self.selected_type_tag
+            != self.selected_body_envelope.selected_type_tag
+            or self.originating_branch_chain_id
+            != self.selected_body_envelope.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "array-body envelope selected slot provenance must match M63 envelope"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_body_envelope_selected_slot",
+            self.label,
+            self.ordinal,
+            self.selected_body_envelope.key,
+            self.source_location.sort_key(),
+            self.candidate_id,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ExactArrayBodyEnvelopeIr:
+    candidate_id: str
+    selected_type_tag: str
+    source_location: SourceLocation
+    originating_branch_chain_id: str
+    slots: tuple[ExactArrayBodyEnvelopeSlot, ...]
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id:
+            raise ValueError("array-body envelope candidate id must be non-empty")
+        if not self.selected_type_tag:
+            raise ValueError("array-body envelope type tag must be non-empty")
+        if self.source_location is None:
+            raise ValueError("array-body envelope requires source location")
+        if not self.originating_branch_chain_id:
+            raise ValueError("array-body envelope branch-chain id must be non-empty")
+        object.__setattr__(self, "slots", tuple(self.slots))
+        if tuple(slot.label for slot in self.slots) != _EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS:
+            raise ValueError("array-body envelope slots must use the exact M64 order")
+        if tuple(slot.ordinal for slot in self.slots) != _EXACT_ARRAY_BODY_ENVELOPE_SLOT_ORDINALS:
+            raise ValueError("array-body envelope slot ordinals must be exact")
+        for slot in self.slots:
+            if (
+                slot.candidate_id != self.candidate_id
+                or slot.selected_type_tag != self.selected_type_tag
+                or slot.originating_branch_chain_id
+                != self.originating_branch_chain_id
+            ):
+                raise ValueError(
+                    "array-body envelope slot provenance must match envelope"
+                )
+
+    @property
+    def selected_body_slot(self) -> ExactArrayBodyEnvelopeSelectedSlot:
+        slot = self.slots[2]
+        if not isinstance(slot, ExactArrayBodyEnvelopeSelectedSlot):
+            raise AssertionError("M64 selected-body slot invariant was violated")
+        return slot
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_body_envelope_ir",
+            self.candidate_id,
+            self.selected_type_tag,
+            self.source_location.sort_key(),
+            self.originating_branch_chain_id,
+            tuple(slot.key for slot in self.slots),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class PrunedGenerationBranch:
     condition: TsilGenerationCondition
     selected_branch: GenerationBranchChoice
@@ -1029,6 +1289,8 @@ class GenerationLoweringStage:
                 SelectedBodyEnvelopeIr,
                 NoSelectedBodyEnvelopeIr,
             )
+        elif self.stage == "array_body_envelope_slot_assembly":
+            expected = (ExactArrayBodyEnvelopeIr,)
         else:
             raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
         if not isinstance(self.output, expected):
@@ -1058,6 +1320,7 @@ class LoweredImplementation:
     ] = ()
     selected_branch_body_irs: tuple[GenerationSelectedBranchBodyIr, ...] = ()
     selected_body_envelopes: tuple[GenerationSelectedBodyEnvelopeIr, ...] = ()
+    array_body_envelopes: tuple[ExactArrayBodyEnvelopeIr, ...] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -1111,6 +1374,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "array_body_envelopes",
+            tuple(self.array_body_envelopes),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -1132,6 +1400,7 @@ class LoweredImplementation:
             ),
             tuple(body_ir.key for body_ir in self.selected_branch_body_irs),
             tuple(envelope.key for envelope in self.selected_body_envelopes),
+            tuple(envelope.key for envelope in self.array_body_envelopes),
             tuple(stage.key for stage in self.generation_stages),
         )
 
@@ -1448,6 +1717,78 @@ def lower_selected_body_envelope(
         )
 
 
+def assemble_exact_array_body_envelope(
+    source: GenerationSelectedBodyEnvelopeIr | GenerationLoweringStage,
+    skeleton: ExactArrayBodyEnvelopeSkeleton,
+) -> Result[ExactArrayBodyEnvelopeIr]:
+    envelope_result = _array_body_envelope_m63_source(source)
+    if not envelope_result.is_ok:
+        return Result.failure(envelope_result.diagnostics)
+
+    envelope = envelope_result.unwrap()
+    skeleton_diagnostic = _validate_exact_array_body_envelope_skeleton(
+        skeleton,
+        envelope,
+    )
+    if skeleton_diagnostic is not None:
+        return Result.failure((skeleton_diagnostic,))
+
+    slots: list[ExactArrayBodyEnvelopeSlot] = []
+    for skeleton_slot in skeleton.slots:
+        if skeleton_slot.label == "selected_body_envelope":
+            slots.append(
+                ExactArrayBodyEnvelopeSelectedSlot(
+                    label="selected_body_envelope",
+                    ordinal=skeleton_slot.ordinal,
+                    selected_body_envelope=envelope,
+                    source_location=skeleton_slot.source_location,
+                    candidate_id=skeleton_slot.candidate_id,
+                    selected_type_tag=skeleton_slot.selected_type_tag,
+                    originating_branch_chain_id=(
+                        skeleton_slot.originating_branch_chain_id
+                    ),
+                )
+            )
+            continue
+
+        opaque_source_text = skeleton_slot.opaque_source_text
+        if opaque_source_text is None:
+            raise AssertionError("M64 opaque slot text was validated above")
+        slots.append(
+            ExactArrayBodyEnvelopeOpaqueSlot(
+                label=skeleton_slot.label,
+                ordinal=skeleton_slot.ordinal,
+                opaque_source_text=opaque_source_text,
+                source_location=skeleton_slot.source_location,
+                candidate_id=skeleton_slot.candidate_id,
+                selected_type_tag=skeleton_slot.selected_type_tag,
+                originating_branch_chain_id=(
+                    skeleton_slot.originating_branch_chain_id
+                ),
+            )
+        )
+
+    try:
+        return Result.ok(
+            ExactArrayBodyEnvelopeIr(
+                candidate_id=skeleton.candidate_id,
+                selected_type_tag=skeleton.selected_type_tag,
+                source_location=skeleton.source_location,
+                originating_branch_chain_id=skeleton.originating_branch_chain_id,
+                slots=tuple(slots),
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        return Result.failure(
+            (
+                _array_body_envelope_shape_unsupported_diagnostic(
+                    str(exc),
+                    skeleton.source_location,
+                ),
+            )
+        )
+
+
 def resolve_generation_type_query(
     query_text: str,
     context: GenerationContext | None = None,
@@ -1624,6 +1965,15 @@ def _selected_body_envelope_stage(
     )
 
 
+def _array_body_envelope_slot_assembly_stage(
+    output: ExactArrayBodyEnvelopeIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="array_body_envelope_slot_assembly",
+        output=output,
+    )
+
+
 def _stage_output_location(
     output: GenerationLoweringStageOutput,
 ) -> SourceLocation | None:
@@ -1647,6 +1997,7 @@ def _stage_output_location(
             NoSelectedAssignmentDirectIntrinsicBodyIr,
             SelectedBodyEnvelopeIr,
             NoSelectedBodyEnvelopeIr,
+            ExactArrayBodyEnvelopeIr,
         ),
     ):
         return output.source_location
@@ -1771,6 +2122,163 @@ def _selected_body_envelope_source(
                 location=location,
             ),
         )
+    )
+
+
+def _array_body_envelope_m63_source(
+    source: GenerationSelectedBodyEnvelopeIr | GenerationLoweringStage,
+) -> Result[GenerationSelectedBodyEnvelopeIr]:
+    if isinstance(source, (SelectedBodyEnvelopeIr, NoSelectedBodyEnvelopeIr)):
+        return Result.ok(source)
+    if isinstance(source, GenerationLoweringStage):
+        if (
+            source.stage == "selected_body_envelope_lowering"
+            and isinstance(source.output, (SelectedBodyEnvelopeIr, NoSelectedBodyEnvelopeIr))
+        ):
+            return Result.ok(source.output)
+        location = _stage_output_location(source.output)
+    else:
+        location = None
+    return Result.failure(
+        (
+            Diagnostic.error(
+                "TSL-LOWER-ARRAY-BODY-ENVELOPE-SOURCE-UNSUPPORTED",
+                "array-body envelope slot assembly consumes only typed M63 "
+                "SelectedBodyEnvelopeIr or NoSelectedBodyEnvelopeIr values, "
+                "or the selected_body_envelope_lowering stage output "
+                "containing one of those M63 values",
+                location=location,
+            ),
+        )
+    )
+
+
+def _validate_exact_array_body_envelope_skeleton(
+    skeleton: ExactArrayBodyEnvelopeSkeleton,
+    envelope: GenerationSelectedBodyEnvelopeIr,
+) -> Diagnostic | None:
+    if not skeleton.is_exact_array_body_shape:
+        return _array_body_envelope_shape_unsupported_diagnostic(
+            "array-body envelope slot assembly supports only the exact "
+            "array.tsl:105-111 structural skeleton",
+            skeleton.source_location,
+        )
+
+    slots = skeleton.slots
+    if len(slots) != len(_EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS):
+        return _array_body_envelope_shape_unsupported_diagnostic(
+            "array-body envelope slot assembly requires exactly five slots; "
+            f"got {len(slots)}",
+            skeleton.source_location,
+        )
+
+    labels = tuple(slot.label for slot in slots)
+    if labels != _EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS:
+        if _has_exact_array_body_labels_once(labels):
+            return Diagnostic.error(
+                "TSL-LOWER-ARRAY-BODY-ENVELOPE-SLOT-ORDER",
+                "array-body envelope slots must appear in the exact M64 "
+                f"order {_EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS!r}; got "
+                f"{labels!r}",
+                location=skeleton.source_location,
+            )
+        return _array_body_envelope_shape_unsupported_diagnostic(
+            "array-body envelope slot assembly requires exactly one of each "
+            f"M64 slot label {_EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS!r}; got "
+            f"{labels!r}",
+            skeleton.source_location,
+        )
+
+    ordinals = tuple(slot.ordinal for slot in slots)
+    if ordinals != _EXACT_ARRAY_BODY_ENVELOPE_SLOT_ORDINALS:
+        return Diagnostic.error(
+            "TSL-LOWER-ARRAY-BODY-ENVELOPE-SLOT-ORDER",
+            "array-body envelope slot ordinals must be deterministic and "
+            f"ordered as {_EXACT_ARRAY_BODY_ENVELOPE_SLOT_ORDINALS!r}; got "
+            f"{ordinals!r}",
+            location=skeleton.source_location,
+        )
+
+    for slot in slots:
+        if (
+            slot.candidate_id != skeleton.candidate_id
+            or slot.selected_type_tag != skeleton.selected_type_tag
+            or slot.originating_branch_chain_id
+            != skeleton.originating_branch_chain_id
+        ):
+            return Diagnostic.error(
+                "TSL-LOWER-ARRAY-BODY-ENVELOPE-PROVENANCE-MISMATCH",
+                "array-body envelope skeleton slot provenance must match "
+                "the skeleton candidate, selected type tag, and branch-chain "
+                "identity",
+                location=slot.source_location,
+            )
+        if (
+            slot.label in _EXACT_ARRAY_BODY_ENVELOPE_OPAQUE_SLOT_LABELS
+            and not (slot.opaque_source_text or "").strip()
+        ):
+            return _array_body_envelope_shape_unsupported_diagnostic(
+                "array-body envelope opaque slots must preserve opaque source text",
+                slot.source_location,
+            )
+        if slot.label == "selected_body_envelope" and slot.opaque_source_text is not None:
+            return _array_body_envelope_shape_unsupported_diagnostic(
+                "array-body envelope selected-body slot must reference the "
+                "M63 envelope without carrying selected branch text",
+                slot.source_location,
+            )
+
+    if (
+        skeleton.candidate_id != envelope.candidate_id
+        or skeleton.selected_type_tag != envelope.selected_type_tag
+        or skeleton.originating_branch_chain_id
+        != envelope.originating_branch_chain_id
+    ):
+        return Diagnostic.error(
+            "TSL-LOWER-ARRAY-BODY-ENVELOPE-PROVENANCE-MISMATCH",
+            "array-body envelope skeleton provenance must match the nested "
+            "M63 envelope candidate id, selected type tag, and branch-chain "
+            "identity",
+            location=skeleton.source_location,
+        )
+
+    selected_slot = slots[2]
+    if (
+        selected_slot.candidate_id != envelope.candidate_id
+        or selected_slot.selected_type_tag != envelope.selected_type_tag
+        or selected_slot.originating_branch_chain_id
+        != envelope.originating_branch_chain_id
+    ):
+        return Diagnostic.error(
+            "TSL-LOWER-ARRAY-BODY-ENVELOPE-PROVENANCE-MISMATCH",
+            "array-body envelope selected slot provenance must match the "
+            "nested M63 envelope candidate id, selected type tag, and "
+            "branch-chain identity",
+            location=selected_slot.source_location,
+        )
+
+    return None
+
+
+def _has_exact_array_body_labels_once(
+    labels: tuple[ExactArrayBodyEnvelopeSlotLabel, ...],
+) -> bool:
+    if len(labels) != len(_EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS):
+        return False
+    return all(
+        labels.count(expected) == 1
+        for expected in _EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS
+    )
+
+
+def _array_body_envelope_shape_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-BODY-ENVELOPE-SHAPE-UNSUPPORTED",
+        detail,
+        location=location,
     )
 
 

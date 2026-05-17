@@ -413,7 +413,7 @@ Current roadmap note:
   direct-intrinsic/SVE semantics, surrounding array/declaration/store/return
   lowering, backend translation, rendering, generated output, or broad TSIL
   parsing.
-- Post-M63 planning selects Milestone 64 as an exact structural
+- Milestone 64 is accepted as an exact structural
   array-body slot-envelope boundary over M63 typed selected-body envelopes.
   M64 introduces deterministic ordered opaque slots around the M63 branch slot
   for the exact `array.tsl:105-111` body evidence. It is a whole-body

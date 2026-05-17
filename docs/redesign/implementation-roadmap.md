@@ -6285,7 +6285,7 @@ Candidate comparison:
 
 | Candidate | Why considered | Boundary risk | Decision |
 | --- | --- | --- | --- |
-| Exact array body envelope slot assembly | M63 now supplies a typed selected-body envelope, but the accepted corpus evidence places that branch inside a larger ordered array body. A structural slot envelope gives future body-lowering slices named attachment points without interpreting those slots yet. | Medium if framed as exact opaque slot assembly over M63; very high if it becomes broad TSIL parsing, SVE array lowering, store/return semantics, or backend/rendering input. | Select as M64. |
+| Exact array body envelope slot assembly | M63 now supplies a typed selected-body envelope, but the accepted corpus evidence places that branch inside a larger ordered array body. A structural slot envelope gives future body-lowering slices named attachment points without interpreting those slots yet. | Medium if framed as exact opaque slot assembly over M63; very high if it becomes broad TSIL parsing, SVE array lowering, store/return semantics, or backend/rendering input. | Accepted as M64. |
 | Direct-intrinsic/SVE semantics | The selected branch and surrounding body contain `svptrue_b*`, `svptrue_b8`, and `svst1` tokens. | High because it would add SVE predicate/vector meaning, direct-intrinsic validation, byte-size-to-token inference, backend intrinsic pressure, and rendering pressure. | Defer. |
 | Vector length/alignment value semantics | The declaration slot contains `value<generation>(vector::length)` and `value<generation>(vector::alignment)`. | Medium to high because it pulls in vector/register metadata and array declaration semantics before the full body has a typed structural envelope. | Defer. |
 | Declaration/store/return lowering | The exact body includes array construction, a store call, and `emit_return`. | High because it would mix variable binding, array type/value semantics, call semantics, store semantics, return semantics, and eventual renderer concerns. | Defer. |
@@ -6295,7 +6295,7 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance after post-M63 planning.
+Accepted.
 
 Goal:
 
@@ -6315,8 +6315,8 @@ Scope:
 - Consume only in-memory typed/provenanced implementation payload information
   already available to lowering for the exact array body shape. M64 must not
   read `tsldata`, `frozen/`, the catalog, or files during evaluation.
-- Add a distinct post-M63 stage or typed value, such as
-  `array_body_envelope_slot_assembly`.
+- Add the distinct post-M63 `array_body_envelope_slot_assembly` typed value
+  boundary.
 - Recognize only the exact ordered structural skeleton evidenced by
   `tsldata/primitives/load_store/array.tsl:105-111`:
   - one opaque pre-branch array-initialization slot for the line 105 shape,
@@ -6465,6 +6465,5 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- If the post-M63 planning result is accepted, update workflow state and create
-  `docs/agent/runs/m64-execution-review-loop-prompt.md`. Do not start M64
-  until the acceptance-finalization prompt records acceptance.
+- Completed by `docs/agent/runs/m64-execution-review-loop-prompt.md`; the
+  orchestrator owns workflow-state updates and the next concrete prompt.
