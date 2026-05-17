@@ -101,46 +101,44 @@ Post-M59 planning is accepted. It selected
 The M60 execution-review loop returned `Accept With Follow-Ups` with no
 blocking implementation issues and no focused revision.
 
-Post-M60 planning selected
+Post-M60 planning is accepted. It selected
 `Milestone 61: Selected Branch Body Assignment Form Recognition Slice`, and
-internal review returned `Accept With Follow-Ups`. The plan is awaiting user
-acceptance.
+internal review returned `Accept With Follow-Ups` after local state wording
+corrections.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Await user acceptance of the post-M60 planning result, then run the
-post-M60 acceptance finalization prompt.
+Execute the Milestone 61 execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m60-acceptance-finalization-prompt.md
+docs/agent/runs/m61-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Post-M60 planning selected Milestone 61 for human acceptance; execution
-must not start until the plan is accepted.
+Milestone 61: Selected Branch Body Assignment Form Recognition Slice
 ```
 
 Latest review verdict:
 
 ```text
-Post-M60 planning selected Milestone 61 and internal review returned Accept
-With Follow-Ups. The plan is awaiting user acceptance.
+Post-M60 planning accepted by user; M61 is active for execution.
 ```
 
 Next expected action:
 
 ```text
-If the user accepts the post-M60 planning result, run the active finalization
-prompt to create the M61 execution-review loop prompt. Do not implement M61
-before acceptance.
+Run the active M61 execution-review loop prompt. If M61 is accepted, update
+this state file, record follow-ups, and create the next concrete run prompt
+under docs/agent/runs/ without starting a later milestone unless a later
+planning pass accepts it.
 ```
 
 Accepted planning prompt:
@@ -359,16 +357,22 @@ Accepted M60 execution-review loop prompt:
 docs/agent/runs/m60-execution-review-loop-prompt.md
 ```
 
-Active post-M60 planning prompt:
+Accepted post-M60 planning prompt:
 
 ```text
 docs/agent/runs/post-m60-planning-plus-review-prompt.md
 ```
 
-Active post-M60 acceptance finalization prompt:
+Accepted post-M60 acceptance finalization prompt:
 
 ```text
 docs/agent/runs/post-m60-acceptance-finalization-prompt.md
+```
+
+Active M61 execution-review loop prompt:
+
+```text
+docs/agent/runs/m61-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -654,8 +658,7 @@ docs/agent/runs/post-m60-acceptance-finalization-prompt.md
   behavior, Rust, compiler execution, broad TSIL parsing, runtime dependency
   on `frozen/`, lowering-time file reads, raw TSL parsing, or catalog queries
   during evaluation.
-- M61 is selected for human acceptance as generation-time lowering
-  form-recognition work only.
+- M61 is generation-time lowering form-recognition work only.
 - M61 must consume accepted typed M60 selected-body handoff outputs, not raw
   branch-chain text, raw TSL, catalog data, or `frozen/` runtime input.
 - M61 may recognize only the exact selected single-statement assignment form
@@ -1080,8 +1083,8 @@ catalog queries during evaluation.
 - Post-M56 staged-lowering planning note: the intended value -> predicate ->
   control-flow -> selected-body lowering path remains the guiding sequence.
   M58 accepted the stage-boundary contract, M59 accepted exact branch-chain
-  pruning, M60 accepted opaque selected-body handoff, and post-M60 planning
-  selected M61 assignment-form recognition for human acceptance.
+  pruning, M60 accepted opaque selected-body handoff, and post-M60 planning is
+  accepted for M61 assignment-form recognition.
 - M57 review follow-up: keep the private top-level generation binary scanner
   narrow. It may recognize unsupported operators only to reject them and must
   not become a general comparison parser without a selected milestone.
@@ -1178,8 +1181,8 @@ catalog queries during evaluation.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M60 acceptance
-finalization if the user accepts the selected M61 plan.
+No stop condition is active. The workflow proceeds with the M61
+execution-review loop.
 
 ## Validation Expectations
 
