@@ -1328,14 +1328,17 @@ Consequences:
   backend translation, rendering, and output deferred.
 - Milestone 58 makes the value -> predicate -> control-flow lowering stage
   contract explicit through typed stage records on lowered implementations. It
-  preserves accepted helper behavior while giving later branch-chain pruning a
+  preserves accepted helper behavior while giving M59 branch-chain pruning a
   typed predicate output to consume without backend/rendering changes or raw
   helper reparsing.
-- The selected post-M58 plan, Milestone 59, should use those typed predicate
-  stage outputs for exactly the documented SVE size-byte no-final-else branch
-  chain. It keeps selected bodies opaque and defers selected-body handoff,
-  direct-intrinsic/SVE body lowering, backend translation, rendering, and
-  generated output.
+- Milestone 59 uses those typed predicate stage outputs for exactly the
+  documented SVE size-byte no-final-else branch chain. It keeps selected bodies
+  opaque and defers selected-body handoff, direct-intrinsic/SVE body lowering,
+  backend translation, rendering, and generated output.
+- The selected post-M59 plan, Milestone 60, makes selected-body handoff a
+  distinct typed opaque boundary. It may carry selected body text and
+  provenance from M59 pruning, but it must not parse or lower body semantics or
+  stretch M59 pruning metadata into the reusable handoff contract.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

@@ -393,18 +393,19 @@ text and does not move suffix or type-spelling evaluation into renderers.
 
 ## Planned Staged Lowering Direction
 
-Post-M56 and post-M57 planning keep size-byte equality predicate lowering
-separate from branch-chain pruning. The intended direction is:
+Post-M56 and post-M57 planning kept size-byte equality predicate lowering
+separate from branch-chain pruning. The accepted staged direction is:
 
 1. Recognize exact selected generation helper expressions.
 2. Resolve typed generation values, such as M55 `type.size_bytes` and M56
    `type.size_bits`.
 3. Resolve typed generation predicates, starting with accepted M57
    `type.size_bytes == 2/4/8`.
-4. Consume typed predicate results for control-flow pruning in a later
-   branch-chain milestone.
+4. Consume typed predicate results for control-flow pruning, as accepted by
+   M59 for the exact size-byte branch chain.
 5. Hand selected branch bodies forward as typed/provenanced lowering inputs
-   before any body-specific lowering slice.
+   before any body-specific lowering slice; M60 is selected for human
+   acceptance for this opaque handoff boundary.
 
 This staged path is a semantic contract. It does not require every step to be a
 separate traversal immediately, but each milestone should expose typed outputs
@@ -433,6 +434,15 @@ provenance for byte sizes `2`, `4`, and `8`, records explicit no-match
 provenance for byte size `1`, and must not introduce broad
 `else if<generation>` parsing, body handoff, direct-intrinsic/SVE body
 lowering, backend translation, rendering, or generated output.
+
+The selected post-M59 plan, M60, is an opaque selected-body handoff slice. It
+should consume M59's typed branch-chain pruning result and produce a distinct
+typed handoff value for the selected branch body text and provenance, or an
+explicit no-selected-body/no-match result for byte size `1`. M60 must not parse
+or lower direct `intrin<...>` / SVE statements, assignments, arrays, calls,
+casts, loops, vector metadata, backend values, renderer output, generated
+artifacts, CLI/reporting/writer behavior, Rust, compiler execution, broad
+TSIL, or runtime `frozen/` evidence.
 
 ## Explicit Deferrals
 

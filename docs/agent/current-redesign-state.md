@@ -91,41 +91,44 @@ Post-M58 planning is accepted. It selected
 The M59 execution-review loop returned `Accept With Follow-Ups` after one
 focused documentation revision.
 
+Post-M59 planning selected
+`Milestone 60: Opaque Selected Branch Body Handoff Slice`, and internal review
+returned `Accept With Follow-Ups` after workflow handoff corrections.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run the post-M59 planning-plus-review prompt with a lowering focus.
+Await human acceptance of the post-M59 planning result.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m59-planning-plus-review-prompt.md
+docs/agent/runs/post-m59-acceptance-finalization-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Post-M59 planning is active; no executor milestone is selected yet.
+Milestone 60: Opaque Selected Branch Body Handoff Slice
 ```
 
 Latest review verdict:
 
 ```text
-The M59 execution-review loop returned `Accept With Follow-Ups` after one
-focused documentation revision.
+Post-M59 planning selected M60, and internal review returned
+`Accept With Follow-Ups` after workflow handoff corrections.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M59 planning-plus-review prompt. Focus next-task planning
-on generation-time lowering. Do not implement code. If a next milestone is
-selected and internally accepted, create the required acceptance finalization
-prompt or next concrete prompt under docs/agent/runs/ without starting
-execution until the workflow state allows it.
+If the user accepts the post-M59 planning result, run the active acceptance
+finalization prompt. The finalization prompt must create the M60
+execution-review loop prompt and update this state file. Do not start M60
+execution until acceptance is recorded.
 ```
 
 Accepted planning prompt:
@@ -330,6 +333,12 @@ Active post-M59 planning prompt:
 
 ```text
 docs/agent/runs/post-m59-planning-plus-review-prompt.md
+```
+
+Active post-M59 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m59-acceptance-finalization-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -973,8 +982,8 @@ or runtime dependency on `frozen/`.
   that M57 predicate lowering is accepted.
 - Post-M56 staged-lowering planning note: the intended value -> predicate ->
   control-flow -> selected-body lowering path remains the guiding sequence.
-  M58 accepted the stage-boundary contract; post-M58 planning selected M59 for
-  human acceptance while M60 remains a draft candidate.
+  M58 accepted the stage-boundary contract, M59 accepted exact branch-chain
+  pruning, and post-M59 planning selected M60 for human acceptance.
 - M57 review follow-up: keep the private top-level generation binary scanner
   narrow. It may recognize unsupported operators only to reject them and must
   not become a general comparison parser without a selected milestone.
@@ -1014,12 +1023,23 @@ or runtime dependency on `frozen/`.
   body handoff and no-runtime-`frozen/` deferrals in substance; a future docs
   cleanup may add the exact labels `M60` and `runtime frozen behavior` to that
   focused section if desired.
+- Post-M59 planning follow-up: M60 handoff diagnostics must stay
+  boundary-level, such as missing selected body/provenance or unsupported
+  source stage, and must not classify direct intrinsics, assignments, arrays,
+  calls, casts, loops, vector metadata, backend uninit, or SVE predicates.
+- Post-M59 planning follow-up: the M60 executor must introduce a distinct typed
+  opaque selected-body handoff value instead of expanding M59 pruning metadata
+  into the reusable body-handoff contract.
+- Post-M59 docs follow-up: `open-questions.md` and
+  `frozen-parity-baselines.md` use "selected opaque M60 handoff candidate";
+  a future wording cleanup may say "M60 selected-for-human-acceptance opaque
+  handoff" to make the acceptance state extra explicit.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M59 planning.
-M60 remains a draft planning candidate only and must not be started unless a
-later planning pass accepts it.
+No stop condition is active. The workflow is waiting for human acceptance of
+the post-M59 planning result. M60 is selected for human acceptance only and must
+not be started until acceptance is recorded.
 
 ## Validation Expectations
 

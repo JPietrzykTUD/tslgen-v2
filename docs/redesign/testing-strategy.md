@@ -753,6 +753,13 @@ Recommended first parity checks:
   branch bodies remain opaque, unselected/no-match bodies are not diagnosed,
   M55/M57/M58 outputs remain unchanged, raw-helper rejection and renderer
   non-evaluation are preserved, and no generated output changes.
+- The selected post-M59 plan, Milestone 60, should test only opaque selected
+  branch body handoff: deterministic selected-body provenance for the `== 2`,
+  `== 4`, and `== 8` arms, explicit no-selected-body behavior for
+  `si8`/`ui8`, unselected bodies ignored even when they contain deferred
+  helpers or unsupported body syntax, boundary-level invalid handoff-state
+  diagnostics, M57/M58/M59 regressions, raw-helper rejection, renderer
+  non-evaluation, and no generated output or golden-file changes.
 
 Deferred parity checks:
 

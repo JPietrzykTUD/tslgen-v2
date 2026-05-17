@@ -398,6 +398,11 @@ metadata; byte size `1` records explicit no-match provenance without
 synthesizing a final `else`. M59 does not add broad `else if<generation>`
 parsing, selected-body handoff, direct-intrinsic/SVE body lowering, backend
 translation, rendering, or output.
+The selected post-M59 plan, Milestone 60, keeps the next step in generation-time
+lowering by turning the M59 selected arm into a distinct typed/provenanced
+opaque selected-body handoff value. It must not parse or lower the selected
+body, inspect unselected bodies, synthesize a no-match body, or add direct
+intrinsic/SVE body semantics, backend translation, rendering, or output.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic

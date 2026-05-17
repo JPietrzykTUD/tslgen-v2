@@ -331,8 +331,9 @@ and still does not add compiler execution.
   and M54 catalog-to-lowering wiring, scalar value queries beyond the selected
   M55 size-byte helper, arithmetic over generation values beyond accepted M56,
   comparisons over generation values beyond the accepted M57 exact size-byte
-  equality predicate slice, branch-chain pruning beyond the selected narrow
-  post-M58 M59 candidate over those predicates, and
+  equality predicate slice, branch-chain pruning beyond the accepted narrow M59
+  slice over those predicates, selected branch body handling beyond the
+  selected opaque M60 handoff candidate, and
   backend translation-map evaluation beyond the selected M40/M45/M46 requests.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and
   googletest download or vendoring.
