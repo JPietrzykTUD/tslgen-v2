@@ -5481,8 +5481,8 @@ execution.
 
 Status:
 
-Selected for human acceptance. Do not implement until this planning result is
-accepted.
+Implemented for M59 execution and awaiting review. Do not start M60 until a
+later planning result is accepted.
 
 Goal:
 

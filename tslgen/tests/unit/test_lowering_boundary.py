@@ -21,6 +21,8 @@ from tslgen.lowering import (
     GenerationExpressionRecognition,
     GenerationLoweringStage,
     GenerationPredicate,
+    GenerationSizeByteBranchChainArm,
+    GenerationSizeByteBranchChainPruning,
     GenerationTypeRef,
     GenerationValue,
     LoweringRequest,
@@ -395,10 +397,55 @@ prim<v:=(v,v)> lower_generation_size_byte_branch_chain(left, right):
   tests []
   impls:
     scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 2) { pg = intrin<svptrue_b16>(); } else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 4) { pg = intrin<svptrue_b32>(); } else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 8) { pg = intrin<svptrue_b64>(); }"
+
+prim<v:=(v,v)> lower_generation_size_byte_branch_chain_body_helpers(left, right):
+  tests []
+  impls:
+    scalar:
+      arith:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 2) { emit_return(value<generation>(vector::length)); } else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 4) { emit_return(value<generation>(vector::length)); } else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 8) { emit_return(value<generation>(vector::length)); }"
+
+prim<v:=(v,v)> lower_generation_size_byte_branch_chain_missing_arm(left, right):
+  tests []
+  impls:
+    scalar:
       si32:
         requires []
         implementation:
-          tsil "if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 2) { emit_return(left + right); } else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 4) { emit_return(right + left); }"
+          tsil "if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 2) { pg = intrin<svptrue_b16>(); } else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 4) { pg = intrin<svptrue_b32>(); }"
+
+prim<v:=(v,v)> lower_generation_size_byte_branch_chain_reordered(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 4) { pg = intrin<svptrue_b32>(); } else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 2) { pg = intrin<svptrue_b16>(); } else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 8) { pg = intrin<svptrue_b64>(); }"
+
+prim<v:=(v,v)> lower_generation_size_byte_branch_chain_duplicate(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 2) { pg = intrin<svptrue_b16>(); } else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 4) { pg = intrin<svptrue_b32>(); } else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 4) { pg = intrin<svptrue_b32_again>(); }"
+
+prim<v:=(v,v)> lower_generation_size_byte_branch_chain_final_else(left, right):
+  tests []
+  impls:
+    scalar:
+      si32:
+        requires []
+        implementation:
+          tsil "if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 2) { pg = intrin<svptrue_b16>(); } else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 4) { pg = intrin<svptrue_b32>(); } else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 8) { pg = intrin<svptrue_b64>(); } else { pg = intrin<svptrue_b8>(); }"
 
 prim<v:=ptr>[aligned=true] lower_generation_aligned_true(ptr):
   tests []
@@ -2336,17 +2383,195 @@ class LoweringBoundaryTests(unittest.TestCase):
                 )
                 self.assertIn(type_tag, result.diagnostics[0].message)
 
-    def test_size_byte_equality_predicate_does_not_prune_branch_chains(self) -> None:
+    def test_prunes_size_byte_equality_branch_chain_for_matching_scalar_sizes(
+        self,
+    ) -> None:
         selection = self.selection_for("lower_generation_size_byte_branch_chain")
 
         result = lower_candidates(selection)
 
-        self.assertFalse(result.is_ok)
-        assert_diagnostic(
-            self,
-            result.diagnostics[0],
-            code="TSL-LOWER-GEN-IF-MALFORMED",
-            severity="error",
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementations = result.unwrap().implementations
+        self.assertEqual(len(implementations), len(SCALAR_SIZE_BYTES_BY_TAG))
+        expected_body_by_literal = {
+            2: "pg = intrin<svptrue_b16>();",
+            4: "pg = intrin<svptrue_b32>();",
+            8: "pg = intrin<svptrue_b64>();",
+        }
+        implementation_by_tag = {
+            implementation.generation_branch_chains[0].type_tag: implementation
+            for implementation in implementations
+        }
+
+        for type_tag, size_bytes in SCALAR_SIZE_BYTES_BY_TAG.items():
+            with self.subTest(type_tag=type_tag):
+                implementation = implementation_by_tag[type_tag]
+                self.assertEqual(implementation.statements, ())
+                self.assertEqual(implementation.generation_branches, ())
+                self.assertEqual(len(implementation.generation_branch_chains), 1)
+                chain = implementation.generation_branch_chains[0]
+                expected_literal = size_bytes if size_bytes in (2, 4, 8) else None
+                self.assertEqual(chain.selected_literal, expected_literal)
+                self.assertEqual(
+                    chain.selected_statement_text,
+                    (
+                        expected_body_by_literal[expected_literal]
+                        if expected_literal is not None
+                        else None
+                    ),
+                )
+                self.assertEqual(tuple(arm.literal for arm in chain.arms), (2, 4, 8))
+                self.assertEqual(
+                    tuple(predicate.literal for predicate in implementation.generation_predicates),
+                    (2, 4, 8),
+                )
+                self.assertEqual(
+                    tuple(predicate.value for predicate in implementation.generation_predicates),
+                    tuple(literal == size_bytes for literal in (2, 4, 8)),
+                )
+                self.assertEqual(
+                    tuple(stage.stage for stage in implementation.generation_stages),
+                    (
+                        "helper_expression_recognition",
+                        "typed_generation_value",
+                        "typed_generation_predicate",
+                        "typed_generation_predicate",
+                        "typed_generation_predicate",
+                        "generation_control_flow_pruning",
+                    ),
+                )
+                self.assertEqual(implementation.generation_stages[-1].output, chain)
+
+    def test_size_byte_branch_chain_records_no_match_without_final_else(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        no_match_chains = tuple(
+            implementation.generation_branch_chains[0]
+            for implementation in result.unwrap().implementations
+            if implementation.generation_branch_chains[0].type_tag in ("si8", "ui8")
+        )
+        self.assertEqual(len(no_match_chains), 2)
+        for chain in no_match_chains:
+            self.assertIsNone(chain.selected_literal)
+            self.assertIsNone(chain.selected_statement_text)
+            self.assertEqual(tuple(arm.literal for arm in chain.arms), (2, 4, 8))
+
+    def test_size_byte_branch_chain_uses_typed_stage_predicates(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                generation_context=GenerationContext(type_tag_override="ui16"),
+            ),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation = result.unwrap().implementations[0]
+        value = GenerationValue(kind="type.size_bytes", value=2, type_tag="ui16")
+        predicates = tuple(
+            GenerationPredicate(
+                kind="type.size_bytes.equals",
+                literal=literal,
+                value=literal == 2,
+                type_tag="ui16",
+            )
+            for literal in (2, 4, 8)
+        )
+        chain = GenerationSizeByteBranchChainPruning(
+            arms=tuple(
+                GenerationSizeByteBranchChainArm(
+                    literal=literal,
+                    predicate=predicate,
+                    statement_text={
+                        2: "pg = intrin<svptrue_b16>();",
+                        4: "pg = intrin<svptrue_b32>();",
+                        8: "pg = intrin<svptrue_b64>();",
+                    }[literal],
+                )
+                for literal, predicate in zip((2, 4, 8), predicates, strict=True)
+            ),
+            type_tag="ui16",
+            selected_literal=2,
+            selected_statement_text="pg = intrin<svptrue_b16>();",
+            condition_location=selection.candidates[0]
+            .variant.source.declaration.source_span.location,
+        )
+        self.assertEqual(implementation.generation_predicates, predicates)
+        self.assertEqual(
+            tuple(stage.output for stage in implementation.generation_stages[1:]),
+            (value, *predicates, chain),
+        )
+
+    def test_size_byte_branch_chain_bodies_remain_opaque(self) -> None:
+        selection = self.selection_for(
+            "lower_generation_size_byte_branch_chain_body_helpers"
+        )
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        for implementation in result.unwrap().implementations:
+            self.assertEqual(implementation.statements, ())
+            self.assertNotIn(
+                "selected_body_lowering",
+                tuple(stage.stage for stage in implementation.generation_stages),
+            )
+
+    def test_size_byte_branch_chain_pruning_is_deterministic(self) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+
+        first = lower_candidates(selection)
+        second = lower_candidates(selection)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap(), second.unwrap())
+
+    def test_size_byte_branch_chain_rejects_unsupported_shapes(self) -> None:
+        for primitive_name in (
+            "lower_generation_size_byte_branch_chain_missing_arm",
+            "lower_generation_size_byte_branch_chain_reordered",
+            "lower_generation_size_byte_branch_chain_duplicate",
+            "lower_generation_size_byte_branch_chain_final_else",
+        ):
+            with self.subTest(primitive_name=primitive_name):
+                selection = self.selection_for(primitive_name)
+
+                result = lower_candidates(selection)
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code="TSL-LOWER-GEN-IF-MALFORMED",
+                    severity="error",
+                )
+
+    def test_size_byte_branch_chain_preserves_standalone_predicate_stage(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_equals_override")
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation = result.unwrap().implementations[0]
+        self.assertEqual(implementation.generation_branch_chains, ())
+        self.assertEqual(
+            tuple(stage.stage for stage in implementation.generation_stages),
+            (
+                "helper_expression_recognition",
+                "typed_generation_value",
+                "typed_generation_predicate",
+            ),
         )
 
     def test_prunes_signedness_generation_branch_for_concrete_integers(self) -> None:

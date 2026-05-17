@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 58 is accepted.
+Milestone 59 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -88,39 +88,44 @@ that was corrected locally.
 Post-M58 planning is accepted. It selected
 `Milestone 59: Size-Byte Equality Generation Branch-Chain Pruning Slice`.
 
+The M59 execution-review loop returned `Accept With Follow-Ups` after one
+focused documentation revision.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute the Milestone 59 execution-review loop.
+Run the post-M59 planning-plus-review prompt with a lowering focus.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m59-execution-review-loop-prompt.md
+docs/agent/runs/post-m59-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 59: Size-Byte Equality Generation Branch-Chain Pruning Slice
+None. Post-M59 planning is active; no executor milestone is selected yet.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M58 planning accepted by user; M59 is active for execution.
+The M59 execution-review loop returned `Accept With Follow-Ups` after one
+focused documentation revision.
 ```
 
 Next expected action:
 
 ```text
-Run the active M59 execution-review loop prompt. If M59 is accepted, update
-this state file, record follow-ups, and create the next concrete run prompt
-under docs/agent/runs/ without starting M60 unless a later planning pass
-accepts it.
+Run the active post-M59 planning-plus-review prompt. Focus next-task planning
+on generation-time lowering. Do not implement code. If a next milestone is
+selected and internally accepted, create the required acceptance finalization
+prompt or next concrete prompt under docs/agent/runs/ without starting
+execution until the workflow state allows it.
 ```
 
 Accepted planning prompt:
@@ -303,22 +308,28 @@ Accepted M58 execution-review loop prompt:
 docs/agent/runs/m58-execution-review-loop-prompt.md
 ```
 
-Active post-M58 planning prompt:
+Accepted post-M58 planning prompt:
 
 ```text
 docs/agent/runs/post-m58-planning-plus-review-prompt.md
 ```
 
-Active post-M58 acceptance finalization prompt:
+Accepted post-M58 acceptance finalization prompt:
 
 ```text
 docs/agent/runs/post-m58-acceptance-finalization-prompt.md
 ```
 
-Active M59 execution-review loop prompt:
+Accepted M59 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m59-execution-review-loop-prompt.md
+```
+
+Active post-M59 planning prompt:
+
+```text
+docs/agent/runs/post-m59-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -823,8 +834,8 @@ implementations while preserving the accepted observable fields for M55
 `GenerationValue(kind="type.size_bytes")`, M56
 `GenerationValue(kind="type.size_bits")`, M57
 `GenerationPredicate(kind="type.size_bytes.equals")`, and M42/M48/M51 branch
-pruning. Future branch-chain pruning should consume typed predicate/stage
-results without backend/rendering changes or raw helper re-evaluation.
+pruning. M59 branch-chain pruning consumes typed predicate/stage results
+without backend/rendering changes or raw helper re-evaluation.
 
 M58 adds no new generation-time helper semantics, arithmetic/comparison
 semantics, size-byte branch-chain pruning, `else if<generation>` support,
@@ -833,6 +844,36 @@ body lowering, vector/register metadata, backend translation expansion,
 rendering, generated output, generated test sources, CLI/reporting/writer
 behavior, Rust, compiler execution, broad TSIL parsing, or runtime dependency
 on `frozen/`.
+
+## Accepted Milestone 59
+
+The Milestone 59 execution-review loop accepted with non-blocking follow-ups
+after one focused documentation revision:
+
+```text
+Milestone 59: Size-Byte Equality Generation Branch-Chain Pruning Slice
+```
+
+The slice is generation-time semantic lowering control-flow pruning only. It
+recognizes exactly the documented SVE size-byte no-final-else branch chain in
+`tsldata/primitives/load_store/array.tsl:107-109`, with ordered `== 2`,
+`== 4`, and `== 8` arms.
+
+M59 consumes the accepted staged M57 predicate results through typed
+`GenerationValue(kind="type.size_bytes")`,
+`GenerationPredicate(kind="type.size_bytes.equals")`, and
+`GenerationLoweringStage` records instead of adding backend/rendering helper
+evaluation or a broad raw-text branch-chain evaluator. Byte sizes `2`, `4`,
+and `8` record selected-arm pruning provenance; byte size `1` records explicit
+no-match provenance without synthesizing a final `else`.
+
+Branch bodies remain opaque pruning metadata. M59 emits no selected-body
+lowering stage for the branch-chain path and does not add M60 selected-body
+handoff, direct `intrin<...>` / SVE body lowering, broad `else if<generation>`
+syntax, final `else`, reordered/missing/duplicate/nested chain support,
+standalone comparison evaluation, backend translation, rendering, output,
+CLI/reporting/writer behavior, Rust, compiler execution, broad TSIL parsing,
+or runtime dependency on `frozen/`.
 
 ## Known Follow-Ups
 
@@ -940,25 +981,45 @@ on `frozen/`.
 - M57 evidence/test follow-up: add explicit unsupported-tag predicate coverage
   for `bword` and `fdqword`, matching the cited group evidence in
   `tsldata/detail/types.tsl:20-26`.
-- M58 boundary follow-up: a future M59 branch-chain slice must consume typed
-  `GenerationValue` / `GenerationPredicate` stage outputs, not the raw
-  `GenerationExpressionRecognition.source_text` provenance.
+- M58 boundary follow-up addressed by M59: exact size-byte branch-chain pruning
+  consumes typed `GenerationValue` / `GenerationPredicate` stage outputs, not
+  raw `GenerationExpressionRecognition.source_text` provenance.
 - M58 boundary follow-up: future opaque selected-body handoff should introduce
   its own typed body record rather than stretching the current
   `selected_body_lowering` stage beyond its accepted `TsilReturnStatement`
   output.
-- M58 extensibility follow-up: if M59 needs staged predicate resolution outside
-  `_lower_input`, refine a reusable typed staged-predicate result instead of
-  duplicating the private stage assembly.
-- Post-M58 planning follow-up: the eventual M59 executor prompt must keep any
-  M58 staged-predicate reuse cleanup explicitly subordinate to the exact
+- M58 extensibility follow-up addressed by M59: branch-chain pruning reuses the
+  typed staged predicate resolver and keeps the cleanup subordinate to the
+  exact chain-pruning slice.
+- Post-M58 planning follow-up addressed by M59: the execution prompt and
+  implementation kept staged-predicate reuse subordinate to the exact
   branch-chain pruning slice.
+- M59 review follow-up: consider adding one more unsupported-shape test for a
+  non-size-byte `else if<generation>` chain.
+- M59 boundary follow-up: consider adding an explicit nested branch-chain
+  rejection test.
+- M59 extensibility follow-up: M60 should introduce a distinct typed selected
+  branch body handoff record instead of expanding
+  `GenerationSizeByteBranchChainPruning.selected_statement_text` into a body
+  handoff contract.
+- M59 extensibility follow-up: consider a small naming or comment cleanup
+  clarifying that `_parse_generation_size_byte_branch_chain` recognizes only
+  chain shape while predicate semantics remain delegated to the staged
+  predicate resolver.
+- M59 evidence follow-up: consider adding a fixture comment clarifying that the
+  unit-test `scalar: arith` harness exercises the exact chain shape and typed
+  M55/M57 behavior, not scalar corpus evidence; corpus evidence remains the
+  SVE chain in `tsldata/primitives/load_store/array.tsl:107-109`.
+- M59 focused docs follow-up: the fixed lowering document preserves selected
+  body handoff and no-runtime-`frozen/` deferrals in substance; a future docs
+  cleanup may add the exact labels `M60` and `runtime frozen behavior` to that
+  focused section if desired.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with the M59
-execution-review loop. M60 remains a draft planning candidate only and must not
-be started unless a later planning pass accepts it.
+No stop condition is active. The workflow proceeds with post-M59 planning.
+M60 remains a draft planning candidate only and must not be started unless a
+later planning pass accepts it.
 
 ## Validation Expectations
 

@@ -420,22 +420,23 @@ For the M57 size-byte equality predicates, the staged output carries the
 underlying M55 `GenerationValue(kind="type.size_bytes")` and the resulting
 `GenerationPredicate(kind="type.size_bytes.equals")`, while the legacy
 `generation_values` and `generation_predicates` observable fields remain
-unchanged. A future M59 branch-chain pruning slice can therefore consume the
-typed predicate stage output directly instead of reparsing the raw
+unchanged. The M59 branch-chain pruning slice consumes the typed predicate
+stage output directly instead of reparsing the raw
 `value<generation>(...) == ...` helper text. M58 does not add branch-chain
 pruning, new helper forms, new comparison or arithmetic semantics, selected body
 handoff policy, backend translation, rendering, or generated output.
 
-The selected post-M58 plan, M59, should consume those typed predicate stage
-outputs for exactly the documented SVE size-byte no-final-else branch chain in
-`tsldata/primitives/load_store/array.tsl:107-109`. It remains a future
-execution slice until accepted and must not introduce broad
+M59 consumes those typed predicate stage outputs for exactly the documented SVE
+size-byte no-final-else branch chain in
+`tsldata/primitives/load_store/array.tsl:107-109`. It records matching arm
+provenance for byte sizes `2`, `4`, and `8`, records explicit no-match
+provenance for byte size `1`, and must not introduce broad
 `else if<generation>` parsing, body handoff, direct-intrinsic/SVE body
 lowering, backend translation, rendering, or generated output.
 
 ## Explicit Deferrals
 
-Deferred beyond the accepted M43-M57 slices:
+Deferred beyond the implemented M43-M59 semantic-lowering slices:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -447,8 +448,8 @@ Deferred beyond the accepted M43-M57 slices:
   M56 exact `type.size_bytes * 8` expression. Comparisons over generation
   values remain deferred except for the accepted M57 exact
   `type.size_bytes == 2/4/8` predicates. Branch-chain pruning over those
-  predicates is selected for post-M58 human acceptance as a narrow M59
-  candidate, but general `else if<generation>` syntax, final-else policy, and
+  predicates is implemented only for the exact M59 SVE size-byte no-final-else
+  branch chain; general `else if<generation>` syntax, final-else policy, and
   broad branch pruning based on generation values remain deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`

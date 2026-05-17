@@ -62,6 +62,7 @@ type GenerationLoweringStageOutput = (
     | GenerationValue
     | GenerationPredicate
     | PrunedGenerationBranch
+    | GenerationSizeByteBranchChainPruning
     | TsilStatement
 )
 
@@ -332,6 +333,65 @@ type TsilGenerationCondition = (
 
 
 @dataclass(frozen=True, slots=True)
+class GenerationSizeByteBranchChainArm:
+    literal: int
+    predicate: GenerationPredicate
+    statement_text: str
+
+    def __post_init__(self) -> None:
+        if self.literal not in (2, 4, 8):
+            raise ValueError("size-byte branch-chain arm literal must be 2, 4, or 8")
+        if self.predicate.kind != "type.size_bytes.equals":
+            raise ValueError("size-byte branch-chain arm requires a size-byte predicate")
+        if self.predicate.literal != self.literal:
+            raise ValueError("size-byte branch-chain arm literal must match predicate")
+        if not self.statement_text.strip():
+            raise ValueError("size-byte branch-chain arm body must be non-empty")
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (self.literal, self.predicate.key, self.statement_text)
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationSizeByteBranchChainPruning:
+    arms: tuple[GenerationSizeByteBranchChainArm, ...]
+    type_tag: str
+    selected_literal: int | None
+    selected_statement_text: str | None = None
+    condition_location: SourceLocation | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "arms", tuple(self.arms))
+        if tuple(arm.literal for arm in self.arms) != (2, 4, 8):
+            raise ValueError("size-byte branch chain must have == 2, == 4, == 8 arms")
+        if not self.type_tag:
+            raise ValueError("size-byte branch-chain type tag must be non-empty")
+        if self.selected_literal is not None and self.selected_literal not in (2, 4, 8):
+            raise ValueError("selected size-byte branch literal must be 2, 4, 8, or None")
+        if self.selected_literal is None:
+            if self.selected_statement_text is not None:
+                raise ValueError("no-match branch chain must not have selected body text")
+        elif not (self.selected_statement_text or "").strip():
+            raise ValueError("matched branch chain must record selected body text")
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        location_key = (
+            self.condition_location.sort_key()
+            if self.condition_location is not None
+            else ()
+        )
+        return (
+            tuple(arm.key for arm in self.arms),
+            self.type_tag,
+            self.selected_literal or 0,
+            self.selected_statement_text or "",
+            location_key,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class PrunedGenerationBranch:
     condition: TsilGenerationCondition
     selected_branch: GenerationBranchChoice
@@ -443,7 +503,7 @@ class GenerationLoweringStage:
         elif self.stage == "typed_generation_predicate":
             expected = (GenerationPredicate,)
         elif self.stage == "generation_control_flow_pruning":
-            expected = (PrunedGenerationBranch,)
+            expected = (PrunedGenerationBranch, GenerationSizeByteBranchChainPruning)
         elif self.stage == "selected_body_lowering":
             expected = (TsilReturnStatement,)
         else:
@@ -468,6 +528,7 @@ class LoweredImplementation:
     generation_type_refs: tuple[GenerationTypeRef, ...] = ()
     generation_values: tuple[GenerationValue, ...] = ()
     generation_predicates: tuple[GenerationPredicate, ...] = ()
+    generation_branch_chains: tuple[GenerationSizeByteBranchChainPruning, ...] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -496,6 +557,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "generation_branch_chains",
+            tuple(self.generation_branch_chains),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -510,6 +576,7 @@ class LoweredImplementation:
             tuple(type_ref.key for type_ref in self.generation_type_refs),
             tuple(value.key for value in self.generation_values),
             tuple(predicate.key for predicate in self.generation_predicates),
+            tuple(chain.key for chain in self.generation_branch_chains),
             tuple(stage.key for stage in self.generation_stages),
         )
 
@@ -700,6 +767,21 @@ class _StagedGenerationPredicate:
         object.__setattr__(self, "generation_values", tuple(self.generation_values))
 
 
+@dataclass(frozen=True, slots=True)
+class _StagedGenerationSizeByteBranchChain:
+    pruning: GenerationSizeByteBranchChainPruning
+    generation_values: tuple[GenerationValue, ...] = ()
+    generation_predicates: tuple[GenerationPredicate, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "generation_values", tuple(self.generation_values))
+        object.__setattr__(
+            self,
+            "generation_predicates",
+            tuple(self.generation_predicates),
+        )
+
+
 def _recognition_stage(
     kind: GenerationRecognitionKind,
     source_text: str,
@@ -727,7 +809,7 @@ def _generation_predicate_stage(
 
 
 def _generation_control_flow_stage(
-    branch: PrunedGenerationBranch,
+    branch: PrunedGenerationBranch | GenerationSizeByteBranchChainPruning,
 ) -> GenerationLoweringStage:
     return GenerationLoweringStage(
         stage="generation_control_flow_pruning",
@@ -940,6 +1022,34 @@ def _lower_input(
     if item.payload.has_generation_condition:
         if _GENERATION_CONDITION_MARKER not in text:
             return Result.failure((_unresolved_selected_branch_diagnostic(item, text),))
+        branch_chain = _prune_generation_size_byte_branch_chain(item, request, text)
+        if branch_chain is not None:
+            if not branch_chain.is_ok:
+                return Result.failure(branch_chain.diagnostics)
+            staged_chain = branch_chain.unwrap()
+            return Result.ok(
+                LoweredImplementation(
+                    candidate_id=item.candidate_id,
+                    status="lowered",
+                    generation_predicates=staged_chain.generation_predicates,
+                    generation_branch_chains=(staged_chain.pruning,),
+                    generation_stages=(
+                        _recognition_stage(
+                            "generation.control_flow",
+                            item.payload.text or text,
+                        ),
+                        *(
+                            _generation_value_stage(value)
+                            for value in staged_chain.generation_values
+                        ),
+                        *(
+                            _generation_predicate_stage(predicate)
+                            for predicate in staged_chain.generation_predicates
+                        ),
+                        _generation_control_flow_stage(staged_chain.pruning),
+                    ),
+                )
+            )
         pruned = _prune_generation_branch(item, request, text)
         if not pruned.is_ok:
             return Result.failure(pruned.diagnostics)
@@ -1081,6 +1191,20 @@ class _ParsedGenerationIf:
 
 
 @dataclass(frozen=True, slots=True)
+class _ParsedSizeByteBranchChainArm:
+    condition_text: str
+    statement_text: str
+
+
+@dataclass(frozen=True, slots=True)
+class _ParsedSizeByteBranchChain:
+    arms: tuple[_ParsedSizeByteBranchChainArm, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "arms", tuple(self.arms))
+
+
+@dataclass(frozen=True, slots=True)
 class _ResolvedGenerationCondition:
     condition: TsilGenerationCondition
     value: bool
@@ -1135,6 +1259,85 @@ def _prune_generation_branch(
             statement_text=statement_text,
             else_syntax=parsed_branch.else_syntax,
             condition_location=item.source_location,
+        )
+    )
+
+
+def _prune_generation_size_byte_branch_chain(
+    item: LoweringInput,
+    request: LoweringRequest,
+    text: str,
+) -> Result[_StagedGenerationSizeByteBranchChain] | None:
+    if "else if<generation>" not in text:
+        return None
+
+    parsed = _parse_generation_size_byte_branch_chain(item, text)
+    if not parsed.is_ok:
+        return Result.failure(parsed.diagnostics)
+
+    context = _context_for_candidate(item, request)
+    selected_candidate_type_tag = (
+        item.candidate.type_tag
+        if request.generation_context.use_candidate_type_tag
+        else None
+    )
+    expected_literals = (2, 4, 8)
+    values_by_key: dict[tuple[str, int, str], GenerationValue] = {}
+    predicates: list[GenerationPredicate] = []
+    arms: list[GenerationSizeByteBranchChainArm] = []
+
+    for expected_literal, parsed_arm in zip(
+        expected_literals,
+        parsed.unwrap().arms,
+        strict=True,
+    ):
+        staged = _resolve_generation_predicate_query_staged(
+            parsed_arm.condition_text,
+            context,
+            selected_candidate_type_tag=selected_candidate_type_tag,
+            location=item.source_location,
+        )
+        if not staged.is_ok:
+            return Result.failure(staged.diagnostics)
+
+        staged_predicate = staged.unwrap()
+        predicate = staged_predicate.predicate
+        if predicate.kind != "type.size_bytes.equals" or predicate.literal != expected_literal:
+            return Result.failure((_malformed_generation_if_diagnostic(item),))
+        for value in staged_predicate.generation_values:
+            values_by_key.setdefault(value.key, value)
+        predicates.append(predicate)
+        arms.append(
+            GenerationSizeByteBranchChainArm(
+                literal=expected_literal,
+                predicate=predicate,
+                statement_text=parsed_arm.statement_text,
+            )
+        )
+
+    type_tags = tuple(dict.fromkeys(predicate.type_tag for predicate in predicates))
+    if len(type_tags) != 1:
+        return Result.failure((_malformed_generation_if_diagnostic(item),))
+
+    selected_arms = tuple(arm for arm in arms if arm.predicate.value)
+    if len(selected_arms) > 1:
+        return Result.failure((_malformed_generation_if_diagnostic(item),))
+    selected_arm = selected_arms[0] if selected_arms else None
+    return Result.ok(
+        _StagedGenerationSizeByteBranchChain(
+            pruning=GenerationSizeByteBranchChainPruning(
+                arms=tuple(arms),
+                type_tag=type_tags[0],
+                selected_literal=(
+                    selected_arm.literal if selected_arm is not None else None
+                ),
+                selected_statement_text=(
+                    selected_arm.statement_text if selected_arm is not None else None
+                ),
+                condition_location=item.source_location,
+            ),
+            generation_values=tuple(values_by_key.values()),
+            generation_predicates=tuple(predicates),
         )
     )
 
@@ -1938,6 +2141,47 @@ def _parse_generation_if(
     )
 
 
+def _parse_generation_size_byte_branch_chain(
+    item: LoweringInput,
+    text: str,
+) -> Result[_ParsedSizeByteBranchChain]:
+    stripped = text.strip()
+    cursor = 0
+    arms: list[_ParsedSizeByteBranchChainArm] = []
+    for marker in ("if<generation>", "else if<generation>", "else if<generation>"):
+        if not stripped.startswith(marker, cursor):
+            return Result.failure((_malformed_generation_if_diagnostic(item),))
+        cursor += len(marker)
+        cursor = _skip_whitespace(stripped, cursor)
+        if cursor >= len(stripped) or stripped[cursor] != "(":
+            return Result.failure((_malformed_generation_if_diagnostic(item),))
+        condition_end = _matching_delimiter(stripped, cursor, "(", ")")
+        if condition_end is None:
+            return Result.failure((_malformed_generation_if_diagnostic(item),))
+        condition_text = stripped[cursor + 1:condition_end].strip()
+
+        cursor = _skip_whitespace(stripped, condition_end + 1)
+        if cursor >= len(stripped) or stripped[cursor] != "{":
+            return Result.failure((_malformed_generation_if_diagnostic(item),))
+        body_end = _matching_delimiter(stripped, cursor, "{", "}")
+        if body_end is None:
+            return Result.failure((_malformed_generation_if_diagnostic(item),))
+        statement_text = stripped[cursor + 1:body_end].strip()
+        if not statement_text or _GENERATION_CONDITION_MARKER in statement_text:
+            return Result.failure((_malformed_generation_if_diagnostic(item),))
+        arms.append(
+            _ParsedSizeByteBranchChainArm(
+                condition_text=condition_text,
+                statement_text=statement_text,
+            )
+        )
+        cursor = _skip_whitespace(stripped, body_end + 1)
+
+    if stripped[cursor:].strip():
+        return Result.failure((_malformed_generation_if_diagnostic(item),))
+    return Result.ok(_ParsedSizeByteBranchChain(tuple(arms)))
+
+
 def _generation_branch_condition(
     item: LoweringInput,
     request: LoweringRequest,
@@ -2271,7 +2515,8 @@ def _malformed_generation_if_diagnostic(
         "generation-time branch pruning supports only branches shaped as "
         "'if<generation>(<supported condition>) { ... } else<generation> "
         "{ ... }', plus plain 'else { ... }' for the exact signedness "
-        "predicate branch form",
+        "predicate branch form, and the exact no-final-else size-byte "
+        "branch chain with == 2, == 4, then == 8 arms",
         location=item.source_location,
     )
 
