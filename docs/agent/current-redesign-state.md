@@ -95,18 +95,21 @@ Post-M59 planning selected
 `Milestone 60: Opaque Selected Branch Body Handoff Slice`, and internal review
 returned `Accept With Follow-Ups` after workflow handoff corrections.
 
+Post-M59 planning is accepted. It selected
+`Milestone 60: Opaque Selected Branch Body Handoff Slice`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Await human acceptance of the post-M59 planning result.
+Execute the Milestone 60 execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m59-acceptance-finalization-prompt.md
+docs/agent/runs/m60-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
@@ -118,17 +121,16 @@ Milestone 60: Opaque Selected Branch Body Handoff Slice
 Latest review verdict:
 
 ```text
-Post-M59 planning selected M60, and internal review returned
-`Accept With Follow-Ups` after workflow handoff corrections.
+Post-M59 planning accepted by user; M60 is active for execution.
 ```
 
 Next expected action:
 
 ```text
-If the user accepts the post-M59 planning result, run the active acceptance
-finalization prompt. The finalization prompt must create the M60
-execution-review loop prompt and update this state file. Do not start M60
-execution until acceptance is recorded.
+Run the active M60 execution-review loop prompt. If M60 is accepted, update
+this state file, record follow-ups, and create the next concrete run prompt
+under docs/agent/runs/ without starting a later milestone unless a later
+planning pass accepts it.
 ```
 
 Accepted planning prompt:
@@ -339,6 +341,12 @@ Active post-M59 acceptance finalization prompt:
 
 ```text
 docs/agent/runs/post-m59-acceptance-finalization-prompt.md
+```
+
+Active M60 execution-review loop prompt:
+
+```text
+docs/agent/runs/m60-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -605,6 +613,24 @@ docs/agent/runs/post-m59-acceptance-finalization-prompt.md
   behavior, Rust, compiler execution, broad TSIL parsing, or runtime
   dependency on `frozen/`.
 - M59 must not make lowering read files, parse raw TSL, or query the catalog
+  during evaluation.
+- M60 is generation-time semantic lowering only.
+- M60 consumes accepted typed M59 branch-chain pruning/stage output.
+- M60 introduces a distinct typed opaque selected-body handoff value or
+  equivalent typed stage output.
+- M60 must keep branch bodies opaque.
+- M60 must not parse or lower selected or unselected body semantics.
+- M60 must not synthesize a selected body for byte-size `1` no-match cases.
+- M60 must not invoke mini TSIL lowering or produce direct-intrinsic/SVE
+  `TsilStatement` values for the branch-chain path.
+- M60 must preserve backend raw-helper rejection and renderer non-evaluation.
+- M60 must not add direct `intrin<...>` / SVE body lowering, assignments,
+  variables, arrays, calls, casts, loops, vector/register metadata,
+  `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, backend uninit values, backend
+  translation, rendering, output, generated tests, CLI/reporting/writer
+  behavior, Rust, compiler execution, broad TSIL parsing, runtime dependency
+  on `frozen/`, lowering-time file reads, raw TSL parsing, or catalog queries
   during evaluation.
 
 ## Accepted Milestone 48
@@ -1037,9 +1063,8 @@ or runtime dependency on `frozen/`.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is waiting for human acceptance of
-the post-M59 planning result. M60 is selected for human acceptance only and must
-not be started until acceptance is recorded.
+No stop condition is active. The workflow proceeds with the M60
+execution-review loop.
 
 ## Validation Expectations
 
