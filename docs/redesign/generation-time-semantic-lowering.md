@@ -503,6 +503,16 @@ stores, `tmp.data()`, `emit_return`, vector length/alignment, backend uninit
 values, backend translation, rendering, generated output, or broad TSIL body
 syntax.
 
+Milestone 65 is selected as the next pipeline-integration boundary. It wires
+the accepted M64 exact array-body envelope into the normal staged lowering
+pipeline by consuming typed/provenanced `ExactArrayBodyEnvelopeSkeleton` input
+plus accepted M63 selected/no-body envelopes, producing
+`LoweredImplementation.array_body_envelopes`, and appending the
+`array_body_envelope_slot_assembly` stage. M65 does not produce skeletons from
+raw body text, parse broad TSIL, lower slot semantics, infer SVE/direct
+intrinsic meanings, evaluate vector length/alignment or backend uninit values,
+feed backend translation or rendering, or emit generated output.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
@@ -530,7 +540,7 @@ M64 diagnostics:
 ## Explicit Deferrals
 
 Deferred beyond the implemented M43-M64 semantic-lowering and structural
-slot-assembly slices:
+slot-assembly slices and selected M65 pipeline-integration slice:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -547,12 +557,15 @@ slot-assembly slices:
   exact selected assignment-form recognition, M62 adds only unresolved typed
   body IR for that recognized form, and M63 adds only a backend-neutral
   envelope/sequence boundary over those M62 typed values. Accepted M64 adds
-  only exact structural array-body slot assembly around M63 envelopes. General
+  only exact structural array-body slot assembly around M63 envelopes, and
+  selected M65 wires that typed envelope into the normal lowering pipeline
+  without adding skeleton recognition or slot semantics. General
   `else if<generation>` syntax, final-else policy, broad branch pruning based
   on generation values, assignment semantics beyond that selected IR shape,
   broad direct-intrinsic/SVE semantics, backend intrinsic lowering, vector
   length/alignment semantics, backend uninit semantics, surrounding
-  declaration/store/return semantics, and broad body lowering remain deferred.
+  declaration/store/return semantics, skeleton recognition from raw body text,
+  and broad body lowering remain deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only

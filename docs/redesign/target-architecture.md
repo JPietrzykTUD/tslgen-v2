@@ -420,6 +420,12 @@ Current roadmap note:
   composition point for future slot-specific lowering, not declaration, array,
   store, return, SVE, vector metadata, backend translation, rendering, output,
   or broad TSIL semantics.
+- Milestone 65 is selected as a pipeline-integration boundary for that M64
+  envelope. It should make normal lowering populate `array_body_envelopes` and
+  append the `array_body_envelope_slot_assembly` stage from typed/provenanced
+  skeleton input, without turning `lower_candidates` into a raw-text
+  dispatcher and without adding skeleton recognition, slot semantics, backend
+  translation, rendering, output, or broad TSIL parsing.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

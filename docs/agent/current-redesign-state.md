@@ -140,41 +140,47 @@ Post-M63 planning is accepted. It selected
 The M64 execution-review loop returned `Accept With Follow-Ups` after one
 focused revision.
 
+Post-M64 planning selected
+`Milestone 65: Exact Array Body Envelope Pipeline Integration Slice`, and
+internal review returned `Accept With Follow-Ups` after a focused workflow
+handoff correction.
+
+Post-M64 planning is accepted. It selected
+`Milestone 65: Exact Array Body Envelope Pipeline Integration Slice`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Plan the next milestone after M64.
+Execute Milestone 65.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m64-planning-plus-review-prompt.md
+docs/agent/runs/m65-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The next task is post-M64 planning.
+Milestone 65: Exact Array Body Envelope Pipeline Integration Slice
 ```
 
 Latest review verdict:
 
 ```text
-The M64 execution-review loop returned Accept With Follow-Ups after one
-focused revision. Blocking test-coverage and stale-doc wording findings were
-resolved before acceptance.
+The post-M64 planning review returned Accept With Follow-Ups after a focused
+workflow handoff correction. Post-M64 planning is accepted.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M64 planning-plus-review prompt. Focus the next milestone
-on lowering. Use the specified read-only planning/review/audit subagents and
-do not implement code unless that active prompt explicitly selects an executor
-task. Do not start M65 execution.
+Run the active M65 execution-review loop prompt. Use the specified single
+write-capable executor followed by read-only review/audit subagents. Do not
+start M66.
 ```
 
 Accepted planning prompt:
@@ -465,10 +471,22 @@ Accepted M64 execution-review loop prompt:
 docs/agent/runs/m64-execution-review-loop-prompt.md
 ```
 
-Active post-M64 planning prompt:
+Completed post-M64 planning prompt:
 
 ```text
 docs/agent/runs/post-m64-planning-plus-review-prompt.md
+```
+
+Accepted post-M64 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m64-acceptance-finalization-prompt.md
+```
+
+Active M65 execution-review loop prompt:
+
+```text
+docs/agent/runs/m65-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -849,6 +867,30 @@ docs/agent/runs/post-m64-planning-plus-review-prompt.md
   compiler execution, broad TSIL parsing, lowering-time file reads, raw TSL
   parsing, catalog queries, runtime `frozen/` use, dictionaries/raw string keys
   as downstream semantic models, or backend-specific branches.
+- M65 is generation-time lowering pipeline-integration work only.
+- M65 must consume accepted M63 selected/no-body envelopes and accepted M64
+  `ExactArrayBodyEnvelopeSkeleton` values supplied in memory.
+- M65 must key skeleton lookup by typed candidate id, selected type tag, and
+  branch-chain identity, not by raw body text.
+- M65 must call the accepted M64 `assemble_exact_array_body_envelope` boundary,
+  populate `LoweredImplementation.array_body_envelopes`, and append the
+  `array_body_envelope_slot_assembly` stage after
+  `selected_body_envelope_lowering`.
+- M65 must make the skeleton-required policy concrete: no-skeleton input
+  preserves existing M63-only behavior unless a candidate is explicitly marked
+  as requiring a skeleton.
+- M65 must diagnose missing required skeleton input, duplicate/conflicting
+  skeletons, skeletons supplied for candidates without M63 envelopes, and
+  skeleton/envelope provenance mismatches.
+- M65 must not produce or recognize skeletons from raw payload text, parse
+  broad TSIL or `array.tsl` during lowering evaluation, lower slot-specific
+  semantics, treat M64 slot labels as semantic statement kinds, or add
+  declaration, assignment, array, store, return, variable, `tmp.data()`,
+  `emit_return`, direct-intrinsic, SVE predicate/vector/register,
+  byte-size-to-`svptrue_b*`, vector length/alignment, backend uninit, backend
+  translation, renderer-ready IR, rendering, output, CLI/report/writer, Rust,
+  compiler, generated-test, file-read, catalog-query, raw TSL parsing, or
+  runtime `frozen/` behavior.
 
 ## Accepted Milestone 48
 
@@ -1436,10 +1478,18 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M64 evidence follow-up: consider adding a small fixture comment tying the
   inlined opaque array-body test snippets to
   `tsldata/primitives/load_store/array.tsl:105-111`.
+- Post-M64 planning follow-up for M65 execution: make the skeleton-required
+  policy concrete. The selected plan allows no-skeleton input to preserve
+  existing M63-only behavior unless a candidate is explicitly marked as
+  requiring a skeleton.
+- Post-M64 planning follow-up for M65 execution: require explicit diagnostic
+  expectations for missing required skeleton input, duplicate/conflicting
+  skeletons, skeletons supplied for candidates without M63 envelopes, and
+  skeleton/envelope provenance mismatches.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M64 planning.
+No stop condition is active. The workflow proceeds with M65 execution.
 
 ## Validation Expectations
 

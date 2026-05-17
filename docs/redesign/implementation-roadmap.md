@@ -6467,3 +6467,171 @@ Next concrete prompt:
 
 - Completed by `docs/agent/runs/m64-execution-review-loop-prompt.md`; the
   orchestrator owns workflow-state updates and the next concrete prompt.
+
+## Post-M64 Planning Result
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Exact array body envelope pipeline integration | M64 defines `ExactArrayBodyEnvelopeIr`, `ExactArrayBodyEnvelopeSkeleton`, and the `array_body_envelope_slot_assembly` stage, but normal `lower_candidates` still stops at M63 unless callers invoke M64 assembly directly. Wiring typed skeleton input through normal lowering makes M64 usable by later body slices. | Medium if framed as typed pipeline wiring; high if it starts recognizing skeletons from raw body text or becomes a new raw-text dispatcher. | Select as M65. |
+| Exact skeleton-producing recognition | A future source/input adapter must eventually prove where exact skeletons come from. | High now because it invites broad TSIL parsing or exact-shape recognition from raw body text before the pipeline can consume typed skeletons cleanly. | Defer. |
+| First slot-specific lowering | M64 gives future slot-specific lowering named attachment points. | High now because normal lowering does not yet produce M64 envelopes, and slot lowering could pull in declaration, array, store, return, vector, or SVE semantics too early. | Defer until M64 is pipeline-reachable. |
+| Vector length/alignment helper semantics | The opaque array-initialization slot contains `value<generation>(vector::length)` and `value<generation>(vector::alignment)`. | Medium to high because it introduces vector metadata semantics before the whole-body envelope is produced by the normal pipeline. | Defer. |
+
+### Milestone 65: Exact Array Body Envelope Pipeline Integration Slice
+
+Status:
+
+Selected for human acceptance after post-M64 planning.
+
+Goal:
+
+Make the normal lowering pipeline populate accepted M64 exact array-body
+envelopes when supplied with in-memory typed/provenanced exact skeleton input.
+
+M65 is a pipeline-integration and maintainability slice. It turns M64 from a
+direct assembly boundary into a normal staged lowering output, without adding
+body semantics or skeleton recognition from raw TSIL text.
+
+Scope:
+
+- Consume accepted M63 `SelectedBodyEnvelopeIr` and
+  `NoSelectedBodyEnvelopeIr` values produced by the
+  `selected_body_envelope_lowering` stage inside the normal lowering path.
+- Consume explicit in-memory typed/provenanced `ExactArrayBodyEnvelopeSkeleton`
+  input supplied to lowering. Skeleton lookup must be keyed by typed
+  candidate id, selected type tag, and branch-chain identity, not by raw body
+  text.
+- Call the accepted M64 `assemble_exact_array_body_envelope` boundary when a
+  matching typed skeleton is supplied.
+- Populate `LoweredImplementation.array_body_envelopes` with the resulting
+  `ExactArrayBodyEnvelopeIr`.
+- Append a deterministic
+  `GenerationLoweringStage(stage="array_body_envelope_slot_assembly", ...)`
+  immediately after the accepted M63 `selected_body_envelope_lowering` stage.
+- Preserve existing M57-M64 values, diagnostics, ordering, selected/no-body
+  behavior, and backend raw-helper/rendering regressions.
+- Diagnose only M65 integration state, such as missing required skeleton input,
+  duplicate/conflicting skeletons, skeletons supplied for candidates without
+  an M63 envelope, and candidate/type/branch provenance mismatch. Unsupported
+  skeleton shape should continue through existing M64 diagnostics.
+
+Out of scope:
+
+- Producing or recognizing `ExactArrayBodyEnvelopeSkeleton` from raw payload
+  text.
+- Broad TSIL parsing or exact skeleton recognition from `array.tsl` text.
+- Slot-specific lowering or semantic interpretation of M64 slot labels.
+- Declaration semantics, assignment binding, variables, arrays, stores,
+  returns, primitive calls, casts, loops, `tmp.data()`, or `emit_return`.
+- SVE predicate/vector/register semantics, including meaning of `svbool_t`,
+  `pg`, `svptrue_b8`, `svptrue_b16/b32/b64`, or `svst1`.
+- Byte-size-to-intrinsic-token validation or inference.
+- Evaluation of `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, or
+  `value<backend>(uninit::array)`.
+- Backend intrinsic IR, backend translation requests, translation-map
+  evaluation, renderer-ready IR, rendering, generated C++/Rust output,
+  generated tests, CLI/reporting/writer behavior, compiler execution, or Rust.
+- File reads, catalog queries, raw TSL parsing, or runtime `frozen/` evidence
+  during lowering evaluation.
+
+Required input:
+
+- Accepted M63 selected/no-body envelope outputs from the normal lowering
+  path.
+- Accepted M64 `ExactArrayBodyEnvelopeSkeleton` values supplied in memory
+  through the lowering request/input boundary.
+
+Expected outputs:
+
+- Existing M57-M64 stage outputs preserved in deterministic order.
+- `ExactArrayBodyEnvelopeIr` values available in
+  `LoweredImplementation.array_body_envelopes`.
+- A final `array_body_envelope_slot_assembly` stage referencing the same
+  `ExactArrayBodyEnvelopeIr`.
+- Structured diagnostics for invalid M65 integration state.
+- No backend translation request, renderer-ready body, generated artifact,
+  SVE semantic object, vector metadata object, or semantic statement IR.
+
+Parity criterion:
+
+M65 proves the accepted M64 exact array-body envelope can be produced through
+the normal lowering pipeline from typed/provenanced skeleton input, without
+implementing skeleton recognition, semantic array-body lowering, SVE/direct
+intrinsic semantics, backend translation, rendering, generated output, or
+compiler parity.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:105-111` for the exact ordered
+  array-body evidence. The SVE-looking text remains evidence only.
+- `tslgen/src/tslgen/lowering/boundary.py` M64 models:
+  `ExactArrayBodyEnvelopeSkeletonSlot`, `ExactArrayBodyEnvelopeSkeleton`,
+  `ExactArrayBodyEnvelopeIr`, and `assemble_exact_array_body_envelope`.
+- `tslgen/src/tslgen/lowering/boundary.py` normal branch-chain lowering path,
+  which currently reaches M63 selected-body envelopes.
+- M64 unit tests in `tslgen/tests/unit/test_lowering_boundary.py` for direct
+  assembly, no-body handling, deterministic stage construction, mismatch
+  preservation, and boundary diagnostics.
+- Accepted M57-M64 staged lowering behavior.
+
+Tests required:
+
+- `lower_candidates` produces `ExactArrayBodyEnvelopeIr` in
+  `array_body_envelopes` when matching typed skeleton input is supplied.
+- The final `generation_stages` entry is
+  `array_body_envelope_slot_assembly` and references the same envelope stored
+  in `array_body_envelopes`.
+- Selected `svptrue_b16`, `svptrue_b32`, and `svptrue_b64` M63 envelopes
+  assemble through normal lowering.
+- `si8` and `ui8` no-body envelopes assemble through normal lowering without
+  synthesized selected branch text.
+- No-skeleton input preserves existing M63-only behavior unless the selected
+  M65 input contract explicitly marks a skeleton as required for the
+  candidate.
+- Duplicate/conflicting skeletons and skeleton/envelope provenance mismatches
+  produce structured diagnostics with source location and actionable messages.
+- Unsupported or non-exact skeleton shape continues to report existing M64
+  diagnostics.
+- Existing M57/M58/M59/M60/M61/M62/M63/M64 behavior remains unchanged.
+- Backend raw-helper rejection and renderer non-evaluation remain unchanged.
+- Determinism tests compare two normal lowering runs with the same skeleton
+  input.
+- No generated output or golden fixtures change.
+
+Golden fixtures required:
+
+- None. M65 is a lowering pipeline-integration slice and must not change
+  generated C++ or Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M65 pipeline-integration test command selected by the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Letting pipeline integration become skeleton recognition from raw body text.
+- Turning `lower_candidates` into a broad raw-string dispatcher.
+- Treating M64 slot labels or opaque source text as semantic statements.
+- Combining integration with slot-specific lowering, vector metadata, SVE
+  predicate/direct-intrinsic semantics, backend translation, or rendering.
+- Silently skipping missing or mismatched skeleton input when the selected
+  integration contract requires it.
+
+Dependencies on prior milestones:
+
+- Milestones 57, 58, 59, 60, 61, 62, 63, and 64.
+
+Next concrete prompt:
+
+- If the post-M64 planning result is accepted, update workflow state and
+  create `docs/agent/runs/post-m64-acceptance-finalization-prompt.md`. That
+  finalization prompt will create
+  `docs/agent/runs/m65-execution-review-loop-prompt.md` after explicit human
+  acceptance. Do not start M65 until the acceptance-finalization prompt records
+  acceptance.
