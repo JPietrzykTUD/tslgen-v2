@@ -410,6 +410,10 @@ separate from branch-chain pruning. The accepted staged direction is:
    form-recognition records before any semantic body lowering. M61 keeps this
    recognition boundary limited to the exact selected assignment form in the
    SVE size-byte branch bodies.
+7. Convert exactly selected recognized body forms into typed body-specific IR
+   values only after form recognition. The post-M61 plan selects M62 for the
+   exact M61 assignment/direct-intrinsic form, with unresolved backend-neutral
+   body IR and no SVE/backend/rendering semantics.
 
 This staged path is a semantic contract. It does not require every step to be a
 separate traversal immediately, but each milestone should expose typed outputs
@@ -462,6 +466,16 @@ literals to intrinsic token text, inspect unselected branch bodies, feed backend
 translation or rendering, add generated output, or parse broad TSIL body
 syntax.
 
+The post-M61 plan selects Milestone 62 as the first body-specific lowering IR
+slice. M62 consumes only M61 typed `selected_body_form_recognition` outputs and
+converts the exact selected assignment/direct-intrinsic form into unresolved,
+backend-neutral typed selected-body IR. It preserves the M61 assignment target,
+direct-intrinsic token text, original RHS/body text, selected type/literal, and
+provenance, but it must not derive semantics by rereading preserved body text.
+It must not validate intrinsic names, infer `type.size_bytes` to
+`svptrue_b*` mappings, prove SVE predicate meaning for `pg`, create backend
+translation requests, feed renderers, or emit generated output.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
@@ -472,8 +486,8 @@ M61 diagnostics:
 
 ## Explicit Deferrals
 
-Deferred beyond the implemented M43-M60 semantic-lowering slices and the
-current M61 form-recognition slice:
+Deferred beyond the implemented M43-M61 semantic-lowering slices and the
+selected M62 body-IR slice:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -486,11 +500,13 @@ current M61 form-recognition slice:
   values remain deferred except for the accepted M57 exact
   `type.size_bytes == 2/4/8` predicates. Branch-chain pruning over those
   predicates is implemented only for the exact M59 SVE size-byte no-final-else
-  branch chain; M60 adds only opaque selected-body handoff, and M61 adds only
-  exact selected assignment-form recognition. General
+  branch chain; M60 adds only opaque selected-body handoff, M61 adds only
+  exact selected assignment-form recognition, and selected M62 planning adds
+  only unresolved typed body IR for that recognized form. General
   `else if<generation>` syntax, final-else policy, broad branch pruning based
-  on generation values, assignment semantics, direct-intrinsic/SVE semantics,
-  and broad body lowering remain deferred.
+  on generation values, assignment semantics beyond that selected IR shape,
+  broad direct-intrinsic/SVE semantics, backend intrinsic lowering, and broad
+  body lowering remain deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only

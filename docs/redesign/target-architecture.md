@@ -399,6 +399,12 @@ Current roadmap note:
   `selected_body_form_recognition` stage. It stays a form-classification
   boundary and must not produce `TsilStatement` values, backend intrinsic
   calls, translation requests, rendered code, or generated artifacts.
+- Post-M61 planning selects Milestone 62 to add only unresolved typed selected
+  assignment/direct-intrinsic body IR from the M61 form-recognition record. It
+  must consume typed M61 fields, preserve original text as provenance, and
+  remain separate from SVE predicate semantics, backend intrinsic IR,
+  translation requests, renderer-ready IR, generated output, broad TSIL body
+  parsing, and lowering-time file/catalog reads.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

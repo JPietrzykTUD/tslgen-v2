@@ -768,6 +768,14 @@ Recommended first parity checks:
   uninspected,
   M57-M60 regressions, raw-helper rejection, renderer non-evaluation, and no
   generated output or golden-file changes.
+- Milestone 62 tests only unresolved selected assignment/direct-intrinsic body
+  IR from M61 form-recognition values: deterministic IR records for
+  `svptrue_b16`, `svptrue_b32`, and `svptrue_b64`, explicit no-selected-body/
+  no-body-IR results for `si8`/`ui8`, preservation of target/token/text/
+  provenance fields, a mismatch test proving selected byte-size literals are
+  not mapped to intrinsic tokens, unsupported M62 source/form diagnostics,
+  M57-M61 regressions, raw-helper rejection, renderer non-evaluation, and no
+  generated output or golden-file changes.
 
 Deferred parity checks:
 

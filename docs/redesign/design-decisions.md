@@ -1344,10 +1344,16 @@ Consequences:
   through a distinct `selected_body_form_recognition` stage, not assignment
   semantics, direct intrinsic/SVE IR, backend translation input, renderer-ready
   IR, or broad TSIL body parsing.
+- Post-M61 planning selects Milestone 62 as the first body-specific typed IR
+  step because M61 has already isolated the exact selected assignment form.
+  M62 must be a projection from typed M61 records into unresolved
+  selected-body IR, not a raw-text dispatcher, backend intrinsic request, SVE
+  predicate semantic evaluator, or renderer-ready representation.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
-- Broad modifier support, primitive calls, direct intrinsics, and Rust body
-  rendering remain deferred until their own helper slices are selected.
+- Broad modifier support, primitive calls, direct intrinsics beyond the
+  selected M62 unresolved body-IR shape, and Rust body rendering remain
+  deferred until their own helper slices are selected.
 - Future native rendering milestones must state which helper IR and translation
   data they consume before adding generated output.

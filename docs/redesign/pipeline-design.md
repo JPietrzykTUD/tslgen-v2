@@ -434,6 +434,14 @@ Milestone 61 adds only a typed selected-body assignment-form recognition record
 from M60 handoff values. That record is exposed through the distinct
 `selected_body_form_recognition` stage as a staged lowering classification
 boundary, not TSIL/body semantic lowering and not backend/rendering input.
+The post-M61 plan selects Milestone 62 as the next Stage 8 lowering boundary:
+it consumes only the M61 `selected_body_form_recognition` output and produces
+unresolved typed selected assignment/direct-intrinsic body IR for the exact
+recognized `pg = intrin<svptrue_b16/b32/b64>();` shape. M62 must preserve
+M61 target/token/text/provenance fields, must not derive semantics by matching
+preserved original body text, and must not create backend translation requests,
+renderer-ready expressions, generated output, broad TSIL body lowering, or
+SVE/backend intrinsic semantics.
 
 ## Stage 9: Backend Planning
 

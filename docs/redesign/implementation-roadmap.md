@@ -5759,8 +5759,7 @@ Candidate comparison:
 
 Status:
 
-Active execution slice after accepted post-M60 planning. Acceptance still
-belongs to the M61 execution-review loop.
+Accepted. M61 returned `Accept With Follow-Ups` after one focused revision.
 
 Goal:
 
@@ -5917,3 +5916,190 @@ Next concrete prompt:
 
 - Completed by `docs/agent/runs/m61-execution-review-loop-prompt.md`; the
   workflow now continues through post-M61 planning.
+
+## Post-M61 Planning Result
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Selected assignment direct-intrinsic body IR | M61 now exposes the selected `pg = intrin<svptrue_b16/b32/b64>();` form as typed, provenanced metadata. Converting that exact recognized form into an unresolved typed selected-body IR value is the first useful body-specific lowering step after form recognition. | Medium if it remains a typed IR projection from M61 records; high if "direct intrinsic" becomes SVE/backend semantic validation, translation input, or renderer-ready text. | Select as M62. |
+| Body-lowering request/result boundary only | A pure boundary could make future stages easier to attach, but M61 already provides a typed stage output that a very narrow IR slice can consume directly. | Low, but it risks being a cosmetic wrapper without advancing observable lowering capability. | Defer unless M62 implementation reveals the need. |
+| Broad direct `intrin<...>` / SVE body lowering | The selected bodies contain zero-argument `svptrue_b*` calls, and the surrounding SVE block uses predicate initialization and `svst1`. | Very high because it would combine assignment semantics, intrinsic validation, SVE predicate meaning, vector metadata, backend translation, and rendering/output pressure. | Defer. |
+| Vector length/alignment generation values | The same array evidence contains vector length and alignment helpers outside the selected generation branches. | Medium to high because it jumps away from the selected-body path and pulls in surrounding array/declaration semantics. | Defer. |
+| M49-M61 follow-up cleanup | Several accepted follow-ups remain non-blocking. | Low individually, but cleanup does not form the next lowering architecture milestone. | Keep recorded unless selected separately. |
+
+### Milestone 62: Selected Assignment Direct-Intrinsic Body IR Slice
+
+Status:
+
+Selected by post-M61 planning. Await human acceptance before execution.
+
+Goal:
+
+Convert the accepted M61 selected assignment-form record into a typed
+selected-body IR node for the exact zero-argument direct-intrinsic RHS already
+recognized by M61:
+
+```text
+pg = intrin<svptrue_b16>();
+pg = intrin<svptrue_b32>();
+pg = intrin<svptrue_b64>();
+```
+
+M62 is the first body-specific lowering step after form recognition. Its IR is
+an unresolved, backend-neutral lowering-stage value. It is not backend
+intrinsic IR, not a backend translation request, not renderer-ready text, and
+not SVE predicate semantics.
+
+Scope:
+
+- Consume only accepted typed `selected_body_form_recognition` outputs:
+  `SelectedBranchBodyAssignmentFormRecognition` and
+  `NoSelectedBranchBodyAssignmentFormRecognition`, or equivalent typed stage
+  values.
+- Produce a distinct typed selected assignment/direct-intrinsic body IR value
+  for the exact M61-recognized single-statement form.
+- Preserve candidate id, selected type tag, selected byte-size literal,
+  originating branch-chain identity, original body text, source/provenance,
+  assignment target text, opaque RHS text, direct-intrinsic token text, and
+  explicit empty argument list.
+- Represent `si8`/`ui8` byte-size `1` no-selected-body/no-form cases as an
+  explicit no-selected-body/no-body-IR result without synthesizing a body.
+- Expose the result through a distinct post-form-recognition stage, such as
+  `selected_body_ir_lowering`, instead of stretching M60 handoff metadata or
+  M61 form-recognition metadata into a mixed semantic dispatcher.
+- Diagnose only invalid M62 boundary state, such as unsupported M61
+  form-recognition boundary state, missing provenance, missing
+  direct-intrinsic token metadata, or inconsistent selected form-to-IR input.
+
+M62 must not read, parse, or match the preserved original body text to derive
+semantics. It may carry original text as provenance, but it may consume only
+typed fields already exposed by M61.
+
+Out of scope:
+
+- Assignment semantics, variable binding, declaration handling, target scope
+  validation, proving that `pg` is an SVE predicate, or checking that `pg` was
+  previously declared.
+- Direct-intrinsic semantic validation, SVE predicate semantics, mapping
+  byte-size literals to `svptrue_b*` intrinsic tokens, backend intrinsic IR,
+  backend translation input, backend metadata lookup, or translation-map
+  evaluation.
+- General `intrin<...>` lowering, non-zero-argument direct intrinsics,
+  primitive calls, casts, arrays, loops, declarations, stores, `emit_return`,
+  multi-statement body lowering, surrounding `svbool_t pg =
+  intrin<svptrue_b8>()`, `intrin<svst1>(...)`, backend uninit values,
+  `value<generation>(vector::length)`, or
+  `value<generation>(vector::alignment)`.
+- Backend translation expansion, rendering, generated output, generated tests,
+  CLI/reporting/writer behavior, Rust, compiler execution,
+  generated-test execution, broad TSIL parsing, central raw-string body
+  dispatch tables, lowering-time file reads, raw TSL parsing, catalog queries
+  during evaluation, or runtime dependency on `frozen/`.
+
+Required input:
+
+- M61 `SelectedBranchBodyAssignmentFormRecognition` and
+  `NoSelectedBranchBodyAssignmentFormRecognition` outputs from the distinct
+  `selected_body_form_recognition` stage. These values may carry provenance,
+  selected type/literal facts, and branch identity originating upstream, but
+  M62 must not separately consume M58 stage records, M59 pruning results, or
+  M60 handoff records.
+
+Expected outputs:
+
+- A distinct typed value such as
+  `SelectedAssignmentDirectIntrinsicBodyIr`, carrying:
+  - the selected candidate/type/literal/branch provenance from M60/M61,
+  - an assignment target record preserving text `pg`,
+  - an unresolved zero-argument direct-intrinsic expression record preserving
+    the M61 token text `svptrue_b16`, `svptrue_b32`, or `svptrue_b64`,
+  - the original RHS/body text only as provenance.
+- A distinct no-selected-body/no-body-IR result for byte-size `1` no-match
+  cases.
+- Boundary-level diagnostics for invalid M62 input state only.
+- No `TsilStatement`, `BackendIntrinsicCall`, backend translation request,
+  renderer-ready expression, rendered code, or generated artifact.
+
+Parity criterion:
+
+M62 proves the selected M61 assignment/direct-intrinsic form can become typed
+body-specific lowering IR without implementing assignment semantics, direct
+intrinsic semantics, SVE predicate meaning, backend translation, rendering,
+generated output, or compiler parity.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:107-109` for the exact selected
+  `pg = intrin<svptrue_b16/b32/b64>();` branch bodies.
+- `tsldata/primitives/load_store/array.tsl:105-106` and `:110-111` as
+  surrounding out-of-scope evidence for declarations, vector metadata, backend
+  uninit, stores, and `emit_return`.
+- Accepted M57 size-byte equality predicate lowering.
+- Accepted M58 staged lowering contract.
+- Accepted M59 exact branch-chain pruning.
+- Accepted M60 opaque selected-body handoff.
+- Accepted M61 selected assignment-form recognition.
+- `docs/redesign/generation-time-semantic-lowering.md` staged lowering
+  direction.
+
+Tests required:
+
+- Selected M61 records for `svptrue_b16`, `svptrue_b32`, and `svptrue_b64`
+  produce deterministic typed selected assignment/direct-intrinsic body IR
+  preserving target text, token text, empty arguments, selected literal,
+  selected type tag, original text, and provenance.
+- `si8` and `ui8` M61 no-form results produce explicit no-selected-body/
+  no-body-IR results without synthesizing a body or form.
+- A synthetic mismatch between selected byte-size literal and
+  direct-intrinsic token text preserves both values without diagnosing or
+  correcting them, proving M62 does not infer a size-to-intrinsic mapping.
+- Unsupported M61 form-recognition boundary state produces M62 boundary
+  diagnostics without classifying SVE/backend semantics.
+- M62 consumes M61 typed fields and does not parse preserved original body text
+  to derive target or RHS semantics.
+- Regression tests preserve M57 predicates, M58 stage records, M59 pruning,
+  M60 handoff, M61 form recognition, backend raw-helper rejection, and
+  renderer non-evaluation.
+- Determinism tests cover selected body IR and no-body-IR results.
+
+Golden fixtures required:
+
+- None. M62 is a lowering/body-IR slice and must not change generated C++ or
+  Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M62 selected assignment direct-intrinsic body IR test command
+  selected by the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Letting the selected body IR become backend intrinsic IR, translation input,
+  renderer-ready text, generated output, or SVE predicate semantics.
+- Re-reading or matching original body text instead of consuming typed M61
+  fields.
+- Inferring a byte-size-to-`svptrue_b*` mapping rather than preserving the M61
+  token text.
+- Adding assignment binding, declaration/scope checks, broad call lowering,
+  or a central raw-string body dispatcher.
+- Pulling in surrounding vector length/alignment, backend uninit, stores,
+  arrays, declarations, calls, casts, loops, `emit_return`, generated tests,
+  CLI/reporting, Rust, compiler execution, or runtime `frozen/` use.
+- Making lowering evaluation read files, parse raw TSL, query the catalog, or
+  construct catalog-derived rule data during evaluation.
+
+Dependencies on prior milestones:
+
+- Milestones 41, 42, 43, 48, 51, 52, 53, 54, 55, 57, 58, 59, 60, and 61.
+
+Next concrete prompt:
+
+- If accepted by the user, continue with
+  `docs/agent/runs/post-m61-acceptance-finalization-prompt.md`, which will
+  create the M62 execution-review loop prompt. Do not start M62 execution from
+  post-M61 planning.
