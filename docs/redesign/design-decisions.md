@@ -1366,9 +1366,9 @@ Consequences:
   from typed/provenanced skeleton input, without turning `lower_candidates`
   into a raw-text dispatcher and without adding skeleton recognition or
   body-slot semantics.
-- Milestone 66 selects exact array-initialization slot form IR as the first
+- Milestone 66 uses exact array-initialization slot form IR as the first
   slot-specific refinement because M65 made the whole-body envelope reachable
-  through normal lowering. M66 should refine only the first
+  through normal lowering. M66 refines only the first
   `opaque_pre_branch_array_initialization` slot into typed form IR, leaving
   vector metadata evaluation, backend uninit semantics, skeleton production,
   store/return lowering, SVE/direct-intrinsic semantics, backend translation,
@@ -1376,10 +1376,9 @@ Consequences:
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
-- Broad modifier support, primitive calls, direct intrinsics beyond the
-  accepted M62 unresolved body-IR shape, accepted M63 singleton envelope
-  shape, accepted M64 exact structural slot envelope, accepted M65 pipeline
-  integration, selected M66 exact first-slot form IR, and Rust body rendering
-  remain deferred until their own helper slices are selected.
+- Broad modifier support, primitive calls, direct-intrinsic semantics beyond
+  the accepted M62 unresolved body-IR shape, and broad C++/Rust body rendering
+  beyond the accepted M63/M64/M65 envelope path and M66 first-slot form-IR
+  boundary remain deferred until their own helper slices are selected.
 - Future native rendering milestones must state which helper IR and translation
   data they consume before adding generated output.

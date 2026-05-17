@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 65 is accepted.
+Milestone 66 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -158,39 +158,43 @@ review returned `Accept With Follow-Ups` after local planning-doc updates.
 Post-M65 planning is accepted. It selected
 `Milestone 66: Exact Array Initialization Slot Form IR Slice`.
 
+The M66 execution-review loop returned `Accept` after one focused
+public-boundary revision, generated package artifact cleanup, and focused
+documentation wording revisions.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 66.
+Plan the next milestone after M66. For the next task, focus on lowering.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m66-execution-review-loop-prompt.md
+docs/agent/runs/post-m66-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 66: Exact Array Initialization Slot Form IR Slice
+No active executor milestone. Post-M66 planning is active.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M65 planning returned Accept With Follow-Ups after local planning-doc
-updates. Post-M65 planning is accepted.
+M66 execution-review loop returned Accept after focused boundary and
+documentation revisions. No M66 follow-ups remain.
 ```
 
 Next expected action:
 
 ```text
-Run the active M66 execution-review loop prompt. Use the specified single
-write-capable executor followed by read-only review/audit subagents. Do not
-start M67.
+Run the active post-M66 planning-plus-review prompt. Use the specified
+read-only planning/review subagents. Do not implement code or start M67 unless
+the active prompt explicitly selects an executor task.
 ```
 
 Accepted planning prompt:
@@ -511,10 +515,16 @@ Accepted post-M65 acceptance finalization prompt:
 docs/agent/runs/post-m65-acceptance-finalization-prompt.md
 ```
 
-Active M66 execution-review loop prompt:
+Accepted M66 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m66-execution-review-loop-prompt.md
+```
+
+Active post-M66 planning prompt:
+
+```text
+docs/agent/runs/post-m66-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -919,11 +929,11 @@ docs/agent/runs/m66-execution-review-loop-prompt.md
   translation, renderer-ready IR, rendering, output, CLI/report/writer, Rust,
   compiler, generated-test, file-read, catalog-query, raw TSL parsing, or
   runtime `frozen/` behavior.
-- M66 is selected for human acceptance as exact array-initialization slot form
-  IR only. M66 must consume accepted M65 `ExactArrayBodyEnvelopeIr` /
+- M66 is accepted as exact array-initialization slot form IR only. M66
+  consumes accepted M65 `ExactArrayBodyEnvelopeIr` /
   `LoweredImplementation.array_body_envelopes` values or the typed
-  `array_body_envelope_slot_assembly` stage, refine only the
-  `opaque_pre_branch_array_initialization` slot at ordinal `0`, and preserve
+  `array_body_envelope_slot_assembly` stage, refines only the
+  `opaque_pre_branch_array_initialization` slot at ordinal `0`, and preserves
   all other slots as opaque.
 - M66 may use the typed slot's opaque source text only for local exact-form
   recognition of `tsldata/primitives/load_store/array.tsl:105`; it must not
@@ -1539,20 +1549,31 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   `array_body_envelope_skeletons` producing identical lowering output or
   diagnostics. Review found the implementation deterministic, but this direct
   test remains useful.
-- Post-M65 planning follow-up for M66 execution: keep the slice as exact
-  array-initialization slot form IR, not semantic array/declaration lowering.
-- Post-M65 planning follow-up for M66 execution: consume typed M65
-  envelope/stage outputs only, and use typed slot opaque text only for local
-  exact-form recognition rather than raw payload scanning or raw-text
-  dispatch.
-- Post-M65 planning follow-up for M66 execution: keep
+- Post-M65 planning follow-up addressed by M66: the implementation keeps the
+  slice as exact array-initialization slot form IR, not semantic
+  array/declaration lowering.
+- Post-M65 planning follow-up addressed by M66: the implementation consumes
+  typed M65 envelope/stage outputs only, and uses typed slot opaque text only
+  for local exact-form recognition rather than raw payload scanning or
+  raw-text dispatch.
+- Post-M65 planning follow-up addressed by M66: the implementation keeps
   `type<generation>(base::in)`, `value<generation>(vector::length)`,
   `value<generation>(vector::alignment)`, and
   `value<backend>(uninit::array)` unresolved.
+- M66 review follow-up addressed during the execution-review loop: remove the
+  public caller-supplied slot override from
+  `lower_exact_array_initialization_slot_form` so the public boundary always
+  refines the selected M65 envelope's own slot `0`.
+- M66 boundary follow-up addressed during the execution-review loop: remove an
+  accidental untracked generated package artifact under
+  `tslgen/tslgen-0.1.0a1`.
+- M66 documentation follow-up addressed during the execution-review loop:
+  align redesign docs so M66 is not described as deferred after
+  implementation.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with M66 execution.
+No stop condition is active. The workflow proceeds with post-M66 planning.
 
 ## Validation Expectations
 

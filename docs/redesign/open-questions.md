@@ -1293,11 +1293,11 @@ Milestone 65 is accepted as exact array-body envelope pipeline integration. It
 makes normal lowering produce M64 envelopes from typed/provenanced skeleton
 input, but it still does not produce skeletons from raw body text or answer
 semantic questions about the surrounding body.
-Milestone 66 is selected to answer only the first surrounding-body question at
-form-IR level: the exact `array.tsl:105` array-initialization slot may become
-typed form IR over accepted M65 envelopes. It still leaves vector metadata,
-backend uninit evaluation, broad declaration/array semantics, store/return
-semantics, SVE/direct-intrinsic semantics, translation, and rendering open.
+Milestone 66 implements only the first surrounding-body question at form-IR
+level: the exact `array.tsl:105` array-initialization slot becomes typed form
+IR over accepted M65 envelopes. It still leaves vector metadata, backend
+uninit evaluation, broad declaration/array semantics, store/return semantics,
+SVE/direct-intrinsic semantics, translation, and rendering open.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1311,9 +1311,9 @@ size-byte equality predicates, branch-chain pruning beyond the accepted narrow
 M59 slice over those predicates, selected body handling beyond the accepted
 opaque M60 handoff, M61 assignment-form recognition slice, accepted M62
 unresolved body-IR shape, accepted M63 singleton envelope shape, accepted M64
-narrow structural slot envelope, accepted M65 pipeline integration, selected
-M66 exact array-initialization slot form IR, and other
-nested expressions, direct
+narrow structural slot envelope, accepted M65 pipeline integration, and
+body-slot semantics beyond the M66 exact first-slot form-IR boundary,
+including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
 `algo`, Rust output, generated tests beyond the selected M49 source fixture,
 CLI/report parity, compiler execution, and broad native rendering.

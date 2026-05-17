@@ -6650,7 +6650,7 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance after post-M65 planning.
+Accepted after the M66 execution-review loop.
 
 Goal:
 
@@ -6808,11 +6808,7 @@ Dependencies on prior milestones:
 
 - Milestones 57, 58, 59, 60, 61, 62, 63, 64, and 65.
 
-Next concrete prompt:
+Execution-review result:
 
-- If the post-M65 planning result is accepted, update workflow state and
-  create `docs/agent/runs/post-m65-acceptance-finalization-prompt.md`. That
-  finalization prompt will create
-  `docs/agent/runs/m66-execution-review-loop-prompt.md` after explicit human
-  acceptance. Do not start M66 until the acceptance-finalization prompt records
-  acceptance.
+- M66 is accepted. The next workflow action is post-M66 planning; this section
+  does not select the follow-on milestone.

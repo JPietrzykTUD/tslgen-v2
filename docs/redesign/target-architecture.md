@@ -426,10 +426,11 @@ Current roadmap note:
   input, without turning `lower_candidates` into a raw-text dispatcher and
   without adding skeleton recognition, slot semantics, backend translation,
   rendering, output, or broad TSIL parsing.
-- Milestone 66 is selected as the first slot-specific form-IR boundary over
-  that M65 envelope. It should consume `ExactArrayBodyEnvelopeIr`, refine only
-  the `opaque_pre_branch_array_initialization` slot into typed exact form IR,
-  and preserve all other slots as opaque provenance. It must not evaluate
+- Milestone 66 is the first slot-specific form-IR boundary over that M65
+  envelope. It consumes `ExactArrayBodyEnvelopeIr`, refines only the
+  `opaque_pre_branch_array_initialization` slot at ordinal `0` into typed exact
+  form IR, appends a distinct `array_initialization_slot_form_lowering` stage,
+  and preserves all other slots as opaque provenance. It must not evaluate
   vector metadata or backend uninit helpers, add broad declaration/array/
   variable semantics, lower store/return slots, introduce backend translation,
   rendering, output, or broad TSIL parsing.

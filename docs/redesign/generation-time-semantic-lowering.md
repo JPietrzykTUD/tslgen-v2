@@ -513,9 +513,9 @@ raw body text, parse broad TSIL, lower slot semantics, infer SVE/direct
 intrinsic meanings, evaluate vector length/alignment or backend uninit values,
 feed backend translation or rendering, or emit generated output.
 
-Milestone 66 is selected as the exact array-initialization slot form-IR
-boundary. It consumes accepted M65 `ExactArrayBodyEnvelopeIr` values and
-refines only the `opaque_pre_branch_array_initialization` slot for the exact
+Milestone 66 implements the exact array-initialization slot form-IR boundary.
+It consumes accepted M65 `ExactArrayBodyEnvelopeIr` values and refines only the
+`opaque_pre_branch_array_initialization` slot at ordinal `0` for the exact
 `tsldata/primitives/load_store/array.tsl:105` form into typed form IR. M66
 records unresolved typed/provenance leaves for `type<generation>(base::in)`,
 `value<generation>(vector::length)`,
@@ -567,11 +567,30 @@ M65 diagnostics:
   skeleton and M63 envelope disagree on candidate id, selected type tag,
   branch-chain identity, or source provenance required for assembly.
 
+M66 diagnostics:
+
+- `TSL-LOWER-ARRAY-INIT-SLOT-SOURCE-UNSUPPORTED`: exact
+  array-initialization slot form lowering was invoked with something other
+  than an accepted M65 `ExactArrayBodyEnvelopeIr`, the
+  `array_body_envelope_slot_assembly` stage output, or a matching lowered
+  implementation envelope.
+- `TSL-LOWER-ARRAY-INIT-SLOT-MISSING`: no accepted M65 array-body envelope or
+  slot is available for the M66 form boundary.
+- `TSL-LOWER-ARRAY-INIT-SLOT-WRONG-POSITION`: the typed slot evidence is not
+  the `opaque_pre_branch_array_initialization` slot at ordinal `0`.
+- `TSL-LOWER-ARRAY-INIT-SLOT-FORM-MALFORMED`: slot text selected from the M65
+  envelope does not have the exact `array.tsl:105` form.
+- `TSL-LOWER-ARRAY-INIT-SLOT-HELPER-UNSUPPORTED`: the slot has the surrounding
+  `var<typed>(array_type<...>, tmp, ...)` shape but one of the unresolved
+  helper leaves is not the exact M66 helper evidence.
+- `TSL-LOWER-ARRAY-INIT-SLOT-PROVENANCE-MISMATCH`: the slot and envelope
+  disagree on candidate id, selected type tag, or branch-chain identity.
+
 ## Explicit Deferrals
 
-Deferred beyond the implemented M43-M65 semantic-lowering, structural
-slot-assembly, and pipeline-integration slices plus selected M66 exact
-array-initialization slot form IR:
+Deferred beyond the implemented M43-M66 semantic-lowering, structural
+slot-assembly, pipeline-integration, and exact array-initialization slot form
+IR slices:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -590,14 +609,14 @@ array-initialization slot form IR:
   envelope/sequence boundary over those M62 typed values. Accepted M64 adds
   only exact structural array-body slot assembly around M63 envelopes, and
   accepted M65 wires that typed envelope into the normal lowering pipeline
-  without adding skeleton recognition or slot semantics. Selected M66 refines
-  only the exact first array-initialization slot into typed form IR while
+  without adding skeleton recognition or slot semantics. M66 refines only the
+  exact first array-initialization slot into typed form IR while
   keeping helper evaluation and other slots deferred. General
   `else if<generation>` syntax, final-else policy, broad branch pruning based
   on generation values, assignment semantics beyond that selected IR shape,
   broad direct-intrinsic/SVE semantics, backend intrinsic lowering, vector
   length/alignment semantics, backend uninit semantics, surrounding
-  declaration/store/return semantics beyond the selected exact M66 form,
+  declaration/store/return semantics beyond the exact M66 form,
   skeleton recognition from raw body text, and broad body lowering remain
   deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:

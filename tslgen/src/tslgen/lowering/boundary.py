@@ -55,6 +55,7 @@ type GenerationLoweringStageName = Literal[
     "selected_body_ir_lowering",
     "selected_body_envelope_lowering",
     "array_body_envelope_slot_assembly",
+    "array_initialization_slot_form_lowering",
 ]
 type GenerationSelectedBranchBodyHandoff = (
     OpaqueSelectedBranchBodyHandoff | NoSelectedBranchBodyHandoff
@@ -79,6 +80,12 @@ type ExactArrayBodyEnvelopeSlotLabel = Literal[
 type ExactArrayBodyEnvelopeSlot = (
     ExactArrayBodyEnvelopeOpaqueSlot | ExactArrayBodyEnvelopeSelectedSlot
 )
+type ExactArrayInitializationHelperLeafKind = Literal[
+    "type_generation_base_in",
+    "value_generation_vector_length",
+    "value_generation_vector_alignment",
+    "value_backend_uninit_array",
+]
 type TsilBinaryOperator = Literal["+"]
 type TsilExpression = (
     TsilParameterReference | TsilBinaryExpression | TsilIntrinsicComposeExpression
@@ -99,6 +106,7 @@ type GenerationLoweringStageOutput = (
     | SelectedBodyEnvelopeIr
     | NoSelectedBodyEnvelopeIr
     | ExactArrayBodyEnvelopeIr
+    | ExactArrayInitializationSlotFormIr
     | TsilStatement
 )
 
@@ -153,6 +161,42 @@ _SELECTED_BODY_ASSIGNMENT_DIRECT_INTRINSIC_TOKENS = (
 )
 _SELECTED_BODY_ASSIGNMENT_RHS_RE = re.compile(
     rf"\Aintrin\s*<\s*({_TSIL_IDENTIFIER})\s*>\s*\(\s*\)\Z"
+)
+_EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND: dict[
+    ExactArrayInitializationHelperLeafKind, str
+] = {
+    "type_generation_base_in": "type<generation>(base::in)",
+    "value_generation_vector_length": "value<generation>(vector::length)",
+    "value_generation_vector_alignment": "value<generation>(vector::alignment)",
+    "value_backend_uninit_array": "value<backend>(uninit::array)",
+}
+_ARRAY_INITIALIZATION_HELPER_TARGET = rf"{_TSIL_IDENTIFIER}::{_TSIL_IDENTIFIER}"
+_ARRAY_INITIALIZATION_HELPER_SHAPE = (
+    rf"(?:type|value)<(?:generation|backend)>\("
+    rf"{_ARRAY_INITIALIZATION_HELPER_TARGET}\)"
+)
+_EXACT_ARRAY_INITIALIZATION_SLOT_RE = re.compile(
+    r"\A[ \t]*var<typed>\("
+    r"array_type<"
+    r"(?P<base_type>type<generation>\(base::in\))"
+    r",[ \t]*"
+    r"(?P<vector_length>value<generation>\(vector::length\))"
+    r",[ \t]*"
+    r"(?P<vector_alignment>value<generation>\(vector::alignment\))"
+    r">,[ \t]*(?P<variable>tmp),[ \t]*"
+    r"(?P<backend_uninit>value<backend>\(uninit::array\))"
+    r"\)[ \t]*\Z"
+)
+_ARRAY_INITIALIZATION_SLOT_HELPER_SHAPE_RE = re.compile(
+    r"\A[ \t]*var<typed>\("
+    rf"array_type<(?P<base_type>{_ARRAY_INITIALIZATION_HELPER_SHAPE})"
+    r",[ \t]*"
+    rf"(?P<vector_length>{_ARRAY_INITIALIZATION_HELPER_SHAPE})"
+    r",[ \t]*"
+    rf"(?P<vector_alignment>{_ARRAY_INITIALIZATION_HELPER_SHAPE})"
+    r">,[ \t]*tmp,[ \t]*"
+    rf"(?P<backend_uninit>{_ARRAY_INITIALIZATION_HELPER_SHAPE})"
+    r"\)[ \t]*\Z"
 )
 
 
@@ -1247,6 +1291,117 @@ class ExactArrayBodyEnvelopeIr:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactArrayInitializationUnresolvedLeaf:
+    kind: ExactArrayInitializationHelperLeafKind
+    source_text: str
+    source_location: SourceLocation
+
+    def __post_init__(self) -> None:
+        expected_text = _EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND.get(self.kind)
+        if expected_text is None:
+            raise ValueError("array-initialization helper leaf kind is unsupported")
+        if self.source_text != expected_text:
+            raise ValueError(
+                "array-initialization helper leaf text must match its exact kind"
+            )
+        if self.source_location is None:
+            raise ValueError(
+                "array-initialization helper leaf requires source location"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_initialization_unresolved_leaf",
+            self.kind,
+            self.source_text,
+            self.source_location.sort_key(),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ExactArrayInitializationSlotFormIr:
+    source_envelope: ExactArrayBodyEnvelopeIr
+    slot_label: Literal["opaque_pre_branch_array_initialization"]
+    slot_ordinal: int
+    source_location: SourceLocation
+    candidate_id: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+    original_slot_text: str
+    variable_token: str
+    variable_token_location: SourceLocation
+    base_type_leaf: ExactArrayInitializationUnresolvedLeaf
+    vector_length_leaf: ExactArrayInitializationUnresolvedLeaf
+    vector_alignment_leaf: ExactArrayInitializationUnresolvedLeaf
+    backend_uninit_leaf: ExactArrayInitializationUnresolvedLeaf
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_envelope, ExactArrayBodyEnvelopeIr):
+            raise TypeError(
+                "array-initialization slot form requires an M65 array-body envelope"
+            )
+        if self.slot_label != "opaque_pre_branch_array_initialization":
+            raise ValueError(
+                "array-initialization slot form label must be "
+                "opaque_pre_branch_array_initialization"
+            )
+        if self.slot_ordinal != 0:
+            raise ValueError("array-initialization slot form ordinal must be 0")
+        if self.source_location is None:
+            raise ValueError("array-initialization slot form requires source location")
+        if not self.candidate_id:
+            raise ValueError(
+                "array-initialization slot form candidate id must be non-empty"
+            )
+        if not self.selected_type_tag:
+            raise ValueError(
+                "array-initialization slot form type tag must be non-empty"
+            )
+        if not self.originating_branch_chain_id:
+            raise ValueError(
+                "array-initialization slot form branch-chain id must be non-empty"
+            )
+        if (
+            self.candidate_id != self.source_envelope.candidate_id
+            or self.selected_type_tag != self.source_envelope.selected_type_tag
+            or self.originating_branch_chain_id
+            != self.source_envelope.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "array-initialization slot form provenance must match its M65 envelope"
+            )
+        if not self.original_slot_text.strip():
+            raise ValueError("array-initialization slot form text must be non-empty")
+        if self.variable_token != "tmp":
+            raise ValueError("array-initialization slot form variable token must be tmp")
+        if self.variable_token_location is None:
+            raise ValueError(
+                "array-initialization slot form variable token requires source location"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_initialization_slot_form_ir",
+            self.source_envelope.key,
+            self.slot_label,
+            self.slot_ordinal,
+            self.source_location.sort_key(),
+            self.candidate_id,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+            self.original_slot_text,
+            self.variable_token,
+            self.variable_token_location.sort_key(),
+            self.base_type_leaf.key,
+            self.vector_length_leaf.key,
+            self.vector_alignment_leaf.key,
+            self.backend_uninit_leaf.key,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class PrunedGenerationBranch:
     condition: TsilGenerationCondition
     selected_branch: GenerationBranchChoice
@@ -1382,6 +1537,8 @@ class GenerationLoweringStage:
             )
         elif self.stage == "array_body_envelope_slot_assembly":
             expected = (ExactArrayBodyEnvelopeIr,)
+        elif self.stage == "array_initialization_slot_form_lowering":
+            expected = (ExactArrayInitializationSlotFormIr,)
         else:
             raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
         if not isinstance(self.output, expected):
@@ -1412,6 +1569,9 @@ class LoweredImplementation:
     selected_branch_body_irs: tuple[GenerationSelectedBranchBodyIr, ...] = ()
     selected_body_envelopes: tuple[GenerationSelectedBodyEnvelopeIr, ...] = ()
     array_body_envelopes: tuple[ExactArrayBodyEnvelopeIr, ...] = ()
+    array_initialization_slot_forms: tuple[
+        ExactArrayInitializationSlotFormIr, ...
+    ] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -1470,6 +1630,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "array_initialization_slot_forms",
+            tuple(self.array_initialization_slot_forms),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -1492,6 +1657,7 @@ class LoweredImplementation:
             tuple(body_ir.key for body_ir in self.selected_branch_body_irs),
             tuple(envelope.key for envelope in self.selected_body_envelopes),
             tuple(envelope.key for envelope in self.array_body_envelopes),
+            tuple(form.key for form in self.array_initialization_slot_forms),
             tuple(stage.key for stage in self.generation_stages),
         )
 
@@ -1944,6 +2110,125 @@ def assemble_exact_array_body_envelope(
         )
 
 
+def lower_exact_array_initialization_slot_form(
+    source: object,
+) -> Result[ExactArrayInitializationSlotFormIr]:
+    envelope_result = _array_initialization_slot_form_source(source)
+    if not envelope_result.is_ok:
+        return Result.failure(envelope_result.diagnostics)
+
+    envelope = envelope_result.unwrap()
+    selected_slot = _array_initialization_envelope_slot(envelope)
+    if selected_slot is None:
+        return Result.failure(
+            (
+                _array_initialization_slot_missing_diagnostic(
+                    "array-initialization slot form lowering requires the M65 "
+                    "opaque_pre_branch_array_initialization slot at ordinal 0",
+                    envelope.source_location,
+                ),
+            )
+        )
+    if not isinstance(selected_slot, ExactArrayBodyEnvelopeOpaqueSlot):
+        return Result.failure(
+            (
+                _array_initialization_slot_wrong_position_diagnostic(
+                    "array-initialization slot form lowering requires an opaque "
+                    "M65 slot, but the selected slot is not opaque",
+                    selected_slot.source_location,
+                ),
+            )
+        )
+
+    slot_diagnostic = _validate_array_initialization_slot_position(
+        envelope,
+        selected_slot,
+    )
+    if slot_diagnostic is not None:
+        return Result.failure((slot_diagnostic,))
+
+    exact_match = _EXACT_ARRAY_INITIALIZATION_SLOT_RE.match(
+        selected_slot.opaque_source_text,
+    )
+    if exact_match is None:
+        shape_match = _ARRAY_INITIALIZATION_SLOT_HELPER_SHAPE_RE.match(
+            selected_slot.opaque_source_text,
+        )
+        if shape_match is not None:
+            return Result.failure(
+                (
+                    _array_initialization_slot_helper_unsupported_diagnostic(
+                        selected_slot,
+                    ),
+                )
+            )
+        return Result.failure(
+            (
+                _array_initialization_slot_malformed_diagnostic(
+                    "array-initialization slot form lowering recognizes only "
+                    "the exact array.tsl:105 var<typed>(array_type<...>, tmp, "
+                    "value<backend>(uninit::array)) form",
+                    selected_slot.source_location,
+                ),
+            )
+        )
+
+    try:
+        return Result.ok(
+            ExactArrayInitializationSlotFormIr(
+                source_envelope=envelope,
+                slot_label="opaque_pre_branch_array_initialization",
+                slot_ordinal=selected_slot.ordinal,
+                source_location=selected_slot.source_location,
+                candidate_id=selected_slot.candidate_id,
+                selected_type_tag=selected_slot.selected_type_tag,
+                originating_branch_chain_id=(
+                    selected_slot.originating_branch_chain_id
+                ),
+                original_slot_text=selected_slot.opaque_source_text,
+                variable_token=exact_match.group("variable"),
+                variable_token_location=_source_span_for_match_group(
+                    selected_slot.source_location,
+                    exact_match,
+                    "variable",
+                ),
+                base_type_leaf=_array_initialization_leaf(
+                    "type_generation_base_in",
+                    selected_slot.source_location,
+                    exact_match,
+                    "base_type",
+                ),
+                vector_length_leaf=_array_initialization_leaf(
+                    "value_generation_vector_length",
+                    selected_slot.source_location,
+                    exact_match,
+                    "vector_length",
+                ),
+                vector_alignment_leaf=_array_initialization_leaf(
+                    "value_generation_vector_alignment",
+                    selected_slot.source_location,
+                    exact_match,
+                    "vector_alignment",
+                ),
+                backend_uninit_leaf=_array_initialization_leaf(
+                    "value_backend_uninit_array",
+                    selected_slot.source_location,
+                    exact_match,
+                    "backend_uninit",
+                ),
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        return Result.failure(
+            (
+                _array_initialization_slot_provenance_mismatch_diagnostic(
+                    str(exc),
+                    selected_slot.source_location,
+                ),
+            )
+        )
+
+
 def resolve_generation_type_query(
     query_text: str,
     context: GenerationContext | None = None,
@@ -2129,6 +2414,15 @@ def _array_body_envelope_slot_assembly_stage(
     )
 
 
+def _array_initialization_slot_form_stage(
+    output: ExactArrayInitializationSlotFormIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="array_initialization_slot_form_lowering",
+        output=output,
+    )
+
+
 def _stage_output_location(
     output: GenerationLoweringStageOutput,
 ) -> SourceLocation | None:
@@ -2153,6 +2447,7 @@ def _stage_output_location(
             SelectedBodyEnvelopeIr,
             NoSelectedBodyEnvelopeIr,
             ExactArrayBodyEnvelopeIr,
+            ExactArrayInitializationSlotFormIr,
         ),
     ):
         return output.source_location
@@ -2456,6 +2751,147 @@ def _array_body_envelope_m63_source(
     )
 
 
+def _array_initialization_slot_form_source(
+    source: object,
+) -> Result[ExactArrayBodyEnvelopeIr]:
+    if isinstance(source, ExactArrayBodyEnvelopeIr):
+        return Result.ok(source)
+    if isinstance(source, GenerationLoweringStage):
+        if (
+            source.stage == "array_body_envelope_slot_assembly"
+            and isinstance(source.output, ExactArrayBodyEnvelopeIr)
+        ):
+            return Result.ok(source.output)
+        location = _stage_output_location(source.output)
+        return Result.failure(
+            (
+                _array_initialization_slot_source_unsupported_diagnostic(
+                    "array-initialization slot form lowering consumes only "
+                    "typed M65 ExactArrayBodyEnvelopeIr values, the "
+                    "array_body_envelope_slot_assembly stage output, or a "
+                    "LoweredImplementation with a matching M65 envelope",
+                    location,
+                ),
+            )
+        )
+    if isinstance(source, LoweredImplementation):
+        if len(source.array_body_envelopes) == 1:
+            return Result.ok(source.array_body_envelopes[0])
+        if len(source.array_body_envelopes) == 0:
+            return Result.failure(
+                (
+                    _array_initialization_slot_missing_diagnostic(
+                        "array-initialization slot form lowering requires a "
+                        "LoweredImplementation carrying an accepted M65 "
+                        "array_body_envelopes entry",
+                        _lowered_implementation_location(source),
+                    ),
+                )
+            )
+        return Result.failure(
+            (
+                _array_initialization_slot_source_unsupported_diagnostic(
+                    "array-initialization slot form lowering consumes exactly "
+                    "one M65 array-body envelope at this boundary",
+                    _lowered_implementation_location(source),
+                ),
+            )
+        )
+    return Result.failure(
+        (
+            _array_initialization_slot_source_unsupported_diagnostic(
+                "array-initialization slot form lowering consumes only typed "
+                "M65 ExactArrayBodyEnvelopeIr values or "
+                "array_body_envelope_slot_assembly stage output",
+                None,
+            ),
+        )
+    )
+
+
+def _array_initialization_envelope_slot(
+    envelope: ExactArrayBodyEnvelopeIr,
+) -> ExactArrayBodyEnvelopeSlot | None:
+    if len(envelope.slots) <= 0:
+        return None
+    return envelope.slots[0]
+
+
+def _validate_array_initialization_slot_position(
+    envelope: ExactArrayBodyEnvelopeIr,
+    slot: ExactArrayBodyEnvelopeOpaqueSlot,
+) -> Diagnostic | None:
+    if (
+        slot.candidate_id != envelope.candidate_id
+        or slot.selected_type_tag != envelope.selected_type_tag
+        or slot.originating_branch_chain_id != envelope.originating_branch_chain_id
+    ):
+        return _array_initialization_slot_provenance_mismatch_diagnostic(
+            "array-initialization slot provenance must match the M65 "
+            "array-body envelope candidate id, selected type tag, and "
+            "branch-chain identity",
+            slot.source_location,
+        )
+    if (
+        slot.label != "opaque_pre_branch_array_initialization"
+        or slot.ordinal != 0
+    ):
+        return _array_initialization_slot_wrong_position_diagnostic(
+            "array-initialization slot form lowering refines only the "
+            "opaque_pre_branch_array_initialization slot at ordinal 0; got "
+            f"label {slot.label!r} and ordinal {slot.ordinal!r}",
+            slot.source_location,
+        )
+    return None
+
+
+def _array_initialization_leaf(
+    kind: ExactArrayInitializationHelperLeafKind,
+    slot_location: SourceLocation,
+    match: re.Match[str],
+    group_name: str,
+) -> ExactArrayInitializationUnresolvedLeaf:
+    return ExactArrayInitializationUnresolvedLeaf(
+        kind=kind,
+        source_text=match.group(group_name),
+        source_location=_source_span_for_match_group(
+            slot_location,
+            match,
+            group_name,
+        ),
+    )
+
+
+def _source_span_for_match_group(
+    source_location: SourceLocation,
+    match: re.Match[str],
+    group_name: str,
+) -> SourceLocation:
+    start = match.start(group_name)
+    end = match.end(group_name)
+    return SourceLocation(
+        source_location.path,
+        source_location.line,
+        source_location.column + start,
+        end_line=source_location.line,
+        end_column=source_location.column + end,
+    )
+
+
+def _lowered_implementation_location(
+    implementation: LoweredImplementation,
+) -> SourceLocation | None:
+    for array_envelope in implementation.array_body_envelopes:
+        return array_envelope.source_location
+    for selected_envelope in implementation.selected_body_envelopes:
+        return selected_envelope.source_location
+    for stage in implementation.generation_stages:
+        location = _stage_output_location(stage.output)
+        if location is not None:
+            return location
+    return None
+
+
 def _validate_exact_array_body_envelope_skeleton(
     skeleton: ExactArrayBodyEnvelopeSkeleton,
     envelope: GenerationSelectedBodyEnvelopeIr,
@@ -2580,6 +3016,75 @@ def _array_body_envelope_shape_unsupported_diagnostic(
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-LOWER-ARRAY-BODY-ENVELOPE-SHAPE-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_slot_source_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-SLOT-SOURCE-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_slot_missing_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-SLOT-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_slot_wrong_position_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-SLOT-WRONG-POSITION",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_slot_malformed_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-SLOT-FORM-MALFORMED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_slot_helper_unsupported_diagnostic(
+    slot: ExactArrayBodyEnvelopeOpaqueSlot,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-SLOT-HELPER-UNSUPPORTED",
+        "array-initialization slot form lowering preserves only the exact "
+        "unresolved helper leaves type<generation>(base::in), "
+        "value<generation>(vector::length), "
+        "value<generation>(vector::alignment), and "
+        "value<backend>(uninit::array)",
+        location=slot.source_location,
+    )
+
+
+def _array_initialization_slot_provenance_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-SLOT-PROVENANCE-MISMATCH",
         detail,
         location=location,
     )
@@ -3121,6 +3626,29 @@ def _lower_input(
                 if array_envelope is not None
                 else ()
             )
+            array_initialization_slot_forms: tuple[
+                ExactArrayInitializationSlotFormIr, ...
+            ] = ()
+            array_initialization_slot_form_stages: tuple[
+                GenerationLoweringStage, ...
+            ] = ()
+            if array_envelope is not None:
+                array_initialization_slot_form_result = (
+                    lower_exact_array_initialization_slot_form(array_envelope)
+                )
+                if not array_initialization_slot_form_result.is_ok:
+                    return Result.failure(
+                        array_initialization_slot_form_result.diagnostics
+                    )
+                array_initialization_slot_form = (
+                    array_initialization_slot_form_result.unwrap()
+                )
+                array_initialization_slot_forms = (array_initialization_slot_form,)
+                array_initialization_slot_form_stages = (
+                    _array_initialization_slot_form_stage(
+                        array_initialization_slot_form,
+                    ),
+                )
             return Result.ok(
                 LoweredImplementation(
                     candidate_id=item.candidate_id,
@@ -3134,6 +3662,7 @@ def _lower_input(
                     selected_branch_body_irs=(body_ir,),
                     selected_body_envelopes=(envelope,),
                     array_body_envelopes=array_body_envelopes,
+                    array_initialization_slot_forms=array_initialization_slot_forms,
                     generation_stages=(
                         _recognition_stage(
                             "generation.control_flow",
@@ -3155,6 +3684,7 @@ def _lower_input(
                         _selected_body_ir_stage(body_ir),
                         envelope_stage,
                         *array_body_stages,
+                        *array_initialization_slot_form_stages,
                     ),
                 )
             )
