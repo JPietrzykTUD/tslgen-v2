@@ -426,6 +426,13 @@ Current roadmap note:
   input, without turning `lower_candidates` into a raw-text dispatcher and
   without adding skeleton recognition, slot semantics, backend translation,
   rendering, output, or broad TSIL parsing.
+- Milestone 66 is selected as the first slot-specific form-IR boundary over
+  that M65 envelope. It should consume `ExactArrayBodyEnvelopeIr`, refine only
+  the `opaque_pre_branch_array_initialization` slot into typed exact form IR,
+  and preserve all other slots as opaque provenance. It must not evaluate
+  vector metadata or backend uninit helpers, add broad declaration/array/
+  variable semantics, lower store/return slots, introduce backend translation,
+  rendering, output, or broad TSIL parsing.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

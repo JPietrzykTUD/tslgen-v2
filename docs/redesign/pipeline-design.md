@@ -465,6 +465,14 @@ normal lowering pipeline so `LoweredImplementation` carries
 stage. M65 must not produce skeletons from raw body text, parse broad TSIL,
 lower slot semantics, introduce backend translation or renderer-ready IR, emit
 generated output, or broaden body lowering.
+Milestone 66 is selected as the next Stage 8 slot-specific form-IR slice: it
+consumes accepted M65 `ExactArrayBodyEnvelopeIr` values, refines only the
+`opaque_pre_branch_array_initialization` slot into typed exact form IR, and
+keeps all other slots opaque. M66 must not evaluate vector length/alignment or
+backend uninit helpers, add generic declaration/array/variable semantics,
+lower store or return slots, introduce SVE/direct-intrinsic/backend
+translation or renderer-ready IR, emit generated output, or broaden TSIL body
+lowering.
 
 ## Stage 9: Backend Planning
 

@@ -151,39 +151,46 @@ Post-M64 planning is accepted. It selected
 The M65 execution-review loop returned `Accept With Follow-Ups` after one
 focused documentation revision.
 
+Post-M65 planning selected
+`Milestone 66: Exact Array Initialization Slot Form IR Slice`, and internal
+review returned `Accept With Follow-Ups` after local planning-doc updates.
+
+Post-M65 planning is accepted. It selected
+`Milestone 66: Exact Array Initialization Slot Form IR Slice`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Plan the next lowering-focused milestone after Milestone 65.
+Execute Milestone 66.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m65-planning-plus-review-prompt.md
+docs/agent/runs/m66-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Current task is post-M65 planning.
+Milestone 66: Exact Array Initialization Slot Form IR Slice
 ```
 
 Latest review verdict:
 
 ```text
-The M65 execution-review loop returned Accept With Follow-Ups after a focused
-documentation revision. M65 is accepted.
+Post-M65 planning returned Accept With Follow-Ups after local planning-doc
+updates. Post-M65 planning is accepted.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M65 planning-plus-review prompt. Focus the next task on
-lowering. Use the specified planning/review subagents, do not implement code,
-and do not start M66 execution.
+Run the active M66 execution-review loop prompt. Use the specified single
+write-capable executor followed by read-only review/audit subagents. Do not
+start M67.
 ```
 
 Accepted planning prompt:
@@ -492,10 +499,22 @@ Accepted M65 execution-review loop prompt:
 docs/agent/runs/m65-execution-review-loop-prompt.md
 ```
 
-Active post-M65 planning prompt:
+Completed post-M65 planning prompt:
 
 ```text
 docs/agent/runs/post-m65-planning-plus-review-prompt.md
+```
+
+Accepted post-M65 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m65-acceptance-finalization-prompt.md
+```
+
+Active M66 execution-review loop prompt:
+
+```text
+docs/agent/runs/m66-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -900,6 +919,26 @@ docs/agent/runs/post-m65-planning-plus-review-prompt.md
   translation, renderer-ready IR, rendering, output, CLI/report/writer, Rust,
   compiler, generated-test, file-read, catalog-query, raw TSL parsing, or
   runtime `frozen/` behavior.
+- M66 is selected for human acceptance as exact array-initialization slot form
+  IR only. M66 must consume accepted M65 `ExactArrayBodyEnvelopeIr` /
+  `LoweredImplementation.array_body_envelopes` values or the typed
+  `array_body_envelope_slot_assembly` stage, refine only the
+  `opaque_pre_branch_array_initialization` slot at ordinal `0`, and preserve
+  all other slots as opaque.
+- M66 may use the typed slot's opaque source text only for local exact-form
+  recognition of `tsldata/primitives/load_store/array.tsl:105`; it must not
+  scan raw payloads, produce skeletons, parse broad TSIL, or dispatch behavior
+  from raw text.
+- M66 must not evaluate `type<generation>(base::in)`,
+  `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, or
+  `value<backend>(uninit::array)`.
+- M66 must not add generic declaration semantics, array allocation/lifetime,
+  variable binding/scope, store/return lowering, `tmp.data()`,
+  `emit_return`, SVE/direct-intrinsic semantics, vector metadata semantics,
+  backend uninit semantics, backend translation, renderer-ready IR,
+  rendering, output, generated tests, CLI/report/writer behavior, Rust,
+  compiler execution, file/catalog reads, or runtime `frozen/` behavior.
 
 ## Accepted Milestone 48
 
@@ -1500,10 +1539,20 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   `array_body_envelope_skeletons` producing identical lowering output or
   diagnostics. Review found the implementation deterministic, but this direct
   test remains useful.
+- Post-M65 planning follow-up for M66 execution: keep the slice as exact
+  array-initialization slot form IR, not semantic array/declaration lowering.
+- Post-M65 planning follow-up for M66 execution: consume typed M65
+  envelope/stage outputs only, and use typed slot opaque text only for local
+  exact-form recognition rather than raw payload scanning or raw-text
+  dispatch.
+- Post-M65 planning follow-up for M66 execution: keep
+  `type<generation>(base::in)`, `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, and
+  `value<backend>(uninit::array)` unresolved.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M65 planning.
+No stop condition is active. The workflow proceeds with M66 execution.
 
 ## Validation Expectations
 

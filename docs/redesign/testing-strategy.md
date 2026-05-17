@@ -804,6 +804,15 @@ Recommended first parity checks:
   preserves existing M57-M64 outputs and ordering, proves deterministic
   repeated normal lowering runs, keeps raw-helper rejection and renderer
   non-evaluation, and changes no generated output or golden files.
+- Milestone 66 tests should cover only exact array-initialization slot form
+  IR: consume accepted M65 `array_body_envelopes`, refine exactly the
+  `opaque_pre_branch_array_initialization` slot, preserve slots `1` through
+  `4` as opaque, preserve envelope/slot provenance and the variable token
+  `tmp`, record unresolved helper leaves without evaluating vector length,
+  vector alignment, base type, or backend uninit values, report malformed
+  exact-form diagnostics, prove deterministic lowering, keep raw-helper
+  rejection and renderer non-evaluation, and change no generated output or
+  golden files.
 
 Deferred parity checks:
 

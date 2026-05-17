@@ -6630,5 +6630,189 @@ Dependencies on prior milestones:
 
 Completion note:
 
-- M65 is accepted after the execution-review loop. Follow-on milestone
-  selection is intentionally outside this M65 section.
+- M65 is accepted after the execution-review loop. Post-M65 planning selected
+  M66 as the first exact slot-specific form-IR slice over the accepted M65
+  array-body envelope.
+
+## Post-M65 Planning Result
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Exact array initialization slot form IR | M65 now makes the accepted M64 array-body envelope available through normal lowering. Refining exactly the first opaque array-initialization slot starts body-specific lowering at the narrowest available attachment point. | Medium if framed as exact form IR over one slot; high if it becomes broad declaration/array semantics, vector metadata evaluation, backend uninit evaluation, or a raw-text dispatcher. | Select as M66. |
+| Exact skeleton-producing/source adapter | M65 still consumes typed skeletons supplied in memory, so a source adapter remains useful. | High now because it invites broad TSIL parsing or exact-shape recognition from raw body text before slot-specific consumers prove which skeleton data matters. | Defer. |
+| Vector length/alignment helper semantics | The first array-initialization slot contains `value<generation>(vector::length)` and `value<generation>(vector::alignment)`. | Medium to high because evaluating them pulls in vector metadata before the exact slot form boundary exists. | Defer until after exact form IR. |
+| Store or return slot lowering | The accepted envelope has post-branch store and return slots. | High because store/return lowering would combine variable binding, call semantics, `tmp.data()`, SVE/direct-intrinsic pressure, backend semantics, and output pressure. | Defer. |
+| M65 determinism follow-up only | Review recorded a useful explicit test for skeleton-input ordering. | Low, but it is a hardening task rather than a large architectural step. | Keep recorded unless bundled as a regression in M66. |
+
+### Milestone 66: Exact Array Initialization Slot Form IR Slice
+
+Status:
+
+Selected for human acceptance after post-M65 planning.
+
+Goal:
+
+Consume accepted M65 `ExactArrayBodyEnvelopeIr` values and refine exactly the
+`opaque_pre_branch_array_initialization` slot into typed form IR for the exact
+`array.tsl:105` shape, without evaluating helper semantics or lowering broad
+array/declaration behavior.
+
+M66 is the first body-specific lowering slice after M65. It uses the whole-body
+slot envelope for its intended purpose: one named opaque slot becomes a typed
+form boundary while all other slots remain opaque.
+
+Scope:
+
+- Consume `LoweredImplementation.array_body_envelopes`,
+  `ExactArrayBodyEnvelopeIr`, or the typed
+  `array_body_envelope_slot_assembly` stage produced by accepted M65.
+- Select only the slot with label `opaque_pre_branch_array_initialization` and
+  ordinal `0`.
+- Recognize only the exact slot form evidenced by
+  `tsldata/primitives/load_store/array.tsl:105`:
+  `var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, tmp, value<backend>(uninit::array))`.
+- Produce an immutable typed form IR value, for example
+  `ExactArrayInitializationSlotFormIr`, preserving candidate id, selected type
+  tag, branch-chain identity, envelope identity, slot ordinal, source
+  location, original slot text, variable token `tmp`, and exact nested helper
+  positions.
+- Represent `type<generation>(base::in)`,
+  `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, and
+  `value<backend>(uninit::array)` as unresolved typed/provenance leaves only.
+- Append a distinct deterministic lowering stage, for example
+  `array_initialization_slot_form_lowering`, after
+  `array_body_envelope_slot_assembly`.
+- Preserve the accepted M65 envelope and the other four M64/M65 slots as
+  opaque, unchanged provenance.
+- Diagnose only M66 boundary/form state, such as unsupported source
+  stage/type, missing array-body envelope, missing slot, wrong label or
+  ordinal, malformed exact slot text, unsupported nested helper shape, or
+  provenance mismatch.
+
+Out of scope:
+
+- Evaluation of `type<generation>(base::in)`,
+  `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, or
+  `value<backend>(uninit::array)`.
+- Generic `var` parsing, generic `array_type` parsing, broad helper-expression
+  parsing, broad declaration semantics, array allocation/lifetime semantics,
+  variable binding/scope, array type/value semantics, or statement IR.
+- Predicate initialization slot lowering, selected-body slot changes, store
+  slot lowering, return slot lowering, `tmp.data()` semantics, or
+  `emit_return` semantics.
+- SVE predicate/vector/register semantics, direct-intrinsic semantics,
+  byte-size-to-`svptrue_b*` token inference, backend intrinsic IR, backend
+  translation requests, translation-map evaluation, renderer-ready IR,
+  rendering, generated C++/Rust output, generated tests, CLI/reporting/writer
+  behavior, compiler execution, or Rust.
+- Producing or recognizing `ExactArrayBodyEnvelopeSkeleton` from raw payload
+  text, broad TSIL parsing, lowering-time file reads, catalog queries, raw TSL
+  parsing, or runtime `frozen/` evidence.
+
+Required input:
+
+- Accepted M65 `LoweredImplementation.array_body_envelopes` /
+  `ExactArrayBodyEnvelopeIr` values, or equivalent typed
+  `array_body_envelope_slot_assembly` stage output.
+- The exact M65 opaque slot text/provenance for
+  `opaque_pre_branch_array_initialization`.
+
+Expected outputs:
+
+- A typed exact array-initialization slot form IR value keyed to the M65
+  envelope and slot `0`.
+- A distinct deterministic stage after `array_body_envelope_slot_assembly`
+  carrying the same typed form IR value.
+- Unresolved typed/provenance leaves for the base type, vector length, vector
+  alignment, and backend uninit helpers.
+- Existing `ExactArrayBodyEnvelopeIr` values and all non-selected slots
+  preserved unchanged.
+- Structured diagnostics for invalid M66 source, slot, form, helper-shape, or
+  provenance state.
+- No semantic array declaration IR, backend value request, renderer-ready body,
+  generated artifact, SVE semantic object, vector metadata value, store IR, or
+  return IR.
+
+Parity criterion:
+
+M66 proves the accepted M65 array-body envelope can be refined one slot at a
+time by turning the exact array-initialization slot into typed form IR, while
+leaving vector metadata, backend uninit, array/declaration semantics,
+store/return semantics, backend translation, rendering, generated output, and
+compiler parity deferred.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:105` for the exact
+  array-initialization slot form.
+- `tsldata/primitives/load_store/array.tsl:105-111` only as context that this
+  slot is part of the accepted M64/M65 five-slot envelope.
+- Accepted M64 `ExactArrayBodyEnvelopeIr` structural slot model.
+- Accepted M65 normal lowering pipeline integration for
+  `LoweredImplementation.array_body_envelopes`.
+- Accepted M57-M63 staged selected-body behavior for preserving the rest of
+  the envelope.
+
+Tests required:
+
+- Normal `lower_candidates` with typed M65 skeleton input produces M66
+  array-initialization slot form IR for selected `svptrue_b16`, `svptrue_b32`,
+  and `svptrue_b64` paths.
+- `si8` and `ui8` no-body M65 envelopes still lower the first slot form
+  without synthesizing selected branch text or changing the no-body envelope.
+- The output preserves envelope identity, slot ordinal, candidate id, selected
+  type tag, branch-chain identity, source location, original slot text, the
+  variable token `tmp`, and unresolved helper leaves.
+- Slots `1` through `4` remain opaque and unchanged.
+- Malformed slot text, missing slot, wrong label/ordinal, unsupported helper
+  shape, unsupported source stage/type, and provenance mismatch produce
+  structured diagnostics with source location and actionable messages.
+- Determinism tests cover repeated M66 lowering, and may include the recorded
+  M65 skeleton-input-ordering follow-up as supporting regression coverage.
+- Regression tests preserve M57-M65 behavior, backend raw-helper rejection,
+  renderer non-evaluation, and no generated output or golden-file changes.
+
+Golden fixtures required:
+
+- None. M66 is a lowering/form-IR slice and must not change generated C++ or
+  Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M66 exact array-initialization slot form test command selected by
+  the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Letting exact slot-form recognition become broad TSIL parsing or a central
+  raw-text dispatcher.
+- Accidentally evaluating vector length, vector alignment, base type, or
+  backend uninit helpers.
+- Treating `var<typed>`, `array_type`, or `tmp` as broad declaration, array,
+  variable-binding, allocation, or lifetime semantics.
+- Mutating the M65 envelope or lowering slots `1` through `4` instead of
+  appending one typed refinement stage.
+- Adding SVE/direct-intrinsic semantics, store/return semantics, backend
+  translation, renderer-ready IR, generated output, file/catalog reads,
+  runtime `frozen/` use, dictionaries/raw string keys as downstream semantic
+  models, or backend-specific branches.
+
+Dependencies on prior milestones:
+
+- Milestones 57, 58, 59, 60, 61, 62, 63, 64, and 65.
+
+Next concrete prompt:
+
+- If the post-M65 planning result is accepted, update workflow state and
+  create `docs/agent/runs/post-m65-acceptance-finalization-prompt.md`. That
+  finalization prompt will create
+  `docs/agent/runs/m66-execution-review-loop-prompt.md` after explicit human
+  acceptance. Do not start M66 until the acceptance-finalization prompt records
+  acceptance.
