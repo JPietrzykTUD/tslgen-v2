@@ -101,40 +101,46 @@ Post-M59 planning is accepted. It selected
 The M60 execution-review loop returned `Accept With Follow-Ups` with no
 blocking implementation issues and no focused revision.
 
+Post-M60 planning selected
+`Milestone 61: Selected Branch Body Assignment Form Recognition Slice`, and
+internal review returned `Accept With Follow-Ups`. The plan is awaiting user
+acceptance.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run the post-M60 planning-plus-review prompt with a lowering focus.
+Await user acceptance of the post-M60 planning result, then run the
+post-M60 acceptance finalization prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m60-planning-plus-review-prompt.md
+docs/agent/runs/post-m60-acceptance-finalization-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Post-M60 planning is active; no executor milestone is selected yet.
+None. Post-M60 planning selected Milestone 61 for human acceptance; execution
+must not start until the plan is accepted.
 ```
 
 Latest review verdict:
 
 ```text
-The M60 execution-review loop returned Accept With Follow-Ups. Non-blocking
-follow-ups are recorded below.
+Post-M60 planning selected Milestone 61 and internal review returned Accept
+With Follow-Ups. The plan is awaiting user acceptance.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M60 planning-plus-review prompt. Focus the next candidate
-on generation-time lowering, use the specified subagent workflow, do not
-implement code, and create the next concrete prompt under docs/agent/runs/
-according to the accepted planning result.
+If the user accepts the post-M60 planning result, run the active finalization
+prompt to create the M61 execution-review loop prompt. Do not implement M61
+before acceptance.
 ```
 
 Accepted planning prompt:
@@ -357,6 +363,12 @@ Active post-M60 planning prompt:
 
 ```text
 docs/agent/runs/post-m60-planning-plus-review-prompt.md
+```
+
+Active post-M60 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m60-acceptance-finalization-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -637,6 +649,29 @@ docs/agent/runs/post-m60-planning-plus-review-prompt.md
 - M60 must not add direct `intrin<...>` / SVE body lowering, assignments,
   variables, arrays, calls, casts, loops, vector/register metadata,
   `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, backend uninit values, backend
+  translation, rendering, output, generated tests, CLI/reporting/writer
+  behavior, Rust, compiler execution, broad TSIL parsing, runtime dependency
+  on `frozen/`, lowering-time file reads, raw TSL parsing, or catalog queries
+  during evaluation.
+- M61 is selected for human acceptance as generation-time lowering
+  form-recognition work only.
+- M61 must consume accepted typed M60 selected-body handoff outputs, not raw
+  branch-chain text, raw TSL, catalog data, or `frozen/` runtime input.
+- M61 may recognize only the exact selected single-statement assignment form
+  from `tsldata/primitives/load_store/array.tsl:107-109`:
+  `pg = intrin<svptrue_b16>();`, `pg = intrin<svptrue_b32>();`, and
+  `pg = intrin<svptrue_b64>();`.
+- M61 output must be typed/provenanced form metadata only, preserving target
+  text, opaque RHS/direct-intrinsic token text, original body text, and
+  M60 handoff identity.
+- M61 must not lower assignment semantics, validate direct intrinsics, infer
+  SVE predicate meaning, map byte-size literals to intrinsic suffixes, inspect
+  unselected branch bodies, or synthesize a body/form for `si8`/`ui8`
+  no-match cases.
+- M61 must not add direct `intrin<...>` / SVE body lowering, declarations,
+  variables, arrays, calls, casts, loops, multi-statement bodies,
+  vector/register metadata, `value<generation>(vector::length)`,
   `value<generation>(vector::alignment)`, backend uninit values, backend
   translation, rendering, output, generated tests, CLI/reporting/writer
   behavior, Rust, compiler execution, broad TSIL parsing, runtime dependency
@@ -1045,7 +1080,8 @@ catalog queries during evaluation.
 - Post-M56 staged-lowering planning note: the intended value -> predicate ->
   control-flow -> selected-body lowering path remains the guiding sequence.
   M58 accepted the stage-boundary contract, M59 accepted exact branch-chain
-  pruning, and post-M59 planning selected M60 for human acceptance.
+  pruning, M60 accepted opaque selected-body handoff, and post-M60 planning
+  selected M61 assignment-form recognition for human acceptance.
 - M57 review follow-up: keep the private top-level generation binary scanner
   narrow. It may recognize unsupported operators only to reject them and must
   not become a general comparison parser without a selected milestone.
@@ -1113,25 +1149,37 @@ catalog queries during evaluation.
 - M60 evidence follow-up: add a short fixture comment clarifying that the
   `vector::length` body-helper fixture is synthetic opacity coverage, not
   corpus evidence for M60 body semantics.
-- M60 docs follow-up: update remaining pre-acceptance/status wording in
+- M60 docs follow-up addressed by post-M60 planning: update remaining
+  pre-acceptance/status wording in
   `docs/redesign/implementation-roadmap.md`,
   `docs/redesign/target-architecture.md`,
   `docs/redesign/testing-strategy.md`, and
   `docs/redesign/design-decisions.md`.
-- M60 docs follow-up: refresh `docs/redesign/behavioral-spec.md` so the
-  parity table includes M58/M59/M60 and narrows remaining gaps to broader
-  branch-chain pruning beyond M59 and body handling beyond the M60 opaque
-  handoff.
-- M60 docs follow-up: refresh `docs/redesign/generation-time-semantic-lowering.md`
-  and `docs/redesign/open-questions.md` so lowering and open-question summaries
-  are current through M60.
-- M60 docs follow-up: refresh `docs/redesign/frozen-parity-baselines.md` from
-  "selected opaque handoff candidate" wording to accepted/implemented M60
-  opaque handoff wording while keeping broader body handling deferred.
+- M60 docs follow-up addressed by post-M60 planning: refresh
+  `docs/redesign/behavioral-spec.md` so the parity table includes
+  M58/M59/M60 and narrows remaining gaps to broader branch-chain pruning
+  beyond M59 and body handling beyond the M60 opaque handoff plus selected
+  M61 form-recognition plan.
+- M60 docs follow-up addressed by post-M60 planning: refresh
+  `docs/redesign/generation-time-semantic-lowering.md` and
+  `docs/redesign/open-questions.md` so lowering and open-question summaries
+  are current through M60 and the selected M61 plan.
+- M60 docs follow-up addressed by post-M60 planning: refresh
+  `docs/redesign/frozen-parity-baselines.md` from selected opaque handoff
+  candidate wording to accepted M60 opaque handoff wording while keeping
+  broader body handling deferred beyond the selected M61 form-recognition plan.
+- Post-M60 planning follow-up: M61 must remain a single selected-body
+  assignment-form recognition boundary. It must not become direct intrinsic
+  lowering, SVE predicate semantic lowering, assignment lowering, backend
+  translation input, renderer-ready IR, or broad TSIL parsing.
+- Post-M60 planning follow-up: the M61 executor should introduce a distinct
+  typed form-recognition value or stage envelope rather than stretching
+  `selected_body_lowering` into a mixed semantic dispatcher.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M60 planning.
+No stop condition is active. The workflow proceeds with post-M60 acceptance
+finalization if the user accepts the selected M61 plan.
 
 ## Validation Expectations
 

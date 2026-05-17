@@ -390,10 +390,15 @@ Current roadmap note:
   provenance, keeps branch bodies opaque, and avoids selected-body handoff,
   direct-intrinsic lowering, backend translation, rendering, output, and
   compiler work.
-- The selected post-M59 plan, Milestone 60, should add only a distinct typed
-  opaque selected-body handoff record from accepted M59 pruning output. It must
-  remain separate from TSIL/body semantic lowering, direct-intrinsic/SVE body
-  handling, backend translation, rendering, output, and compiler work.
+- Milestone 60 adds only a distinct typed opaque selected-body handoff record
+  from accepted M59 pruning output. It remains separate from TSIL/body semantic
+  lowering, direct-intrinsic/SVE body handling, backend translation, rendering,
+  output, and compiler work.
+- The selected post-M60 plan, Milestone 61, should add only a typed
+  selected-body assignment-form recognition record from M60 handoff values. It
+  must stay a form-classification boundary and must not produce `TsilStatement`
+  values, backend intrinsic calls, translation requests, rendered code, or
+  generated artifacts.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

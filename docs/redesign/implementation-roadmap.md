@@ -5473,9 +5473,9 @@ Candidate comparison:
 This path is recorded now because the post-M56 planning discussion identified a
 clear architectural direction: generation-time lowering should proceed through
 small typed stages rather than repeatedly recognizing entire surrounding
-strings. With M59 accepted, M60 is selected for human acceptance as the next
-lowering-focused candidate. The following milestones must still be reviewed and
-accepted one at a time before execution.
+strings. M59 and M60 are now accepted, and post-M60 planning selects M61 for
+human acceptance as the next lowering-focused candidate. The following
+milestones must still be reviewed and accepted one at a time before execution.
 
 ### Milestone 59: Size-Byte Equality Generation Branch-Chain Pruning Slice
 
@@ -5620,8 +5620,8 @@ Dependencies on prior milestones:
 
 Status:
 
-Selected for human acceptance. Do not implement until this planning result is
-accepted.
+Accepted. M60 returned `Accept With Follow-Ups` with no blocking
+implementation issues and no focused revision.
 
 Goal:
 
@@ -5740,4 +5740,174 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m59-acceptance-finalization-prompt.md`
+- Completed by `docs/agent/runs/m60-execution-review-loop-prompt.md`; the
+  workflow now continues through the post-M60 planning result below.
+
+## Post-M60 Planning Result
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Selected branch body assignment form recognition | M60 now hands forward only the selected branch body as typed opaque data. Recognizing the exact selected assignment-form shape turns that inert text into a typed, reviewable input for later body-specific lowering. | Medium if it stays form recognition; high if it validates direct intrinsics, SVE predicate meaning, assignment semantics, or feeds backend/rendering. | Select as M61. |
+| First direct `intrin<...>` / SVE body lowering | The selected M60 bodies contain `pg = intrin<svptrue_b16/b32/b64>();`. | High because it combines assignment semantics, direct intrinsic semantics, SVE predicate meaning, backend translation pressure, and likely renderer/output questions. | Defer until after typed form recognition. |
+| Vector length/alignment generation values | Surrounding SVE array evidence contains vector length/alignment helpers. | Medium to high because it jumps away from the selected-body handoff path and pulls in metadata needed by surrounding non-branch statements. | Defer. |
+| Broad SVE array body lowering | The same corpus block includes array construction, backend uninit, predicate initialization, stores, and `emit_return`. | Very high because it combines multiple TSIL body forms and backend/output concerns. | Defer. |
+| M49-M60 follow-up cleanup | Several accepted follow-ups remain. | Low individually, but cleanup does not form the next lowering architecture milestone. | Keep recorded unless selected separately. |
+
+### Milestone 61: Selected Branch Body Assignment Form Recognition Slice
+
+Status:
+
+Selected for human acceptance. Do not implement until this planning result is
+accepted.
+
+Goal:
+
+Consume the accepted M60 typed selected-body handoff and recognize exactly the
+selected branch-body assignment form:
+
+```text
+pg = intrin<svptrue_b16>();
+pg = intrin<svptrue_b32>();
+pg = intrin<svptrue_b64>();
+```
+
+M61 is a form-recognition boundary only. It makes the selected body
+inspectable as typed, provenanced form metadata for future body-specific
+lowering, while keeping assignment semantics, direct intrinsic semantics, SVE
+predicate meaning, backend translation, rendering, and generated output
+deferred.
+
+Scope:
+
+- Consume only accepted M60 `OpaqueSelectedBranchBodyHandoff` and
+  `NoSelectedBranchBodyHandoff` values, or equivalent typed selected-body
+  handoff stage output.
+- Recognize only the exact single-statement assignment body form selected by
+  M59/M60 from `tsldata/primitives/load_store/array.tsl:107-109`.
+- Preserve candidate id, selected type tag, selected literal, originating
+  branch-chain identity, original opaque body text, selected statement source
+  span/provenance, assignment target text, and opaque RHS/source text.
+- Record the direct-intrinsic token text only as form metadata needed by later
+  slices; do not validate, translate, or semantically lower it.
+- Represent `si8`/`ui8` byte-size `1` no-match handoffs explicitly without
+  synthesizing a body or recognized form.
+- Diagnose only invalid selected-body form-recognition state, such as missing
+  provenance, unsupported handoff source, extra statements, unsupported target
+  shape, unsupported RHS shape, or malformed selected body text.
+
+Out of scope:
+
+- Assignment semantics, variable binding, declaration handling, target scope
+  validation, or proving that `pg` is an SVE predicate.
+- Direct `intrin<...>` lowering, intrinsic-name validation, SVE predicate
+  semantics, mapping byte-size literals to SVE suffixes, backend intrinsic IR,
+  backend translation input, rendering, generated output, generated tests,
+  CLI/reporting, writer behavior, Rust, compiler execution, or generated-test
+  execution.
+- Surrounding SVE body forms such as `svbool_t pg = intrin<svptrue_b8>()`,
+  `intrin<svst1>(...)`, array construction, backend uninit,
+  `emit_return`, vector length/alignment, declarations, variables, arrays,
+  calls, casts, loops, multi-statement bodies, or broad TSIL parsing.
+- Inspecting or diagnosing unselected branch bodies.
+- Lowering-time file reads, raw TSL parsing, catalog queries during
+  evaluation, central raw-string dispatch tables, or runtime dependency on
+  `frozen/`.
+
+Required inputs:
+
+- M58 typed `GenerationLoweringStage` records.
+- M59 typed branch-chain pruning results for selected `== 2`, `== 4`, and
+  `== 8` arms plus no-match provenance for byte size `1`.
+- M60 `OpaqueSelectedBranchBodyHandoff` and
+  `NoSelectedBranchBodyHandoff` values, including candidate id, selected type
+  tag, selected literal, opaque body text, source/provenance, and originating
+  branch-chain identity.
+- Existing M42/M48/M51/M59/M60 selected-branch-only diagnostic principles.
+
+Expected outputs:
+
+- A distinct typed selected-body assignment-form recognition value, or
+  equivalent typed stage output, carrying the preserved M60 handoff identity
+  and selected-body provenance plus form-level metadata for the assignment
+  target and opaque RHS/direct-intrinsic token text.
+- A distinct no-selected-body/no-recognized-form result for byte-size `1`
+  no-match cases.
+- Boundary-level diagnostics for invalid recognition state only.
+- No `TsilStatement`, backend intrinsic call, translation request, rendered
+  code, or generated artifact output.
+
+Parity criterion:
+
+M61 proves the accepted M60 selected-body handoff can be classified into one
+typed body-form record without implementing body semantics. It does not claim
+assignment, direct-intrinsic, SVE body, vector metadata, backend translation,
+rendering, generated output, or compiler parity.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:107-109` for the exact selected
+  branch body assignment forms.
+- `tsldata/primitives/load_store/array.tsl:105-106` and `:110-111` as
+  surrounding out-of-scope SVE body evidence.
+- Accepted M58 stage records for generation-time lowering outputs.
+- Accepted M59 typed branch-chain pruning.
+- Accepted M60 typed opaque selected-body handoff.
+- `docs/redesign/generation-time-semantic-lowering.md` staged lowering
+  direction.
+
+Tests required:
+
+- Selected `== 2`, `== 4`, and `== 8` M60 handoffs recognize the exact
+  assignment-form bodies for `svptrue_b16`, `svptrue_b32`, and `svptrue_b64`
+  while preserving original text/provenance.
+- `si8` and `ui8` no-match handoffs produce explicit no-body/no-form results.
+- Unsupported selected-body forms, extra statements, malformed assignment
+  text, missing selected body text, missing provenance, and unsupported source
+  stage diagnostics remain boundary-level and do not classify direct intrinsic
+  or SVE semantics.
+- Unselected branch bodies remain uninspected and do not emit body-form
+  diagnostics.
+- Regression tests preserve M57 predicates, M58 stage records, M59
+  branch-chain pruning/no-match behavior, M60 handoff behavior, backend
+  raw-helper rejection, and renderer non-evaluation.
+- Determinism tests for recognized form metadata and no-body/no-form results.
+
+Golden fixtures required:
+
+- None. M61 is a lowering/form-recognition slice and must not change generated
+  C++ or Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M61 selected-body assignment-form recognition test command
+  selected by the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Letting form recognition become assignment lowering, direct-intrinsic/SVE
+  semantic lowering, backend translation input, or renderer-ready IR.
+- Treating intrinsic names such as `svptrue_b16` as semantic values instead of
+  opaque selected-form metadata.
+- Inferring a size-to-intrinsic mapping rather than consuming M60 selected
+  handoff text/provenance.
+- Building a broad body parser, central raw-string dispatcher, or
+  multi-statement TSIL evaluator.
+- Inspecting or diagnosing unselected branch bodies.
+- Pulling in surrounding vector length/alignment, backend uninit, stores,
+  arrays, declarations, calls, casts, loops, `emit_return`, generated tests,
+  CLI/reporting, Rust, compiler execution, or runtime `frozen/` use.
+- Making lowering evaluation read files, parse raw TSL, query the catalog, or
+  construct catalog-derived rule data during evaluation.
+
+Dependencies on prior milestones:
+
+- Milestones 41, 42, 43, 48, 51, 52, 53, 54, 55, 57, 58, 59, and 60.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m60-acceptance-finalization-prompt.md`

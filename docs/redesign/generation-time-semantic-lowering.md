@@ -404,8 +404,12 @@ separate from branch-chain pruning. The accepted staged direction is:
 4. Consume typed predicate results for control-flow pruning, as accepted by
    M59 for the exact size-byte branch chain.
 5. Hand selected branch bodies forward as typed/provenanced lowering inputs
-   before any body-specific lowering slice; M60 is selected for human
-   acceptance for this opaque handoff boundary.
+   before any body-specific lowering slice; M60 accepted this opaque handoff
+   boundary.
+6. Recognize exactly selected body forms from the M60 handoff as typed
+   form-recognition records before any semantic body lowering. The selected
+   post-M60 plan, M61, keeps this recognition boundary limited to the exact
+   selected assignment form in the SVE size-byte branch bodies.
 
 This staged path is a semantic contract. It does not require every step to be a
 separate traversal immediately, but each milestone should expose typed outputs
@@ -435,18 +439,31 @@ provenance for byte size `1`, and must not introduce broad
 `else if<generation>` parsing, body handoff, direct-intrinsic/SVE body
 lowering, backend translation, rendering, or generated output.
 
-The selected post-M59 plan, M60, is an opaque selected-body handoff slice. It
-should consume M59's typed branch-chain pruning result and produce a distinct
-typed handoff value for the selected branch body text and provenance, or an
-explicit no-selected-body/no-match result for byte size `1`. M60 must not parse
-or lower direct `intrin<...>` / SVE statements, assignments, arrays, calls,
+M60 is accepted as the opaque selected-body handoff slice. It consumes M59's
+typed branch-chain pruning result and produces a distinct typed handoff value
+for the selected branch body text and provenance, or an explicit
+no-selected-body/no-match result for byte size `1`. M60 does not parse or
+lower direct `intrin<...>` / SVE statements, assignments, arrays, calls,
 casts, loops, vector metadata, backend values, renderer output, generated
 artifacts, CLI/reporting/writer behavior, Rust, compiler execution, broad
 TSIL, or runtime `frozen/` evidence.
 
+The selected post-M60 plan, M61, is selected-body assignment-form recognition.
+It should consume only typed M60 handoff values and recognize exactly the
+selected single-statement forms
+`pg = intrin<svptrue_b16>();`, `pg = intrin<svptrue_b32>();`, and
+`pg = intrin<svptrue_b64>();` from
+`tsldata/primitives/load_store/array.tsl:107-109`. M61 should preserve the
+assignment target, opaque RHS/direct-intrinsic token text, original body text,
+and provenance as typed form metadata. It must not lower assignment semantics,
+validate direct intrinsics, infer SVE predicate meaning, inspect unselected
+branch bodies, feed backend translation or rendering, add generated output, or
+parse broad TSIL body syntax.
+
 ## Explicit Deferrals
 
-Deferred beyond the implemented M43-M59 semantic-lowering slices:
+Deferred beyond the implemented M43-M60 semantic-lowering slices and the
+selected M61 form-recognition plan:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -459,8 +476,11 @@ Deferred beyond the implemented M43-M59 semantic-lowering slices:
   values remain deferred except for the accepted M57 exact
   `type.size_bytes == 2/4/8` predicates. Branch-chain pruning over those
   predicates is implemented only for the exact M59 SVE size-byte no-final-else
-  branch chain; general `else if<generation>` syntax, final-else policy, and
-  broad branch pruning based on generation values remain deferred.
+  branch chain; M60 adds only opaque selected-body handoff, and M61 is selected
+  only for exact selected assignment-form recognition. General
+  `else if<generation>` syntax, final-else policy, broad branch pruning based
+  on generation values, assignment semantics, direct-intrinsic/SVE semantics,
+  and broad body lowering remain deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only

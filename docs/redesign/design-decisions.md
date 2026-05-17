@@ -1335,10 +1335,15 @@ Consequences:
   documented SVE size-byte no-final-else branch chain. It keeps selected bodies
   opaque and defers selected-body handoff, direct-intrinsic/SVE body lowering,
   backend translation, rendering, and generated output.
-- The selected post-M59 plan, Milestone 60, makes selected-body handoff a
-  distinct typed opaque boundary. It may carry selected body text and
-  provenance from M59 pruning, but it must not parse or lower body semantics or
-  stretch M59 pruning metadata into the reusable handoff contract.
+- Milestone 60 makes selected-body handoff a distinct typed opaque boundary.
+  It carries selected body text and provenance from M59 pruning without parsing
+  or lowering body semantics and without stretching M59 pruning metadata into
+  the reusable handoff contract.
+- The selected post-M60 plan, Milestone 61, keeps the next step as typed
+  selected-body assignment-form recognition only. It should consume M60
+  handoff values and emit form metadata, not assignment semantics, direct
+  intrinsic/SVE IR, backend translation input, renderer-ready IR, or broad
+  TSIL body parsing.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

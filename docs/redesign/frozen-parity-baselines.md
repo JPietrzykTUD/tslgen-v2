@@ -333,7 +333,8 @@ and still does not add compiler execution.
   comparisons over generation values beyond the accepted M57 exact size-byte
   equality predicate slice, branch-chain pruning beyond the accepted narrow M59
   slice over those predicates, selected branch body handling beyond the
-  selected opaque M60 handoff candidate, and
+  accepted opaque M60 handoff and selected M61 assignment-form recognition
+  plan, and
   backend translation-map evaluation beyond the selected M40/M45/M46 requests.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and
   googletest download or vendoring.

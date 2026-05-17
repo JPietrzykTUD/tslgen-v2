@@ -425,12 +425,15 @@ documented SVE size-byte no-final-else branch chain. It records the matching
 `1`, while keeping branch bodies opaque. M59 remains lowering-only and does
 not add selected-body handoff, direct intrinsic/SVE body semantics, backend
 translation, rendering, or generated output.
-The selected post-M59 plan, Milestone 60, should keep Stage 8 lowering-only by
-turning the M59 selected-arm pruning result into a distinct typed opaque body
-handoff. It must not invoke mini TSIL lowering, produce direct-intrinsic/SVE
-`TsilStatement` values, parse unselected bodies, or change backend translation,
-rendering, generated output, CLI/reporting/writer behavior, Rust, or compiler
-execution.
+Milestone 60 keeps Stage 8 lowering-only by turning the M59 selected-arm
+pruning result into a distinct typed opaque body handoff. It does not invoke
+mini TSIL lowering, produce direct-intrinsic/SVE `TsilStatement` values, parse
+unselected bodies, or change backend translation, rendering, generated output,
+CLI/reporting/writer behavior, Rust, or compiler execution.
+The selected post-M60 plan, Milestone 61, should add only a typed
+selected-body assignment-form recognition record from M60 handoff values. That
+record is a staged lowering classification boundary, not TSIL/body semantic
+lowering and not backend/rendering input.
 
 ## Stage 9: Backend Planning
 
