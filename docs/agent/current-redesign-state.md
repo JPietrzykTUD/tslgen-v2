@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 61 is accepted.
+Milestone 62 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -117,38 +117,43 @@ updates.
 Post-M61 planning is accepted. It selected
 `Milestone 62: Selected Assignment Direct-Intrinsic Body IR Slice`.
 
+The M62 execution-review loop returned `Accept With Follow-Ups` after one
+focused documentation revision.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 62.
+Run the post-M62 planning-plus-review prompt, focusing on lowering.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m62-execution-review-loop-prompt.md
+docs/agent/runs/post-m62-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 62: Selected Assignment Direct-Intrinsic Body IR Slice
+None. Post-M62 planning is active; no executor milestone is selected yet.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M61 planning accepted by user; M62 is active for execution.
+The M62 execution-review loop returned Accept With Follow-Ups after one
+focused documentation revision.
 ```
 
 Next expected action:
 
 ```text
-Run the active M62 execution-review loop prompt. Use one write-capable executor
-if M62 is not already implemented, then run the specified read-only review and
-audit subagents. Do not start M63.
+Run the active post-M62 planning-plus-review prompt. Use the specified
+subagent workflow, prefer lowering-focused candidates, do not implement code,
+and create the next concrete prompt under docs/agent/runs/ according to the
+accepted planning result.
 ```
 
 Accepted planning prompt:
@@ -397,10 +402,16 @@ Accepted post-M61 acceptance finalization prompt:
 docs/agent/runs/post-m61-acceptance-finalization-prompt.md
 ```
 
-Active M62 execution-review loop prompt:
+Accepted M62 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m62-execution-review-loop-prompt.md
+```
+
+Active post-M62 planning prompt:
+
+```text
+docs/agent/runs/post-m62-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -708,8 +719,7 @@ docs/agent/runs/m62-execution-review-loop-prompt.md
   behavior, Rust, compiler execution, broad TSIL parsing, runtime dependency
   on `frozen/`, lowering-time file reads, raw TSL parsing, or catalog queries
   during evaluation.
-- M62 is selected for human acceptance as generation-time lowering body-IR
-  work only.
+- M62 is accepted as generation-time lowering body-IR work only.
 - M62 must consume accepted typed M61 `selected_body_form_recognition`
   outputs, not raw selected body text except as preserved provenance.
 - M62 may produce unresolved typed selected assignment/direct-intrinsic body IR
@@ -1067,21 +1077,25 @@ CLI/reporting/writer behavior, Rust, compiler execution, broad TSIL parsing,
 runtime dependency on `frozen/`, lowering-time file reads, raw TSL parsing, or
 catalog queries during evaluation.
 
-## Selected Milestone 62
+## Accepted Milestone 62
 
-Post-M61 planning selected the following milestone for human acceptance:
+The Milestone 62 execution-review loop accepted with non-blocking follow-ups
+after one focused documentation revision:
 
 ```text
 Milestone 62: Selected Assignment Direct-Intrinsic Body IR Slice
 ```
 
-M62 should consume only typed M61 `selected_body_form_recognition` outputs and
-produce unresolved backend-neutral selected-body IR for the exact selected
-assignment/direct-intrinsic form. It must preserve M61 target/token/text and
-provenance fields as typed IR facts, but it must not validate SVE/backend
-intrinsic meaning, infer byte-size-to-intrinsic mappings, create backend
-translation requests, feed renderers, emit generated output, or parse broad
-TSIL body syntax.
+M62 consumes only typed M61 `selected_body_form_recognition` outputs and
+produces unresolved backend-neutral selected-body IR for the exact selected
+assignment/direct-intrinsic form. It preserves M61 target/token/text,
+explicit empty argument list, and provenance fields as typed IR facts. It
+keeps byte-size `1` no-match cases as explicit no-body-IR results and adds the
+distinct `selected_body_ir_lowering` stage.
+
+M62 does not validate SVE/backend intrinsic meaning, infer
+byte-size-to-intrinsic mappings, create backend translation requests, feed
+renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Known Follow-Ups
 
@@ -1284,22 +1298,26 @@ TSIL body syntax.
 - M61 extensibility follow-up: if later slices need exact statement spans,
   split `selected_statement_location` from the inherited M60 handoff/source
   provenance rather than overloading the same location.
-- Post-M61 planning follow-up: the M62 title includes "Direct-Intrinsic", so
-  the executor prompt must keep saying this is unresolved backend-neutral
-  selected-body IR, not backend intrinsic IR, SVE semantic validation,
-  translation input, renderer-ready IR, or generated output.
-- Post-M61 planning follow-up: the M62 executor should introduce a distinct
-  post-form-recognition body-IR value/stage, such as
-  `selected_body_ir_lowering`, instead of overloading M60 handoff or M61
-  form-recognition records.
-- Post-M61 planning follow-up: M62 tests should include a synthetic mismatch
-  between selected byte-size literal and direct-intrinsic token text to prove
-  the slice preserves M61 typed facts instead of inferring a
-  size-to-intrinsic mapping.
+- Post-M61 planning follow-up addressed by M62: the implementation keeps
+  "Direct-Intrinsic" as unresolved backend-neutral selected-body IR, not
+  backend intrinsic IR, SVE semantic validation, translation input,
+  renderer-ready IR, or generated output.
+- Post-M61 planning follow-up addressed by M62: the implementation introduced
+  the distinct `selected_body_ir_lowering` body-IR stage/value instead of
+  overloading M60 handoff or M61 form-recognition records.
+- Post-M61 planning follow-up addressed by M62: the implementation includes a
+  synthetic mismatch test between selected byte-size literal and
+  direct-intrinsic token text to prove the slice preserves M61 typed facts
+  instead of inferring a size-to-intrinsic mapping.
+- M62 validation follow-up: consider asserting diagnostic location and message
+  text for the unsupported M62 source/boundary diagnostic. The current test
+  asserts diagnostic code and severity, and validation found this
+  non-blocking.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with M62 execution.
+No stop condition is active. The workflow proceeds with post-M62 planning,
+focused on lowering.
 
 ## Validation Expectations
 

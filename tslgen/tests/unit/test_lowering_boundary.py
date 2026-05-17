@@ -21,6 +21,7 @@ from tslgen.lowering import (
     GenerationContext,
     GenerationExpressionRecognition,
     GenerationLoweringStage,
+    NoSelectedAssignmentDirectIntrinsicBodyIr,
     NoSelectedBranchBodyAssignmentFormRecognition,
     NoSelectedBranchBodyHandoff,
     OpaqueSelectedBranchBodyHandoff,
@@ -31,6 +32,7 @@ from tslgen.lowering import (
     GenerationValue,
     LoweringRequest,
     PrunedGenerationBranch,
+    SelectedAssignmentDirectIntrinsicBodyIr,
     SelectedBranchBodyAssignmentFormRecognition,
     TsilBinaryExpression,
     TsilIntrinsicComposeExpression,
@@ -41,6 +43,7 @@ from tslgen.lowering import (
     build_catalog_lowering_request,
     handoff_opaque_selected_branch_body,
     lower_candidates,
+    lower_selected_branch_body_ir,
     prepare_lowering_inputs,
     recognize_selected_branch_body_assignment_form,
     resolve_generation_predicate_query,
@@ -2467,7 +2470,9 @@ class LoweringBoundaryTests(unittest.TestCase):
                     len(implementation.selected_branch_body_assignment_forms),
                     1,
                 )
+                self.assertEqual(len(implementation.selected_branch_body_irs), 1)
                 assignment_form = implementation.selected_branch_body_assignment_forms[0]
+                body_ir = implementation.selected_branch_body_irs[0]
                 if expected_literal is None:
                     assert isinstance(handoff, NoSelectedBranchBodyHandoff)
                     self.assertEqual(handoff.selected_type_tag, type_tag)
@@ -2476,6 +2481,8 @@ class LoweringBoundaryTests(unittest.TestCase):
                         NoSelectedBranchBodyAssignmentFormRecognition,
                     )
                     self.assertEqual(assignment_form.selected_type_tag, type_tag)
+                    assert isinstance(body_ir, NoSelectedAssignmentDirectIntrinsicBodyIr)
+                    self.assertEqual(body_ir.selected_type_tag, type_tag)
                 else:
                     assert isinstance(handoff, OpaqueSelectedBranchBodyHandoff)
                     self.assertEqual(handoff.selected_type_tag, type_tag)
@@ -2492,6 +2499,13 @@ class LoweringBoundaryTests(unittest.TestCase):
                     self.assertEqual(assignment_form.selected_literal, expected_literal)
                     self.assertEqual(
                         assignment_form.original_opaque_body_text,
+                        expected_body_by_literal[expected_literal],
+                    )
+                    assert isinstance(body_ir, SelectedAssignmentDirectIntrinsicBodyIr)
+                    self.assertEqual(body_ir.selected_type_tag, type_tag)
+                    self.assertEqual(body_ir.selected_literal, expected_literal)
+                    self.assertEqual(
+                        body_ir.original_opaque_body_text,
                         expected_body_by_literal[expected_literal],
                     )
                 self.assertEqual(tuple(arm.literal for arm in chain.arms), (2, 4, 8))
@@ -2514,14 +2528,16 @@ class LoweringBoundaryTests(unittest.TestCase):
                         "generation_control_flow_pruning",
                         "selected_body_lowering",
                         "selected_body_form_recognition",
+                        "selected_body_ir_lowering",
                     ),
                 )
-                self.assertEqual(implementation.generation_stages[-3].output, chain)
-                self.assertEqual(implementation.generation_stages[-2].output, handoff)
+                self.assertEqual(implementation.generation_stages[-4].output, chain)
+                self.assertEqual(implementation.generation_stages[-3].output, handoff)
                 self.assertEqual(
-                    implementation.generation_stages[-1].output,
+                    implementation.generation_stages[-2].output,
                     assignment_form,
                 )
+                self.assertEqual(implementation.generation_stages[-1].output, body_ir)
 
     def test_size_byte_branch_chain_records_no_match_without_final_else(
         self,
@@ -2559,6 +2575,15 @@ class LoweringBoundaryTests(unittest.TestCase):
         for form in no_match_forms:
             assert isinstance(form, NoSelectedBranchBodyAssignmentFormRecognition)
             self.assertEqual(form.attempted_literals, (2, 4, 8))
+        no_match_body_irs = tuple(
+            implementation.selected_branch_body_irs[0]
+            for implementation in result.unwrap().implementations
+            if implementation.generation_branch_chains[0].type_tag in ("si8", "ui8")
+        )
+        self.assertEqual(len(no_match_body_irs), 2)
+        for body_ir in no_match_body_irs:
+            assert isinstance(body_ir, NoSelectedAssignmentDirectIntrinsicBodyIr)
+            self.assertEqual(body_ir.attempted_literals, (2, 4, 8))
 
     def test_size_byte_branch_chain_uses_typed_stage_predicates(
         self,
@@ -2605,10 +2630,10 @@ class LoweringBoundaryTests(unittest.TestCase):
         )
         self.assertEqual(implementation.generation_predicates, predicates)
         self.assertEqual(
-            tuple(stage.output for stage in implementation.generation_stages[1:-2]),
+            tuple(stage.output for stage in implementation.generation_stages[1:-3]),
             (value, *predicates, chain),
         )
-        handoff = implementation.generation_stages[-2].output
+        handoff = implementation.generation_stages[-3].output
         assert isinstance(handoff, OpaqueSelectedBranchBodyHandoff)
         self.assertEqual(handoff.candidate_id, implementation.candidate_id)
         self.assertEqual(handoff.selected_type_tag, "ui16")
@@ -2616,12 +2641,19 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(handoff.opaque_body_text, "pg = intrin<svptrue_b16>();")
         self.assertEqual(handoff.source_location, chain.condition_location)
         self.assertIn(implementation.candidate_id, handoff.originating_branch_chain_id)
-        form = implementation.generation_stages[-1].output
+        form = implementation.generation_stages[-2].output
         assert isinstance(form, SelectedBranchBodyAssignmentFormRecognition)
         self.assertEqual(form.candidate_id, implementation.candidate_id)
         self.assertEqual(form.assignment_target_text, "pg")
         self.assertEqual(form.opaque_rhs_text, "intrin<svptrue_b16>()")
         self.assertEqual(form.direct_intrinsic_token_text, "svptrue_b16")
+        body_ir = implementation.generation_stages[-1].output
+        assert isinstance(body_ir, SelectedAssignmentDirectIntrinsicBodyIr)
+        self.assertEqual(body_ir.candidate_id, implementation.candidate_id)
+        self.assertEqual(body_ir.assignment_target_text, "pg")
+        self.assertEqual(body_ir.opaque_rhs_text, "intrin<svptrue_b16>()")
+        self.assertEqual(body_ir.direct_intrinsic_token_text, "svptrue_b16")
+        self.assertEqual(body_ir.direct_intrinsic_argument_texts, ())
 
     def test_selected_size_byte_branch_bodies_are_opaque_handoffs(self) -> None:
         selection = self.selection_for("lower_generation_size_byte_branch_chain")
@@ -2700,10 +2732,19 @@ class LoweringBoundaryTests(unittest.TestCase):
                 self.assertEqual(form.opaque_rhs_text, rhs_text)
                 self.assertEqual(form.direct_intrinsic_token_text, token_text)
                 self.assertEqual(
-                    implementation.generation_stages[-1],
+                    implementation.generation_stages[-2],
                     GenerationLoweringStage(
                         stage="selected_body_form_recognition",
                         output=form,
+                    ),
+                )
+                body_ir = implementation.selected_branch_body_irs[0]
+                assert isinstance(body_ir, SelectedAssignmentDirectIntrinsicBodyIr)
+                self.assertEqual(
+                    implementation.generation_stages[-1],
+                    GenerationLoweringStage(
+                        stage="selected_body_ir_lowering",
+                        output=body_ir,
                     ),
                 )
 
@@ -2724,6 +2765,149 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(form.selected_literal, 8)
         self.assertEqual(form.direct_intrinsic_token_text, "svptrue_b16")
 
+    def test_selected_assignment_direct_intrinsic_body_ir_records_are_lowered(
+        self,
+    ) -> None:
+        cases = (
+            ("si16", 2, "svptrue_b16", "intrin<svptrue_b16>()"),
+            ("ui32", 4, "svptrue_b32", "intrin<svptrue_b32>()"),
+            ("f64", 8, "svptrue_b64", "intrin<svptrue_b64>()"),
+        )
+
+        for type_tag, literal, token_text, rhs_text in cases:
+            with self.subTest(token_text=token_text):
+                form = SelectedBranchBodyAssignmentFormRecognition(
+                    candidate_id="candidate-1",
+                    selected_type_tag=type_tag,
+                    selected_literal=literal,
+                    originating_branch_chain_id="candidate-1:chain",
+                    original_opaque_body_text=f"pg = {rhs_text};",
+                    selected_statement_location=SourceLocation(
+                        Path("array.tsl"),
+                        107,
+                        15,
+                    ),
+                    assignment_target_text="pg",
+                    opaque_rhs_text=rhs_text,
+                    direct_intrinsic_token_text=token_text,
+                )
+
+                result = lower_selected_branch_body_ir(
+                    GenerationLoweringStage(
+                        stage="selected_body_form_recognition",
+                        output=form,
+                    )
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                body_ir = result.unwrap()
+                assert isinstance(body_ir, SelectedAssignmentDirectIntrinsicBodyIr)
+                self.assertEqual(body_ir.candidate_id, "candidate-1")
+                self.assertEqual(body_ir.selected_type_tag, type_tag)
+                self.assertEqual(body_ir.selected_literal, literal)
+                self.assertEqual(
+                    body_ir.originating_branch_chain_id,
+                    "candidate-1:chain",
+                )
+                self.assertEqual(body_ir.original_opaque_body_text, f"pg = {rhs_text};")
+                self.assertEqual(body_ir.assignment_target_text, "pg")
+                self.assertEqual(body_ir.opaque_rhs_text, rhs_text)
+                self.assertEqual(body_ir.direct_intrinsic_token_text, token_text)
+                self.assertEqual(body_ir.direct_intrinsic_argument_texts, ())
+
+    def test_no_selected_body_form_lowers_to_no_body_ir_for_byte_size_one(
+        self,
+    ) -> None:
+        for type_tag in ("si8", "ui8"):
+            with self.subTest(type_tag=type_tag):
+                form = NoSelectedBranchBodyAssignmentFormRecognition(
+                    candidate_id=f"{type_tag}-candidate",
+                    selected_type_tag=type_tag,
+                    source_location=SourceLocation(Path("array.tsl"), 107, 15),
+                    originating_branch_chain_id=f"{type_tag}:chain",
+                    attempted_literals=(2, 4, 8),
+                )
+
+                result = lower_selected_branch_body_ir(form)
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                body_ir = result.unwrap()
+                assert isinstance(body_ir, NoSelectedAssignmentDirectIntrinsicBodyIr)
+                self.assertEqual(body_ir.candidate_id, f"{type_tag}-candidate")
+                self.assertEqual(body_ir.selected_type_tag, type_tag)
+                self.assertEqual(body_ir.originating_branch_chain_id, f"{type_tag}:chain")
+                self.assertEqual(body_ir.attempted_literals, (2, 4, 8))
+
+    def test_body_ir_lowering_preserves_literal_token_mismatch(self) -> None:
+        form = SelectedBranchBodyAssignmentFormRecognition(
+            candidate_id="candidate-1",
+            selected_type_tag="f64",
+            selected_literal=8,
+            originating_branch_chain_id="candidate-1:chain",
+            original_opaque_body_text="pg = intrin<svptrue_b16>();",
+            selected_statement_location=SourceLocation(Path("array.tsl"), 107, 15),
+            assignment_target_text="pg",
+            opaque_rhs_text="intrin<svptrue_b16>()",
+            direct_intrinsic_token_text="svptrue_b16",
+        )
+
+        result = lower_selected_branch_body_ir(form)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        body_ir = result.unwrap()
+        assert isinstance(body_ir, SelectedAssignmentDirectIntrinsicBodyIr)
+        self.assertEqual(body_ir.selected_literal, 8)
+        self.assertEqual(body_ir.direct_intrinsic_token_text, "svptrue_b16")
+
+    def test_body_ir_lowering_does_not_parse_original_body_text(self) -> None:
+        form = SelectedBranchBodyAssignmentFormRecognition(
+            candidate_id="candidate-1",
+            selected_type_tag="si16",
+            selected_literal=2,
+            originating_branch_chain_id="candidate-1:chain",
+            original_opaque_body_text="mask = value<generation>(vector::length);",
+            selected_statement_location=SourceLocation(Path("array.tsl"), 107, 15),
+            assignment_target_text="pg",
+            opaque_rhs_text="intrin<svptrue_b16>()",
+            direct_intrinsic_token_text="svptrue_b16",
+        )
+
+        result = lower_selected_branch_body_ir(form)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        body_ir = result.unwrap()
+        assert isinstance(body_ir, SelectedAssignmentDirectIntrinsicBodyIr)
+        self.assertEqual(
+            body_ir.original_opaque_body_text,
+            "mask = value<generation>(vector::length);",
+        )
+        self.assertEqual(body_ir.assignment_target_text, "pg")
+        self.assertEqual(body_ir.opaque_rhs_text, "intrin<svptrue_b16>()")
+        self.assertEqual(body_ir.direct_intrinsic_token_text, "svptrue_b16")
+
+    def test_body_ir_lowering_rejects_unsupported_source_stage(self) -> None:
+        statement = TsilReturnStatement(
+            TsilBinaryExpression(
+                operator="+",
+                left=TsilParameterReference("left"),
+                right=TsilParameterReference("right"),
+            )
+        )
+        stage = GenerationLoweringStage(
+            stage="selected_body_lowering",
+            output=statement,
+        )
+
+        result = lower_selected_branch_body_ir(stage)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-SELECTED-BODY-IR-SOURCE-UNSUPPORTED",
+            severity="error",
+        )
+
     def test_size_byte_handoff_is_deterministic(self) -> None:
         selection = self.selection_for("lower_generation_size_byte_branch_chain")
 
@@ -2739,6 +2923,25 @@ class LoweringBoundaryTests(unittest.TestCase):
             ),
             tuple(
                 implementation.selected_branch_body_handoffs
+                for implementation in second.unwrap().implementations
+            ),
+        )
+
+    def test_selected_body_ir_lowering_is_deterministic(self) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+
+        first = lower_candidates(selection)
+        second = lower_candidates(selection)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(
+            tuple(
+                implementation.selected_branch_body_irs
+                for implementation in first.unwrap().implementations
+            ),
+            tuple(
+                implementation.selected_branch_body_irs
                 for implementation in second.unwrap().implementations
             ),
         )
@@ -2925,8 +3128,12 @@ class LoweringBoundaryTests(unittest.TestCase):
             self.assertEqual(len(implementation.selected_branch_body_assignment_forms), 1)
             form = implementation.selected_branch_body_assignment_forms[0]
             self.assertIsInstance(form, NoSelectedBranchBodyAssignmentFormRecognition)
-            self.assertIs(implementation.generation_stages[-2].output, handoff)
-            self.assertIs(implementation.generation_stages[-1].output, form)
+            self.assertEqual(len(implementation.selected_branch_body_irs), 1)
+            body_ir = implementation.selected_branch_body_irs[0]
+            self.assertIsInstance(body_ir, NoSelectedAssignmentDirectIntrinsicBodyIr)
+            self.assertIs(implementation.generation_stages[-3].output, handoff)
+            self.assertIs(implementation.generation_stages[-2].output, form)
+            self.assertIs(implementation.generation_stages[-1].output, body_ir)
             self.assertNotIsInstance(
                 handoff,
                 TsilReturnStatement,

@@ -5933,7 +5933,8 @@ Candidate comparison:
 
 Status:
 
-Selected by post-M61 planning. Await human acceptance before execution.
+Accepted. M62 returned `Accept With Follow-Ups` after one focused
+documentation revision.
 
 Goal:
 
@@ -6099,7 +6100,6 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- If accepted by the user, continue with
-  `docs/agent/runs/post-m61-acceptance-finalization-prompt.md`, which will
-  create the M62 execution-review loop prompt. Do not start M62 execution from
-  post-M61 planning.
+- The M62 execution-review loop owns acceptance for this milestone. If M62 is
+  accepted, update workflow state and create the next concrete post-M62 prompt
+  under `docs/agent/runs/`. Do not start M63.

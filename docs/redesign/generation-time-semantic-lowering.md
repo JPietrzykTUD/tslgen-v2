@@ -411,9 +411,9 @@ separate from branch-chain pruning. The accepted staged direction is:
    recognition boundary limited to the exact selected assignment form in the
    SVE size-byte branch bodies.
 7. Convert exactly selected recognized body forms into typed body-specific IR
-   values only after form recognition. The post-M61 plan selects M62 for the
-   exact M61 assignment/direct-intrinsic form, with unresolved backend-neutral
-   body IR and no SVE/backend/rendering semantics.
+   values only after form recognition. M62 accepts the exact M61
+   assignment/direct-intrinsic form, with unresolved backend-neutral body IR
+   and no SVE/backend/rendering semantics.
 
 This staged path is a semantic contract. It does not require every step to be a
 separate traversal immediately, but each milestone should expose typed outputs
@@ -466,13 +466,15 @@ literals to intrinsic token text, inspect unselected branch bodies, feed backend
 translation or rendering, add generated output, or parse broad TSIL body
 syntax.
 
-The post-M61 plan selects Milestone 62 as the first body-specific lowering IR
-slice. M62 consumes only M61 typed `selected_body_form_recognition` outputs and
-converts the exact selected assignment/direct-intrinsic form into unresolved,
-backend-neutral typed selected-body IR. It preserves the M61 assignment target,
-direct-intrinsic token text, original RHS/body text, selected type/literal, and
-provenance, but it must not derive semantics by rereading preserved body text.
-It must not validate intrinsic names, infer `type.size_bytes` to
+Milestone 62 is the first body-specific lowering IR slice. It consumes only M61
+typed `selected_body_form_recognition` outputs and converts the exact selected
+assignment/direct-intrinsic form into unresolved, backend-neutral typed
+selected-body IR through the distinct `selected_body_ir_lowering` stage. The
+selected IR preserves the M61 assignment target, direct-intrinsic token text,
+explicit empty argument list, original RHS/body text, selected type/literal,
+and provenance. The no-selected-body M61 result becomes an explicit no-body-IR
+result for byte-size `1` cases. M62 does not derive semantics by rereading
+preserved body text, validate intrinsic names, infer `type.size_bytes` to
 `svptrue_b*` mappings, prove SVE predicate meaning for `pg`, create backend
 translation requests, feed renderers, or emit generated output.
 
@@ -484,10 +486,13 @@ M61 diagnostics:
 - `TSL-LOWER-SELECTED-BODY-FORM-TARGET-UNSUPPORTED`
 - `TSL-LOWER-SELECTED-BODY-FORM-RHS-UNSUPPORTED`
 
+M62 diagnostics:
+
+- `TSL-LOWER-SELECTED-BODY-IR-SOURCE-UNSUPPORTED`
+
 ## Explicit Deferrals
 
-Deferred beyond the implemented M43-M61 semantic-lowering slices and the
-selected M62 body-IR slice:
+Deferred beyond the implemented M43-M62 semantic-lowering slices:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -501,8 +506,8 @@ selected M62 body-IR slice:
   `type.size_bytes == 2/4/8` predicates. Branch-chain pruning over those
   predicates is implemented only for the exact M59 SVE size-byte no-final-else
   branch chain; M60 adds only opaque selected-body handoff, M61 adds only
-  exact selected assignment-form recognition, and selected M62 planning adds
-  only unresolved typed body IR for that recognized form. General
+  exact selected assignment-form recognition, and M62 adds only unresolved
+  typed body IR for that recognized form. General
   `else if<generation>` syntax, final-else policy, broad branch pruning based
   on generation values, assignment semantics beyond that selected IR shape,
   broad direct-intrinsic/SVE semantics, backend intrinsic lowering, and broad
