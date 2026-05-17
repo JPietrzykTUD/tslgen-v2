@@ -1355,12 +1355,17 @@ Consequences:
   evaluator, SVE semantic layer, backend translation input, renderer input, or
   broad TSIL parser. SVE-looking `array.tsl` text is evidence for the need for
   the boundary, not an architectural dependency.
+- Milestone 64 selects exact structural array-body slot assembly before
+  semantic slot lowering. It composes accepted M63 selected-body envelopes into
+  a deterministic ordered whole-body slot envelope, while keeping surrounding
+  slots opaque and non-semantic so later milestones can refine one slot at a
+  time.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
 - Broad modifier support, primitive calls, direct intrinsics beyond the
   accepted M62 unresolved body-IR shape, accepted M63 singleton envelope
-  shape, and Rust body rendering remain deferred until their own helper slices
-  are selected.
+  shape, selected M64 exact structural slot envelope, and Rust body rendering
+  remain deferred until their own helper slices are selected.
 - Future native rendering milestones must state which helper IR and translation
   data they consume before adding generated output.

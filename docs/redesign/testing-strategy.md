@@ -785,6 +785,16 @@ Recommended first parity checks:
   unsupported source/type or inconsistent-envelope diagnostics, M57-M62
   regressions, raw-helper rejection, renderer non-evaluation, and no generated
   output or golden-file changes.
+- Milestone 64 tests only exact array-body envelope slot assembly over M63
+  envelopes: deterministic five-slot structural envelopes for the exact
+  `array.tsl:105-111` shape, a selected-body slot referencing M63
+  `svptrue_b16`, `svptrue_b32`, and `svptrue_b64` envelopes, explicit no-body
+  branch slots for `si8`/`ui8`, preservation of opaque slot text/provenance
+  and slot order, candidate/type/branch provenance mismatch diagnostics,
+  missing/reordered/duplicate/extra slot diagnostics, proof that non-branch
+  slots remain opaque and non-semantic, M57-M63 regressions, raw-helper
+  rejection, renderer non-evaluation, and no generated output or golden-file
+  changes.
 
 Deferred parity checks:
 

@@ -130,41 +130,47 @@ Post-M62 planning is accepted. It selected
 The M63 execution-review loop returned `Accept With Follow-Ups` with no
 blocking implementation issues and no focused revision.
 
+Post-M63 planning selected
+`Milestone 64: Exact Array Body Envelope Slot Assembly Slice`, and internal
+review returned `Accept With Follow-Ups` after local planning-doc updates.
+
+Post-M63 planning is accepted. It selected
+`Milestone 64: Exact Array Body Envelope Slot Assembly Slice`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M63 planning, focusing on lowering.
+Execute Milestone 64.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m63-planning-plus-review-prompt.md
+docs/agent/runs/m64-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Post-M63 planning is active; no executor milestone is selected yet.
+Milestone 64: Exact Array Body Envelope Slot Assembly Slice
 ```
 
 Latest review verdict:
 
 ```text
-The M63 execution-review loop returned Accept With Follow-Ups. Follow-up:
-M62's unsupported-source diagnostic test still asserts code/severity but not
-location/message text.
+The post-M63 planning review returned Accept With Follow-Ups after local
+planning-doc updates. Follow-up: M62's unsupported-source diagnostic test still
+asserts code/severity but not location/message text.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M63 planning-plus-review prompt. Use the specified
-subagent workflow, prefer lowering-focused candidates, do not implement code,
-and create the next concrete prompt under docs/agent/runs/ according to the
-accepted planning result.
+Run the active M64 execution-review loop prompt. Use the specified single
+write-capable executor followed by read-only review/audit subagents. Do not
+start M65.
 ```
 
 Accepted planning prompt:
@@ -437,10 +443,22 @@ Accepted M63 execution-review loop prompt:
 docs/agent/runs/m63-execution-review-loop-prompt.md
 ```
 
-Active post-M63 planning prompt:
+Completed post-M63 planning prompt:
 
 ```text
 docs/agent/runs/post-m63-planning-plus-review-prompt.md
+```
+
+Accepted post-M63 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m63-acceptance-finalization-prompt.md
+```
+
+Active M64 execution-review loop prompt:
+
+```text
+docs/agent/runs/m64-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -799,6 +817,28 @@ docs/agent/runs/post-m63-planning-plus-review-prompt.md
   TSL parsing, catalog queries, runtime `frozen/` use, dictionaries/raw string
   keys as downstream semantic models, or backend-specific branches in the
   envelope stage.
+- M64 is generation-time lowering/body-envelope slot assembly work only.
+- M64 must consume accepted typed M63 `selected_body_envelope_lowering`
+  outputs or equivalent typed M63 envelope values:
+  `SelectedBodyEnvelopeIr` and `NoSelectedBodyEnvelopeIr`.
+- M64 may assemble only the exact ordered structural array-body skeleton
+  evidenced by `tsldata/primitives/load_store/array.tsl:105-111`.
+- M64 must produce deterministic typed opaque slots around one selected-body
+  slot that references the M63 envelope. Slot labels are structural/
+  provenance labels only, not semantic statement kinds.
+- M64 must not loosen M63's singleton selected-body envelope invariant or
+  synthesize selected branch text for `si8`/`ui8` no-body cases.
+- SVE-looking corpus text is evidence only. M64 must not make `svbool_t`,
+  `pg`, `svptrue_b*`, `svst1`, `tmp.data()`, vector metadata, backend uninit
+  values, or `emit_return` architectural concepts or semantic rules.
+- M64 must not add declaration semantics, assignment binding, variable scope,
+  array semantics, direct-intrinsic semantics, SVE predicate/vector semantics,
+  byte-size-to-token inference, store semantics, return semantics, vector
+  length/alignment evaluation, backend uninit semantics, backend translation,
+  rendering, output, generated tests, CLI/report/writer behavior, Rust,
+  compiler execution, broad TSIL parsing, lowering-time file reads, raw TSL
+  parsing, catalog queries, runtime `frozen/` use, dictionaries/raw string keys
+  as downstream semantic models, or backend-specific branches.
 
 ## Accepted Milestone 48
 
@@ -1372,8 +1412,7 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M63 planning,
-focused on lowering.
+No stop condition is active. The workflow proceeds with M64 execution.
 
 ## Validation Expectations
 

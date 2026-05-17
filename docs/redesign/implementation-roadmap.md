@@ -6278,3 +6278,193 @@ Next concrete prompt:
 
 - Completed by `docs/agent/runs/m63-execution-review-loop-prompt.md`; the
   workflow now continues through post-M63 planning.
+
+## Post-M63 Planning Result
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Exact array body envelope slot assembly | M63 now supplies a typed selected-body envelope, but the accepted corpus evidence places that branch inside a larger ordered array body. A structural slot envelope gives future body-lowering slices named attachment points without interpreting those slots yet. | Medium if framed as exact opaque slot assembly over M63; very high if it becomes broad TSIL parsing, SVE array lowering, store/return semantics, or backend/rendering input. | Select as M64. |
+| Direct-intrinsic/SVE semantics | The selected branch and surrounding body contain `svptrue_b*`, `svptrue_b8`, and `svst1` tokens. | High because it would add SVE predicate/vector meaning, direct-intrinsic validation, byte-size-to-token inference, backend intrinsic pressure, and rendering pressure. | Defer. |
+| Vector length/alignment value semantics | The declaration slot contains `value<generation>(vector::length)` and `value<generation>(vector::alignment)`. | Medium to high because it pulls in vector/register metadata and array declaration semantics before the full body has a typed structural envelope. | Defer. |
+| Declaration/store/return lowering | The exact body includes array construction, a store call, and `emit_return`. | High because it would mix variable binding, array type/value semantics, call semantics, store semantics, return semantics, and eventual renderer concerns. | Defer. |
+| M62 diagnostic follow-up cleanup | A non-blocking M62 diagnostic-location/message assertion follow-up remains recorded. | Low, but it does not move lowering architecture forward. | Keep recorded unless selected separately. |
+
+### Milestone 64: Exact Array Body Envelope Slot Assembly Slice
+
+Status:
+
+Selected for human acceptance after post-M63 planning.
+
+Goal:
+
+Assemble the exact ordered array-body shape evidenced by
+`tsldata/primitives/load_store/array.tsl:105-111` into a deterministic typed
+body-envelope slot sequence around the accepted M63 selected-body envelope.
+
+M64 is a larger structural step than M63: it creates the whole-body composition
+point future body-lowering milestones can refine one slot at a time. It is not
+semantic array-body lowering.
+
+Scope:
+
+- Consume accepted typed M63 `selected_body_envelope_lowering` outputs or
+  equivalent typed M63 envelope values:
+  `SelectedBodyEnvelopeIr` and `NoSelectedBodyEnvelopeIr`.
+- Consume only in-memory typed/provenanced implementation payload information
+  already available to lowering for the exact array body shape. M64 must not
+  read `tsldata`, `frozen/`, the catalog, or files during evaluation.
+- Add a distinct post-M63 stage or typed value, such as
+  `array_body_envelope_slot_assembly`.
+- Recognize only the exact ordered structural skeleton evidenced by
+  `tsldata/primitives/load_store/array.tsl:105-111`:
+  - one opaque pre-branch array-initialization slot for the line 105 shape,
+  - one opaque pre-branch predicate-initialization slot for the line 106 shape,
+  - one selected-body envelope slot carrying the M63 envelope for the lines
+    107-109 branch-chain path,
+  - one opaque post-branch store-call slot for the line 110 shape,
+  - one opaque post-branch return-emission slot for the line 111 shape.
+- Treat those slot labels as exact structural/provenance labels only. They must
+  not imply declaration, assignment, predicate, store, return, array, vector,
+  direct-intrinsic, or backend semantics.
+- Preserve deterministic slot order, slot ordinal, opaque source text,
+  source/provenance, candidate id, selected type tag, branch-chain identity,
+  and a typed reference to the nested M63 envelope.
+- For byte-size `1` no-selected-body cases, carry the M63 no-body envelope in
+  the selected-body slot without synthesizing selected branch text.
+- Diagnose only M64 boundary state: unsupported source/stage/type, missing M63
+  envelope, duplicate selected-body slot, unsupported exact skeleton, missing
+  or extra slot, reordered slot, or candidate/type/branch provenance mismatch.
+
+M64 may use exact-shape structural recognition to assemble slots, but it must
+not split the body into semantic statements or dispatch behavior from raw text.
+Raw body text may be preserved as opaque provenance only.
+
+Out of scope:
+
+- SVE predicate/vector/register semantics, including meaning of `svbool_t`,
+  `pg`, `svptrue_b8`, `svptrue_b16/b32/b64`, or `svst1`.
+- Direct-intrinsic semantic validation, non-zero-argument intrinsic semantics,
+  byte-size-to-intrinsic-token inference, backend intrinsic IR, backend
+  translation requests, translation-map evaluation, renderer-ready IR,
+  rendering, generated C++/Rust output, generated tests, CLI/reporting/writer
+  behavior, compiler execution, or Rust.
+- Declaration semantics, assignment binding, variable scope, array type/value
+  semantics, `tmp.data()` semantics, store semantics, return semantics,
+  primitive calls, casts, loops, broad body lowering, or broad TSIL parsing.
+- Evaluation of `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, or
+  `value<backend>(uninit::array)`.
+- Consuming M60/M61/M62 raw text as a semantic shortcut; re-opening M63
+  `original_opaque_body_text` to infer target/RHS/intrinsic semantics; using
+  dictionaries, raw string keys, backend-specific branches, file reads, raw
+  TSL parsing, catalog queries, or runtime `frozen/` evidence during lowering
+  evaluation.
+
+Required input:
+
+- M63 `SelectedBodyEnvelopeIr` or `NoSelectedBodyEnvelopeIr` outputs from the
+  distinct `selected_body_envelope_lowering` stage.
+- Typed/provenanced exact array-body source information already supplied by
+  the lowering pipeline for the selected implementation payload. This source
+  information is structural/provenance input only, not semantic statement IR.
+
+Expected outputs:
+
+- A distinct typed value such as `ExactArrayBodyEnvelopeIr`, carrying five
+  deterministic ordered slots.
+- Opaque structural slot values for the four surrounding pre/post slots,
+  preserving text and provenance only.
+- A selected-body envelope slot referencing the M63 selected/no-body envelope.
+- Boundary-level diagnostics for invalid M64 input state only.
+- No `TsilStatement`, declaration/store/return statement IR, `BackendIntrinsicCall`,
+  backend translation request, renderer-ready body, rendered code, generated
+  artifact, SVE semantic object, vector metadata object, or backend-value
+  semantic object.
+
+Parity criterion:
+
+M64 proves the exact `array.tsl:105-111` body can be represented as a typed,
+ordered, backend-neutral structural envelope around the accepted M63 selected
+body envelope without implementing semantic array-body lowering, SVE/direct
+intrinsic semantics, backend translation, rendering, generated output, or
+compiler parity.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:105-111` for the exact ordered
+  array-body evidence.
+- `tsldata/primitives/load_store/array.tsl:107-109` for the accepted selected
+  branch-chain body evidence already covered through M57-M63.
+- Accepted M57 size-byte equality predicate lowering.
+- Accepted M58 staged lowering contract.
+- Accepted M59 exact branch-chain pruning.
+- Accepted M60 opaque selected-body handoff.
+- Accepted M61 selected assignment-form recognition.
+- Accepted M62 unresolved selected assignment/direct-intrinsic body IR.
+- Accepted M63 backend-neutral selected-body envelope IR.
+- `docs/redesign/generation-time-semantic-lowering.md` staged lowering
+  direction.
+
+Tests required:
+
+- Selected M63 envelopes for `svptrue_b16`, `svptrue_b32`, and `svptrue_b64`
+  assemble deterministic five-slot exact array-body envelopes.
+- `si8` and `ui8` M63 no-body envelopes assemble deterministic five-slot
+  envelopes with an explicit no-body selected-body slot and no synthesized
+  selected branch text.
+- Slot order, slot ordinals, candidate id, selected type tag, branch-chain
+  identity, opaque slot text, source locations, and nested M63 envelope
+  references are preserved.
+- Reordered, missing, duplicate, or extra slots produce structured M64
+  boundary diagnostics.
+- Mismatched candidate/type/branch provenance between the exact body skeleton
+  and nested M63 envelope produces structured M64 diagnostics.
+- Unsupported non-exact body skeletons, including final-else or additional
+  statements, are rejected without semantic classification.
+- Tests prove M64 does not reopen M63 selected-body text to infer
+  byte-size-to-token relationships, direct-intrinsic meaning, or SVE semantics.
+- Regression tests preserve M57 predicates, M58 stage records, M59 pruning,
+  M60 handoff, M61 form recognition, M62 body IR, M63 envelopes, backend
+  raw-helper rejection, renderer non-evaluation, and no generated output.
+- Determinism tests cover selected and no-body array-body envelopes.
+
+Golden fixtures required:
+
+- None. M64 is a lowering/body-envelope slot assembly slice and must not
+  change generated C++ or Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M64 exact array body envelope slot assembly test command selected
+  by the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Letting exact structural slot assembly become broad TSIL parsing or
+  multi-statement body lowering.
+- Naming slot records in a way that implies declaration, store, return, SVE,
+  vector, or backend semantics rather than opaque provenance roles.
+- Consuming M60/M61/M62 raw text, reparsing M63 selected-body text, or
+  dispatching semantics from raw strings.
+- Inferring byte-size-to-`svptrue_b*` mappings, validating direct intrinsics,
+  or interpreting `svbool_t`, `svst1`, vector length/alignment, backend
+  uninit, `tmp.data()`, or `emit_return`.
+- Adding backend translation, rendering, generated output, generated tests,
+  file/catalog reads, runtime `frozen/` use, dictionaries/raw string keys as
+  semantic models, or backend-specific branches.
+
+Dependencies on prior milestones:
+
+- Milestones 41, 42, 43, 48, 51, 52, 53, 54, 55, 57, 58, 59, 60, 61, 62, and
+  63.
+
+Next concrete prompt:
+
+- If the post-M63 planning result is accepted, update workflow state and create
+  `docs/agent/runs/m64-execution-review-loop-prompt.md`. Do not start M64
+  until the acceptance-finalization prompt records acceptance.

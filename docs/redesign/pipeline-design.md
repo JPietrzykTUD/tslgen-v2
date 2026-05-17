@@ -449,6 +449,15 @@ deterministic typed sequence. For M63, the selected sequence is exact and
 singleton. M63 must not parse surrounding SVE-looking statements from the array
 corpus, lower direct-intrinsic/SVE semantics, introduce backend translation or
 renderer-ready IR, emit generated output, or broaden TSIL body lowering.
+Post-M63 planning selects Milestone 64 as the next Stage 8 boundary: it
+consumes typed M63 selected-body envelopes and assembles only the exact
+`array.tsl:105-111` structural skeleton into a deterministic ordered slot
+envelope. The surrounding pre/post slots are opaque provenance slots, and the
+branch slot references the M63 selected/no-body envelope. M64 must not lower
+declarations, arrays, stores, returns, `svbool_t`, `svst1`, vector
+length/alignment, backend uninit values, direct-intrinsic/SVE semantics,
+backend translation, renderer-ready IR, generated output, or broad TSIL body
+syntax.
 
 ## Stage 9: Backend Planning
 
