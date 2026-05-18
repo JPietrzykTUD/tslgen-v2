@@ -6830,7 +6830,7 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance after post-M66 planning.
+Accepted with follow-ups after one focused documentation revision.
 
 Goal:
 
@@ -6982,10 +6982,202 @@ Dependencies on prior milestones:
 
 - Milestones 57, 58, 59, 60, 61, 62, 63, 64, 65, and 66.
 
+Execution-review result:
+
+- M67 is accepted with non-blocking follow-ups. The next workflow action is
+  post-M67 planning; this section does not select the follow-on milestone.
+
+## Post-M67 Planning Result
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Exact array initialization base-type helper request resolution | M67 now exposes a typed `generation_type` request for `type<generation>(base::in)`, and M43/M52/M53/M54 already define the accepted typed base-type semantics. Resolving exactly this request proves the request IR can feed a later lowering pass. | Medium if it calls raw query-string helper evaluators, expands to the full M43 helper family, or starts resolving all four M67 requests. | Select as M68. |
+| Vector length/alignment request resolution | M67 also records `value<generation>(vector::length)` and `value<generation>(vector::alignment)` requests. | High because these require vector/extension/lane metadata policy and missing-metadata diagnostics. | Defer until a vector metadata policy slice is selected. |
+| Backend uninit request resolution | M67 records `value<backend>(uninit::array)` as a backend-value request. | High because it crosses into backend value semantics, backend translation requests, renderer-ready IR, and generated-output pressure. | Defer. |
+| Generic helper request dispatcher | A shared resolver might seem useful after M67. | High because it would become a central helper evaluator and invite raw-string dispatch. | Reject for now; future helpers should add typed, family-specific slices. |
+| Next exact slot-specific form IR | The M64/M65 envelope still has predicate, selected-body, store, and return slots. | Medium to high because nearby slots pull in SVE predicates, direct intrinsics, store semantics, `tmp.data()`, `emit_return`, and backend/rendering pressure. | Defer until first-slot helper-resolution staging is proven. |
+| Determinism or diagnostic hardening | M67 and M65 recorded useful non-blocking hardening follow-ups. | Low risk, but lower architectural value than turning M67 request IR into a typed resolution pass. | Keep recorded; include only if it naturally fits M68. |
+
+### Milestone 68: Exact Array Initialization Base-Type Helper Request Resolution Slice
+
+Status:
+
+Selected for human acceptance after post-M67 planning.
+
+Goal:
+
+Consume accepted M67 `ExactArrayInitializationHelperRequestIr` values and
+resolve exactly the base-type helper request record for
+`type<generation>(base::in)` into a typed base-type resolution result, using
+accepted M43/M52/M53/M54 base-type semantics without reparsing raw helper text.
+
+M68 is a request-resolution boundary only. It proves that M67 request/
+provenance IR can feed a later lowering pass while leaving vector metadata,
+backend uninit semantics, declaration semantics, backend translation, and
+rendering unresolved.
+
+Scope:
+
+- Consume accepted M67 `ExactArrayInitializationHelperRequestIr` values, the
+  typed `array_initialization_helper_request_lowering` stage output, or a
+  typed `LoweredImplementation` carrying exactly one accepted M67
+  `array_initialization_helper_requests` entry as a container/source.
+- Select only the M67 request record with request ordinal `0`, request kind
+  `generation_type`, helper leaf kind `type_generation_base_in`, and source
+  text `type<generation>(base::in)` as provenance/invariant evidence.
+- Produce an immutable typed result value, for example
+  `ExactArrayInitializationBaseTypeResolutionIr`, keyed to the M67 request IR
+  and source base-type request record.
+- Carry the resolved `GenerationTypeRef(kind="base.in",
+  type_tag=<selected type tag>)` or an equivalent M68-specific wrapper around
+  that accepted value.
+- Use accepted M43/M52/M53/M54 selected type context and concrete integer
+  generation rule semantics through typed lowering request/context inputs.
+- Preserve source M67 request IR, source request record, leaf source text,
+  source locations, candidate id, selected type tag, branch-chain identity,
+  envelope identity, slot ordinal, variable token `tmp`, and deterministic
+  result ordering.
+- Preserve the remaining M67 requests for vector length, vector alignment, and
+  backend uninit as unresolved request/provenance records.
+- Append a distinct deterministic lowering stage, for example
+  `array_initialization_base_type_request_resolution`, after
+  `array_initialization_helper_request_lowering`.
+- Produce structured diagnostics for invalid M68 boundary/request state, such
+  as unsupported source stage/type, missing or multiple M67 request IR values,
+  missing base-type request, duplicate base-type request, mismatched request
+  ordinal/kind/leaf kind, unsupported base-type request text, unsupported
+  selected type, or provenance mismatch.
+
+Out of scope:
+
+- Calling raw query-string helper evaluators such as
+  `resolve_generation_type_query(...)` on M67 leaf text unless the evaluator is
+  refactored behind a typed, non-text entry point and tests prove no raw helper
+  text is parsed.
+- Parsing, regex-matching, normalizing, or dispatching on `leaf_source_text`,
+  `original_slot_text`, raw TSIL, raw TSL, or helper strings. Source text is
+  provenance/invariant evidence only.
+- Resolving `base.signed_of`, `base.unsigned_of`, or any other M43 type query
+  family.
+- Resolving `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, or
+  `value<backend>(uninit::array)`.
+- Producing `GenerationValue`, vector metadata values, backend uninit values,
+  backend translation requests, renderer-ready values, generated output, or
+  resolved array declaration semantics.
+- Generic `type<generation>(...)`, `value<generation>(...)`,
+  `type<backend>(...)`, or `value<backend>(...)` parsing or dispatch.
+- Generic `var` parsing, generic `array_type` parsing, declaration semantics,
+  array allocation/lifetime semantics, variable binding/scope, store/return
+  lowering, `tmp.data()`, `emit_return`, direct-intrinsic/SVE semantics,
+  vector/register metadata lookup, backend semantics, backend translation,
+  rendering, generated tests, CLI/reporting/writer behavior, Rust, compiler
+  execution, broad TSIL parsing, lowering-time file/catalog reads, raw TSL
+  parsing, raw-text dispatch tables, or runtime `frozen/` use.
+
+Required input:
+
+- Accepted M67 `ExactArrayInitializationHelperRequestIr` values, equivalent
+  typed `array_initialization_helper_request_lowering` stage output, or a
+  typed `LoweredImplementation` container with exactly one accepted M67
+  `array_initialization_helper_requests` entry.
+- The exact M67 base-type request record and provenance for
+  `tsldata/primitives/load_store/array.tsl:105`.
+- Accepted M43/M52/M53/M54 typed base-type semantics and concrete integer
+  generation rule inputs already available before lowering evaluation.
+
+Expected outputs:
+
+- A typed base-type request-resolution IR value keyed to the accepted M67
+  request IR and source base-type request record.
+- A typed base-type result equivalent to
+  `GenerationTypeRef(kind="base.in", type_tag=<selected type tag>)`.
+- A distinct deterministic lowering stage after
+  `array_initialization_helper_request_lowering`.
+- Remaining vector length, vector alignment, and backend uninit M67 request
+  records preserved as unresolved provenance.
+- Existing M57-M67 lowering outputs, backend raw-helper rejection, renderer
+  non-evaluation, generated outputs, and golden fixtures unchanged.
+
+Parity criterion:
+
+M68 proves the accepted M67 request/provenance IR can drive a typed helper
+resolution pass for the already accepted base-type semantics without raw
+helper reparsing, vector metadata policy, backend uninit semantics,
+declaration semantics, backend translation, or renderer behavior.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:105` for the exact first-slot
+  `type<generation>(base::in)` helper request evidence.
+- Accepted M67 `ExactArrayInitializationHelperRequestIr` and request records.
+- Accepted M43 `GenerationTypeRef(kind="base.in")` behavior.
+- Accepted M52 concrete integer type/signedness expansion.
+- Accepted M53 typed concrete integer generation rule source.
+- Accepted M54 catalog-derived rule wiring into lowering inputs.
+
+Tests required:
+
+- Direct M68 lowering from an accepted M67
+  `ExactArrayInitializationHelperRequestIr` resolves exactly the base-type
+  request for selected supported concrete integer tags.
+- Normal `lower_candidates` with typed M65/M66/M67 input carries M68
+  base-type resolution IR and appends
+  `array_initialization_base_type_request_resolution` after
+  `array_initialization_helper_request_lowering`.
+- The resolved type result matches accepted M43/M52/M53/M54 selected type
+  context and concrete integer rule semantics.
+- Vector length, vector alignment, and backend uninit requests remain
+  unresolved and unchanged.
+- Unsupported source stage/type, missing or multiple request IR values,
+  missing base-type request, duplicate base-type request, mismatched
+  ordinal/kind/leaf kind, unsupported base-type request text, unsupported
+  selected type, and provenance mismatch produce structured diagnostics with
+  source locations and actionable messages.
+- Tests prove M68 consumes typed M67 records and does not call raw query-string
+  helper evaluators on M67 leaf text, parse raw helper strings, read files,
+  query the catalog during evaluation, invoke backend translation, feed
+  renderers, or use runtime `frozen/`.
+- Regression tests preserve M57-M67 behavior, backend raw-helper rejection,
+  renderer non-evaluation, determinism, and no generated output or golden-file
+  changes.
+
+Golden fixtures required:
+
+- None. M68 is a lowering/request-resolution slice and must not change
+  generated C++ or Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M68 exact array-initialization base-type request-resolution test
+  command selected by the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Calling raw query-string helper evaluators on M67 leaf text or adding a
+  generic helper dispatcher.
+- Expanding from `base.in` to the whole M43 type-query family.
+- Resolving all four M67 requests rather than only the base-type request.
+- Making vector metadata, backend uninit, declaration, array, store, return,
+  direct-intrinsic, backend translation, rendering, or output decisions under
+  the cover of request resolution.
+- Rebuilding rule sources, querying catalogs, reading `tsldata`, or inspecting
+  `frozen/` during lowering evaluation.
+- Mutating M67 request IR instead of appending one typed resolution stage.
+
+Dependencies on prior milestones:
+
+- Milestones 43, 52, 53, 54, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, and 67.
+
 Next concrete prompt:
 
-- `docs/agent/runs/post-m66-acceptance-finalization-prompt.md` is created and
+- `docs/agent/runs/post-m67-acceptance-finalization-prompt.md` is created and
   active pending human acceptance. That finalization prompt will create
-  `docs/agent/runs/m67-execution-review-loop-prompt.md` after explicit human
-  acceptance. Do not start M67 until the acceptance-finalization prompt records
+  `docs/agent/runs/m68-execution-review-loop-prompt.md` after explicit human
+  acceptance. Do not start M68 until the acceptance-finalization prompt records
   acceptance.

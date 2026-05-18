@@ -170,39 +170,46 @@ state correction.
 The M67 execution-review loop returned `Accept With Follow-Ups` after one
 focused documentation revision.
 
+Post-M67 planning is accepted. It selected
+`Milestone 68: Exact Array Initialization Base-Type Helper Request Resolution Slice`,
+and internal review returned `Accept With Follow-Ups` for the selected slice
+after identifying a workflow handoff correction. Human acceptance included the
+condition that M68 must avoid hardwiring.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Plan the next lowering-focused milestone after M67.
+Execute Milestone 68.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m67-planning-plus-review-prompt.md
+docs/agent/runs/m68-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The next task is post-M67 planning.
+Milestone 68: Exact Array Initialization Base-Type Helper Request Resolution Slice
 ```
 
 Latest review verdict:
 
 ```text
-M67 execution-review returned Accept With Follow-Ups after one focused
-documentation revision.
+Post-M67 planning returned Accept With Follow-Ups after selecting M68 and
+identifying a workflow handoff correction. Human acceptance is recorded with
+the condition that M68 must avoid hardwiring.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M67 planning-plus-review prompt. Focus the next candidate
-on lowering, use the specified planning/review subagents, and do not implement
-code or start M68 execution.
+Run the active M68 execution-review loop prompt with one write-capable
+executor if M68 is not already implemented, then read-only review/audit
+subagents. Do not start M69.
 ```
 
 Accepted planning prompt:
@@ -547,10 +554,22 @@ Accepted M67 execution-review loop prompt:
 docs/agent/runs/m67-execution-review-loop-prompt.md
 ```
 
-Active post-M67 planning prompt:
+Completed post-M67 planning prompt:
 
 ```text
 docs/agent/runs/post-m67-planning-plus-review-prompt.md
+```
+
+Accepted post-M67 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m67-acceptance-finalization-prompt.md
+```
+
+Active M68 execution-review loop prompt:
+
+```text
+docs/agent/runs/m68-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1000,6 +1019,45 @@ docs/agent/runs/post-m67-planning-plus-review-prompt.md
   variable scope, store/return lowering, `tmp.data()`, `emit_return`,
   direct-intrinsic/SVE semantics, broad TSIL parsing, file/catalog reads during
   lowering, raw-text dispatch tables, or runtime `frozen/` use.
+- M68 is accepted for execution as exact array-initialization base-type helper
+  request resolution only. M68 must consume accepted M67
+  `ExactArrayInitializationHelperRequestIr` values, the
+  `array_initialization_helper_request_lowering` stage output, or a typed
+  `LoweredImplementation` carrying exactly one accepted M67
+  `array_initialization_helper_requests` entry.
+- M68 must resolve only the M67 base-type request record with request ordinal
+  `0`, request kind `generation_type`, and helper leaf kind
+  `type_generation_base_in` into a typed result equivalent to
+  `GenerationTypeRef(kind="base.in", type_tag=<selected type tag>)`.
+- M68 must preserve source M67 request IR, source request record, leaf source
+  text as provenance only, source locations, candidate id, selected type tag,
+  branch-chain identity, envelope identity, slot ordinal, variable token
+  `tmp`, and deterministic result ordering.
+- M68 must not parse, regex-match, normalize, or dispatch on M67
+  `leaf_source_text`, M66 `original_slot_text`, raw TSIL, raw TSL, or helper
+  strings.
+- M68 must not hardwire request resolution through ad-hoc tables or `if`/`elif`
+  branches keyed by raw helper text, selected type tags, or request ordinals.
+  It must consume typed M67 request records and accepted typed
+  rule/context inputs.
+- M68 must not call raw query-string helper evaluators such as
+  `resolve_generation_type_query(...)` on M67 leaf text unless such behavior is
+  refactored behind a typed, non-text entry point and tests prove no raw helper
+  text is parsed.
+- M68 must not resolve `base.signed_of`, `base.unsigned_of`,
+  `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, or
+  `value<backend>(uninit::array)`.
+- M68 must not produce `GenerationValue`, vector metadata values, backend
+  uninit values, backend translation requests, renderer-ready IR, generated
+  output, generated tests, CLI/report/writer behavior, Rust, or compiler
+  execution.
+- M68 must not add generic helper parsing, generic `var` parsing, generic
+  `array_type` parsing, declaration semantics, array allocation/lifetime,
+  variable scope, store/return lowering, `tmp.data()`, `emit_return`,
+  direct-intrinsic/SVE semantics, broad TSIL parsing, file/catalog reads during
+  lowering evaluation, catalog queries during evaluation, raw-text dispatch
+  tables, or runtime `frozen/` use.
 
 ## Accepted Milestone 48
 
@@ -1640,10 +1698,23 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M67 documentation revision follow-up addressed during the execution-review
   loop: document the typed `LoweredImplementation` source container and the
   new M67 diagnostic codes in the redesign docs.
+- Post-M67 planning follow-up for M68 execution: M68 must be a typed
+  request-resolution adapter over M67 IR, not a raw
+  `type<generation>(...)` evaluator over M67 leaf text.
+- Post-M67 acceptance condition for M68 execution: ensure no hardwiring.
+  Resolution must not be implemented through ad-hoc tables or branches keyed
+  by raw helper text, selected type tags, or request ordinals; it must use
+  typed M67 request records plus accepted typed rule/context inputs.
+- Post-M67 planning follow-up for M68 execution: keep vector length, vector
+  alignment, backend uninit, declaration/array semantics, backend
+  translation, rendering, and generated output out of scope.
+- Post-M67 planning follow-up for M68 execution: do not use `Catalog`, file
+  reads, `tsldata`, or `frozen/` during lowering evaluation; selected type
+  context and rules must arrive through typed lowering request/context inputs.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M67 planning.
+No stop condition is active. The workflow proceeds with M68 execution.
 
 ## Validation Expectations
 

@@ -525,7 +525,7 @@ not lower generic declarations, arrays, variables, store/return slots,
 SVE/direct intrinsics, backend translation, rendering, generated output, or
 broad TSIL body syntax.
 
-Milestone 67 is selected as the exact array-initialization helper request IR
+Milestone 67 is accepted as the exact array-initialization helper request IR
 slice. It consumes accepted M66 `ExactArrayInitializationSlotFormIr` values,
 the `array_initialization_slot_form_lowering` stage, or a typed
 `LoweredImplementation` carrying exactly one accepted M66 form as a
@@ -534,6 +534,20 @@ into deterministic typed deferred helper-request records. M67 preserves leaf
 kind, source text, source locations, candidate/type/envelope provenance, slot
 ordinal, branch-chain identity, and variable token `tmp`, but it does not
 evaluate, resolve, translate, normalize, or render any helper.
+
+Milestone 68 is selected as the exact array-initialization base-type helper
+request resolution slice. It consumes accepted M67
+`ExactArrayInitializationHelperRequestIr` values, the
+`array_initialization_helper_request_lowering` stage, or a typed
+`LoweredImplementation` carrying exactly one accepted M67 helper-request IR as
+a container/source. M68 resolves only the M67 request record for
+`type<generation>(base::in)` into a typed result equivalent to
+`GenerationTypeRef(kind="base.in", type_tag=<selected type tag>)`, preserving
+M67 request provenance and leaving the vector length, vector alignment, and
+backend uninit requests unresolved. M68 must consume typed M67 request fields,
+not reparse `leaf_source_text`, `original_slot_text`, raw TSIL, raw TSL, or
+helper strings, and it must not call raw query-string helper evaluators on M67
+leaf text.
 
 M61 diagnostics:
 
@@ -624,8 +638,9 @@ M67 diagnostics:
 ## Explicit Deferrals
 
 Deferred beyond the implemented M43-M67 semantic-lowering, structural
-slot-assembly, pipeline-integration, and exact array-initialization slot form
-IR slices:
+slot-assembly, pipeline-integration, exact array-initialization slot form IR,
+and M67 helper-request IR slices, plus selected M68 base-type request
+resolution:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -656,7 +671,8 @@ IR slices:
   length/alignment semantics, backend uninit semantics, surrounding
   declaration/store/return semantics beyond the exact M66 form,
   skeleton recognition from raw body text, and broad body lowering remain
-  deferred.
+  deferred. Selected M68 narrows only the exact M67 base-type request; vector
+  length/alignment and backend uninit request resolution remain deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only

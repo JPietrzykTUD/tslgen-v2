@@ -474,7 +474,7 @@ must not evaluate vector length/alignment or backend uninit helpers, add
 generic declaration/array/variable semantics, lower store or return slots,
 introduce SVE/direct-intrinsic/backend translation or renderer-ready IR, emit
 generated output, or broaden TSIL body lowering.
-Milestone 67 is selected as the next Stage 8 request/provenance boundary over
+Milestone 67 is accepted as the next Stage 8 request/provenance boundary over
 the M66 form IR. It may consume the direct M66 form, the
 `array_initialization_slot_form_lowering` stage output, or a typed
 `LoweredImplementation` carrying exactly one accepted M66 form as a
@@ -482,6 +482,16 @@ container/source. It should append a distinct helper-request stage after
 `array_initialization_slot_form_lowering` and classify exactly the four M66
 unresolved helper leaves into typed deferred request records. It must not
 evaluate helper values, create backend translation requests, or broaden body
+lowering.
+Milestone 68 is selected as the next Stage 8 request-resolution boundary over
+M67 request IR. It may consume the direct M67 helper-request IR, the
+`array_initialization_helper_request_lowering` stage output, or a typed
+`LoweredImplementation` carrying exactly one accepted M67 helper-request IR as
+a container/source. It should append a distinct base-type request-resolution
+stage after `array_initialization_helper_request_lowering` and resolve only
+the M67 `type<generation>(base::in)` request into a typed base-type result. It
+must not resolve vector length, vector alignment, or backend uninit requests,
+parse raw helper text, create backend translation requests, or broaden body
 lowering.
 
 ## Stage 9: Backend Planning

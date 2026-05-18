@@ -813,7 +813,7 @@ Recommended first parity checks:
   exact-form diagnostics, prove deterministic lowering, keep raw-helper
   rejection and renderer non-evaluation, and change no generated output or
   golden files.
-- Milestone 67 tests should cover only typed deferred helper-request IR over
+- Milestone 67 tests cover only typed deferred helper-request IR over
   accepted M66 leaves: classify exactly the base-type, vector-length,
   vector-alignment, and backend-uninit leaves into deterministic request
   records; preserve leaf text, source locations, and M65/M66 provenance; prove
@@ -823,6 +823,18 @@ Recommended first parity checks:
   or multiple forms, missing/mismatched leaves, unsupported leaf text, and
   provenance diagnostics; keep M57-M66 behavior, raw-helper rejection,
   renderer non-evaluation, generated outputs, and golden files unchanged.
+- Milestone 68 tests should cover only typed base-type request resolution over
+  accepted M67 request IR: consume direct request IR, stage output, and typed
+  `LoweredImplementation` container sources; resolve exactly the
+  `type<generation>(base::in)` request to a typed base-type result equivalent
+  to `GenerationTypeRef(kind="base.in")`; preserve M67 provenance; prove
+  vector length, vector alignment, and backend uninit requests remain
+  unresolved; cover missing/multiple request IR, missing/duplicate/mismatched
+  base-type request records, unsupported selected types, unsupported request
+  text, and provenance diagnostics; prove no raw helper text is parsed, no raw
+  query-string helper evaluator is called on M67 leaf text, no file/catalog
+  reads happen during evaluation, and generated outputs/golden files remain
+  unchanged.
 
 Deferred parity checks:
 

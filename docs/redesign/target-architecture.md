@@ -434,13 +434,22 @@ Current roadmap note:
   vector metadata or backend uninit helpers, add broad declaration/array/
   variable semantics, lower store/return slots, introduce backend translation,
   rendering, output, or broad TSIL parsing.
-- Milestone 67 is selected as the next request/provenance boundary over the
+- Milestone 67 is accepted as the next request/provenance boundary over the
   M66 form IR. It should consume only `ExactArrayInitializationSlotFormIr`,
   the corresponding stage output, or a typed `LoweredImplementation` carrying
   exactly one accepted M66 form as a container/source, then produce typed
   deferred helper-request records for the four exact M66 leaves. It must not
   evaluate helper values, call backend translation, parse raw slot text, or
   add declaration/array/store/return semantics.
+- Milestone 68 is selected as the first request-resolution boundary over M67
+  request IR. It should consume only `ExactArrayInitializationHelperRequestIr`,
+  the corresponding stage output, or a typed `LoweredImplementation` carrying
+  exactly one accepted M67 helper-request IR as a container/source, then
+  resolve exactly the base-type request into a typed result equivalent to
+  `GenerationTypeRef(kind="base.in")`. It must not parse M67 leaf text, call
+  raw query-string helper evaluators on that text, resolve vector/backend
+  requests, create backend translation requests, feed renderers, or add
+  declaration/array/store/return semantics.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not
