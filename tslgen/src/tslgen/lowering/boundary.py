@@ -62,6 +62,7 @@ type GenerationLoweringStageName = Literal[
     "array_initialization_vector_alignment_request_resolution",
     "array_initialization_helper_set_completion",
     "array_initialization_declaration_shell_lowering",
+    "array_body_structural_sequence_classification",
 ]
 type ExactArrayInitializationVectorLengthKind = Literal[
     "fixed_lanes",
@@ -95,6 +96,13 @@ type ExactArrayBodyEnvelopeSlotLabel = Literal[
 type ExactArrayBodyEnvelopeSlot = (
     ExactArrayBodyEnvelopeOpaqueSlot | ExactArrayBodyEnvelopeSelectedSlot
 )
+type ExactArrayBodyStructuralRoleLabel = Literal[
+    "first_slot_declaration_shell",
+    "opaque_predicate_init_shaped_slot",
+    "selected_body_envelope_slot",
+    "opaque_post_branch_store_call_shaped_slot",
+    "opaque_return_emission_shaped_slot",
+]
 type ExactArrayInitializationHelperLeafKind = Literal[
     "type_generation_base_in",
     "value_generation_vector_length",
@@ -139,6 +147,7 @@ type GenerationLoweringStageOutput = (
     | ExactArrayInitializationVectorAlignmentResolutionIr
     | ExactArrayInitializationHelperSetCompletionIr
     | ExactArrayInitializationDeclarationShellIr
+    | ExactArrayBodyStructuralSequenceIr
     | TsilStatement
 )
 
@@ -159,6 +168,15 @@ _EXACT_ARRAY_BODY_ENVELOPE_OPAQUE_SLOT_LABELS = (
     "opaque_pre_branch_predicate_initialization",
     "opaque_post_branch_store_call",
     "opaque_post_branch_return_emission",
+)
+_EXACT_ARRAY_BODY_STRUCTURAL_ROLE_LABELS: tuple[
+    ExactArrayBodyStructuralRoleLabel, ...
+] = (
+    "first_slot_declaration_shell",
+    "opaque_predicate_init_shaped_slot",
+    "selected_body_envelope_slot",
+    "opaque_post_branch_store_call_shaped_slot",
+    "opaque_return_emission_shaped_slot",
 )
 
 _GENERATION_CONDITION_MARKER = "if<generation>"
@@ -2742,6 +2760,224 @@ class ExactArrayInitializationDeclarationShellIr:
 
 
 @dataclass(frozen=True, slots=True)
+class _ExactArrayBodyStructuralRole:
+    role_label: ExactArrayBodyStructuralRoleLabel
+    role_ordinal: int
+    envelope_slot: ExactArrayBodyEnvelopeSlot
+    source_location: SourceLocation
+    candidate_id: str
+    target_extension: str | None
+    source_extension: str | None
+    selected_type_tag: str
+    originating_branch_chain_id: str
+    declaration_shell: ExactArrayInitializationDeclarationShellIr | None = None
+    selected_body_envelope: GenerationSelectedBodyEnvelopeIr | None = None
+    opaque_source_text: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.role_label not in _EXACT_ARRAY_BODY_STRUCTURAL_ROLE_LABELS:
+            raise ValueError("array-body structural role label is unsupported")
+        if self.role_ordinal not in _EXACT_ARRAY_BODY_ENVELOPE_SLOT_ORDINALS:
+            raise ValueError("array-body structural role ordinal is unsupported")
+        if self.source_location is None:
+            raise ValueError("array-body structural role requires source location")
+        if not self.candidate_id:
+            raise ValueError("array-body structural role candidate id must be non-empty")
+        if not self.selected_type_tag:
+            raise ValueError("array-body structural role type tag must be non-empty")
+        if not self.originating_branch_chain_id:
+            raise ValueError(
+                "array-body structural role branch-chain id must be non-empty"
+            )
+        if (
+            self.envelope_slot.ordinal != self.role_ordinal
+            or self.envelope_slot.candidate_id != self.candidate_id
+            or self.envelope_slot.selected_type_tag != self.selected_type_tag
+            or self.envelope_slot.originating_branch_chain_id
+            != self.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "array-body structural role provenance must match its M65 slot"
+            )
+        if self.role_ordinal == 0:
+            if not isinstance(self.declaration_shell, ExactArrayInitializationDeclarationShellIr):
+                raise ValueError(
+                    "first structural role requires the accepted M73 declaration shell"
+                )
+            if self.declaration_shell.slot_ordinal != 0:
+                raise ValueError(
+                    "first structural role may attach the M73 declaration shell "
+                    "only to slot ordinal 0"
+                )
+            if self.selected_body_envelope is not None or self.opaque_source_text is not None:
+                raise ValueError(
+                    "first structural role must not carry selected-body or opaque "
+                    "non-first evidence"
+                )
+        elif self.role_ordinal == 2:
+            if not isinstance(self.envelope_slot, ExactArrayBodyEnvelopeSelectedSlot):
+                raise ValueError(
+                    "selected-body structural role requires the M65 selected-body slot"
+                )
+            if self.selected_body_envelope is not self.envelope_slot.selected_body_envelope:
+                raise ValueError(
+                    "selected-body structural role must preserve the nested M63 envelope"
+                )
+            if self.declaration_shell is not None or self.opaque_source_text is not None:
+                raise ValueError(
+                    "selected-body structural role must not carry declaration or "
+                    "opaque source text"
+                )
+        else:
+            if not isinstance(self.envelope_slot, ExactArrayBodyEnvelopeOpaqueSlot):
+                raise ValueError(
+                    "opaque structural roles require opaque M65 envelope slots"
+                )
+            if self.opaque_source_text != self.envelope_slot.opaque_source_text:
+                raise ValueError(
+                    "opaque structural roles must preserve M65 opaque source text"
+                )
+            if self.declaration_shell is not None or self.selected_body_envelope is not None:
+                raise ValueError(
+                    "opaque structural roles must not carry declaration-shell or "
+                    "selected-body envelope links"
+                )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        location_key = self.source_location.sort_key()
+        declaration_key = (
+            self.declaration_shell.key if self.declaration_shell is not None else ()
+        )
+        selected_key = (
+            self.selected_body_envelope.key
+            if self.selected_body_envelope is not None
+            else ()
+        )
+        return (
+            "exact_array_body_structural_role",
+            self.role_label,
+            self.role_ordinal,
+            self.envelope_slot.key,
+            location_key,
+            self.candidate_id,
+            self.target_extension or "",
+            self.source_extension or "",
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+            declaration_key,
+            selected_key,
+            self.opaque_source_text or "",
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ExactArrayBodyStructuralSequenceIr:
+    source_envelope: ExactArrayBodyEnvelopeIr
+    declaration_shell: ExactArrayInitializationDeclarationShellIr
+    roles: tuple[_ExactArrayBodyStructuralRole, ...]
+    source_location: SourceLocation
+    candidate_id: str
+    target_extension: str
+    source_extension: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_envelope, ExactArrayBodyEnvelopeIr):
+            raise TypeError(
+                "array-body structural sequence requires an M65 array-body envelope"
+            )
+        if not isinstance(
+            self.declaration_shell,
+            ExactArrayInitializationDeclarationShellIr,
+        ):
+            raise TypeError(
+                "array-body structural sequence requires an M73 declaration shell"
+            )
+        object.__setattr__(self, "roles", tuple(self.roles))
+        if self.source_location is None:
+            raise ValueError("array-body structural sequence requires source location")
+        if (
+            self.candidate_id != self.source_envelope.candidate_id
+            or self.candidate_id != self.declaration_shell.candidate_id
+            or self.selected_type_tag != self.source_envelope.selected_type_tag
+            or self.selected_type_tag != self.declaration_shell.selected_type_tag
+            or self.originating_branch_chain_id
+            != self.source_envelope.originating_branch_chain_id
+            or self.originating_branch_chain_id
+            != self.declaration_shell.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "array-body structural sequence provenance must match the "
+                "accepted M65 envelope and M73 declaration shell"
+            )
+        if (
+            self.target_extension != self.declaration_shell.target_extension
+            or self.source_extension != self.declaration_shell.source_extension
+        ):
+            raise ValueError(
+                "array-body structural sequence extension provenance must "
+                "match the accepted M73 declaration shell"
+            )
+        if self.declaration_shell.source_envelope is not self.source_envelope:
+            raise ValueError(
+                "array-body structural sequence declaration shell must reference "
+                "the same accepted M65 envelope"
+            )
+        if tuple(role.role_label for role in self.roles) != (
+            _EXACT_ARRAY_BODY_STRUCTURAL_ROLE_LABELS
+        ):
+            raise ValueError(
+                "array-body structural sequence roles must use the exact M74 order"
+            )
+        if tuple(role.role_ordinal for role in self.roles) != (
+            _EXACT_ARRAY_BODY_ENVELOPE_SLOT_ORDINALS
+        ):
+            raise ValueError(
+                "array-body structural sequence role ordinals must be exact"
+            )
+        if tuple(role.envelope_slot for role in self.roles) != self.source_envelope.slots:
+            raise ValueError(
+                "array-body structural sequence roles must preserve source slot order"
+            )
+        if self.roles[0].declaration_shell is not self.declaration_shell:
+            raise ValueError(
+                "array-body structural sequence must attach the M73 declaration "
+                "shell only to role ordinal 0"
+            )
+        for role in self.roles[1:]:
+            if role.declaration_shell is not None:
+                raise ValueError(
+                    "array-body structural sequence must not attach the M73 "
+                    "declaration shell to nonzero slots"
+                )
+        if (
+            self.roles[2].selected_body_envelope
+            is not self.source_envelope.selected_body_slot.selected_body_envelope
+        ):
+            raise ValueError(
+                "array-body structural sequence must preserve the M63 selected/no-body "
+                "envelope only in the selected-body slot"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_body_structural_sequence_ir",
+            self.source_envelope.key,
+            self.declaration_shell.key,
+            tuple(role.key for role in self.roles),
+            self.source_location.sort_key(),
+            self.candidate_id,
+            self.target_extension,
+            self.source_extension,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationValue:
     kind: GenerationValueKind
     value: int
@@ -2846,6 +3082,8 @@ class GenerationLoweringStage:
             expected = (ExactArrayInitializationHelperSetCompletionIr,)
         elif self.stage == "array_initialization_declaration_shell_lowering":
             expected = (ExactArrayInitializationDeclarationShellIr,)
+        elif self.stage == "array_body_structural_sequence_classification":
+            expected = (ExactArrayBodyStructuralSequenceIr,)
         else:
             raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
         if not isinstance(self.output, expected):
@@ -2896,6 +3134,9 @@ class LoweredImplementation:
     ] = ()
     array_initialization_declaration_shells: tuple[
         ExactArrayInitializationDeclarationShellIr, ...
+    ] = ()
+    array_body_structural_sequences: tuple[
+        ExactArrayBodyStructuralSequenceIr, ...
     ] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
@@ -2990,6 +3231,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "array_body_structural_sequences",
+            tuple(self.array_body_structural_sequences),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -3040,6 +3286,10 @@ class LoweredImplementation:
             tuple(
                 shell.key
                 for shell in self.array_initialization_declaration_shells
+            ),
+            tuple(
+                sequence.key
+                for sequence in self.array_body_structural_sequences
             ),
             tuple(stage.key for stage in self.generation_stages),
         )
@@ -4276,6 +4526,107 @@ def lower_exact_array_initialization_declaration_shell(
         )
 
 
+def lower_exact_array_body_structural_sequence(
+    source: object,
+    declaration_shell: object | None = None,
+    context: GenerationContext | None = None,
+    *,
+    selected_candidate_id: str | None = None,
+    target_extension: str | None = None,
+    source_extension: str | None = None,
+    selected_type_tag: str | None = None,
+) -> Result[ExactArrayBodyStructuralSequenceIr]:
+    source_result = _array_body_structural_sequence_source(source, declaration_shell)
+    if not source_result.is_ok:
+        return Result.failure(source_result.diagnostics)
+    envelope, shell = source_result.unwrap()
+
+    diagnostics = _validate_array_body_structural_sequence_inputs(envelope, shell)
+    if diagnostics:
+        return Result.failure(sort_diagnostics(tuple(diagnostics)))
+
+    generation_context = context or GenerationContext()
+    effective_candidate_id = (
+        selected_candidate_id
+        or generation_context.selected_candidate_id
+        or shell.candidate_id
+    )
+    effective_target_extension = target_extension or shell.target_extension
+    effective_source_extension = source_extension or shell.source_extension
+    effective_type_tag = (
+        selected_type_tag
+        or generation_context.selected_type_tag
+        or shell.selected_type_tag
+    )
+    if (
+        effective_candidate_id != shell.candidate_id
+        or effective_target_extension != shell.target_extension
+        or effective_source_extension != shell.source_extension
+        or effective_type_tag != shell.selected_type_tag
+    ):
+        return Result.failure(
+            (
+                _array_body_structural_sequence_context_mismatch_diagnostic(
+                    "array-body structural sequence classification requires "
+                    "the typed selected candidate context to match the M73 "
+                    "declaration shell candidate id, target extension, source "
+                    "extension, and selected type tag",
+                    shell.source_location,
+                ),
+            )
+        )
+
+    roles: list[_ExactArrayBodyStructuralRole] = []
+    for role_label, slot in zip(
+        _EXACT_ARRAY_BODY_STRUCTURAL_ROLE_LABELS,
+        envelope.slots,
+        strict=True,
+    ):
+        try:
+            roles.append(
+                _structural_role_from_slot(
+                    role_label,
+                    slot,
+                    shell,
+                    target_extension=shell.target_extension,
+                    source_extension=shell.source_extension,
+                )
+            )
+        except (TypeError, ValueError) as exc:
+            return Result.failure(
+                (
+                    _array_body_structural_sequence_malformed_diagnostic(
+                        str(exc),
+                        slot.source_location,
+                    ),
+                )
+            )
+
+    try:
+        return Result.ok(
+            ExactArrayBodyStructuralSequenceIr(
+                source_envelope=envelope,
+                declaration_shell=shell,
+                roles=tuple(roles),
+                source_location=envelope.source_location,
+                candidate_id=envelope.candidate_id,
+                target_extension=shell.target_extension,
+                source_extension=shell.source_extension,
+                selected_type_tag=envelope.selected_type_tag,
+                originating_branch_chain_id=envelope.originating_branch_chain_id,
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        return Result.failure(
+            (
+                _array_body_structural_sequence_malformed_diagnostic(
+                    str(exc),
+                    envelope.source_location,
+                ),
+            )
+        )
+
+
 def resolve_generation_type_query(
     query_text: str,
     context: GenerationContext | None = None,
@@ -4408,6 +4759,9 @@ class _ExactArrayInitializationStagePipelineResult:
     array_initialization_declaration_shells: tuple[
         ExactArrayInitializationDeclarationShellIr, ...
     ] = ()
+    array_body_structural_sequences: tuple[
+        ExactArrayBodyStructuralSequenceIr, ...
+    ] = ()
     stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -4451,6 +4805,11 @@ class _ExactArrayInitializationStagePipelineResult:
             "array_initialization_declaration_shells",
             tuple(self.array_initialization_declaration_shells),
         )
+        object.__setattr__(
+            self,
+            "array_body_structural_sequences",
+            tuple(self.array_body_structural_sequences),
+        )
         object.__setattr__(self, "stages", tuple(self.stages))
 
     @property
@@ -4485,6 +4844,10 @@ class _ExactArrayInitializationStagePipelineResult:
             tuple(
                 shell.key
                 for shell in self.array_initialization_declaration_shells
+            ),
+            tuple(
+                sequence.key
+                for sequence in self.array_body_structural_sequences
             ),
             tuple(stage.key for stage in self.stages),
         )
@@ -4630,6 +4993,15 @@ def _array_initialization_declaration_shell_stage(
     )
 
 
+def _array_body_structural_sequence_stage(
+    output: ExactArrayBodyStructuralSequenceIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="array_body_structural_sequence_classification",
+        output=output,
+    )
+
+
 def _stage_output_location(
     output: GenerationLoweringStageOutput,
 ) -> SourceLocation | None:
@@ -4661,6 +5033,7 @@ def _stage_output_location(
             ExactArrayInitializationVectorAlignmentResolutionIr,
             ExactArrayInitializationHelperSetCompletionIr,
             ExactArrayInitializationDeclarationShellIr,
+            ExactArrayBodyStructuralSequenceIr,
         ),
     ):
         return output.source_location
@@ -4923,6 +5296,25 @@ def _lower_exact_array_initialization_stage_pipeline(
     declaration_shell_stage = _array_initialization_declaration_shell_stage(
         declaration_shell,
     )
+    structural_sequence_result = lower_exact_array_body_structural_sequence(
+        array_envelope,
+        declaration_shell,
+        _context_for_candidate(item, request),
+        selected_candidate_id=item.candidate_id,
+        target_extension=item.candidate.target_extension,
+        source_extension=item.candidate.source_extension,
+        selected_type_tag=(
+            item.candidate.type_tag
+            if request.generation_context.use_candidate_type_tag
+            else None
+        ),
+    )
+    if not structural_sequence_result.is_ok:
+        return Result.failure(structural_sequence_result.diagnostics)
+    structural_sequence = structural_sequence_result.unwrap()
+    structural_sequence_stage = _array_body_structural_sequence_stage(
+        structural_sequence,
+    )
 
     return Result.ok(
         _ExactArrayInitializationStagePipelineResult(
@@ -4944,6 +5336,9 @@ def _lower_exact_array_initialization_stage_pipeline(
             array_initialization_declaration_shells=(
                 declaration_shell,
             ),
+            array_body_structural_sequences=(
+                structural_sequence,
+            ),
             stages=(
                 array_body_stage,
                 array_initialization_slot_form_stage,
@@ -4953,6 +5348,7 @@ def _lower_exact_array_initialization_stage_pipeline(
                 vector_alignment_resolution_stage,
                 helper_set_completion_stage,
                 declaration_shell_stage,
+                structural_sequence_stage,
             ),
         )
     )
@@ -5559,6 +5955,185 @@ def _array_initialization_declaration_shell_source(
                 "only typed M72 "
                 "ExactArrayInitializationHelperSetCompletionIr values or "
                 "array_initialization_helper_set_completion stage output",
+                None,
+            ),
+        )
+    )
+
+
+def _array_body_structural_sequence_source(
+    source: object,
+    declaration_shell: object | None,
+) -> Result[tuple[ExactArrayBodyEnvelopeIr, ExactArrayInitializationDeclarationShellIr]]:
+    if isinstance(source, ExactArrayInitializationDeclarationShellIr):
+        if declaration_shell is not None:
+            return Result.failure(
+                (
+                    _array_body_structural_sequence_source_unsupported_diagnostic(
+                        "array-body structural sequence classification accepts "
+                        "a separate declaration-shell argument only when the "
+                        "primary source is an M65 envelope source",
+                        source.source_location,
+                    ),
+                )
+            )
+        return Result.ok((source.source_envelope, source))
+
+    if isinstance(source, ExactArrayBodyEnvelopeIr):
+        shell_result = _array_body_structural_sequence_shell_source(
+            declaration_shell,
+        )
+        if not shell_result.is_ok:
+            return Result.failure(shell_result.diagnostics)
+        return Result.ok((source, shell_result.unwrap()))
+
+    if isinstance(source, GenerationLoweringStage):
+        if (
+            source.stage == "array_initialization_declaration_shell_lowering"
+            and isinstance(source.output, ExactArrayInitializationDeclarationShellIr)
+        ):
+            if declaration_shell is not None:
+                return Result.failure(
+                    (
+                        _array_body_structural_sequence_source_unsupported_diagnostic(
+                            "array-body structural sequence classification "
+                            "accepts a separate declaration-shell argument only "
+                            "when the primary source is an M65 envelope source",
+                            source.output.source_location,
+                        ),
+                    )
+                )
+            return Result.ok((source.output.source_envelope, source.output))
+        if (
+            source.stage == "array_body_envelope_slot_assembly"
+            and isinstance(source.output, ExactArrayBodyEnvelopeIr)
+        ):
+            shell_result = _array_body_structural_sequence_shell_source(
+                declaration_shell,
+            )
+            if not shell_result.is_ok:
+                return Result.failure(shell_result.diagnostics)
+            return Result.ok((source.output, shell_result.unwrap()))
+        return Result.failure(
+            (
+                _array_body_structural_sequence_source_unsupported_diagnostic(
+                    "array-body structural sequence classification consumes "
+                    "accepted M65 ExactArrayBodyEnvelopeIr values with an M73 "
+                    "declaration shell, accepted M73 declaration-shell values "
+                    "or stage output, or a LoweredImplementation carrying "
+                    "exactly one matching M65 envelope and M73 shell",
+                    _stage_output_location(source.output),
+                ),
+            )
+        )
+
+    if isinstance(source, LoweredImplementation):
+        if declaration_shell is not None:
+            return Result.failure(
+                (
+                    _array_body_structural_sequence_source_unsupported_diagnostic(
+                        "array-body structural sequence classification does "
+                        "not accept a separate declaration-shell argument when "
+                        "the primary source is a LoweredImplementation",
+                        _lowered_implementation_location(source),
+                    ),
+                )
+            )
+        diagnostics: list[Diagnostic] = []
+        if len(source.array_body_envelopes) == 0:
+            diagnostics.append(
+                _array_body_structural_sequence_missing_ir_diagnostic(
+                    "array-body structural sequence classification requires "
+                    "a LoweredImplementation carrying one accepted M65 "
+                    "array_body_envelopes entry",
+                    _lowered_implementation_location(source),
+                )
+            )
+        elif len(source.array_body_envelopes) > 1:
+            diagnostics.append(
+                _array_body_structural_sequence_multiple_ir_diagnostic(
+                    "array-body structural sequence classification requires "
+                    "exactly one M65 array_body_envelopes entry",
+                    _lowered_implementation_location(source),
+                )
+            )
+        if len(source.array_initialization_declaration_shells) == 0:
+            diagnostics.append(
+                _array_body_structural_sequence_missing_ir_diagnostic(
+                    "array-body structural sequence classification requires "
+                    "a LoweredImplementation carrying one accepted M73 "
+                    "array_initialization_declaration_shells entry",
+                    _lowered_implementation_location(source),
+                )
+            )
+        elif len(source.array_initialization_declaration_shells) > 1:
+            diagnostics.append(
+                _array_body_structural_sequence_multiple_ir_diagnostic(
+                    "array-body structural sequence classification requires "
+                    "exactly one M73 array_initialization_declaration_shells "
+                    "entry",
+                    _lowered_implementation_location(source),
+                )
+            )
+        if diagnostics:
+            return Result.failure(sort_diagnostics(tuple(diagnostics)))
+        return Result.ok(
+            (
+                source.array_body_envelopes[0],
+                source.array_initialization_declaration_shells[0],
+            )
+        )
+
+    return Result.failure(
+        (
+            _array_body_structural_sequence_source_unsupported_diagnostic(
+                "array-body structural sequence classification consumes only "
+                "accepted M65 envelope/M73 declaration-shell typed sources or "
+                "a matching LoweredImplementation",
+                None,
+            ),
+        )
+    )
+
+
+def _array_body_structural_sequence_shell_source(
+    source: object | None,
+) -> Result[ExactArrayInitializationDeclarationShellIr]:
+    if isinstance(source, ExactArrayInitializationDeclarationShellIr):
+        return Result.ok(source)
+    if isinstance(source, GenerationLoweringStage):
+        if (
+            source.stage == "array_initialization_declaration_shell_lowering"
+            and isinstance(source.output, ExactArrayInitializationDeclarationShellIr)
+        ):
+            return Result.ok(source.output)
+        return Result.failure(
+            (
+                _array_body_structural_sequence_source_unsupported_diagnostic(
+                    "array-body structural sequence classification requires "
+                    "the separate source to be an accepted M73 declaration "
+                    "shell or array_initialization_declaration_shell_lowering "
+                    "stage output",
+                    _stage_output_location(source.output),
+                ),
+            )
+        )
+    if source is None:
+        return Result.failure(
+            (
+                _array_body_structural_sequence_missing_ir_diagnostic(
+                    "array-body structural sequence classification requires "
+                    "an accepted M73 declaration-shell value when the primary "
+                    "source is an M65 envelope",
+                    None,
+                ),
+            )
+        )
+    return Result.failure(
+        (
+            _array_body_structural_sequence_source_unsupported_diagnostic(
+                "array-body structural sequence classification requires an "
+                "accepted M73 declaration-shell value",
                 None,
             ),
         )
@@ -6637,6 +7212,166 @@ def _validate_array_initialization_declaration_shell(
     return diagnostics
 
 
+def _validate_array_body_structural_sequence_inputs(
+    envelope: ExactArrayBodyEnvelopeIr,
+    shell: ExactArrayInitializationDeclarationShellIr,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+
+    if not isinstance(envelope, ExactArrayBodyEnvelopeIr):
+        diagnostics.append(
+            _array_body_structural_sequence_source_unsupported_diagnostic(
+                "array-body structural sequence classification requires an "
+                "accepted M65 ExactArrayBodyEnvelopeIr source",
+                None,
+            )
+        )
+        return diagnostics
+    if not isinstance(shell, ExactArrayInitializationDeclarationShellIr):
+        diagnostics.append(
+            _array_body_structural_sequence_source_unsupported_diagnostic(
+                "array-body structural sequence classification requires an "
+                "accepted M73 ExactArrayInitializationDeclarationShellIr source",
+                None,
+            )
+        )
+        return diagnostics
+
+    if not _exact_array_body_envelope_shape_is_supported(envelope):
+        labels = tuple(slot.label for slot in envelope.slots)
+        ordinals = tuple(slot.ordinal for slot in envelope.slots)
+        if len(envelope.slots) == len(_EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS):
+            diagnostics.append(
+                _array_body_structural_sequence_role_mismatch_diagnostic(
+                    "array-body structural sequence classification requires "
+                    "the accepted M65 five-slot source order "
+                    f"{_EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS!r}; got labels "
+                    f"{labels!r} and ordinals {ordinals!r}",
+                    envelope.source_location,
+                )
+            )
+        else:
+            diagnostics.append(
+                _array_body_structural_sequence_malformed_diagnostic(
+                    "array-body structural sequence classification requires "
+                    f"exactly five accepted M65 slots; got {len(envelope.slots)}",
+                    envelope.source_location,
+                )
+            )
+
+    if (
+        envelope.candidate_id != shell.candidate_id
+        or envelope.selected_type_tag != shell.selected_type_tag
+        or envelope.originating_branch_chain_id != shell.originating_branch_chain_id
+    ):
+        diagnostics.append(
+            _array_body_structural_sequence_context_mismatch_diagnostic(
+                "array-body structural sequence classification requires M65 "
+                "envelope and M73 declaration shell candidate id, selected "
+                "type tag, and branch-chain identity to match",
+                shell.source_location,
+            )
+        )
+
+    if shell.source_envelope is not envelope:
+        diagnostics.append(
+            _array_body_structural_sequence_provenance_mismatch_diagnostic(
+                "M73 declaration shell must reference the same accepted M65 "
+                "array-body envelope supplied to structural sequence "
+                "classification",
+                shell.source_location,
+            )
+        )
+    if (
+        shell.slot_label != "opaque_pre_branch_array_initialization"
+        or shell.slot_ordinal != 0
+    ):
+        diagnostics.append(
+            _array_body_structural_sequence_malformed_diagnostic(
+                "array-body structural sequence classification attaches the "
+                "M73 declaration shell only to the first M65 slot at ordinal 0",
+                shell.source_location,
+            )
+        )
+    if len(envelope.slots) >= 3:
+        selected_slot = envelope.slots[2]
+        if not isinstance(selected_slot, ExactArrayBodyEnvelopeSelectedSlot):
+            diagnostics.append(
+                _array_body_structural_sequence_role_mismatch_diagnostic(
+                    "array-body structural sequence classification requires "
+                    "the selected-body envelope role at slot ordinal 2",
+                    getattr(selected_slot, "source_location", envelope.source_location),
+                )
+            )
+        elif (
+            selected_slot.selected_body_envelope.candidate_id != envelope.candidate_id
+            or selected_slot.selected_body_envelope.selected_type_tag
+            != envelope.selected_type_tag
+            or selected_slot.selected_body_envelope.originating_branch_chain_id
+            != envelope.originating_branch_chain_id
+        ):
+            diagnostics.append(
+                _array_body_structural_sequence_provenance_mismatch_diagnostic(
+                    "M65 selected-body slot must preserve the accepted M63 "
+                    "selected/no-body envelope provenance",
+                    selected_slot.source_location,
+                )
+            )
+    return diagnostics
+
+
+def _exact_array_body_envelope_shape_is_supported(
+    envelope: ExactArrayBodyEnvelopeIr,
+) -> bool:
+    return (
+        tuple(slot.label for slot in envelope.slots)
+        == _EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS
+        and tuple(slot.ordinal for slot in envelope.slots)
+        == _EXACT_ARRAY_BODY_ENVELOPE_SLOT_ORDINALS
+    )
+
+
+def _structural_role_from_slot(
+    role_label: ExactArrayBodyStructuralRoleLabel,
+    slot: ExactArrayBodyEnvelopeSlot,
+    shell: ExactArrayInitializationDeclarationShellIr,
+    *,
+    target_extension: str,
+    source_extension: str,
+) -> _ExactArrayBodyStructuralRole:
+    declaration_shell: ExactArrayInitializationDeclarationShellIr | None = None
+    selected_body_envelope: GenerationSelectedBodyEnvelopeIr | None = None
+    opaque_source_text: str | None = None
+
+    if role_label == "first_slot_declaration_shell":
+        declaration_shell = shell
+    elif role_label == "selected_body_envelope_slot":
+        if not isinstance(slot, ExactArrayBodyEnvelopeSelectedSlot):
+            raise ValueError(
+                "selected-body role must be backed by the M65 selected-body slot"
+            )
+        selected_body_envelope = slot.selected_body_envelope
+    else:
+        if not isinstance(slot, ExactArrayBodyEnvelopeOpaqueSlot):
+            raise ValueError("opaque structural role must be backed by an opaque slot")
+        opaque_source_text = slot.opaque_source_text
+
+    return _ExactArrayBodyStructuralRole(
+        role_label=role_label,
+        role_ordinal=slot.ordinal,
+        envelope_slot=slot,
+        source_location=slot.source_location,
+        candidate_id=slot.candidate_id,
+        target_extension=target_extension,
+        source_extension=source_extension,
+        selected_type_tag=slot.selected_type_tag,
+        originating_branch_chain_id=slot.originating_branch_chain_id,
+        declaration_shell=declaration_shell,
+        selected_body_envelope=selected_body_envelope,
+        opaque_source_text=opaque_source_text,
+    )
+
+
 def _array_initialization_leaf(
     kind: ExactArrayInitializationHelperLeafKind,
     slot_location: SourceLocation,
@@ -6675,6 +7410,8 @@ def _lowered_implementation_location(
 ) -> SourceLocation | None:
     for array_envelope in implementation.array_body_envelopes:
         return array_envelope.source_location
+    for declaration_shell in implementation.array_initialization_declaration_shells:
+        return declaration_shell.source_location
     for selected_envelope in implementation.selected_body_envelopes:
         return selected_envelope.source_location
     for stage in implementation.generation_stages:
@@ -7517,6 +8254,83 @@ def _array_initialization_declaration_shell_backend_policy_mismatch_diagnostic(
     )
 
 
+def _array_body_structural_sequence_source_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-SOURCE-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_body_structural_sequence_missing_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-IR-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _array_body_structural_sequence_multiple_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-IR-MULTIPLE",
+        detail,
+        location=location,
+    )
+
+
+def _array_body_structural_sequence_context_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-CONTEXT-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_body_structural_sequence_provenance_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-PROVENANCE-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_body_structural_sequence_role_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-ROLE-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_body_structural_sequence_malformed_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-MALFORMED",
+        detail,
+        location=location,
+    )
+
+
 def _duplicate_array_body_envelope_skeleton_diagnostic(
     lookup_key: ExactArrayBodyEnvelopeSkeletonKey,
     skeleton: ExactArrayBodyEnvelopeSkeleton,
@@ -8088,6 +8902,9 @@ def _lower_input(
                     ),
                     array_initialization_declaration_shells=(
                         array_initialization_pipeline.array_initialization_declaration_shells
+                    ),
+                    array_body_structural_sequences=(
+                        array_initialization_pipeline.array_body_structural_sequences
                     ),
                     generation_stages=(
                         _recognition_stage(

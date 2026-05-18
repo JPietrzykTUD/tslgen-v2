@@ -601,15 +601,15 @@ allocation/lifetime, initializer behavior, variable scope, stores, returns,
 `tmp.data()`, `emit_return`, backend uninit translation, backend translation
 maps, rendering, and generated output remain deferred.
 
-Post-M73 planning selects Milestone 74 as exact array-body structural sequence
-and slot-role classification. It should consume the accepted M64/M65 exact
-array-body envelope and accepted M73 first-slot declaration-shell IR, then
-produce one typed source-ordered sequence for the exact `array.tsl:105-111`
-body. Slot roles are structural/provenance labels only, not executable
-statement semantics: first-slot declaration shell, opaque predicate-init-shaped
-slot, selected-body envelope slot, opaque post-branch store-call-shaped slot,
-and opaque return-emission-shaped slot. M74 must preserve non-first slots as
-opaque/unresolved structural evidence and must not interpret `svbool_t`,
+Milestone 74 implements exact array-body structural sequence and slot-role
+classification. It consumes the accepted M64/M65 exact array-body envelope and
+accepted M73 first-slot declaration-shell IR, then produces one typed
+source-ordered sequence for the exact `array.tsl:105-111` body. Slot roles are
+structural/provenance labels only, not executable statement semantics:
+first-slot declaration shell, opaque predicate-init-shaped slot, selected-body
+envelope slot, opaque post-branch store-call-shaped slot, and opaque
+return-emission-shaped slot. M74 preserves non-first slots as opaque/unresolved
+structural evidence and must not interpret `svbool_t`,
 `svptrue_b8`, selected `svptrue_b*`, `svst1`, `tmp.data()`, `emit_return`,
 `assume_aligned`, store/return behavior, SVE/direct-intrinsic behavior,
 backend maps, rendering, generated output, or broad TSIL/body semantics.
@@ -852,7 +852,7 @@ M73 diagnostics:
   the backend-uninit boundary no longer carries the M72
   `deferred_backend_value` policy that M73 must preserve without translation.
 
-M74 planned diagnostics should cover:
+M74 diagnostics:
 
 - `TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-SOURCE-UNSUPPORTED`: the
   source is not an accepted M73 declaration shell, M73 stage output, accepted
@@ -881,12 +881,12 @@ M74 planned diagnostics should cover:
 
 ## Explicit Deferrals
 
-Deferred beyond the implemented M43-M73 semantic-lowering, structural
+Deferred beyond the implemented M43-M74 semantic-lowering, structural
 slot-assembly, pipeline-integration, exact array-initialization slot form IR,
 M67 helper-request IR, accepted M68 base-type request resolution, M69 pipeline
 extraction, M70 vector-length request resolution, M71 vector-alignment
 request resolution, M72 helper-set completion, M73 exact declaration-shell
-structural IR, and selected M74 exact structural-sequence classification
+structural IR, and implemented M74 exact structural-sequence classification
 slices:
 
 - Full TSIL grammar and general expression evaluation.
@@ -934,7 +934,7 @@ slices:
   through explicit typed metadata. Implemented M72 packages the exact helper
   set and keeps backend uninit as a typed deferred backend-value boundary.
   Implemented M73 records only the exact first-slot declaration-shell
-  structure over that helper set. Selected M74 records only exact
+  structure over that helper set. Implemented M74 records only exact
   source-ordered body sequence and structural/provenance slot roles around
   that M73 value. Backend uninit translation, broad vector/register metadata,
   generic declaration/array/body semantics, allocation/lifetime, initializer

@@ -484,11 +484,11 @@ Current roadmap note:
   semantics, allocation/lifetime, initializer behavior, variable scope,
   store/return lowering, backend translation, renderer-ready IR, or generated
   output.
-- Post-M73 planning selects Milestone 74 as a typed exact array-body
-  structural sequence and slot-role classification boundary after M73. It
-  should consume accepted M64/M65 envelope state and the accepted M73
-  declaration shell, then produce one source-ordered structural sequence for
-  the exact `array.tsl:105-111` slots. The role labels are provenance
+- Milestone 74 implements a typed exact array-body structural sequence and
+  slot-role classification boundary after M73. It consumes accepted M64/M65
+  envelope state and the accepted M73 declaration shell, then produces one
+  source-ordered structural sequence for the exact `array.tsl:105-111` slots.
+  The role labels are provenance
   structure only; they must not become executable statement kinds, broad body
   IR, variable scope, allocation/lifetime, predicate/store/return semantics,
   SVE/direct-intrinsic semantics, backend translation, renderer-ready IR, or

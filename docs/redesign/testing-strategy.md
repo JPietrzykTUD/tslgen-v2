@@ -886,7 +886,7 @@ Recommended first parity checks:
   lowering evaluation, and no backend translation/rendering, generic
   `var`/`array_type` parsing, allocation/lifetime, store/return, golden-file,
   or generated-output churn.
-- Milestone 74 tests should prove exact array-body structural sequence and
+- Milestone 74 tests prove exact array-body structural sequence and
   structural/provenance slot-role classification without body semantics:
   direct sequence tests from accepted M64/M65 envelope state plus accepted M73
   declaration-shell IR, normal `lower_candidates` stage-order tests after

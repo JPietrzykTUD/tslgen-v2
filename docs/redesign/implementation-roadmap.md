@@ -8118,15 +8118,16 @@ Dependencies on prior milestones:
 Next concrete prompt:
 
 - `docs/agent/runs/post-m73-planning-plus-review-prompt.md` completed the
-  post-M73 lowering-focused planning pass. The active workflow prompt is now
-  `docs/agent/runs/post-m73-acceptance-finalization-prompt.md`, pending human
-  acceptance.
+  post-M73 lowering-focused planning pass. The
+  `docs/agent/runs/post-m73-acceptance-finalization-prompt.md` prompt recorded
+  human acceptance and created the M74 execution-review loop prompt.
 
 ### Post-M73 Planning Result
 
 Status:
 
-Selected for human acceptance after post-M73 planning.
+Accepted after post-M73 planning and implemented by the M74 execution-review
+loop.
 
 Selected milestone:
 
@@ -8148,7 +8149,7 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance after post-M73 planning.
+Accepted after the M74 execution-review loop.
 
 Goal:
 
@@ -8331,8 +8332,7 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m73-acceptance-finalization-prompt.md` is created and
-  active pending human acceptance. That finalization prompt will create
-  `docs/agent/runs/m74-execution-review-loop-prompt.md` after explicit human
-  acceptance. Do not start M74 until the acceptance-finalization prompt
-  records acceptance.
+- `docs/agent/runs/m74-execution-review-loop-prompt.md` completed the M74
+  implementation and review loop. The next concrete prompt is
+  `docs/agent/runs/post-m74-planning-plus-review-prompt.md`. Do not start
+  M75 until post-M74 planning is accepted.

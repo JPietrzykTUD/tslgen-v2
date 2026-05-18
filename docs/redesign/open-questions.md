@@ -1335,10 +1335,10 @@ question but still leaves generic declaration/array semantics, allocation/
 lifetime, initializer behavior, variable scope, store/return semantics,
 `tmp.data()`, `emit_return`, backend uninit translation, rendering, output,
 and broad vector/register metadata policy open.
-Post-M73 planning selects Milestone 74 as the next exact structural lowering
-step: typed source-ordered array-body structural sequence and structural/
-provenance slot-role classification for the accepted `array.tsl:105-111`
-shape. M74 narrows whole-body structure but still leaves predicate semantics,
+Milestone 74 implements the next exact structural lowering step: typed
+source-ordered array-body structural sequence and structural/provenance
+slot-role classification for the accepted `array.tsl:105-111` shape. M74
+narrows whole-body structure but still leaves predicate semantics,
 SVE/direct-intrinsic semantics, generic body/declaration/array semantics,
 variable scope, allocation/lifetime, initializer behavior, `tmp.data()`,
 store/return semantics, `emit_return`, backend uninit translation, rendering,
@@ -1361,7 +1361,7 @@ M67 helper-request/provenance IR over the M66 first-slot leaves, accepted M68
 base-type request resolution, accepted M69 behavior-preserving extraction,
 accepted M70 exact vector-length request resolution, accepted M71 exact
 vector-alignment request resolution, accepted M72 exact helper-set completion,
-implemented M73 exact first-slot declaration-shell structural IR, selected M74
+implemented M73 exact first-slot declaration-shell structural IR, implemented M74
 exact array-body structural sequence and structural/provenance slot-role
 classification, and body-slot semantics beyond those exact structural/
 request-resolution boundaries, including nested expressions, direct
