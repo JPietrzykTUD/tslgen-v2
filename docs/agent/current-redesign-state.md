@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 66 is accepted.
+Milestone 67 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -167,39 +167,42 @@ Post-M66 planning is accepted. It selected
 internal review returned `Accept With Follow-Ups` after a focused workflow
 state correction.
 
+The M67 execution-review loop returned `Accept With Follow-Ups` after one
+focused documentation revision.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 67.
+Plan the next lowering-focused milestone after M67.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m67-execution-review-loop-prompt.md
+docs/agent/runs/post-m67-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 67: Exact Array Initialization Helper Request IR Slice
+None. The next task is post-M67 planning.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M66 planning returned Accept With Follow-Ups after focused workflow state
-correction. Human acceptance is recorded; M67 is ready for execution.
+M67 execution-review returned Accept With Follow-Ups after one focused
+documentation revision.
 ```
 
 Next expected action:
 
 ```text
-Run the active M67 execution-review loop prompt with one write-capable
-executor if M67 is not already implemented, then read-only review/audit
-subagents. Do not start M68.
+Run the active post-M67 planning-plus-review prompt. Focus the next candidate
+on lowering, use the specified planning/review subagents, and do not implement
+code or start M68 execution.
 ```
 
 Accepted planning prompt:
@@ -538,10 +541,16 @@ Accepted post-M66 acceptance finalization prompt:
 docs/agent/runs/post-m66-acceptance-finalization-prompt.md
 ```
 
-Active M67 execution-review loop prompt:
+Accepted M67 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m67-execution-review-loop-prompt.md
+```
+
+Active post-M67 planning prompt:
+
+```text
+docs/agent/runs/post-m67-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -966,10 +975,11 @@ docs/agent/runs/m67-execution-review-loop-prompt.md
   backend uninit semantics, backend translation, renderer-ready IR,
   rendering, output, generated tests, CLI/report/writer behavior, Rust,
   compiler execution, file/catalog reads, or runtime `frozen/` behavior.
-- M67 is accepted for execution as exact array-initialization helper-request
-  IR only. M67 must consume accepted M66
-  `ExactArrayInitializationSlotFormIr` values or the
-  `array_initialization_slot_form_lowering` stage output.
+- M67 is accepted as exact array-initialization helper-request IR only. M67
+  consumes accepted M66 `ExactArrayInitializationSlotFormIr` values, the
+  `array_initialization_slot_form_lowering` stage output, or a typed
+  `LoweredImplementation` carrying exactly one accepted M66
+  `array_initialization_slot_forms` entry.
 - M67 must classify exactly four M66 leaves into typed deferred request
   records: `type<generation>(base::in)`,
   `value<generation>(vector::length)`,
@@ -1620,10 +1630,20 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - Post-M66 planning follow-up for M67 execution: consume M66
   `ExactArrayInitializationSlotFormIr` / leaf records and do not reparse raw
   slot text or dispatch from raw helper strings.
+- M67 review follow-up: consider tightening
+  `ExactArrayInitializationHelperRequestRecord` model invariants so
+  `request_kind` is validated against the expected leaf spec, not only
+  produced correctly by the lowerer.
+- M67 validation follow-up: strengthen bad-leaf diagnostic tests to assert
+  exact path, line, column, and actionable message text for missing,
+  duplicate, mismatched, and unsupported helper leaf diagnostics.
+- M67 documentation revision follow-up addressed during the execution-review
+  loop: document the typed `LoweredImplementation` source container and the
+  new M67 diagnostic codes in the redesign docs.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with M67 execution.
+No stop condition is active. The workflow proceeds with post-M67 planning.
 
 ## Validation Expectations
 

@@ -6834,10 +6834,11 @@ Selected for human acceptance after post-M66 planning.
 
 Goal:
 
-Consume accepted M66 `ExactArrayInitializationSlotFormIr` values and classify
-the four exact unresolved helper leaves into typed deferred helper-request IR,
-without evaluating, resolving, translating, normalizing, or rendering any
-helper.
+Consume accepted M66 `ExactArrayInitializationSlotFormIr` values, their stage
+output, or a typed `LoweredImplementation` carrying exactly one accepted M66
+form as a container/source, and classify the four exact unresolved helper
+leaves into typed deferred helper-request IR, without evaluating, resolving,
+translating, normalizing, or rendering any helper.
 
 M67 is a request/provenance boundary only. It is intended to make the next
 array-initialization lowering steps explicit and composable before any helper
@@ -6845,8 +6846,10 @@ family is semantically resolved.
 
 Scope:
 
-- Consume accepted M66 `ExactArrayInitializationSlotFormIr` values, or the
-  typed `array_initialization_slot_form_lowering` stage output.
+- Consume accepted M66 `ExactArrayInitializationSlotFormIr` values, the typed
+  `array_initialization_slot_form_lowering` stage output, or a typed
+  `LoweredImplementation` carrying exactly one accepted M66
+  `array_initialization_slot_forms` entry as a container/source.
 - Produce an immutable typed helper-request IR value, for example
   `ExactArrayInitializationHelperRequestIr`, keyed to the M66 slot form.
 - Classify exactly the four M66 helper leaves into deterministic request
@@ -6864,7 +6867,8 @@ Scope:
 - Preserve the accepted M65 envelope, accepted M66 form IR, and all non-M66
   body slots unchanged.
 - Produce structured diagnostics for invalid M67 boundary/request state, such
-  as unsupported source stage/type, missing M66 form, missing request leaf,
+  as unsupported source stage/type, missing M66 form in a source container,
+  multiple M66 forms in a `LoweredImplementation`, missing request leaf,
   duplicate/mismatched leaf kind, unsupported leaf text, or provenance
   mismatch.
 
@@ -6891,8 +6895,10 @@ Out of scope:
 
 Required input:
 
-- Accepted M66 `ExactArrayInitializationSlotFormIr` values, or equivalent
-  typed `array_initialization_slot_form_lowering` stage output.
+- Accepted M66 `ExactArrayInitializationSlotFormIr` values, equivalent typed
+  `array_initialization_slot_form_lowering` stage output, or a typed
+  `LoweredImplementation` container with exactly one accepted M66
+  `array_initialization_slot_forms` entry.
 - The exact M66 unresolved helper leaf records and provenance for
   `tsldata/primitives/load_store/array.tsl:105`.
 
@@ -6937,8 +6943,9 @@ Tests required:
 - Selected `svptrue_b16`, `svptrue_b32`, and `svptrue_b64` paths and `si8` /
   `ui8` no-body paths continue to preserve M65/M66 behavior.
 - Unsupported source stage/type, missing form, missing leaf, duplicate or
-  mismatched leaf kind/text, and provenance mismatch produce structured
-  diagnostics with source locations and actionable messages.
+  multiple forms in a `LoweredImplementation`, duplicate or mismatched leaf
+  kind/text, and provenance mismatch produce structured diagnostics with
+  source locations and actionable messages.
 - Tests prove the request IR contains no resolved values and does not call
   generation helper evaluators, backend translation, renderers, file/catalog
   reads, or runtime `frozen/`.

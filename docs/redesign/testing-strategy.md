@@ -818,10 +818,11 @@ Recommended first parity checks:
   vector-alignment, and backend-uninit leaves into deterministic request
   records; preserve leaf text, source locations, and M65/M66 provenance; prove
   no helper values are resolved and no backend translation requests are
-  created; cover unsupported source, missing/mismatched leaves, unsupported
-  leaf text, and provenance diagnostics; keep M57-M66 behavior, raw-helper
-  rejection, renderer non-evaluation, generated outputs, and golden files
-  unchanged.
+  created; cover direct M66 form, stage-output, and typed
+  `LoweredImplementation` container sources; cover unsupported source, missing
+  or multiple forms, missing/mismatched leaves, unsupported leaf text, and
+  provenance diagnostics; keep M57-M66 behavior, raw-helper rejection,
+  renderer non-evaluation, generated outputs, and golden files unchanged.
 
 Deferred parity checks:
 

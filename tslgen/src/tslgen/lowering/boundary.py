@@ -56,6 +56,7 @@ type GenerationLoweringStageName = Literal[
     "selected_body_envelope_lowering",
     "array_body_envelope_slot_assembly",
     "array_initialization_slot_form_lowering",
+    "array_initialization_helper_request_lowering",
 ]
 type GenerationSelectedBranchBodyHandoff = (
     OpaqueSelectedBranchBodyHandoff | NoSelectedBranchBodyHandoff
@@ -86,6 +87,17 @@ type ExactArrayInitializationHelperLeafKind = Literal[
     "value_generation_vector_alignment",
     "value_backend_uninit_array",
 ]
+type ExactArrayInitializationHelperRequestKind = Literal[
+    "generation_type",
+    "generation_value",
+    "backend_value",
+]
+type ExactArrayInitializationHelperLeafFieldName = Literal[
+    "base_type_leaf",
+    "vector_length_leaf",
+    "vector_alignment_leaf",
+    "backend_uninit_leaf",
+]
 type TsilBinaryOperator = Literal["+"]
 type TsilExpression = (
     TsilParameterReference | TsilBinaryExpression | TsilIntrinsicComposeExpression
@@ -107,6 +119,7 @@ type GenerationLoweringStageOutput = (
     | NoSelectedBodyEnvelopeIr
     | ExactArrayBodyEnvelopeIr
     | ExactArrayInitializationSlotFormIr
+    | ExactArrayInitializationHelperRequestIr
     | TsilStatement
 )
 
@@ -170,6 +183,44 @@ _EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND: dict[
     "value_generation_vector_alignment": "value<generation>(vector::alignment)",
     "value_backend_uninit_array": "value<backend>(uninit::array)",
 }
+
+
+@dataclass(frozen=True, slots=True)
+class _ExactArrayInitializationHelperLeafSpec:
+    field_name: ExactArrayInitializationHelperLeafFieldName
+    expected_leaf_kind: ExactArrayInitializationHelperLeafKind
+    request_kind: ExactArrayInitializationHelperRequestKind
+    request_ordinal: int
+
+
+_EXACT_ARRAY_INITIALIZATION_HELPER_LEAF_SPECS: tuple[
+    _ExactArrayInitializationHelperLeafSpec, ...
+] = (
+    _ExactArrayInitializationHelperLeafSpec(
+        field_name="base_type_leaf",
+        expected_leaf_kind="type_generation_base_in",
+        request_kind="generation_type",
+        request_ordinal=0,
+    ),
+    _ExactArrayInitializationHelperLeafSpec(
+        field_name="vector_length_leaf",
+        expected_leaf_kind="value_generation_vector_length",
+        request_kind="generation_value",
+        request_ordinal=1,
+    ),
+    _ExactArrayInitializationHelperLeafSpec(
+        field_name="vector_alignment_leaf",
+        expected_leaf_kind="value_generation_vector_alignment",
+        request_kind="generation_value",
+        request_ordinal=2,
+    ),
+    _ExactArrayInitializationHelperLeafSpec(
+        field_name="backend_uninit_leaf",
+        expected_leaf_kind="value_backend_uninit_array",
+        request_kind="backend_value",
+        request_ordinal=3,
+    ),
+)
 _ARRAY_INITIALIZATION_HELPER_TARGET = rf"{_TSIL_IDENTIFIER}::{_TSIL_IDENTIFIER}"
 _ARRAY_INITIALIZATION_HELPER_SHAPE = (
     rf"(?:type|value)<(?:generation|backend)>\("
@@ -1402,6 +1453,201 @@ class ExactArrayInitializationSlotFormIr:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactArrayInitializationHelperRequestRecord:
+    source_form: ExactArrayInitializationSlotFormIr
+    source_envelope: ExactArrayBodyEnvelopeIr
+    request_ordinal: int
+    request_kind: ExactArrayInitializationHelperRequestKind
+    helper_leaf_kind: ExactArrayInitializationHelperLeafKind
+    leaf_source_text: str
+    leaf_source_location: SourceLocation
+    candidate_id: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+    slot_label: Literal["opaque_pre_branch_array_initialization"]
+    slot_ordinal: int
+    variable_token: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_form, ExactArrayInitializationSlotFormIr):
+            raise TypeError(
+                "array-initialization helper request requires an M66 slot form"
+            )
+        if not isinstance(self.source_envelope, ExactArrayBodyEnvelopeIr):
+            raise TypeError(
+                "array-initialization helper request requires an M65 envelope"
+            )
+        if self.source_envelope != self.source_form.source_envelope:
+            raise ValueError(
+                "array-initialization helper request envelope must match "
+                "the M66 slot form envelope"
+            )
+        if self.request_ordinal not in range(
+            len(_EXACT_ARRAY_INITIALIZATION_HELPER_LEAF_SPECS)
+        ):
+            raise ValueError(
+                "array-initialization helper request ordinal is unsupported"
+            )
+        if self.request_kind not in (
+            "generation_type",
+            "generation_value",
+            "backend_value",
+        ):
+            raise ValueError("array-initialization helper request kind is unsupported")
+        expected_text = _EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND.get(
+            self.helper_leaf_kind,
+        )
+        if expected_text is None or self.leaf_source_text != expected_text:
+            raise ValueError(
+                "array-initialization helper request source text must match "
+                "its unresolved M66 leaf kind"
+            )
+        if self.leaf_source_location is None:
+            raise ValueError(
+                "array-initialization helper request requires leaf source location"
+            )
+        if (
+            self.candidate_id != self.source_form.candidate_id
+            or self.selected_type_tag != self.source_form.selected_type_tag
+            or self.originating_branch_chain_id
+            != self.source_form.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "array-initialization helper request provenance must match "
+                "the M66 slot form"
+            )
+        if self.slot_label != self.source_form.slot_label:
+            raise ValueError(
+                "array-initialization helper request slot label must match "
+                "the M66 slot form"
+            )
+        if self.slot_ordinal != self.source_form.slot_ordinal:
+            raise ValueError(
+                "array-initialization helper request slot ordinal must match "
+                "the M66 slot form"
+            )
+        if self.variable_token != self.source_form.variable_token:
+            raise ValueError(
+                "array-initialization helper request variable token must match "
+                "the M66 slot form"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_initialization_helper_request_record",
+            self.source_form.key,
+            self.source_envelope.key,
+            self.request_ordinal,
+            self.request_kind,
+            self.helper_leaf_kind,
+            self.leaf_source_text,
+            self.leaf_source_location.sort_key(),
+            self.candidate_id,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+            self.slot_label,
+            self.slot_ordinal,
+            self.variable_token,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ExactArrayInitializationHelperRequestIr:
+    source_form: ExactArrayInitializationSlotFormIr
+    source_envelope: ExactArrayBodyEnvelopeIr
+    source_location: SourceLocation
+    candidate_id: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+    slot_label: Literal["opaque_pre_branch_array_initialization"]
+    slot_ordinal: int
+    variable_token: str
+    requests: tuple[ExactArrayInitializationHelperRequestRecord, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_form, ExactArrayInitializationSlotFormIr):
+            raise TypeError(
+                "array-initialization helper request IR requires an M66 slot form"
+            )
+        if not isinstance(self.source_envelope, ExactArrayBodyEnvelopeIr):
+            raise TypeError(
+                "array-initialization helper request IR requires an M65 envelope"
+            )
+        if self.source_envelope != self.source_form.source_envelope:
+            raise ValueError(
+                "array-initialization helper request IR envelope must match "
+                "the M66 slot form envelope"
+            )
+        if self.source_location != self.source_form.source_location:
+            raise ValueError(
+                "array-initialization helper request IR source location must "
+                "match the M66 slot form"
+            )
+        if (
+            self.candidate_id != self.source_form.candidate_id
+            or self.selected_type_tag != self.source_form.selected_type_tag
+            or self.originating_branch_chain_id
+            != self.source_form.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "array-initialization helper request IR provenance must match "
+                "the M66 slot form"
+            )
+        if self.slot_label != self.source_form.slot_label:
+            raise ValueError(
+                "array-initialization helper request IR slot label must match "
+                "the M66 slot form"
+            )
+        if self.slot_ordinal != self.source_form.slot_ordinal:
+            raise ValueError(
+                "array-initialization helper request IR slot ordinal must "
+                "match the M66 slot form"
+            )
+        if self.variable_token != self.source_form.variable_token:
+            raise ValueError(
+                "array-initialization helper request IR variable token must "
+                "match the M66 slot form"
+            )
+        object.__setattr__(self, "requests", tuple(self.requests))
+        expected = tuple(
+            (spec.request_ordinal, spec.expected_leaf_kind)
+            for spec in _EXACT_ARRAY_INITIALIZATION_HELPER_LEAF_SPECS
+        )
+        actual = tuple(
+            (request.request_ordinal, request.helper_leaf_kind)
+            for request in self.requests
+        )
+        if actual != expected:
+            raise ValueError(
+                "array-initialization helper request IR must contain exactly "
+                "the four M66 helper leaves in deterministic order"
+            )
+        for request in self.requests:
+            if request.source_form != self.source_form:
+                raise ValueError(
+                    "array-initialization helper request record must match "
+                    "the M66 source form"
+                )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_initialization_helper_request_ir",
+            self.source_form.key,
+            self.source_envelope.key,
+            self.source_location.sort_key(),
+            self.candidate_id,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+            self.slot_label,
+            self.slot_ordinal,
+            self.variable_token,
+            tuple(request.key for request in self.requests),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class PrunedGenerationBranch:
     condition: TsilGenerationCondition
     selected_branch: GenerationBranchChoice
@@ -1539,6 +1785,8 @@ class GenerationLoweringStage:
             expected = (ExactArrayBodyEnvelopeIr,)
         elif self.stage == "array_initialization_slot_form_lowering":
             expected = (ExactArrayInitializationSlotFormIr,)
+        elif self.stage == "array_initialization_helper_request_lowering":
+            expected = (ExactArrayInitializationHelperRequestIr,)
         else:
             raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
         if not isinstance(self.output, expected):
@@ -1571,6 +1819,9 @@ class LoweredImplementation:
     array_body_envelopes: tuple[ExactArrayBodyEnvelopeIr, ...] = ()
     array_initialization_slot_forms: tuple[
         ExactArrayInitializationSlotFormIr, ...
+    ] = ()
+    array_initialization_helper_requests: tuple[
+        ExactArrayInitializationHelperRequestIr, ...
     ] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
@@ -1635,6 +1886,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "array_initialization_helper_requests",
+            tuple(self.array_initialization_helper_requests),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -1658,6 +1914,10 @@ class LoweredImplementation:
             tuple(envelope.key for envelope in self.selected_body_envelopes),
             tuple(envelope.key for envelope in self.array_body_envelopes),
             tuple(form.key for form in self.array_initialization_slot_forms),
+            tuple(
+                helper_request.key
+                for helper_request in self.array_initialization_helper_requests
+            ),
             tuple(stage.key for stage in self.generation_stages),
         )
 
@@ -2229,6 +2489,123 @@ def lower_exact_array_initialization_slot_form(
         )
 
 
+def lower_exact_array_initialization_helper_requests(
+    source: object,
+) -> Result[ExactArrayInitializationHelperRequestIr]:
+    form_result = _array_initialization_helper_request_source(source)
+    if not form_result.is_ok:
+        return Result.failure(form_result.diagnostics)
+
+    form = form_result.unwrap()
+    provenance_diagnostic = _validate_array_initialization_helper_form_provenance(
+        form,
+    )
+    if provenance_diagnostic is not None:
+        return Result.failure((provenance_diagnostic,))
+
+    diagnostics: list[Diagnostic] = []
+    requests: list[ExactArrayInitializationHelperRequestRecord] = []
+    seen_leaf_kinds: set[ExactArrayInitializationHelperLeafKind] = set()
+    for spec in _EXACT_ARRAY_INITIALIZATION_HELPER_LEAF_SPECS:
+        leaf = getattr(form, spec.field_name, None)
+        if not isinstance(leaf, ExactArrayInitializationUnresolvedLeaf):
+            diagnostics.append(
+                _array_initialization_helper_request_missing_leaf_diagnostic(
+                    spec,
+                    form,
+                )
+            )
+            continue
+        if leaf.kind in seen_leaf_kinds:
+            diagnostics.append(
+                _array_initialization_helper_request_duplicate_leaf_diagnostic(
+                    leaf,
+                    form,
+                )
+            )
+            continue
+        seen_leaf_kinds.add(leaf.kind)
+        if leaf.kind != spec.expected_leaf_kind:
+            diagnostics.append(
+                _array_initialization_helper_request_mismatched_leaf_diagnostic(
+                    spec,
+                    leaf,
+                )
+            )
+            continue
+        expected_text = _EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND.get(leaf.kind)
+        if expected_text is None or leaf.source_text != expected_text:
+            diagnostics.append(
+                _array_initialization_helper_request_unsupported_leaf_diagnostic(
+                    spec,
+                    leaf,
+                )
+            )
+            continue
+        if leaf.source_location is None:
+            diagnostics.append(
+                _array_initialization_helper_request_missing_leaf_diagnostic(
+                    spec,
+                    form,
+                )
+            )
+            continue
+        try:
+            requests.append(
+                ExactArrayInitializationHelperRequestRecord(
+                    source_form=form,
+                    source_envelope=form.source_envelope,
+                    request_ordinal=spec.request_ordinal,
+                    request_kind=spec.request_kind,
+                    helper_leaf_kind=leaf.kind,
+                    leaf_source_text=leaf.source_text,
+                    leaf_source_location=leaf.source_location,
+                    candidate_id=form.candidate_id,
+                    selected_type_tag=form.selected_type_tag,
+                    originating_branch_chain_id=form.originating_branch_chain_id,
+                    slot_label=form.slot_label,
+                    slot_ordinal=form.slot_ordinal,
+                    variable_token=form.variable_token,
+                )
+            )
+        except (TypeError, ValueError) as exc:
+            diagnostics.append(
+                _array_initialization_helper_request_provenance_mismatch_diagnostic(
+                    str(exc),
+                    leaf.source_location,
+                )
+            )
+
+    if diagnostics:
+        ordered = sort_diagnostics(tuple(diagnostics))
+        return Result.failure(ordered)
+
+    try:
+        return Result.ok(
+            ExactArrayInitializationHelperRequestIr(
+                source_form=form,
+                source_envelope=form.source_envelope,
+                source_location=form.source_location,
+                candidate_id=form.candidate_id,
+                selected_type_tag=form.selected_type_tag,
+                originating_branch_chain_id=form.originating_branch_chain_id,
+                slot_label=form.slot_label,
+                slot_ordinal=form.slot_ordinal,
+                variable_token=form.variable_token,
+                requests=tuple(requests),
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        return Result.failure(
+            (
+                _array_initialization_helper_request_provenance_mismatch_diagnostic(
+                    str(exc),
+                    form.source_location,
+                ),
+            )
+        )
+
+
 def resolve_generation_type_query(
     query_text: str,
     context: GenerationContext | None = None,
@@ -2423,6 +2800,15 @@ def _array_initialization_slot_form_stage(
     )
 
 
+def _array_initialization_helper_request_stage(
+    output: ExactArrayInitializationHelperRequestIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="array_initialization_helper_request_lowering",
+        output=output,
+    )
+
+
 def _stage_output_location(
     output: GenerationLoweringStageOutput,
 ) -> SourceLocation | None:
@@ -2448,6 +2834,7 @@ def _stage_output_location(
             NoSelectedBodyEnvelopeIr,
             ExactArrayBodyEnvelopeIr,
             ExactArrayInitializationSlotFormIr,
+            ExactArrayInitializationHelperRequestIr,
         ),
     ):
         return output.source_location
@@ -2809,6 +3196,64 @@ def _array_initialization_slot_form_source(
     )
 
 
+def _array_initialization_helper_request_source(
+    source: object,
+) -> Result[ExactArrayInitializationSlotFormIr]:
+    if isinstance(source, ExactArrayInitializationSlotFormIr):
+        return Result.ok(source)
+    if isinstance(source, GenerationLoweringStage):
+        if (
+            source.stage == "array_initialization_slot_form_lowering"
+            and isinstance(source.output, ExactArrayInitializationSlotFormIr)
+        ):
+            return Result.ok(source.output)
+        return Result.failure(
+            (
+                _array_initialization_helper_request_source_unsupported_diagnostic(
+                    "array-initialization helper request lowering consumes only "
+                    "typed M66 ExactArrayInitializationSlotFormIr values, the "
+                    "array_initialization_slot_form_lowering stage output, or "
+                    "a LoweredImplementation with a matching M66 form",
+                    _stage_output_location(source.output),
+                ),
+            )
+        )
+    if isinstance(source, LoweredImplementation):
+        if len(source.array_initialization_slot_forms) == 1:
+            return Result.ok(source.array_initialization_slot_forms[0])
+        if len(source.array_initialization_slot_forms) == 0:
+            return Result.failure(
+                (
+                    _array_initialization_helper_request_missing_form_diagnostic(
+                        "array-initialization helper request lowering requires "
+                        "a LoweredImplementation carrying an accepted M66 "
+                        "array_initialization_slot_forms entry",
+                        _lowered_implementation_location(source),
+                    ),
+                )
+            )
+        return Result.failure(
+            (
+                _array_initialization_helper_request_source_unsupported_diagnostic(
+                    "array-initialization helper request lowering consumes "
+                    "exactly one M66 array-initialization slot form at this "
+                    "boundary",
+                    _lowered_implementation_location(source),
+                ),
+            )
+        )
+    return Result.failure(
+        (
+            _array_initialization_helper_request_source_unsupported_diagnostic(
+                "array-initialization helper request lowering consumes only "
+                "typed M66 ExactArrayInitializationSlotFormIr values or "
+                "array_initialization_slot_form_lowering stage output",
+                None,
+            ),
+        )
+    )
+
+
 def _array_initialization_envelope_slot(
     envelope: ExactArrayBodyEnvelopeIr,
 ) -> ExactArrayBodyEnvelopeSlot | None:
@@ -2841,6 +3286,48 @@ def _validate_array_initialization_slot_position(
             "opaque_pre_branch_array_initialization slot at ordinal 0; got "
             f"label {slot.label!r} and ordinal {slot.ordinal!r}",
             slot.source_location,
+        )
+    return None
+
+
+def _validate_array_initialization_helper_form_provenance(
+    form: ExactArrayInitializationSlotFormIr,
+) -> Diagnostic | None:
+    if not isinstance(form.source_envelope, ExactArrayBodyEnvelopeIr):
+        return _array_initialization_helper_request_provenance_mismatch_diagnostic(
+            "array-initialization helper request lowering requires the M66 "
+            "slot form to reference an M65 array-body envelope",
+            form.source_location,
+        )
+    if (
+        form.candidate_id != form.source_envelope.candidate_id
+        or form.selected_type_tag != form.source_envelope.selected_type_tag
+        or form.originating_branch_chain_id
+        != form.source_envelope.originating_branch_chain_id
+    ):
+        return _array_initialization_helper_request_provenance_mismatch_diagnostic(
+            "array-initialization helper request lowering requires M66 form "
+            "provenance (candidate id, selected type tag, and branch-chain "
+            "identity) to match its M65 envelope",
+            form.source_location,
+        )
+    if form.slot_label != "opaque_pre_branch_array_initialization":
+        return _array_initialization_helper_request_provenance_mismatch_diagnostic(
+            "array-initialization helper request lowering requires the M66 "
+            "opaque_pre_branch_array_initialization slot form",
+            form.source_location,
+        )
+    if form.slot_ordinal != 0:
+        return _array_initialization_helper_request_provenance_mismatch_diagnostic(
+            "array-initialization helper request lowering requires the M66 "
+            "slot form at ordinal 0",
+            form.source_location,
+        )
+    if form.variable_token != "tmp":
+        return _array_initialization_helper_request_provenance_mismatch_diagnostic(
+            "array-initialization helper request lowering requires the M66 "
+            "variable token tmp",
+            form.variable_token_location or form.source_location,
         )
     return None
 
@@ -3085,6 +3572,91 @@ def _array_initialization_slot_provenance_mismatch_diagnostic(
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-LOWER-ARRAY-INIT-SLOT-PROVENANCE-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_helper_request_source_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-SOURCE-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_helper_request_missing_form_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-FORM-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_helper_request_missing_leaf_diagnostic(
+    spec: _ExactArrayInitializationHelperLeafSpec,
+    form: ExactArrayInitializationSlotFormIr,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-MISSING",
+        "array-initialization helper request lowering requires the M66 "
+        f"{spec.field_name} field to carry the unresolved helper leaf "
+        f"{spec.expected_leaf_kind!r}",
+        location=form.source_location,
+    )
+
+
+def _array_initialization_helper_request_mismatched_leaf_diagnostic(
+    spec: _ExactArrayInitializationHelperLeafSpec,
+    leaf: ExactArrayInitializationUnresolvedLeaf,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-MISMATCH",
+        "array-initialization helper request lowering expected the M66 "
+        f"{spec.field_name} field to carry leaf kind "
+        f"{spec.expected_leaf_kind!r}, got {leaf.kind!r}",
+        location=leaf.source_location,
+    )
+
+
+def _array_initialization_helper_request_duplicate_leaf_diagnostic(
+    leaf: ExactArrayInitializationUnresolvedLeaf,
+    form: ExactArrayInitializationSlotFormIr,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-DUPLICATE",
+        "array-initialization helper request lowering requires each of the "
+        "four M66 helper leaf kinds exactly once; duplicate leaf kind "
+        f"{leaf.kind!r} appeared for variable {form.variable_token!r}",
+        location=leaf.source_location,
+    )
+
+
+def _array_initialization_helper_request_unsupported_leaf_diagnostic(
+    spec: _ExactArrayInitializationHelperLeafSpec,
+    leaf: ExactArrayInitializationUnresolvedLeaf,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-UNSUPPORTED",
+        "array-initialization helper request lowering preserves only the "
+        "exact M66 unresolved helper leaf text for "
+        f"{spec.expected_leaf_kind!r}; got {leaf.source_text!r}",
+        location=leaf.source_location,
+    )
+
+
+def _array_initialization_helper_request_provenance_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-PROVENANCE-MISMATCH",
         detail,
         location=location,
     )
@@ -3632,6 +4204,12 @@ def _lower_input(
             array_initialization_slot_form_stages: tuple[
                 GenerationLoweringStage, ...
             ] = ()
+            array_initialization_helper_requests: tuple[
+                ExactArrayInitializationHelperRequestIr, ...
+            ] = ()
+            array_initialization_helper_request_stages: tuple[
+                GenerationLoweringStage, ...
+            ] = ()
             if array_envelope is not None:
                 array_initialization_slot_form_result = (
                     lower_exact_array_initialization_slot_form(array_envelope)
@@ -3649,6 +4227,26 @@ def _lower_input(
                         array_initialization_slot_form,
                     ),
                 )
+                array_initialization_helper_request_result = (
+                    lower_exact_array_initialization_helper_requests(
+                        array_initialization_slot_form,
+                    )
+                )
+                if not array_initialization_helper_request_result.is_ok:
+                    return Result.failure(
+                        array_initialization_helper_request_result.diagnostics
+                    )
+                array_initialization_helper_request = (
+                    array_initialization_helper_request_result.unwrap()
+                )
+                array_initialization_helper_requests = (
+                    array_initialization_helper_request,
+                )
+                array_initialization_helper_request_stages = (
+                    _array_initialization_helper_request_stage(
+                        array_initialization_helper_request,
+                    ),
+                )
             return Result.ok(
                 LoweredImplementation(
                     candidate_id=item.candidate_id,
@@ -3663,6 +4261,9 @@ def _lower_input(
                     selected_body_envelopes=(envelope,),
                     array_body_envelopes=array_body_envelopes,
                     array_initialization_slot_forms=array_initialization_slot_forms,
+                    array_initialization_helper_requests=(
+                        array_initialization_helper_requests
+                    ),
                     generation_stages=(
                         _recognition_stage(
                             "generation.control_flow",
@@ -3685,6 +4286,7 @@ def _lower_input(
                         envelope_stage,
                         *array_body_stages,
                         *array_initialization_slot_form_stages,
+                        *array_initialization_helper_request_stages,
                     ),
                 )
             )

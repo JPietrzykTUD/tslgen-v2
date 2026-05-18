@@ -475,7 +475,10 @@ generic declaration/array/variable semantics, lower store or return slots,
 introduce SVE/direct-intrinsic/backend translation or renderer-ready IR, emit
 generated output, or broaden TSIL body lowering.
 Milestone 67 is selected as the next Stage 8 request/provenance boundary over
-the M66 form IR. It should append a distinct helper-request stage after
+the M66 form IR. It may consume the direct M66 form, the
+`array_initialization_slot_form_lowering` stage output, or a typed
+`LoweredImplementation` carrying exactly one accepted M66 form as a
+container/source. It should append a distinct helper-request stage after
 `array_initialization_slot_form_lowering` and classify exactly the four M66
 unresolved helper leaves into typed deferred request records. It must not
 evaluate helper values, create backend translation requests, or broaden body

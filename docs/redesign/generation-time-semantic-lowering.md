@@ -526,13 +526,14 @@ SVE/direct intrinsics, backend translation, rendering, generated output, or
 broad TSIL body syntax.
 
 Milestone 67 is selected as the exact array-initialization helper request IR
-slice. It consumes accepted M66 `ExactArrayInitializationSlotFormIr` values or
-the `array_initialization_slot_form_lowering` stage and classifies exactly the
-four M66 unresolved helper leaves into deterministic typed deferred
-helper-request records. M67 preserves leaf kind, source text, source
-locations, candidate/type/envelope provenance, slot ordinal, branch-chain
-identity, and variable token `tmp`, but it does not evaluate, resolve,
-translate, normalize, or render any helper.
+slice. It consumes accepted M66 `ExactArrayInitializationSlotFormIr` values,
+the `array_initialization_slot_form_lowering` stage, or a typed
+`LoweredImplementation` carrying exactly one accepted M66 form as a
+container/source, and classifies exactly the four M66 unresolved helper leaves
+into deterministic typed deferred helper-request records. M67 preserves leaf
+kind, source text, source locations, candidate/type/envelope provenance, slot
+ordinal, branch-chain identity, and variable token `tmp`, but it does not
+evaluate, resolve, translate, normalize, or render any helper.
 
 M61 diagnostics:
 
@@ -595,9 +596,34 @@ M66 diagnostics:
 - `TSL-LOWER-ARRAY-INIT-SLOT-PROVENANCE-MISMATCH`: the slot and envelope
   disagree on candidate id, selected type tag, or branch-chain identity.
 
+M67 diagnostics:
+
+- `TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-SOURCE-UNSUPPORTED`: helper-request
+  lowering was invoked with something other than an accepted M66
+  `ExactArrayInitializationSlotFormIr`, the
+  `array_initialization_slot_form_lowering` stage output, or a typed
+  `LoweredImplementation` carrying exactly one accepted M66 form; this also
+  covers a `LoweredImplementation` carrying multiple M66 forms at the M67
+  request boundary.
+- `TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-FORM-MISSING`: a
+  `LoweredImplementation` source does not carry an accepted M66
+  array-initialization slot form.
+- `TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-MISSING`: an accepted M66 form is
+  missing one of the four required unresolved helper leaves.
+- `TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-MISMATCH`: an M66 leaf field
+  carries a different leaf kind than the exact request boundary expects.
+- `TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-DUPLICATE`: the M66 form presents
+  the same helper leaf kind more than once.
+- `TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-UNSUPPORTED`: an M66 helper leaf
+  has source text outside the exact accepted first-slot helper evidence.
+- `TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-PROVENANCE-MISMATCH`: the M66 form,
+  leaf, request record, or source container disagrees on candidate id,
+  selected type tag, branch-chain identity, envelope identity, slot ordinal, or
+  variable-token provenance required by the request boundary.
+
 ## Explicit Deferrals
 
-Deferred beyond the implemented M43-M66 semantic-lowering, structural
+Deferred beyond the implemented M43-M67 semantic-lowering, structural
 slot-assembly, pipeline-integration, and exact array-initialization slot form
 IR slices:
 
