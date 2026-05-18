@@ -257,8 +257,8 @@ produces typed structural lowering state for the exact `array.tsl:105`
 only: generic declaration/array semantics, allocation/lifetime, initializer
 behavior, variable scope, store/return semantics, `tmp.data()`, `emit_return`,
 backend uninit translation, backend translation/rendering, and generated
-output remain out of scope. Human acceptance has been recorded; M73 execution
-is now the active workflow action.
+output remain out of scope. Human acceptance was recorded, and M73 execution
+became the active workflow action.
 
 The M73 execution-review loop returned `Accept` after one focused
 documentation revision. Review and audit found no blocking implementation,
@@ -273,39 +273,53 @@ array semantics, allocation/lifetime, initializer behavior, variable scope,
 store/return semantics, `tmp.data()`, `emit_return`, and direct-intrinsic/SVE
 semantics remain out of scope.
 
+Post-M73 planning selected
+`Milestone 74: Exact Array Body Structural Sequence And Slot-Role Classification Slice`,
+and internal review returned `Accept With Follow-Ups` after local
+planning-doc updates. The selected plan consumes accepted M64/M65 exact
+array-body envelope state and accepted M73 declaration-shell IR, then produces
+one typed source-ordered structural sequence for the exact `array.tsl:105-111`
+body. Slot roles must remain structural/provenance labels only. Predicate,
+store, return, `tmp.data()`, `emit_return`, `assume_aligned`,
+direct-intrinsic/SVE semantics, backend translation, rendering, generated
+output, generic body/declaration/array semantics, allocation/lifetime,
+initializer behavior, and variable scope remain out of scope. Human acceptance
+has been recorded, and M74 execution is the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M73 planning for the next lowering-focused milestone.
+Execute Milestone 74.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m73-planning-plus-review-prompt.md
+docs/agent/runs/m74-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Post-M73 planning is the active workflow action.
+Milestone 74: Exact Array Body Structural Sequence And Slot-Role Classification Slice
 ```
 
 Latest review verdict:
 
 ```text
-The M73 execution-review loop returned Accept after one focused documentation
-revision.
+Post-M73 planning selected M74 and returned Accept With Follow-Ups after local
+planning-doc updates. Human acceptance has been recorded.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M73 planning-plus-review prompt. For the next task, focus
-on lowering. Do not start M74 execution until a post-M73 plan is accepted and
-the acceptance-finalization prompt creates an execution-review loop prompt.
+Run the active M74 execution-review loop prompt. If M74 is already implemented
+and awaiting review, skip implementation and run review/audit subagents. If
+M74 is not implemented, run exactly one write-capable executor, then run the
+required read-only review/audit subagents. Do not start M75.
 ```
 
 Accepted planning prompt:
@@ -758,10 +772,22 @@ Accepted M73 execution-review loop prompt:
 docs/agent/runs/m73-execution-review-loop-prompt.md
 ```
 
-Active post-M73 planning-plus-review prompt:
+Completed post-M73 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m73-planning-plus-review-prompt.md
+```
+
+Accepted post-M73 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m73-acceptance-finalization-prompt.md
+```
+
+Active M74 execution-review loop prompt:
+
+```text
+docs/agent/runs/m74-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1348,6 +1374,31 @@ docs/agent/runs/post-m73-planning-plus-review-prompt.md
   or returns, interpret `tmp.data()`, lower `emit_return`, add
   direct-intrinsic/SVE semantics, parse broad TSIL, read `tsldata`/catalog/
   backend maps during lowering evaluation, or depend on `frozen/` at runtime.
+- M74 is the active executor milestone as exact array-body structural sequence
+  and structural/provenance slot-role classification only.
+- M74 must consume accepted typed M64/M65 exact array-body envelope state and
+  accepted M73 `ExactArrayInitializationDeclarationShellIr` values, the
+  corresponding stage outputs, or a typed `LoweredImplementation` carrying
+  exactly one matching envelope and declaration shell.
+- M74 must produce one typed source-ordered structural sequence for the exact
+  `array.tsl:105-111` body, with five structural/provenance roles: first-slot
+  declaration shell, opaque predicate-init-shaped slot, selected-body envelope
+  slot, opaque post-branch store-call-shaped slot, and opaque
+  return-emission-shaped slot.
+- M74 must attach the accepted M73 declaration shell only to slot ordinal `0`
+  and preserve the accepted M63/M64 selected/no-body envelope only in the
+  selected-body slot.
+- M74 must use source text only as provenance/invariant evidence and must not
+  derive semantics from raw body text, corpus line numbers, helper strings,
+  SVE tokens, backend ids, renderer names, or catalog data.
+- M74 must not interpret `svbool_t`, `pg`, `intrin<svptrue_b8>`,
+  `svptrue_b16/b32/b64`, `intrin<svst1>`, `tmp.data()`, `emit_return`,
+  `assume_aligned`, stores, returns, direct intrinsics, SVE predicate/vector/
+  register semantics, byte-size-to-token relationships, backend uninit,
+  backend maps, rendering, generated output, generic body/declaration/array
+  semantics, allocation/lifetime, initializer behavior, variable scope, broad
+  TSIL parsing, lowering-time file/catalog reads, `tsldata` reads during
+  lowering evaluation, host CPU queries, or runtime `frozen/` use.
 
 ## Accepted Milestone 48
 
@@ -2156,10 +2207,26 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M73 documentation revision addressed the review blocker by recording the
   M73 diagnostic codes and updating stale planned/selected wording across the
   redesign docs while preserving the structural-only boundary.
+- Post-M73 planning follow-up for M74 execution: role labels must remain
+  structural/provenance labels only, not executable statement kinds or
+  predicate/store/return/body semantics.
+- Post-M73 planning follow-up for M74 execution: M74 must add at most one
+  exact public structural-sequence IR value and one exact stage/output pairing;
+  it must not add a generic body IR hierarchy, per-role public tuples,
+  slot-role registry, broad stage registry, or semantic dispatcher.
+- Post-M73 planning follow-up for M74 execution: derive roles from accepted
+  typed M64/M65/M73 slot identity and provenance, not from raw text, line
+  numbers, helper strings, SVE tokens, backend ids, renderer names, or catalog
+  data.
+- Post-M73 planning follow-up for M74 execution: preserve non-first slots as
+  opaque/unresolved structural evidence and keep `tmp.data()`, `emit_return`,
+  `assume_aligned`, store/return semantics, SVE/direct-intrinsic semantics,
+  backend translation/rendering, and generated output out of scope.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready for post-M73 planning.
+No stop condition is active. The workflow is ready to execute M74 through the
+active execution-review loop prompt.
 
 ## Validation Expectations
 

@@ -522,6 +522,17 @@ or array semantics: backend uninit translation, renderer input, generated
 output, allocation/lifetime, initializer behavior, variable scope, store,
 return, `tmp.data()`, and `emit_return` remain deferred.
 
+Post-M73 planning selects Milestone 74 as exact array-body structural sequence
+and slot-role classification. It should consume accepted M64/M65 exact
+array-body envelope state and the accepted M73 declaration-shell IR, then
+produce one typed source-ordered structural sequence for the exact
+`array.tsl:105-111` body. The slot roles are structural/provenance labels
+only: first-slot declaration shell, opaque predicate-init-shaped slot,
+selected-body envelope slot, opaque post-branch store-call-shaped slot, and
+opaque return-emission-shaped slot. M74 must not interpret those roles as
+declaration, array, variable, predicate, store, return, intrinsic, SVE,
+backend, renderer, or output semantics.
+
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
 suffix request over typed M43 `GenerationTypeRef` inputs. Milestone 46

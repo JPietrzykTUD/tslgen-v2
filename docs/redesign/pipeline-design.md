@@ -538,6 +538,17 @@ backend-planning input, renderer-ready declaration, generic `var`/
 `array_type` parser, allocation/lifetime model, store/return lowering, or
 generated-output step.
 
+Post-M73 planning selects Milestone 74 as the next Stage 8 boundary after
+`array_initialization_declaration_shell_lowering`. M74 should produce one
+typed exact array-body structural sequence and structural/provenance slot-role
+classification value for the accepted `array.tsl:105-111` body. The proposed
+stage name is `array_body_structural_sequence_classification`. It must consume
+accepted M64/M65 envelope state and the accepted M73 declaration shell, and it
+must not become a generic body parser, executable statement sequence,
+variable/allocation model, predicate/store/return lowering, SVE/direct-
+intrinsic semantic slice, backend-planning input, renderer-ready body, or
+generated-output step.
+
 ## Stage 9: Backend Planning
 
 Inputs:

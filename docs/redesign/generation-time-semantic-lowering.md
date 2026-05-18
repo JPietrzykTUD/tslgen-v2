@@ -601,6 +601,19 @@ allocation/lifetime, initializer behavior, variable scope, stores, returns,
 `tmp.data()`, `emit_return`, backend uninit translation, backend translation
 maps, rendering, and generated output remain deferred.
 
+Post-M73 planning selects Milestone 74 as exact array-body structural sequence
+and slot-role classification. It should consume the accepted M64/M65 exact
+array-body envelope and accepted M73 first-slot declaration-shell IR, then
+produce one typed source-ordered sequence for the exact `array.tsl:105-111`
+body. Slot roles are structural/provenance labels only, not executable
+statement semantics: first-slot declaration shell, opaque predicate-init-shaped
+slot, selected-body envelope slot, opaque post-branch store-call-shaped slot,
+and opaque return-emission-shaped slot. M74 must preserve non-first slots as
+opaque/unresolved structural evidence and must not interpret `svbool_t`,
+`svptrue_b8`, selected `svptrue_b*`, `svst1`, `tmp.data()`, `emit_return`,
+`assume_aligned`, store/return behavior, SVE/direct-intrinsic behavior,
+backend maps, rendering, generated output, or broad TSIL/body semantics.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
@@ -839,14 +852,42 @@ M73 diagnostics:
   the backend-uninit boundary no longer carries the M72
   `deferred_backend_value` policy that M73 must preserve without translation.
 
+M74 planned diagnostics should cover:
+
+- `TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-SOURCE-UNSUPPORTED`: the
+  source is not an accepted M73 declaration shell, M73 stage output, accepted
+  M64/M65 exact array-body envelope source, or typed lowered implementation
+  carrying exactly the required M64/M65/M73 values.
+- `TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-IR-MISSING`: a typed source
+  container does not carry the required exact M64/M65 envelope or M73
+  declaration-shell value.
+- `TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-IR-MULTIPLE`: a typed source
+  container carries multiple candidate envelope or declaration-shell values
+  where M74 requires exactly one.
+- `TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-CONTEXT-MISMATCH`: selected
+  candidate, extension, selected type, or branch-chain context does not match
+  the typed M64/M65/M73 inputs.
+- `TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-PROVENANCE-MISMATCH`: accepted
+  M64/M65 envelope, M63 selected-body envelope, and M73 declaration shell do
+  not agree on candidate, selected type, branch-chain, slot identity, or source
+  provenance.
+- `TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-ROLE-MISMATCH`: the accepted
+  envelope does not expose the exact five source-ordered structural/provenance
+  roles required by `array.tsl:105-111`.
+- `TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-MALFORMED`: the exact structural
+  sequence is missing a role, has reordered/extra roles, attaches the M73
+  declaration shell to a nonzero slot, or otherwise violates the exact
+  five-slot structural invariant without implying slot semantics.
+
 ## Explicit Deferrals
 
 Deferred beyond the implemented M43-M73 semantic-lowering, structural
 slot-assembly, pipeline-integration, exact array-initialization slot form IR,
 M67 helper-request IR, accepted M68 base-type request resolution, M69 pipeline
 extraction, M70 vector-length request resolution, M71 vector-alignment
-request resolution, M72 helper-set completion, and M73 exact declaration-shell
-structural IR slices:
+request resolution, M72 helper-set completion, M73 exact declaration-shell
+structural IR, and selected M74 exact structural-sequence classification
+slices:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -893,10 +934,13 @@ structural IR slices:
   through explicit typed metadata. Implemented M72 packages the exact helper
   set and keeps backend uninit as a typed deferred backend-value boundary.
   Implemented M73 records only the exact first-slot declaration-shell
-  structure over that helper set. Backend uninit translation, broad
-  vector/register metadata, generic declaration/array semantics, allocation/
-  lifetime, initializer behavior, variable scope, store/return semantics,
-  aligned load/store semantics, rendering, and output remain deferred.
+  structure over that helper set. Selected M74 records only exact
+  source-ordered body sequence and structural/provenance slot roles around
+  that M73 value. Backend uninit translation, broad vector/register metadata,
+  generic declaration/array/body semantics, allocation/lifetime, initializer
+  behavior, variable scope, predicate semantics, direct-intrinsic/SVE
+  semantics, store/return semantics, aligned load/store semantics, rendering,
+  and output remain deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only

@@ -8117,6 +8117,222 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- M73 execution has occurred. The orchestrator remains responsible for the
-  workflow state transition and any next run prompt under `docs/agent/runs/`;
-  this documentation revision does not update those workflow files.
+- `docs/agent/runs/post-m73-planning-plus-review-prompt.md` completed the
+  post-M73 lowering-focused planning pass. The active workflow prompt is now
+  `docs/agent/runs/post-m73-acceptance-finalization-prompt.md`, pending human
+  acceptance.
+
+### Post-M73 Planning Result
+
+Status:
+
+Selected for human acceptance after post-M73 planning.
+
+Selected milestone:
+
+```text
+Milestone 74: Exact Array Body Structural Sequence And Slot-Role Classification Slice
+```
+
+Candidate comparison:
+
+| Candidate | Value | Risk | Decision |
+| --- | --- | --- | --- |
+| Exact array-body structural sequence and slot-role classification | High. Rejoins the accepted M64/M65 exact body envelope with the accepted M73 declaration-shell IR, giving future lowering slices one source-ordered typed body structure instead of isolated slot fragments. | Medium-high if role names become store/return/predicate/body semantics. | Select as M74 with strict wording that roles are structural/provenance labels only. |
+| Narrow M73-to-envelope handoff | Medium. Links M73 back to the envelope but mostly rewraps existing facts without making all body roles explicit. | Low, but less forward movement than a five-role structural sequence. | Defer. |
+| Predicate-init slot lowering | Useful later for SVE body parity. | High now because it pulls in `svbool_t`, `pg`, `svptrue_b8`, direct-intrinsic, and SVE predicate semantics. | Defer. |
+| Store-call or return-emission lowering | High later. | Too early; would interpret `tmp.data()`, `svst1`, `emit_return`, store/return semantics, variable scope, and backend/rendering pressure. | Defer. |
+| Private resolver/stage-table cleanup | Useful maintainability work. | Lower value than making the exact body sequence explicit, unless implementation pressure forces it. | Keep as non-blocking follow-up. |
+
+### Milestone 74: Exact Array Body Structural Sequence And Slot-Role Classification Slice
+
+Status:
+
+Selected for human acceptance after post-M73 planning.
+
+Goal:
+
+Consume accepted M64/M65 exact array-body envelope state and the accepted M73
+first-slot declaration-shell IR, then produce one typed source-ordered
+structural sequence for the exact `array.tsl:105-111` body:
+
+```text
+slot 0: first-slot declaration shell from M73
+slot 1: opaque predicate-init-shaped structural role
+slot 2: selected-body envelope structural role
+slot 3: opaque post-branch store-call-shaped structural role
+slot 4: opaque return-emission-shaped structural role
+```
+
+M74 is structural/provenance lowering only. Slot-role classification names the
+accepted exact body positions; it must not define executable statement kinds,
+generic body IR, declaration/array semantics, variable scope,
+allocation/lifetime, initializer behavior, predicate semantics, store/return
+semantics, direct-intrinsic/SVE semantics, backend translation, renderer-ready
+IR, or generated output.
+
+Scope:
+
+- Consume accepted typed M64/M65 `ExactArrayBodyEnvelopeIr` values, the
+  `array_body_envelope_slot_assembly` stage output, accepted typed M73
+  `ExactArrayInitializationDeclarationShellIr` values, the
+  `array_initialization_declaration_shell_lowering` stage output, or a typed
+  `LoweredImplementation` carrying exactly one matching M64/M65 envelope and
+  one matching M73 declaration shell.
+- Produce one typed IR such as `ExactArrayBodyStructuralSequenceIr`, carrying:
+  - the source M64/M65 exact array-body envelope;
+  - the accepted M73 declaration-shell IR attached only to slot ordinal `0`;
+  - the accepted M63 selected/no-body envelope through the M64 selected-body
+    envelope slot;
+  - one source-ordered five-entry structural/provenance role sequence;
+  - role labels for declaration-shell, opaque predicate-init-shaped slot,
+    selected-body envelope slot, opaque post-branch store-call-shaped slot,
+    and opaque return-emission-shaped slot;
+  - opaque source/provenance for the non-first slots without interpreting
+    their text;
+  - deterministic provenance including candidate id, selected type tag,
+    target/source extension where available, branch-chain id, envelope/slot
+    identity, role ordinal, and source locations.
+- Append one deterministic stage after
+  `array_initialization_declaration_shell_lowering`, for example
+  `array_body_structural_sequence_classification`.
+- Preserve accepted M63/M64/M65/M66/M67/M68/M69/M70/M71/M72/M73 behavior and
+  outputs.
+- Use source text only as provenance/invariant evidence. M74 must derive roles
+  from accepted typed envelope slot identity and provenance, not from raw body
+  text, corpus line numbers, SVE tokens, backend ids, or helper strings.
+
+Out of scope:
+
+- Interpreting `svbool_t`, `pg`, `intrin<svptrue_b8>`, selected
+  `svptrue_b16/b32/b64`, `intrin<svst1>`, `tmp.data()`, `a`,
+  `emit_return(tmp)`, `assume_aligned`, stores, returns, direct intrinsics,
+  SVE predicate/vector/register semantics, byte-size-to-token inference, or
+  branch-body semantics beyond accepted M57-M63.
+- Generic body IR, broad TSIL parsing, generic declaration semantics, generic
+  array semantics, generic variable semantics, allocation/lifetime, variable
+  binding/scope, initializer semantics, statement execution order semantics,
+  store semantics, return semantics, or multi-statement lowering.
+- Backend manifests, backend maps, language maps, translation maps, backend
+  uninit translation, backend translation requests, renderer-ready values,
+  renderer calls, generated artifacts, golden files, CLI/report/writer
+  behavior, Rust behavior, compiler execution, or generated-test execution.
+- Broad helper registries, raw helper-string dispatch, broad body/slot
+  registries, lowering-time file/catalog reads, raw TSL parsing, `tsldata`
+  reads during lowering evaluation, host CPU queries, backend map reads, or
+  runtime dependency on `frozen/`.
+
+Required input:
+
+- Accepted M64/M65 exact array-body envelope state for the selected body.
+- Accepted M73 exact first-slot declaration-shell structural IR.
+- Accepted M63 selected/no-body envelope reachable through the M64/M65
+  selected-body slot.
+- Accepted M66-M72 first-slot provenance reachable through the M73 source
+  chain.
+
+Expected outputs:
+
+- One typed exact array-body structural sequence IR value.
+- One deterministic generation-lowering stage after
+  `array_initialization_declaration_shell_lowering`.
+- Structured diagnostics for unsupported source/container shapes, missing or
+  duplicate envelope/declaration-shell values, context mismatch, provenance
+  mismatch, role/order mismatch, malformed exact five-slot sequence
+  invariants, and unsupported non-exact body shapes.
+- No backend translation request, renderer-ready value, generated artifact,
+  golden output, CLI/report/writer, Rust, compiler, generic body/declaration/
+  array semantics, store, return, `tmp.data()`, `emit_return`, or SVE/direct-
+  intrinsic behavior change.
+
+Parity criterion:
+
+M74 proves the accepted `array.tsl:105-111` body can be carried as one typed,
+source-ordered structural/provenance sequence around the accepted M73
+declaration-shell IR and accepted M63/M64 selected-body envelope without
+implementing body-slot semantics, backend translation, rendering, generated
+output, or compiler parity.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:105` for the exact first-slot
+  declaration shell already refined by M73.
+- `tsldata/primitives/load_store/array.tsl:106` for the exact predicate-init
+  shaped slot as opaque structural evidence only.
+- `tsldata/primitives/load_store/array.tsl:107-109` for the accepted selected
+  branch-chain body evidence already covered through M57-M63.
+- `tsldata/primitives/load_store/array.tsl:110` for the exact post-branch
+  store-call shaped slot as opaque structural evidence only.
+- `tsldata/primitives/load_store/array.tsl:111` for the exact return-emission
+  shaped slot as opaque structural evidence only.
+- Accepted M63 selected-body envelope, M64 exact array-body envelope slot
+  assembly, M65 pipeline integration, and M66-M73 first-slot chain in
+  `tslgen/src/tslgen/lowering/boundary.py` and
+  `tslgen/tests/unit/test_lowering_boundary.py`.
+- Same-text `array.tsl` repetitions are supporting corpus repetition only,
+  not expanded M74 scope.
+- `construct.tsl`, backend translation maps, and `frozen/` remain future
+  evidence only and must not become runtime input.
+
+Tests required:
+
+- Direct resolver tests from accepted M64/M65 envelope plus accepted M73
+  declaration shell to the M74 structural sequence IR.
+- Normal `lower_candidates` pipeline tests proving the M74 stage appears after
+  `array_initialization_declaration_shell_lowering` and preserves M63-M73
+  ordering and outputs.
+- Tests proving exact five-entry role order, M73 shell linkage only to slot
+  `0`, M63 selected/no-body envelope linkage only to the selected-body slot,
+  and opaque preservation of predicate-init, store-call, and return-emission
+  slot text/provenance without interpreting it.
+- Diagnostics for missing, duplicate, unsupported source/container, context
+  mismatch, provenance mismatch, role/order mismatch, and malformed exact
+  sequence invariants.
+- Determinism tests for repeated runs and reordered inputs.
+- Regression tests proving M63/M64/M65/M66/M67/M68/M70/M71/M72/M73 behavior is
+  unchanged.
+- Regression tests proving no backend translation, rendering, generated
+  output, golden-file churn, broad body/declaration/array lowering, generic
+  parser, raw helper evaluator calls, raw helper parsing, catalog reads,
+  `tsldata` reads, host CPU queries, backend map reads, or runtime `frozen/`
+  use is introduced.
+
+Golden fixtures required:
+
+- None. M74 is lowering-only structural IR and must not change generated C++
+  or Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M74 structural sequence / slot-role test command selected by the
+  executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Letting role labels become executable statement kinds or generic body IR.
+- Inferring roles from raw text, SVE tokens, backend ids, corpus line numbers,
+  or helper strings instead of accepted typed slot identity and provenance.
+- Treating the store-call-shaped or return-emission-shaped roles as store or
+  return lowering.
+- Treating the predicate-init-shaped role or selected-body role as SVE/direct-
+  intrinsic semantics.
+- Reconnecting M73 to the envelope in a way that implies variable scope,
+  allocation/lifetime, initializer semantics, or backend-uninit translation.
+- Adding broad `BodyIr`, slot-role registries, central semantic dispatchers,
+  backend shortcuts, rendering, generated output, or raw TSIL parsing.
+
+Dependencies on prior milestones:
+
+- Milestones 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72,
+  and 73.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m73-acceptance-finalization-prompt.md` is created and
+  active pending human acceptance. That finalization prompt will create
+  `docs/agent/runs/m74-execution-review-loop-prompt.md` after explicit human
+  acceptance. Do not start M74 until the acceptance-finalization prompt
+  records acceptance.

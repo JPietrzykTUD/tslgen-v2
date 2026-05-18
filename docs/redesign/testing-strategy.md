@@ -886,6 +886,21 @@ Recommended first parity checks:
   lowering evaluation, and no backend translation/rendering, generic
   `var`/`array_type` parsing, allocation/lifetime, store/return, golden-file,
   or generated-output churn.
+- Milestone 74 tests should prove exact array-body structural sequence and
+  structural/provenance slot-role classification without body semantics:
+  direct sequence tests from accepted M64/M65 envelope state plus accepted M73
+  declaration-shell IR, normal `lower_candidates` stage-order tests after
+  `array_initialization_declaration_shell_lowering`, exact five-entry role
+  order for `array.tsl:105-111`, M73 shell linkage only to slot 0, M63
+  selected/no-body envelope linkage only to the selected-body slot, opaque
+  preservation for the predicate-init, post-branch store-call, and
+  return-emission slots, unsupported/missing/duplicate source diagnostics,
+  provenance and role-order diagnostics, deterministic ordering, unchanged
+  M63-M73 behavior, no raw helper parsing or raw query evaluator calls, no
+  catalog/`tsldata`/host CPU/backend map reads during lowering evaluation,
+  and no backend translation/rendering, generic body/declaration/array
+  parsing, variable/allocation/store/return semantics, golden-file, or
+  generated-output churn.
 
 Deferred parity checks:
 

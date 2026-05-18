@@ -1419,6 +1419,15 @@ Consequences:
   lowering state only. It must not add generic `var`/`array_type` parsing,
   variable scope, allocation/lifetime, initializer semantics, backend uninit
   translation, renderer-ready IR, store/return semantics, or generated output.
+- Post-M73 planning selects Milestone 74 to introduce exact array-body
+  structural sequence and structural/provenance slot-role classification
+  before any remaining slot semantics. M74 should consume accepted M64/M65
+  envelope state and accepted M73 declaration-shell IR, then record the exact
+  `array.tsl:105-111` source-ordered slot sequence as typed lowering state.
+  The role labels must not become executable statement kinds or imply generic
+  body IR, variable scope, allocation/lifetime, predicate semantics, store/
+  return semantics, SVE/direct-intrinsic semantics, backend translation,
+  renderer-ready IR, or generated output.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
