@@ -341,7 +341,7 @@ and still does not add compiler execution.
   base-type request resolution over that request IR, accepted M69
   behavior-preserving stage extraction, accepted M70 exact vector-length
   request resolution from explicit typed metadata, accepted M71 exact
-  vector-alignment request resolution from explicit typed metadata, selected
+  vector-alignment request resolution from explicit typed metadata, accepted
   M72 exact helper-set completion with backend uninit preserved as a typed
   deferred boundary, broad TSIL/body-slot parity beyond those request-
   resolution boundaries, and backend translation-map evaluation beyond the

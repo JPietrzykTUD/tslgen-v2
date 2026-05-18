@@ -31,6 +31,7 @@ from tslgen.lowering import (
     ExactArrayBodyEnvelopeSkeletonRequirement,
     ExactArrayBodyEnvelopeSkeletonSlot,
     ExactArrayInitializationBaseTypeResolutionIr,
+    ExactArrayInitializationHelperSetCompletionIr,
     ExactArrayInitializationHelperRequestIr,
     ExactArrayInitializationHelperRequestRecord,
     ExactArrayInitializationSlotFormIr,
@@ -71,6 +72,7 @@ from tslgen.lowering import (
     handoff_opaque_selected_branch_body,
     lower_candidates,
     lower_exact_array_initialization_base_type_request,
+    lower_exact_array_initialization_helper_set_completion,
     lower_exact_array_initialization_helper_requests,
     lower_exact_array_initialization_slot_form,
     lower_exact_array_initialization_vector_alignment_request,
@@ -1115,6 +1117,36 @@ class LoweringBoundaryTests(unittest.TestCase):
             target_extension=metadata.target_extension,
             source_extension=metadata.source_extension,
             selected_type_tag=base_resolution.selected_type_tag,
+        )
+        if not result.is_ok:
+            raise AssertionError(result.diagnostics)
+        return result.unwrap()
+
+    def exact_array_initialization_vector_alignment_resolution(
+        self,
+        *,
+        selected_type_tag: str = "si16",
+    ) -> ExactArrayInitializationVectorAlignmentResolutionIr:
+        vector_length_resolution = (
+            self.exact_array_initialization_vector_length_resolution(
+                selected_type_tag=selected_type_tag,
+            )
+        )
+        metadata = self.vector_alignment_metadata(
+            candidate_id=vector_length_resolution.candidate_id,
+            target_extension=vector_length_resolution.target_extension,
+            source_extension=vector_length_resolution.source_extension,
+            selected_type_tag=vector_length_resolution.selected_type_tag,
+        )
+        result = lower_exact_array_initialization_vector_alignment_request(
+            vector_length_resolution,
+            GenerationContext(
+                array_initialization_vector_alignment_metadata=(metadata,),
+            ),
+            selected_candidate_id=vector_length_resolution.candidate_id,
+            target_extension=vector_length_resolution.target_extension,
+            source_extension=vector_length_resolution.source_extension,
+            selected_type_tag=vector_length_resolution.selected_type_tag,
         )
         if not result.is_ok:
             raise AssertionError(result.diagnostics)
@@ -3678,6 +3710,10 @@ class LoweringBoundaryTests(unittest.TestCase):
                         (),
                     )
                     self.assertEqual(
+                        implementation.array_initialization_helper_set_completions,
+                        (),
+                    )
+                    self.assertEqual(
                         tuple(stage.stage for stage in implementation.generation_stages),
                         tuple(stage.stage for stage in baseline_impl.generation_stages),
                     )
@@ -3780,61 +3816,88 @@ class LoweringBoundaryTests(unittest.TestCase):
                     ),
                     ("value_backend_uninit_array",),
                 )
+                self.assertEqual(
+                    len(implementation.array_initialization_helper_set_completions),
+                    1,
+                )
+                helper_set_completion = (
+                    implementation.array_initialization_helper_set_completions[0]
+                )
                 self.assertIs(
-                    implementation.generation_stages[-6].output,
+                    helper_set_completion.source_vector_alignment_resolution,
+                    vector_alignment_resolution,
+                )
+                self.assertIs(
+                    helper_set_completion.source_backend_uninit_request,
+                    helper_request.requests[3],
+                )
+                self.assertEqual(
+                    helper_set_completion.unresolved_backend_uninit.policy,
+                    "deferred_backend_value",
+                )
+                self.assertIs(
+                    implementation.generation_stages[-7].output,
                     array_envelope,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-6].stage,
+                    implementation.generation_stages[-7].stage,
                     "array_body_envelope_slot_assembly",
                 )
-                self.assertIs(implementation.generation_stages[-5].output, slot_form)
+                self.assertIs(implementation.generation_stages[-6].output, slot_form)
                 self.assertEqual(
-                    implementation.generation_stages[-5].stage,
+                    implementation.generation_stages[-6].stage,
                     "array_initialization_slot_form_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-4].output,
+                    implementation.generation_stages[-5].output,
                     helper_request,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-4].stage,
+                    implementation.generation_stages[-5].stage,
                     "array_initialization_helper_request_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-3].output,
+                    implementation.generation_stages[-4].output,
                     base_type_resolution,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-3].stage,
+                    implementation.generation_stages[-4].stage,
                     "array_initialization_base_type_request_resolution",
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-2].stage,
+                    implementation.generation_stages[-3].stage,
                     "array_initialization_vector_length_request_resolution",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-2].output,
+                    implementation.generation_stages[-3].output,
                     vector_length_resolution,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-1].stage,
+                    implementation.generation_stages[-2].stage,
                     "array_initialization_vector_alignment_request_resolution",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-1].output,
+                    implementation.generation_stages[-2].output,
                     vector_alignment_resolution,
                 )
                 self.assertEqual(
-                    tuple(stage.stage for stage in implementation.generation_stages[:-6]),
+                    implementation.generation_stages[-1].stage,
+                    "array_initialization_helper_set_completion",
+                )
+                self.assertIs(
+                    implementation.generation_stages[-1].output,
+                    helper_set_completion,
+                )
+                self.assertEqual(
+                    tuple(stage.stage for stage in implementation.generation_stages[:-7]),
                     tuple(stage.stage for stage in baseline_impl.generation_stages),
                 )
                 self.assertEqual(
-                    tuple(stage.output for stage in implementation.generation_stages[:-6]),
+                    tuple(stage.output for stage in implementation.generation_stages[:-7]),
                     tuple(stage.output for stage in baseline_impl.generation_stages),
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-7].stage,
+                    implementation.generation_stages[-8].stage,
                     "selected_body_envelope_lowering",
                 )
                 self.assertEqual(slot_form.slot_ordinal, 0)
@@ -3896,6 +3959,10 @@ class LoweringBoundaryTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     implementation.array_initialization_vector_alignment_resolutions,
+                    (),
+                )
+                self.assertEqual(
+                    implementation.array_initialization_helper_set_completions,
                     (),
                 )
                 self.assertEqual(
@@ -4191,6 +4258,25 @@ class LoweringBoundaryTests(unittest.TestCase):
                     ("value_backend_uninit_array",),
                 )
                 self.assertEqual(
+                    len(pipeline.array_initialization_helper_set_completions),
+                    1,
+                )
+                helper_set_completion = (
+                    pipeline.array_initialization_helper_set_completions[0]
+                )
+                self.assertIs(
+                    helper_set_completion.source_vector_alignment_resolution,
+                    vector_alignment_resolution,
+                )
+                self.assertIs(
+                    helper_set_completion.source_backend_uninit_request,
+                    helper_request.requests[3],
+                )
+                self.assertEqual(
+                    helper_set_completion.unresolved_backend_uninit.policy,
+                    "deferred_backend_value",
+                )
+                self.assertEqual(
                     tuple(stage.stage for stage in pipeline.stages),
                     (
                         "array_body_envelope_slot_assembly",
@@ -4199,6 +4285,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                         "array_initialization_base_type_request_resolution",
                         "array_initialization_vector_length_request_resolution",
                         "array_initialization_vector_alignment_request_resolution",
+                        "array_initialization_helper_set_completion",
                     ),
                 )
                 self.assertEqual(
@@ -4210,6 +4297,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                         resolution,
                         vector_length_resolution,
                         vector_alignment_resolution,
+                        helper_set_completion,
                     ),
                 )
 
@@ -4246,7 +4334,11 @@ class LoweringBoundaryTests(unittest.TestCase):
                     len(pipeline.array_initialization_vector_alignment_resolutions),
                     1,
                 )
-                self.assertEqual(len(pipeline.stages), 6)
+                self.assertEqual(
+                    len(pipeline.array_initialization_helper_set_completions),
+                    1,
+                )
+                self.assertEqual(len(pipeline.stages), 7)
 
     def test_exact_array_initialization_stage_pipeline_no_skeleton_is_empty(
         self,
@@ -4264,6 +4356,7 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(pipeline.array_initialization_base_type_resolutions, ())
         self.assertEqual(pipeline.array_initialization_vector_length_resolutions, ())
         self.assertEqual(pipeline.array_initialization_vector_alignment_resolutions, ())
+        self.assertEqual(pipeline.array_initialization_helper_set_completions, ())
         self.assertEqual(pipeline.stages, ())
 
     def test_exact_array_initialization_stage_pipeline_matches_lower_candidates_tail(
@@ -4329,8 +4422,12 @@ class LoweringBoundaryTests(unittest.TestCase):
             implementation.array_initialization_vector_alignment_resolutions,
             pipeline_result.array_initialization_vector_alignment_resolutions,
         )
-        self.assertEqual(implementation.generation_stages[-6:], pipeline_result.stages)
-        self.assertEqual(implementation.generation_stages[-7], envelope_stage)
+        self.assertEqual(
+            implementation.array_initialization_helper_set_completions,
+            pipeline_result.array_initialization_helper_set_completions,
+        )
+        self.assertEqual(implementation.generation_stages[-7:], pipeline_result.stages)
+        self.assertEqual(implementation.generation_stages[-8], envelope_stage)
 
     def test_lower_candidates_vector_length_metadata_order_is_deterministic(
         self,
@@ -6471,6 +6568,374 @@ class LoweringBoundaryTests(unittest.TestCase):
                 kind="fixed_bytes",
                 bytes=64,
             ),
+        )
+
+    def test_exact_array_initialization_helper_set_completion_resolves_m71_request(
+        self,
+    ) -> None:
+        vector_alignment_resolution = (
+            self.exact_array_initialization_vector_alignment_resolution(
+                selected_type_tag="si16",
+            )
+        )
+        sources = (
+            vector_alignment_resolution,
+            GenerationLoweringStage(
+                stage="array_initialization_vector_alignment_request_resolution",
+                output=vector_alignment_resolution,
+            ),
+            LoweredImplementation(
+                candidate_id=vector_alignment_resolution.candidate_id,
+                status="lowered",
+                array_initialization_vector_alignment_resolutions=(
+                    vector_alignment_resolution,
+                ),
+            ),
+        )
+
+        for source in sources:
+            with self.subTest(source=type(source).__name__):
+                result = lower_exact_array_initialization_helper_set_completion(
+                    source,
+                    GenerationContext(
+                        selected_candidate_id=(
+                            vector_alignment_resolution.candidate_id
+                        ),
+                        selected_type_tag=(
+                            vector_alignment_resolution.selected_type_tag
+                        ),
+                    ),
+                    selected_candidate_id=vector_alignment_resolution.candidate_id,
+                    target_extension=vector_alignment_resolution.target_extension,
+                    source_extension=vector_alignment_resolution.source_extension,
+                    selected_type_tag=vector_alignment_resolution.selected_type_tag,
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                completion = result.unwrap()
+                assert isinstance(
+                    completion,
+                    ExactArrayInitializationHelperSetCompletionIr,
+                )
+                self.assertIs(
+                    completion.source_vector_alignment_resolution,
+                    vector_alignment_resolution,
+                )
+                self.assertIs(
+                    completion.source_vector_length_resolution,
+                    vector_alignment_resolution.source_vector_length_resolution,
+                )
+                self.assertIs(
+                    completion.source_base_type_resolution,
+                    vector_alignment_resolution.source_vector_length_resolution
+                    .source_base_type_resolution,
+                )
+                self.assertIs(
+                    completion.source_backend_uninit_request,
+                    vector_alignment_resolution.unresolved_requests[0],
+                )
+                self.assertEqual(
+                    completion.source_backend_uninit_request.request_ordinal,
+                    3,
+                )
+                self.assertEqual(
+                    completion.source_backend_uninit_request.request_kind,
+                    "backend_value",
+                )
+                self.assertEqual(
+                    completion.source_backend_uninit_request.helper_leaf_kind,
+                    "value_backend_uninit_array",
+                )
+                self.assertEqual(
+                    completion.unresolved_backend_uninit.policy,
+                    "deferred_backend_value",
+                )
+                self.assertEqual(
+                    completion.unresolved_backend_uninit.source_backend_uninit_request
+                    .leaf_source_text,
+                    "value<backend>(uninit::array)",
+                )
+                self.assertIs(
+                    GenerationLoweringStage(
+                        stage="array_initialization_helper_set_completion",
+                        output=completion,
+                    ).output,
+                    completion,
+                )
+
+    def test_exact_array_initialization_helper_set_completion_rejects_invalid_sources(
+        self,
+    ) -> None:
+        vector_alignment_resolution = (
+            self.exact_array_initialization_vector_alignment_resolution()
+        )
+        body_ir = self.selected_body_ir()
+        implementation_without_ir = LoweredImplementation(
+            candidate_id="candidate-1",
+            status="lowered",
+            array_initialization_vector_length_resolutions=(
+                vector_alignment_resolution.source_vector_length_resolution,
+            ),
+        )
+        implementation_with_multiple = LoweredImplementation(
+            candidate_id="candidate-1",
+            status="lowered",
+            array_initialization_vector_alignment_resolutions=(
+                vector_alignment_resolution,
+                vector_alignment_resolution,
+            ),
+        )
+        cases = (
+            (
+                "stage",
+                GenerationLoweringStage(
+                    stage="selected_body_ir_lowering",
+                    output=body_ir,
+                ),
+                "TSL-LOWER-ARRAY-INIT-HELPER-SET-SOURCE-UNSUPPORTED",
+                "M71",
+            ),
+            (
+                "type",
+                object(),
+                "TSL-LOWER-ARRAY-INIT-HELPER-SET-SOURCE-UNSUPPORTED",
+                "M71",
+            ),
+            (
+                "missing_ir",
+                implementation_without_ir,
+                "TSL-LOWER-ARRAY-INIT-HELPER-SET-IR-MISSING",
+                "array_initialization_vector_alignment_resolutions",
+            ),
+            (
+                "multiple_ir",
+                implementation_with_multiple,
+                "TSL-LOWER-ARRAY-INIT-HELPER-SET-IR-MULTIPLE",
+                "exactly one",
+            ),
+        )
+
+        for name, source, code, message in cases:
+            with self.subTest(name=name):
+                result = lower_exact_array_initialization_helper_set_completion(
+                    source,
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
+                self.assertIn(message, result.diagnostics[0].message)
+
+    def test_exact_array_initialization_helper_set_completion_rejects_bad_records(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "missing",
+                "TSL-LOWER-ARRAY-INIT-HELPER-SET-BACKEND-UNINIT-MISSING",
+            ),
+            (
+                "duplicate",
+                "TSL-LOWER-ARRAY-INIT-HELPER-SET-BACKEND-UNINIT-DUPLICATE",
+            ),
+            (
+                "ordinal",
+                "TSL-LOWER-ARRAY-INIT-HELPER-SET-BACKEND-UNINIT-MISMATCH",
+            ),
+            (
+                "kind",
+                "TSL-LOWER-ARRAY-INIT-HELPER-SET-BACKEND-UNINIT-MISMATCH",
+            ),
+            (
+                "leaf_kind",
+                "TSL-LOWER-ARRAY-INIT-HELPER-SET-BACKEND-UNINIT-MISMATCH",
+            ),
+            (
+                "source_text",
+                "TSL-LOWER-ARRAY-INIT-HELPER-SET-BACKEND-UNINIT-UNSUPPORTED",
+            ),
+        )
+
+        for name, code in cases:
+            with self.subTest(name=name):
+                vector_alignment_resolution = (
+                    self.exact_array_initialization_vector_alignment_resolution()
+                )
+                backend_request = vector_alignment_resolution.unresolved_requests[0]
+                if name == "missing":
+                    object.__setattr__(
+                        vector_alignment_resolution,
+                        "unresolved_requests",
+                        (),
+                    )
+                elif name == "duplicate":
+                    object.__setattr__(
+                        vector_alignment_resolution,
+                        "unresolved_requests",
+                        (backend_request, backend_request),
+                    )
+                elif name == "ordinal":
+                    object.__setattr__(backend_request, "request_ordinal", 2)
+                elif name == "kind":
+                    object.__setattr__(
+                        backend_request,
+                        "request_kind",
+                        "generation_value",
+                    )
+                elif name == "leaf_kind":
+                    object.__setattr__(
+                        backend_request,
+                        "helper_leaf_kind",
+                        "value_generation_vector_alignment",
+                    )
+                else:
+                    object.__setattr__(
+                        backend_request,
+                        "leaf_source_text",
+                        "value<backend>(uninit::scalar)",
+                    )
+
+                result = lower_exact_array_initialization_helper_set_completion(
+                    vector_alignment_resolution,
+                )
+
+                self.assertFalse(result.is_ok)
+                self.assertTrue(
+                    any(diagnostic.code == code for diagnostic in result.diagnostics),
+                    result.diagnostics,
+                )
+                diagnostic = next(
+                    diagnostic
+                    for diagnostic in result.diagnostics
+                    if diagnostic.code == code
+                )
+                self.assertEqual(diagnostic.severity, "error")
+                self.assertIsNotNone(diagnostic.location)
+
+    def test_exact_array_initialization_helper_set_completion_rejects_context_mismatch(
+        self,
+    ) -> None:
+        vector_alignment_resolution = (
+            self.exact_array_initialization_vector_alignment_resolution()
+        )
+
+        result = lower_exact_array_initialization_helper_set_completion(
+            vector_alignment_resolution,
+            GenerationContext(selected_candidate_id="other-candidate"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-INIT-HELPER-SET-CONTEXT-MISMATCH",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+        )
+        self.assertIn("selected candidate context", result.diagnostics[0].message)
+
+    def test_exact_array_initialization_helper_set_completion_reports_provenance_mismatch(
+        self,
+    ) -> None:
+        vector_alignment_resolution = (
+            self.exact_array_initialization_vector_alignment_resolution()
+        )
+        object.__setattr__(
+            vector_alignment_resolution.unresolved_requests[0],
+            "candidate_id",
+            "other-candidate",
+        )
+
+        result = lower_exact_array_initialization_helper_set_completion(
+            vector_alignment_resolution,
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-INIT-HELPER-SET-PROVENANCE-MISMATCH",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+        )
+        self.assertIn("provenance", result.diagnostics[0].message)
+
+    def test_exact_array_initialization_helper_set_completion_is_deterministic(
+        self,
+    ) -> None:
+        first_source = self.exact_array_initialization_vector_alignment_resolution()
+        second_source = self.exact_array_initialization_vector_alignment_resolution()
+
+        first = lower_exact_array_initialization_helper_set_completion(first_source)
+        second = lower_exact_array_initialization_helper_set_completion(second_source)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap().key, second.unwrap().key)
+
+    def test_exact_array_initialization_helper_set_completion_uses_no_raw_or_external_state(
+        self,
+    ) -> None:
+        vector_alignment_resolution = (
+            self.exact_array_initialization_vector_alignment_resolution()
+        )
+        original_type_query = lowering_boundary.resolve_generation_type_query
+        original_value_query = lowering_boundary.resolve_generation_value_query
+        original_open = builtins.open
+        original_cpu_count = os.cpu_count
+        original_processor = platform.processor
+
+        def fail_on_raw_query(*args: object, **kwargs: object) -> object:
+            raise AssertionError("raw helper evaluator was called")
+
+        def fail_on_file_read(*args: object, **kwargs: object) -> object:
+            raise AssertionError("file/catalog/tsldata/backend map read was called")
+
+        def fail_on_cpu_query(*args: object, **kwargs: object) -> object:
+            raise AssertionError("host CPU query was called")
+
+        lowering_boundary.resolve_generation_type_query = fail_on_raw_query  # type: ignore[assignment]
+        lowering_boundary.resolve_generation_value_query = fail_on_raw_query  # type: ignore[assignment]
+        builtins.open = fail_on_file_read  # type: ignore[assignment]
+        os.cpu_count = fail_on_cpu_query  # type: ignore[assignment]
+        platform.processor = fail_on_cpu_query  # type: ignore[assignment]
+        try:
+            with (
+                mock.patch.object(
+                    Path,
+                    "read_text",
+                    side_effect=AssertionError(
+                        "file/catalog/tsldata/backend map read was called"
+                    ),
+                ),
+                mock.patch.object(
+                    Path,
+                    "read_bytes",
+                    side_effect=AssertionError(
+                        "file/catalog/tsldata/backend map read was called"
+                    ),
+                ),
+            ):
+                result = lower_exact_array_initialization_helper_set_completion(
+                    vector_alignment_resolution,
+                )
+        finally:
+            lowering_boundary.resolve_generation_type_query = original_type_query
+            lowering_boundary.resolve_generation_value_query = original_value_query
+            builtins.open = original_open
+            os.cpu_count = original_cpu_count
+            platform.processor = original_processor
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(
+            result.unwrap().unresolved_backend_uninit.policy,
+            "deferred_backend_value",
         )
 
     def test_exact_array_initialization_slot_form_api_uses_envelope_slot_only(

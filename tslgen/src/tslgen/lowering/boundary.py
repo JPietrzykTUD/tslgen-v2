@@ -60,6 +60,7 @@ type GenerationLoweringStageName = Literal[
     "array_initialization_base_type_request_resolution",
     "array_initialization_vector_length_request_resolution",
     "array_initialization_vector_alignment_request_resolution",
+    "array_initialization_helper_set_completion",
 ]
 type ExactArrayInitializationVectorLengthKind = Literal[
     "fixed_lanes",
@@ -135,6 +136,7 @@ type GenerationLoweringStageOutput = (
     | ExactArrayInitializationBaseTypeResolutionIr
     | ExactArrayInitializationVectorLengthResolutionIr
     | ExactArrayInitializationVectorAlignmentResolutionIr
+    | ExactArrayInitializationHelperSetCompletionIr
     | TsilStatement
 )
 
@@ -295,6 +297,26 @@ _EXACT_ARRAY_INITIALIZATION_VECTOR_ALIGNMENT_REQUEST_RULE = (
         helper_leaf_kind="value_generation_vector_alignment",
         expected_leaf_source_text=_EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND[
             "value_generation_vector_alignment"
+        ],
+    )
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _ExactArrayInitializationBackendUninitRequestRule:
+    request_ordinal: int
+    request_kind: Literal["backend_value"]
+    helper_leaf_kind: Literal["value_backend_uninit_array"]
+    expected_leaf_source_text: str
+
+
+_EXACT_ARRAY_INITIALIZATION_BACKEND_UNINIT_REQUEST_RULE = (
+    _ExactArrayInitializationBackendUninitRequestRule(
+        request_ordinal=3,
+        request_kind="backend_value",
+        helper_leaf_kind="value_backend_uninit_array",
+        expected_leaf_source_text=_EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND[
+            "value_backend_uninit_array"
         ],
     )
 )
@@ -2343,6 +2365,225 @@ class ExactArrayInitializationVectorAlignmentResolutionIr:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactArrayInitializationDeferredBackendUninitValue:
+    source_backend_uninit_request: ExactArrayInitializationHelperRequestRecord
+    policy: Literal["deferred_backend_value"]
+    source_location: SourceLocation
+    candidate_id: str
+    target_extension: str
+    source_extension: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+    slot_label: Literal["opaque_pre_branch_array_initialization"]
+    slot_ordinal: int
+    variable_token: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(
+            self.source_backend_uninit_request,
+            ExactArrayInitializationHelperRequestRecord,
+        ):
+            raise TypeError(
+                "array-initialization backend-uninit boundary requires an "
+                "M67 helper-request record"
+            )
+        if self.policy != "deferred_backend_value":
+            raise ValueError(
+                "array-initialization backend-uninit boundary must remain a "
+                "deferred backend-value policy"
+            )
+        request = self.source_backend_uninit_request
+        if (
+            request.request_ordinal != 3
+            or request.request_kind != "backend_value"
+            or request.helper_leaf_kind != "value_backend_uninit_array"
+        ):
+            raise ValueError(
+                "array-initialization backend-uninit boundary requires the "
+                "M67 request with ordinal 3, kind 'backend_value', and leaf "
+                "kind 'value_backend_uninit_array'"
+            )
+        if (
+            request.leaf_source_text
+            != _EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND[
+                "value_backend_uninit_array"
+            ]
+        ):
+            raise ValueError(
+                "array-initialization backend-uninit boundary preserves only "
+                "the exact M67 source text as provenance"
+            )
+        if self.source_location != request.leaf_source_location:
+            raise ValueError(
+                "array-initialization backend-uninit boundary source location "
+                "must match the source M67 request"
+            )
+        if (
+            self.candidate_id != request.candidate_id
+            or self.selected_type_tag != request.selected_type_tag
+            or self.originating_branch_chain_id
+            != request.originating_branch_chain_id
+            or self.slot_label != request.slot_label
+            or self.slot_ordinal != request.slot_ordinal
+            or self.variable_token != request.variable_token
+        ):
+            raise ValueError(
+                "array-initialization backend-uninit boundary provenance must "
+                "match the source M67 request"
+            )
+        if not self.target_extension or not self.source_extension:
+            raise ValueError(
+                "array-initialization backend-uninit boundary requires typed "
+                "target/source extension provenance"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_initialization_deferred_backend_uninit_value",
+            self.source_backend_uninit_request.key,
+            self.policy,
+            self.source_location.sort_key(),
+            self.candidate_id,
+            self.target_extension,
+            self.source_extension,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+            self.slot_label,
+            self.slot_ordinal,
+            self.variable_token,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ExactArrayInitializationHelperSetCompletionIr:
+    source_vector_alignment_resolution: ExactArrayInitializationVectorAlignmentResolutionIr
+    source_vector_length_resolution: ExactArrayInitializationVectorLengthResolutionIr
+    source_base_type_resolution: ExactArrayInitializationBaseTypeResolutionIr
+    source_backend_uninit_request: ExactArrayInitializationHelperRequestRecord
+    unresolved_backend_uninit: ExactArrayInitializationDeferredBackendUninitValue
+    source_location: SourceLocation
+    candidate_id: str
+    target_extension: str
+    source_extension: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+    slot_label: Literal["opaque_pre_branch_array_initialization"]
+    slot_ordinal: int
+    variable_token: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(
+            self.source_vector_alignment_resolution,
+            ExactArrayInitializationVectorAlignmentResolutionIr,
+        ):
+            raise TypeError(
+                "array-initialization helper-set completion requires an M71 "
+                "vector-alignment resolution"
+            )
+        if (
+            self.source_vector_length_resolution
+            is not self.source_vector_alignment_resolution.source_vector_length_resolution
+        ):
+            raise ValueError(
+                "array-initialization helper-set completion must carry the "
+                "accepted M70 vector-length resolution from M71"
+            )
+        if (
+            self.source_base_type_resolution
+            is not self.source_vector_length_resolution.source_base_type_resolution
+        ):
+            raise ValueError(
+                "array-initialization helper-set completion must carry the "
+                "accepted M68 base-type resolution from M70"
+            )
+        if self.source_backend_uninit_request not in (
+            self.source_vector_alignment_resolution.unresolved_requests
+        ):
+            raise ValueError(
+                "array-initialization helper-set completion source "
+                "backend-uninit request must come from the M71 unresolved "
+                "request records"
+            )
+        if (
+            self.unresolved_backend_uninit.source_backend_uninit_request
+            is not self.source_backend_uninit_request
+        ):
+            raise ValueError(
+                "array-initialization helper-set completion backend-uninit "
+                "boundary must reference the selected M67 backend-uninit request"
+            )
+        if (
+            self.source_location
+            != self.source_vector_alignment_resolution.source_location
+        ):
+            raise ValueError(
+                "array-initialization helper-set completion source location "
+                "must match the M71 vector-alignment resolution"
+            )
+        if (
+            self.candidate_id
+            != self.source_vector_alignment_resolution.candidate_id
+            or self.target_extension
+            != self.source_vector_alignment_resolution.target_extension
+            or self.source_extension
+            != self.source_vector_alignment_resolution.source_extension
+            or self.selected_type_tag
+            != self.source_vector_alignment_resolution.selected_type_tag
+            or self.originating_branch_chain_id
+            != self.source_vector_alignment_resolution.originating_branch_chain_id
+            or self.slot_label
+            != self.source_vector_alignment_resolution.slot_label
+            or self.slot_ordinal
+            != self.source_vector_alignment_resolution.slot_ordinal
+            or self.variable_token
+            != self.source_vector_alignment_resolution.variable_token
+        ):
+            raise ValueError(
+                "array-initialization helper-set completion provenance must "
+                "match the M71 vector-alignment resolution"
+            )
+        if (
+            self.unresolved_backend_uninit.candidate_id != self.candidate_id
+            or self.unresolved_backend_uninit.target_extension
+            != self.target_extension
+            or self.unresolved_backend_uninit.source_extension
+            != self.source_extension
+            or self.unresolved_backend_uninit.selected_type_tag
+            != self.selected_type_tag
+            or self.unresolved_backend_uninit.originating_branch_chain_id
+            != self.originating_branch_chain_id
+            or self.unresolved_backend_uninit.slot_label != self.slot_label
+            or self.unresolved_backend_uninit.slot_ordinal != self.slot_ordinal
+            or self.unresolved_backend_uninit.variable_token != self.variable_token
+        ):
+            raise ValueError(
+                "array-initialization helper-set completion backend-uninit "
+                "boundary provenance must match the completed helper set"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_initialization_helper_set_completion_ir",
+            self.source_vector_alignment_resolution.key,
+            self.source_vector_length_resolution.key,
+            self.source_base_type_resolution.key,
+            self.source_backend_uninit_request.key,
+            self.unresolved_backend_uninit.key,
+            self.source_location.sort_key(),
+            self.candidate_id,
+            self.target_extension,
+            self.source_extension,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+            self.slot_label,
+            self.slot_ordinal,
+            self.variable_token,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationValue:
     kind: GenerationValueKind
     value: int
@@ -2443,6 +2684,8 @@ class GenerationLoweringStage:
             expected = (ExactArrayInitializationVectorLengthResolutionIr,)
         elif self.stage == "array_initialization_vector_alignment_request_resolution":
             expected = (ExactArrayInitializationVectorAlignmentResolutionIr,)
+        elif self.stage == "array_initialization_helper_set_completion":
+            expected = (ExactArrayInitializationHelperSetCompletionIr,)
         else:
             raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
         if not isinstance(self.output, expected):
@@ -2487,6 +2730,9 @@ class LoweredImplementation:
     ] = ()
     array_initialization_vector_alignment_resolutions: tuple[
         ExactArrayInitializationVectorAlignmentResolutionIr, ...
+    ] = ()
+    array_initialization_helper_set_completions: tuple[
+        ExactArrayInitializationHelperSetCompletionIr, ...
     ] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
@@ -2571,6 +2817,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "array_initialization_helper_set_completions",
+            tuple(self.array_initialization_helper_set_completions),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -2613,6 +2864,10 @@ class LoweredImplementation:
                 for resolution in (
                     self.array_initialization_vector_alignment_resolutions
                 )
+            ),
+            tuple(
+                completion.key
+                for completion in self.array_initialization_helper_set_completions
             ),
             tuple(stage.key for stage in self.generation_stages),
         )
@@ -3642,6 +3897,123 @@ def lower_exact_array_initialization_vector_alignment_request(
         )
 
 
+def lower_exact_array_initialization_helper_set_completion(
+    source: object,
+    context: GenerationContext | None = None,
+    *,
+    selected_candidate_id: str | None = None,
+    target_extension: str | None = None,
+    source_extension: str | None = None,
+    selected_type_tag: str | None = None,
+) -> Result[ExactArrayInitializationHelperSetCompletionIr]:
+    vector_alignment_result = _array_initialization_helper_set_completion_source(
+        source,
+    )
+    if not vector_alignment_result.is_ok:
+        return Result.failure(vector_alignment_result.diagnostics)
+
+    vector_alignment_resolution = vector_alignment_result.unwrap()
+    diagnostics = _validate_array_initialization_helper_set_completion_provenance(
+        vector_alignment_resolution,
+    )
+    backend_uninit_request = _array_initialization_backend_uninit_request_record(
+        vector_alignment_resolution,
+        diagnostics,
+    )
+    if diagnostics:
+        return Result.failure(sort_diagnostics(tuple(diagnostics)))
+    if backend_uninit_request is None:
+        raise AssertionError(
+            "backend-uninit request diagnostics must be present when missing"
+        )
+
+    generation_context = context or GenerationContext()
+    effective_candidate_id = (
+        selected_candidate_id
+        or generation_context.selected_candidate_id
+        or vector_alignment_resolution.candidate_id
+    )
+    effective_target_extension = (
+        target_extension or vector_alignment_resolution.target_extension
+    )
+    effective_source_extension = (
+        source_extension or vector_alignment_resolution.source_extension
+    )
+    effective_type_tag = (
+        selected_type_tag
+        or generation_context.selected_type_tag
+        or vector_alignment_resolution.selected_type_tag
+    )
+    if (
+        effective_candidate_id != vector_alignment_resolution.candidate_id
+        or effective_target_extension != vector_alignment_resolution.target_extension
+        or effective_source_extension != vector_alignment_resolution.source_extension
+        or effective_type_tag != vector_alignment_resolution.selected_type_tag
+    ):
+        return Result.failure(
+            (
+                _array_initialization_helper_set_context_mismatch_diagnostic(
+                    "array-initialization helper-set completion requires the "
+                    "typed selected candidate context to match the M71 "
+                    "vector-alignment resolution candidate id, target "
+                    "extension, source extension, and selected type tag",
+                    backend_uninit_request.leaf_source_location,
+                ),
+            )
+        )
+
+    try:
+        deferred_backend_uninit = ExactArrayInitializationDeferredBackendUninitValue(
+            source_backend_uninit_request=backend_uninit_request,
+            policy="deferred_backend_value",
+            source_location=backend_uninit_request.leaf_source_location,
+            candidate_id=vector_alignment_resolution.candidate_id,
+            target_extension=vector_alignment_resolution.target_extension,
+            source_extension=vector_alignment_resolution.source_extension,
+            selected_type_tag=vector_alignment_resolution.selected_type_tag,
+            originating_branch_chain_id=(
+                vector_alignment_resolution.originating_branch_chain_id
+            ),
+            slot_label=vector_alignment_resolution.slot_label,
+            slot_ordinal=vector_alignment_resolution.slot_ordinal,
+            variable_token=vector_alignment_resolution.variable_token,
+        )
+        return Result.ok(
+            ExactArrayInitializationHelperSetCompletionIr(
+                source_vector_alignment_resolution=vector_alignment_resolution,
+                source_vector_length_resolution=(
+                    vector_alignment_resolution.source_vector_length_resolution
+                ),
+                source_base_type_resolution=(
+                    vector_alignment_resolution.source_vector_length_resolution
+                    .source_base_type_resolution
+                ),
+                source_backend_uninit_request=backend_uninit_request,
+                unresolved_backend_uninit=deferred_backend_uninit,
+                source_location=vector_alignment_resolution.source_location,
+                candidate_id=vector_alignment_resolution.candidate_id,
+                target_extension=vector_alignment_resolution.target_extension,
+                source_extension=vector_alignment_resolution.source_extension,
+                selected_type_tag=vector_alignment_resolution.selected_type_tag,
+                originating_branch_chain_id=(
+                    vector_alignment_resolution.originating_branch_chain_id
+                ),
+                slot_label=vector_alignment_resolution.slot_label,
+                slot_ordinal=vector_alignment_resolution.slot_ordinal,
+                variable_token=vector_alignment_resolution.variable_token,
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        return Result.failure(
+            (
+                _array_initialization_helper_set_provenance_mismatch_diagnostic(
+                    str(exc),
+                    vector_alignment_resolution.source_location,
+                ),
+            )
+        )
+
+
 def resolve_generation_type_query(
     query_text: str,
     context: GenerationContext | None = None,
@@ -3768,6 +4140,9 @@ class _ExactArrayInitializationStagePipelineResult:
     array_initialization_vector_alignment_resolutions: tuple[
         ExactArrayInitializationVectorAlignmentResolutionIr, ...
     ] = ()
+    array_initialization_helper_set_completions: tuple[
+        ExactArrayInitializationHelperSetCompletionIr, ...
+    ] = ()
     stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -3801,6 +4176,11 @@ class _ExactArrayInitializationStagePipelineResult:
             "array_initialization_vector_alignment_resolutions",
             tuple(self.array_initialization_vector_alignment_resolutions),
         )
+        object.__setattr__(
+            self,
+            "array_initialization_helper_set_completions",
+            tuple(self.array_initialization_helper_set_completions),
+        )
         object.__setattr__(self, "stages", tuple(self.stages))
 
     @property
@@ -3827,6 +4207,10 @@ class _ExactArrayInitializationStagePipelineResult:
                 for resolution in (
                     self.array_initialization_vector_alignment_resolutions
                 )
+            ),
+            tuple(
+                completion.key
+                for completion in self.array_initialization_helper_set_completions
             ),
             tuple(stage.key for stage in self.stages),
         )
@@ -3954,6 +4338,15 @@ def _array_initialization_vector_alignment_resolution_stage(
     )
 
 
+def _array_initialization_helper_set_completion_stage(
+    output: ExactArrayInitializationHelperSetCompletionIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="array_initialization_helper_set_completion",
+        output=output,
+    )
+
+
 def _stage_output_location(
     output: GenerationLoweringStageOutput,
 ) -> SourceLocation | None:
@@ -3983,6 +4376,7 @@ def _stage_output_location(
             ExactArrayInitializationBaseTypeResolutionIr,
             ExactArrayInitializationVectorLengthResolutionIr,
             ExactArrayInitializationVectorAlignmentResolutionIr,
+            ExactArrayInitializationHelperSetCompletionIr,
         ),
     ):
         return output.source_location
@@ -4209,6 +4603,24 @@ def _lower_exact_array_initialization_stage_pipeline(
             vector_alignment_resolution,
         )
     )
+    helper_set_completion_result = lower_exact_array_initialization_helper_set_completion(
+        vector_alignment_resolution,
+        _context_for_candidate(item, request),
+        selected_candidate_id=item.candidate_id,
+        target_extension=item.candidate.target_extension,
+        source_extension=item.candidate.source_extension,
+        selected_type_tag=(
+            item.candidate.type_tag
+            if request.generation_context.use_candidate_type_tag
+            else None
+        ),
+    )
+    if not helper_set_completion_result.is_ok:
+        return Result.failure(helper_set_completion_result.diagnostics)
+    helper_set_completion = helper_set_completion_result.unwrap()
+    helper_set_completion_stage = _array_initialization_helper_set_completion_stage(
+        helper_set_completion,
+    )
 
     return Result.ok(
         _ExactArrayInitializationStagePipelineResult(
@@ -4224,6 +4636,9 @@ def _lower_exact_array_initialization_stage_pipeline(
             array_initialization_vector_alignment_resolutions=(
                 vector_alignment_resolution,
             ),
+            array_initialization_helper_set_completions=(
+                helper_set_completion,
+            ),
             stages=(
                 array_body_stage,
                 array_initialization_slot_form_stage,
@@ -4231,6 +4646,7 @@ def _lower_exact_array_initialization_stage_pipeline(
                 base_type_resolution_stage,
                 vector_length_resolution_stage,
                 vector_alignment_resolution_stage,
+                helper_set_completion_stage,
             ),
         )
     )
@@ -4710,6 +5126,72 @@ def _array_initialization_vector_alignment_resolution_source(
                 "ExactArrayInitializationVectorLengthResolutionIr values or "
                 "array_initialization_vector_length_request_resolution stage "
                 "output",
+                None,
+            ),
+        )
+    )
+
+
+def _array_initialization_helper_set_completion_source(
+    source: object,
+) -> Result[ExactArrayInitializationVectorAlignmentResolutionIr]:
+    if isinstance(source, ExactArrayInitializationVectorAlignmentResolutionIr):
+        return Result.ok(source)
+    if isinstance(source, GenerationLoweringStage):
+        if (
+            source.stage == "array_initialization_vector_alignment_request_resolution"
+            and isinstance(source.output, ExactArrayInitializationVectorAlignmentResolutionIr)
+        ):
+            return Result.ok(source.output)
+        return Result.failure(
+            (
+                _array_initialization_helper_set_source_unsupported_diagnostic(
+                    "array-initialization helper-set completion consumes typed "
+                    "M71 ExactArrayInitializationVectorAlignmentResolutionIr "
+                    "values, the "
+                    "array_initialization_vector_alignment_request_resolution "
+                    "stage output, or a LoweredImplementation with a matching "
+                    "M71 vector-alignment resolution",
+                    _stage_output_location(source.output),
+                ),
+            )
+        )
+    if isinstance(source, LoweredImplementation):
+        if len(source.array_initialization_vector_alignment_resolutions) == 1:
+            return Result.ok(
+                source.array_initialization_vector_alignment_resolutions[0]
+            )
+        if len(source.array_initialization_vector_alignment_resolutions) == 0:
+            return Result.failure(
+                (
+                    _array_initialization_helper_set_missing_ir_diagnostic(
+                        "array-initialization helper-set completion requires "
+                        "a LoweredImplementation carrying an accepted M71 "
+                        "array_initialization_vector_alignment_resolutions "
+                        "entry",
+                        _lowered_implementation_location(source),
+                    ),
+                )
+            )
+        return Result.failure(
+            (
+                _array_initialization_helper_set_multiple_ir_diagnostic(
+                    "array-initialization helper-set completion requires "
+                    "exactly one M71 "
+                    "array_initialization_vector_alignment_resolutions entry; "
+                    f"got {len(source.array_initialization_vector_alignment_resolutions)}",
+                    _lowered_implementation_location(source),
+                ),
+            )
+        )
+    return Result.failure(
+        (
+            _array_initialization_helper_set_source_unsupported_diagnostic(
+                "array-initialization helper-set completion consumes only "
+                "typed M71 ExactArrayInitializationVectorAlignmentResolutionIr "
+                "values or "
+                "array_initialization_vector_alignment_request_resolution "
+                "stage output",
                 None,
             ),
         )
@@ -5403,6 +5885,191 @@ def _array_initialization_vector_alignment_metadata_for_context(
             )
         )
     return Result.ok(matches[0])
+
+
+def _validate_array_initialization_helper_set_completion_provenance(
+    vector_alignment_resolution: ExactArrayInitializationVectorAlignmentResolutionIr,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    vector_length_resolution = (
+        vector_alignment_resolution.source_vector_length_resolution
+    )
+    if vector_alignment_resolution.source_vector_alignment_request not in (
+        vector_length_resolution.unresolved_requests
+    ):
+        diagnostics.append(
+            _array_initialization_helper_set_provenance_mismatch_diagnostic(
+                "M71 vector-alignment resolution source request must come "
+                "from its M70 vector-length resolution",
+                vector_alignment_resolution.source_location,
+            )
+        )
+    if vector_alignment_resolution.source_location != (
+        vector_length_resolution.source_location
+    ):
+        diagnostics.append(
+            _array_initialization_helper_set_provenance_mismatch_diagnostic(
+                "M71 vector-alignment resolution source location must match "
+                "its M70 vector-length resolution",
+                vector_alignment_resolution.source_location,
+            )
+        )
+    if (
+        vector_alignment_resolution.candidate_id
+        != vector_length_resolution.candidate_id
+        or vector_alignment_resolution.target_extension
+        != vector_length_resolution.target_extension
+        or vector_alignment_resolution.source_extension
+        != vector_length_resolution.source_extension
+        or vector_alignment_resolution.selected_type_tag
+        != vector_length_resolution.selected_type_tag
+        or vector_alignment_resolution.originating_branch_chain_id
+        != vector_length_resolution.originating_branch_chain_id
+    ):
+        diagnostics.append(
+            _array_initialization_helper_set_provenance_mismatch_diagnostic(
+                "M71 vector-alignment resolution provenance must match its "
+                "M70 vector-length resolution",
+                vector_alignment_resolution.source_location,
+            )
+        )
+    if (
+        vector_alignment_resolution.slot_label
+        != vector_length_resolution.slot_label
+        or vector_alignment_resolution.slot_ordinal
+        != vector_length_resolution.slot_ordinal
+        or vector_alignment_resolution.variable_token
+        != vector_length_resolution.variable_token
+    ):
+        diagnostics.append(
+            _array_initialization_helper_set_provenance_mismatch_diagnostic(
+                "M71 vector-alignment resolution slot provenance must match "
+                "its M70 vector-length resolution",
+                vector_alignment_resolution.source_location,
+            )
+        )
+    for request in vector_alignment_resolution.unresolved_requests:
+        if request.source_form != (
+            vector_length_resolution.source_base_type_resolution
+            .source_request_ir.source_form
+        ):
+            diagnostics.append(
+                _array_initialization_helper_set_provenance_mismatch_diagnostic(
+                    "M71 unresolved request record source form must match the "
+                    "source M67 helper-request IR",
+                    request.leaf_source_location,
+                )
+            )
+        if request.source_envelope != (
+            vector_length_resolution.source_base_type_resolution
+            .source_request_ir.source_envelope
+        ):
+            diagnostics.append(
+                _array_initialization_helper_set_provenance_mismatch_diagnostic(
+                    "M71 unresolved request record envelope must match the "
+                    "source M67 helper-request IR",
+                    request.leaf_source_location,
+                )
+            )
+        if (
+            request.candidate_id != vector_alignment_resolution.candidate_id
+            or request.selected_type_tag
+            != vector_alignment_resolution.selected_type_tag
+            or request.originating_branch_chain_id
+            != vector_alignment_resolution.originating_branch_chain_id
+            or request.slot_label != vector_alignment_resolution.slot_label
+            or request.slot_ordinal != vector_alignment_resolution.slot_ordinal
+            or request.variable_token != vector_alignment_resolution.variable_token
+        ):
+            diagnostics.append(
+                _array_initialization_helper_set_provenance_mismatch_diagnostic(
+                    "M71 unresolved request record provenance must match the "
+                    "source vector-alignment resolution",
+                    request.leaf_source_location,
+                )
+            )
+    return diagnostics
+
+
+def _array_initialization_backend_uninit_request_record(
+    vector_alignment_resolution: ExactArrayInitializationVectorAlignmentResolutionIr,
+    diagnostics: list[Diagnostic],
+) -> ExactArrayInitializationHelperRequestRecord | None:
+    rule = _EXACT_ARRAY_INITIALIZATION_BACKEND_UNINIT_REQUEST_RULE
+    backend_uninit_records = tuple(
+        request
+        for request in vector_alignment_resolution.unresolved_requests
+        if request.helper_leaf_kind == rule.helper_leaf_kind
+    )
+    if not backend_uninit_records:
+        ordinal_or_kind_records = tuple(
+            request
+            for request in vector_alignment_resolution.unresolved_requests
+            if (
+                request.request_ordinal == rule.request_ordinal
+                or request.request_kind == rule.request_kind
+            )
+        )
+        if ordinal_or_kind_records:
+            for request in ordinal_or_kind_records:
+                diagnostics.append(
+                    _array_initialization_helper_set_mismatch_diagnostic(
+                        "array-initialization helper-set completion expected "
+                        "the M67 backend-uninit request to carry ordinal "
+                        f"{rule.request_ordinal}, kind {rule.request_kind!r}, "
+                        f"and leaf kind {rule.helper_leaf_kind!r}; got "
+                        f"ordinal {request.request_ordinal}, kind "
+                        f"{request.request_kind!r}, and leaf kind "
+                        f"{request.helper_leaf_kind!r}",
+                        request.leaf_source_location,
+                    )
+                )
+            return None
+        diagnostics.append(
+            _array_initialization_helper_set_missing_request_diagnostic(
+                "array-initialization helper-set completion requires one M67 "
+                "backend-uninit request record preserved by M71",
+                vector_alignment_resolution.source_location,
+            )
+        )
+        return None
+    if len(backend_uninit_records) > 1:
+        for request in backend_uninit_records:
+            diagnostics.append(
+                _array_initialization_helper_set_duplicate_request_diagnostic(
+                    "array-initialization helper-set completion requires "
+                    "exactly one M67 backend-uninit request record; duplicate "
+                    f"record appeared at ordinal {request.request_ordinal}",
+                    request.leaf_source_location,
+                )
+            )
+        return None
+
+    backend_uninit_request = backend_uninit_records[0]
+    if (
+        backend_uninit_request.request_ordinal != rule.request_ordinal
+        or backend_uninit_request.request_kind != rule.request_kind
+    ):
+        diagnostics.append(
+            _array_initialization_helper_set_mismatch_diagnostic(
+                "array-initialization helper-set completion expected ordinal "
+                f"{rule.request_ordinal} and kind {rule.request_kind!r}; got "
+                f"ordinal {backend_uninit_request.request_ordinal} and kind "
+                f"{backend_uninit_request.request_kind!r}",
+                backend_uninit_request.leaf_source_location,
+            )
+        )
+    if backend_uninit_request.leaf_source_text != rule.expected_leaf_source_text:
+        diagnostics.append(
+            _array_initialization_helper_set_unsupported_request_diagnostic(
+                "array-initialization helper-set completion preserves the M67 "
+                "backend-uninit leaf source text only as provenance and "
+                "accepts only the exact M67 backend-uninit leaf text for that "
+                f"typed request; got {backend_uninit_request.leaf_source_text!r}",
+                backend_uninit_request.leaf_source_location,
+            )
+        )
+    return backend_uninit_request
 
 
 def _array_initialization_leaf(
@@ -6109,6 +6776,105 @@ def _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
     )
 
 
+def _array_initialization_helper_set_source_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-SET-SOURCE-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_helper_set_missing_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-SET-IR-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_helper_set_multiple_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-SET-IR-MULTIPLE",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_helper_set_missing_request_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-SET-BACKEND-UNINIT-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_helper_set_duplicate_request_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-SET-BACKEND-UNINIT-DUPLICATE",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_helper_set_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-SET-BACKEND-UNINIT-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_helper_set_unsupported_request_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-SET-BACKEND-UNINIT-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_helper_set_context_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-SET-CONTEXT-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_helper_set_provenance_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-HELPER-SET-PROVENANCE-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
 def _duplicate_array_body_envelope_skeleton_diagnostic(
     lookup_key: ExactArrayBodyEnvelopeSkeletonKey,
     skeleton: ExactArrayBodyEnvelopeSkeleton,
@@ -6674,6 +7440,9 @@ def _lower_input(
                     ),
                     array_initialization_vector_alignment_resolutions=(
                         array_initialization_pipeline.array_initialization_vector_alignment_resolutions
+                    ),
+                    array_initialization_helper_set_completions=(
+                        array_initialization_pipeline.array_initialization_helper_set_completions
                     ),
                     generation_stages=(
                         _recognition_stage(

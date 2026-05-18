@@ -522,10 +522,10 @@ length, vector bits, scalar byte size, selected type tags, SVE token text,
 extension names, host CPU state, catalog data, backend translation maps,
 backend vector-alignment spellings, or renderers.
 
-Milestone 72 is selected as the next Stage 8 helper-set completion boundary.
-It should consume the accepted M71 vector-alignment resolution, identify the
+Milestone 72 is implemented as the Stage 8 helper-set completion boundary. It
+consumes the accepted M71 vector-alignment resolution, identifies the
 remaining exact M67 `value<backend>(uninit::array)` request by typed request
-fields, and produce one typed aggregate helper-set IR after
+fields, and produces one typed aggregate helper-set IR after
 `array_initialization_vector_alignment_request_resolution`. The backend-uninit
 request remains a deferred backend-value boundary; Stage 8 must not translate
 it, render it, query backend maps, lower declarations/arrays, or emit output.

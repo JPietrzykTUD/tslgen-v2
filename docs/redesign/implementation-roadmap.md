@@ -7741,7 +7741,7 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance after post-M71 planning.
+Accepted after M72 execution review.
 
 Goal:
 
@@ -7914,8 +7914,6 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m71-acceptance-finalization-prompt.md` is created and
-  active pending human acceptance. That finalization prompt will create
-  `docs/agent/runs/m72-execution-review-loop-prompt.md` after explicit human
-  acceptance. Do not start M72 until the acceptance-finalization prompt records
-  acceptance.
+- `docs/agent/runs/post-m72-planning-plus-review-prompt.md` is created for the
+  next lowering-focused planning pass. Do not start Milestone 73 until a
+  post-M72 plan is accepted.

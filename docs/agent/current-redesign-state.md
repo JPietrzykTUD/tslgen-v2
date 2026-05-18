@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 71 is accepted.
+Milestone 72 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -236,42 +236,52 @@ array-initialization helper set as typed lowering state while keeping the
 remaining `value<backend>(uninit::array)` request as a typed deferred
 backend-value boundary. It must not add backend translation, rendering,
 generated output, or declaration/array semantics. Human acceptance has been
-recorded; M72 execution is the next action.
+recorded; M72 execution was the next action.
+
+The M72 execution-review loop returned `Accept With Follow-Ups` after focused
+documentation consistency revisions. Review and audit found no blocking
+implementation, validation, boundary, extensibility, documentation, or
+evidence issues after those revisions. M72 completes the exact first
+array-initialization helper set as typed lowering state by packaging accepted
+M68 base type, accepted M70 vector length, accepted M71 vector alignment, and
+the remaining exact M67 `value<backend>(uninit::array)` request as a typed
+deferred backend-value boundary. Backend translation, rendering, generated
+output, and declaration/array semantics remain out of scope.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 72.
+Run post-M72 planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m72-execution-review-loop-prompt.md
+docs/agent/runs/post-m72-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 72: Exact Array Initialization Helper-Set Completion IR Slice
+None. Post-M72 planning is active.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M71 planning selected M72 and returned Accept With Follow-Ups after a
-focused workflow handoff correction. Human acceptance is recorded; M72
-execution is the next action.
+The M72 execution-review loop returned Accept With Follow-Ups after focused
+documentation consistency revisions. Human acceptance is not yet recorded for
+the next milestone; post-M72 planning is the next action.
 ```
 
 Next expected action:
 
 ```text
-Run the active M72 execution-review loop prompt. Use exactly one write-capable
-executor if M72 is not already implemented, then read-only review/audit
-subagents. Do not start M73.
+Run the active post-M72 planning-plus-review prompt. For the next task, focus
+on lowering. Use the specified read-only planning/review subagents, do not
+implement product code, and do not start M73 execution.
 ```
 
 Accepted planning prompt:
@@ -700,10 +710,16 @@ Accepted post-M71 acceptance finalization prompt:
 docs/agent/runs/post-m71-acceptance-finalization-prompt.md
 ```
 
-Active M72 execution-review loop prompt:
+Accepted M72 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m72-execution-review-loop-prompt.md
+```
+
+Active post-M72 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m72-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1254,9 +1270,9 @@ docs/agent/runs/m72-execution-review-loop-prompt.md
   generated tests, CLI/report/writer behavior, Rust, compiler execution, broad
   TSIL parsing, lowering-time file/catalog reads, `tsldata` reads during
   lowering evaluation, host CPU queries, or runtime `frozen/` use.
-- M72 is accepted for execution as exact array-initialization
-  helper-set completion IR only. M72 must consume accepted M71
-  vector-alignment resolution values and package the exact helper set into one
+- M72 is accepted as exact array-initialization helper-set completion IR only.
+  M72 consumes accepted M71
+  vector-alignment resolution values and packages the exact helper set into one
   typed aggregate: accepted M68 base type, accepted M70 vector length,
   accepted M71 vector alignment, and the remaining exact M67
   `value<backend>(uninit::array)` request.
@@ -2036,10 +2052,28 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - Post-M71 planning follow-up addressed during planning: stale M71
   pre-acceptance wording was updated across the redesign docs while preserving
   historical prior-planning context where appropriate.
+- M72 execution addressed the post-M71 helper-set follow-ups: review verified
+  typed M67/M68/M70/M71 request/result consumption, a typed deferred
+  backend-uninit boundary, unchanged M68/M69/M70/M71 behavior, no backend
+  translation/rendering/generated-output expansion, and no declaration/array
+  semantics.
+- M72 documentation revision follow-up addressed during the execution-review
+  loop: stale M72 prospective wording was updated across redesign docs,
+  including roadmap and parity-baseline handoff wording, while preserving the
+  helper-set-only boundary.
+- M72 review follow-up: the generic unsupported-source diagnostic for
+  `lower_exact_array_initialization_helper_set_completion` omits the accepted
+  `LoweredImplementation` source form from its final fallback wording. Review
+  found this diagnostic wording issue non-blocking because the
+  `LoweredImplementation` branch is implemented and tested.
+- M72 extensibility follow-up: `GenerationLoweringStage.__post_init__` remains
+  a central stage-name-to-output-type validation table. It is not semantic
+  dispatch, but the table is a growing maintainability pressure point before
+  many more stages accumulate.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with M72 execution.
+No stop condition is active. The workflow proceeds with post-M72 planning.
 
 ## Validation Expectations
 

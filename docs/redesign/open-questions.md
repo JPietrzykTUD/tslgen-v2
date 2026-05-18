@@ -208,9 +208,9 @@ vector-length metadata as a typed value/policy or diagnose unsupported numeric
 resolution, but it must not assume a fixed SVE lane count or decide SVE
 backend/test generation policy. The accepted M71 vector-alignment slice is
 similarly limited to explicit typed alignment metadata for the exact
-array-initialization request. The selected M72 helper-set completion slice may
-preserve backend uninit as a typed deferred boundary for that exact request,
-but it must not decide broad SVE alignment, register, backend-uninit
+array-initialization request. The accepted M72 helper-set completion slice
+preserves backend uninit as a typed deferred boundary for that exact request,
+but it does not decide broad SVE alignment, register, backend-uninit
 translation, rendering, or test-generation policy.
 
 ## OQ-008: Which CLI Compatibility Is Required?
@@ -1322,7 +1322,7 @@ while preserving behavior. Milestone 70 is accepted to resolve only the exact
 `value<generation>(vector::length)` request from explicit typed metadata
 through that extracted pipeline. Milestone 71 is accepted to resolve only the
 exact `value<generation>(vector::alignment)` request from explicit typed
-metadata through the same staged pipeline. Milestone 72 is selected to package
+metadata through the same staged pipeline. Milestone 72 is accepted to package
 the exact helper set and preserve the remaining
 `value<backend>(uninit::array)` request as a typed deferred backend-value
 boundary. It still leaves backend uninit translation, declaration/array
@@ -1345,7 +1345,7 @@ narrow structural slot envelope, accepted M65 pipeline integration, accepted
 M67 helper-request/provenance IR over the M66 first-slot leaves, accepted M68
 base-type request resolution, accepted M69 behavior-preserving extraction,
 accepted M70 exact vector-length request resolution, accepted M71 exact
-vector-alignment request resolution, selected M72 exact helper-set completion,
+vector-alignment request resolution, accepted M72 exact helper-set completion,
 and body-slot semantics beyond those request-resolution boundaries, including
 nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and

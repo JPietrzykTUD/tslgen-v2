@@ -865,7 +865,7 @@ Recommended first parity checks:
   backend uninit request, no raw helper parsing or raw query evaluator calls
   on M67 leaf text, no catalog/`tsldata`/host CPU reads during lowering
   evaluation, and no backend translation/rendering or generated-output churn.
-- Milestone 72 tests should prove exact array-initialization helper-set
+- Milestone 72 tests prove exact array-initialization helper-set
   completion without backend translation: direct aggregate tests from accepted
   M71 resolution, normal `lower_candidates` stage-order tests after
   `array_initialization_vector_alignment_request_resolution`, typed

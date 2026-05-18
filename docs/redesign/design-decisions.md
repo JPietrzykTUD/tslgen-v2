@@ -1405,8 +1405,8 @@ Consequences:
   alignment from vector length, vector bits, scalar byte size, selected type
   tags, SVE token text, extension names, host CPU state, catalog data, backend
   maps, backend vector-alignment spellings, or renderer names.
-- Milestone 72 is selected to complete the exact array-initialization helper
-  set before declaration/array semantics. The selected design condition is
+- Milestone 72 is accepted to complete the exact array-initialization helper
+  set before declaration/array semantics. The accepted design condition is
   that M72 packages accepted M68/M70/M71 results and the remaining exact M67
   `value<backend>(uninit::array)` request into one typed aggregate, while
   preserving backend uninit only as a deferred backend-value request boundary.
