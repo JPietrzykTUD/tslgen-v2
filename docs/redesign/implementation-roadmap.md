@@ -7004,7 +7004,8 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance after post-M67 planning.
+Implemented and accepted with non-blocking follow-ups after the M68
+execution-review loop.
 
 Goal:
 

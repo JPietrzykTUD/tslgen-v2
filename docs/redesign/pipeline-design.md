@@ -483,11 +483,11 @@ container/source. It should append a distinct helper-request stage after
 unresolved helper leaves into typed deferred request records. It must not
 evaluate helper values, create backend translation requests, or broaden body
 lowering.
-Milestone 68 is selected as the next Stage 8 request-resolution boundary over
-M67 request IR. It may consume the direct M67 helper-request IR, the
+Milestone 68 is accepted as the next Stage 8 request-resolution boundary over
+M67 request IR. It consumes the direct M67 helper-request IR, the
 `array_initialization_helper_request_lowering` stage output, or a typed
 `LoweredImplementation` carrying exactly one accepted M67 helper-request IR as
-a container/source. It should append a distinct base-type request-resolution
+a container/source. It appends a distinct base-type request-resolution
 stage after `array_initialization_helper_request_lowering` and resolve only
 the M67 `type<generation>(base::in)` request into a typed base-type result. It
 must not resolve vector length, vector alignment, or backend uninit requests,

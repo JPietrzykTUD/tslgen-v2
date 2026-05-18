@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 67 is accepted.
+Milestone 68 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -176,40 +176,45 @@ and internal review returned `Accept With Follow-Ups` for the selected slice
 after identifying a workflow handoff correction. Human acceptance included the
 condition that M68 must avoid hardwiring.
 
+The M68 execution-review loop returned `Accept With Follow-Ups` after one
+focused documentation revision documenting the M68 diagnostics. Review and
+audit found no blocking implementation, validation, boundary, evidence, or
+documentation issues after that revision.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 68.
+Plan the next lowering-focused milestone after M68.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m68-execution-review-loop-prompt.md
+docs/agent/runs/post-m68-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 68: Exact Array Initialization Base-Type Helper Request Resolution Slice
+None. The next task is post-M68 planning.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M67 planning returned Accept With Follow-Ups after selecting M68 and
-identifying a workflow handoff correction. Human acceptance is recorded with
-the condition that M68 must avoid hardwiring.
+M68 execution-review returned Accept With Follow-Ups after one focused
+documentation revision. No hardwiring, raw helper dispatch, vector/backend
+scope creep, renderer evaluation, or generated-output changes were found.
 ```
 
 Next expected action:
 
 ```text
-Run the active M68 execution-review loop prompt with one write-capable
-executor if M68 is not already implemented, then read-only review/audit
-subagents. Do not start M69.
+Run the active post-M68 planning-plus-review prompt. Focus the next candidate
+on lowering, use the specified planning/review subagents, and do not implement
+code or start M69 execution.
 ```
 
 Accepted planning prompt:
@@ -566,10 +571,16 @@ Accepted post-M67 acceptance finalization prompt:
 docs/agent/runs/post-m67-acceptance-finalization-prompt.md
 ```
 
-Active M68 execution-review loop prompt:
+Accepted M68 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m68-execution-review-loop-prompt.md
+```
+
+Active post-M68 planning prompt:
+
+```text
+docs/agent/runs/post-m68-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1019,7 +1030,7 @@ docs/agent/runs/m68-execution-review-loop-prompt.md
   variable scope, store/return lowering, `tmp.data()`, `emit_return`,
   direct-intrinsic/SVE semantics, broad TSIL parsing, file/catalog reads during
   lowering, raw-text dispatch tables, or runtime `frozen/` use.
-- M68 is accepted for execution as exact array-initialization base-type helper
+- M68 is accepted as exact array-initialization base-type helper
   request resolution only. M68 must consume accepted M67
   `ExactArrayInitializationHelperRequestIr` values, the
   `array_initialization_helper_request_lowering` stage output, or a typed
@@ -1711,10 +1722,29 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - Post-M67 planning follow-up for M68 execution: do not use `Catalog`, file
   reads, `tsldata`, or `frozen/` during lowering evaluation; selected type
   context and rules must arrive through typed lowering request/context inputs.
+- M68 execution addressed the post-M67 no-hardwiring and no-raw-helper
+  follow-ups: review verified typed M67 request consumption, typed
+  rule/context inputs, no raw M67 leaf-text evaluation, no backend/rendering
+  expansion, and unresolved vector/backend requests preserved.
+- M68 documentation revision follow-up addressed during the execution-review
+  loop: document the new
+  `TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-*` diagnostic codes and inherited
+  unsupported selected-type diagnostic path.
+- M68 extensibility follow-up: before adding vector/backend helper resolver
+  stages, consider extracting the growing M64-M68 `_lower_input` array-body
+  stage assembly tail into a small typed array-initialization stage helper so
+  future stages do not keep adding locals and stage appends in one function.
+- M68 extensibility follow-up: `GenerationLoweringStage.__post_init__` remains
+  a central stage-name-to-output-type `elif` table. Review found this is type
+  validation rather than semantic dispatch, but it is a future maintainability
+  pressure point as more stages are added.
+- M68 extensibility follow-up: `_ExactArrayInitializationBaseTypeRequestRule`
+  has an unused `result_kind`; remove it or let the typed rule drive the
+  result-kind invariant before adding sibling vector/backend resolver rules.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with M68 execution.
+No stop condition is active. The workflow proceeds with post-M68 planning.
 
 ## Validation Expectations
 

@@ -1299,7 +1299,7 @@ IR over accepted M65 envelopes. It still leaves vector metadata, backend
 uninit evaluation, broad declaration/array semantics, store/return semantics,
 SVE/direct-intrinsic semantics, translation, and rendering open.
 Milestone 67 is accepted to classify exactly the four M66 helper leaves into
-typed deferred helper-request/provenance IR. Milestone 68 is selected to
+typed deferred helper-request/provenance IR. Milestone 68 is accepted to
 resolve only the exact M67 base-type request for
 `type<generation>(base::in)` through typed request IR and accepted
 M43/M52/M53/M54 base-type semantics. It still does not evaluate vector
@@ -1320,7 +1320,7 @@ M59 slice over those predicates, selected body handling beyond the accepted
 opaque M60 handoff, M61 assignment-form recognition slice, accepted M62
 unresolved body-IR shape, accepted M63 singleton envelope shape, accepted M64
 narrow structural slot envelope, accepted M65 pipeline integration, accepted
-M67 helper-request/provenance IR over the M66 first-slot leaves, selected M68
+M67 helper-request/provenance IR over the M66 first-slot leaves, accepted M68
 base-type request resolution, and body-slot semantics beyond that base-type
 request boundary, including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and

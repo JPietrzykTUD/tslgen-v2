@@ -535,7 +535,7 @@ kind, source text, source locations, candidate/type/envelope provenance, slot
 ordinal, branch-chain identity, and variable token `tmp`, but it does not
 evaluate, resolve, translate, normalize, or render any helper.
 
-Milestone 68 is selected as the exact array-initialization base-type helper
+Milestone 68 is accepted as the exact array-initialization base-type helper
 request resolution slice. It consumes accepted M67
 `ExactArrayInitializationHelperRequestIr` values, the
 `array_initialization_helper_request_lowering` stage, or a typed
@@ -635,19 +635,51 @@ M67 diagnostics:
   selected type tag, branch-chain identity, envelope identity, slot ordinal, or
   variable-token provenance required by the request boundary.
 
+M68 diagnostics:
+
+- `TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-SOURCE-UNSUPPORTED`: base-type
+  request resolution was invoked with something other than an accepted M67
+  `ExactArrayInitializationHelperRequestIr`, the
+  `array_initialization_helper_request_lowering` stage output, or a typed
+  `LoweredImplementation` carrying the accepted M67 helper-request IR.
+- `TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-IR-MISSING`: a
+  `LoweredImplementation` source does not carry an accepted M67 helper-request
+  IR.
+- `TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-IR-MULTIPLE`: a
+  `LoweredImplementation` source carries more than one M67 helper-request IR
+  at the M68 request-resolution boundary.
+- `TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-MISSING`: the accepted M67 request
+  IR does not contain the required base-type request record.
+- `TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-DUPLICATE`: the M67 request IR
+  contains more than one base-type request record.
+- `TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-MISMATCH`: the selected M67
+  base-type request record does not carry the expected ordinal `0`, request
+  kind `generation_type`, and helper leaf kind `type_generation_base_in`.
+- `TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-UNSUPPORTED`: the selected M67
+  base-type request record does not preserve the exact accepted
+  `type<generation>(base::in)` leaf text as provenance/invariant evidence.
+- `TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-PROVENANCE-MISMATCH`: the M67
+  helper-request IR, source form, source request record, or resolved
+  base-type result disagree on candidate id, selected type tag, branch-chain
+  identity, envelope identity, slot ordinal, variable token, source location,
+  or remaining unresolved request provenance.
+
+M68 also reuses the existing generation-type diagnostics, such as
+`TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED`, when the selected typed base type cannot
+be resolved through the accepted concrete integer generation rule inputs.
+
 ## Explicit Deferrals
 
-Deferred beyond the implemented M43-M67 semantic-lowering, structural
+Deferred beyond the implemented M43-M68 semantic-lowering, structural
 slot-assembly, pipeline-integration, exact array-initialization slot form IR,
-and M67 helper-request IR slices, plus selected M68 base-type request
-resolution:
+M67 helper-request IR, and accepted M68 base-type request resolution slices:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
   types, generic vector lengths, aliases, and non-selected base forms.
 - Generation-time value queries other than the M55 scalar
   size-bytes form, including vector length, vector alignment, mask lane
-  constants, and generic lengths. Selected M67 may classify the exact M66
+  constants, and generic lengths. Accepted M67 classifies the exact M66
   vector length/alignment leaves as deferred helper-request records, but it
   must not resolve their values.
 - Arithmetic over generation values remains deferred except for the accepted
@@ -662,8 +694,8 @@ resolution:
   only exact structural array-body slot assembly around M63 envelopes, and
   accepted M65 wires that typed envelope into the normal lowering pipeline
   without adding skeleton recognition or slot semantics. M66 refines only the
-  exact first array-initialization slot into typed form IR. Selected M67 may
-  classify the four M66 helper leaves into typed deferred request/provenance
+  exact first array-initialization slot into typed form IR. Accepted M67
+  classifies the four M66 helper leaves into typed deferred request/provenance
   IR, while keeping helper evaluation and other slots deferred. General
   `else if<generation>` syntax, final-else policy, broad branch pruning based
   on generation values, assignment semantics beyond that selected IR shape,
@@ -671,7 +703,7 @@ resolution:
   length/alignment semantics, backend uninit semantics, surrounding
   declaration/store/return semantics beyond the exact M66 form,
   skeleton recognition from raw body text, and broad body lowering remain
-  deferred. Selected M68 narrows only the exact M67 base-type request; vector
+  deferred. Accepted M68 narrows only the exact M67 base-type request; vector
   length/alignment and backend uninit request resolution remain deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`

@@ -441,8 +441,8 @@ Current roadmap note:
   deferred helper-request records for the four exact M66 leaves. It must not
   evaluate helper values, call backend translation, parse raw slot text, or
   add declaration/array/store/return semantics.
-- Milestone 68 is selected as the first request-resolution boundary over M67
-  request IR. It should consume only `ExactArrayInitializationHelperRequestIr`,
+- Milestone 68 is accepted as the first request-resolution boundary over M67
+  request IR. It consumes only `ExactArrayInitializationHelperRequestIr`,
   the corresponding stage output, or a typed `LoweredImplementation` carrying
   exactly one accepted M67 helper-request IR as a container/source, then
   resolve exactly the base-type request into a typed result equivalent to

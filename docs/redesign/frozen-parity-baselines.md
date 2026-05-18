@@ -337,7 +337,7 @@ and still does not add compiler execution.
   accepted M62 unresolved body-IR shape plus accepted M63 singleton envelope
   shape, accepted M64 exact structural slot envelope, accepted M65
   pipeline integration for that envelope, accepted M67 helper-request/
-  provenance IR over the accepted M66 exact first-slot form, selected M68
+  provenance IR over the accepted M66 exact first-slot form, accepted M68
   base-type request resolution over that request IR, broad TSIL/body-slot
   parity beyond that base-type request boundary, and backend
   translation-map evaluation beyond the selected M40/M45/M46 requests.

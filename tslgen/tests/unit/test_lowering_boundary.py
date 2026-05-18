@@ -6,6 +6,7 @@ from pathlib import Path, PurePosixPath
 import unittest
 
 from _helpers import assert_diagnostic
+import tslgen.lowering.boundary as lowering_boundary
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
 from tslgen.analysis.selection import SelectionRequest, plan_selection
 from tslgen.config.model import SourceConfig
@@ -25,6 +26,7 @@ from tslgen.lowering import (
     ExactArrayBodyEnvelopeSkeleton,
     ExactArrayBodyEnvelopeSkeletonRequirement,
     ExactArrayBodyEnvelopeSkeletonSlot,
+    ExactArrayInitializationBaseTypeResolutionIr,
     ExactArrayInitializationHelperRequestIr,
     ExactArrayInitializationHelperRequestRecord,
     ExactArrayInitializationSlotFormIr,
@@ -58,6 +60,7 @@ from tslgen.lowering import (
     build_catalog_lowering_request,
     handoff_opaque_selected_branch_body,
     lower_candidates,
+    lower_exact_array_initialization_base_type_request,
     lower_exact_array_initialization_helper_requests,
     lower_exact_array_initialization_slot_form,
     lower_selected_branch_body_ir,
@@ -955,6 +958,23 @@ class LoweringBoundaryTests(unittest.TestCase):
         if not result.is_ok:
             raise AssertionError(result.diagnostics)
         return result.unwrap()
+
+    def exact_array_initialization_helper_request_ir(
+        self,
+        *,
+        selected_type_tag: str = "si16",
+    ) -> ExactArrayInitializationHelperRequestIr:
+        slot_form_result = lower_exact_array_initialization_slot_form(
+            self.exact_array_body_envelope(selected_type_tag=selected_type_tag),
+        )
+        if not slot_form_result.is_ok:
+            raise AssertionError(slot_form_result.diagnostics)
+        helper_request_result = lower_exact_array_initialization_helper_requests(
+            slot_form_result.unwrap(),
+        )
+        if not helper_request_result.is_ok:
+            raise AssertionError(helper_request_result.diagnostics)
+        return helper_request_result.unwrap()
 
     def test_prepares_typed_lowering_inputs_from_selected_candidates(self) -> None:
         referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
@@ -3367,6 +3387,7 @@ class LoweringBoundaryTests(unittest.TestCase):
             self.exact_array_body_skeleton_for_envelope(envelope)
             for implementation in baseline.unwrap().implementations
             for envelope in implementation.selected_body_envelopes
+            if envelope.selected_type_tag in CONCRETE_INTEGER_TAGS
         )
 
         result = lower_candidates(
@@ -3376,7 +3397,7 @@ class LoweringBoundaryTests(unittest.TestCase):
 
         self.assertTrue(result.is_ok, result.diagnostics)
         implementations = result.unwrap().implementations
-        self.assertEqual(len(implementations), len(skeletons))
+        self.assertEqual(len(implementations), len(baseline.unwrap().implementations))
         selected_tokens: set[str] = set()
         no_body_tags: set[str] = set()
         for baseline_impl, implementation in zip(
@@ -3385,6 +3406,26 @@ class LoweringBoundaryTests(unittest.TestCase):
             strict=True,
         ):
             with self.subTest(candidate_id=implementation.candidate_id):
+                baseline_envelope = baseline_impl.selected_body_envelopes[0]
+                if baseline_envelope.selected_type_tag not in CONCRETE_INTEGER_TAGS:
+                    self.assertEqual(implementation.array_body_envelopes, ())
+                    self.assertEqual(
+                        implementation.array_initialization_slot_forms,
+                        (),
+                    )
+                    self.assertEqual(
+                        implementation.array_initialization_helper_requests,
+                        (),
+                    )
+                    self.assertEqual(
+                        implementation.array_initialization_base_type_resolutions,
+                        (),
+                    )
+                    self.assertEqual(
+                        tuple(stage.stage for stage in implementation.generation_stages),
+                        tuple(stage.stage for stage in baseline_impl.generation_stages),
+                    )
+                    continue
                 self.assertEqual(len(implementation.array_body_envelopes), 1)
                 array_envelope = implementation.array_body_envelopes[0]
                 self.assertEqual(
@@ -3399,37 +3440,64 @@ class LoweringBoundaryTests(unittest.TestCase):
                 )
                 helper_request = implementation.array_initialization_helper_requests[0]
                 self.assertIs(helper_request.source_form, slot_form)
+                self.assertEqual(
+                    len(implementation.array_initialization_base_type_resolutions),
+                    1,
+                )
+                base_type_resolution = (
+                    implementation.array_initialization_base_type_resolutions[0]
+                )
+                self.assertIs(base_type_resolution.source_request_ir, helper_request)
+                self.assertEqual(
+                    base_type_resolution.resolved_type_ref,
+                    GenerationTypeRef(
+                        kind="base.in",
+                        type_tag=array_envelope.selected_type_tag,
+                    ),
+                )
+                self.assertEqual(
+                    base_type_resolution.unresolved_requests,
+                    helper_request.requests[1:],
+                )
                 self.assertIs(
-                    implementation.generation_stages[-3].output,
+                    implementation.generation_stages[-4].output,
                     array_envelope,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-3].stage,
+                    implementation.generation_stages[-4].stage,
                     "array_body_envelope_slot_assembly",
                 )
-                self.assertIs(implementation.generation_stages[-2].output, slot_form)
+                self.assertIs(implementation.generation_stages[-3].output, slot_form)
                 self.assertEqual(
-                    implementation.generation_stages[-2].stage,
+                    implementation.generation_stages[-3].stage,
                     "array_initialization_slot_form_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-1].output,
+                    implementation.generation_stages[-2].output,
                     helper_request,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-1].stage,
+                    implementation.generation_stages[-2].stage,
                     "array_initialization_helper_request_lowering",
                 )
+                self.assertIs(
+                    implementation.generation_stages[-1].output,
+                    base_type_resolution,
+                )
                 self.assertEqual(
-                    tuple(stage.stage for stage in implementation.generation_stages[:-3]),
+                    implementation.generation_stages[-1].stage,
+                    "array_initialization_base_type_request_resolution",
+                )
+                self.assertEqual(
+                    tuple(stage.stage for stage in implementation.generation_stages[:-4]),
                     tuple(stage.stage for stage in baseline_impl.generation_stages),
                 )
                 self.assertEqual(
-                    tuple(stage.output for stage in implementation.generation_stages[:-3]),
+                    tuple(stage.output for stage in implementation.generation_stages[:-4]),
                     tuple(stage.output for stage in baseline_impl.generation_stages),
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-4].stage,
+                    implementation.generation_stages[-5].stage,
                     "selected_body_envelope_lowering",
                 )
                 self.assertEqual(slot_form.slot_ordinal, 0)
@@ -3479,6 +3547,10 @@ class LoweringBoundaryTests(unittest.TestCase):
                 self.assertEqual(implementation.array_initialization_slot_forms, ())
                 self.assertEqual(
                     implementation.array_initialization_helper_requests,
+                    (),
+                )
+                self.assertEqual(
+                    implementation.array_initialization_base_type_resolutions,
                     (),
                 )
                 self.assertEqual(
@@ -4203,6 +4275,304 @@ class LoweringBoundaryTests(unittest.TestCase):
             column=15,
         )
         self.assertIn("provenance", result.diagnostics[0].message)
+
+    def test_exact_array_initialization_base_type_request_resolves_m67_request(
+        self,
+    ) -> None:
+        for selected_type_tag in ("si16", "ui32"):
+            with self.subTest(selected_type_tag=selected_type_tag):
+                helper_ir = self.exact_array_initialization_helper_request_ir(
+                    selected_type_tag=selected_type_tag,
+                )
+                sources = (
+                    helper_ir,
+                    GenerationLoweringStage(
+                        stage="array_initialization_helper_request_lowering",
+                        output=helper_ir,
+                    ),
+                    LoweredImplementation(
+                        candidate_id=helper_ir.candidate_id,
+                        status="lowered",
+                        array_initialization_helper_requests=(helper_ir,),
+                    ),
+                )
+
+                for source in sources:
+                    result = lower_exact_array_initialization_base_type_request(
+                        source,
+                    )
+
+                    self.assertTrue(result.is_ok, result.diagnostics)
+                    resolution = result.unwrap()
+                    assert isinstance(
+                        resolution,
+                        ExactArrayInitializationBaseTypeResolutionIr,
+                    )
+                    self.assertIs(resolution.source_request_ir, helper_ir)
+                    self.assertIs(
+                        resolution.source_base_type_request,
+                        helper_ir.requests[0],
+                    )
+                    self.assertEqual(
+                        resolution.resolved_type_ref,
+                        GenerationTypeRef(
+                            kind="base.in",
+                            type_tag=selected_type_tag,
+                        ),
+                    )
+                    self.assertEqual(
+                        resolution.unresolved_requests,
+                        helper_ir.requests[1:],
+                    )
+                    self.assertEqual(
+                        tuple(
+                            request.helper_leaf_kind
+                            for request in resolution.unresolved_requests
+                        ),
+                        (
+                            "value_generation_vector_length",
+                            "value_generation_vector_alignment",
+                            "value_backend_uninit_array",
+                        ),
+                    )
+                    self.assertEqual(resolution.candidate_id, helper_ir.candidate_id)
+                    self.assertEqual(resolution.selected_type_tag, selected_type_tag)
+                    self.assertEqual(
+                        resolution.originating_branch_chain_id,
+                        helper_ir.originating_branch_chain_id,
+                    )
+                    self.assertEqual(
+                        resolution.slot_label,
+                        "opaque_pre_branch_array_initialization",
+                    )
+                    self.assertEqual(resolution.slot_ordinal, 0)
+                    self.assertEqual(resolution.variable_token, "tmp")
+                    self.assertIs(
+                        GenerationLoweringStage(
+                            stage=(
+                                "array_initialization_base_type_request_resolution"
+                            ),
+                            output=resolution,
+                        ).output,
+                        resolution,
+                    )
+
+    def test_exact_array_initialization_base_type_request_rejects_invalid_sources(
+        self,
+    ) -> None:
+        helper_ir = self.exact_array_initialization_helper_request_ir()
+        body_ir = self.selected_body_ir()
+        implementation_without_ir = LoweredImplementation(
+            candidate_id="candidate-1",
+            status="lowered",
+            selected_body_envelopes=(self.selected_body_envelope(),),
+        )
+        implementation_with_multiple = LoweredImplementation(
+            candidate_id="candidate-1",
+            status="lowered",
+            array_initialization_helper_requests=(helper_ir, helper_ir),
+        )
+        cases = (
+            (
+                "stage",
+                GenerationLoweringStage(
+                    stage="selected_body_ir_lowering",
+                    output=body_ir,
+                ),
+                "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-SOURCE-UNSUPPORTED",
+                "M67",
+            ),
+            (
+                "type",
+                object(),
+                "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-SOURCE-UNSUPPORTED",
+                "M67",
+            ),
+            (
+                "missing_ir",
+                implementation_without_ir,
+                "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-IR-MISSING",
+                "array_initialization_helper_requests",
+            ),
+            (
+                "multiple_ir",
+                implementation_with_multiple,
+                "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-IR-MULTIPLE",
+                "exactly one",
+            ),
+        )
+
+        for name, source, code, message in cases:
+            with self.subTest(name=name):
+                result = lower_exact_array_initialization_base_type_request(source)
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
+                self.assertIn(message, result.diagnostics[0].message)
+
+    def test_exact_array_initialization_base_type_request_rejects_bad_records(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "missing",
+                "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-MISSING",
+            ),
+            (
+                "duplicate",
+                "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-DUPLICATE",
+            ),
+            (
+                "ordinal",
+                "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-MISMATCH",
+            ),
+            (
+                "kind",
+                "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-MISMATCH",
+            ),
+            (
+                "leaf_kind",
+                "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-MISMATCH",
+            ),
+            (
+                "source_text",
+                "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-UNSUPPORTED",
+            ),
+        )
+
+        for name, code in cases:
+            with self.subTest(name=name):
+                helper_ir = self.exact_array_initialization_helper_request_ir()
+                base_request = helper_ir.requests[0]
+                if name == "missing":
+                    object.__setattr__(helper_ir, "requests", helper_ir.requests[1:])
+                elif name == "duplicate":
+                    object.__setattr__(
+                        helper_ir,
+                        "requests",
+                        (base_request, *helper_ir.requests),
+                    )
+                elif name == "ordinal":
+                    object.__setattr__(base_request, "request_ordinal", 1)
+                elif name == "kind":
+                    object.__setattr__(base_request, "request_kind", "backend_value")
+                elif name == "leaf_kind":
+                    object.__setattr__(
+                        base_request,
+                        "helper_leaf_kind",
+                        "value_generation_vector_length",
+                    )
+                else:
+                    object.__setattr__(
+                        base_request,
+                        "leaf_source_text",
+                        "type<generation>(base::out)",
+                    )
+
+                result = lower_exact_array_initialization_base_type_request(helper_ir)
+
+                self.assertFalse(result.is_ok)
+                self.assertTrue(
+                    any(diagnostic.code == code for diagnostic in result.diagnostics),
+                    result.diagnostics,
+                )
+                diagnostic = next(
+                    diagnostic
+                    for diagnostic in result.diagnostics
+                    if diagnostic.code == code
+                )
+                self.assertEqual(diagnostic.severity, "error")
+                self.assertIsNotNone(diagnostic.location)
+
+    def test_exact_array_initialization_base_type_request_rejects_selected_type(
+        self,
+    ) -> None:
+        helper_ir = self.exact_array_initialization_helper_request_ir(
+            selected_type_tag="f32",
+        )
+
+        result = lower_exact_array_initialization_base_type_request(helper_ir)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+        )
+        self.assertIn("concrete integer", result.diagnostics[0].message)
+
+    def test_exact_array_initialization_base_type_request_reports_provenance_mismatch(
+        self,
+    ) -> None:
+        helper_ir = self.exact_array_initialization_helper_request_ir()
+        object.__setattr__(helper_ir.requests[0], "candidate_id", "other-candidate")
+
+        result = lower_exact_array_initialization_base_type_request(helper_ir)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-PROVENANCE-MISMATCH",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+        )
+        self.assertIn("provenance", result.diagnostics[0].message)
+
+    def test_exact_array_initialization_base_type_request_rejects_context_mismatch(
+        self,
+    ) -> None:
+        helper_ir = self.exact_array_initialization_helper_request_ir(
+            selected_type_tag="si16",
+        )
+
+        result = lower_exact_array_initialization_base_type_request(
+            helper_ir,
+            GenerationContext(type_tag_override="ui16"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-PROVENANCE-MISMATCH",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+        )
+        self.assertIn("selected type tag", result.diagnostics[0].message)
+
+    def test_exact_array_initialization_base_type_request_does_not_evaluate_raw_helper_text(
+        self,
+    ) -> None:
+        helper_ir = self.exact_array_initialization_helper_request_ir(
+            selected_type_tag="si32",
+        )
+        original = lowering_boundary.resolve_generation_type_query
+
+        def fail_on_raw_query(*args: object, **kwargs: object) -> object:
+            raise AssertionError("raw generation type query evaluator was called")
+
+        lowering_boundary.resolve_generation_type_query = fail_on_raw_query  # type: ignore[assignment]
+        try:
+            result = lower_exact_array_initialization_base_type_request(helper_ir)
+        finally:
+            lowering_boundary.resolve_generation_type_query = original
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(
+            result.unwrap().resolved_type_ref,
+            GenerationTypeRef(kind="base.in", type_tag="si32"),
+        )
 
     def test_exact_array_initialization_slot_form_api_uses_envelope_slot_only(
         self,

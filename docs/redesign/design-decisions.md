@@ -1374,12 +1374,12 @@ Consequences:
   store/return lowering, SVE/direct-intrinsic semantics, backend translation,
   rendering, and output for later milestones.
 - Milestone 67 is accepted as a typed deferred helper-request/provenance IR
-  boundary over M66 leaves. It should classify the exact base-type,
+  boundary over M66 leaves. It classifies the exact base-type,
   vector-length, vector-alignment, and backend-uninit helper leaves without
   evaluating them, creating backend translation requests, parsing raw slot
   text, or adding declaration/array semantics.
-- Milestone 68 is selected as the first typed request-resolution boundary over
-  M67 helper-request IR. It should resolve exactly the M67 base-type request
+- Milestone 68 is accepted as the first typed request-resolution boundary over
+  M67 helper-request IR. It resolves exactly the M67 base-type request
   for `type<generation>(base::in)` using accepted M43/M52/M53/M54 typed
   semantics and request/context inputs, not by reparsing M67 leaf text or
   bypassing the M67 request IR. Vector length, vector alignment, backend
@@ -1391,7 +1391,7 @@ Consequences:
 - Broad modifier support, primitive calls, direct-intrinsic semantics beyond
   the accepted M62 unresolved body-IR shape, and broad C++/Rust body rendering
   beyond the accepted M63/M64/M65 envelope path, M66 first-slot form-IR
-  boundary, accepted M67 helper-request/provenance boundary, and selected M68
+  boundary, accepted M67 helper-request/provenance boundary, and accepted M68
   base-type request-resolution boundary remain
   deferred until their own helper slices are selected.
 - Future native rendering milestones must state which helper IR and translation

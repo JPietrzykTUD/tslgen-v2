@@ -57,6 +57,7 @@ type GenerationLoweringStageName = Literal[
     "array_body_envelope_slot_assembly",
     "array_initialization_slot_form_lowering",
     "array_initialization_helper_request_lowering",
+    "array_initialization_base_type_request_resolution",
 ]
 type GenerationSelectedBranchBodyHandoff = (
     OpaqueSelectedBranchBodyHandoff | NoSelectedBranchBodyHandoff
@@ -120,6 +121,7 @@ type GenerationLoweringStageOutput = (
     | ExactArrayBodyEnvelopeIr
     | ExactArrayInitializationSlotFormIr
     | ExactArrayInitializationHelperRequestIr
+    | ExactArrayInitializationBaseTypeResolutionIr
     | TsilStatement
 )
 
@@ -220,6 +222,28 @@ _EXACT_ARRAY_INITIALIZATION_HELPER_LEAF_SPECS: tuple[
         request_kind="backend_value",
         request_ordinal=3,
     ),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _ExactArrayInitializationBaseTypeRequestRule:
+    request_ordinal: int
+    request_kind: Literal["generation_type"]
+    helper_leaf_kind: Literal["type_generation_base_in"]
+    expected_leaf_source_text: str
+    result_kind: Literal["base.in"]
+
+
+_EXACT_ARRAY_INITIALIZATION_BASE_TYPE_REQUEST_RULE = (
+    _ExactArrayInitializationBaseTypeRequestRule(
+        request_ordinal=0,
+        request_kind="generation_type",
+        helper_leaf_kind="type_generation_base_in",
+        expected_leaf_source_text=_EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND[
+            "type_generation_base_in"
+        ],
+        result_kind="base.in",
+    )
 )
 _ARRAY_INITIALIZATION_HELPER_TARGET = rf"{_TSIL_IDENTIFIER}::{_TSIL_IDENTIFIER}"
 _ARRAY_INITIALIZATION_HELPER_SHAPE = (
@@ -1693,6 +1717,115 @@ class GenerationTypeRef:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactArrayInitializationBaseTypeResolutionIr:
+    source_request_ir: ExactArrayInitializationHelperRequestIr
+    source_base_type_request: ExactArrayInitializationHelperRequestRecord
+    resolved_type_ref: GenerationTypeRef
+    unresolved_requests: tuple[ExactArrayInitializationHelperRequestRecord, ...]
+    source_location: SourceLocation
+    candidate_id: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+    slot_label: Literal["opaque_pre_branch_array_initialization"]
+    slot_ordinal: int
+    variable_token: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_request_ir, ExactArrayInitializationHelperRequestIr):
+            raise TypeError(
+                "array-initialization base-type resolution requires an M67 "
+                "helper-request IR"
+            )
+        if not isinstance(
+            self.source_base_type_request,
+            ExactArrayInitializationHelperRequestRecord,
+        ):
+            raise TypeError(
+                "array-initialization base-type resolution requires an M67 "
+                "base-type request record"
+            )
+        if self.source_base_type_request not in self.source_request_ir.requests:
+            raise ValueError(
+                "array-initialization base-type source request must come from "
+                "the M67 helper-request IR"
+            )
+        if self.resolved_type_ref.kind != "base.in":
+            raise ValueError(
+                "array-initialization base-type resolution must resolve "
+                "GenerationTypeRef(kind='base.in')"
+            )
+        if self.resolved_type_ref.type_tag != self.selected_type_tag:
+            raise ValueError(
+                "array-initialization base-type resolution type tag must match "
+                "the M67 selected type tag"
+            )
+        if self.source_location != self.source_request_ir.source_location:
+            raise ValueError(
+                "array-initialization base-type resolution source location "
+                "must match the M67 helper-request IR"
+            )
+        if (
+            self.candidate_id != self.source_request_ir.candidate_id
+            or self.selected_type_tag != self.source_request_ir.selected_type_tag
+            or self.originating_branch_chain_id
+            != self.source_request_ir.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "array-initialization base-type resolution provenance must "
+                "match the M67 helper-request IR"
+            )
+        if self.slot_label != self.source_request_ir.slot_label:
+            raise ValueError(
+                "array-initialization base-type resolution slot label must "
+                "match the M67 helper-request IR"
+            )
+        if self.slot_ordinal != self.source_request_ir.slot_ordinal:
+            raise ValueError(
+                "array-initialization base-type resolution slot ordinal must "
+                "match the M67 helper-request IR"
+            )
+        if self.variable_token != self.source_request_ir.variable_token:
+            raise ValueError(
+                "array-initialization base-type resolution variable token must "
+                "match the M67 helper-request IR"
+            )
+        object.__setattr__(self, "unresolved_requests", tuple(self.unresolved_requests))
+        expected_unresolved = tuple(
+            request
+            for request in self.source_request_ir.requests
+            if request is not self.source_base_type_request
+        )
+        if self.unresolved_requests != expected_unresolved:
+            raise ValueError(
+                "array-initialization base-type resolution must preserve all "
+                "non-base M67 requests as unresolved records in deterministic order"
+            )
+        for request in self.unresolved_requests:
+            if request.helper_leaf_kind == "type_generation_base_in":
+                raise ValueError(
+                    "array-initialization base-type resolution unresolved "
+                    "requests must not include the resolved base-type request"
+                )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_initialization_base_type_resolution_ir",
+            self.source_request_ir.key,
+            self.source_base_type_request.key,
+            self.resolved_type_ref.key,
+            tuple(request.key for request in self.unresolved_requests),
+            self.source_location.sort_key(),
+            self.candidate_id,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+            self.slot_label,
+            self.slot_ordinal,
+            self.variable_token,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationValue:
     kind: GenerationValueKind
     value: int
@@ -1787,6 +1920,8 @@ class GenerationLoweringStage:
             expected = (ExactArrayInitializationSlotFormIr,)
         elif self.stage == "array_initialization_helper_request_lowering":
             expected = (ExactArrayInitializationHelperRequestIr,)
+        elif self.stage == "array_initialization_base_type_request_resolution":
+            expected = (ExactArrayInitializationBaseTypeResolutionIr,)
         else:
             raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
         if not isinstance(self.output, expected):
@@ -1822,6 +1957,9 @@ class LoweredImplementation:
     ] = ()
     array_initialization_helper_requests: tuple[
         ExactArrayInitializationHelperRequestIr, ...
+    ] = ()
+    array_initialization_base_type_resolutions: tuple[
+        ExactArrayInitializationBaseTypeResolutionIr, ...
     ] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
@@ -1891,6 +2029,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "array_initialization_base_type_resolutions",
+            tuple(self.array_initialization_base_type_resolutions),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -1917,6 +2060,10 @@ class LoweredImplementation:
             tuple(
                 helper_request.key
                 for helper_request in self.array_initialization_helper_requests
+            ),
+            tuple(
+                resolution.key
+                for resolution in self.array_initialization_base_type_resolutions
             ),
             tuple(stage.key for stage in self.generation_stages),
         )
@@ -2606,6 +2753,97 @@ def lower_exact_array_initialization_helper_requests(
         )
 
 
+def lower_exact_array_initialization_base_type_request(
+    source: object,
+    context: GenerationContext | None = None,
+    *,
+    selected_candidate_type_tag: str | None = None,
+) -> Result[ExactArrayInitializationBaseTypeResolutionIr]:
+    request_ir_result = _array_initialization_base_type_resolution_source(source)
+    if not request_ir_result.is_ok:
+        return Result.failure(request_ir_result.diagnostics)
+
+    request_ir = request_ir_result.unwrap()
+    diagnostics = _validate_array_initialization_base_type_request_ir_provenance(
+        request_ir,
+    )
+    base_request = _array_initialization_base_type_request_record(
+        request_ir,
+        diagnostics,
+    )
+    if diagnostics:
+        return Result.failure(sort_diagnostics(tuple(diagnostics)))
+    if base_request is None:
+        raise AssertionError("base request diagnostics must be present when missing")
+
+    generation_context = context or GenerationContext()
+    candidate_type_tag = selected_candidate_type_tag
+    if candidate_type_tag is None and generation_context.use_candidate_type_tag:
+        candidate_type_tag = request_ir.selected_type_tag
+    semantic_label = "array-initialization base-type request"
+    effective_type_tag = _effective_generation_type_tag(
+        generation_context,
+        selected_candidate_type_tag=candidate_type_tag,
+        query_text=semantic_label,
+        location=base_request.leaf_source_location,
+    )
+    if not effective_type_tag.is_ok:
+        return Result.failure(effective_type_tag.diagnostics)
+
+    resolved_type_ref = _base_in_type_ref(
+        effective_type_tag.unwrap(),
+        generation_context.concrete_integer_generation_rules,
+        semantic_label,
+        base_request.leaf_source_location,
+    )
+    if not resolved_type_ref.is_ok:
+        return Result.failure(resolved_type_ref.diagnostics)
+    type_ref = resolved_type_ref.unwrap()
+    if type_ref.type_tag != request_ir.selected_type_tag:
+        return Result.failure(
+            (
+                _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+                    "array-initialization base-type request resolved selected "
+                    f"type tag {type_ref.type_tag!r}, but the M67 "
+                    "helper-request IR records selected type tag "
+                    f"{request_ir.selected_type_tag!r}",
+                    base_request.leaf_source_location,
+                ),
+            )
+        )
+
+    unresolved_requests = tuple(
+        request
+        for request in request_ir.requests
+        if request is not base_request
+    )
+    try:
+        return Result.ok(
+            ExactArrayInitializationBaseTypeResolutionIr(
+                source_request_ir=request_ir,
+                source_base_type_request=base_request,
+                resolved_type_ref=type_ref,
+                unresolved_requests=unresolved_requests,
+                source_location=request_ir.source_location,
+                candidate_id=request_ir.candidate_id,
+                selected_type_tag=request_ir.selected_type_tag,
+                originating_branch_chain_id=request_ir.originating_branch_chain_id,
+                slot_label=request_ir.slot_label,
+                slot_ordinal=request_ir.slot_ordinal,
+                variable_token=request_ir.variable_token,
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        return Result.failure(
+            (
+                _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+                    str(exc),
+                    request_ir.source_location,
+                ),
+            )
+        )
+
+
 def resolve_generation_type_query(
     query_text: str,
     context: GenerationContext | None = None,
@@ -2809,6 +3047,15 @@ def _array_initialization_helper_request_stage(
     )
 
 
+def _array_initialization_base_type_resolution_stage(
+    output: ExactArrayInitializationBaseTypeResolutionIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="array_initialization_base_type_request_resolution",
+        output=output,
+    )
+
+
 def _stage_output_location(
     output: GenerationLoweringStageOutput,
 ) -> SourceLocation | None:
@@ -2835,6 +3082,7 @@ def _stage_output_location(
             ExactArrayBodyEnvelopeIr,
             ExactArrayInitializationSlotFormIr,
             ExactArrayInitializationHelperRequestIr,
+            ExactArrayInitializationBaseTypeResolutionIr,
         ),
     ):
         return output.source_location
@@ -3254,6 +3502,65 @@ def _array_initialization_helper_request_source(
     )
 
 
+def _array_initialization_base_type_resolution_source(
+    source: object,
+) -> Result[ExactArrayInitializationHelperRequestIr]:
+    if isinstance(source, ExactArrayInitializationHelperRequestIr):
+        return Result.ok(source)
+    if isinstance(source, GenerationLoweringStage):
+        if (
+            source.stage == "array_initialization_helper_request_lowering"
+            and isinstance(source.output, ExactArrayInitializationHelperRequestIr)
+        ):
+            return Result.ok(source.output)
+        return Result.failure(
+            (
+                _array_initialization_base_type_resolution_source_unsupported_diagnostic(
+                    "array-initialization base-type request resolution consumes "
+                    "typed M67 ExactArrayInitializationHelperRequestIr values, "
+                    "the array_initialization_helper_request_lowering stage "
+                    "output, or a LoweredImplementation with a matching M67 "
+                    "helper-request IR",
+                    _stage_output_location(source.output),
+                ),
+            )
+        )
+    if isinstance(source, LoweredImplementation):
+        if len(source.array_initialization_helper_requests) == 1:
+            return Result.ok(source.array_initialization_helper_requests[0])
+        if len(source.array_initialization_helper_requests) == 0:
+            return Result.failure(
+                (
+                    _array_initialization_base_type_resolution_missing_ir_diagnostic(
+                        "array-initialization base-type request resolution "
+                        "requires a LoweredImplementation carrying an accepted "
+                        "M67 array_initialization_helper_requests entry",
+                        _lowered_implementation_location(source),
+                    ),
+                )
+            )
+        return Result.failure(
+            (
+                _array_initialization_base_type_resolution_multiple_ir_diagnostic(
+                    "array-initialization base-type request resolution requires "
+                    "exactly one M67 array_initialization_helper_requests "
+                    f"entry; got {len(source.array_initialization_helper_requests)}",
+                    _lowered_implementation_location(source),
+                ),
+            )
+        )
+    return Result.failure(
+        (
+            _array_initialization_base_type_resolution_source_unsupported_diagnostic(
+                "array-initialization base-type request resolution consumes "
+                "typed M67 ExactArrayInitializationHelperRequestIr values or "
+                "array_initialization_helper_request_lowering stage output",
+                None,
+            ),
+        )
+    )
+
+
 def _array_initialization_envelope_slot(
     envelope: ExactArrayBodyEnvelopeIr,
 ) -> ExactArrayBodyEnvelopeSlot | None:
@@ -3330,6 +3637,168 @@ def _validate_array_initialization_helper_form_provenance(
             form.variable_token_location or form.source_location,
         )
     return None
+
+
+def _validate_array_initialization_base_type_request_ir_provenance(
+    request_ir: ExactArrayInitializationHelperRequestIr,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if request_ir.source_envelope != request_ir.source_form.source_envelope:
+        diagnostics.append(
+            _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+                "M67 helper-request IR envelope must match its M66 slot form "
+                "envelope",
+                request_ir.source_location,
+            )
+        )
+    if request_ir.source_location != request_ir.source_form.source_location:
+        diagnostics.append(
+            _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+                "M67 helper-request IR source location must match its M66 slot "
+                "form source location",
+                request_ir.source_location,
+            )
+        )
+    if (
+        request_ir.candidate_id != request_ir.source_form.candidate_id
+        or request_ir.selected_type_tag != request_ir.source_form.selected_type_tag
+        or request_ir.originating_branch_chain_id
+        != request_ir.source_form.originating_branch_chain_id
+    ):
+        diagnostics.append(
+            _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+                "M67 helper-request IR provenance must match its M66 slot form",
+                request_ir.source_location,
+            )
+        )
+    if (
+        request_ir.slot_label != request_ir.source_form.slot_label
+        or request_ir.slot_ordinal != request_ir.source_form.slot_ordinal
+        or request_ir.variable_token != request_ir.source_form.variable_token
+    ):
+        diagnostics.append(
+            _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+                "M67 helper-request IR slot provenance must match its M66 "
+                "slot form",
+                request_ir.source_location,
+            )
+        )
+    for request in request_ir.requests:
+        if request.source_form != request_ir.source_form:
+            diagnostics.append(
+                _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+                    "M67 helper-request record source form must match the "
+                    "source helper-request IR",
+                    request.leaf_source_location,
+                )
+            )
+        if request.source_envelope != request_ir.source_envelope:
+            diagnostics.append(
+                _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+                    "M67 helper-request record envelope must match the source "
+                    "helper-request IR",
+                    request.leaf_source_location,
+                )
+            )
+        if (
+            request.candidate_id != request_ir.candidate_id
+            or request.selected_type_tag != request_ir.selected_type_tag
+            or request.originating_branch_chain_id
+            != request_ir.originating_branch_chain_id
+            or request.slot_label != request_ir.slot_label
+            or request.slot_ordinal != request_ir.slot_ordinal
+            or request.variable_token != request_ir.variable_token
+        ):
+            diagnostics.append(
+                _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+                    "M67 helper-request record provenance must match the "
+                    "source helper-request IR",
+                    request.leaf_source_location,
+                )
+            )
+    return diagnostics
+
+
+def _array_initialization_base_type_request_record(
+    request_ir: ExactArrayInitializationHelperRequestIr,
+    diagnostics: list[Diagnostic],
+) -> ExactArrayInitializationHelperRequestRecord | None:
+    rule = _EXACT_ARRAY_INITIALIZATION_BASE_TYPE_REQUEST_RULE
+    base_records = tuple(
+        request
+        for request in request_ir.requests
+        if request.helper_leaf_kind == rule.helper_leaf_kind
+    )
+    if not base_records:
+        ordinal_or_kind_records = tuple(
+            request
+            for request in request_ir.requests
+            if (
+                request.request_ordinal == rule.request_ordinal
+                or request.request_kind == rule.request_kind
+            )
+        )
+        if ordinal_or_kind_records:
+            for request in ordinal_or_kind_records:
+                diagnostics.append(
+                    _array_initialization_base_type_resolution_mismatch_diagnostic(
+                        "array-initialization base-type request resolution "
+                        "expected the M67 base request to carry ordinal "
+                        f"{rule.request_ordinal}, kind {rule.request_kind!r}, "
+                        f"and leaf kind {rule.helper_leaf_kind!r}; got ordinal "
+                        f"{request.request_ordinal}, kind "
+                        f"{request.request_kind!r}, and leaf kind "
+                        f"{request.helper_leaf_kind!r}",
+                        request.leaf_source_location,
+                    )
+                )
+            return None
+        diagnostics.append(
+            _array_initialization_base_type_resolution_missing_request_diagnostic(
+                "array-initialization base-type request resolution requires "
+                "one M67 base-type request record",
+                request_ir.source_location,
+            )
+        )
+        return None
+    if len(base_records) > 1:
+        for request in base_records:
+            diagnostics.append(
+                _array_initialization_base_type_resolution_duplicate_request_diagnostic(
+                    "array-initialization base-type request resolution requires "
+                    "exactly one M67 base-type request record; duplicate "
+                    f"record appeared at ordinal {request.request_ordinal}",
+                    request.leaf_source_location,
+                )
+            )
+        return None
+
+    base_request = base_records[0]
+    if (
+        base_request.request_ordinal != rule.request_ordinal
+        or base_request.request_kind != rule.request_kind
+    ):
+        diagnostics.append(
+            _array_initialization_base_type_resolution_mismatch_diagnostic(
+                "array-initialization base-type request resolution expected "
+                f"ordinal {rule.request_ordinal} and kind "
+                f"{rule.request_kind!r}; got ordinal "
+                f"{base_request.request_ordinal} and kind "
+                f"{base_request.request_kind!r}",
+                base_request.leaf_source_location,
+            )
+        )
+    if base_request.leaf_source_text != rule.expected_leaf_source_text:
+        diagnostics.append(
+            _array_initialization_base_type_resolution_unsupported_request_diagnostic(
+                "array-initialization base-type request resolution preserves "
+                "the M67 leaf source text only as provenance and accepts only "
+                "the exact M67 base-type leaf text for that typed request; got "
+                f"{base_request.leaf_source_text!r}",
+                base_request.leaf_source_location,
+            )
+        )
+    return base_request
 
 
 def _array_initialization_leaf(
@@ -3657,6 +4126,94 @@ def _array_initialization_helper_request_provenance_mismatch_diagnostic(
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-PROVENANCE-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_base_type_resolution_source_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-SOURCE-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_base_type_resolution_missing_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-IR-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_base_type_resolution_multiple_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-IR-MULTIPLE",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_base_type_resolution_missing_request_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_base_type_resolution_duplicate_request_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-DUPLICATE",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_base_type_resolution_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_base_type_resolution_unsupported_request_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-PROVENANCE-MISMATCH",
         detail,
         location=location,
     )
@@ -4210,6 +4767,12 @@ def _lower_input(
             array_initialization_helper_request_stages: tuple[
                 GenerationLoweringStage, ...
             ] = ()
+            array_initialization_base_type_resolutions: tuple[
+                ExactArrayInitializationBaseTypeResolutionIr, ...
+            ] = ()
+            array_initialization_base_type_resolution_stages: tuple[
+                GenerationLoweringStage, ...
+            ] = ()
             if array_envelope is not None:
                 array_initialization_slot_form_result = (
                     lower_exact_array_initialization_slot_form(array_envelope)
@@ -4247,6 +4810,28 @@ def _lower_input(
                         array_initialization_helper_request,
                     ),
                 )
+                base_type_resolution_result = (
+                    lower_exact_array_initialization_base_type_request(
+                        array_initialization_helper_request,
+                        _context_for_candidate(item, request),
+                        selected_candidate_type_tag=(
+                            item.candidate.type_tag
+                            if request.generation_context.use_candidate_type_tag
+                            else None
+                        ),
+                    )
+                )
+                if not base_type_resolution_result.is_ok:
+                    return Result.failure(base_type_resolution_result.diagnostics)
+                base_type_resolution = base_type_resolution_result.unwrap()
+                array_initialization_base_type_resolutions = (
+                    base_type_resolution,
+                )
+                array_initialization_base_type_resolution_stages = (
+                    _array_initialization_base_type_resolution_stage(
+                        base_type_resolution,
+                    ),
+                )
             return Result.ok(
                 LoweredImplementation(
                     candidate_id=item.candidate_id,
@@ -4263,6 +4848,9 @@ def _lower_input(
                     array_initialization_slot_forms=array_initialization_slot_forms,
                     array_initialization_helper_requests=(
                         array_initialization_helper_requests
+                    ),
+                    array_initialization_base_type_resolutions=(
+                        array_initialization_base_type_resolutions
                     ),
                     generation_stages=(
                         _recognition_stage(
@@ -4287,6 +4875,7 @@ def _lower_input(
                         *array_body_stages,
                         *array_initialization_slot_form_stages,
                         *array_initialization_helper_request_stages,
+                        *array_initialization_base_type_resolution_stages,
                     ),
                 )
             )
