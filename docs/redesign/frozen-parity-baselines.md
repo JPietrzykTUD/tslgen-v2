@@ -340,10 +340,12 @@ and still does not add compiler execution.
   provenance IR over the accepted M66 exact first-slot form, accepted M68
   base-type request resolution over that request IR, accepted M69
   behavior-preserving stage extraction, accepted M70 exact vector-length
-  request resolution from explicit typed metadata, selected M71 exact
-  vector-alignment request resolution from explicit typed metadata, broad
-  TSIL/body-slot parity beyond those request-resolution boundaries, and backend
-  translation-map evaluation beyond the selected M40/M45/M46 requests.
+  request resolution from explicit typed metadata, accepted M71 exact
+  vector-alignment request resolution from explicit typed metadata, selected
+  M72 exact helper-set completion with backend uninit preserved as a typed
+  deferred boundary, broad TSIL/body-slot parity beyond those request-
+  resolution boundaries, and backend translation-map evaluation beyond the
+  selected M40/M45/M46 requests.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and
   googletest download or vendoring.
 - Full legacy CLI drop-in compatibility and `run_all.sh` replacement.

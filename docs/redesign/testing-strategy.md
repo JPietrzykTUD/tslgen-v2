@@ -855,9 +855,9 @@ Recommended first parity checks:
   and backend uninit requests, no raw helper parsing or raw query evaluator
   calls on M67 leaf text, no catalog/`tsldata`/host CPU reads during lowering
   evaluation, and no backend translation/rendering or generated-output churn.
-- Milestone 71 tests should prove exact array-initialization vector-alignment
-  request resolution through explicit typed metadata: direct resolver tests,
-  normal `lower_candidates` stage-order tests after
+- Milestone 71 tests prove exact array-initialization vector-alignment request
+  resolution through explicit typed metadata: direct resolver tests, normal
+  `lower_candidates` stage-order tests after
   `array_initialization_vector_length_request_resolution`, missing/duplicate/
   conflicting/unsupported metadata diagnostics, malformed or mismatched M67
   request diagnostics, deterministic ordering for repeated and reversed
@@ -865,6 +865,16 @@ Recommended first parity checks:
   backend uninit request, no raw helper parsing or raw query evaluator calls
   on M67 leaf text, no catalog/`tsldata`/host CPU reads during lowering
   evaluation, and no backend translation/rendering or generated-output churn.
+- Milestone 72 tests should prove exact array-initialization helper-set
+  completion without backend translation: direct aggregate tests from accepted
+  M71 resolution, normal `lower_candidates` stage-order tests after
+  `array_initialization_vector_alignment_request_resolution`, typed
+  backend-uninit request identity checks, missing/duplicate/mismatched request
+  diagnostics, deterministic ordering, unchanged M68/M70/M71 behavior,
+  pipeline-level M67 diagnostic propagation where touched, no raw helper
+  parsing or raw query evaluator calls, no catalog/`tsldata`/host CPU/backend
+  map reads during lowering evaluation, and no declaration/array lowering,
+  backend translation/rendering, golden-file, or generated-output churn.
 
 Deferred parity checks:
 

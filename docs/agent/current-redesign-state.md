@@ -228,39 +228,50 @@ issues after that revision. M71 resolves only the exact M67
 pipeline values and explicit typed vector-alignment metadata; backend uninit
 remains unresolved.
 
+Post-M71 planning selected
+`Milestone 72: Exact Array Initialization Helper-Set Completion IR Slice`,
+and internal review returned `Accept With Follow-Ups` after identifying a
+workflow handoff correction. The selected plan completes the exact
+array-initialization helper set as typed lowering state while keeping the
+remaining `value<backend>(uninit::array)` request as a typed deferred
+backend-value boundary. It must not add backend translation, rendering,
+generated output, or declaration/array semantics. Human acceptance has been
+recorded; M72 execution is the next action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Plan the next milestone after Milestone 71.
+Execute Milestone 72.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m71-planning-plus-review-prompt.md
+docs/agent/runs/m72-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Post-M71 planning is active.
+Milestone 72: Exact Array Initialization Helper-Set Completion IR Slice
 ```
 
 Latest review verdict:
 
 ```text
-M71 execution-review returned Accept With Follow-Ups after one focused
-documentation revision. Focused re-review accepted the revision.
+Post-M71 planning selected M72 and returned Accept With Follow-Ups after a
+focused workflow handoff correction. Human acceptance is recorded; M72
+execution is the next action.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M71 planning-plus-review prompt. Focus on lowering, use
-the specified read-only planning/review subagents, and do not implement code or
-start Milestone 72 execution.
+Run the active M72 execution-review loop prompt. Use exactly one write-capable
+executor if M72 is not already implemented, then read-only review/audit
+subagents. Do not start M73.
 ```
 
 Accepted planning prompt:
@@ -677,10 +688,22 @@ Accepted M71 execution-review loop prompt:
 docs/agent/runs/m71-execution-review-loop-prompt.md
 ```
 
-Active post-M71 planning-plus-review prompt:
+Completed post-M71 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m71-planning-plus-review-prompt.md
+```
+
+Accepted post-M71 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m71-acceptance-finalization-prompt.md
+```
+
+Active M72 execution-review loop prompt:
+
+```text
+docs/agent/runs/m72-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1231,6 +1254,22 @@ docs/agent/runs/post-m71-planning-plus-review-prompt.md
   generated tests, CLI/report/writer behavior, Rust, compiler execution, broad
   TSIL parsing, lowering-time file/catalog reads, `tsldata` reads during
   lowering evaluation, host CPU queries, or runtime `frozen/` use.
+- M72 is accepted for execution as exact array-initialization
+  helper-set completion IR only. M72 must consume accepted M71
+  vector-alignment resolution values and package the exact helper set into one
+  typed aggregate: accepted M68 base type, accepted M70 vector length,
+  accepted M71 vector alignment, and the remaining exact M67
+  `value<backend>(uninit::array)` request.
+- M72 must keep backend uninit as a typed deferred backend-value request
+  boundary. It must not translate or render backend uninit, query backend
+  maps, create backend translation requests, produce renderer-ready values,
+  or change generated output.
+- M72 must not add broad `var`, `array_type`, declaration,
+  allocation/lifetime, variable binding/scope, initializer, store, return,
+  `tmp.data()`, `emit_return`, `assume_aligned`, direct-intrinsic/SVE
+  semantics, generic helper dispatch, broad stage registries, broad TSIL
+  parsing, lowering-time file/catalog reads, `tsldata` reads during lowering
+  evaluation, host CPU queries, or runtime `frozen/` use.
 
 ## Accepted Milestone 48
 
@@ -1981,10 +2020,26 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M71 documentation follow-up: after M71 acceptance, sweep remaining
   pre-acceptance wording such as "selected" or "should" to
   accepted/implemented wording where appropriate in redesign docs.
+- Post-M71 planning follow-up for M72 execution: M72 must complete the exact
+  first-slot helper set as typed lowering state, not backend uninit
+  translation. Backend uninit must remain a typed deferred backend-value
+  request boundary with no backend text, translation request, renderer-ready
+  value, or generated output.
+- Post-M71 planning follow-up for M72 execution: M72 must not become
+  declaration/array lowering. Keep broad `var`, `array_type`,
+  allocation/lifetime, stores, returns, `tmp.data()`, and `emit_return` out of
+  scope.
+- Post-M71 planning follow-up for M72 execution: include relevant M69/M71
+  hardening where practical, especially pipeline-level M67 diagnostic
+  propagation coverage and no catalog/`tsldata`/host CPU/backend-map reads
+  during M72 lowering evaluation.
+- Post-M71 planning follow-up addressed during planning: stale M71
+  pre-acceptance wording was updated across the redesign docs while preserving
+  historical prior-planning context where appropriate.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M71 planning.
+No stop condition is active. The workflow proceeds with M72 execution.
 
 ## Validation Expectations
 

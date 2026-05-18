@@ -7552,7 +7552,7 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance after post-M70 planning.
+Accepted after the M71 execution-review loop.
 
 Goal:
 
@@ -7722,6 +7722,200 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- Human acceptance after post-M70 planning has been recorded, and
-  `docs/agent/runs/m71-execution-review-loop-prompt.md` is the active
-  execution-review prompt for M71.
+- M71 execution is complete and accepted. Post-M71 lowering planning is the
+  next workflow step.
+
+## Post-M71 Planning Result
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Narrow backend-uninit request boundary | M71 leaves only the exact M67 `value<backend>(uninit::array)` request unresolved in the accepted first-slot helper family. | High if it resolves to backend text or queries backend maps; lower if it is only a typed deferred boundary. | Safe but slightly too small because later declaration/array slices would still need to stitch together M68/M70/M71 and the remaining request. |
+| Exact array-initialization helper-set completion IR | Completes the exact M66/M67 first-slot helper set as typed lowering state: accepted M68 base type, accepted M70 vector length, accepted M71 vector alignment, and the remaining backend-uninit request as a typed deferred boundary. | Medium if the aggregate remains exact, typed, and non-rendering; high if it turns into backend uninit translation, broad helper dispatch, or declaration/array lowering. | Select as M72, with strict wording that backend uninit remains a typed unresolved backend-value request boundary and no backend/rendering/output behavior is introduced. |
+| Exact array declaration/array-type IR | Once the helper set is complete, later slices can start lowering the surrounding `var<typed>(array_type<...>, tmp, ...)` structure. | High now because it invites `var`, `array_type`, allocation/lifetime, initializer, store, return, `tmp.data()`, and rendering semantics before the helper set has a single typed handoff. | Defer until M72 provides a complete typed helper-set input. |
+| Private exact-array resolver cleanup | M68/M70/M71 repeat request/provenance/metadata validation shapes. | Medium if it becomes a broad registry or central raw-helper dispatcher. | Defer as a standalone milestone; permit only the smallest private typed helper extraction needed by M72. |
+| Diagnostic/no-runtime-dependency hardening only | M69/M70/M71 left non-blocking follow-ups around pipeline-level diagnostic propagation and broader no-runtime-dependency guards. | Low risk, but lower value than completing the helper-set handoff. | Fold relevant hardening into M72 validation criteria. |
+
+### Milestone 72: Exact Array Initialization Helper-Set Completion IR Slice
+
+Status:
+
+Selected for human acceptance after post-M71 planning.
+
+Goal:
+
+Consume the accepted M71 vector-alignment resolution for the exact first
+array-initialization slot and package the complete helper set into one typed
+aggregate IR: the accepted M68 base-type resolution, accepted M70
+vector-length resolution, accepted M71 vector-alignment resolution, and the
+remaining exact M67 `value<backend>(uninit::array)` request as a typed
+unresolved backend-value request boundary.
+
+M72 is generation-time lowering helper-set completion only. It must not
+resolve backend uninit into backend text, backend translation requests,
+renderer-ready values, generated output, or declaration/array semantics.
+
+Scope:
+
+- Consume only accepted M71
+  `ExactArrayInitializationVectorAlignmentResolutionIr` values, the
+  `array_initialization_vector_alignment_request_resolution` stage output, or
+  a typed `LoweredImplementation` carrying exactly one accepted M71
+  vector-alignment resolution.
+- Select only the remaining M67 request record whose typed fields identify the
+  exact backend-uninit helper from the first array-initialization slot:
+  request ordinal `3`, request kind `backend_value`, and helper leaf kind
+  `value_backend_uninit_array`.
+- Model that backend-uninit request only as a typed deferred backend-value
+  request boundary or policy value. Source text may be preserved only as
+  provenance/invariant evidence.
+- Produce one typed aggregate such as
+  `ExactArrayInitializationHelperSetCompletionIr`, carrying:
+  - the source M71 vector-alignment resolution;
+  - the accepted M70 vector-length resolution;
+  - the accepted M68 base-type resolution;
+  - the source M67 backend-uninit request record;
+  - the typed unresolved backend-uninit boundary/policy;
+  - deterministic provenance including candidate id, target/source extension,
+    selected type tag, branch-chain id, envelope/slot identity, variable token,
+    and source locations.
+- Append one deterministic stage after
+  `array_initialization_vector_alignment_request_resolution`, for example
+  `array_initialization_helper_set_completion`.
+- Preserve accepted M68 base-type behavior, accepted M69 stage-pipeline
+  behavior, accepted M70 vector-length behavior, and accepted M71
+  vector-alignment behavior.
+- Include M69/M71 hardening follow-ups where practical: pipeline-level M67
+  diagnostic propagation coverage for the extracted array-initialization stage
+  pipeline and guards that M72 lowering does not read catalog data, `tsldata`,
+  host CPU state, backend maps, or `frozen/` at evaluation time.
+
+Out of scope:
+
+- Translating, resolving, or rendering `value<backend>(uninit::array)` to C++,
+  Rust, backend text, initializer syntax, `{}`, `MaybeUninit`, backend
+  translation requests, renderer-ready values, or generated output.
+- Backend manifests, backend maps, language maps, translation maps,
+  renderer calls, generated artifacts, golden files, CLI/report/writer
+  behavior, Rust behavior, compiler execution, or generated-test execution.
+- Broad `var`, `array_type`, declaration, array allocation/lifetime,
+  variable binding/scope, initializer semantics, store, return, `tmp.data()`,
+  `emit_return`, `assume_aligned`, direct-intrinsic/SVE semantics, loops,
+  calls, casts, or multi-statement lowering.
+- Generic `value<backend>(...)`, `type<backend>(...)`,
+  `value<generation>(...)`, or `type<generation>(...)` evaluator families;
+  broad helper registries; raw helper-string dispatch; broad stage registries;
+  broad TSIL parsing; lowering-time file/catalog reads; raw TSL parsing;
+  `tsldata` reads during lowering evaluation; host CPU queries; or runtime
+  dependency on `frozen/`.
+
+Required input:
+
+- Accepted M67 helper request IR for the exact first-slot helper leaves.
+- Accepted M68 base-type request-resolution output.
+- Accepted M69 extracted array-initialization stage pipeline boundary.
+- Accepted M70 vector-length request-resolution output.
+- Accepted M71 vector-alignment request-resolution output preserving only the
+  backend-uninit request as unresolved.
+- Typed selected-candidate context already available to lowering, including
+  candidate id, target/source extension, and selected type tag. Backend id may
+  be preserved as typed provenance/policy input only if already supplied; it
+  must not drive backend map lookup or emitted text.
+
+Expected outputs:
+
+- One typed unresolved backend-uninit boundary/policy value for the exact M67
+  backend-uninit request.
+- One typed helper-set completion aggregate with no remaining unresolved
+  helper-request records for the exact first array-initialization slot.
+- One deterministic generation-lowering stage after
+  `array_initialization_vector_alignment_request_resolution`.
+- Structured diagnostics for unsupported source/container shapes,
+  missing/duplicate/mismatched/malformed backend-uninit request records,
+  context mismatch, and provenance mismatch.
+- No backend translation request, renderer-ready value, generated artifact,
+  golden output, CLI/report/writer, Rust, or compiler behavior change.
+
+Parity criterion:
+
+M72 proves the accepted M66/M67 first-slot helper family can be completed as a
+single typed lowering handoff after M68/M70/M71, while keeping backend uninit
+deferred and preventing declaration/rendering semantics from leaking into
+lowering.
+
+Evidence paths:
+
+- Accepted M67 helper request IR and M68/M70/M71 unresolved-request
+  preservation in `tslgen/src/tslgen/lowering/boundary.py`.
+- Accepted M70/M71 request-resolution pattern and tests in
+  `tslgen/src/tslgen/lowering/boundary.py` and
+  `tslgen/tests/unit/test_lowering_boundary.py`.
+- `tsldata/primitives/load_store/array.tsl:105` for the exact selected
+  `value<backend>(uninit::array)` request in the accepted first-slot form.
+- Other same-shape `array.tsl` forms at lines 37, 45, 54, 62, 71, 79, 88,
+  and 96 are supporting corpus repetition only, not expanded M72 scope.
+- `tsldata/detail/lang/translate_cpp.tsl` backend-uninit entries are evidence
+  that output behavior exists later; M72 must not read or consume those maps.
+- `frozen/` remains legacy evidence only and must not become runtime input.
+
+Tests required:
+
+- Direct resolver tests from M71 vector-alignment resolution to the M72
+  helper-set completion aggregate.
+- Normal `lower_candidates` pipeline tests proving the M72 stage appears after
+  `array_initialization_vector_alignment_request_resolution` and preserves
+  M68/M69/M70/M71 ordering and outputs.
+- Tests proving the backend-uninit request is identified by typed M67 fields
+  and source text is provenance/invariant evidence only.
+- Diagnostics for missing, duplicate, wrong-kind, wrong-ordinal, unsupported
+  leaf text, unsupported source/container, context mismatch, and provenance
+  mismatch.
+- Determinism tests for repeated runs and reordered inputs.
+- Regression tests proving M68 base-type behavior, M70 vector-length behavior,
+  and M71 vector-alignment behavior are unchanged.
+- Regression tests proving no backend translation, rendering, generated
+  output, golden-file churn, declaration/array lowering, raw helper evaluator
+  calls, raw helper parsing, catalog reads, `tsldata` reads, host CPU queries,
+  backend map reads, or runtime `frozen/` use is introduced.
+- Pipeline-level M67 diagnostic propagation coverage if M72 touches the
+  extracted array-initialization stage pipeline in a way that can exercise it.
+
+Golden fixtures required:
+
+- None. M72 is lowering-only helper-set completion and must not change
+  generated C++ or Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M72 helper-set completion test command selected by the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Treating backend uninit as a backend translation or rendering problem under
+  a lowering label.
+- Hardwiring uninit behavior from request ordinal, helper text, backend id,
+  selected type tag, extension name, renderer name, or backend map directly to
+  emitted text or a fake backend-neutral initializer.
+- Letting the aggregate IR become declaration/array IR for `var`, `array_type`,
+  allocation/lifetime, initializer, store, return, `tmp.data()`, or
+  `emit_return`.
+- Creating a broad helper-set registry, generic backend-value evaluator,
+  central stage dispatcher, or raw-helper parser instead of one exact typed
+  continuation after M71.
+- Expanding public exports beyond genuinely consumed typed boundary values.
+
+Dependencies on prior milestones:
+
+- Milestones 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, and 71.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m71-acceptance-finalization-prompt.md` is created and
+  active pending human acceptance. That finalization prompt will create
+  `docs/agent/runs/m72-execution-review-loop-prompt.md` after explicit human
+  acceptance. Do not start M72 until the acceptance-finalization prompt records
+  acceptance.

@@ -512,15 +512,23 @@ vector alignment and backend uninit requests, and must not infer lanes from raw
 helper text, SVE tokens, extension names, vector-bit strings, host CPU state,
 catalog data, backend translation maps, or renderers.
 
-Milestone 71 is selected as the next Stage 8 request-resolution boundary. It
-should resolve exactly the M67 `value<generation>(vector::alignment)` request
-through the M69/M70 extracted array-initialization pipeline and explicit typed
-vector-alignment metadata supplied before lowering evaluation. The stage should
-follow `array_initialization_vector_length_request_resolution`, preserve the
+Milestone 71 is accepted as a Stage 8 request-resolution boundary. It resolves
+exactly the M67 `value<generation>(vector::alignment)` request through the
+M69/M70 extracted array-initialization pipeline and explicit typed
+vector-alignment metadata supplied before lowering evaluation. The stage
+follows `array_initialization_vector_length_request_resolution`, preserves the
 remaining backend-uninit request, and must not infer alignment from vector
 length, vector bits, scalar byte size, selected type tags, SVE token text,
 extension names, host CPU state, catalog data, backend translation maps,
 backend vector-alignment spellings, or renderers.
+
+Milestone 72 is selected as the next Stage 8 helper-set completion boundary.
+It should consume the accepted M71 vector-alignment resolution, identify the
+remaining exact M67 `value<backend>(uninit::array)` request by typed request
+fields, and produce one typed aggregate helper-set IR after
+`array_initialization_vector_alignment_request_resolution`. The backend-uninit
+request remains a deferred backend-value boundary; Stage 8 must not translate
+it, render it, query backend maps, lower declarations/arrays, or emit output.
 
 ## Stage 9: Backend Planning
 

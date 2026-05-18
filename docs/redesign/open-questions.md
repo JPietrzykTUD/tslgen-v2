@@ -206,10 +206,12 @@ SVE test planning and backend slices are blocked. Fixed-lane backends are not bl
 The accepted M70 lowering slice may represent explicit runtime/scalable
 vector-length metadata as a typed value/policy or diagnose unsupported numeric
 resolution, but it must not assume a fixed SVE lane count or decide SVE
-backend/test generation policy. The selected M71 vector-alignment slice is
+backend/test generation policy. The accepted M71 vector-alignment slice is
 similarly limited to explicit typed alignment metadata for the exact
-array-initialization request; it must not decide broad SVE alignment,
-register, backend, or test-generation policy.
+array-initialization request. The selected M72 helper-set completion slice may
+preserve backend uninit as a typed deferred boundary for that exact request,
+but it must not decide broad SVE alignment, register, backend-uninit
+translation, rendering, or test-generation policy.
 
 ## OQ-008: Which CLI Compatibility Is Required?
 
@@ -1318,11 +1320,14 @@ question created by that accepted chain: extract the M64-M68
 array-initialization stage assembly tail into a private typed helper/result
 while preserving behavior. Milestone 70 is accepted to resolve only the exact
 `value<generation>(vector::length)` request from explicit typed metadata
-through that extracted pipeline. Milestone 71 is selected to resolve only the
+through that extracted pipeline. Milestone 71 is accepted to resolve only the
 exact `value<generation>(vector::alignment)` request from explicit typed
-metadata through the same staged pipeline. It still leaves backend uninit,
-declaration/array semantics, aligned load/store semantics, rendering, output,
-and broad vector/register metadata policy open.
+metadata through the same staged pipeline. Milestone 72 is selected to package
+the exact helper set and preserve the remaining
+`value<backend>(uninit::array)` request as a typed deferred backend-value
+boundary. It still leaves backend uninit translation, declaration/array
+semantics, aligned load/store semantics, rendering, output, and broad
+vector/register metadata policy open.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1339,9 +1344,10 @@ unresolved body-IR shape, accepted M63 singleton envelope shape, accepted M64
 narrow structural slot envelope, accepted M65 pipeline integration, accepted
 M67 helper-request/provenance IR over the M66 first-slot leaves, accepted M68
 base-type request resolution, accepted M69 behavior-preserving extraction,
-accepted M70 exact vector-length request resolution, selected M71 exact
-vector-alignment request resolution, and body-slot semantics beyond those
-request-resolution boundaries, including nested expressions, direct
+accepted M70 exact vector-length request resolution, accepted M71 exact
+vector-alignment request resolution, selected M72 exact helper-set completion,
+and body-slot semantics beyond those request-resolution boundaries, including
+nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
 `algo`, Rust output, generated tests beyond the selected M49 source fixture,
 CLI/report parity, compiler execution, and broad native rendering.

@@ -463,13 +463,20 @@ Current roadmap note:
   metadata supplied before lowering evaluation, not from raw helper text,
   extension names, SVE tokens, vector-bit strings, host CPU state, catalog
   reads, backend maps, or renderers.
-- Milestone 71 is selected as the next typed request-resolution boundary over
-  the M69/M70 array-initialization pipeline. It should resolve exactly the M67
+- Milestone 71 is accepted as a typed request-resolution boundary over the
+  M69/M70 array-initialization pipeline. It resolves exactly the M67
   `value<generation>(vector::alignment)` request from explicit typed
   vector-alignment metadata supplied before lowering evaluation, not from
   vector length, vector bits, scalar byte size, selected type tags, SVE token
   text, extension names, host CPU state, catalog reads, backend maps, backend
   vector-alignment spellings, or renderers.
+- Milestone 72 is selected as a typed helper-set completion boundary over the
+  M69/M70/M71 array-initialization pipeline. It should package the accepted
+  M68 base type, M70 vector length, M71 vector alignment, and remaining exact
+  M67 `value<backend>(uninit::array)` request into one typed aggregate for
+  later declaration/array lowering. The backend-uninit request remains a
+  deferred backend-value boundary and must not become backend text,
+  translation input, renderer-ready IR, declaration semantics, or output.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

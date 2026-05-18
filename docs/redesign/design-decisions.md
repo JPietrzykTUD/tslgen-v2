@@ -1398,13 +1398,20 @@ Consequences:
   from raw helper text, SVE tokens, extension names, vector-bit strings,
   selected type tags, host CPU state, catalog data, backend maps, or renderer
   names.
-- Milestone 71 is selected to resolve exactly the M67
+- Milestone 71 is accepted to resolve exactly the M67
   `value<generation>(vector::alignment)` request through the M69/M70 extracted
-  pipeline. The selected design condition is that vector-alignment facts arrive
+  pipeline. The accepted design condition is that vector-alignment facts arrive
   as explicit typed metadata before lowering evaluation; M71 must not infer
   alignment from vector length, vector bits, scalar byte size, selected type
   tags, SVE token text, extension names, host CPU state, catalog data, backend
   maps, backend vector-alignment spellings, or renderer names.
+- Milestone 72 is selected to complete the exact array-initialization helper
+  set before declaration/array semantics. The selected design condition is
+  that M72 packages accepted M68/M70/M71 results and the remaining exact M67
+  `value<backend>(uninit::array)` request into one typed aggregate, while
+  preserving backend uninit only as a deferred backend-value request boundary.
+  It must not query backend maps, create translation requests, render backend
+  text, or lower `var`/`array_type` semantics.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
