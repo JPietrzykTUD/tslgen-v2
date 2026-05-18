@@ -1298,6 +1298,11 @@ level: the exact `array.tsl:105` array-initialization slot becomes typed form
 IR over accepted M65 envelopes. It still leaves vector metadata, backend
 uninit evaluation, broad declaration/array semantics, store/return semantics,
 SVE/direct-intrinsic semantics, translation, and rendering open.
+Milestone 67 is selected to classify exactly the four M66 helper leaves into
+typed deferred helper-request/provenance IR. It still does not evaluate vector
+length/alignment, backend uninit, or base type helpers, and it does not answer
+semantic questions about declarations, arrays, direct intrinsics, stores,
+returns, translation, or rendering.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1311,9 +1316,9 @@ size-byte equality predicates, branch-chain pruning beyond the accepted narrow
 M59 slice over those predicates, selected body handling beyond the accepted
 opaque M60 handoff, M61 assignment-form recognition slice, accepted M62
 unresolved body-IR shape, accepted M63 singleton envelope shape, accepted M64
-narrow structural slot envelope, accepted M65 pipeline integration, and
-body-slot semantics beyond the M66 exact first-slot form-IR boundary,
-including nested expressions, direct
+narrow structural slot envelope, accepted M65 pipeline integration, selected
+M67 helper-request/provenance IR over the M66 first-slot leaves, and body-slot
+semantics beyond that request boundary, including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
 `algo`, Rust output, generated tests beyond the selected M49 source fixture,
 CLI/report parity, compiler execution, and broad native rendering.

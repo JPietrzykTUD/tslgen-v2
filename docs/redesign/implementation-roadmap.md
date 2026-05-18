@@ -6812,3 +6812,173 @@ Execution-review result:
 
 - M66 is accepted. The next workflow action is post-M66 planning; this section
   does not select the follow-on milestone.
+
+## Post-M66 Planning Result
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Exact array initialization helper request IR | M66 now records the exact first-slot helper leaves as typed unresolved provenance. Classifying those leaves into typed deferred request records creates the next useful lowering handoff without evaluating helper semantics. | Medium if "request" becomes helper evaluation, backend translation input, or a generic raw helper dispatcher. | Select as M67. |
+| Vector length/alignment semantic values | The M66 form includes `value<generation>(vector::length)` and `value<generation>(vector::alignment)`. | High now because evaluating them requires vector metadata rules, extension/type metadata policy, missing-metadata diagnostics, and could become broad vector semantics. | Defer until a request IR boundary exists and a value-resolution slice is selected. |
+| Backend uninit semantics | The M66 form includes `value<backend>(uninit::array)`. | High because it invites backend value semantics, backend translation requests, renderer-ready values, and generated output pressure. | Defer. |
+| Generic array/declaration IR | The M66 form is syntactically a `var<typed>(array_type<...>, tmp, ...)` declaration-like shape. | High because it combines generic `var`, `array_type`, allocation/lifetime, variable binding, and statement semantics. | Defer. |
+| Next slot-specific form IR | The accepted M64/M65 envelope also has predicate, selected-body, store, and return slots. | Medium to high because the nearby slots pull in SVE predicates, direct intrinsics, store semantics, `tmp.data()`, `emit_return`, and backend/rendering pressure. | Defer until helper-request/provenance boundaries are stable. |
+| Determinism-only hardening | M65 recorded a useful explicit skeleton-input-ordering test follow-up. | Low risk, but lower architectural value than the next typed lowering boundary. | Keep recorded; include only if it naturally fits a nearby implementation. |
+
+### Milestone 67: Exact Array Initialization Helper Request IR Slice
+
+Status:
+
+Selected for human acceptance after post-M66 planning.
+
+Goal:
+
+Consume accepted M66 `ExactArrayInitializationSlotFormIr` values and classify
+the four exact unresolved helper leaves into typed deferred helper-request IR,
+without evaluating, resolving, translating, normalizing, or rendering any
+helper.
+
+M67 is a request/provenance boundary only. It is intended to make the next
+array-initialization lowering steps explicit and composable before any helper
+family is semantically resolved.
+
+Scope:
+
+- Consume accepted M66 `ExactArrayInitializationSlotFormIr` values, or the
+  typed `array_initialization_slot_form_lowering` stage output.
+- Produce an immutable typed helper-request IR value, for example
+  `ExactArrayInitializationHelperRequestIr`, keyed to the M66 slot form.
+- Classify exactly the four M66 helper leaves into deterministic request
+  records:
+  - generation type request for `type<generation>(base::in)`;
+  - generation value request for `value<generation>(vector::length)`;
+  - generation value request for `value<generation>(vector::alignment)`;
+  - backend value request for `value<backend>(uninit::array)`.
+- Preserve source leaf text, leaf kind, source locations, candidate id,
+  selected type tag, branch-chain identity, envelope identity, slot ordinal,
+  variable token `tmp`, and deterministic request ordering.
+- Append a distinct deterministic lowering stage, for example
+  `array_initialization_helper_request_lowering`, after
+  `array_initialization_slot_form_lowering`.
+- Preserve the accepted M65 envelope, accepted M66 form IR, and all non-M66
+  body slots unchanged.
+- Produce structured diagnostics for invalid M67 boundary/request state, such
+  as unsupported source stage/type, missing M66 form, missing request leaf,
+  duplicate/mismatched leaf kind, unsupported leaf text, or provenance
+  mismatch.
+
+Out of scope:
+
+- Calling existing generation helper evaluators, including M43 base type
+  resolution, from the M67 request boundary.
+- Producing `GenerationTypeRef`, `GenerationValue`, vector metadata values,
+  backend uninit values, backend translation requests, renderer-ready values,
+  generated output, or resolved helper results.
+- Evaluating `type<generation>(base::in)`,
+  `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, or
+  `value<backend>(uninit::array)`.
+- Generic `type<generation>(...)`, `value<generation>(...)`,
+  `type<backend>(...)`, or `value<backend>(...)` parsing or dispatch.
+- Generic `var` parsing, generic `array_type` parsing, declaration semantics,
+  array allocation/lifetime semantics, variable binding/scope, store/return
+  lowering, `tmp.data()`, `emit_return`, direct-intrinsic/SVE semantics,
+  vector/register metadata lookup, backend semantics, backend translation,
+  rendering, generated tests, CLI/reporting/writer behavior, Rust, compiler
+  execution, broad TSIL parsing, lowering-time file/catalog reads, raw TSL
+  parsing, raw-text dispatch tables, or runtime `frozen/` use.
+
+Required input:
+
+- Accepted M66 `ExactArrayInitializationSlotFormIr` values, or equivalent
+  typed `array_initialization_slot_form_lowering` stage output.
+- The exact M66 unresolved helper leaf records and provenance for
+  `tsldata/primitives/load_store/array.tsl:105`.
+
+Expected outputs:
+
+- A typed deferred helper-request IR value keyed to the accepted M66 form.
+- Exactly four typed request records in deterministic order, preserving the
+  accepted M66 leaf text and source locations.
+- A distinct deterministic lowering stage after
+  `array_initialization_slot_form_lowering`.
+- Existing M65 array-body envelopes, M66 slot forms, M57-M66 lowering outputs,
+  backend raw-helper rejection, renderer non-evaluation, generated outputs, and
+  golden fixtures unchanged.
+
+Parity criterion:
+
+M67 proves the accepted M66 first-slot helper leaves can become explicit typed
+request/provenance records for future helper-resolution milestones without
+evaluating vector metadata, backend uninit semantics, declaration semantics, or
+backend/rendering behavior.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:105` for the exact helper leaves in
+  the M66 first-slot form.
+- Accepted M66 `ExactArrayInitializationSlotFormIr` and unresolved leaf
+  records.
+- Accepted M65 `LoweredImplementation.array_body_envelopes` /
+  `ExactArrayBodyEnvelopeIr` integration.
+- Accepted M57-M64 staged lowering and provenance boundaries.
+
+Tests required:
+
+- Direct M67 lowering from an accepted M66 `ExactArrayInitializationSlotFormIr`
+  produces exactly four typed deferred request records.
+- Normal `lower_candidates` with typed M65 skeleton input carries M67 request
+  IR and appends `array_initialization_helper_request_lowering` after
+  `array_initialization_slot_form_lowering`.
+- Request records preserve leaf kind, source text, source location, candidate
+  id, selected type tag, branch-chain identity, envelope identity, slot
+  ordinal, variable token `tmp`, and deterministic ordering.
+- Selected `svptrue_b16`, `svptrue_b32`, and `svptrue_b64` paths and `si8` /
+  `ui8` no-body paths continue to preserve M65/M66 behavior.
+- Unsupported source stage/type, missing form, missing leaf, duplicate or
+  mismatched leaf kind/text, and provenance mismatch produce structured
+  diagnostics with source locations and actionable messages.
+- Tests prove the request IR contains no resolved values and does not call
+  generation helper evaluators, backend translation, renderers, file/catalog
+  reads, or runtime `frozen/`.
+- Regression tests preserve M57-M66 behavior, backend raw-helper rejection,
+  renderer non-evaluation, determinism, and no generated output or golden-file
+  changes.
+
+Golden fixtures required:
+
+- None. M67 is a lowering/request-IR slice and must not change generated C++ or
+  Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M67 exact array-initialization helper-request test command
+  selected by the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Letting request IR become helper evaluation, especially for M43
+  `base::in`, vector length/alignment metadata, or backend uninit semantics.
+- Treating backend value requests as backend translation requests.
+- Re-parsing `original_slot_text`, scanning raw payloads, or adding a generic
+  helper dispatcher instead of consuming M66 leaf records.
+- Treating `var<typed>`, `array_type`, or `tmp` as declaration, array,
+  allocation, or variable-binding semantics.
+- Adding store/return lowering, direct-intrinsic/SVE semantics, rendering,
+  generated output, file/catalog reads, or runtime `frozen/` behavior.
+
+Dependencies on prior milestones:
+
+- Milestones 57, 58, 59, 60, 61, 62, 63, 64, 65, and 66.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m66-acceptance-finalization-prompt.md` is created and
+  active pending human acceptance. That finalization prompt will create
+  `docs/agent/runs/m67-execution-review-loop-prompt.md` after explicit human
+  acceptance. Do not start M67 until the acceptance-finalization prompt records
+  acceptance.

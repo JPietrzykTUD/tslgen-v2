@@ -1373,12 +1373,18 @@ Consequences:
   vector metadata evaluation, backend uninit semantics, skeleton production,
   store/return lowering, SVE/direct-intrinsic semantics, backend translation,
   rendering, and output for later milestones.
+- Milestone 67 is selected as a typed deferred helper-request/provenance IR
+  boundary over M66 leaves. It should classify the exact base-type,
+  vector-length, vector-alignment, and backend-uninit helper leaves without
+  evaluating them, creating backend translation requests, parsing raw slot
+  text, or adding declaration/array semantics.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
 - Broad modifier support, primitive calls, direct-intrinsic semantics beyond
   the accepted M62 unresolved body-IR shape, and broad C++/Rust body rendering
-  beyond the accepted M63/M64/M65 envelope path and M66 first-slot form-IR
-  boundary remain deferred until their own helper slices are selected.
+  beyond the accepted M63/M64/M65 envelope path, M66 first-slot form-IR
+  boundary, and selected M67 helper-request/provenance boundary remain
+  deferred until their own helper slices are selected.
 - Future native rendering milestones must state which helper IR and translation
   data they consume before adding generated output.

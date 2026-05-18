@@ -525,6 +525,15 @@ not lower generic declarations, arrays, variables, store/return slots,
 SVE/direct intrinsics, backend translation, rendering, generated output, or
 broad TSIL body syntax.
 
+Milestone 67 is selected as the exact array-initialization helper request IR
+slice. It consumes accepted M66 `ExactArrayInitializationSlotFormIr` values or
+the `array_initialization_slot_form_lowering` stage and classifies exactly the
+four M66 unresolved helper leaves into deterministic typed deferred
+helper-request records. M67 preserves leaf kind, source text, source
+locations, candidate/type/envelope provenance, slot ordinal, branch-chain
+identity, and variable token `tmp`, but it does not evaluate, resolve,
+translate, normalize, or render any helper.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
@@ -597,7 +606,9 @@ IR slices:
   types, generic vector lengths, aliases, and non-selected base forms.
 - Generation-time value queries other than the M55 scalar
   size-bytes form, including vector length, vector alignment, mask lane
-  constants, and generic lengths.
+  constants, and generic lengths. Selected M67 may classify the exact M66
+  vector length/alignment leaves as deferred helper-request records, but it
+  must not resolve their values.
 - Arithmetic over generation values remains deferred except for the accepted
   M56 exact `type.size_bytes * 8` expression. Comparisons over generation
   values remain deferred except for the accepted M57 exact
@@ -610,8 +621,9 @@ IR slices:
   only exact structural array-body slot assembly around M63 envelopes, and
   accepted M65 wires that typed envelope into the normal lowering pipeline
   without adding skeleton recognition or slot semantics. M66 refines only the
-  exact first array-initialization slot into typed form IR while
-  keeping helper evaluation and other slots deferred. General
+  exact first array-initialization slot into typed form IR. Selected M67 may
+  classify the four M66 helper leaves into typed deferred request/provenance
+  IR, while keeping helper evaluation and other slots deferred. General
   `else if<generation>` syntax, final-else policy, broad branch pruning based
   on generation values, assignment semantics beyond that selected IR shape,
   broad direct-intrinsic/SVE semantics, backend intrinsic lowering, vector

@@ -162,39 +162,44 @@ The M66 execution-review loop returned `Accept` after one focused
 public-boundary revision, generated package artifact cleanup, and focused
 documentation wording revisions.
 
+Post-M66 planning is accepted. It selected
+`Milestone 67: Exact Array Initialization Helper Request IR Slice`, and
+internal review returned `Accept With Follow-Ups` after a focused workflow
+state correction.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Plan the next milestone after M66. For the next task, focus on lowering.
+Execute Milestone 67.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m66-planning-plus-review-prompt.md
+docs/agent/runs/m67-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-No active executor milestone. Post-M66 planning is active.
+Milestone 67: Exact Array Initialization Helper Request IR Slice
 ```
 
 Latest review verdict:
 
 ```text
-M66 execution-review loop returned Accept after focused boundary and
-documentation revisions. No M66 follow-ups remain.
+Post-M66 planning returned Accept With Follow-Ups after focused workflow state
+correction. Human acceptance is recorded; M67 is ready for execution.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M66 planning-plus-review prompt. Use the specified
-read-only planning/review subagents. Do not implement code or start M67 unless
-the active prompt explicitly selects an executor task.
+Run the active M67 execution-review loop prompt with one write-capable
+executor if M67 is not already implemented, then read-only review/audit
+subagents. Do not start M68.
 ```
 
 Accepted planning prompt:
@@ -521,10 +526,22 @@ Accepted M66 execution-review loop prompt:
 docs/agent/runs/m66-execution-review-loop-prompt.md
 ```
 
-Active post-M66 planning prompt:
+Completed post-M66 planning prompt:
 
 ```text
 docs/agent/runs/post-m66-planning-plus-review-prompt.md
+```
+
+Accepted post-M66 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m66-acceptance-finalization-prompt.md
+```
+
+Active M67 execution-review loop prompt:
+
+```text
+docs/agent/runs/m67-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -949,6 +966,30 @@ docs/agent/runs/post-m66-planning-plus-review-prompt.md
   backend uninit semantics, backend translation, renderer-ready IR,
   rendering, output, generated tests, CLI/report/writer behavior, Rust,
   compiler execution, file/catalog reads, or runtime `frozen/` behavior.
+- M67 is accepted for execution as exact array-initialization helper-request
+  IR only. M67 must consume accepted M66
+  `ExactArrayInitializationSlotFormIr` values or the
+  `array_initialization_slot_form_lowering` stage output.
+- M67 must classify exactly four M66 leaves into typed deferred request
+  records: `type<generation>(base::in)`,
+  `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, and
+  `value<backend>(uninit::array)`.
+- M67 must preserve source leaf text, leaf kind, source locations, candidate
+  id, selected type tag, branch-chain identity, envelope identity, slot
+  ordinal, variable token `tmp`, and deterministic request ordering.
+- M67 must not evaluate, resolve, translate, normalize, or render any helper.
+- M67 must not call existing generation helper evaluators, including M43 base
+  type resolution.
+- M67 must not produce `GenerationTypeRef`, `GenerationValue`, vector metadata
+  values, backend uninit values, backend translation requests, renderer-ready
+  IR, generated output, generated tests, CLI/report/writer behavior, Rust, or
+  compiler execution.
+- M67 must not add generic helper parsing, generic `var` parsing, generic
+  `array_type` parsing, declaration semantics, array allocation/lifetime,
+  variable scope, store/return lowering, `tmp.data()`, `emit_return`,
+  direct-intrinsic/SVE semantics, broad TSIL parsing, file/catalog reads during
+  lowering, raw-text dispatch tables, or runtime `frozen/` use.
 
 ## Accepted Milestone 48
 
@@ -1570,10 +1611,19 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M66 documentation follow-up addressed during the execution-review loop:
   align redesign docs so M66 is not described as deferred after
   implementation.
+- Post-M66 planning follow-up for M67 execution: keep M67 as typed deferred
+  helper-request/provenance IR only, not helper evaluation.
+- Post-M66 planning follow-up for M67 execution: do not produce
+  `GenerationTypeRef`, `GenerationValue`, backend translation requests,
+  resolved vector metadata values, backend uninit values, renderer-ready IR,
+  or generated output.
+- Post-M66 planning follow-up for M67 execution: consume M66
+  `ExactArrayInitializationSlotFormIr` / leaf records and do not reparse raw
+  slot text or dispatch from raw helper strings.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M66 planning.
+No stop condition is active. The workflow proceeds with M67 execution.
 
 ## Validation Expectations
 

@@ -460,6 +460,14 @@ and backend uninit helpers, but it must not evaluate those helpers or add broad
 declaration, array, variable, store, return, SVE/direct-intrinsic, backend
 translation, rendering, generated output, or broad TSIL body semantics.
 
+Milestone 67 is selected as a request/provenance IR slice over the accepted M66
+first-slot helper leaves. It should classify exactly the base-type,
+vector-length, vector-alignment, and backend-uninit leaves into typed deferred
+helper-request records while preserving M66 provenance. It must not evaluate
+those helpers, call existing helper evaluators, create backend translation
+requests, or add declaration, array, variable, store, return, SVE/direct
+intrinsic, rendering, generated output, or broad TSIL body semantics.
+
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
 suffix request over typed M43 `GenerationTypeRef` inputs. Milestone 46

@@ -434,6 +434,12 @@ Current roadmap note:
   vector metadata or backend uninit helpers, add broad declaration/array/
   variable semantics, lower store/return slots, introduce backend translation,
   rendering, output, or broad TSIL parsing.
+- Milestone 67 is selected as the next request/provenance boundary over the
+  M66 form IR. It should consume only `ExactArrayInitializationSlotFormIr` or
+  the corresponding stage output and produce typed deferred helper-request
+  records for the four exact M66 leaves. It must not evaluate helper values,
+  call backend translation, parse raw slot text, or add declaration/array/
+  store/return semantics.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not
