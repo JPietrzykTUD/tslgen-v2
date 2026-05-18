@@ -203,10 +203,13 @@ Required evidence:
 Implementation blocked:
 
 SVE test planning and backend slices are blocked. Fixed-lane backends are not blocked.
-The selected M70 lowering plan may represent explicit runtime/scalable
+The accepted M70 lowering slice may represent explicit runtime/scalable
 vector-length metadata as a typed value/policy or diagnose unsupported numeric
 resolution, but it must not assume a fixed SVE lane count or decide SVE
-backend/test generation policy.
+backend/test generation policy. The selected M71 vector-alignment slice is
+similarly limited to explicit typed alignment metadata for the exact
+array-initialization request; it must not decide broad SVE alignment,
+register, backend, or test-generation policy.
 
 ## OQ-008: Which CLI Compatibility Is Required?
 
@@ -1313,11 +1316,13 @@ translation, or rendering.
 Milestone 69 is accepted as the answer to the immediate maintainability
 question created by that accepted chain: extract the M64-M68
 array-initialization stage assembly tail into a private typed helper/result
-while preserving behavior. Milestone 70 is selected to resolve only the exact
+while preserving behavior. Milestone 70 is accepted to resolve only the exact
 `value<generation>(vector::length)` request from explicit typed metadata
-through that extracted pipeline. It still leaves vector alignment, backend
-uninit, declaration/array semantics, rendering, output, and broad vector/
-register metadata policy open.
+through that extracted pipeline. Milestone 71 is selected to resolve only the
+exact `value<generation>(vector::alignment)` request from explicit typed
+metadata through the same staged pipeline. It still leaves backend uninit,
+declaration/array semantics, aligned load/store semantics, rendering, output,
+and broad vector/register metadata policy open.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1334,8 +1339,9 @@ unresolved body-IR shape, accepted M63 singleton envelope shape, accepted M64
 narrow structural slot envelope, accepted M65 pipeline integration, accepted
 M67 helper-request/provenance IR over the M66 first-slot leaves, accepted M68
 base-type request resolution, accepted M69 behavior-preserving extraction,
-selected M70 exact vector-length request resolution, and body-slot semantics
-beyond that request-resolution boundary, including nested expressions, direct
+accepted M70 exact vector-length request resolution, selected M71 exact
+vector-alignment request resolution, and body-slot semantics beyond those
+request-resolution boundaries, including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
 `algo`, Rust output, generated tests beyond the selected M49 source fixture,
 CLI/report parity, compiler execution, and broad native rendering.

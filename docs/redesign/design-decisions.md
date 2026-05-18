@@ -1391,13 +1391,20 @@ Consequences:
   private helper/result preserves current lowered fields, stage names/order,
   diagnostics, deterministic behavior, and generated-output state, and does
   not become a semantic helper dispatcher or broad stage registry.
-- Milestone 70 is selected to resolve exactly the M67
+- Milestone 70 is accepted to resolve exactly the M67
   `value<generation>(vector::length)` request through the M69 extracted
-  pipeline. The selected design condition is that vector-length facts arrive as
+  pipeline. The accepted design condition is that vector-length facts arrive as
   explicit typed metadata before lowering evaluation; M70 must not infer lanes
   from raw helper text, SVE tokens, extension names, vector-bit strings,
   selected type tags, host CPU state, catalog data, backend maps, or renderer
   names.
+- Milestone 71 is selected to resolve exactly the M67
+  `value<generation>(vector::alignment)` request through the M69/M70 extracted
+  pipeline. The selected design condition is that vector-alignment facts arrive
+  as explicit typed metadata before lowering evaluation; M71 must not infer
+  alignment from vector length, vector bits, scalar byte size, selected type
+  tags, SVE token text, extension names, host CPU state, catalog data, backend
+  maps, backend vector-alignment spellings, or renderer names.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

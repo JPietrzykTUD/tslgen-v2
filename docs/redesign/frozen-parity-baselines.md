@@ -339,9 +339,10 @@ and still does not add compiler execution.
   pipeline integration for that envelope, accepted M67 helper-request/
   provenance IR over the accepted M66 exact first-slot form, accepted M68
   base-type request resolution over that request IR, accepted M69
-  behavior-preserving stage extraction, selected M70 exact vector-length
-  request resolution from explicit typed metadata, broad TSIL/body-slot parity
-  beyond that request-resolution boundary, and backend
+  behavior-preserving stage extraction, accepted M70 exact vector-length
+  request resolution from explicit typed metadata, selected M71 exact
+  vector-alignment request resolution from explicit typed metadata, broad
+  TSIL/body-slot parity beyond those request-resolution boundaries, and backend
   translation-map evaluation beyond the selected M40/M45/M46 requests.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and
   googletest download or vendoring.

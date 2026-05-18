@@ -503,14 +503,24 @@ behavior. M69 does not add new public IR, new semantic helper resolution,
 vector length/alignment resolution, backend uninit resolution, generic helper
 dispatch, backend translation, rendering, or generated output.
 
-Milestone 70 is selected as the next Stage 8 request-resolution boundary. It
-should resolve exactly the M67 `value<generation>(vector::length)` request
-through the M69 extracted array-initialization pipeline and explicit typed
-vector-length metadata supplied before lowering evaluation. The stage should
-follow `array_initialization_base_type_request_resolution`, preserve unresolved
+Milestone 70 is accepted as a Stage 8 request-resolution boundary. It resolves
+exactly the M67 `value<generation>(vector::length)` request through the M69
+extracted array-initialization pipeline and explicit typed vector-length
+metadata supplied before lowering evaluation. The stage follows
+`array_initialization_base_type_request_resolution`, preserves unresolved
 vector alignment and backend uninit requests, and must not infer lanes from raw
 helper text, SVE tokens, extension names, vector-bit strings, host CPU state,
 catalog data, backend translation maps, or renderers.
+
+Milestone 71 is selected as the next Stage 8 request-resolution boundary. It
+should resolve exactly the M67 `value<generation>(vector::alignment)` request
+through the M69/M70 extracted array-initialization pipeline and explicit typed
+vector-alignment metadata supplied before lowering evaluation. The stage should
+follow `array_initialization_vector_length_request_resolution`, preserve the
+remaining backend-uninit request, and must not infer alignment from vector
+length, vector bits, scalar byte size, selected type tags, SVE token text,
+extension names, host CPU state, catalog data, backend translation maps,
+backend vector-alignment spellings, or renderers.
 
 ## Stage 9: Backend Planning
 

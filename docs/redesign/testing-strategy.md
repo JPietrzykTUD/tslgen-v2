@@ -845,7 +845,7 @@ Recommended first parity checks:
   not called; and generated outputs/golden files remain unchanged. A
   pipeline-level M67 diagnostic propagation test remains a non-blocking
   follow-up for the next slice that touches the extracted pipeline.
-- Milestone 70 tests should prove exact array-initialization vector-length
+- Milestone 70 tests prove exact array-initialization vector-length
   request resolution through explicit typed metadata: direct resolver tests,
   normal `lower_candidates` stage-order tests after
   `array_initialization_base_type_request_resolution`, missing/duplicate/
@@ -854,6 +854,16 @@ Recommended first parity checks:
   metadata inputs, unchanged base-type behavior, unresolved vector alignment
   and backend uninit requests, no raw helper parsing or raw query evaluator
   calls on M67 leaf text, no catalog/`tsldata`/host CPU reads during lowering
+  evaluation, and no backend translation/rendering or generated-output churn.
+- Milestone 71 tests should prove exact array-initialization vector-alignment
+  request resolution through explicit typed metadata: direct resolver tests,
+  normal `lower_candidates` stage-order tests after
+  `array_initialization_vector_length_request_resolution`, missing/duplicate/
+  conflicting/unsupported metadata diagnostics, malformed or mismatched M67
+  request diagnostics, deterministic ordering for repeated and reversed
+  metadata inputs, unchanged base-type and vector-length behavior, unresolved
+  backend uninit request, no raw helper parsing or raw query evaluator calls
+  on M67 leaf text, no catalog/`tsldata`/host CPU reads during lowering
   evaluation, and no backend translation/rendering or generated-output churn.
 
 Deferred parity checks:

@@ -45,7 +45,7 @@ rather than raw parser dictionaries or backend renderer state.
 | selected type tag | implemented in M43 | Required for base scalar type queries before suffix and signedness work. Defaults from the selected candidate type tag when `GenerationContext.type_tag_override` is absent and candidate defaulting is enabled. |
 | type tag override | implemented in M43 | Explicit request-local test/diagnostic override. `GenerationContext.type_tag_override` wins over `selected_type_tag` and the selected candidate type tag. |
 | backend type spelling | likely later | Consumed by backend translation and rendering after type resolution. |
-| vector/register metadata | likely later | Required for `vector::length`, `vector::alignment`, and register types. |
+| vector/register metadata | partially selected | M70 accepts explicit vector-length metadata for the exact array-initialization request, and M71 is selected to use explicit vector-alignment metadata for the sibling request. Broad vector/register metadata remains later. |
 | primitive attributes with non-bool values | likely later | Needed if non-boolean attribute queries are selected. |
 | resolved template | likely later | Required by wrapper/body helper families beyond the first branch slice. |
 | parameter roles | likely later | Needed for masks, immediates, and pointer/load/store roles. |
@@ -70,8 +70,8 @@ behavior without treating the whole corpus as implemented.
 | `if<generation>(value<generation>(primitive::attribute(packed)))` | `tsldata/primitives/load_store/store.tsl:177-188`, `store.tsl:196-210` | Select packed mask-store path. | Primitive attributes, mask parameter role, vector metadata. | Same branch-pruning model as `aligned`, with mask-specific context later. | Mask/vector type data for selected branch. | required-later | Defer until mask store parity is selected. | Reuse branch evaluator after selected mask fixture exists. |
 | `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))` | Exact `else<generation>` forms in `tsldata/primitives/bitwise/shifts.tsl:535-547`, `shifts.tsl:625-635`, `shifts.tsl:842-887`, `shifts.tsl:933-943`, `shifts.tsl:1222-1244`, `shifts.tsl:1268-1280`, `shifts.tsl:1465-1481`, and `shifts.tsl:1507-1518`; plain-`else` evidence in `tsldata/primitives/conversion/repr_change.tsl:1210-1217`, with additional same-predicate evidence at `:540-649`, `:1093-1100`, and `:1160-1167`. | Select signed or unsigned branch behavior. | Type tag from typed M43 `GenerationTypeRef(kind="base.in")`, plus M42 branch provenance context. | Boolean `GenerationValue` derived from typed type query and pruned branch provenance. | No backend data for the predicate itself; selected branch bodies may contain backend requests. | M48 implemented `else<generation>`; M51 implemented exact plain `else` | M51 accepts only the exact plain-`else` syntax for this predicate. Branch bodies, conversion parity, and broad plain-`else` support remain deferred. | True/false pruning, selected-branch-only diagnostics, unsupported predicate/type diagnostics, missing type context, raw-helper rejection, and no conversion-body lowering. |
 | `type<generation>(vector::register)` | `tsldata/primitives/load_store/load.tsl:39-45`, `load.tsl:59-67`, `store.tsl:56-61` | Resolve selected vector register type. | Backend id, extension, type tag, vector/register metadata. | `GenerationTypeRef(kind="vector.register")`. | Language type map. | required-later | Defer until vector register type rendering is selected. | Typed metadata fixtures; missing language-map diagnostics. |
-| `value<generation>(vector::length)` | `tsldata/primitives/load_store/load.tsl:41-43`, `tsldata/primitives/bitwise/shifts.tsl:50-53`, `shifts.tsl:218-221`; exact M70 array-initialization request in `tsldata/primitives/load_store/array.tsl:105` | Resolve lane count or explicit runtime/scalable vector-length policy for selected contexts. | Extension, type tag, lane metadata, and for M70 the typed M67/M69 array-initialization request context. | Narrow typed vector-length result such as `ExactArrayInitializationVectorLengthResolutionIr`; broad vector/query consumers may later use `GenerationValue` or a typed policy value. | Explicit typed metadata supplied before lowering evaluation. | M70 selected for exact array-initialization request; broad vector/loop use remains required-later. | M70 selects only the exact M67 array-initialization vector-length request. Broad loop/vector metadata resolution remains deferred. | M70 direct and pipeline tests with explicit metadata, missing/duplicate/unsupported runtime/scalable diagnostics, determinism, raw-helper rejection, no host CPU/catalog/`tsldata` reads during lowering, and no backend/rendering output. Broad loop tests remain later. |
-| `value<generation>(vector::alignment)` | `tsldata/primitives/load_store/load.tsl:55-70`, `store.tsl:54-64`, `store.tsl:75-85` | Supply alignment value to selected aligned branch. | Extension, type tag, alignment metadata. | `GenerationValue[int](kind="vector.alignment")`. | Extension/type metadata. | required-later | Defer until aligned branch body rendering is selected. | Query tests plus missing alignment diagnostics. |
+| `value<generation>(vector::length)` | `tsldata/primitives/load_store/load.tsl:41-43`, `tsldata/primitives/bitwise/shifts.tsl:50-53`, `shifts.tsl:218-221`; exact M70 array-initialization request in `tsldata/primitives/load_store/array.tsl:105` | Resolve lane count or explicit runtime/scalable vector-length policy for selected contexts. | Extension, type tag, lane metadata, and for M70 the typed M67/M69 array-initialization request context. | Narrow typed vector-length result such as `ExactArrayInitializationVectorLengthResolutionIr`; broad vector/query consumers may later use `GenerationValue` or a typed policy value. | Explicit typed metadata supplied before lowering evaluation. | M70 accepted for exact array-initialization request; broad vector/loop use remains required-later. | M70 resolves only the exact M67 array-initialization vector-length request. Broad loop/vector metadata resolution remains deferred. | M70 direct and pipeline tests with explicit metadata, missing/duplicate/unsupported runtime/scalable diagnostics, determinism, raw-helper rejection, no host CPU/catalog/`tsldata` reads during lowering, and no backend/rendering output. Broad loop tests remain later. |
+| `value<generation>(vector::alignment)` | Exact M71 array-initialization request in `tsldata/primitives/load_store/array.tsl:105`; broader aligned load/store evidence in `tsldata/primitives/load_store/load.tsl:55-70`, `store.tsl:54-64`, and `store.tsl:75-85` | Supply alignment value or explicit unsupported policy for selected contexts. | Extension, type tag, alignment metadata, and for M71 the typed M67/M70 array-initialization request context. | Narrow typed vector-alignment result such as `ExactArrayInitializationVectorAlignmentResolutionIr`; broad vector/query consumers may later use `GenerationValue` or a typed policy value. | Explicit typed metadata supplied before lowering evaluation. | M71 selected for exact array-initialization request; broad aligned load/store use remains required-later. | M71 selects only the exact M67 array-initialization vector-alignment request. Broad aligned-branch, `assume_aligned`, and vector/register metadata semantics remain deferred. | M71 direct and pipeline tests with explicit metadata, missing/duplicate/conflicting/unsupported diagnostics, determinism, raw-helper rejection, no host CPU/catalog/`tsldata` reads during lowering, backend uninit still unresolved, and no backend/rendering output. Broad aligned branch tests remain later. |
 | `value<generation>(type::size_bytes(type<generation>(base::in)))` | `tsldata/primitives/io/out.tsl:43-52`, `tsldata/primitives/bitwise/bit_counts.tsl:99`, `tsldata/primitives/load_store/array.tsl:107-109`, `tsldata/primitives/misc/conflict.tsl:79` | Resolve the selected scalar base type byte size. | Selected type tag plus explicit scalar size-byte rules for selected singleton scalar tags. | `GenerationValue[int](kind="type.size_bytes")`. | No backend data for the value itself. Later backend/rendering may consume already-lowered values only after separate slices. | implemented by M55 | M55 selects only the exact nested `base::in` query for `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`, `f32`, and `f64`. | Byte-value tests, float scope tests, unsupported group/wildcard diagnostics, missing context/rule diagnostics, determinism, raw-helper rejection, and no surrounding body lowering. |
 | `value<generation>(type::size_bytes(type<generation>(base::in))) * 8` | `tsldata/primitives/io/out.tsl:43`, `:46`, `:48`, `:50`, `:52`, `:70`, `:73`, `:75`, `:77`, `:79`; `tsldata/primitives/misc/conflict.tsl:79` | Resolve selected scalar base type bit width from the accepted typed size-byte value. | Selected type tag plus explicit scalar size-byte rules for selected singleton scalar tags. | `GenerationValue[int](kind="type.size_bits")`. | No backend data for the value itself. | implemented by M56 | M56 selects only this exact left-associated `size_bytes * 8` expression and does not add general arithmetic or branch pruning. | Bit-width tests, unsupported operator/literal/operand diagnostics, context precedence, determinism, raw-helper rejection, and no surrounding body lowering. |
 | `value<generation>(type::size_bytes(type<generation>(base::in))) == 2`, `== 4`, and `== 8` | `tsldata/primitives/load_store/array.tsl:107-109` | Resolve exact scalar size-byte equality predicates before any branch-chain policy. | Selected type tag plus explicit scalar size-byte rules for selected singleton scalar tags. | Typed boolean predicate value, for example `GenerationPredicate(kind="type.size_bytes.equals")`. | No backend data for the predicate itself. | implemented by M57 | M57 selects only these exact predicates. Branch-chain pruning and `else if<generation>` remain deferred. | Predicate truth-table tests for 2/4/8, unsupported operator/literal/operand diagnostics, determinism, raw-helper rejection, and no branch-chain/body lowering. |
@@ -558,16 +558,27 @@ vector/backend requests. M69 does not add helper semantics, parse raw helper
 text, resolve vector length/alignment or backend uninit requests, or create
 backend translation/rendering/output behavior.
 
-Milestone 70 is selected for human acceptance as exact array-initialization
-vector-length request resolution. It should resolve only the accepted M67
-request for `value<generation>(vector::length)` through the M69 extracted
-pipeline and explicit typed vector-length metadata supplied before lowering
-evaluation. M70 must not infer lane counts from SVE token text, extension
-names, `vector_bits`, selected type tags, scalar sizes, host CPU features,
-catalog data, `tsldata`, backend maps, or renderer names during lowering.
-Runtime/scalable metadata must remain an explicit typed policy/value or
-produce diagnostics; it must not be converted into a fake fixed lane count.
-Vector alignment, backend uninit, declaration/array semantics, backend
+Milestone 70 is accepted as exact array-initialization vector-length request
+resolution. It resolves only the accepted M67 request for
+`value<generation>(vector::length)` through the M69 extracted pipeline and
+explicit typed vector-length metadata supplied before lowering evaluation. M70
+must not infer lane counts from SVE token text, extension names, `vector_bits`,
+selected type tags, scalar sizes, host CPU features, catalog data, `tsldata`,
+backend maps, or renderer names during lowering. Runtime/scalable metadata
+must remain an explicit typed policy/value or produce diagnostics; it must not
+be converted into a fake fixed lane count. Vector alignment, backend uninit,
+declaration/array semantics, backend translation/rendering/output behavior,
+and broad vector/register metadata remain deferred after M70.
+
+Milestone 71 is selected for human acceptance as exact array-initialization
+vector-alignment request resolution. It should resolve only the accepted M67
+request for `value<generation>(vector::alignment)` through the M69/M70
+pipeline and explicit typed vector-alignment metadata supplied before lowering
+evaluation. M71 must not infer alignment from vector length, vector bits,
+scalar byte size, selected type tags, SVE token text, extension names, host CPU
+features, catalog data, `tsldata`, backend maps, backend vector-alignment
+spellings, or renderer names during lowering. Backend uninit, declaration/
+array semantics, aligned load/store semantics, `assume_aligned`, backend
 translation/rendering/output behavior, and broad vector/register metadata
 remain deferred.
 
@@ -745,13 +756,16 @@ extraction, and M70 vector-length request resolution slices:
   types, generic vector lengths, aliases, and non-selected base forms.
 - Generation-time value queries other than the accepted M55 scalar
   size-bytes form, M56 exact size-bits expression, M57 exact size-byte
-  equality predicates, and the selected M70 exact array-initialization
-  `value<generation>(vector::length)` request remain deferred. Broad/generic
-  vector-length semantics, vector alignment, mask lane constants, and generic
-  lengths remain deferred. Accepted M67 classifies the exact M66 vector
-  length/alignment leaves as deferred helper-request records; only the M70
-  request-resolution boundary may resolve the vector-length request, and only
-  from explicit typed metadata.
+  equality predicates, the accepted M70 exact array-initialization
+  `value<generation>(vector::length)` request, and the selected M71 exact
+  array-initialization `value<generation>(vector::alignment)` request remain
+  deferred. Broad/generic vector-length semantics, broad aligned load/store
+  alignment semantics, mask lane constants, and generic lengths remain
+  deferred. Accepted M67 classifies the exact M66 vector length/alignment
+  leaves as deferred helper-request records; only the M70 request-resolution
+  boundary may resolve the vector-length request, and only the selected M71
+  request-resolution boundary may resolve the vector-alignment request. Both
+  must consume explicit typed metadata.
 - Arithmetic over generation values remains deferred except for the accepted
   M56 exact `type.size_bytes * 8` expression. Comparisons over generation
   values remain deferred except for the accepted M57 exact
@@ -774,11 +788,12 @@ extraction, and M70 vector-length request resolution slices:
   declaration/store/return semantics beyond the exact M66 form,
   skeleton recognition from raw body text, and broad body lowering remain
   deferred. Accepted M68 narrows only the exact M67 base-type request, accepted
-  M69 extracts that existing stage assembly without new semantics, and
-  selected M70 resolves only the exact vector-length request through explicit
-  typed metadata. Vector alignment, backend uninit request resolution, broad
-  vector/register metadata, declaration/array semantics, rendering, and output
-  remain deferred.
+  M69 extracts that existing stage assembly without new semantics, accepted
+  M70 resolves only the exact vector-length request through explicit typed
+  metadata, and selected M71 resolves only the exact vector-alignment request
+  through explicit typed metadata. Backend uninit request resolution, broad
+  vector/register metadata, declaration/array semantics, aligned load/store
+  semantics, rendering, and output remain deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only
