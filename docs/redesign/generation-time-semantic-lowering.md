@@ -690,20 +690,68 @@ M68 also reuses the existing generation-type diagnostics, such as
 `TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED`, when the selected typed base type cannot
 be resolved through the accepted concrete integer generation rule inputs.
 
+M70 diagnostics:
+
+- `TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-SOURCE-UNSUPPORTED`: vector-
+  length request resolution was invoked with something other than an accepted
+  M68 `ExactArrayInitializationBaseTypeResolutionIr`, the
+  `array_initialization_base_type_request_resolution` stage output, or a typed
+  `LoweredImplementation` carrying the accepted M68 base-type resolution.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-IR-MISSING`: a
+  `LoweredImplementation` source does not carry an accepted M68 base-type
+  resolution.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-IR-MULTIPLE`: a
+  `LoweredImplementation` source carries more than one M68 base-type
+  resolution at the M70 request-resolution boundary.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-MISSING`: the M68 unresolved
+  request records do not contain the required vector-length request.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-DUPLICATE`: the M68 unresolved
+  request records contain more than one vector-length request.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-MISMATCH`: the selected M67
+  vector-length request record does not carry the expected ordinal `1`,
+  request kind `generation_value`, and helper leaf kind
+  `value_generation_vector_length`.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-UNSUPPORTED`: the selected M67
+  vector-length request record does not preserve the exact accepted
+  `value<generation>(vector::length)` leaf text as provenance/invariant
+  evidence.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-MISSING`: explicit typed
+  vector-length metadata is absent for the structured candidate id,
+  target/source extension, and selected type tag.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-DUPLICATE`: more than one
+  identical vector-length metadata entry is supplied for the same structured
+  context.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-CONFLICT`: conflicting
+  vector-length metadata entries are supplied for the same structured context.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-UNSUPPORTED`: a caller requests
+  fixed numeric lanes from typed runtime/scalable metadata.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-CONTEXT-MISMATCH`: the typed selected
+  candidate context disagrees with the M68 base-type resolution candidate id
+  or selected type tag.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-PROVENANCE-MISMATCH`: the M68 base-type
+  resolution, unresolved request records, or M70 result disagree on candidate,
+  type, branch-chain, slot, variable-token, source-location, or source-request
+  provenance required by the boundary.
+
 ## Explicit Deferrals
 
-Deferred beyond the implemented M43-M68 semantic-lowering, structural
+Deferred beyond the implemented M43-M70 semantic-lowering, structural
 slot-assembly, pipeline-integration, exact array-initialization slot form IR,
-M67 helper-request IR, and accepted M68 base-type request resolution slices:
+M67 helper-request IR, accepted M68 base-type request resolution, M69 pipeline
+extraction, and M70 vector-length request resolution slices:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
   types, generic vector lengths, aliases, and non-selected base forms.
-- Generation-time value queries other than the M55 scalar
-  size-bytes form, including vector length, vector alignment, mask lane
-  constants, and generic lengths. Accepted M67 classifies the exact M66
-  vector length/alignment leaves as deferred helper-request records, but it
-  must not resolve their values.
+- Generation-time value queries other than the accepted M55 scalar
+  size-bytes form, M56 exact size-bits expression, M57 exact size-byte
+  equality predicates, and the selected M70 exact array-initialization
+  `value<generation>(vector::length)` request remain deferred. Broad/generic
+  vector-length semantics, vector alignment, mask lane constants, and generic
+  lengths remain deferred. Accepted M67 classifies the exact M66 vector
+  length/alignment leaves as deferred helper-request records; only the M70
+  request-resolution boundary may resolve the vector-length request, and only
+  from explicit typed metadata.
 - Arithmetic over generation values remains deferred except for the accepted
   M56 exact `type.size_bytes * 8` expression. Comparisons over generation
   values remain deferred except for the accepted M57 exact

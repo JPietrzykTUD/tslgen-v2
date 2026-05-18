@@ -10,7 +10,7 @@ import tslgen.lowering.boundary as lowering_boundary
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
 from tslgen.analysis.selection import SelectionRequest, plan_selection
 from tslgen.config.model import SourceConfig
-from tslgen.core.diagnostics import SourceLocation
+from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.core.frozen_map import FrozenMap
 from tslgen.domain.catalog import Catalog, build_catalog
 from tslgen.domain.generation_rules import (
@@ -30,6 +30,9 @@ from tslgen.lowering import (
     ExactArrayInitializationHelperRequestIr,
     ExactArrayInitializationHelperRequestRecord,
     ExactArrayInitializationSlotFormIr,
+    ExactArrayInitializationVectorLengthMetadata,
+    ExactArrayInitializationVectorLengthResolutionIr,
+    ExactArrayInitializationVectorLengthValue,
     GenerationContext,
     GenerationExpressionRecognition,
     GenerationLoweringStage,
@@ -63,6 +66,7 @@ from tslgen.lowering import (
     lower_exact_array_initialization_base_type_request,
     lower_exact_array_initialization_helper_requests,
     lower_exact_array_initialization_slot_form,
+    lower_exact_array_initialization_vector_length_request,
     lower_selected_branch_body_ir,
     lower_selected_body_envelope,
     prepare_lowering_inputs,
@@ -976,6 +980,65 @@ class LoweringBoundaryTests(unittest.TestCase):
             raise AssertionError(helper_request_result.diagnostics)
         return helper_request_result.unwrap()
 
+    def exact_array_initialization_base_type_resolution(
+        self,
+        *,
+        selected_type_tag: str = "si16",
+    ) -> ExactArrayInitializationBaseTypeResolutionIr:
+        result = lower_exact_array_initialization_base_type_request(
+            self.exact_array_initialization_helper_request_ir(
+                selected_type_tag=selected_type_tag,
+            ),
+        )
+        if not result.is_ok:
+            raise AssertionError(result.diagnostics)
+        return result.unwrap()
+
+    def vector_length_metadata(
+        self,
+        *,
+        candidate_id: str = "candidate-1",
+        target_extension: str = "sve",
+        source_extension: str = "sve",
+        selected_type_tag: str = "si16",
+        lanes: int = 17,
+        kind: str = "fixed_lanes",
+    ) -> ExactArrayInitializationVectorLengthMetadata:
+        value = (
+            ExactArrayInitializationVectorLengthValue(
+                kind="fixed_lanes",
+                lanes=lanes,
+            )
+            if kind == "fixed_lanes"
+            else ExactArrayInitializationVectorLengthValue(
+                kind=kind,  # type: ignore[arg-type]
+            )
+        )
+        return ExactArrayInitializationVectorLengthMetadata(
+            candidate_id=candidate_id,
+            target_extension=target_extension,
+            source_extension=source_extension,
+            selected_type_tag=selected_type_tag,
+            vector_length=value,
+            source_location=SourceLocation(Path("metadata.tsl"), 3, 5),
+        )
+
+    def vector_length_metadata_for_item(
+        self,
+        item,
+        *,
+        lanes: int = 17,
+        kind: str = "fixed_lanes",
+    ) -> ExactArrayInitializationVectorLengthMetadata:
+        return self.vector_length_metadata(
+            candidate_id=item.candidate_id,
+            target_extension=item.candidate.target_extension,
+            source_extension=item.candidate.source_extension,
+            selected_type_tag=item.candidate.type_tag,
+            lanes=lanes,
+            kind=kind,
+        )
+
     def size_byte_branch_chain_item_and_envelope(
         self,
         selected_type_tag: str,
@@ -1014,9 +1077,13 @@ class LoweringBoundaryTests(unittest.TestCase):
             output=envelope,
         )
         if request is None:
+            metadata = self.vector_length_metadata_for_item(item)
             request = LoweringRequest(
                 array_body_envelope_skeletons=(
                     skeleton or self.exact_array_body_skeleton_for_envelope(envelope),
+                ),
+                generation_context=GenerationContext(
+                    array_initialization_vector_length_metadata=(metadata,),
                 ),
             )
         lookup = lowering_boundary._build_array_body_envelope_skeleton_lookup(request)
@@ -3441,10 +3508,34 @@ class LoweringBoundaryTests(unittest.TestCase):
             for envelope in implementation.selected_body_envelopes
             if envelope.selected_type_tag in CONCRETE_INTEGER_TAGS
         )
+        metadata = tuple(
+            self.vector_length_metadata(
+                candidate_id=implementation.candidate_id,
+                target_extension=selection.candidates_by_id[
+                    implementation.candidate_id
+                ].target_extension,
+                source_extension=selection.candidates_by_id[
+                    implementation.candidate_id
+                ].source_extension,
+                selected_type_tag=selection.candidates_by_id[
+                    implementation.candidate_id
+                ].type_tag,
+                lanes=17,
+            )
+            for implementation in baseline.unwrap().implementations
+            if implementation.selected_body_envelopes
+            and implementation.selected_body_envelopes[0].selected_type_tag
+            in CONCRETE_INTEGER_TAGS
+        )
 
         result = lower_candidates(
             selection,
-            LoweringRequest(array_body_envelope_skeletons=skeletons),
+            LoweringRequest(
+                array_body_envelope_skeletons=skeletons,
+                generation_context=GenerationContext(
+                    array_initialization_vector_length_metadata=metadata,
+                ),
+            ),
         )
 
         self.assertTrue(result.is_ok, result.diagnostics)
@@ -3471,6 +3562,10 @@ class LoweringBoundaryTests(unittest.TestCase):
                     )
                     self.assertEqual(
                         implementation.array_initialization_base_type_resolutions,
+                        (),
+                    )
+                    self.assertEqual(
+                        implementation.array_initialization_vector_length_resolutions,
                         (),
                     )
                     self.assertEqual(
@@ -3511,45 +3606,85 @@ class LoweringBoundaryTests(unittest.TestCase):
                     base_type_resolution.unresolved_requests,
                     helper_request.requests[1:],
                 )
+                self.assertEqual(
+                    len(implementation.array_initialization_vector_length_resolutions),
+                    1,
+                )
+                vector_length_resolution = (
+                    implementation.array_initialization_vector_length_resolutions[0]
+                )
                 self.assertIs(
-                    implementation.generation_stages[-4].output,
+                    vector_length_resolution.source_base_type_resolution,
+                    base_type_resolution,
+                )
+                self.assertIs(
+                    vector_length_resolution.source_vector_length_request,
+                    helper_request.requests[1],
+                )
+                self.assertEqual(
+                    vector_length_resolution.resolved_vector_length,
+                    ExactArrayInitializationVectorLengthValue(
+                        kind="fixed_lanes",
+                        lanes=17,
+                    ),
+                )
+                self.assertEqual(
+                    tuple(
+                        request.helper_leaf_kind
+                        for request in vector_length_resolution.unresolved_requests
+                    ),
+                    (
+                        "value_generation_vector_alignment",
+                        "value_backend_uninit_array",
+                    ),
+                )
+                self.assertIs(
+                    implementation.generation_stages[-5].output,
                     array_envelope,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-4].stage,
+                    implementation.generation_stages[-5].stage,
                     "array_body_envelope_slot_assembly",
                 )
-                self.assertIs(implementation.generation_stages[-3].output, slot_form)
+                self.assertIs(implementation.generation_stages[-4].output, slot_form)
                 self.assertEqual(
-                    implementation.generation_stages[-3].stage,
+                    implementation.generation_stages[-4].stage,
                     "array_initialization_slot_form_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-2].output,
+                    implementation.generation_stages[-3].output,
                     helper_request,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-2].stage,
+                    implementation.generation_stages[-3].stage,
                     "array_initialization_helper_request_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-1].output,
+                    implementation.generation_stages[-2].output,
                     base_type_resolution,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-1].stage,
+                    implementation.generation_stages[-2].stage,
                     "array_initialization_base_type_request_resolution",
                 )
                 self.assertEqual(
-                    tuple(stage.stage for stage in implementation.generation_stages[:-4]),
+                    implementation.generation_stages[-1].stage,
+                    "array_initialization_vector_length_request_resolution",
+                )
+                self.assertIs(
+                    implementation.generation_stages[-1].output,
+                    vector_length_resolution,
+                )
+                self.assertEqual(
+                    tuple(stage.stage for stage in implementation.generation_stages[:-5]),
                     tuple(stage.stage for stage in baseline_impl.generation_stages),
                 )
                 self.assertEqual(
-                    tuple(stage.output for stage in implementation.generation_stages[:-4]),
+                    tuple(stage.output for stage in implementation.generation_stages[:-5]),
                     tuple(stage.output for stage in baseline_impl.generation_stages),
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-5].stage,
+                    implementation.generation_stages[-6].stage,
                     "selected_body_envelope_lowering",
                 )
                 self.assertEqual(slot_form.slot_ordinal, 0)
@@ -3603,6 +3738,10 @@ class LoweringBoundaryTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     implementation.array_initialization_base_type_resolutions,
+                    (),
+                )
+                self.assertEqual(
+                    implementation.array_initialization_vector_length_resolutions,
                     (),
                 )
                 self.assertEqual(
@@ -3841,12 +3980,43 @@ class LoweringBoundaryTests(unittest.TestCase):
                     ),
                 )
                 self.assertEqual(
+                    len(pipeline.array_initialization_vector_length_resolutions),
+                    1,
+                )
+                vector_length_resolution = (
+                    pipeline.array_initialization_vector_length_resolutions[0]
+                )
+                self.assertIs(
+                    vector_length_resolution.source_base_type_resolution,
+                    resolution,
+                )
+                self.assertEqual(
+                    vector_length_resolution.resolved_vector_length,
+                    ExactArrayInitializationVectorLengthValue(
+                        kind="fixed_lanes",
+                        lanes=17,
+                    ),
+                )
+                self.assertEqual(
+                    tuple(
+                        request.helper_leaf_kind
+                        for request in (
+                            vector_length_resolution.unresolved_requests
+                        )
+                    ),
+                    (
+                        "value_generation_vector_alignment",
+                        "value_backend_uninit_array",
+                    ),
+                )
+                self.assertEqual(
                     tuple(stage.stage for stage in pipeline.stages),
                     (
                         "array_body_envelope_slot_assembly",
                         "array_initialization_slot_form_lowering",
                         "array_initialization_helper_request_lowering",
                         "array_initialization_base_type_request_resolution",
+                        "array_initialization_vector_length_request_resolution",
                     ),
                 )
                 self.assertEqual(
@@ -3856,6 +4026,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                         slot_form,
                         helper_request,
                         resolution,
+                        vector_length_resolution,
                     ),
                 )
 
@@ -3884,7 +4055,8 @@ class LoweringBoundaryTests(unittest.TestCase):
                         type_tag=selected_type_tag,
                     ),
                 )
-                self.assertEqual(len(pipeline.stages), 4)
+                self.assertEqual(len(pipeline.array_initialization_vector_length_resolutions), 1)
+                self.assertEqual(len(pipeline.stages), 5)
 
     def test_exact_array_initialization_stage_pipeline_no_skeleton_is_empty(
         self,
@@ -3900,6 +4072,7 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(pipeline.array_initialization_slot_forms, ())
         self.assertEqual(pipeline.array_initialization_helper_requests, ())
         self.assertEqual(pipeline.array_initialization_base_type_resolutions, ())
+        self.assertEqual(pipeline.array_initialization_vector_length_resolutions, ())
         self.assertEqual(pipeline.stages, ())
 
     def test_exact_array_initialization_stage_pipeline_matches_lower_candidates_tail(
@@ -3907,7 +4080,14 @@ class LoweringBoundaryTests(unittest.TestCase):
     ) -> None:
         item, envelope = self.size_byte_branch_chain_item_and_envelope("si32")
         skeleton = self.exact_array_body_skeleton_for_envelope(envelope)
-        request = LoweringRequest(array_body_envelope_skeletons=(skeleton,))
+        request = LoweringRequest(
+            array_body_envelope_skeletons=(skeleton,),
+            generation_context=GenerationContext(
+                array_initialization_vector_length_metadata=(
+                    self.vector_length_metadata_for_item(item),
+                ),
+            ),
+        )
         lookup = lowering_boundary._build_array_body_envelope_skeleton_lookup(request)
         self.assertTrue(lookup.is_ok, lookup.diagnostics)
         envelope_stage = GenerationLoweringStage(
@@ -3947,8 +4127,61 @@ class LoweringBoundaryTests(unittest.TestCase):
             implementation.array_initialization_base_type_resolutions,
             pipeline_result.array_initialization_base_type_resolutions,
         )
-        self.assertEqual(implementation.generation_stages[-4:], pipeline_result.stages)
-        self.assertEqual(implementation.generation_stages[-5], envelope_stage)
+        self.assertEqual(
+            implementation.array_initialization_vector_length_resolutions,
+            pipeline_result.array_initialization_vector_length_resolutions,
+        )
+        self.assertEqual(implementation.generation_stages[-5:], pipeline_result.stages)
+        self.assertEqual(implementation.generation_stages[-6], envelope_stage)
+
+    def test_lower_candidates_vector_length_metadata_order_is_deterministic(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+        baseline = lower_candidates(selection)
+        self.assertTrue(baseline.is_ok, baseline.diagnostics)
+        implementation = next(
+            implementation
+            for implementation in baseline.unwrap().implementations
+            if implementation.selected_body_envelopes
+            and implementation.selected_body_envelopes[0].selected_type_tag == "si32"
+        )
+        envelope = implementation.selected_body_envelopes[0]
+        candidate = selection.candidates_by_id[implementation.candidate_id]
+        skeleton = self.exact_array_body_skeleton_for_envelope(envelope)
+        matching_metadata = self.vector_length_metadata(
+            candidate_id=candidate.candidate_id,
+            target_extension=candidate.target_extension,
+            source_extension=candidate.source_extension,
+            selected_type_tag=candidate.type_tag,
+            lanes=29,
+        )
+        other_metadata = self.vector_length_metadata(
+            candidate_id="other-candidate",
+            selected_type_tag="si32",
+            lanes=3,
+        )
+
+        plans = []
+        for metadata in (
+            (matching_metadata, other_metadata),
+            (other_metadata, matching_metadata),
+        ):
+            result = lower_candidates(
+                selection,
+                LoweringRequest(
+                    array_body_envelope_skeletons=(skeleton,),
+                    generation_context=GenerationContext(
+                        array_initialization_vector_length_metadata=metadata,
+                    ),
+                ),
+            )
+            self.assertTrue(result.is_ok, result.diagnostics)
+            plans.append(result.unwrap())
+
+        first = plans[0].implementations_by_candidate_id[candidate.candidate_id]
+        second = plans[1].implementations_by_candidate_id[candidate.candidate_id]
+        self.assertEqual(first.key, second.key)
 
     def test_exact_array_initialization_stage_pipeline_propagates_diagnostics(
         self,
@@ -4021,6 +4254,58 @@ class LoweringBoundaryTests(unittest.TestCase):
                 )
                 self.assertIn(message, result.diagnostics[0].message)
 
+    def test_exact_array_initialization_stage_pipeline_propagates_m67_diagnostic(
+        self,
+    ) -> None:
+        item, envelope = self.size_byte_branch_chain_item_and_envelope("si16")
+        skeleton = self.exact_array_body_skeleton_for_envelope(envelope)
+        request = LoweringRequest(
+            array_body_envelope_skeletons=(skeleton,),
+            generation_context=GenerationContext(
+                array_initialization_vector_length_metadata=(
+                    self.vector_length_metadata_for_item(item),
+                ),
+            ),
+        )
+        lookup = lowering_boundary._build_array_body_envelope_skeleton_lookup(request)
+        self.assertTrue(lookup.is_ok, lookup.diagnostics)
+        original = lowering_boundary.lower_exact_array_initialization_helper_requests
+
+        def fail_m67(*args: object, **kwargs: object):
+            return lowering_boundary.Result.failure(
+                (
+                    Diagnostic.error(
+                        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-MISSING",
+                        "synthetic M67 propagation diagnostic",
+                        location=skeleton.source_location,
+                    ),
+                )
+            )
+
+        lowering_boundary.lower_exact_array_initialization_helper_requests = fail_m67  # type: ignore[assignment]
+        try:
+            result = lowering_boundary._lower_exact_array_initialization_stage_pipeline(
+                item,
+                request,
+                GenerationLoweringStage(
+                    stage="selected_body_envelope_lowering",
+                    output=envelope,
+                ),
+                lookup.unwrap(),
+            )
+        finally:
+            lowering_boundary.lower_exact_array_initialization_helper_requests = original
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-MISSING",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+        )
+
     def test_exact_array_initialization_stage_pipeline_propagates_m68_diagnostic(
         self,
     ) -> None:
@@ -4050,6 +4335,36 @@ class LoweringBoundaryTests(unittest.TestCase):
             line=105,
         )
         self.assertIn("concrete integer", result.diagnostics[0].message)
+
+    def test_exact_array_initialization_stage_pipeline_reports_missing_m70_metadata(
+        self,
+    ) -> None:
+        item, envelope = self.size_byte_branch_chain_item_and_envelope("si16")
+        skeleton = self.exact_array_body_skeleton_for_envelope(envelope)
+        request = LoweringRequest(array_body_envelope_skeletons=(skeleton,))
+        lookup = lowering_boundary._build_array_body_envelope_skeleton_lookup(request)
+        self.assertTrue(lookup.is_ok, lookup.diagnostics)
+
+        result = lowering_boundary._lower_exact_array_initialization_stage_pipeline(
+            item,
+            request,
+            GenerationLoweringStage(
+                stage="selected_body_envelope_lowering",
+                output=envelope,
+            ),
+            lookup.unwrap(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-MISSING",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+        )
+        self.assertIn("explicit typed vector-length metadata", result.diagnostics[0].message)
 
     def test_exact_array_initialization_stage_pipeline_is_deterministic(
         self,
@@ -4087,6 +4402,19 @@ class LoweringBoundaryTests(unittest.TestCase):
             ),
             (
                 "value_generation_vector_length",
+                "value_generation_vector_alignment",
+                "value_backend_uninit_array",
+            ),
+        )
+        vector_resolution = (
+            result.unwrap().array_initialization_vector_length_resolutions[0]
+        )
+        self.assertEqual(
+            tuple(
+                request.helper_leaf_kind
+                for request in vector_resolution.unresolved_requests
+            ),
+            (
                 "value_generation_vector_alignment",
                 "value_backend_uninit_array",
             ),
@@ -4929,6 +5257,466 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(
             result.unwrap().resolved_type_ref,
             GenerationTypeRef(kind="base.in", type_tag="si32"),
+        )
+
+    def test_exact_array_initialization_vector_length_request_resolves_m67_request(
+        self,
+    ) -> None:
+        base_resolution = self.exact_array_initialization_base_type_resolution(
+            selected_type_tag="si16",
+        )
+        metadata = self.vector_length_metadata(
+            candidate_id=base_resolution.candidate_id,
+            selected_type_tag=base_resolution.selected_type_tag,
+            lanes=23,
+        )
+        context = GenerationContext(
+            selected_candidate_id=base_resolution.candidate_id,
+            selected_type_tag=base_resolution.selected_type_tag,
+            array_initialization_vector_length_metadata=(metadata,),
+        )
+        sources = (
+            base_resolution,
+            GenerationLoweringStage(
+                stage="array_initialization_base_type_request_resolution",
+                output=base_resolution,
+            ),
+            LoweredImplementation(
+                candidate_id=base_resolution.candidate_id,
+                status="lowered",
+                array_initialization_base_type_resolutions=(base_resolution,),
+            ),
+        )
+
+        for source in sources:
+            with self.subTest(source=type(source).__name__):
+                result = lower_exact_array_initialization_vector_length_request(
+                    source,
+                    context,
+                    selected_candidate_id=base_resolution.candidate_id,
+                    target_extension="sve",
+                    source_extension="sve",
+                    selected_type_tag=base_resolution.selected_type_tag,
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                resolution = result.unwrap()
+                assert isinstance(
+                    resolution,
+                    ExactArrayInitializationVectorLengthResolutionIr,
+                )
+                self.assertIs(resolution.source_base_type_resolution, base_resolution)
+                self.assertIs(
+                    resolution.source_vector_length_request,
+                    base_resolution.unresolved_requests[0],
+                )
+                self.assertEqual(
+                    resolution.resolved_vector_length,
+                    ExactArrayInitializationVectorLengthValue(
+                        kind="fixed_lanes",
+                        lanes=23,
+                    ),
+                )
+                self.assertEqual(
+                    tuple(
+                        request.helper_leaf_kind
+                        for request in resolution.unresolved_requests
+                    ),
+                    (
+                        "value_generation_vector_alignment",
+                        "value_backend_uninit_array",
+                    ),
+                )
+                self.assertEqual(resolution.target_extension, "sve")
+                self.assertEqual(resolution.source_extension, "sve")
+                self.assertIs(
+                    GenerationLoweringStage(
+                        stage=(
+                            "array_initialization_vector_length_request_resolution"
+                        ),
+                        output=resolution,
+                    ).output,
+                    resolution,
+                )
+
+    def test_exact_array_initialization_vector_length_request_preserves_runtime_policy(
+        self,
+    ) -> None:
+        base_resolution = self.exact_array_initialization_base_type_resolution()
+        metadata = self.vector_length_metadata(
+            candidate_id=base_resolution.candidate_id,
+            selected_type_tag=base_resolution.selected_type_tag,
+            kind="scalable_lanes",
+        )
+
+        result = lower_exact_array_initialization_vector_length_request(
+            base_resolution,
+            GenerationContext(
+                array_initialization_vector_length_metadata=(metadata,),
+            ),
+            selected_candidate_id=base_resolution.candidate_id,
+            target_extension="sve",
+            source_extension="sve",
+            selected_type_tag=base_resolution.selected_type_tag,
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(
+            result.unwrap().resolved_vector_length,
+            ExactArrayInitializationVectorLengthValue(kind="scalable_lanes"),
+        )
+
+    def test_exact_array_initialization_vector_length_request_rejects_invalid_sources(
+        self,
+    ) -> None:
+        base_resolution = self.exact_array_initialization_base_type_resolution()
+        body_ir = self.selected_body_ir()
+        implementation_without_ir = LoweredImplementation(
+            candidate_id="candidate-1",
+            status="lowered",
+            selected_body_envelopes=(self.selected_body_envelope(),),
+        )
+        implementation_with_multiple = LoweredImplementation(
+            candidate_id="candidate-1",
+            status="lowered",
+            array_initialization_base_type_resolutions=(
+                base_resolution,
+                base_resolution,
+            ),
+        )
+        cases = (
+            (
+                "stage",
+                GenerationLoweringStage(
+                    stage="selected_body_ir_lowering",
+                    output=body_ir,
+                ),
+                "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-SOURCE-UNSUPPORTED",
+                "M68",
+            ),
+            (
+                "type",
+                object(),
+                "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-SOURCE-UNSUPPORTED",
+                "M68",
+            ),
+            (
+                "missing_ir",
+                implementation_without_ir,
+                "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-IR-MISSING",
+                "array_initialization_base_type_resolutions",
+            ),
+            (
+                "multiple_ir",
+                implementation_with_multiple,
+                "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-IR-MULTIPLE",
+                "exactly one",
+            ),
+        )
+
+        for name, source, code, message in cases:
+            with self.subTest(name=name):
+                result = lower_exact_array_initialization_vector_length_request(
+                    source,
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
+                self.assertIn(message, result.diagnostics[0].message)
+
+    def test_exact_array_initialization_vector_length_request_rejects_metadata_issues(
+        self,
+    ) -> None:
+        base_resolution = self.exact_array_initialization_base_type_resolution()
+        metadata = self.vector_length_metadata(
+            candidate_id=base_resolution.candidate_id,
+            selected_type_tag=base_resolution.selected_type_tag,
+            lanes=17,
+        )
+        conflicting = replace(
+            metadata,
+            vector_length=ExactArrayInitializationVectorLengthValue(
+                kind="fixed_lanes",
+                lanes=19,
+            ),
+        )
+        runtime = self.vector_length_metadata(
+            candidate_id=base_resolution.candidate_id,
+            selected_type_tag=base_resolution.selected_type_tag,
+            kind="runtime_lanes",
+        )
+        cases = (
+            (
+                "missing",
+                (),
+                False,
+                "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-MISSING",
+                "explicit typed vector-length metadata",
+            ),
+            (
+                "duplicate",
+                (metadata, metadata),
+                False,
+                "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-DUPLICATE",
+                "duplicate",
+            ),
+            (
+                "conflict",
+                (metadata, conflicting),
+                False,
+                "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-CONFLICT",
+                "conflicting",
+            ),
+            (
+                "runtime_numeric",
+                (runtime,),
+                True,
+                "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-UNSUPPORTED",
+                "fixed numeric lanes",
+            ),
+        )
+
+        for name, metadata_entries, require_fixed, code, message in cases:
+            with self.subTest(name=name):
+                result = lower_exact_array_initialization_vector_length_request(
+                    base_resolution,
+                    GenerationContext(
+                        array_initialization_vector_length_metadata=metadata_entries,
+                    ),
+                    selected_candidate_id=base_resolution.candidate_id,
+                    target_extension="sve",
+                    source_extension="sve",
+                    selected_type_tag=base_resolution.selected_type_tag,
+                    require_fixed_lanes=require_fixed,
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
+                self.assertIn(message, result.diagnostics[0].message)
+
+    def test_exact_array_initialization_vector_length_request_rejects_bad_records(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "missing",
+                "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-MISSING",
+            ),
+            (
+                "duplicate",
+                "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-DUPLICATE",
+            ),
+            (
+                "ordinal",
+                "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-MISMATCH",
+            ),
+            (
+                "kind",
+                "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-MISMATCH",
+            ),
+            (
+                "leaf_kind",
+                "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-MISMATCH",
+            ),
+            (
+                "source_text",
+                "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-UNSUPPORTED",
+            ),
+        )
+
+        for name, code in cases:
+            with self.subTest(name=name):
+                base_resolution = (
+                    self.exact_array_initialization_base_type_resolution()
+                )
+                vector_request = base_resolution.unresolved_requests[0]
+                if name == "missing":
+                    object.__setattr__(
+                        base_resolution,
+                        "unresolved_requests",
+                        base_resolution.unresolved_requests[2:],
+                    )
+                elif name == "duplicate":
+                    object.__setattr__(
+                        base_resolution,
+                        "unresolved_requests",
+                        (vector_request, *base_resolution.unresolved_requests),
+                    )
+                elif name == "ordinal":
+                    object.__setattr__(vector_request, "request_ordinal", 2)
+                elif name == "kind":
+                    object.__setattr__(vector_request, "request_kind", "backend_value")
+                elif name == "leaf_kind":
+                    object.__setattr__(
+                        vector_request,
+                        "helper_leaf_kind",
+                        "value_backend_uninit_array",
+                    )
+                else:
+                    object.__setattr__(
+                        vector_request,
+                        "leaf_source_text",
+                        "value<generation>(vector::width)",
+                    )
+
+                result = lower_exact_array_initialization_vector_length_request(
+                    base_resolution,
+                )
+
+                self.assertFalse(result.is_ok)
+                self.assertTrue(
+                    any(diagnostic.code == code for diagnostic in result.diagnostics),
+                    result.diagnostics,
+                )
+                diagnostic = next(
+                    diagnostic
+                    for diagnostic in result.diagnostics
+                    if diagnostic.code == code
+                )
+                self.assertEqual(diagnostic.severity, "error")
+                self.assertIsNotNone(diagnostic.location)
+
+    def test_exact_array_initialization_vector_length_request_rejects_context_mismatch(
+        self,
+    ) -> None:
+        base_resolution = self.exact_array_initialization_base_type_resolution()
+        metadata = self.vector_length_metadata(
+            candidate_id=base_resolution.candidate_id,
+            selected_type_tag=base_resolution.selected_type_tag,
+        )
+
+        result = lower_exact_array_initialization_vector_length_request(
+            base_resolution,
+            GenerationContext(
+                selected_candidate_id="other-candidate",
+                array_initialization_vector_length_metadata=(metadata,),
+            ),
+            target_extension="sve",
+            source_extension="sve",
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-CONTEXT-MISMATCH",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+        )
+        self.assertIn("selected candidate context", result.diagnostics[0].message)
+
+    def test_exact_array_initialization_vector_length_request_reports_provenance_mismatch(
+        self,
+    ) -> None:
+        base_resolution = self.exact_array_initialization_base_type_resolution()
+        object.__setattr__(
+            base_resolution.unresolved_requests[0],
+            "candidate_id",
+            "other-candidate",
+        )
+
+        result = lower_exact_array_initialization_vector_length_request(
+            base_resolution,
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-PROVENANCE-MISMATCH",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+        )
+        self.assertIn("provenance", result.diagnostics[0].message)
+
+    def test_exact_array_initialization_vector_length_request_is_deterministic(
+        self,
+    ) -> None:
+        base_resolution = self.exact_array_initialization_base_type_resolution()
+        matching = self.vector_length_metadata(
+            candidate_id=base_resolution.candidate_id,
+            selected_type_tag=base_resolution.selected_type_tag,
+            lanes=31,
+        )
+        other = self.vector_length_metadata(
+            candidate_id="other-candidate",
+            selected_type_tag=base_resolution.selected_type_tag,
+            lanes=9,
+        )
+        contexts = (
+            GenerationContext(
+                array_initialization_vector_length_metadata=(matching, other),
+            ),
+            GenerationContext(
+                array_initialization_vector_length_metadata=(other, matching),
+            ),
+        )
+
+        first = lower_exact_array_initialization_vector_length_request(
+            base_resolution,
+            contexts[0],
+            selected_candidate_id=base_resolution.candidate_id,
+            target_extension="sve",
+            source_extension="sve",
+            selected_type_tag=base_resolution.selected_type_tag,
+        )
+        second = lower_exact_array_initialization_vector_length_request(
+            base_resolution,
+            contexts[1],
+            selected_candidate_id=base_resolution.candidate_id,
+            target_extension="sve",
+            source_extension="sve",
+            selected_type_tag=base_resolution.selected_type_tag,
+        )
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap().key, second.unwrap().key)
+
+    def test_exact_array_initialization_vector_length_request_does_not_evaluate_raw_helper_text(
+        self,
+    ) -> None:
+        base_resolution = self.exact_array_initialization_base_type_resolution()
+        metadata = self.vector_length_metadata(
+            candidate_id=base_resolution.candidate_id,
+            selected_type_tag=base_resolution.selected_type_tag,
+        )
+        original = lowering_boundary.resolve_generation_value_query
+
+        def fail_on_raw_query(*args: object, **kwargs: object) -> object:
+            raise AssertionError("raw generation value query evaluator was called")
+
+        lowering_boundary.resolve_generation_value_query = fail_on_raw_query  # type: ignore[assignment]
+        try:
+            result = lower_exact_array_initialization_vector_length_request(
+                base_resolution,
+                GenerationContext(
+                    array_initialization_vector_length_metadata=(metadata,),
+                ),
+                selected_candidate_id=base_resolution.candidate_id,
+                target_extension="sve",
+                source_extension="sve",
+                selected_type_tag=base_resolution.selected_type_tag,
+            )
+        finally:
+            lowering_boundary.resolve_generation_value_query = original
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(
+            result.unwrap().resolved_vector_length,
+            ExactArrayInitializationVectorLengthValue(kind="fixed_lanes", lanes=17),
         )
 
     def test_exact_array_initialization_slot_form_api_uses_envelope_slot_only(

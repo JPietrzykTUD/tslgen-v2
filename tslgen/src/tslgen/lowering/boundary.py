@@ -58,6 +58,12 @@ type GenerationLoweringStageName = Literal[
     "array_initialization_slot_form_lowering",
     "array_initialization_helper_request_lowering",
     "array_initialization_base_type_request_resolution",
+    "array_initialization_vector_length_request_resolution",
+]
+type ExactArrayInitializationVectorLengthKind = Literal[
+    "fixed_lanes",
+    "runtime_lanes",
+    "scalable_lanes",
 ]
 type GenerationSelectedBranchBodyHandoff = (
     OpaqueSelectedBranchBodyHandoff | NoSelectedBranchBodyHandoff
@@ -122,6 +128,7 @@ type GenerationLoweringStageOutput = (
     | ExactArrayInitializationSlotFormIr
     | ExactArrayInitializationHelperRequestIr
     | ExactArrayInitializationBaseTypeResolutionIr
+    | ExactArrayInitializationVectorLengthResolutionIr
     | TsilStatement
 )
 
@@ -245,6 +252,26 @@ _EXACT_ARRAY_INITIALIZATION_BASE_TYPE_REQUEST_RULE = (
         result_kind="base.in",
     )
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _ExactArrayInitializationVectorLengthRequestRule:
+    request_ordinal: int
+    request_kind: Literal["generation_value"]
+    helper_leaf_kind: Literal["value_generation_vector_length"]
+    expected_leaf_source_text: str
+
+
+_EXACT_ARRAY_INITIALIZATION_VECTOR_LENGTH_REQUEST_RULE = (
+    _ExactArrayInitializationVectorLengthRequestRule(
+        request_ordinal=1,
+        request_kind="generation_value",
+        helper_leaf_kind="value_generation_vector_length",
+        expected_leaf_source_text=_EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND[
+            "value_generation_vector_length"
+        ],
+    )
+)
 _ARRAY_INITIALIZATION_HELPER_TARGET = rf"{_TSIL_IDENTIFIER}::{_TSIL_IDENTIFIER}"
 _ARRAY_INITIALIZATION_HELPER_SHAPE = (
     rf"(?:type|value)<(?:generation|backend)>\("
@@ -276,6 +303,83 @@ _ARRAY_INITIALIZATION_SLOT_HELPER_SHAPE_RE = re.compile(
 
 
 @dataclass(frozen=True, slots=True)
+class ExactArrayInitializationVectorLengthValue:
+    kind: ExactArrayInitializationVectorLengthKind
+    lanes: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind not in ("fixed_lanes", "runtime_lanes", "scalable_lanes"):
+            raise ValueError("array-initialization vector-length kind is unsupported")
+        if self.kind == "fixed_lanes":
+            if isinstance(self.lanes, bool) or not isinstance(self.lanes, int):
+                raise ValueError(
+                    "fixed array-initialization vector length requires integer lanes"
+                )
+            if self.lanes <= 0:
+                raise ValueError(
+                    "fixed array-initialization vector length must be positive"
+                )
+        elif self.lanes is not None:
+            raise ValueError(
+                "runtime/scalable array-initialization vector length must not "
+                "pretend to have fixed integer lanes"
+            )
+
+    @property
+    def key(self) -> tuple[str, int | None]:
+        return (self.kind, self.lanes)
+
+
+@dataclass(frozen=True, slots=True)
+class ExactArrayInitializationVectorLengthMetadata:
+    candidate_id: str
+    target_extension: str
+    source_extension: str
+    selected_type_tag: str
+    vector_length: ExactArrayInitializationVectorLengthValue
+    source_location: SourceLocation | None = None
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "candidate_id",
+            "target_extension",
+            "source_extension",
+            "selected_type_tag",
+        ):
+            if not getattr(self, field_name):
+                raise ValueError(
+                    "array-initialization vector-length metadata "
+                    f"{field_name} must be non-empty"
+                )
+        if not isinstance(
+            self.vector_length,
+            ExactArrayInitializationVectorLengthValue,
+        ):
+            raise TypeError(
+                "array-initialization vector-length metadata requires a typed "
+                "vector-length value"
+            )
+
+    @property
+    def lookup_key(self) -> tuple[str, str, str, str]:
+        return (
+            self.candidate_id,
+            self.target_extension,
+            self.source_extension,
+            self.selected_type_tag,
+        )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        location_key = (
+            self.source_location.sort_key()
+            if self.source_location is not None
+            else ()
+        )
+        return (*self.lookup_key, self.vector_length.key, location_key)
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationContext:
     values: FrozenMap[str, CatalogValue] = field(default_factory=FrozenMap.empty)
     primitive_attributes: FrozenMap[str, CatalogValue] | None = None
@@ -294,6 +398,9 @@ class GenerationContext:
     scalar_size_bytes_generation_rules: ScalarSizeBytesGenerationRuleSet = field(
         default_factory=default_scalar_size_bytes_generation_rule_set
     )
+    array_initialization_vector_length_metadata: tuple[
+        ExactArrayInitializationVectorLengthMetadata, ...
+    ] = ()
     implementation_source_location: SourceLocation | None = None
 
     def __post_init__(self) -> None:
@@ -305,6 +412,16 @@ class GenerationContext:
                 FrozenMap(self.primitive_attributes.items()),
             )
         object.__setattr__(self, "parameters", tuple(self.parameters))
+        object.__setattr__(
+            self,
+            "array_initialization_vector_length_metadata",
+            tuple(
+                sorted(
+                    self.array_initialization_vector_length_metadata,
+                    key=lambda metadata: metadata.key,
+                )
+            ),
+        )
         for field_name in (
             "selected_primitive_name",
             "emitted_primitive_name",
@@ -1826,6 +1943,136 @@ class ExactArrayInitializationBaseTypeResolutionIr:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactArrayInitializationVectorLengthResolutionIr:
+    source_base_type_resolution: ExactArrayInitializationBaseTypeResolutionIr
+    source_vector_length_request: ExactArrayInitializationHelperRequestRecord
+    resolved_vector_length: ExactArrayInitializationVectorLengthValue
+    unresolved_requests: tuple[ExactArrayInitializationHelperRequestRecord, ...]
+    source_location: SourceLocation
+    candidate_id: str
+    target_extension: str
+    source_extension: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+    slot_label: Literal["opaque_pre_branch_array_initialization"]
+    slot_ordinal: int
+    variable_token: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(
+            self.source_base_type_resolution,
+            ExactArrayInitializationBaseTypeResolutionIr,
+        ):
+            raise TypeError(
+                "array-initialization vector-length resolution requires an M68 "
+                "base-type resolution"
+            )
+        if not isinstance(
+            self.source_vector_length_request,
+            ExactArrayInitializationHelperRequestRecord,
+        ):
+            raise TypeError(
+                "array-initialization vector-length resolution requires an M67 "
+                "vector-length request record"
+            )
+        if self.source_vector_length_request not in (
+            self.source_base_type_resolution.unresolved_requests
+        ):
+            raise ValueError(
+                "array-initialization vector-length source request must come "
+                "from the M68 unresolved request records"
+            )
+        if self.source_vector_length_request.helper_leaf_kind != (
+            "value_generation_vector_length"
+        ):
+            raise ValueError(
+                "array-initialization vector-length resolution must resolve "
+                "the M67 value<generation>(vector::length) request"
+            )
+        if not isinstance(
+            self.resolved_vector_length,
+            ExactArrayInitializationVectorLengthValue,
+        ):
+            raise TypeError(
+                "array-initialization vector-length resolution requires a "
+                "typed vector-length value"
+            )
+        if self.source_location != self.source_base_type_resolution.source_location:
+            raise ValueError(
+                "array-initialization vector-length resolution source location "
+                "must match the M68 base-type resolution"
+            )
+        if (
+            self.candidate_id != self.source_base_type_resolution.candidate_id
+            or self.selected_type_tag
+            != self.source_base_type_resolution.selected_type_tag
+            or self.originating_branch_chain_id
+            != self.source_base_type_resolution.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "array-initialization vector-length resolution provenance must "
+                "match the M68 base-type resolution"
+            )
+        if not self.target_extension or not self.source_extension:
+            raise ValueError(
+                "array-initialization vector-length resolution requires typed "
+                "target/source extension context"
+            )
+        if self.slot_label != self.source_base_type_resolution.slot_label:
+            raise ValueError(
+                "array-initialization vector-length resolution slot label must "
+                "match the M68 base-type resolution"
+            )
+        if self.slot_ordinal != self.source_base_type_resolution.slot_ordinal:
+            raise ValueError(
+                "array-initialization vector-length resolution slot ordinal "
+                "must match the M68 base-type resolution"
+            )
+        if self.variable_token != self.source_base_type_resolution.variable_token:
+            raise ValueError(
+                "array-initialization vector-length resolution variable token "
+                "must match the M68 base-type resolution"
+            )
+        object.__setattr__(self, "unresolved_requests", tuple(self.unresolved_requests))
+        expected_unresolved = tuple(
+            request
+            for request in self.source_base_type_resolution.unresolved_requests
+            if request is not self.source_vector_length_request
+        )
+        if self.unresolved_requests != expected_unresolved:
+            raise ValueError(
+                "array-initialization vector-length resolution must preserve "
+                "only vector-alignment and backend-uninit requests as "
+                "unresolved records in deterministic order"
+            )
+        for request in self.unresolved_requests:
+            if request.helper_leaf_kind == "value_generation_vector_length":
+                raise ValueError(
+                    "array-initialization vector-length resolution unresolved "
+                    "requests must not include the resolved vector-length request"
+                )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_initialization_vector_length_resolution_ir",
+            self.source_base_type_resolution.key,
+            self.source_vector_length_request.key,
+            self.resolved_vector_length.key,
+            tuple(request.key for request in self.unresolved_requests),
+            self.source_location.sort_key(),
+            self.candidate_id,
+            self.target_extension,
+            self.source_extension,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+            self.slot_label,
+            self.slot_ordinal,
+            self.variable_token,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationValue:
     kind: GenerationValueKind
     value: int
@@ -1922,6 +2169,8 @@ class GenerationLoweringStage:
             expected = (ExactArrayInitializationHelperRequestIr,)
         elif self.stage == "array_initialization_base_type_request_resolution":
             expected = (ExactArrayInitializationBaseTypeResolutionIr,)
+        elif self.stage == "array_initialization_vector_length_request_resolution":
+            expected = (ExactArrayInitializationVectorLengthResolutionIr,)
         else:
             raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
         if not isinstance(self.output, expected):
@@ -1960,6 +2209,9 @@ class LoweredImplementation:
     ] = ()
     array_initialization_base_type_resolutions: tuple[
         ExactArrayInitializationBaseTypeResolutionIr, ...
+    ] = ()
+    array_initialization_vector_length_resolutions: tuple[
+        ExactArrayInitializationVectorLengthResolutionIr, ...
     ] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
@@ -2034,6 +2286,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "array_initialization_vector_length_resolutions",
+            tuple(self.array_initialization_vector_length_resolutions),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -2064,6 +2321,12 @@ class LoweredImplementation:
             tuple(
                 resolution.key
                 for resolution in self.array_initialization_base_type_resolutions
+            ),
+            tuple(
+                resolution.key
+                for resolution in (
+                    self.array_initialization_vector_length_resolutions
+                )
             ),
             tuple(stage.key for stage in self.generation_stages),
         )
@@ -2844,6 +3107,134 @@ def lower_exact_array_initialization_base_type_request(
         )
 
 
+def lower_exact_array_initialization_vector_length_request(
+    source: object,
+    context: GenerationContext | None = None,
+    *,
+    selected_candidate_id: str | None = None,
+    target_extension: str | None = None,
+    source_extension: str | None = None,
+    selected_type_tag: str | None = None,
+    require_fixed_lanes: bool = False,
+) -> Result[ExactArrayInitializationVectorLengthResolutionIr]:
+    base_resolution_result = _array_initialization_vector_length_resolution_source(
+        source,
+    )
+    if not base_resolution_result.is_ok:
+        return Result.failure(base_resolution_result.diagnostics)
+
+    base_resolution = base_resolution_result.unwrap()
+    diagnostics = _validate_array_initialization_vector_length_resolution_provenance(
+        base_resolution,
+    )
+    vector_length_request = _array_initialization_vector_length_request_record(
+        base_resolution,
+        diagnostics,
+    )
+    if diagnostics:
+        return Result.failure(sort_diagnostics(tuple(diagnostics)))
+    if vector_length_request is None:
+        raise AssertionError(
+            "vector-length request diagnostics must be present when missing"
+        )
+
+    generation_context = context or GenerationContext()
+    effective_candidate_id = (
+        selected_candidate_id
+        or generation_context.selected_candidate_id
+        or base_resolution.candidate_id
+    )
+    effective_type_tag = (
+        selected_type_tag
+        or generation_context.selected_type_tag
+        or base_resolution.selected_type_tag
+    )
+    if (
+        effective_candidate_id != base_resolution.candidate_id
+        or effective_type_tag != base_resolution.selected_type_tag
+    ):
+        return Result.failure(
+            (
+                _array_initialization_vector_length_context_mismatch_diagnostic(
+                    "array-initialization vector-length request resolution "
+                    "requires the typed selected candidate context to match "
+                    "the M68 base-type resolution candidate id and selected "
+                    "type tag",
+                    vector_length_request.leaf_source_location,
+                ),
+            )
+        )
+    if target_extension is None or source_extension is None:
+        return Result.failure(
+            (
+                _array_initialization_vector_length_metadata_missing_diagnostic(
+                    "array-initialization vector-length request resolution "
+                    "requires typed target/source extension context before "
+                    "lowering evaluation",
+                    vector_length_request.leaf_source_location,
+                ),
+            )
+        )
+
+    metadata_result = _array_initialization_vector_length_metadata_for_context(
+        generation_context,
+        candidate_id=base_resolution.candidate_id,
+        target_extension=target_extension,
+        source_extension=source_extension,
+        selected_type_tag=base_resolution.selected_type_tag,
+        location=vector_length_request.leaf_source_location,
+    )
+    if not metadata_result.is_ok:
+        return Result.failure(metadata_result.diagnostics)
+    metadata = metadata_result.unwrap()
+    if require_fixed_lanes and metadata.vector_length.kind != "fixed_lanes":
+        return Result.failure(
+            (
+                _array_initialization_vector_length_metadata_unsupported_diagnostic(
+                    "array-initialization vector-length request resolution was "
+                    "asked for fixed numeric lanes, but the supplied typed "
+                    f"metadata is {metadata.vector_length.kind!r}",
+                    metadata.source_location or vector_length_request.leaf_source_location,
+                ),
+            )
+        )
+
+    unresolved_requests = tuple(
+        request
+        for request in base_resolution.unresolved_requests
+        if request is not vector_length_request
+    )
+    try:
+        return Result.ok(
+            ExactArrayInitializationVectorLengthResolutionIr(
+                source_base_type_resolution=base_resolution,
+                source_vector_length_request=vector_length_request,
+                resolved_vector_length=metadata.vector_length,
+                unresolved_requests=unresolved_requests,
+                source_location=base_resolution.source_location,
+                candidate_id=base_resolution.candidate_id,
+                target_extension=metadata.target_extension,
+                source_extension=metadata.source_extension,
+                selected_type_tag=base_resolution.selected_type_tag,
+                originating_branch_chain_id=(
+                    base_resolution.originating_branch_chain_id
+                ),
+                slot_label=base_resolution.slot_label,
+                slot_ordinal=base_resolution.slot_ordinal,
+                variable_token=base_resolution.variable_token,
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        return Result.failure(
+            (
+                _array_initialization_vector_length_provenance_mismatch_diagnostic(
+                    str(exc),
+                    base_resolution.source_location,
+                ),
+            )
+        )
+
+
 def resolve_generation_type_query(
     query_text: str,
     context: GenerationContext | None = None,
@@ -2964,6 +3355,9 @@ class _ExactArrayInitializationStagePipelineResult:
     array_initialization_base_type_resolutions: tuple[
         ExactArrayInitializationBaseTypeResolutionIr, ...
     ] = ()
+    array_initialization_vector_length_resolutions: tuple[
+        ExactArrayInitializationVectorLengthResolutionIr, ...
+    ] = ()
     stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -2987,6 +3381,11 @@ class _ExactArrayInitializationStagePipelineResult:
             "array_initialization_base_type_resolutions",
             tuple(self.array_initialization_base_type_resolutions),
         )
+        object.__setattr__(
+            self,
+            "array_initialization_vector_length_resolutions",
+            tuple(self.array_initialization_vector_length_resolutions),
+        )
         object.__setattr__(self, "stages", tuple(self.stages))
 
     @property
@@ -3001,6 +3400,12 @@ class _ExactArrayInitializationStagePipelineResult:
             tuple(
                 resolution.key
                 for resolution in self.array_initialization_base_type_resolutions
+            ),
+            tuple(
+                resolution.key
+                for resolution in (
+                    self.array_initialization_vector_length_resolutions
+                )
             ),
             tuple(stage.key for stage in self.stages),
         )
@@ -3110,6 +3515,15 @@ def _array_initialization_base_type_resolution_stage(
     )
 
 
+def _array_initialization_vector_length_resolution_stage(
+    output: ExactArrayInitializationVectorLengthResolutionIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="array_initialization_vector_length_request_resolution",
+        output=output,
+    )
+
+
 def _stage_output_location(
     output: GenerationLoweringStageOutput,
 ) -> SourceLocation | None:
@@ -3137,6 +3551,7 @@ def _stage_output_location(
             ExactArrayInitializationSlotFormIr,
             ExactArrayInitializationHelperRequestIr,
             ExactArrayInitializationBaseTypeResolutionIr,
+            ExactArrayInitializationVectorLengthResolutionIr,
         ),
     ):
         return output.source_location
@@ -3319,6 +3734,28 @@ def _lower_exact_array_initialization_stage_pipeline(
     base_type_resolution_stage = _array_initialization_base_type_resolution_stage(
         base_type_resolution,
     )
+    vector_length_resolution_result = (
+        lower_exact_array_initialization_vector_length_request(
+            base_type_resolution,
+            _context_for_candidate(item, request),
+            selected_candidate_id=item.candidate_id,
+            target_extension=item.candidate.target_extension,
+            source_extension=item.candidate.source_extension,
+            selected_type_tag=(
+                item.candidate.type_tag
+                if request.generation_context.use_candidate_type_tag
+                else None
+            ),
+        )
+    )
+    if not vector_length_resolution_result.is_ok:
+        return Result.failure(vector_length_resolution_result.diagnostics)
+    vector_length_resolution = vector_length_resolution_result.unwrap()
+    vector_length_resolution_stage = (
+        _array_initialization_vector_length_resolution_stage(
+            vector_length_resolution,
+        )
+    )
 
     return Result.ok(
         _ExactArrayInitializationStagePipelineResult(
@@ -3328,11 +3765,15 @@ def _lower_exact_array_initialization_stage_pipeline(
                 array_initialization_helper_request,
             ),
             array_initialization_base_type_resolutions=(base_type_resolution,),
+            array_initialization_vector_length_resolutions=(
+                vector_length_resolution,
+            ),
             stages=(
                 array_body_stage,
                 array_initialization_slot_form_stage,
                 array_initialization_helper_request_stage,
                 base_type_resolution_stage,
+                vector_length_resolution_stage,
             ),
         )
     )
@@ -3692,6 +4133,68 @@ def _array_initialization_base_type_resolution_source(
     )
 
 
+def _array_initialization_vector_length_resolution_source(
+    source: object,
+) -> Result[ExactArrayInitializationBaseTypeResolutionIr]:
+    if isinstance(source, ExactArrayInitializationBaseTypeResolutionIr):
+        return Result.ok(source)
+    if isinstance(source, GenerationLoweringStage):
+        if (
+            source.stage == "array_initialization_base_type_request_resolution"
+            and isinstance(source.output, ExactArrayInitializationBaseTypeResolutionIr)
+        ):
+            return Result.ok(source.output)
+        return Result.failure(
+            (
+                _array_initialization_vector_length_source_unsupported_diagnostic(
+                    "array-initialization vector-length request resolution "
+                    "consumes typed M68 "
+                    "ExactArrayInitializationBaseTypeResolutionIr values, the "
+                    "array_initialization_base_type_request_resolution stage "
+                    "output, or a LoweredImplementation with a matching M68 "
+                    "base-type resolution",
+                    _stage_output_location(source.output),
+                ),
+            )
+        )
+    if isinstance(source, LoweredImplementation):
+        if len(source.array_initialization_base_type_resolutions) == 1:
+            return Result.ok(source.array_initialization_base_type_resolutions[0])
+        if len(source.array_initialization_base_type_resolutions) == 0:
+            return Result.failure(
+                (
+                    _array_initialization_vector_length_missing_ir_diagnostic(
+                        "array-initialization vector-length request resolution "
+                        "requires a LoweredImplementation carrying an accepted "
+                        "M68 array_initialization_base_type_resolutions entry",
+                        _lowered_implementation_location(source),
+                    ),
+                )
+            )
+        return Result.failure(
+            (
+                _array_initialization_vector_length_multiple_ir_diagnostic(
+                    "array-initialization vector-length request resolution "
+                    "requires exactly one M68 "
+                    "array_initialization_base_type_resolutions entry; got "
+                    f"{len(source.array_initialization_base_type_resolutions)}",
+                    _lowered_implementation_location(source),
+                ),
+            )
+        )
+    return Result.failure(
+        (
+            _array_initialization_vector_length_source_unsupported_diagnostic(
+                "array-initialization vector-length request resolution "
+                "consumes only typed M68 "
+                "ExactArrayInitializationBaseTypeResolutionIr values or "
+                "array_initialization_base_type_request_resolution stage output",
+                None,
+            ),
+        )
+    )
+
+
 def _array_initialization_envelope_slot(
     envelope: ExactArrayBodyEnvelopeIr,
 ) -> ExactArrayBodyEnvelopeSlot | None:
@@ -3930,6 +4433,228 @@ def _array_initialization_base_type_request_record(
             )
         )
     return base_request
+
+
+def _validate_array_initialization_vector_length_resolution_provenance(
+    base_resolution: ExactArrayInitializationBaseTypeResolutionIr,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    request_ir = base_resolution.source_request_ir
+    if base_resolution.source_base_type_request not in request_ir.requests:
+        diagnostics.append(
+            _array_initialization_vector_length_provenance_mismatch_diagnostic(
+                "M68 base-type resolution source request must come from its "
+                "M67 helper-request IR",
+                base_resolution.source_location,
+            )
+        )
+    if base_resolution.source_location != request_ir.source_location:
+        diagnostics.append(
+            _array_initialization_vector_length_provenance_mismatch_diagnostic(
+                "M68 base-type resolution source location must match its M67 "
+                "helper-request IR",
+                base_resolution.source_location,
+            )
+        )
+    if (
+        base_resolution.candidate_id != request_ir.candidate_id
+        or base_resolution.selected_type_tag != request_ir.selected_type_tag
+        or base_resolution.originating_branch_chain_id
+        != request_ir.originating_branch_chain_id
+    ):
+        diagnostics.append(
+            _array_initialization_vector_length_provenance_mismatch_diagnostic(
+                "M68 base-type resolution provenance must match its M67 "
+                "helper-request IR",
+                base_resolution.source_location,
+            )
+        )
+    if (
+        base_resolution.slot_label != request_ir.slot_label
+        or base_resolution.slot_ordinal != request_ir.slot_ordinal
+        or base_resolution.variable_token != request_ir.variable_token
+    ):
+        diagnostics.append(
+            _array_initialization_vector_length_provenance_mismatch_diagnostic(
+                "M68 base-type resolution slot provenance must match its M67 "
+                "helper-request IR",
+                base_resolution.source_location,
+            )
+        )
+    for request in base_resolution.unresolved_requests:
+        if request.source_form != request_ir.source_form:
+            diagnostics.append(
+                _array_initialization_vector_length_provenance_mismatch_diagnostic(
+                    "M68 unresolved request record source form must match the "
+                    "source M67 helper-request IR",
+                    request.leaf_source_location,
+                )
+            )
+        if request.source_envelope != request_ir.source_envelope:
+            diagnostics.append(
+                _array_initialization_vector_length_provenance_mismatch_diagnostic(
+                    "M68 unresolved request record envelope must match the "
+                    "source M67 helper-request IR",
+                    request.leaf_source_location,
+                )
+            )
+        if (
+            request.candidate_id != base_resolution.candidate_id
+            or request.selected_type_tag != base_resolution.selected_type_tag
+            or request.originating_branch_chain_id
+            != base_resolution.originating_branch_chain_id
+            or request.slot_label != base_resolution.slot_label
+            or request.slot_ordinal != base_resolution.slot_ordinal
+            or request.variable_token != base_resolution.variable_token
+        ):
+            diagnostics.append(
+                _array_initialization_vector_length_provenance_mismatch_diagnostic(
+                    "M68 unresolved request record provenance must match the "
+                    "source base-type resolution",
+                    request.leaf_source_location,
+                )
+            )
+    return diagnostics
+
+
+def _array_initialization_vector_length_request_record(
+    base_resolution: ExactArrayInitializationBaseTypeResolutionIr,
+    diagnostics: list[Diagnostic],
+) -> ExactArrayInitializationHelperRequestRecord | None:
+    rule = _EXACT_ARRAY_INITIALIZATION_VECTOR_LENGTH_REQUEST_RULE
+    vector_length_records = tuple(
+        request
+        for request in base_resolution.unresolved_requests
+        if request.helper_leaf_kind == rule.helper_leaf_kind
+    )
+    if not vector_length_records:
+        ordinal_or_kind_records = tuple(
+            request
+            for request in base_resolution.unresolved_requests
+            if (
+                request.request_ordinal == rule.request_ordinal
+                or request.request_kind == rule.request_kind
+            )
+        )
+        if ordinal_or_kind_records:
+            for request in ordinal_or_kind_records:
+                diagnostics.append(
+                    _array_initialization_vector_length_mismatch_diagnostic(
+                        "array-initialization vector-length request resolution "
+                        "expected the M67 vector-length request to carry "
+                        f"ordinal {rule.request_ordinal}, kind "
+                        f"{rule.request_kind!r}, and leaf kind "
+                        f"{rule.helper_leaf_kind!r}; got ordinal "
+                        f"{request.request_ordinal}, kind "
+                        f"{request.request_kind!r}, and leaf kind "
+                        f"{request.helper_leaf_kind!r}",
+                        request.leaf_source_location,
+                    )
+                )
+            return None
+        diagnostics.append(
+            _array_initialization_vector_length_missing_request_diagnostic(
+                "array-initialization vector-length request resolution "
+                "requires one M67 vector-length request record preserved by "
+                "M68",
+                base_resolution.source_location,
+            )
+        )
+        return None
+    if len(vector_length_records) > 1:
+        for request in vector_length_records:
+            diagnostics.append(
+                _array_initialization_vector_length_duplicate_request_diagnostic(
+                    "array-initialization vector-length request resolution "
+                    "requires exactly one M67 vector-length request record; "
+                    f"duplicate record appeared at ordinal "
+                    f"{request.request_ordinal}",
+                    request.leaf_source_location,
+                )
+            )
+        return None
+
+    vector_length_request = vector_length_records[0]
+    if (
+        vector_length_request.request_ordinal != rule.request_ordinal
+        or vector_length_request.request_kind != rule.request_kind
+    ):
+        diagnostics.append(
+            _array_initialization_vector_length_mismatch_diagnostic(
+                "array-initialization vector-length request resolution "
+                f"expected ordinal {rule.request_ordinal} and kind "
+                f"{rule.request_kind!r}; got ordinal "
+                f"{vector_length_request.request_ordinal} and kind "
+                f"{vector_length_request.request_kind!r}",
+                vector_length_request.leaf_source_location,
+            )
+        )
+    if vector_length_request.leaf_source_text != rule.expected_leaf_source_text:
+        diagnostics.append(
+            _array_initialization_vector_length_unsupported_request_diagnostic(
+                "array-initialization vector-length request resolution "
+                "preserves the M67 leaf source text only as provenance and "
+                "accepts only the exact M67 vector-length leaf text for that "
+                f"typed request; got {vector_length_request.leaf_source_text!r}",
+                vector_length_request.leaf_source_location,
+            )
+        )
+    return vector_length_request
+
+
+def _array_initialization_vector_length_metadata_for_context(
+    context: GenerationContext,
+    *,
+    candidate_id: str,
+    target_extension: str,
+    source_extension: str,
+    selected_type_tag: str,
+    location: SourceLocation | None,
+) -> Result[ExactArrayInitializationVectorLengthMetadata]:
+    lookup_key = (
+        candidate_id,
+        target_extension,
+        source_extension,
+        selected_type_tag,
+    )
+    matches = tuple(
+        metadata
+        for metadata in context.array_initialization_vector_length_metadata
+        if metadata.lookup_key == lookup_key
+    )
+    if not matches:
+        return Result.failure(
+            (
+                _array_initialization_vector_length_metadata_missing_diagnostic(
+                    "array-initialization vector-length request resolution "
+                    "requires explicit typed vector-length metadata for "
+                    f"candidate {candidate_id!r}, target extension "
+                    f"{target_extension!r}, source extension "
+                    f"{source_extension!r}, and selected type tag "
+                    f"{selected_type_tag!r}",
+                    location,
+                ),
+            )
+        )
+    if len(matches) > 1:
+        values = tuple(metadata.vector_length for metadata in matches)
+        code_detail = "conflicting" if len(set(values)) > 1 else "duplicate"
+        diagnostic = (
+            _array_initialization_vector_length_metadata_conflict_diagnostic
+            if code_detail == "conflicting"
+            else _array_initialization_vector_length_metadata_duplicate_diagnostic
+        )
+        return Result.failure(
+            (
+                diagnostic(
+                    "array-initialization vector-length metadata requires "
+                    f"exactly one entry for {lookup_key!r}; found "
+                    f"{code_detail} entries",
+                    matches[0].source_location or location,
+                ),
+            )
+        )
+    return Result.ok(matches[0])
 
 
 def _array_initialization_leaf(
@@ -4345,6 +5070,149 @@ def _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-PROVENANCE-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_length_source_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-SOURCE-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_length_missing_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-IR-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_length_multiple_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-IR-MULTIPLE",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_length_missing_request_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_length_duplicate_request_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-DUPLICATE",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_length_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_length_unsupported_request_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_length_metadata_missing_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_length_metadata_duplicate_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-DUPLICATE",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_length_metadata_conflict_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-CONFLICT",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_length_metadata_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_length_context_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-CONTEXT-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_length_provenance_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-PROVENANCE-MISMATCH",
         detail,
         location=location,
     )
@@ -4910,6 +5778,9 @@ def _lower_input(
                     array_initialization_base_type_resolutions=(
                         array_initialization_pipeline.array_initialization_base_type_resolutions
                     ),
+                    array_initialization_vector_length_resolutions=(
+                        array_initialization_pipeline.array_initialization_vector_length_resolutions
+                    ),
                     generation_stages=(
                         _recognition_stage(
                             "generation.control_flow",
@@ -5272,6 +6143,9 @@ def _context_for_candidate(
         concrete_integer_generation_rules=context.concrete_integer_generation_rules,
         scalar_size_bytes_generation_rules=(
             context.scalar_size_bytes_generation_rules
+        ),
+        array_initialization_vector_length_metadata=(
+            context.array_initialization_vector_length_metadata
         ),
         implementation_source_location=(
             context.implementation_source_location or item.source_location

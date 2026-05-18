@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 69 is accepted.
+Milestone 70 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -199,40 +199,49 @@ vector-length metadata before lowering evaluation and must not infer lane
 counts from raw text, SVE tokens, vector-bit strings, host CPU state, catalog
 data, backend maps, or renderers.
 
+The M70 execution-review loop returned `Accept With Follow-Ups` after one
+focused documentation revision. Review and audit found no blocking
+implementation, validation, boundary, extensibility, documentation, or evidence
+issues after that revision. M70 resolves only the exact M67
+`value<generation>(vector::length)` request through typed M68/M69 pipeline
+values and explicit typed vector-length metadata; vector alignment and backend
+uninit remain unresolved.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 70.
+Run post-M70 planning with a lowering focus.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m70-execution-review-loop-prompt.md
+docs/agent/runs/post-m70-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 70: Exact Array Initialization Vector-Length Request Resolution Slice
+No active executor milestone. Post-M70 planning must select exactly one next
+lowering milestone candidate.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M69 planning returned Accept With Follow-Ups after selecting M70 as the
-exact array-initialization vector-length request resolution slice. Human
-acceptance is recorded; M70 execution is the next action.
+The M70 execution-review loop returned Accept With Follow-Ups after one
+focused documentation revision. A focused re-review accepted the documentation
+fix. One non-blocking M70 validation hardening follow-up remains.
 ```
 
 Next expected action:
 
 ```text
-Run the active M70 execution-review loop prompt. Use exactly one write-capable
-executor if M70 is not already implemented, then read-only review/audit
-subagents. Do not start M71.
+Run the active post-M70 planning-plus-review prompt. Use read-only planning,
+audit, and review subagents as specified. Do not implement code and do not
+start M71 execution.
 ```
 
 Accepted planning prompt:
@@ -625,10 +634,16 @@ Accepted post-M69 acceptance finalization prompt:
 docs/agent/runs/post-m69-acceptance-finalization-prompt.md
 ```
 
-Active M70 execution-review loop prompt:
+Accepted M70 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m70-execution-review-loop-prompt.md
+```
+
+Active post-M70 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m70-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1135,7 +1150,7 @@ docs/agent/runs/m70-execution-review-loop-prompt.md
   output, generated tests, CLI/report/writer behavior, Rust, compiler
   execution, broad TSIL parsing, lowering-time file/catalog reads, `tsldata`
   reads during lowering evaluation, or runtime `frozen/` use.
-- M70 is accepted for execution as exact array-initialization
+- M70 is accepted as exact array-initialization
   vector-length request resolution only. M70 must resolve exactly the M67
   `value<generation>(vector::length)` request through the accepted M69
   extracted pipeline and explicit typed vector-length metadata supplied before
@@ -1862,10 +1877,18 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   uninit, declaration/array semantics, backend translation, rendering,
   generated output, generated tests, CLI/report/writer behavior, Rust,
   compiler execution, and runtime `frozen/` use out of scope.
+- M70 execution follow-up: consider adding an explicit unit test that guards
+  against catalog reads, `tsldata` reads, and host CPU queries during M70
+  vector-length request resolution. Review found the implementation and
+  broader validation clean; this is coverage hardening, not a blocker.
+- M70 documentation follow-up addressed during the execution-review loop:
+  update stale lowering-doc deferral wording so broad/generic vector-length
+  semantics remain deferred while the exact M70 array-initialization
+  vector-length request is carved out as resolved from explicit typed metadata.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with M70 execution.
+No stop condition is active. The workflow proceeds with post-M70 planning.
 
 ## Validation Expectations
 
