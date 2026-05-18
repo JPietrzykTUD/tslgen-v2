@@ -976,6 +976,58 @@ class LoweringBoundaryTests(unittest.TestCase):
             raise AssertionError(helper_request_result.diagnostics)
         return helper_request_result.unwrap()
 
+    def size_byte_branch_chain_item_and_envelope(
+        self,
+        selected_type_tag: str,
+    ):
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+        inputs = prepare_lowering_inputs(selection)
+        self.assertTrue(inputs.is_ok, inputs.diagnostics)
+        baseline = lower_candidates(selection)
+        self.assertTrue(baseline.is_ok, baseline.diagnostics)
+        implementation = next(
+            implementation
+            for implementation in baseline.unwrap().implementations
+            if implementation.selected_body_envelopes
+            and implementation.selected_body_envelopes[0].selected_type_tag
+            == selected_type_tag
+        )
+        item = next(
+            item
+            for item in inputs.unwrap().inputs
+            if item.candidate_id == implementation.candidate_id
+        )
+        return item, implementation.selected_body_envelopes[0]
+
+    def exact_array_initialization_stage_pipeline(
+        self,
+        selected_type_tag: str,
+        *,
+        skeleton: ExactArrayBodyEnvelopeSkeleton | None = None,
+        request: LoweringRequest | None = None,
+    ):
+        item, envelope = self.size_byte_branch_chain_item_and_envelope(
+            selected_type_tag,
+        )
+        envelope_stage = GenerationLoweringStage(
+            stage="selected_body_envelope_lowering",
+            output=envelope,
+        )
+        if request is None:
+            request = LoweringRequest(
+                array_body_envelope_skeletons=(
+                    skeleton or self.exact_array_body_skeleton_for_envelope(envelope),
+                ),
+            )
+        lookup = lowering_boundary._build_array_body_envelope_skeleton_lookup(request)
+        self.assertTrue(lookup.is_ok, lookup.diagnostics)
+        return lowering_boundary._lower_exact_array_initialization_stage_pipeline(
+            item,
+            request,
+            envelope_stage,
+            lookup.unwrap(),
+        )
+
     def test_prepares_typed_lowering_inputs_from_selected_candidates(self) -> None:
         referenced = reference_validated(catalog_with_primitives(LOWERING_FIXTURE))
         selection = candidate_selection_for(
@@ -3734,6 +3786,311 @@ class LoweringBoundaryTests(unittest.TestCase):
             column=15,
         )
         self.assertIn("exact", result.diagnostics[0].message)
+
+    def test_exact_array_initialization_stage_pipeline_lowers_selected_paths(
+        self,
+    ) -> None:
+        cases = (
+            ("si16", "svptrue_b16"),
+            ("si32", "svptrue_b32"),
+            ("si64", "svptrue_b64"),
+        )
+
+        for selected_type_tag, token_text in cases:
+            with self.subTest(selected_type_tag=selected_type_tag):
+                result = self.exact_array_initialization_stage_pipeline(
+                    selected_type_tag,
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                pipeline = result.unwrap()
+                self.assertEqual(len(pipeline.array_body_envelopes), 1)
+                array_envelope = pipeline.array_body_envelopes[0]
+                nested = array_envelope.selected_body_slot.selected_body_envelope
+                assert isinstance(nested, SelectedBodyEnvelopeIr)
+                self.assertEqual(
+                    nested.entries[0].direct_intrinsic_token_text,
+                    token_text,
+                )
+                self.assertEqual(len(pipeline.array_initialization_slot_forms), 1)
+                slot_form = pipeline.array_initialization_slot_forms[0]
+                self.assertIs(slot_form.source_envelope, array_envelope)
+                self.assertEqual(
+                    slot_form.original_slot_text,
+                    ARRAY_BODY_OPAQUE_TEXT_BY_LABEL[
+                        "opaque_pre_branch_array_initialization"
+                    ],
+                )
+                self.assertEqual(
+                    len(pipeline.array_initialization_helper_requests),
+                    1,
+                )
+                helper_request = pipeline.array_initialization_helper_requests[0]
+                self.assertIs(helper_request.source_form, slot_form)
+                self.assertEqual(
+                    len(pipeline.array_initialization_base_type_resolutions),
+                    1,
+                )
+                resolution = pipeline.array_initialization_base_type_resolutions[0]
+                self.assertIs(resolution.source_request_ir, helper_request)
+                self.assertEqual(
+                    resolution.resolved_type_ref,
+                    GenerationTypeRef(
+                        kind="base.in",
+                        type_tag=selected_type_tag,
+                    ),
+                )
+                self.assertEqual(
+                    tuple(stage.stage for stage in pipeline.stages),
+                    (
+                        "array_body_envelope_slot_assembly",
+                        "array_initialization_slot_form_lowering",
+                        "array_initialization_helper_request_lowering",
+                        "array_initialization_base_type_request_resolution",
+                    ),
+                )
+                self.assertEqual(
+                    tuple(stage.output for stage in pipeline.stages),
+                    (
+                        array_envelope,
+                        slot_form,
+                        helper_request,
+                        resolution,
+                    ),
+                )
+
+    def test_exact_array_initialization_stage_pipeline_lowers_no_body_paths(
+        self,
+    ) -> None:
+        for selected_type_tag in ("si8", "ui8"):
+            with self.subTest(selected_type_tag=selected_type_tag):
+                result = self.exact_array_initialization_stage_pipeline(
+                    selected_type_tag,
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                pipeline = result.unwrap()
+                self.assertEqual(len(pipeline.array_body_envelopes), 1)
+                array_envelope = pipeline.array_body_envelopes[0]
+                nested = array_envelope.selected_body_slot.selected_body_envelope
+                self.assertIsInstance(nested, NoSelectedBodyEnvelopeIr)
+                self.assertEqual(nested.entries, ())
+                self.assertEqual(
+                    pipeline.array_initialization_base_type_resolutions[
+                        0
+                    ].resolved_type_ref,
+                    GenerationTypeRef(
+                        kind="base.in",
+                        type_tag=selected_type_tag,
+                    ),
+                )
+                self.assertEqual(len(pipeline.stages), 4)
+
+    def test_exact_array_initialization_stage_pipeline_no_skeleton_is_empty(
+        self,
+    ) -> None:
+        result = self.exact_array_initialization_stage_pipeline(
+            "si16",
+            request=LoweringRequest(),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        pipeline = result.unwrap()
+        self.assertEqual(pipeline.array_body_envelopes, ())
+        self.assertEqual(pipeline.array_initialization_slot_forms, ())
+        self.assertEqual(pipeline.array_initialization_helper_requests, ())
+        self.assertEqual(pipeline.array_initialization_base_type_resolutions, ())
+        self.assertEqual(pipeline.stages, ())
+
+    def test_exact_array_initialization_stage_pipeline_matches_lower_candidates_tail(
+        self,
+    ) -> None:
+        item, envelope = self.size_byte_branch_chain_item_and_envelope("si32")
+        skeleton = self.exact_array_body_skeleton_for_envelope(envelope)
+        request = LoweringRequest(array_body_envelope_skeletons=(skeleton,))
+        lookup = lowering_boundary._build_array_body_envelope_skeleton_lookup(request)
+        self.assertTrue(lookup.is_ok, lookup.diagnostics)
+        envelope_stage = GenerationLoweringStage(
+            stage="selected_body_envelope_lowering",
+            output=envelope,
+        )
+        pipeline = lowering_boundary._lower_exact_array_initialization_stage_pipeline(
+            item,
+            request,
+            envelope_stage,
+            lookup.unwrap(),
+        )
+        plan = lower_candidates(
+            self.selection_for("lower_generation_size_byte_branch_chain"),
+            request,
+        )
+
+        self.assertTrue(pipeline.is_ok, pipeline.diagnostics)
+        self.assertTrue(plan.is_ok, plan.diagnostics)
+        implementation = plan.unwrap().implementations_by_candidate_id[
+            item.candidate_id
+        ]
+        pipeline_result = pipeline.unwrap()
+        self.assertEqual(
+            implementation.array_body_envelopes,
+            pipeline_result.array_body_envelopes,
+        )
+        self.assertEqual(
+            implementation.array_initialization_slot_forms,
+            pipeline_result.array_initialization_slot_forms,
+        )
+        self.assertEqual(
+            implementation.array_initialization_helper_requests,
+            pipeline_result.array_initialization_helper_requests,
+        )
+        self.assertEqual(
+            implementation.array_initialization_base_type_resolutions,
+            pipeline_result.array_initialization_base_type_resolutions,
+        )
+        self.assertEqual(implementation.generation_stages[-4:], pipeline_result.stages)
+        self.assertEqual(implementation.generation_stages[-5], envelope_stage)
+
+    def test_exact_array_initialization_stage_pipeline_propagates_diagnostics(
+        self,
+    ) -> None:
+        item, envelope = self.size_byte_branch_chain_item_and_envelope("si16")
+        envelope_stage = GenerationLoweringStage(
+            stage="selected_body_envelope_lowering",
+            output=envelope,
+        )
+        skeleton = self.exact_array_body_skeleton_for_envelope(envelope)
+        malformed_skeleton = replace(
+            skeleton,
+            slots=(
+                replace(
+                    skeleton.slots[0],
+                    opaque_source_text="var<typed>(unsupported)",
+                ),
+                *skeleton.slots[1:],
+            ),
+        )
+        cases = (
+            (
+                "m64",
+                LoweringRequest(
+                    array_body_envelope_skeletons=(
+                        replace(skeleton, is_exact_array_body_shape=False),
+                    ),
+                ),
+                "TSL-LOWER-ARRAY-BODY-ENVELOPE-SHAPE-UNSUPPORTED",
+                "tsldata/primitives/load_store/array.tsl",
+                105,
+                15,
+                "exact",
+            ),
+            (
+                "m66",
+                LoweringRequest(array_body_envelope_skeletons=(malformed_skeleton,)),
+                "TSL-LOWER-ARRAY-INIT-SLOT-FORM-MALFORMED",
+                "tsldata/primitives/load_store/array.tsl",
+                105,
+                15,
+                "array-initialization slot form",
+            ),
+        )
+        for name, request, code, path, line, column, message in cases:
+            with self.subTest(name=name):
+                lookup = lowering_boundary._build_array_body_envelope_skeleton_lookup(
+                    request,
+                )
+                self.assertTrue(lookup.is_ok, lookup.diagnostics)
+
+                result = (
+                    lowering_boundary._lower_exact_array_initialization_stage_pipeline(
+                        item,
+                        request,
+                        envelope_stage,
+                        lookup.unwrap(),
+                    )
+                )
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                    path=path,
+                    line=line,
+                    column=column,
+                )
+                self.assertIn(message, result.diagnostics[0].message)
+
+    def test_exact_array_initialization_stage_pipeline_propagates_m68_diagnostic(
+        self,
+    ) -> None:
+        item, envelope = self.size_byte_branch_chain_item_and_envelope("f32")
+        skeleton = self.exact_array_body_skeleton_for_envelope(envelope)
+        request = LoweringRequest(array_body_envelope_skeletons=(skeleton,))
+        lookup = lowering_boundary._build_array_body_envelope_skeleton_lookup(request)
+        self.assertTrue(lookup.is_ok, lookup.diagnostics)
+
+        result = lowering_boundary._lower_exact_array_initialization_stage_pipeline(
+            item,
+            request,
+            GenerationLoweringStage(
+                stage="selected_body_envelope_lowering",
+                output=envelope,
+            ),
+            lookup.unwrap(),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-GEN-TYPE-TAG-UNSUPPORTED",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+        )
+        self.assertIn("concrete integer", result.diagnostics[0].message)
+
+    def test_exact_array_initialization_stage_pipeline_is_deterministic(
+        self,
+    ) -> None:
+        first = self.exact_array_initialization_stage_pipeline("si64")
+        second = self.exact_array_initialization_stage_pipeline("si64")
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap().key, second.unwrap().key)
+
+    def test_exact_array_initialization_stage_pipeline_preserves_typed_boundary(
+        self,
+    ) -> None:
+        original_type_query = lowering_boundary.resolve_generation_type_query
+        original_value_query = lowering_boundary.resolve_generation_value_query
+
+        def fail_on_raw_query(*args: object, **kwargs: object) -> object:
+            raise AssertionError("raw helper evaluator was called")
+
+        lowering_boundary.resolve_generation_type_query = fail_on_raw_query  # type: ignore[assignment]
+        lowering_boundary.resolve_generation_value_query = fail_on_raw_query  # type: ignore[assignment]
+        try:
+            result = self.exact_array_initialization_stage_pipeline("si32")
+        finally:
+            lowering_boundary.resolve_generation_type_query = original_type_query
+            lowering_boundary.resolve_generation_value_query = original_value_query
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        resolution = result.unwrap().array_initialization_base_type_resolutions[0]
+        self.assertEqual(
+            tuple(
+                request.helper_leaf_kind
+                for request in resolution.unresolved_requests
+            ),
+            (
+                "value_generation_vector_length",
+                "value_generation_vector_alignment",
+                "value_backend_uninit_array",
+            ),
+        )
 
     def test_exact_array_body_envelopes_assemble_selected_m63_slots(
         self,

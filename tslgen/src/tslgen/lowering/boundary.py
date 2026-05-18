@@ -2952,6 +2952,60 @@ class _StagedGenerationSizeByteBranchChain:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class _ExactArrayInitializationStagePipelineResult:
+    array_body_envelopes: tuple[ExactArrayBodyEnvelopeIr, ...] = ()
+    array_initialization_slot_forms: tuple[
+        ExactArrayInitializationSlotFormIr, ...
+    ] = ()
+    array_initialization_helper_requests: tuple[
+        ExactArrayInitializationHelperRequestIr, ...
+    ] = ()
+    array_initialization_base_type_resolutions: tuple[
+        ExactArrayInitializationBaseTypeResolutionIr, ...
+    ] = ()
+    stages: tuple[GenerationLoweringStage, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "array_body_envelopes",
+            tuple(self.array_body_envelopes),
+        )
+        object.__setattr__(
+            self,
+            "array_initialization_slot_forms",
+            tuple(self.array_initialization_slot_forms),
+        )
+        object.__setattr__(
+            self,
+            "array_initialization_helper_requests",
+            tuple(self.array_initialization_helper_requests),
+        )
+        object.__setattr__(
+            self,
+            "array_initialization_base_type_resolutions",
+            tuple(self.array_initialization_base_type_resolutions),
+        )
+        object.__setattr__(self, "stages", tuple(self.stages))
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            tuple(envelope.key for envelope in self.array_body_envelopes),
+            tuple(form.key for form in self.array_initialization_slot_forms),
+            tuple(
+                request.key
+                for request in self.array_initialization_helper_requests
+            ),
+            tuple(
+                resolution.key
+                for resolution in self.array_initialization_base_type_resolutions
+            ),
+            tuple(stage.key for stage in self.stages),
+        )
+
+
 def _recognition_stage(
     kind: GenerationRecognitionKind,
     source_text: str,
@@ -3205,6 +3259,83 @@ def _assemble_matching_array_body_envelope(
     if not assembled.is_ok:
         return Result.failure(assembled.diagnostics)
     return Result.ok(assembled.unwrap())
+
+
+def _lower_exact_array_initialization_stage_pipeline(
+    item: LoweringInput,
+    request: LoweringRequest,
+    envelope_stage: GenerationLoweringStage,
+    skeleton_lookup: _ArrayBodyEnvelopeSkeletonLookup,
+) -> Result[_ExactArrayInitializationStagePipelineResult]:
+    array_envelope_result = _assemble_matching_array_body_envelope(
+        envelope_stage,
+        skeleton_lookup,
+    )
+    if not array_envelope_result.is_ok:
+        return Result.failure(array_envelope_result.diagnostics)
+    array_envelope = array_envelope_result.unwrap()
+    if array_envelope is None:
+        return Result.ok(_ExactArrayInitializationStagePipelineResult())
+
+    array_body_stage = _array_body_envelope_slot_assembly_stage(array_envelope)
+    array_initialization_slot_form_result = (
+        lower_exact_array_initialization_slot_form(array_envelope)
+    )
+    if not array_initialization_slot_form_result.is_ok:
+        return Result.failure(array_initialization_slot_form_result.diagnostics)
+    array_initialization_slot_form = array_initialization_slot_form_result.unwrap()
+    array_initialization_slot_form_stage = _array_initialization_slot_form_stage(
+        array_initialization_slot_form,
+    )
+
+    array_initialization_helper_request_result = (
+        lower_exact_array_initialization_helper_requests(
+            array_initialization_slot_form,
+        )
+    )
+    if not array_initialization_helper_request_result.is_ok:
+        return Result.failure(array_initialization_helper_request_result.diagnostics)
+    array_initialization_helper_request = (
+        array_initialization_helper_request_result.unwrap()
+    )
+    array_initialization_helper_request_stage = (
+        _array_initialization_helper_request_stage(
+            array_initialization_helper_request,
+        )
+    )
+
+    base_type_resolution_result = lower_exact_array_initialization_base_type_request(
+        array_initialization_helper_request,
+        _context_for_candidate(item, request),
+        selected_candidate_type_tag=(
+            item.candidate.type_tag
+            if request.generation_context.use_candidate_type_tag
+            else None
+        ),
+    )
+    if not base_type_resolution_result.is_ok:
+        return Result.failure(base_type_resolution_result.diagnostics)
+    base_type_resolution = base_type_resolution_result.unwrap()
+    base_type_resolution_stage = _array_initialization_base_type_resolution_stage(
+        base_type_resolution,
+    )
+
+    return Result.ok(
+        _ExactArrayInitializationStagePipelineResult(
+            array_body_envelopes=(array_envelope,),
+            array_initialization_slot_forms=(array_initialization_slot_form,),
+            array_initialization_helper_requests=(
+                array_initialization_helper_request,
+            ),
+            array_initialization_base_type_resolutions=(base_type_resolution,),
+            stages=(
+                array_body_stage,
+                array_initialization_slot_form_stage,
+                array_initialization_helper_request_stage,
+                base_type_resolution_stage,
+            ),
+        )
+    )
 
 
 def _unused_array_body_envelope_skeleton_diagnostics(
@@ -4740,98 +4871,21 @@ def _lower_input(
                 return Result.failure(envelope_result.diagnostics)
             envelope = envelope_result.unwrap()
             envelope_stage = _selected_body_envelope_stage(envelope)
-            array_envelope_result = _assemble_matching_array_body_envelope(
-                envelope_stage,
-                skeleton_lookup,
+            array_initialization_pipeline_result = (
+                _lower_exact_array_initialization_stage_pipeline(
+                    item,
+                    request,
+                    envelope_stage,
+                    skeleton_lookup,
+                )
             )
-            if not array_envelope_result.is_ok:
-                return Result.failure(array_envelope_result.diagnostics)
-            array_envelope = array_envelope_result.unwrap()
-            array_body_envelopes = (
-                (array_envelope,) if array_envelope is not None else ()
+            if not array_initialization_pipeline_result.is_ok:
+                return Result.failure(
+                    array_initialization_pipeline_result.diagnostics
+                )
+            array_initialization_pipeline = (
+                array_initialization_pipeline_result.unwrap()
             )
-            array_body_stages = (
-                (_array_body_envelope_slot_assembly_stage(array_envelope),)
-                if array_envelope is not None
-                else ()
-            )
-            array_initialization_slot_forms: tuple[
-                ExactArrayInitializationSlotFormIr, ...
-            ] = ()
-            array_initialization_slot_form_stages: tuple[
-                GenerationLoweringStage, ...
-            ] = ()
-            array_initialization_helper_requests: tuple[
-                ExactArrayInitializationHelperRequestIr, ...
-            ] = ()
-            array_initialization_helper_request_stages: tuple[
-                GenerationLoweringStage, ...
-            ] = ()
-            array_initialization_base_type_resolutions: tuple[
-                ExactArrayInitializationBaseTypeResolutionIr, ...
-            ] = ()
-            array_initialization_base_type_resolution_stages: tuple[
-                GenerationLoweringStage, ...
-            ] = ()
-            if array_envelope is not None:
-                array_initialization_slot_form_result = (
-                    lower_exact_array_initialization_slot_form(array_envelope)
-                )
-                if not array_initialization_slot_form_result.is_ok:
-                    return Result.failure(
-                        array_initialization_slot_form_result.diagnostics
-                    )
-                array_initialization_slot_form = (
-                    array_initialization_slot_form_result.unwrap()
-                )
-                array_initialization_slot_forms = (array_initialization_slot_form,)
-                array_initialization_slot_form_stages = (
-                    _array_initialization_slot_form_stage(
-                        array_initialization_slot_form,
-                    ),
-                )
-                array_initialization_helper_request_result = (
-                    lower_exact_array_initialization_helper_requests(
-                        array_initialization_slot_form,
-                    )
-                )
-                if not array_initialization_helper_request_result.is_ok:
-                    return Result.failure(
-                        array_initialization_helper_request_result.diagnostics
-                    )
-                array_initialization_helper_request = (
-                    array_initialization_helper_request_result.unwrap()
-                )
-                array_initialization_helper_requests = (
-                    array_initialization_helper_request,
-                )
-                array_initialization_helper_request_stages = (
-                    _array_initialization_helper_request_stage(
-                        array_initialization_helper_request,
-                    ),
-                )
-                base_type_resolution_result = (
-                    lower_exact_array_initialization_base_type_request(
-                        array_initialization_helper_request,
-                        _context_for_candidate(item, request),
-                        selected_candidate_type_tag=(
-                            item.candidate.type_tag
-                            if request.generation_context.use_candidate_type_tag
-                            else None
-                        ),
-                    )
-                )
-                if not base_type_resolution_result.is_ok:
-                    return Result.failure(base_type_resolution_result.diagnostics)
-                base_type_resolution = base_type_resolution_result.unwrap()
-                array_initialization_base_type_resolutions = (
-                    base_type_resolution,
-                )
-                array_initialization_base_type_resolution_stages = (
-                    _array_initialization_base_type_resolution_stage(
-                        base_type_resolution,
-                    ),
-                )
             return Result.ok(
                 LoweredImplementation(
                     candidate_id=item.candidate_id,
@@ -4844,13 +4898,17 @@ def _lower_input(
                     ),
                     selected_branch_body_irs=(body_ir,),
                     selected_body_envelopes=(envelope,),
-                    array_body_envelopes=array_body_envelopes,
-                    array_initialization_slot_forms=array_initialization_slot_forms,
+                    array_body_envelopes=(
+                        array_initialization_pipeline.array_body_envelopes
+                    ),
+                    array_initialization_slot_forms=(
+                        array_initialization_pipeline.array_initialization_slot_forms
+                    ),
                     array_initialization_helper_requests=(
-                        array_initialization_helper_requests
+                        array_initialization_pipeline.array_initialization_helper_requests
                     ),
                     array_initialization_base_type_resolutions=(
-                        array_initialization_base_type_resolutions
+                        array_initialization_pipeline.array_initialization_base_type_resolutions
                     ),
                     generation_stages=(
                         _recognition_stage(
@@ -4872,10 +4930,7 @@ def _lower_input(
                         ),
                         _selected_body_ir_stage(body_ir),
                         envelope_stage,
-                        *array_body_stages,
-                        *array_initialization_slot_form_stages,
-                        *array_initialization_helper_request_stages,
-                        *array_initialization_base_type_resolution_stages,
+                        *array_initialization_pipeline.stages,
                     ),
                 )
             )

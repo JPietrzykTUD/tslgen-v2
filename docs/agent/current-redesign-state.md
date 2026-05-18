@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 68 is accepted.
+Milestone 69 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -186,40 +186,44 @@ Post-M68 planning is accepted. It selected
 and internal review returned `Accept With Follow-Ups` after local
 planning-doc updates.
 
+The M69 execution-review loop returned `Accept With Follow-Ups` with no
+blocking implementation, validation, boundary, extensibility, documentation,
+or evidence issues. Review recorded one non-blocking follow-up for explicit
+pipeline-level M67 diagnostic propagation coverage.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 69.
+Plan the post-M69 lowering milestone.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m69-execution-review-loop-prompt.md
+docs/agent/runs/post-m69-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 69: Exact Array Initialization Stage Pipeline Extraction Slice
+None. The next task is post-M69 lowering planning.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M68 planning returned Accept With Follow-Ups after selecting M69 as a
-behavior-preserving exact array-initialization stage pipeline extraction
-slice. Human acceptance is recorded; M69 execution is the next action.
+M69 execution-review returned Accept With Follow-Ups. The implementation
+extracts the accepted M64-M68 array-initialization stage assembly tail into a
+private typed pipeline result/helper while preserving accepted M68 behavior.
 ```
 
 Next expected action:
 
 ```text
-Run the active M69 execution-review loop prompt. Use exactly one write-capable
-executor if M69 is not already implemented, then read-only review/audit
-subagents. Do not start M70.
+Run the active post-M69 planning-plus-review prompt. Focus on lowering, use the
+specified read-only planning/review subagents, and do not implement code.
 ```
 
 Accepted planning prompt:
@@ -594,10 +598,16 @@ Accepted post-M68 acceptance finalization prompt:
 docs/agent/runs/post-m68-acceptance-finalization-prompt.md
 ```
 
-Active M69 execution-review loop prompt:
+Accepted M69 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m69-execution-review-loop-prompt.md
+```
+
+Active post-M69 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m69-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1086,10 +1096,10 @@ docs/agent/runs/m69-execution-review-loop-prompt.md
   direct-intrinsic/SVE semantics, broad TSIL parsing, file/catalog reads during
   lowering evaluation, catalog queries during evaluation, raw-text dispatch
   tables, or runtime `frozen/` use.
-- M69 is accepted for execution as behavior-preserving
-  exact array-initialization stage pipeline extraction only. M69 must extract
-  the accepted M64-M68 array-initialization stage assembly tail from
-  `_lower_input` into a small typed helper or private pipeline result.
+- M69 is accepted as behavior-preserving exact array-initialization stage
+  pipeline extraction only. M69 extracts the accepted M64-M68
+  array-initialization stage assembly tail from `_lower_input` into a private
+  typed helper/result.
 - M69 must preserve the same public `LoweredImplementation` fields, stage
   names, stage order, typed outputs, diagnostics, source locations,
   deterministic ordering, no-skeleton/no-body behavior, and generated-output
@@ -1765,10 +1775,9 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   loop: document the new
   `TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-*` diagnostic codes and inherited
   unsupported selected-type diagnostic path.
-- M68 extensibility follow-up: before adding vector/backend helper resolver
-  stages, consider extracting the growing M64-M68 `_lower_input` array-body
-  stage assembly tail into a small typed array-initialization stage helper so
-  future stages do not keep adding locals and stage appends in one function.
+- M68 extensibility follow-up addressed by M69: the growing M64-M68
+  `_lower_input` array-body stage assembly tail is now extracted into a
+  private typed array-initialization stage pipeline helper/result.
 - M68 extensibility follow-up: `GenerationLoweringStage.__post_init__` remains
   a central stage-name-to-output-type `elif` table. Review found this is type
   validation rather than semantic dispatch, but it is a future maintainability
@@ -1776,29 +1785,33 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M68 extensibility follow-up: `_ExactArrayInitializationBaseTypeRequestRule`
   has an unused `result_kind`; remove it or let the typed rule drive the
   result-kind invariant before adding sibling vector/backend resolver rules.
-- Post-M68 planning follow-up for M69 execution: keep M69 behavior-preserving;
-  execution must prove identical `LoweredImplementation` fields, stage
-  names/order, typed outputs, diagnostics, deterministic behavior,
-  no-skeleton/no-body behavior, and generated-output state.
-- Post-M68 planning follow-up for M69 execution: M69 must not become a broad
-  stage registry, generic helper dispatcher, semantic resolver, vector
+- Post-M68 planning follow-up addressed by M69: execution stayed
+  behavior-preserving and review verified identical public
+  `LoweredImplementation` fields, stage names/order, typed outputs,
+  diagnostics, deterministic behavior, no-skeleton/no-body behavior, and
+  generated-output state.
+- Post-M68 planning follow-up addressed by M69: the extraction did not become
+  a broad stage registry, generic helper dispatcher, semantic resolver, vector
   metadata resolver, backend uninit resolver, declaration/array semantics
   slice, renderer path, or generated-output milestone.
-- Post-M68 planning follow-up for M69 execution: leave
+- Post-M68 planning follow-up retained after M69: leave
   `GenerationLoweringStage.__post_init__` table cleanup and
   `_ExactArrayInitializationBaseTypeRequestRule.result_kind` cleanup as
-  follow-ups unless a purely mechanical touch is required and does not broaden
-  M69.
+  follow-ups for a later focused cleanup unless a purely mechanical touch is
+  required by another selected slice.
 - Post-M68 planning follow-up: after M69, revisit one vector metadata request
   slice from the extracted typed stage boundary rather than extending
   `_lower_input` directly.
-- Post-M68 planning acceptance is recorded for M69 execution. The execution
-  prompt must carry the non-blocking M69 behavior-preservation and no-broadening
-  follow-ups above.
+- Post-M68 planning acceptance is superseded by accepted M69 execution.
+- M69 review follow-up: consider adding an explicit pipeline-level M67
+  diagnostic propagation test if a future slice touches the extracted
+  array-initialization stage pipeline. Existing direct M67 helper-request
+  diagnostic tests remain accepted coverage.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with M69 execution.
+No stop condition is active. The workflow proceeds with post-M69 lowering
+planning.
 
 ## Validation Expectations
 
