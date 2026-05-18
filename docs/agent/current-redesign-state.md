@@ -301,40 +301,53 @@ initializer behavior, predicate/store/return semantics, `tmp.data()`,
 parsing, lowering-time file/catalog reads, `tsldata` reads during lowering,
 host CPU queries, backend maps, and runtime `frozen/` use remain out of scope.
 
+Post-M74 planning selected
+`Milestone 75: Exact Predicate Path Structural Request IR Slice`. The selected
+plan consumes accepted M74 structural sequence state and records the exact
+predicate path across slot 1 predicate initialization, slot 2 accepted
+selected/no-body predicate update evidence, and slot 3 post-branch
+store-call predicate-token use. It must remain structural/request IR only:
+SVE predicate semantics, byte-size-to-token inference, store semantics,
+`svst1`, `tmp.data()`, `a`, backend maps, rendering, generated output,
+variable scope, and broad body semantics remain out of scope.
+
+Post-M74 planning is accepted. Human acceptance was recorded, and M75
+execution is the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M74 lowering-focused planning.
+Execute Milestone 75.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m74-planning-plus-review-prompt.md
+docs/agent/runs/m75-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Post-M74 planning is active.
+Milestone 75: Exact Predicate Path Structural Request IR Slice
 ```
 
 Latest review verdict:
 
 ```text
-M74 execution-review loop returned Accept With Follow-Ups after one focused
-validation-coverage revision and final documentation wording cleanup.
+Post-M74 planning selected M75 after local planning updates. Human acceptance
+has been recorded.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M74 planning-plus-review prompt. Focus on lowering. Do not
-implement code, and do not start M75 execution unless post-M74 planning is
-accepted and the workflow state advances through the required finalization
-prompt.
+Run the M75 execution-review loop prompt. If M75 is already implemented and
+awaiting review, skip implementation and run the required read-only review and
+audit subagents. If M75 is not implemented, use exactly one write-capable
+executor, then run the required review and audit subagents.
 ```
 
 Accepted planning prompt:
@@ -805,10 +818,22 @@ Accepted M74 execution-review loop prompt:
 docs/agent/runs/m74-execution-review-loop-prompt.md
 ```
 
-Active post-M74 planning-plus-review prompt:
+Completed post-M74 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m74-planning-plus-review-prompt.md
+```
+
+Accepted post-M74 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m74-acceptance-finalization-prompt.md
+```
+
+Active M75 execution-review loop prompt:
+
+```text
+docs/agent/runs/m75-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1420,6 +1445,22 @@ docs/agent/runs/post-m74-planning-plus-review-prompt.md
   semantics, allocation/lifetime, initializer behavior, variable scope, broad
   TSIL parsing, lowering-time file/catalog reads, `tsldata` reads during
   lowering evaluation, host CPU queries, or runtime `frozen/` use.
+- M75 is accepted for execution as exact predicate path structural/request IR
+  only.
+- M75 must consume accepted typed M74 exact array-body structural sequence
+  state and accepted M63/M62 selected/no-body predicate update evidence.
+- M75 must produce one typed exact predicate-path structural/request IR value
+  for the exact path across slot 1 predicate initialization, slot 2 selected/
+  no-body predicate update evidence, and slot 3 post-branch store-call
+  predicate-token use.
+- M75 must keep `svbool_t`, `pg`, `svptrue_b8`, selected `svptrue_b16/b32/b64`,
+  and slot-3 `pg` as structural tokens/request provenance only.
+- M75 must not interpret SVE predicate semantics, byte-size-to-token
+  relationships, stores, `svst1`, `tmp.data()`, `a`, backend maps, rendering,
+  generated output, variable scope, generic predicate/body/store semantics,
+  broad TSIL parsing, lowering-time file/catalog reads, `tsldata` reads during
+  lowering evaluation, host CPU queries, backend map reads, or runtime
+  `frozen/` use.
 
 ## Accepted Milestone 48
 
@@ -2258,11 +2299,16 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   gap by adding symmetric missing-envelope and duplicate-declaration-shell
   `LoweredImplementation` tests and preserving M73 shell source locations for
   missing-envelope diagnostics.
+- Post-M74 planning follow-up for M75 execution: keep the selected slice as an
+  exact predicate path structural/request IR only. Do not let it become SVE
+  predicate semantics, byte-size-to-token inference, store-call lowering,
+  variable scope, backend translation, renderer-ready IR, generated output, a
+  slot-role registry, or broad body IR.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready for post-M74
-lowering-focused planning through the active planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M75 through the
+active execution-review loop prompt.
 
 ## Validation Expectations
 

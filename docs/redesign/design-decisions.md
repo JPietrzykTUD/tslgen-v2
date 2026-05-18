@@ -1428,6 +1428,14 @@ Consequences:
   body IR, variable scope, allocation/lifetime, predicate semantics, store/
   return semantics, SVE/direct-intrinsic semantics, backend translation,
   renderer-ready IR, or generated output.
+- Post-M74 planning selects Milestone 75 to introduce an exact predicate path
+  structural/request IR before any store-call or SVE predicate semantics. M75
+  should consume accepted M74 sequence state and accepted M63/M62 selected-body
+  evidence, then record the exact `pg` initialization/update/use path as typed
+  lowering state. It must not make `svptrue_b*`, `svst1`, `tmp.data()`, or
+  `a` into SVE/store/backend semantics, and it must not introduce variable
+  scope, generic predicate IR, backend translation, renderer-ready IR, or
+  generated output.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

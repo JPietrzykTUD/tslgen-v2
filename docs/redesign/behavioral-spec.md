@@ -533,6 +533,16 @@ must not interpret those roles as
 declaration, array, variable, predicate, store, return, intrinsic, SVE,
 backend, renderer, or output semantics.
 
+Post-M74 planning selects Milestone 75 as exact predicate path structural
+request IR. It should consume accepted M74 structural sequence state and
+record the exact predicate path from slot 1 predicate initialization, through
+accepted selected/no-body predicate update evidence in slot 2, to slot 3
+post-branch store-call predicate-token use. M75 must keep `svbool_t`, `pg`,
+`svptrue_b8`, selected `svptrue_b16/b32/b64`, and slot-3 `pg` as structural
+tokens/request provenance only. It must not interpret SVE predicate behavior,
+store behavior, `svst1`, `tmp.data()`, `a`, backend maps, renderer behavior,
+generated output, variable scope, or broad body semantics.
+
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
 suffix request over typed M43 `GenerationTypeRef` inputs. Milestone 46

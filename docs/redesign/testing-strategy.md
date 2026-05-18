@@ -901,6 +901,20 @@ Recommended first parity checks:
   and no backend translation/rendering, generic body/declaration/array
   parsing, variable/allocation/store/return semantics, golden-file, or
   generated-output churn.
+- Milestone 75 tests should prove exact predicate path structural/request IR
+  without SVE, store, variable-scope, backend, renderer, or output semantics:
+  direct tests from accepted M74 sequence state, normal `lower_candidates`
+  stage-order tests after `array_body_structural_sequence_classification`,
+  exact slot-1/slot-2/slot-3 `pg` path linkage, selected `svptrue_b16/b32/b64`
+  update request preservation when accepted selected-body evidence exists,
+  explicit no-update preservation for accepted no-body cases, unsupported/
+  missing/duplicate source diagnostics, context/provenance/token mismatch
+  diagnostics, malformed exact predicate-init and store-call predicate-token
+  shape diagnostics, deterministic ordering, unchanged M57-M74 behavior, no
+  raw helper parsing or raw query evaluator calls, no catalog/`tsldata`/host
+  CPU/backend map reads during lowering evaluation, and no backend
+  translation/rendering, generic predicate/store/body lowering, golden-file,
+  or generated-output churn.
 
 Deferred parity checks:
 

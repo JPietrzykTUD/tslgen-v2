@@ -8333,6 +8333,214 @@ Dependencies on prior milestones:
 Next concrete prompt:
 
 - `docs/agent/runs/m74-execution-review-loop-prompt.md` completed the M74
-  implementation and review loop. The next concrete prompt is
-  `docs/agent/runs/post-m74-planning-plus-review-prompt.md`. Do not start
-  M75 until post-M74 planning is accepted.
+  implementation and review loop. Post-M74 planning is accepted, and the
+  active concrete prompt is
+  `docs/agent/runs/m75-execution-review-loop-prompt.md`.
+
+### Post-M74 Planning Result
+
+Status:
+
+Accepted for execution after post-M74 planning and human acceptance.
+
+Selected milestone:
+
+```text
+Milestone 75: Exact Predicate Path Structural Request IR Slice
+```
+
+Candidate comparison:
+
+| Candidate | Value | Risk | Decision |
+| --- | --- | --- | --- |
+| Exact predicate path structural request IR | High. Broadens beyond only slot 1 by connecting the accepted M74 predicate-init slot, accepted selected-body predicate update evidence, and post-branch store-call predicate-token use into one typed path needed before any store lowering. | Medium-high if it starts interpreting SVE predicate semantics, `svptrue_b*`, `svst1`, or variable scope. | Select as M75 with strict structural/request-only wording. |
+| Predicate-init slot only | Medium. Refines the next opaque slot but leaves the selected update and store-call predicate token disconnected. | Lower risk, but less forward movement after M74 made the whole sequence available. | Defer in favor of the broader exact predicate path. |
+| Store-call slot lowering | High later. | Too broad now because it would pull in `tmp.data()`, `a`, store semantics, backend maps, alignment behavior, renderer pressure, and generated output. | Defer. |
+| Return-emission slot lowering | High later. | Too broad now because it pulls in return semantics, `emit_return`, variable lifetime, renderer pressure, and output behavior. | Defer. |
+| Private resolver/stage-table cleanup | Useful maintainability work. | Lower forward movement than consuming M74 for the next semantic-bearing path. | Keep as non-blocking follow-up. |
+
+### Milestone 75: Exact Predicate Path Structural Request IR Slice
+
+Status:
+
+Selected for human acceptance after post-M74 planning.
+
+Goal:
+
+Consume accepted M74 exact array-body structural sequence state and produce one
+typed predicate-path structural/request IR for the exact `array.tsl:106-110`
+predicate path:
+
+```text
+slot 1: svbool_t pg = intrin<svptrue_b8>();
+slot 2: accepted selected-body assignment envelope for pg = intrin<svptrue_b*>();
+slot 3: intrin<svst1>(pg, tmp.data(), a);
+```
+
+M75 should connect the exact predicate initialization, accepted selected
+predicate update evidence, and post-branch predicate-token use as typed
+lowering state only. It must not define SVE predicate semantics, variable
+scope, store semantics, backend translation, renderer-ready IR, or generated
+output.
+
+Scope:
+
+- Consume accepted typed M74 `ExactArrayBodyStructuralSequenceIr` values, the
+  `array_body_structural_sequence_classification` stage output, or a typed
+  `LoweredImplementation` carrying exactly one M74 structural sequence.
+- Consume the accepted M63/M64 selected/no-body envelope reachable through the
+  M74 selected-body role and the accepted M61/M62 selected assignment/direct-
+  intrinsic body IR when present.
+- Produce one typed IR such as `ExactPredicatePathStructuralRequestIr`,
+  carrying:
+  - the source M74 structural sequence;
+  - slot ordinal `1` as the exact predicate-init-shaped structural request
+    source;
+  - structural tokens `svbool_t`, `pg`, and unresolved direct-intrinsic request
+    token `svptrue_b8` from the exact predicate-init shape;
+  - the accepted selected-body predicate update request from the M63 selected
+    body envelope when a selected body exists, preserving the already accepted
+    unresolved token such as `svptrue_b16`, `svptrue_b32`, or `svptrue_b64`;
+  - an explicit no-update state for accepted `NoSelectedBodyEnvelopeIr` cases;
+  - slot ordinal `3` as the exact post-branch store-call-shaped structural
+    source, recording only that the predicate argument token is the same `pg`;
+  - deterministic provenance including candidate id, target/source extension
+    where available, selected type tag, branch-chain id, M74 role identity,
+    envelope/slot identity, and source locations.
+- Append one deterministic stage after
+  `array_body_structural_sequence_classification`, for example
+  `predicate_path_structural_request_lowering`.
+- Preserve accepted M57-M74 behavior and outputs.
+- Use source text only as exact structural shape/provenance evidence. M75 must
+  derive path membership from accepted M74 role identity and accepted M63/M62
+  selected-body state, not from raw corpus line numbers, SVE token semantics,
+  backend ids, renderer names, catalog data, or helper-string dispatch.
+
+Out of scope:
+
+- Interpreting `svbool_t`, `pg`, `intrin<svptrue_b8>`, selected
+  `svptrue_b16/b32/b64`, `intrin<svst1>`, `tmp.data()`, `a`, `emit_return`,
+  `assume_aligned`, stores, returns, direct intrinsics, SVE predicate/vector/
+  register semantics, byte-size-to-token inference, lane masks, backend uninit,
+  backend maps, rendering, generated output, generic body/declaration/array
+  semantics, allocation/lifetime, initializer behavior, variable scope, broad
+  TSIL parsing, lowering-time file/catalog reads, `tsldata` reads during
+  lowering evaluation, host CPU queries, or runtime `frozen/` use.
+- Generic predicate IR, broad variable/use-def analysis, generic call
+  semantics, generic store-call IR, generic direct-intrinsic semantics,
+  backend translation requests, renderer-ready values, generated artifacts,
+  golden files, CLI/report/writer behavior, Rust behavior, compiler
+  execution, or generated-test execution.
+- Broad helper registries, raw helper-string dispatch, broad slot-role
+  registries, broad stage registries, central semantic dispatchers, or public
+  IR families beyond one exact predicate-path structural/request boundary.
+
+Required input:
+
+- Accepted M74 exact array-body structural sequence.
+- Accepted M64/M65 exact array-body envelope and M63 selected/no-body envelope
+  reachable through M74.
+- Accepted M61/M62 selected assignment/direct-intrinsic body IR when present.
+- Exact M74 predicate-init-shaped slot and post-branch store-call-shaped slot
+  provenance.
+
+Expected outputs:
+
+- One typed exact predicate-path structural/request IR value.
+- One deterministic generation-lowering stage after
+  `array_body_structural_sequence_classification`.
+- Structured diagnostics for unsupported source/container shapes, missing or
+  duplicate M74 values, context mismatch, provenance mismatch, malformed exact
+  predicate-init shape, malformed exact store-call predicate-token shape,
+  selected-body target-token mismatch, selected-body provenance mismatch, and
+  unsupported non-exact predicate-path shapes.
+- No backend translation request, renderer-ready value, generated artifact,
+  golden output, CLI/report/writer, Rust, compiler, generic predicate/store/
+  return semantics, `tmp.data()`, `emit_return`, SVE semantics, or direct-
+  intrinsic behavior change.
+
+Parity criterion:
+
+M75 proves the accepted `array.tsl:106-110` predicate path can be carried as
+typed structural/request lowering state around the accepted M74 sequence and
+accepted M63/M62 selected-body evidence, without implementing SVE predicate
+semantics, store semantics, backend translation, rendering, generated output,
+or compiler parity.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:106` for the exact predicate-init
+  shaped slot as structural/request evidence only.
+- `tsldata/primitives/load_store/array.tsl:107-109` for the accepted selected
+  branch-chain predicate update evidence already covered through M57-M63.
+- `tsldata/primitives/load_store/array.tsl:110` for the exact post-branch
+  store-call-shaped predicate-token use as structural evidence only.
+- Accepted M74 exact structural sequence in
+  `tslgen/src/tslgen/lowering/boundary.py` and
+  `tslgen/tests/unit/test_lowering_boundary.py`.
+- Same-text `array.tsl` repetitions are supporting corpus repetition only,
+  not expanded M75 scope.
+- Backend translation maps, `construct.tsl`, generated outputs, and `frozen/`
+  remain future evidence only and must not become runtime input.
+
+Tests required:
+
+- Direct resolver tests from accepted M74 structural sequence to the M75
+  predicate-path structural/request IR.
+- Normal `lower_candidates` pipeline tests proving the M75 stage appears after
+  `array_body_structural_sequence_classification` and preserves M57-M74
+  ordering and outputs.
+- Tests proving slot-1 predicate init, slot-2 accepted selected/no-body
+  predicate update, and slot-3 predicate-token use all reference the same
+  structural `pg` token without variable-scope or store semantics.
+- Tests proving selected-body update request preservation for selected
+  `svptrue_b16/b32/b64` tokens and explicit no-update preservation for
+  `NoSelectedBodyEnvelopeIr` cases.
+- Diagnostics for missing, duplicate, unsupported source/container, context
+  mismatch, provenance mismatch, malformed predicate-init shape, malformed
+  store-call predicate-token shape, selected-body target-token mismatch, and
+  unsupported non-exact predicate-path shape.
+- Determinism tests for repeated runs and reordered inputs.
+- Regression tests proving M57-M74 behavior is unchanged.
+- Regression tests proving no backend translation, rendering, generated
+  output, golden-file churn, broad body/declaration/array/predicate/store
+  lowering, generic parser, raw helper evaluator calls, raw helper parsing,
+  catalog reads, `tsldata` reads, host CPU queries, backend map reads, or
+  runtime `frozen/` use is introduced.
+
+Golden fixtures required:
+
+- None. M75 is lowering-only structural/request IR and must not change
+  generated C++ or Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M75 predicate-path structural/request test command selected by the
+  executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Letting `svptrue_b8`, `svptrue_b16`, `svptrue_b32`, or `svptrue_b64` become
+  SVE predicate semantics instead of unresolved direct-intrinsic request
+  tokens.
+- Inferring byte-size-to-token relationships beyond accepted M57-M63 branch
+  selection evidence.
+- Treating slot 3 as store lowering or interpreting `svst1`, `tmp.data()`,
+  `a`, alignment, or memory behavior.
+- Introducing variable scope, lifetime, store semantics, return semantics,
+  backend maps, renderer-ready IR, generated output, or raw helper dispatch.
+- Growing the M74 private role detail into a slot-role registry, generic body
+  IR, broad stage registry, or central semantic dispatcher.
+
+Dependencies on prior milestones:
+
+- Milestones 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72,
+  73, and 74.
+
+Next concrete prompt:
+
+- `docs/agent/runs/m75-execution-review-loop-prompt.md` is active after
+  explicit human acceptance. Do not start M76 during M75 execution.

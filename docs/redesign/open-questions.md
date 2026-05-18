@@ -1363,8 +1363,9 @@ accepted M70 exact vector-length request resolution, accepted M71 exact
 vector-alignment request resolution, accepted M72 exact helper-set completion,
 implemented M73 exact first-slot declaration-shell structural IR, implemented M74
 exact array-body structural sequence and structural/provenance slot-role
-classification, and body-slot semantics beyond those exact structural/
-request-resolution boundaries, including nested expressions, direct
+classification, selected M75 exact predicate-path structural/request IR, and
+body-slot semantics beyond those exact structural/request-resolution
+boundaries, including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
 `algo`, Rust output, generated tests beyond the selected M49 source fixture,
 CLI/report parity, compiler execution, and broad native rendering.

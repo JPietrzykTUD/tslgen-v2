@@ -614,6 +614,18 @@ structural evidence and must not interpret `svbool_t`,
 `assume_aligned`, store/return behavior, SVE/direct-intrinsic behavior,
 backend maps, rendering, generated output, or broad TSIL/body semantics.
 
+Post-M74 planning selects Milestone 75 as exact predicate path structural
+request IR. It should consume the accepted M74 exact array-body structural
+sequence and record the exact predicate path across slot 1 predicate
+initialization, slot 2 accepted selected/no-body predicate update evidence,
+and slot 3 post-branch store-call predicate-token use. The result is typed
+structural/request lowering state only: `svbool_t`, `pg`, `svptrue_b8`,
+selected `svptrue_b16/b32/b64`, and the slot-3 `pg` argument remain structural
+tokens and unresolved direct-intrinsic/request provenance. M75 must not
+interpret SVE predicate semantics, byte-size-to-token relationships, store
+semantics, `svst1`, `tmp.data()`, `a`, backend maps, rendering, generated
+output, variable scope, or broad body semantics.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
@@ -879,6 +891,28 @@ M74 diagnostics:
   declaration shell to a nonzero slot, or otherwise violates the exact
   five-slot structural invariant without implying slot semantics.
 
+M75 planned diagnostics should cover:
+
+- `TSL-LOWER-PREDICATE-PATH-SOURCE-UNSUPPORTED`: the source is not an accepted
+  M74 structural sequence, M74 stage output, or typed lowered implementation
+  carrying exactly one M74 value.
+- `TSL-LOWER-PREDICATE-PATH-IR-MISSING`: a typed source container does not
+  carry the required exact M74 structural sequence.
+- `TSL-LOWER-PREDICATE-PATH-IR-MULTIPLE`: a typed source container carries
+  multiple M74 structural sequences where M75 requires exactly one.
+- `TSL-LOWER-PREDICATE-PATH-CONTEXT-MISMATCH`: selected candidate, extension,
+  selected type, or branch-chain context does not match the typed M74 input.
+- `TSL-LOWER-PREDICATE-PATH-PROVENANCE-MISMATCH`: accepted M74 sequence,
+  M64/M65 envelope slots, M63 selected-body envelope, and M62 selected-body IR
+  do not agree on candidate, selected type, branch-chain, slot identity, or
+  source provenance required for predicate-path classification.
+- `TSL-LOWER-PREDICATE-PATH-MALFORMED`: the exact predicate-init or
+  store-call-shaped predicate-token slot cannot satisfy the M75 structural
+  shape invariant.
+- `TSL-LOWER-PREDICATE-PATH-TOKEN-MISMATCH`: the exact slot-1 predicate token,
+  selected-body assignment target token, or slot-3 predicate argument token do
+  not match the required structural `pg` path.
+
 ## Explicit Deferrals
 
 Deferred beyond the implemented M43-M74 semantic-lowering, structural
@@ -886,8 +920,8 @@ slot-assembly, pipeline-integration, exact array-initialization slot form IR,
 M67 helper-request IR, accepted M68 base-type request resolution, M69 pipeline
 extraction, M70 vector-length request resolution, M71 vector-alignment
 request resolution, M72 helper-set completion, M73 exact declaration-shell
-structural IR, and implemented M74 exact structural-sequence classification
-slices:
+structural IR, implemented M74 exact structural-sequence classification, and
+selected M75 exact predicate-path structural/request IR slices:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -936,7 +970,9 @@ slices:
   Implemented M73 records only the exact first-slot declaration-shell
   structure over that helper set. Implemented M74 records only exact
   source-ordered body sequence and structural/provenance slot roles around
-  that M73 value. Backend uninit translation, broad vector/register metadata,
+  that M73 value. Selected M75 will record only exact predicate-path
+  structural/request state across slots 1, 2, and 3 without SVE or store
+  semantics. Backend uninit translation, broad vector/register metadata,
   generic declaration/array/body semantics, allocation/lifetime, initializer
   behavior, variable scope, predicate semantics, direct-intrinsic/SVE
   semantics, store/return semantics, aligned load/store semantics, rendering,

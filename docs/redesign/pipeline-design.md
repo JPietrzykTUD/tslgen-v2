@@ -549,6 +549,16 @@ variable/allocation model, predicate/store/return lowering, SVE/direct-
 intrinsic semantic slice, backend-planning input, renderer-ready body, or
 generated-output step.
 
+Post-M74 planning selects Milestone 75 as the next Stage 8 boundary after
+`array_body_structural_sequence_classification`. M75 should produce one typed
+exact predicate-path structural/request value for the accepted path spanning
+the predicate-init role, selected-body role, and post-branch store-call-shaped
+role. The proposed stage name is `predicate_path_structural_request_lowering`.
+It must consume accepted M74 sequence state and accepted M63/M62 selected-body
+evidence, and it must not become SVE predicate semantics, variable/use-def
+analysis, store lowering, backend-planning input, renderer-ready body, or a
+generated-output step.
+
 ## Stage 9: Backend Planning
 
 Inputs:
