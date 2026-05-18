@@ -61,6 +61,7 @@ type GenerationLoweringStageName = Literal[
     "array_initialization_vector_length_request_resolution",
     "array_initialization_vector_alignment_request_resolution",
     "array_initialization_helper_set_completion",
+    "array_initialization_declaration_shell_lowering",
 ]
 type ExactArrayInitializationVectorLengthKind = Literal[
     "fixed_lanes",
@@ -137,6 +138,7 @@ type GenerationLoweringStageOutput = (
     | ExactArrayInitializationVectorLengthResolutionIr
     | ExactArrayInitializationVectorAlignmentResolutionIr
     | ExactArrayInitializationHelperSetCompletionIr
+    | ExactArrayInitializationDeclarationShellIr
     | TsilStatement
 )
 
@@ -2584,6 +2586,162 @@ class ExactArrayInitializationHelperSetCompletionIr:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactArrayInitializationDeclarationShellIr:
+    source_helper_set_completion: ExactArrayInitializationHelperSetCompletionIr
+    source_slot_form: ExactArrayInitializationSlotFormIr
+    source_envelope: ExactArrayBodyEnvelopeIr
+    declaration_kind: Literal["var<typed>"]
+    array_type_kind: Literal["array_type"]
+    base_type_ref: GenerationTypeRef
+    vector_length: ExactArrayInitializationVectorLengthValue
+    vector_alignment: ExactArrayInitializationVectorAlignmentValue
+    unresolved_backend_uninit: ExactArrayInitializationDeferredBackendUninitValue
+    source_location: SourceLocation
+    candidate_id: str
+    target_extension: str
+    source_extension: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+    slot_label: Literal["opaque_pre_branch_array_initialization"]
+    slot_ordinal: int
+    variable_token: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(
+            self.source_helper_set_completion,
+            ExactArrayInitializationHelperSetCompletionIr,
+        ):
+            raise TypeError(
+                "array-initialization declaration-shell IR requires an M72 "
+                "helper-set completion"
+            )
+        if not isinstance(self.source_slot_form, ExactArrayInitializationSlotFormIr):
+            raise TypeError(
+                "array-initialization declaration-shell IR requires the "
+                "reachable M66 slot form"
+            )
+        if not isinstance(self.source_envelope, ExactArrayBodyEnvelopeIr):
+            raise TypeError(
+                "array-initialization declaration-shell IR requires the "
+                "reachable M65 array-body envelope"
+            )
+        completion = self.source_helper_set_completion
+        source_request_ir = completion.source_base_type_resolution.source_request_ir
+        if self.source_slot_form is not source_request_ir.source_form:
+            raise ValueError(
+                "array-initialization declaration-shell IR source slot form "
+                "must be the M66 form reachable through the M72 helper set"
+            )
+        if self.source_envelope is not self.source_slot_form.source_envelope:
+            raise ValueError(
+                "array-initialization declaration-shell IR source envelope "
+                "must be the M65 envelope reachable through the M66 slot form"
+            )
+        if self.declaration_kind != "var<typed>":
+            raise ValueError(
+                "array-initialization declaration-shell IR supports only the "
+                "exact var<typed> declaration shell"
+            )
+        if self.array_type_kind != "array_type":
+            raise ValueError(
+                "array-initialization declaration-shell IR supports only the "
+                "exact array_type shell"
+            )
+        if self.base_type_ref is not completion.source_base_type_resolution.resolved_type_ref:
+            raise ValueError(
+                "array-initialization declaration-shell IR must carry the "
+                "accepted M68 base-type fact"
+            )
+        if self.base_type_ref.kind != "base.in":
+            raise ValueError(
+                "array-initialization declaration-shell IR base type must be "
+                "the accepted M68 base.in type ref"
+            )
+        if (
+            self.vector_length
+            is not completion.source_vector_length_resolution.resolved_vector_length
+        ):
+            raise ValueError(
+                "array-initialization declaration-shell IR must carry the "
+                "accepted M70 vector-length fact"
+            )
+        if (
+            self.vector_alignment
+            is not completion.source_vector_alignment_resolution.resolved_vector_alignment
+        ):
+            raise ValueError(
+                "array-initialization declaration-shell IR must carry the "
+                "accepted M71 vector-alignment fact"
+            )
+        if (
+            self.unresolved_backend_uninit
+            is not completion.unresolved_backend_uninit
+        ):
+            raise ValueError(
+                "array-initialization declaration-shell IR must preserve the "
+                "accepted M72 deferred backend-uninit boundary"
+            )
+        if self.unresolved_backend_uninit.policy != "deferred_backend_value":
+            raise ValueError(
+                "array-initialization declaration-shell IR backend uninit "
+                "must remain a deferred backend-value policy"
+            )
+        if self.source_location != completion.source_location:
+            raise ValueError(
+                "array-initialization declaration-shell IR source location "
+                "must match the M72 helper-set completion"
+            )
+        if (
+            self.candidate_id != completion.candidate_id
+            or self.target_extension != completion.target_extension
+            or self.source_extension != completion.source_extension
+            or self.selected_type_tag != completion.selected_type_tag
+            or self.originating_branch_chain_id
+            != completion.originating_branch_chain_id
+            or self.slot_label != completion.slot_label
+            or self.slot_ordinal != completion.slot_ordinal
+            or self.variable_token != completion.variable_token
+        ):
+            raise ValueError(
+                "array-initialization declaration-shell IR provenance must "
+                "match the M72 helper-set completion"
+            )
+        if (
+            self.slot_label != "opaque_pre_branch_array_initialization"
+            or self.slot_ordinal != 0
+            or self.variable_token != "tmp"
+        ):
+            raise ValueError(
+                "array-initialization declaration-shell IR supports only the "
+                "exact first-slot tmp declaration shell"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_initialization_declaration_shell_ir",
+            self.source_helper_set_completion.key,
+            self.source_slot_form.key,
+            self.source_envelope.key,
+            self.declaration_kind,
+            self.array_type_kind,
+            self.base_type_ref.key,
+            self.vector_length.key,
+            self.vector_alignment.key,
+            self.unresolved_backend_uninit.key,
+            self.source_location.sort_key(),
+            self.candidate_id,
+            self.target_extension,
+            self.source_extension,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+            self.slot_label,
+            self.slot_ordinal,
+            self.variable_token,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationValue:
     kind: GenerationValueKind
     value: int
@@ -2686,6 +2844,8 @@ class GenerationLoweringStage:
             expected = (ExactArrayInitializationVectorAlignmentResolutionIr,)
         elif self.stage == "array_initialization_helper_set_completion":
             expected = (ExactArrayInitializationHelperSetCompletionIr,)
+        elif self.stage == "array_initialization_declaration_shell_lowering":
+            expected = (ExactArrayInitializationDeclarationShellIr,)
         else:
             raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
         if not isinstance(self.output, expected):
@@ -2733,6 +2893,9 @@ class LoweredImplementation:
     ] = ()
     array_initialization_helper_set_completions: tuple[
         ExactArrayInitializationHelperSetCompletionIr, ...
+    ] = ()
+    array_initialization_declaration_shells: tuple[
+        ExactArrayInitializationDeclarationShellIr, ...
     ] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
@@ -2822,6 +2985,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "array_initialization_declaration_shells",
+            tuple(self.array_initialization_declaration_shells),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -2868,6 +3036,10 @@ class LoweredImplementation:
             tuple(
                 completion.key
                 for completion in self.array_initialization_helper_set_completions
+            ),
+            tuple(
+                shell.key
+                for shell in self.array_initialization_declaration_shells
             ),
             tuple(stage.key for stage in self.generation_stages),
         )
@@ -4014,6 +4186,96 @@ def lower_exact_array_initialization_helper_set_completion(
         )
 
 
+def lower_exact_array_initialization_declaration_shell(
+    source: object,
+    context: GenerationContext | None = None,
+    *,
+    selected_candidate_id: str | None = None,
+    target_extension: str | None = None,
+    source_extension: str | None = None,
+    selected_type_tag: str | None = None,
+) -> Result[ExactArrayInitializationDeclarationShellIr]:
+    completion_result = _array_initialization_declaration_shell_source(source)
+    if not completion_result.is_ok:
+        return Result.failure(completion_result.diagnostics)
+
+    completion = completion_result.unwrap()
+    diagnostics = _validate_array_initialization_declaration_shell(completion)
+    if diagnostics:
+        return Result.failure(sort_diagnostics(tuple(diagnostics)))
+
+    generation_context = context or GenerationContext()
+    effective_candidate_id = (
+        selected_candidate_id
+        or generation_context.selected_candidate_id
+        or completion.candidate_id
+    )
+    effective_target_extension = target_extension or completion.target_extension
+    effective_source_extension = source_extension or completion.source_extension
+    effective_type_tag = (
+        selected_type_tag
+        or generation_context.selected_type_tag
+        or completion.selected_type_tag
+    )
+    if (
+        effective_candidate_id != completion.candidate_id
+        or effective_target_extension != completion.target_extension
+        or effective_source_extension != completion.source_extension
+        or effective_type_tag != completion.selected_type_tag
+    ):
+        return Result.failure(
+            (
+                _array_initialization_declaration_shell_context_mismatch_diagnostic(
+                    "array-initialization declaration-shell lowering requires "
+                    "the typed selected candidate context to match the M72 "
+                    "helper-set completion candidate id, target extension, "
+                    "source extension, and selected type tag",
+                    completion.source_location,
+                ),
+            )
+        )
+
+    source_slot_form = completion.source_base_type_resolution.source_request_ir.source_form
+    source_envelope = source_slot_form.source_envelope
+    try:
+        return Result.ok(
+            ExactArrayInitializationDeclarationShellIr(
+                source_helper_set_completion=completion,
+                source_slot_form=source_slot_form,
+                source_envelope=source_envelope,
+                declaration_kind="var<typed>",
+                array_type_kind="array_type",
+                base_type_ref=completion.source_base_type_resolution.resolved_type_ref,
+                vector_length=(
+                    completion.source_vector_length_resolution.resolved_vector_length
+                ),
+                vector_alignment=(
+                    completion.source_vector_alignment_resolution
+                    .resolved_vector_alignment
+                ),
+                unresolved_backend_uninit=completion.unresolved_backend_uninit,
+                source_location=completion.source_location,
+                candidate_id=completion.candidate_id,
+                target_extension=completion.target_extension,
+                source_extension=completion.source_extension,
+                selected_type_tag=completion.selected_type_tag,
+                originating_branch_chain_id=completion.originating_branch_chain_id,
+                slot_label=completion.slot_label,
+                slot_ordinal=completion.slot_ordinal,
+                variable_token=completion.variable_token,
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        return Result.failure(
+            (
+                _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+                    str(exc),
+                    completion.source_location,
+                ),
+            )
+        )
+
+
 def resolve_generation_type_query(
     query_text: str,
     context: GenerationContext | None = None,
@@ -4143,6 +4405,9 @@ class _ExactArrayInitializationStagePipelineResult:
     array_initialization_helper_set_completions: tuple[
         ExactArrayInitializationHelperSetCompletionIr, ...
     ] = ()
+    array_initialization_declaration_shells: tuple[
+        ExactArrayInitializationDeclarationShellIr, ...
+    ] = ()
     stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -4181,6 +4446,11 @@ class _ExactArrayInitializationStagePipelineResult:
             "array_initialization_helper_set_completions",
             tuple(self.array_initialization_helper_set_completions),
         )
+        object.__setattr__(
+            self,
+            "array_initialization_declaration_shells",
+            tuple(self.array_initialization_declaration_shells),
+        )
         object.__setattr__(self, "stages", tuple(self.stages))
 
     @property
@@ -4211,6 +4481,10 @@ class _ExactArrayInitializationStagePipelineResult:
             tuple(
                 completion.key
                 for completion in self.array_initialization_helper_set_completions
+            ),
+            tuple(
+                shell.key
+                for shell in self.array_initialization_declaration_shells
             ),
             tuple(stage.key for stage in self.stages),
         )
@@ -4347,6 +4621,15 @@ def _array_initialization_helper_set_completion_stage(
     )
 
 
+def _array_initialization_declaration_shell_stage(
+    output: ExactArrayInitializationDeclarationShellIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="array_initialization_declaration_shell_lowering",
+        output=output,
+    )
+
+
 def _stage_output_location(
     output: GenerationLoweringStageOutput,
 ) -> SourceLocation | None:
@@ -4377,6 +4660,7 @@ def _stage_output_location(
             ExactArrayInitializationVectorLengthResolutionIr,
             ExactArrayInitializationVectorAlignmentResolutionIr,
             ExactArrayInitializationHelperSetCompletionIr,
+            ExactArrayInitializationDeclarationShellIr,
         ),
     ):
         return output.source_location
@@ -4621,6 +4905,24 @@ def _lower_exact_array_initialization_stage_pipeline(
     helper_set_completion_stage = _array_initialization_helper_set_completion_stage(
         helper_set_completion,
     )
+    declaration_shell_result = lower_exact_array_initialization_declaration_shell(
+        helper_set_completion,
+        _context_for_candidate(item, request),
+        selected_candidate_id=item.candidate_id,
+        target_extension=item.candidate.target_extension,
+        source_extension=item.candidate.source_extension,
+        selected_type_tag=(
+            item.candidate.type_tag
+            if request.generation_context.use_candidate_type_tag
+            else None
+        ),
+    )
+    if not declaration_shell_result.is_ok:
+        return Result.failure(declaration_shell_result.diagnostics)
+    declaration_shell = declaration_shell_result.unwrap()
+    declaration_shell_stage = _array_initialization_declaration_shell_stage(
+        declaration_shell,
+    )
 
     return Result.ok(
         _ExactArrayInitializationStagePipelineResult(
@@ -4639,6 +4941,9 @@ def _lower_exact_array_initialization_stage_pipeline(
             array_initialization_helper_set_completions=(
                 helper_set_completion,
             ),
+            array_initialization_declaration_shells=(
+                declaration_shell,
+            ),
             stages=(
                 array_body_stage,
                 array_initialization_slot_form_stage,
@@ -4647,6 +4952,7 @@ def _lower_exact_array_initialization_stage_pipeline(
                 vector_length_resolution_stage,
                 vector_alignment_resolution_stage,
                 helper_set_completion_stage,
+                declaration_shell_stage,
             ),
         )
     )
@@ -5192,6 +5498,67 @@ def _array_initialization_helper_set_completion_source(
                 "values or "
                 "array_initialization_vector_alignment_request_resolution "
                 "stage output",
+                None,
+            ),
+        )
+    )
+
+
+def _array_initialization_declaration_shell_source(
+    source: object,
+) -> Result[ExactArrayInitializationHelperSetCompletionIr]:
+    if isinstance(source, ExactArrayInitializationHelperSetCompletionIr):
+        return Result.ok(source)
+    if isinstance(source, GenerationLoweringStage):
+        if (
+            source.stage == "array_initialization_helper_set_completion"
+            and isinstance(source.output, ExactArrayInitializationHelperSetCompletionIr)
+        ):
+            return Result.ok(source.output)
+        return Result.failure(
+            (
+                _array_initialization_declaration_shell_source_unsupported_diagnostic(
+                    "array-initialization declaration-shell lowering consumes "
+                    "typed M72 ExactArrayInitializationHelperSetCompletionIr "
+                    "values, the array_initialization_helper_set_completion "
+                    "stage output, or a LoweredImplementation with a matching "
+                    "M72 helper-set completion",
+                    _stage_output_location(source.output),
+                ),
+            )
+        )
+    if isinstance(source, LoweredImplementation):
+        if len(source.array_initialization_helper_set_completions) == 1:
+            return Result.ok(source.array_initialization_helper_set_completions[0])
+        if len(source.array_initialization_helper_set_completions) == 0:
+            return Result.failure(
+                (
+                    _array_initialization_declaration_shell_missing_ir_diagnostic(
+                        "array-initialization declaration-shell lowering "
+                        "requires a LoweredImplementation carrying an accepted "
+                        "M72 array_initialization_helper_set_completions entry",
+                        _lowered_implementation_location(source),
+                    ),
+                )
+            )
+        return Result.failure(
+            (
+                _array_initialization_declaration_shell_multiple_ir_diagnostic(
+                    "array-initialization declaration-shell lowering requires "
+                    "exactly one M72 "
+                    "array_initialization_helper_set_completions entry; got "
+                    f"{len(source.array_initialization_helper_set_completions)}",
+                    _lowered_implementation_location(source),
+                ),
+            )
+        )
+    return Result.failure(
+        (
+            _array_initialization_declaration_shell_source_unsupported_diagnostic(
+                "array-initialization declaration-shell lowering consumes "
+                "only typed M72 "
+                "ExactArrayInitializationHelperSetCompletionIr values or "
+                "array_initialization_helper_set_completion stage output",
                 None,
             ),
         )
@@ -6072,6 +6439,204 @@ def _array_initialization_backend_uninit_request_record(
     return backend_uninit_request
 
 
+def _validate_array_initialization_declaration_shell(
+    completion: ExactArrayInitializationHelperSetCompletionIr,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    vector_alignment_resolution = completion.source_vector_alignment_resolution
+    vector_length_resolution = completion.source_vector_length_resolution
+    base_type_resolution = completion.source_base_type_resolution
+    helper_request_ir = base_type_resolution.source_request_ir
+    source_form = helper_request_ir.source_form
+    source_envelope = helper_request_ir.source_envelope
+    backend_uninit = completion.unresolved_backend_uninit
+
+    if vector_length_resolution is not (
+        vector_alignment_resolution.source_vector_length_resolution
+    ):
+        diagnostics.append(
+            _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+                "M72 helper-set completion must carry the M70 vector-length "
+                "resolution accepted by its M71 vector-alignment resolution",
+                completion.source_location,
+            )
+        )
+    if base_type_resolution is not vector_length_resolution.source_base_type_resolution:
+        diagnostics.append(
+            _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+                "M72 helper-set completion must carry the M68 base-type "
+                "resolution accepted by its M70 vector-length resolution",
+                completion.source_location,
+            )
+        )
+    if (
+        completion.source_backend_uninit_request
+        not in vector_alignment_resolution.unresolved_requests
+    ):
+        diagnostics.append(
+            _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+                "M72 helper-set completion backend-uninit request must come "
+                "from the M71 unresolved request records",
+                completion.source_location,
+            )
+        )
+    if (
+        backend_uninit.source_backend_uninit_request
+        is not completion.source_backend_uninit_request
+    ):
+        diagnostics.append(
+            _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+                "M72 deferred backend-uninit boundary must reference the "
+                "selected M67 backend-uninit request",
+                completion.source_location,
+            )
+        )
+    if backend_uninit.policy != "deferred_backend_value":
+        diagnostics.append(
+            _array_initialization_declaration_shell_backend_policy_mismatch_diagnostic(
+                "array-initialization declaration-shell lowering preserves "
+                "only the M72 deferred_backend_value backend-uninit policy; "
+                f"got {backend_uninit.policy!r}",
+                backend_uninit.source_location,
+            )
+        )
+
+    if source_form.source_envelope is not source_envelope:
+        diagnostics.append(
+            _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+                "M67 helper-request IR source envelope must be the M65 "
+                "envelope carried by its M66 slot form",
+                source_form.source_location,
+            )
+        )
+    if (
+        source_envelope.candidate_id != completion.candidate_id
+        or source_envelope.selected_type_tag != completion.selected_type_tag
+        or source_envelope.originating_branch_chain_id
+        != completion.originating_branch_chain_id
+    ):
+        diagnostics.append(
+            _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+                "M65 envelope provenance must match the M72 helper-set "
+                "completion candidate id, selected type tag, and branch-chain "
+                "identity",
+                source_envelope.source_location,
+            )
+        )
+    for stage_name, source in (
+        ("M66 slot form", source_form),
+        ("M68 base-type resolution", base_type_resolution),
+        ("M70 vector-length resolution", vector_length_resolution),
+        ("M71 vector-alignment resolution", vector_alignment_resolution),
+        ("M72 backend-uninit boundary", backend_uninit),
+    ):
+        if (
+            source.candidate_id != completion.candidate_id
+            or source.selected_type_tag != completion.selected_type_tag
+            or source.originating_branch_chain_id
+            != completion.originating_branch_chain_id
+            or source.slot_label != completion.slot_label
+            or source.slot_ordinal != completion.slot_ordinal
+            or source.variable_token != completion.variable_token
+        ):
+            diagnostics.append(
+                _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+                    f"{stage_name} provenance must match the M72 helper-set "
+                    "completion",
+                    source.source_location,
+                )
+            )
+    for stage_name, source in (
+        ("M70 vector-length resolution", vector_length_resolution),
+        ("M71 vector-alignment resolution", vector_alignment_resolution),
+        ("M72 backend-uninit boundary", backend_uninit),
+    ):
+        if (
+            source.target_extension != completion.target_extension
+            or source.source_extension != completion.source_extension
+        ):
+            diagnostics.append(
+                _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+                    f"{stage_name} target/source extension provenance must "
+                    "match the M72 helper-set completion",
+                    source.source_location,
+                )
+            )
+
+    if (
+        completion.slot_label != "opaque_pre_branch_array_initialization"
+        or completion.slot_ordinal != 0
+        or completion.variable_token != "tmp"
+        or source_form.slot_label != "opaque_pre_branch_array_initialization"
+        or source_form.slot_ordinal != 0
+        or source_form.variable_token != "tmp"
+    ):
+        diagnostics.append(
+            _array_initialization_declaration_shell_malformed_diagnostic(
+                "array-initialization declaration-shell lowering supports "
+                "only the exact first-slot "
+                "opaque_pre_branch_array_initialization var<typed>(..., tmp, "
+                "...) shell",
+                source_form.variable_token_location or source_form.source_location,
+            )
+        )
+    expected_leaf_kinds = (
+        source_form.base_type_leaf.kind,
+        source_form.vector_length_leaf.kind,
+        source_form.vector_alignment_leaf.kind,
+        source_form.backend_uninit_leaf.kind,
+    )
+    if expected_leaf_kinds != (
+        "type_generation_base_in",
+        "value_generation_vector_length",
+        "value_generation_vector_alignment",
+        "value_backend_uninit_array",
+    ):
+        diagnostics.append(
+            _array_initialization_declaration_shell_malformed_diagnostic(
+                "array-initialization declaration-shell lowering requires the "
+                "exact M66 helper-leaf shape for base type, vector length, "
+                "vector alignment, and deferred backend uninit",
+                source_form.source_location,
+            )
+        )
+    if (
+        base_type_resolution.resolved_type_ref.kind != "base.in"
+        or base_type_resolution.resolved_type_ref.type_tag
+        != completion.selected_type_tag
+    ):
+        diagnostics.append(
+            _array_initialization_declaration_shell_malformed_diagnostic(
+                "array-initialization declaration-shell lowering requires the "
+                "accepted M68 base.in type fact for the selected type tag",
+                base_type_resolution.source_location,
+            )
+        )
+    if not isinstance(
+        vector_length_resolution.resolved_vector_length,
+        ExactArrayInitializationVectorLengthValue,
+    ):
+        diagnostics.append(
+            _array_initialization_declaration_shell_malformed_diagnostic(
+                "array-initialization declaration-shell lowering requires the "
+                "accepted typed M70 vector-length fact",
+                vector_length_resolution.source_location,
+            )
+        )
+    if not isinstance(
+        vector_alignment_resolution.resolved_vector_alignment,
+        ExactArrayInitializationVectorAlignmentValue,
+    ) or vector_alignment_resolution.resolved_vector_alignment.kind == "unsupported":
+        diagnostics.append(
+            _array_initialization_declaration_shell_malformed_diagnostic(
+                "array-initialization declaration-shell lowering requires the "
+                "accepted typed M71 vector-alignment fact",
+                vector_alignment_resolution.source_location,
+            )
+        )
+    return diagnostics
+
+
 def _array_initialization_leaf(
     kind: ExactArrayInitializationHelperLeafKind,
     slot_location: SourceLocation,
@@ -6875,6 +7440,83 @@ def _array_initialization_helper_set_provenance_mismatch_diagnostic(
     )
 
 
+def _array_initialization_declaration_shell_source_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-SOURCE-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_declaration_shell_missing_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-IR-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_declaration_shell_multiple_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-IR-MULTIPLE",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_declaration_shell_context_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-CONTEXT-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-PROVENANCE-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_declaration_shell_malformed_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-MALFORMED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_declaration_shell_backend_policy_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-BACKEND-UNINIT-POLICY-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
 def _duplicate_array_body_envelope_skeleton_diagnostic(
     lookup_key: ExactArrayBodyEnvelopeSkeletonKey,
     skeleton: ExactArrayBodyEnvelopeSkeleton,
@@ -7443,6 +8085,9 @@ def _lower_input(
                     ),
                     array_initialization_helper_set_completions=(
                         array_initialization_pipeline.array_initialization_helper_set_completions
+                    ),
+                    array_initialization_declaration_shells=(
+                        array_initialization_pipeline.array_initialization_declaration_shells
                     ),
                     generation_stages=(
                         _recognition_stage(

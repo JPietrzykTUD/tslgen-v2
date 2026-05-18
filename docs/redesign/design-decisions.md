@@ -1412,14 +1412,13 @@ Consequences:
   preserving backend uninit only as a deferred backend-value request boundary.
   It must not query backend maps, create translation requests, render backend
   text, or lower `var`/`array_type` semantics.
-- Post-M72 planning selects Milestone 73 to introduce exact first-slot
+- Milestone 73 is implemented to introduce exact first-slot
   declaration-shell structural IR before broad declaration/array semantics.
-  The design condition is that M73 consumes the accepted M72 helper-set
-  completion and records the exact `array.tsl:105`
-  `var<typed>(array_type<...>, tmp, ...)` structure as typed lowering state
-  only. It must not add generic `var`/`array_type` parsing, variable scope,
-  allocation/lifetime, initializer semantics, backend uninit translation,
-  renderer-ready IR, store/return semantics, or generated output.
+  M73 consumes the accepted M72 helper-set completion and records the exact
+  `array.tsl:105` `var<typed>(array_type<...>, tmp, ...)` structure as typed
+  lowering state only. It must not add generic `var`/`array_type` parsing,
+  variable scope, allocation/lifetime, initializer semantics, backend uninit
+  translation, renderer-ready IR, store/return semantics, or generated output.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

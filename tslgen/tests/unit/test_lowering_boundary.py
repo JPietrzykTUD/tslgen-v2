@@ -31,6 +31,7 @@ from tslgen.lowering import (
     ExactArrayBodyEnvelopeSkeletonRequirement,
     ExactArrayBodyEnvelopeSkeletonSlot,
     ExactArrayInitializationBaseTypeResolutionIr,
+    ExactArrayInitializationDeclarationShellIr,
     ExactArrayInitializationHelperSetCompletionIr,
     ExactArrayInitializationHelperRequestIr,
     ExactArrayInitializationHelperRequestRecord,
@@ -71,6 +72,7 @@ from tslgen.lowering import (
     build_catalog_lowering_request,
     handoff_opaque_selected_branch_body,
     lower_candidates,
+    lower_exact_array_initialization_declaration_shell,
     lower_exact_array_initialization_base_type_request,
     lower_exact_array_initialization_helper_set_completion,
     lower_exact_array_initialization_helper_requests,
@@ -1148,6 +1150,36 @@ class LoweringBoundaryTests(unittest.TestCase):
             source_extension=vector_length_resolution.source_extension,
             selected_type_tag=vector_length_resolution.selected_type_tag,
         )
+        if not result.is_ok:
+            raise AssertionError(result.diagnostics)
+        return result.unwrap()
+
+    def exact_array_initialization_helper_set_completion(
+        self,
+        *,
+        selected_type_tag: str = "si16",
+    ) -> ExactArrayInitializationHelperSetCompletionIr:
+        vector_alignment_resolution = (
+            self.exact_array_initialization_vector_alignment_resolution(
+                selected_type_tag=selected_type_tag,
+            )
+        )
+        result = lower_exact_array_initialization_helper_set_completion(
+            vector_alignment_resolution,
+        )
+        if not result.is_ok:
+            raise AssertionError(result.diagnostics)
+        return result.unwrap()
+
+    def exact_array_initialization_declaration_shell(
+        self,
+        *,
+        selected_type_tag: str = "si16",
+    ) -> ExactArrayInitializationDeclarationShellIr:
+        completion = self.exact_array_initialization_helper_set_completion(
+            selected_type_tag=selected_type_tag,
+        )
+        result = lower_exact_array_initialization_declaration_shell(completion)
         if not result.is_ok:
             raise AssertionError(result.diagnostics)
         return result.unwrap()
@@ -3714,6 +3746,10 @@ class LoweringBoundaryTests(unittest.TestCase):
                         (),
                     )
                     self.assertEqual(
+                        implementation.array_initialization_declaration_shells,
+                        (),
+                    )
+                    self.assertEqual(
                         tuple(stage.stage for stage in implementation.generation_stages),
                         tuple(stage.stage for stage in baseline_impl.generation_stages),
                     )
@@ -3835,69 +3871,108 @@ class LoweringBoundaryTests(unittest.TestCase):
                     helper_set_completion.unresolved_backend_uninit.policy,
                     "deferred_backend_value",
                 )
+                self.assertEqual(
+                    len(implementation.array_initialization_declaration_shells),
+                    1,
+                )
+                declaration_shell = (
+                    implementation.array_initialization_declaration_shells[0]
+                )
                 self.assertIs(
-                    implementation.generation_stages[-7].output,
+                    declaration_shell.source_helper_set_completion,
+                    helper_set_completion,
+                )
+                self.assertIs(declaration_shell.source_slot_form, slot_form)
+                self.assertIs(declaration_shell.source_envelope, array_envelope)
+                self.assertEqual(declaration_shell.declaration_kind, "var<typed>")
+                self.assertEqual(declaration_shell.array_type_kind, "array_type")
+                self.assertIs(
+                    declaration_shell.base_type_ref,
+                    base_type_resolution.resolved_type_ref,
+                )
+                self.assertIs(
+                    declaration_shell.vector_length,
+                    vector_length_resolution.resolved_vector_length,
+                )
+                self.assertIs(
+                    declaration_shell.vector_alignment,
+                    vector_alignment_resolution.resolved_vector_alignment,
+                )
+                self.assertIs(
+                    declaration_shell.unresolved_backend_uninit,
+                    helper_set_completion.unresolved_backend_uninit,
+                )
+                self.assertIs(
+                    implementation.generation_stages[-8].output,
                     array_envelope,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-7].stage,
+                    implementation.generation_stages[-8].stage,
                     "array_body_envelope_slot_assembly",
                 )
-                self.assertIs(implementation.generation_stages[-6].output, slot_form)
+                self.assertIs(implementation.generation_stages[-7].output, slot_form)
                 self.assertEqual(
-                    implementation.generation_stages[-6].stage,
+                    implementation.generation_stages[-7].stage,
                     "array_initialization_slot_form_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-5].output,
+                    implementation.generation_stages[-6].output,
                     helper_request,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-5].stage,
+                    implementation.generation_stages[-6].stage,
                     "array_initialization_helper_request_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-4].output,
+                    implementation.generation_stages[-5].output,
                     base_type_resolution,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-4].stage,
+                    implementation.generation_stages[-5].stage,
                     "array_initialization_base_type_request_resolution",
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-3].stage,
+                    implementation.generation_stages[-4].stage,
                     "array_initialization_vector_length_request_resolution",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-3].output,
+                    implementation.generation_stages[-4].output,
                     vector_length_resolution,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-2].stage,
+                    implementation.generation_stages[-3].stage,
                     "array_initialization_vector_alignment_request_resolution",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-2].output,
+                    implementation.generation_stages[-3].output,
                     vector_alignment_resolution,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-1].stage,
+                    implementation.generation_stages[-2].stage,
                     "array_initialization_helper_set_completion",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-1].output,
+                    implementation.generation_stages[-2].output,
                     helper_set_completion,
                 )
                 self.assertEqual(
-                    tuple(stage.stage for stage in implementation.generation_stages[:-7]),
+                    implementation.generation_stages[-1].stage,
+                    "array_initialization_declaration_shell_lowering",
+                )
+                self.assertIs(
+                    implementation.generation_stages[-1].output,
+                    declaration_shell,
+                )
+                self.assertEqual(
+                    tuple(stage.stage for stage in implementation.generation_stages[:-8]),
                     tuple(stage.stage for stage in baseline_impl.generation_stages),
                 )
                 self.assertEqual(
-                    tuple(stage.output for stage in implementation.generation_stages[:-7]),
+                    tuple(stage.output for stage in implementation.generation_stages[:-8]),
                     tuple(stage.output for stage in baseline_impl.generation_stages),
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-8].stage,
+                    implementation.generation_stages[-9].stage,
                     "selected_body_envelope_lowering",
                 )
                 self.assertEqual(slot_form.slot_ordinal, 0)
@@ -3963,6 +4038,10 @@ class LoweringBoundaryTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     implementation.array_initialization_helper_set_completions,
+                    (),
+                )
+                self.assertEqual(
+                    implementation.array_initialization_declaration_shells,
                     (),
                 )
                 self.assertEqual(
@@ -4277,6 +4356,34 @@ class LoweringBoundaryTests(unittest.TestCase):
                     "deferred_backend_value",
                 )
                 self.assertEqual(
+                    len(pipeline.array_initialization_declaration_shells),
+                    1,
+                )
+                declaration_shell = pipeline.array_initialization_declaration_shells[0]
+                self.assertIs(
+                    declaration_shell.source_helper_set_completion,
+                    helper_set_completion,
+                )
+                self.assertIs(declaration_shell.source_slot_form, slot_form)
+                self.assertEqual(declaration_shell.declaration_kind, "var<typed>")
+                self.assertEqual(declaration_shell.array_type_kind, "array_type")
+                self.assertIs(
+                    declaration_shell.base_type_ref,
+                    resolution.resolved_type_ref,
+                )
+                self.assertIs(
+                    declaration_shell.vector_length,
+                    vector_length_resolution.resolved_vector_length,
+                )
+                self.assertIs(
+                    declaration_shell.vector_alignment,
+                    vector_alignment_resolution.resolved_vector_alignment,
+                )
+                self.assertIs(
+                    declaration_shell.unresolved_backend_uninit,
+                    helper_set_completion.unresolved_backend_uninit,
+                )
+                self.assertEqual(
                     tuple(stage.stage for stage in pipeline.stages),
                     (
                         "array_body_envelope_slot_assembly",
@@ -4286,6 +4393,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                         "array_initialization_vector_length_request_resolution",
                         "array_initialization_vector_alignment_request_resolution",
                         "array_initialization_helper_set_completion",
+                        "array_initialization_declaration_shell_lowering",
                     ),
                 )
                 self.assertEqual(
@@ -4298,6 +4406,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                         vector_length_resolution,
                         vector_alignment_resolution,
                         helper_set_completion,
+                        declaration_shell,
                     ),
                 )
 
@@ -4338,7 +4447,11 @@ class LoweringBoundaryTests(unittest.TestCase):
                     len(pipeline.array_initialization_helper_set_completions),
                     1,
                 )
-                self.assertEqual(len(pipeline.stages), 7)
+                self.assertEqual(
+                    len(pipeline.array_initialization_declaration_shells),
+                    1,
+                )
+                self.assertEqual(len(pipeline.stages), 8)
 
     def test_exact_array_initialization_stage_pipeline_no_skeleton_is_empty(
         self,
@@ -4357,6 +4470,7 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(pipeline.array_initialization_vector_length_resolutions, ())
         self.assertEqual(pipeline.array_initialization_vector_alignment_resolutions, ())
         self.assertEqual(pipeline.array_initialization_helper_set_completions, ())
+        self.assertEqual(pipeline.array_initialization_declaration_shells, ())
         self.assertEqual(pipeline.stages, ())
 
     def test_exact_array_initialization_stage_pipeline_matches_lower_candidates_tail(
@@ -4426,8 +4540,79 @@ class LoweringBoundaryTests(unittest.TestCase):
             implementation.array_initialization_helper_set_completions,
             pipeline_result.array_initialization_helper_set_completions,
         )
-        self.assertEqual(implementation.generation_stages[-7:], pipeline_result.stages)
-        self.assertEqual(implementation.generation_stages[-8], envelope_stage)
+        self.assertEqual(
+            implementation.array_initialization_declaration_shells,
+            pipeline_result.array_initialization_declaration_shells,
+        )
+        self.assertEqual(implementation.generation_stages[-8:], pipeline_result.stages)
+        self.assertEqual(implementation.generation_stages[-9], envelope_stage)
+
+    def test_lower_candidates_declaration_shell_stage_follows_helper_set_completion(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+        item, envelope = self.size_byte_branch_chain_item_and_envelope("si32")
+        skeleton = self.exact_array_body_skeleton_for_envelope(envelope)
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                array_body_envelope_skeletons=(skeleton,),
+                generation_context=GenerationContext(
+                    array_initialization_vector_length_metadata=(
+                        self.vector_length_metadata_for_item(item),
+                    ),
+                    array_initialization_vector_alignment_metadata=(
+                        self.vector_alignment_metadata_for_item(item),
+                    ),
+                ),
+            ),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation = result.unwrap().implementations_by_candidate_id[
+            item.candidate_id
+        ]
+        self.assertEqual(
+            implementation.generation_stages[-2].stage,
+            "array_initialization_helper_set_completion",
+        )
+        self.assertEqual(
+            implementation.generation_stages[-1].stage,
+            "array_initialization_declaration_shell_lowering",
+        )
+        helper_set_completion = implementation.array_initialization_helper_set_completions[
+            0
+        ]
+        declaration_shell = implementation.array_initialization_declaration_shells[0]
+        self.assertIs(implementation.generation_stages[-2].output, helper_set_completion)
+        self.assertIs(implementation.generation_stages[-1].output, declaration_shell)
+        self.assertIs(
+            declaration_shell.source_helper_set_completion,
+            helper_set_completion,
+        )
+        self.assertIs(
+            declaration_shell.base_type_ref,
+            implementation.array_initialization_base_type_resolutions[
+                0
+            ].resolved_type_ref,
+        )
+        self.assertIs(
+            declaration_shell.vector_length,
+            implementation.array_initialization_vector_length_resolutions[
+                0
+            ].resolved_vector_length,
+        )
+        self.assertIs(
+            declaration_shell.vector_alignment,
+            implementation.array_initialization_vector_alignment_resolutions[
+                0
+            ].resolved_vector_alignment,
+        )
+        self.assertEqual(
+            declaration_shell.unresolved_backend_uninit.policy,
+            "deferred_backend_value",
+        )
 
     def test_lower_candidates_vector_length_metadata_order_is_deterministic(
         self,
@@ -6933,6 +7118,307 @@ class LoweringBoundaryTests(unittest.TestCase):
             platform.processor = original_processor
 
         self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(
+            result.unwrap().unresolved_backend_uninit.policy,
+            "deferred_backend_value",
+        )
+
+    def test_exact_array_initialization_declaration_shell_lowers_m72_completion(
+        self,
+    ) -> None:
+        completion = self.exact_array_initialization_helper_set_completion(
+            selected_type_tag="si32",
+        )
+        sources = (
+            completion,
+            GenerationLoweringStage(
+                stage="array_initialization_helper_set_completion",
+                output=completion,
+            ),
+            LoweredImplementation(
+                candidate_id=completion.candidate_id,
+                status="lowered",
+                array_initialization_helper_set_completions=(completion,),
+            ),
+        )
+
+        for source in sources:
+            with self.subTest(source=type(source).__name__):
+                result = lower_exact_array_initialization_declaration_shell(
+                    source,
+                    GenerationContext(
+                        selected_candidate_id=completion.candidate_id,
+                        selected_type_tag=completion.selected_type_tag,
+                    ),
+                    selected_candidate_id=completion.candidate_id,
+                    target_extension=completion.target_extension,
+                    source_extension=completion.source_extension,
+                    selected_type_tag=completion.selected_type_tag,
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                shell = result.unwrap()
+                assert isinstance(shell, ExactArrayInitializationDeclarationShellIr)
+                self.assertIs(shell.source_helper_set_completion, completion)
+                self.assertIs(
+                    shell.source_slot_form,
+                    completion.source_base_type_resolution.source_request_ir.source_form,
+                )
+                self.assertIs(
+                    shell.source_envelope,
+                    completion.source_base_type_resolution.source_request_ir
+                    .source_form.source_envelope,
+                )
+                self.assertEqual(shell.declaration_kind, "var<typed>")
+                self.assertEqual(shell.array_type_kind, "array_type")
+                self.assertIs(
+                    shell.base_type_ref,
+                    completion.source_base_type_resolution.resolved_type_ref,
+                )
+                self.assertEqual(shell.base_type_ref.type_tag, "si32")
+                self.assertIs(
+                    shell.vector_length,
+                    completion.source_vector_length_resolution.resolved_vector_length,
+                )
+                self.assertIs(
+                    shell.vector_alignment,
+                    completion.source_vector_alignment_resolution
+                    .resolved_vector_alignment,
+                )
+                self.assertIs(
+                    shell.unresolved_backend_uninit,
+                    completion.unresolved_backend_uninit,
+                )
+                self.assertEqual(
+                    shell.unresolved_backend_uninit.policy,
+                    "deferred_backend_value",
+                )
+                self.assertEqual(shell.variable_token, "tmp")
+                self.assertEqual(shell.slot_ordinal, 0)
+                self.assertIs(
+                    GenerationLoweringStage(
+                        stage="array_initialization_declaration_shell_lowering",
+                        output=shell,
+                    ).output,
+                    shell,
+                )
+
+    def test_exact_array_initialization_declaration_shell_rejects_invalid_sources(
+        self,
+    ) -> None:
+        completion = self.exact_array_initialization_helper_set_completion()
+        body_ir = self.selected_body_ir()
+        implementation_without_ir = LoweredImplementation(
+            candidate_id="candidate-1",
+            status="lowered",
+            array_initialization_vector_alignment_resolutions=(
+                completion.source_vector_alignment_resolution,
+            ),
+        )
+        implementation_with_multiple = LoweredImplementation(
+            candidate_id="candidate-1",
+            status="lowered",
+            array_initialization_helper_set_completions=(completion, completion),
+        )
+        cases = (
+            (
+                "stage",
+                GenerationLoweringStage(
+                    stage="selected_body_ir_lowering",
+                    output=body_ir,
+                ),
+                "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-SOURCE-UNSUPPORTED",
+                "M72",
+            ),
+            (
+                "type",
+                object(),
+                "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-SOURCE-UNSUPPORTED",
+                "M72",
+            ),
+            (
+                "missing_ir",
+                implementation_without_ir,
+                "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-IR-MISSING",
+                "array_initialization_helper_set_completions",
+            ),
+            (
+                "multiple_ir",
+                implementation_with_multiple,
+                "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-IR-MULTIPLE",
+                "exactly one",
+            ),
+        )
+
+        for name, source, code, message in cases:
+            with self.subTest(name=name):
+                result = lower_exact_array_initialization_declaration_shell(source)
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
+                self.assertIn(message, result.diagnostics[0].message)
+
+    def test_exact_array_initialization_declaration_shell_rejects_context_mismatch(
+        self,
+    ) -> None:
+        completion = self.exact_array_initialization_helper_set_completion()
+
+        result = lower_exact_array_initialization_declaration_shell(
+            completion,
+            GenerationContext(selected_candidate_id="other-candidate"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-CONTEXT-MISMATCH",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+        )
+        self.assertIn("selected candidate context", result.diagnostics[0].message)
+
+    def test_exact_array_initialization_declaration_shell_reports_provenance_mismatch(
+        self,
+    ) -> None:
+        completion = self.exact_array_initialization_helper_set_completion()
+        object.__setattr__(
+            completion.source_vector_length_resolution,
+            "candidate_id",
+            "other-candidate",
+        )
+
+        result = lower_exact_array_initialization_declaration_shell(completion)
+
+        self.assertFalse(result.is_ok)
+        self.assertTrue(
+            any(
+                diagnostic.code
+                == "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-PROVENANCE-MISMATCH"
+                for diagnostic in result.diagnostics
+            ),
+            result.diagnostics,
+        )
+
+    def test_exact_array_initialization_declaration_shell_reports_malformed_shell(
+        self,
+    ) -> None:
+        completion = self.exact_array_initialization_helper_set_completion()
+        source_form = (
+            completion.source_base_type_resolution.source_request_ir.source_form
+        )
+        object.__setattr__(source_form, "variable_token", "scratch")
+
+        result = lower_exact_array_initialization_declaration_shell(completion)
+
+        self.assertFalse(result.is_ok)
+        self.assertTrue(
+            any(
+                diagnostic.code
+                == "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-MALFORMED"
+                for diagnostic in result.diagnostics
+            ),
+            result.diagnostics,
+        )
+
+    def test_exact_array_initialization_declaration_shell_rejects_backend_policy_mismatch(
+        self,
+    ) -> None:
+        completion = self.exact_array_initialization_helper_set_completion()
+        object.__setattr__(
+            completion.unresolved_backend_uninit,
+            "policy",
+            "translated_backend_value",
+        )
+
+        result = lower_exact_array_initialization_declaration_shell(completion)
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code=(
+                "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-"
+                "BACKEND-UNINIT-POLICY-MISMATCH"
+            ),
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=105,
+        )
+        self.assertIn("deferred_backend_value", result.diagnostics[0].message)
+
+    def test_exact_array_initialization_declaration_shell_is_deterministic(
+        self,
+    ) -> None:
+        first_source = self.exact_array_initialization_helper_set_completion()
+        second_source = self.exact_array_initialization_helper_set_completion()
+
+        first = lower_exact_array_initialization_declaration_shell(first_source)
+        second = lower_exact_array_initialization_declaration_shell(second_source)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        self.assertEqual(first.unwrap().key, second.unwrap().key)
+
+    def test_exact_array_initialization_declaration_shell_uses_no_raw_or_external_state(
+        self,
+    ) -> None:
+        completion = self.exact_array_initialization_helper_set_completion()
+        original_type_query = lowering_boundary.resolve_generation_type_query
+        original_value_query = lowering_boundary.resolve_generation_value_query
+        original_open = builtins.open
+        original_cpu_count = os.cpu_count
+        original_processor = platform.processor
+
+        def fail_on_raw_query(*args: object, **kwargs: object) -> object:
+            raise AssertionError("raw helper evaluator was called")
+
+        def fail_on_file_read(*args: object, **kwargs: object) -> object:
+            raise AssertionError("file/catalog/tsldata/backend map read was called")
+
+        def fail_on_cpu_query(*args: object, **kwargs: object) -> object:
+            raise AssertionError("host CPU query was called")
+
+        lowering_boundary.resolve_generation_type_query = fail_on_raw_query  # type: ignore[assignment]
+        lowering_boundary.resolve_generation_value_query = fail_on_raw_query  # type: ignore[assignment]
+        builtins.open = fail_on_file_read  # type: ignore[assignment]
+        os.cpu_count = fail_on_cpu_query  # type: ignore[assignment]
+        platform.processor = fail_on_cpu_query  # type: ignore[assignment]
+        try:
+            with (
+                mock.patch.object(
+                    Path,
+                    "read_text",
+                    side_effect=AssertionError(
+                        "file/catalog/tsldata/backend map read was called"
+                    ),
+                ),
+                mock.patch.object(
+                    Path,
+                    "read_bytes",
+                    side_effect=AssertionError(
+                        "file/catalog/tsldata/backend map read was called"
+                    ),
+                ),
+            ):
+                result = lower_exact_array_initialization_declaration_shell(
+                    completion,
+                )
+        finally:
+            lowering_boundary.resolve_generation_type_query = original_type_query
+            lowering_boundary.resolve_generation_value_query = original_value_query
+            builtins.open = original_open
+            os.cpu_count = original_cpu_count
+            platform.processor = original_processor
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        self.assertEqual(result.unwrap().declaration_kind, "var<typed>")
         self.assertEqual(
             result.unwrap().unresolved_backend_uninit.policy,
             "deferred_backend_value",

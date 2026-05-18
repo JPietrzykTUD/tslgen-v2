@@ -591,13 +591,15 @@ boundary. M72 does not resolve backend uninit into backend text, backend
 translation requests, renderer-ready values, generated output, or
 declaration/array semantics.
 
-Post-M72 planning selects Milestone 73 as exact first-slot
-declaration-shell structural IR. It should consume the M72 helper-set
-completion and produce typed structure for the exact `array.tsl:105`
-`var<typed>(array_type<...>, tmp, ...)` shell. Generic declarations, generic
-arrays, allocation/lifetime, initializer behavior, variable scope, stores,
-returns, `tmp.data()`, `emit_return`, backend uninit translation, backend
-translation maps, rendering, and generated output remain deferred.
+Milestone 73 implements exact first-slot declaration-shell structural IR. It
+consumes the M72 helper-set completion and produces typed structure for the
+exact `array.tsl:105` `var<typed>(array_type<...>, tmp, ...)` shell. M73
+records only the structural declaration kind, array-type shape, `tmp`
+variable token, accepted M68/M70/M71 helper facts, and M72 deferred backend
+uninit boundary as lowering state. Generic declarations, generic arrays,
+allocation/lifetime, initializer behavior, variable scope, stores, returns,
+`tmp.data()`, `emit_return`, backend uninit translation, backend translation
+maps, rendering, and generated output remain deferred.
 
 M61 diagnostics:
 
@@ -806,13 +808,45 @@ M71 diagnostics:
   on candidate, type, branch-chain, slot, variable-token, source-location, or
   source-request provenance required by the boundary.
 
+M73 diagnostics:
+
+- `TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-SOURCE-UNSUPPORTED`: declaration-
+  shell lowering was invoked with something other than an accepted M72
+  `ExactArrayInitializationHelperSetCompletionIr`, the
+  `array_initialization_helper_set_completion` stage output, or a typed
+  `LoweredImplementation` carrying a matching M72 helper-set completion.
+- `TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-IR-MISSING`: a
+  `LoweredImplementation` source does not carry an accepted M72
+  `array_initialization_helper_set_completions` entry.
+- `TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-IR-MULTIPLE`: a
+  `LoweredImplementation` source carries more than one M72 helper-set
+  completion at the M73 declaration-shell boundary.
+- `TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-CONTEXT-MISMATCH`: the typed
+  selected candidate context supplied to M73 disagrees with the M72 helper-set
+  completion candidate id, target extension, source extension, or selected
+  type tag.
+- `TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-PROVENANCE-MISMATCH`: the M72
+  helper-set completion, reachable M66/M65 source chain, M68/M70/M71 results,
+  backend-uninit request/boundary, or structural shell output disagree on the
+  candidate, extension, selected type, branch-chain, slot, variable, or source
+  provenance required by the boundary.
+- `TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-MALFORMED`: the M72 completion or
+  reachable source chain does not preserve the exact first-slot
+  `opaque_pre_branch_array_initialization` ordinal `0`
+  `var<typed>(array_type<...>, tmp, value<backend>(uninit::array))` shell, the
+  exact M66 helper leaves, or the accepted M68/M70/M71 typed helper facts.
+- `TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-BACKEND-UNINIT-POLICY-MISMATCH`:
+  the backend-uninit boundary no longer carries the M72
+  `deferred_backend_value` policy that M73 must preserve without translation.
+
 ## Explicit Deferrals
 
-Deferred beyond the implemented M43-M71 semantic-lowering, structural
+Deferred beyond the implemented M43-M73 semantic-lowering, structural
 slot-assembly, pipeline-integration, exact array-initialization slot form IR,
 M67 helper-request IR, accepted M68 base-type request resolution, M69 pipeline
-extraction, M70 vector-length request resolution, and M71 vector-alignment
-request resolution slices:
+extraction, M70 vector-length request resolution, M71 vector-alignment
+request resolution, M72 helper-set completion, and M73 exact declaration-shell
+structural IR slices:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -847,18 +881,22 @@ request resolution slices:
   `else if<generation>` syntax, final-else policy, broad branch pruning based
   on generation values, assignment semantics beyond that selected IR shape,
   broad direct-intrinsic/SVE semantics, backend intrinsic lowering, vector
-  length/alignment semantics, backend uninit semantics, surrounding
-  declaration/store/return semantics beyond the exact M66 form,
+  length/alignment semantics, backend uninit semantics, generic
+  declaration/array semantics, allocation/lifetime, initializer behavior,
+  variable scope, surrounding store/return semantics beyond the exact M73
+  structural declaration shell,
   skeleton recognition from raw body text, and broad body lowering remain
   deferred. Accepted M68 narrows only the exact M67 base-type request, accepted
   M69 extracts that existing stage assembly without new semantics, accepted
   M70 resolves only the exact vector-length request through explicit typed
   metadata, and accepted M71 resolves only the exact vector-alignment request
   through explicit typed metadata. Implemented M72 packages the exact helper
-  set and keeps backend uninit as a typed deferred backend-value boundary, but
-  backend uninit translation, broad vector/register metadata,
-  declaration/array semantics, aligned load/store semantics, rendering, and
-  output remain deferred.
+  set and keeps backend uninit as a typed deferred backend-value boundary.
+  Implemented M73 records only the exact first-slot declaration-shell
+  structure over that helper set. Backend uninit translation, broad
+  vector/register metadata, generic declaration/array semantics, allocation/
+  lifetime, initializer behavior, variable scope, store/return semantics,
+  aligned load/store semantics, rendering, and output remain deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only

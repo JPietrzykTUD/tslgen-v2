@@ -514,13 +514,13 @@ stage. Backend uninit remains a typed deferred backend-value request boundary;
 M72 does not translate it to backend text, create renderer-ready values, lower
 `var`/`array_type`, or change generated output.
 
-Post-M72 planning selects Milestone 73 as exact first-slot declaration-shell
-structural IR. The planned slice should consume the accepted M72 helper-set
-completion and produce one typed structural value for the exact
-`array.tsl:105` `var<typed>(array_type<...>, tmp, ...)` shell. It is not
-generic declaration or array semantics: backend uninit translation, renderer
-input, generated output, allocation/lifetime, initializer behavior, variable
-scope, store, return, `tmp.data()`, and `emit_return` remain deferred.
+Milestone 73 implements exact first-slot declaration-shell structural IR. It
+consumes the accepted M72 helper-set completion and produces one typed
+structural value for the exact `array.tsl:105`
+`var<typed>(array_type<...>, tmp, ...)` shell. It is not generic declaration
+or array semantics: backend uninit translation, renderer input, generated
+output, allocation/lifetime, initializer behavior, variable scope, store,
+return, `tmp.data()`, and `emit_return` remain deferred.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic

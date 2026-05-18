@@ -7922,9 +7922,10 @@ Next concrete prompt:
 
 Status:
 
-Selected for human acceptance after post-M72 planning.
+Milestone 73 was selected by post-M72 planning and is now implemented as the
+exact first-slot declaration-shell structural IR slice.
 
-Selected milestone:
+Implemented milestone:
 
 ```text
 Milestone 73: Exact First-Slot Declaration-Shell Structural IR Slice
@@ -7934,7 +7935,7 @@ Candidate comparison:
 
 | Candidate | Value | Risk | Decision |
 | --- | --- | --- | --- |
-| Exact first-slot declaration-shell structural IR | High. Consumes the completed M72 helper-set aggregate and makes the exact `array.tsl:105` first slot structurally usable as typed lowering state. | Medium-high if it is mistaken for broad declaration/array semantics. | Select as M73 with strict wording that the output is structural IR only. |
+| Exact first-slot declaration-shell structural IR | High. Consumes the completed M72 helper-set aggregate and makes the exact `array.tsl:105` first slot structurally usable as typed lowering state. | Medium-high if it is mistaken for broad declaration/array semantics. | Implemented as M73 with strict wording that the output is structural IR only. |
 | Narrow helper-set-to-envelope handoff | Low. Mostly rewraps M72 without exposing the first-slot statement structure. | Low, but too little functional movement. | Defer. |
 | Backend-uninit handling | Medium later. Eventually needed for output, but M72 intentionally keeps it deferred. | High now because translation/rendering would cross the lowering boundary. | Defer until backend translation/rendering slices are selected. |
 | Generic `var` / `array_type` parsing | Broadly useful later. | Too broad now; would add generic declaration/array semantics and broad TSIL parsing. | Reject for M73. |
@@ -7945,7 +7946,7 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance after post-M72 planning.
+Implemented as the exact first-slot declaration-shell structural IR slice.
 
 Goal:
 
@@ -8116,8 +8117,6 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m72-acceptance-finalization-prompt.md` is created and
-  active pending human acceptance. That finalization prompt will create
-  `docs/agent/runs/m73-execution-review-loop-prompt.md` after explicit human
-  acceptance. Do not start M73 until the acceptance-finalization prompt
-  records acceptance.
+- M73 execution has occurred. The orchestrator remains responsible for the
+  workflow state transition and any next run prompt under `docs/agent/runs/`;
+  this documentation revision does not update those workflow files.

@@ -1328,8 +1328,8 @@ the exact helper set and preserve the remaining
 boundary. It still leaves backend uninit translation, declaration/array
 semantics, aligned load/store semantics, rendering, output, and broad
 vector/register metadata policy open.
-Post-M72 planning selects Milestone 73 as the next exact structural lowering
-step: typed first-slot declaration-shell IR for the accepted `array.tsl:105`
+Milestone 73 implements the next exact structural lowering step: typed
+first-slot declaration-shell IR for the accepted `array.tsl:105`
 `var<typed>(array_type<...>, tmp, ...)` shape. M73 narrows one structural
 question but still leaves generic declaration/array semantics, allocation/
 lifetime, initializer behavior, variable scope, store/return semantics,
@@ -1353,7 +1353,7 @@ M67 helper-request/provenance IR over the M66 first-slot leaves, accepted M68
 base-type request resolution, accepted M69 behavior-preserving extraction,
 accepted M70 exact vector-length request resolution, accepted M71 exact
 vector-alignment request resolution, accepted M72 exact helper-set completion,
-selected M73 exact first-slot declaration-shell structural IR, and body-slot
+implemented M73 exact first-slot declaration-shell structural IR, and body-slot
 semantics beyond those exact structural/request-resolution boundaries,
 including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and

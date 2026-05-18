@@ -477,13 +477,13 @@ Current roadmap note:
   later declaration/array lowering. The backend-uninit request remains a
   deferred backend-value boundary and must not become backend text,
   translation input, renderer-ready IR, declaration semantics, or output.
-- Post-M72 planning selects Milestone 73 as a typed exact first-slot
-  declaration-shell structural IR boundary after M72. It should consume the
-  M72 helper-set aggregate and preserve the exact
-  `var<typed>(array_type<...>, tmp, ...)` shape as typed structure only. It
-  must not become generic declaration/array semantics, allocation/lifetime,
-  initializer behavior, variable scope, store/return lowering, backend
-  translation, renderer-ready IR, or generated output.
+- Milestone 73 is implemented as a typed exact first-slot declaration-shell
+  structural IR boundary after M72. It consumes the M72 helper-set aggregate
+  and preserves the exact `var<typed>(array_type<...>, tmp, ...)` shape as
+  typed structure only. It must not become generic declaration/array
+  semantics, allocation/lifetime, initializer behavior, variable scope,
+  store/return lowering, backend translation, renderer-ready IR, or generated
+  output.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not
