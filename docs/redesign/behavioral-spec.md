@@ -472,12 +472,20 @@ rendering, generated output, or broad TSIL body semantics.
 
 Milestone 68 is accepted as the first request-resolution slice over the
 accepted M67 helper-request IR. It consumes typed M67 request records and
-resolve only the base-type request for `type<generation>(base::in)` into a
+resolves only the base-type request for `type<generation>(base::in)` into a
 typed base-type result equivalent to `GenerationTypeRef(kind="base.in")`.
 M68 must not parse raw helper text, call raw query-string helper evaluators on
 M67 leaf text, resolve vector length/alignment or backend uninit requests, add
 declaration/array semantics, create backend translation requests, feed
 renderers, or change generated output.
+
+Milestone 69 is selected as behavior-preserving lowering-pipeline
+maintainability work. It should extract the accepted M64-M68 exact
+array-initialization stage assembly tail into a typed helper or private
+pipeline result without changing the accepted observable M65-M68 contract:
+same `LoweredImplementation` fields, same `GenerationLoweringStage`
+names/order, same typed outputs, same diagnostics, same deterministic
+behavior, and no generated-output changes.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic

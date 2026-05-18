@@ -445,11 +445,18 @@ Current roadmap note:
   request IR. It consumes only `ExactArrayInitializationHelperRequestIr`,
   the corresponding stage output, or a typed `LoweredImplementation` carrying
   exactly one accepted M67 helper-request IR as a container/source, then
-  resolve exactly the base-type request into a typed result equivalent to
+  resolves exactly the base-type request into a typed result equivalent to
   `GenerationTypeRef(kind="base.in")`. It must not parse M67 leaf text, call
   raw query-string helper evaluators on that text, resolve vector/backend
   requests, create backend translation requests, feed renderers, or add
   declaration/array/store/return semantics.
+- Milestone 69 is selected as a behavior-preserving extraction of the accepted
+  M64-M68 exact array-initialization stage assembly tail into a typed helper or
+  private pipeline result. It is an architecture/maintainability boundary, not
+  a new semantic boundary: it must preserve the accepted M68 observable
+  `LoweredImplementation` fields, stage names/order, diagnostics, and
+  deterministic behavior while leaving vector/backend helper resolution,
+  generic stage registries, rendering, and output deferred.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

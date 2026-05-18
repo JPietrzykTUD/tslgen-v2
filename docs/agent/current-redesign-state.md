@@ -181,40 +181,45 @@ focused documentation revision documenting the M68 diagnostics. Review and
 audit found no blocking implementation, validation, boundary, evidence, or
 documentation issues after that revision.
 
+Post-M68 planning is accepted. It selected
+`Milestone 69: Exact Array Initialization Stage Pipeline Extraction Slice`,
+and internal review returned `Accept With Follow-Ups` after local
+planning-doc updates.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Plan the next lowering-focused milestone after M68.
+Execute Milestone 69.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m68-planning-plus-review-prompt.md
+docs/agent/runs/m69-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The next task is post-M68 planning.
+Milestone 69: Exact Array Initialization Stage Pipeline Extraction Slice
 ```
 
 Latest review verdict:
 
 ```text
-M68 execution-review returned Accept With Follow-Ups after one focused
-documentation revision. No hardwiring, raw helper dispatch, vector/backend
-scope creep, renderer evaluation, or generated-output changes were found.
+Post-M68 planning returned Accept With Follow-Ups after selecting M69 as a
+behavior-preserving exact array-initialization stage pipeline extraction
+slice. Human acceptance is recorded; M69 execution is the next action.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M68 planning-plus-review prompt. Focus the next candidate
-on lowering, use the specified planning/review subagents, and do not implement
-code or start M69 execution.
+Run the active M69 execution-review loop prompt. Use exactly one write-capable
+executor if M69 is not already implemented, then read-only review/audit
+subagents. Do not start M70.
 ```
 
 Accepted planning prompt:
@@ -577,10 +582,22 @@ Accepted M68 execution-review loop prompt:
 docs/agent/runs/m68-execution-review-loop-prompt.md
 ```
 
-Active post-M68 planning prompt:
+Completed post-M68 planning prompt:
 
 ```text
 docs/agent/runs/post-m68-planning-plus-review-prompt.md
+```
+
+Accepted post-M68 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m68-acceptance-finalization-prompt.md
+```
+
+Active M69 execution-review loop prompt:
+
+```text
+docs/agent/runs/m69-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1069,6 +1086,24 @@ docs/agent/runs/post-m68-planning-plus-review-prompt.md
   direct-intrinsic/SVE semantics, broad TSIL parsing, file/catalog reads during
   lowering evaluation, catalog queries during evaluation, raw-text dispatch
   tables, or runtime `frozen/` use.
+- M69 is accepted for execution as behavior-preserving
+  exact array-initialization stage pipeline extraction only. M69 must extract
+  the accepted M64-M68 array-initialization stage assembly tail from
+  `_lower_input` into a small typed helper or private pipeline result.
+- M69 must preserve the same public `LoweredImplementation` fields, stage
+  names, stage order, typed outputs, diagnostics, source locations,
+  deterministic ordering, no-skeleton/no-body behavior, and generated-output
+  state as accepted M68.
+- M69 must keep accepted calls to M64/M66/M67/M68 lowering functions in the
+  same order and with the same typed inputs.
+- M69 must not add public IR, new `LoweredImplementation` fields, new stage
+  names, renderer-facing values, semantic helper resolution, vector
+  length/alignment resolution, backend uninit resolution, generic helper
+  parsing, broad stage registries, raw helper-string dispatch, raw
+  query-string helper evaluation, backend translation, rendering, generated
+  output, generated tests, CLI/report/writer behavior, Rust, compiler
+  execution, broad TSIL parsing, lowering-time file/catalog reads, `tsldata`
+  reads during lowering evaluation, or runtime `frozen/` use.
 
 ## Accepted Milestone 48
 
@@ -1741,10 +1776,29 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M68 extensibility follow-up: `_ExactArrayInitializationBaseTypeRequestRule`
   has an unused `result_kind`; remove it or let the typed rule drive the
   result-kind invariant before adding sibling vector/backend resolver rules.
+- Post-M68 planning follow-up for M69 execution: keep M69 behavior-preserving;
+  execution must prove identical `LoweredImplementation` fields, stage
+  names/order, typed outputs, diagnostics, deterministic behavior,
+  no-skeleton/no-body behavior, and generated-output state.
+- Post-M68 planning follow-up for M69 execution: M69 must not become a broad
+  stage registry, generic helper dispatcher, semantic resolver, vector
+  metadata resolver, backend uninit resolver, declaration/array semantics
+  slice, renderer path, or generated-output milestone.
+- Post-M68 planning follow-up for M69 execution: leave
+  `GenerationLoweringStage.__post_init__` table cleanup and
+  `_ExactArrayInitializationBaseTypeRequestRule.result_kind` cleanup as
+  follow-ups unless a purely mechanical touch is required and does not broaden
+  M69.
+- Post-M68 planning follow-up: after M69, revisit one vector metadata request
+  slice from the extracted typed stage boundary rather than extending
+  `_lower_input` directly.
+- Post-M68 planning acceptance is recorded for M69 execution. The execution
+  prompt must carry the non-blocking M69 behavior-preservation and no-broadening
+  follow-ups above.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M68 planning.
+No stop condition is active. The workflow proceeds with M69 execution.
 
 ## Validation Expectations
 

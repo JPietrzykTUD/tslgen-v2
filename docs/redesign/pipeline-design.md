@@ -488,11 +488,21 @@ M67 request IR. It consumes the direct M67 helper-request IR, the
 `array_initialization_helper_request_lowering` stage output, or a typed
 `LoweredImplementation` carrying exactly one accepted M67 helper-request IR as
 a container/source. It appends a distinct base-type request-resolution
-stage after `array_initialization_helper_request_lowering` and resolve only
+stage after `array_initialization_helper_request_lowering` and resolves only
 the M67 `type<generation>(base::in)` request into a typed base-type result. It
 must not resolve vector length, vector alignment, or backend uninit requests,
 parse raw helper text, create backend translation requests, or broaden body
 lowering.
+
+Milestone 69 is selected as a behavior-preserving Stage 8 maintainability
+slice. It extracts the accepted M64-M68 exact array-initialization stage
+assembly tail from `_lower_input` into a typed helper or private pipeline
+result while preserving the same `LoweredImplementation` fields, stage names,
+stage order, diagnostics, source locations, deterministic ordering, and
+no-skeleton/no-body behavior. M69 must not add new stage names, new public IR,
+new semantic helper resolution, vector length/alignment resolution, backend
+uninit resolution, generic helper dispatch, backend translation, rendering, or
+generated output.
 
 ## Stage 9: Backend Planning
 

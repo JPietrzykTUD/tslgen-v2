@@ -823,18 +823,26 @@ Recommended first parity checks:
   or multiple forms, missing/mismatched leaves, unsupported leaf text, and
   provenance diagnostics; keep M57-M66 behavior, raw-helper rejection,
   renderer non-evaluation, generated outputs, and golden files unchanged.
-- Milestone 68 tests should cover only typed base-type request resolution over
-  accepted M67 request IR: consume direct request IR, stage output, and typed
-  `LoweredImplementation` container sources; resolve exactly the
+- Milestone 68 tests cover only typed base-type request resolution over
+  accepted M67 request IR: consuming direct request IR, stage output, and typed
+  `LoweredImplementation` container sources; resolving exactly the
   `type<generation>(base::in)` request to a typed base-type result equivalent
-  to `GenerationTypeRef(kind="base.in")`; preserve M67 provenance; prove
+  to `GenerationTypeRef(kind="base.in")`; preserving M67 provenance; proving
   vector length, vector alignment, and backend uninit requests remain
-  unresolved; cover missing/multiple request IR, missing/duplicate/mismatched
+  unresolved; covering missing/multiple request IR, missing/duplicate/mismatched
   base-type request records, unsupported selected types, unsupported request
-  text, and provenance diagnostics; prove no raw helper text is parsed, no raw
+  text, and provenance diagnostics; proving no raw helper text is parsed, no raw
   query-string helper evaluator is called on M67 leaf text, no file/catalog
   reads happen during evaluation, and generated outputs/golden files remain
   unchanged.
+- Milestone 69 tests should prove behavior-preserving extraction of the
+  accepted M64-M68 array-initialization stage assembly tail: direct helper or
+  private pipeline tests return the same existing tuples and stage records;
+  normal `lower_candidates` emits identical `LoweredImplementation` fields,
+  stage names/order, diagnostic codes, source locations, and deterministic
+  output; representative M64/M66/M67/M68 failure paths preserve early-return
+  diagnostics; skeleton and no-skeleton paths remain unchanged; and generated
+  outputs/golden files remain unchanged.
 
 Deferred parity checks:
 

@@ -7177,8 +7177,180 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m67-acceptance-finalization-prompt.md` is created and
+- M68 execution is complete and accepted. Post-M68 planning is the next
+  workflow step.
+
+## Post-M68 Planning Result
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Exact array-initialization stage pipeline extraction | M68 review identified the growing M64-M68 array-initialization tail in `_lower_input` as the next maintainability pressure point. Extracting it into a typed helper/pipeline extension point lets future vector/backend request-resolution stages attach locally without changing behavior now. | Medium if it becomes a cosmetic wrapper, a broad stage registry, or a semantic helper dispatcher. Low if it preserves current outputs, diagnostics, and stage order exactly. | Select as M69. |
+| Vector length request resolution | M67 records `value<generation>(vector::length)` as a typed request, and resolving it would move functionality forward. | High now because it requires selected extension/type lane metadata policy and could extend the current `_lower_input` tail before the stage assembly point is maintainable. | Defer until after M69 extraction. |
+| Vector alignment request resolution | M67 records `value<generation>(vector::alignment)` as a typed request, and aligned load/store bodies need this later. | High now because it requires alignment metadata policy and aligned branch context; it should use the extracted stage point rather than expand `_lower_input` further. | Defer until after M69 extraction and metadata policy selection. |
+| Backend uninit request boundary | M67 records `value<backend>(uninit::array)` as a backend-value request. | High because it crosses into backend value semantics, backend translation requests, renderer-ready IR, and generated-output pressure. | Defer. |
+| Generic helper resolver family | A shared resolver abstraction could prepare future helper families. | High because it could become a central raw-string dispatcher or stage registry before multiple typed resolver families justify it. | Reject for now. |
+| Next exact slot-specific form IR | The M64/M65 envelope still has predicate, selected-body, store, and return slots. | Medium to high because nearby slots pull in SVE predicates, direct intrinsics, store semantics, `tmp.data()`, `emit_return`, and backend/rendering pressure. | Defer. |
+| Stage-contract table cleanup | `GenerationLoweringStage.__post_init__` is a growing stage-name-to-output-type table. | Medium if mixed with extraction; it is type validation rather than semantic dispatch, but broadening it could distract from the immediate array-initialization tail. | Keep as follow-up. |
+
+### Milestone 69: Exact Array Initialization Stage Pipeline Extraction Slice
+
+Status:
+
+Selected for human acceptance after post-M68 planning.
+
+Goal:
+
+Extract the accepted M64-M68 exact array-initialization stage assembly tail from
+`_lower_input` into a small typed helper or private pipeline result while
+preserving observable behavior exactly.
+
+M69 is behavior-preserving maintainability work only. It creates a clearer
+typed attachment point for later vector length, vector alignment, backend
+uninit, or array/declaration slices, but it does not implement any of those
+semantics.
+
+Scope:
+
+- Extract only the existing exact array-initialization sequence currently
+  assembled inline after selected-body envelope lowering:
+  - accepted M64 array-body envelope assembly;
+  - accepted M66 exact array-initialization slot form lowering;
+  - accepted M67 exact helper-request IR lowering;
+  - accepted M68 exact base-type request resolution.
+- Introduce a small private typed helper/result, for example
+  `ExactArrayInitializationStagePipelineResult`, carrying the same existing
+  output tuples and `GenerationLoweringStage` records currently assembled in
+  `_lower_input`.
+- Preserve the same public `LoweredImplementation` fields, stage names, stage
+  order, typed outputs, diagnostics, source locations, deterministic ordering,
+  and no-skeleton/no-body behavior as accepted M68.
+- Keep the accepted calls to M64/M66/M67/M68 lowering functions in the same
+  order and with the same typed inputs.
+- Keep M66 slot text and M67 leaf text as provenance/invariant evidence only.
+- Leave `GenerationLoweringStage.__post_init__` table cleanup and
+  `_ExactArrayInitializationBaseTypeRequestRule.result_kind` cleanup as
+  follow-ups unless they are touched only mechanically and without semantic
+  scope expansion.
+
+Out of scope:
+
+- New semantic helper resolution.
+- Resolution of `value<generation>(vector::length)`,
+  `value<generation>(vector::alignment)`, or
+  `value<backend>(uninit::array)`.
+- Generic helper resolver families, broad stage registries, raw helper-string
+  dispatch, or semantic tables keyed by source text, request ordinals, selected
+  type tags, SVE tokens, backend ids, or renderer names.
+- New public IR, new `LoweredImplementation` fields, new stage names, or
+  renderer-facing values.
+- New slot-specific lowering beyond the existing exact ordinal-0
+  array-initialization slot; predicate initialization, selected-body, store,
+  and return slots remain untouched and opaque.
+- Broad `var`, `array_type`, declaration, array allocation/lifetime, variable,
+  store, return, SVE/direct-intrinsic, backend translation, rendering,
+  generated output, generated tests, CLI/reporting/writer behavior, Rust,
+  compiler execution, broad TSIL parsing, lowering-time file/catalog reads,
+  raw TSL parsing, `tsldata` reads during lowering evaluation, or runtime
+  `frozen/` use.
+
+Required input:
+
+- Accepted M63 selected/no-body envelope outputs and accepted M64 skeleton
+  inputs/lookup behavior.
+- Accepted M64 `ExactArrayBodyEnvelopeIr` behavior.
+- Accepted M66 `ExactArrayInitializationSlotFormIr` behavior.
+- Accepted M67 `ExactArrayInitializationHelperRequestIr` behavior.
+- Accepted M68 `ExactArrayInitializationBaseTypeResolutionIr` behavior.
+- Existing typed `LoweringInput`, `LoweringRequest`, and generation context
+  inputs, including M43/M52/M53/M54 rule/context inputs used by M68.
+
+Expected outputs:
+
+- A private typed helper/pipeline result carrying the same existing tuples for:
+  - `array_body_envelopes`;
+  - `array_initialization_slot_forms`;
+  - `array_initialization_helper_requests`;
+  - `array_initialization_base_type_resolutions`;
+  - corresponding `GenerationLoweringStage` records.
+- `lower_candidates` output identical to accepted M68 for the covered selected
+  and no-body paths.
+- No generated artifact, golden output, backend translation, renderer,
+  CLI/report/writer, Rust, or compiler behavior changes.
+
+Parity criterion:
+
+M69 proves the accepted M64-M68 array-initialization lowering sequence can be
+owned by a typed sub-pipeline boundary without changing behavior or creating a
+semantic dispatcher.
+
+Evidence paths:
+
+- M68 review follow-up in `docs/agent/current-redesign-state.md` identifying
+  the growing M64-M68 `_lower_input` tail as the next maintainability pressure.
+- `tslgen/src/tslgen/lowering/boundary.py` around `_lower_input`, where the
+  accepted M64/M66/M67/M68 outputs and stages are assembled inline.
+- Accepted M64, M65, M66, M67, and M68 lowering tests for stage order,
+  diagnostics, deterministic output, and unresolved helper preservation.
+- `tsldata/primitives/load_store/array.tsl:105-111` only as existing corpus
+  context for the accepted exact array-body envelope; no new corpus evidence
+  is required.
+
+Tests required:
+
+- Direct helper/pipeline tests for selected `svptrue_b16`, `svptrue_b32`, and
+  `svptrue_b64` paths, plus no-body paths such as `si8`/`ui8`, proving the
+  helper returns the same tuples and stage records that `_lower_input`
+  previously assembled inline.
+- Normal `lower_candidates` tests proving identical `LoweredImplementation`
+  fields and the same stage sequence:
+  `array_body_envelope_slot_assembly`,
+  `array_initialization_slot_form_lowering`,
+  `array_initialization_helper_request_lowering`, and
+  `array_initialization_base_type_request_resolution`.
+- Failure-propagation tests for representative M64/M66/M67/M68 diagnostics,
+  preserving diagnostic codes, severity, source locations, and actionable
+  message intent.
+- Determinism tests comparing repeated runs and, where nearby skeleton inputs
+  are touched, reversed skeleton ordering.
+- Regression tests proving no raw helper parsing, no raw query-string helper
+  evaluation on M67 leaf text, no vector/backend request resolution, no
+  backend translation/rendering, and no generated output or golden-file
+  changes.
+
+Golden fixtures required:
+
+- None. M69 is a behavior-preserving lowering-pipeline extraction and must not
+  change generated C++ or Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M69 behavior-preservation test command selected by the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Cosmetic extraction that leaves `_lower_input` as the real orchestration
+  point.
+- Broad stage registry or semantic dispatcher introduced under a
+  maintainability label.
+- Any changed `LoweredImplementation` fields, stage names/order, diagnostics,
+  deterministic ordering, no-body/no-skeleton behavior, or generated outputs.
+- Pulling in vector length/alignment, backend uninit, declaration/array,
+  store/return, SVE/direct-intrinsic, backend translation, rendering, output,
+  file/catalog reads, raw helper dispatch, or runtime `frozen/` use.
+
+Dependencies on prior milestones:
+
+- Milestones 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, and 68.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m68-acceptance-finalization-prompt.md` is created and
   active pending human acceptance. That finalization prompt will create
-  `docs/agent/runs/m68-execution-review-loop-prompt.md` after explicit human
-  acceptance. Do not start M68 until the acceptance-finalization prompt records
+  `docs/agent/runs/m69-execution-review-loop-prompt.md` after explicit human
+  acceptance. Do not start M69 until the acceptance-finalization prompt records
   acceptance.

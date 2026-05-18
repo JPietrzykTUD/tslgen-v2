@@ -75,7 +75,7 @@ behavior without treating the whole corpus as implemented.
 | `value<generation>(type::size_bytes(type<generation>(base::in)))` | `tsldata/primitives/io/out.tsl:43-52`, `tsldata/primitives/bitwise/bit_counts.tsl:99`, `tsldata/primitives/load_store/array.tsl:107-109`, `tsldata/primitives/misc/conflict.tsl:79` | Resolve the selected scalar base type byte size. | Selected type tag plus explicit scalar size-byte rules for selected singleton scalar tags. | `GenerationValue[int](kind="type.size_bytes")`. | No backend data for the value itself. Later backend/rendering may consume already-lowered values only after separate slices. | implemented by M55 | M55 selects only the exact nested `base::in` query for `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`, `f32`, and `f64`. | Byte-value tests, float scope tests, unsupported group/wildcard diagnostics, missing context/rule diagnostics, determinism, raw-helper rejection, and no surrounding body lowering. |
 | `value<generation>(type::size_bytes(type<generation>(base::in))) * 8` | `tsldata/primitives/io/out.tsl:43`, `:46`, `:48`, `:50`, `:52`, `:70`, `:73`, `:75`, `:77`, `:79`; `tsldata/primitives/misc/conflict.tsl:79` | Resolve selected scalar base type bit width from the accepted typed size-byte value. | Selected type tag plus explicit scalar size-byte rules for selected singleton scalar tags. | `GenerationValue[int](kind="type.size_bits")`. | No backend data for the value itself. | implemented by M56 | M56 selects only this exact left-associated `size_bytes * 8` expression and does not add general arithmetic or branch pruning. | Bit-width tests, unsupported operator/literal/operand diagnostics, context precedence, determinism, raw-helper rejection, and no surrounding body lowering. |
 | `value<generation>(type::size_bytes(type<generation>(base::in))) == 2`, `== 4`, and `== 8` | `tsldata/primitives/load_store/array.tsl:107-109` | Resolve exact scalar size-byte equality predicates before any branch-chain policy. | Selected type tag plus explicit scalar size-byte rules for selected singleton scalar tags. | Typed boolean predicate value, for example `GenerationPredicate(kind="type.size_bytes.equals")`. | No backend data for the predicate itself. | implemented by M57 | M57 selects only these exact predicates. Branch-chain pruning and `else if<generation>` remain deferred. | Predicate truth-table tests for 2/4/8, unsupported operator/literal/operand diagnostics, determinism, raw-helper rejection, and no branch-chain/body lowering. |
-| `type<generation>(base::in)` | `tsldata/primitives/bitwise/shifts.tsl:38-40`, `shifts.tsl:150`, `tsldata/primitives/conversion/repr_change.tsl:1210-1225` | Resolve selected primitive base type. | Type tag and active vector type. | `GenerationTypeRef(kind="base.in")`. | No backend data to resolve the semantic type; later backend spelling uses language maps. | implemented M43 | Selected by Milestone 43 as part of the base type query family. | Type-query diagnostics for missing type tag. |
+| `type<generation>(base::in)` | `tsldata/primitives/bitwise/shifts.tsl:38-40`, `shifts.tsl:150`, `tsldata/primitives/conversion/repr_change.tsl:1210-1225`, `tsldata/primitives/load_store/array.tsl:105` | Resolve selected primitive base type. | Type tag and active vector type. | `GenerationTypeRef(kind="base.in")`. | No backend data to resolve the semantic type; later backend spelling uses language maps. | implemented M43; M68 resolves the exact M67 array-initialization base-type request | Selected by Milestone 43 as part of the base type query family. M68 reuses the accepted typed semantics for the exact M67 request record without reparsing leaf text. | Type-query diagnostics for missing type tag; M68 request-resolution diagnostics for malformed M67 request/provenance state. |
 | `type<generation>(base::signed_of(type<generation>(base::in)))` and `type<generation>(base::unsigned_of(type<generation>(base::in)))` | `tsldata/primitives/arithmetic/fundamental.tsl:47-90`, `tsldata/primitives/bitwise/shifts.tsl:38-40`, `shifts.tsl:63-82` | Convert selected base type to signed/unsigned companion. | Type tag and integer signedness rules. | `GenerationTypeRef(kind="base.signed_of")` or `base.unsigned_of`. | No backend data to resolve the semantic type; later suffix translation uses translation maps. | implemented M43 | Milestone 43 accepts only these exact nested forms. Prose shorthand such as `base::signed_of(base::in)` is not accepted TSIL syntax. | Query tests for selected integer tags; unsupported float/pointer/generic conversion diagnostics. |
 | `type<generation>(vector::transform_extension(...))` and `vector::as_extension(...)` | `tsldata/primitives/conversion/repr_change.tsl:121-128`, `tsldata/primitives/bitwise/shifts.tsl:875-880`, `shifts.tsl:1222-1240` | Build related vector types for conversion or reinterpret paths. | Current extension, target extension, type tag, vector family/width. | `GenerationTypeRef(kind="vector.transform_extension")`. | Extension metadata and language type map. | required-later | Defer until conversion parity slice. | Fixture-driven type transformation tests. |
 | `type<generation>(vector::mask_underlying_t)` | `tsldata/primitives/load_store/store.tsl:177-188`, `store.tsl:196-210` | Resolve mask storage word type. | Mask parameter role, vector mask metadata. | `GenerationTypeRef(kind="vector.mask_underlying_t")`. | Language type map and vector mask metadata. | required-later | Defer until mask store parity. | Mask metadata tests. |
@@ -549,6 +549,15 @@ not reparse `leaf_source_text`, `original_slot_text`, raw TSIL, raw TSL, or
 helper strings, and it must not call raw query-string helper evaluators on M67
 leaf text.
 
+Milestone 69 is selected as a behavior-preserving exact array-initialization
+stage pipeline extraction slice. It extracts the accepted M64-M68
+array-initialization stage assembly tail from `_lower_input` into a typed
+helper or private pipeline result while preserving the same lowered outputs,
+stage names/order, diagnostics, source locations, deterministic behavior, and
+unresolved vector/backend requests. M69 must not add helper semantics, parse
+raw helper text, resolve vector length/alignment or backend uninit requests,
+or create backend translation/rendering/output behavior.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
@@ -703,8 +712,10 @@ M67 helper-request IR, and accepted M68 base-type request resolution slices:
   length/alignment semantics, backend uninit semantics, surrounding
   declaration/store/return semantics beyond the exact M66 form,
   skeleton recognition from raw body text, and broad body lowering remain
-  deferred. Accepted M68 narrows only the exact M67 base-type request; vector
-  length/alignment and backend uninit request resolution remain deferred.
+  deferred. Accepted M68 narrows only the exact M67 base-type request, and
+  selected M69 extracts that existing stage assembly without new semantics;
+  vector length/alignment and backend uninit request resolution remain
+  deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only
