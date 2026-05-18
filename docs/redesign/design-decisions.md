@@ -1385,13 +1385,19 @@ Consequences:
   bypassing the M67 request IR. Vector length, vector alignment, backend
   uninit, declaration/array semantics, backend translation, rendering, and
   generated output remain deferred.
-- Milestone 69 is selected to extract the accepted M64-M68
+- Milestone 69 is accepted as the extraction of the accepted M64-M68
   array-initialization stage assembly before adding vector/backend sibling
   resolvers. This is behavior-preserving maintainability work: the extracted
-  helper or private pipeline result must preserve current lowered fields,
-  stage names/order, diagnostics, deterministic behavior, and generated-output
-  state, and must not become a semantic helper dispatcher or broad stage
-  registry.
+  private helper/result preserves current lowered fields, stage names/order,
+  diagnostics, deterministic behavior, and generated-output state, and does
+  not become a semantic helper dispatcher or broad stage registry.
+- Milestone 70 is selected to resolve exactly the M67
+  `value<generation>(vector::length)` request through the M69 extracted
+  pipeline. The selected design condition is that vector-length facts arrive as
+  explicit typed metadata before lowering evaluation; M70 must not infer lanes
+  from raw helper text, SVE tokens, extension names, vector-bit strings,
+  selected type tags, host CPU state, catalog data, backend maps, or renderer
+  names.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

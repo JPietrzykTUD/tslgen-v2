@@ -450,13 +450,19 @@ Current roadmap note:
   raw query-string helper evaluators on that text, resolve vector/backend
   requests, create backend translation requests, feed renderers, or add
   declaration/array/store/return semantics.
-- Milestone 69 is selected as a behavior-preserving extraction of the accepted
-  M64-M68 exact array-initialization stage assembly tail into a typed helper or
-  private pipeline result. It is an architecture/maintainability boundary, not
-  a new semantic boundary: it must preserve the accepted M68 observable
+- Milestone 69 is accepted as a behavior-preserving extraction of the accepted
+  M64-M68 exact array-initialization stage assembly tail into a private typed
+  helper/result. It is an architecture/maintainability boundary, not a new
+  semantic boundary: it preserves the accepted M68 observable
   `LoweredImplementation` fields, stage names/order, diagnostics, and
   deterministic behavior while leaving vector/backend helper resolution,
   generic stage registries, rendering, and output deferred.
+- Milestone 70 is selected as the next typed request-resolution boundary over
+  the M69 array-initialization pipeline. It should resolve exactly the M67
+  `value<generation>(vector::length)` request from explicit typed vector-length
+  metadata supplied before lowering evaluation, not from raw helper text,
+  extension names, SVE tokens, vector-bit strings, host CPU state, catalog
+  reads, backend maps, or renderers.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

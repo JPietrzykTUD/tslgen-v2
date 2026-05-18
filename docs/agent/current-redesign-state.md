@@ -191,39 +191,48 @@ blocking implementation, validation, boundary, extensibility, documentation,
 or evidence issues. Review recorded one non-blocking follow-up for explicit
 pipeline-level M67 diagnostic propagation coverage.
 
+Post-M69 planning is accepted. It selected
+`Milestone 70: Exact Array Initialization Vector-Length Request Resolution Slice`,
+and internal review returned `Accept With Follow-Ups` after local
+planning-doc updates. The selected plan requires explicit typed
+vector-length metadata before lowering evaluation and must not infer lane
+counts from raw text, SVE tokens, vector-bit strings, host CPU state, catalog
+data, backend maps, or renderers.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Plan the post-M69 lowering milestone.
+Execute Milestone 70.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m69-planning-plus-review-prompt.md
+docs/agent/runs/m70-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The next task is post-M69 lowering planning.
+Milestone 70: Exact Array Initialization Vector-Length Request Resolution Slice
 ```
 
 Latest review verdict:
 
 ```text
-M69 execution-review returned Accept With Follow-Ups. The implementation
-extracts the accepted M64-M68 array-initialization stage assembly tail into a
-private typed pipeline result/helper while preserving accepted M68 behavior.
+Post-M69 planning returned Accept With Follow-Ups after selecting M70 as the
+exact array-initialization vector-length request resolution slice. Human
+acceptance is recorded; M70 execution is the next action.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M69 planning-plus-review prompt. Focus on lowering, use the
-specified read-only planning/review subagents, and do not implement code.
+Run the active M70 execution-review loop prompt. Use exactly one write-capable
+executor if M70 is not already implemented, then read-only review/audit
+subagents. Do not start M71.
 ```
 
 Accepted planning prompt:
@@ -604,10 +613,22 @@ Accepted M69 execution-review loop prompt:
 docs/agent/runs/m69-execution-review-loop-prompt.md
 ```
 
-Active post-M69 planning-plus-review prompt:
+Completed post-M69 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m69-planning-plus-review-prompt.md
+```
+
+Accepted post-M69 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m69-acceptance-finalization-prompt.md
+```
+
+Active M70 execution-review loop prompt:
+
+```text
+docs/agent/runs/m70-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1114,6 +1135,28 @@ docs/agent/runs/post-m69-planning-plus-review-prompt.md
   output, generated tests, CLI/report/writer behavior, Rust, compiler
   execution, broad TSIL parsing, lowering-time file/catalog reads, `tsldata`
   reads during lowering evaluation, or runtime `frozen/` use.
+- M70 is accepted for execution as exact array-initialization
+  vector-length request resolution only. M70 must resolve exactly the M67
+  `value<generation>(vector::length)` request through the accepted M69
+  extracted pipeline and explicit typed vector-length metadata supplied before
+  lowering evaluation.
+- M70 must consume typed M67/M68/M69 request/result values and typed candidate
+  context. It must not parse M66 slot text, M67 leaf text, raw TSIL, raw TSL,
+  `candidate_id`, SVE tokens, extension names, vector-bit strings, backend ids,
+  or renderer names to produce semantic vector-length values.
+- M70 must preserve accepted M68 base-type behavior and keep
+  `value<generation>(vector::alignment)` and
+  `value<backend>(uninit::array)` unresolved.
+- M70 must not infer fixed lane counts from SVE/scalable/runtime-lane
+  metadata. Runtime/scalable metadata must remain an explicit typed
+  value/policy or produce diagnostics.
+- M70 must not add broad vector/register metadata semantics, vector alignment
+  resolution, backend uninit resolution, declaration/array semantics,
+  direct-intrinsic/SVE semantics, generic helper dispatch, broad stage
+  registries, backend translation, rendering, generated output, generated
+  tests, CLI/report/writer behavior, Rust, compiler execution, broad TSIL
+  parsing, lowering-time file/catalog reads, `tsldata` reads during lowering
+  evaluation, host CPU queries, or runtime `frozen/` use.
 
 ## Accepted Milestone 48
 
@@ -1807,11 +1850,22 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   diagnostic propagation test if a future slice touches the extracted
   array-initialization stage pipeline. Existing direct M67 helper-request
   diagnostic tests remain accepted coverage.
+- Post-M69 planning follow-up for M70 execution: vector-length facts must be
+  explicit typed metadata supplied before lowering evaluation. M70 must not
+  infer lanes from raw helper text, SVE tokens, extension names, vector-bit
+  strings, selected type tags, scalar sizes, host CPU state, catalog data,
+  backend maps, renderer names, or raw `candidate_id` parsing.
+- Post-M69 planning follow-up for M70 execution: preserve scalable/runtime-lane
+  uncertainty as an explicit typed value/policy or diagnostics. Do not fake a
+  fixed integer lane count for SVE/runtime-lane extensions.
+- Post-M69 planning follow-up for M70 execution: keep vector alignment, backend
+  uninit, declaration/array semantics, backend translation, rendering,
+  generated output, generated tests, CLI/report/writer behavior, Rust,
+  compiler execution, and runtime `frozen/` use out of scope.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M69 lowering
-planning.
+No stop condition is active. The workflow proceeds with M70 execution.
 
 ## Validation Expectations
 

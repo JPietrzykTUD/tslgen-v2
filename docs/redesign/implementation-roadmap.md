@@ -7198,7 +7198,7 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance after post-M68 planning.
+Accepted after the M69 execution-review loop.
 
 Goal:
 
@@ -7349,8 +7349,191 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m68-acceptance-finalization-prompt.md` is created and
+- M69 execution is complete and accepted. Post-M69 lowering planning is the
+  next workflow step.
+
+## Post-M69 Planning Result
+
+Candidate comparison:
+
+| Candidate | Why considered | Boundary risk | Decision |
+| --- | --- | --- | --- |
+| Exact array-initialization vector-length request resolution | M67 records `value<generation>(vector::length)` as a typed request, M68 proved the sibling request-resolution pattern for `type<generation>(base::in)`, and M69 provides the extracted typed stage-pipeline attachment point. Resolving one remaining request moves the array-initialization lowering chain materially forward. | High if it infers lanes from SVE tokens, vector bits, type tags, host CPU, catalog data, backend maps, or raw helper text. Low to medium if it consumes explicit typed vector-length metadata supplied before lowering evaluation and preserves scalable/runtime-lane uncertainty as typed value policy or diagnostics. | Select as M70, with explicit typed metadata input as a blocking boundary. |
+| Typed vector metadata input boundary only | A metadata-only milestone could be needed if vector-length facts cannot be stated without speculative policy. | Medium because it may be too abstract if it does not resolve a selected request. | Defer unless M70 execution discovers the metadata input cannot be made explicit and narrow. |
+| Vector alignment request resolution | M67 records `value<generation>(vector::alignment)`, and aligned load/store bodies need it later. | Higher than vector length because alignment is tied to aligned branches, backend/language maps, and `assume_aligned` behavior. | Defer until after vector-length resolution and selected alignment policy. |
+| Backend uninit request boundary | M67 records `value<backend>(uninit::array)` as a backend-value request. | High because it crosses into backend value semantics, backend translation requests, renderer-ready values, and generated-output pressure. | Defer. |
+| Exact array declaration/array-type IR | The first slot cannot become renderer-useful until base type, vector length, vector alignment, and backend uninit have typed values. | High if it broadens into `var`, `array_type`, allocation/lifetime, store, or return semantics before helper values are resolved. | Defer until the selected helper requests are resolved or explicitly modeled. |
+| Stage-contract table cleanup | `GenerationLoweringStage.__post_init__` is a growing stage-name-to-output-type table. | Medium if mixed with new semantics; it is type validation rather than semantic dispatch. | Keep as follow-up. |
+
+### Milestone 70: Exact Array Initialization Vector-Length Request Resolution Slice
+
+Status:
+
+Selected for human acceptance after post-M69 planning.
+
+Goal:
+
+Resolve exactly the accepted M67 array-initialization helper request for
+`value<generation>(vector::length)` into a typed vector-length request
+resolution result, using the extracted M69 array-initialization stage pipeline
+and explicit typed vector-length metadata supplied before lowering evaluation.
+
+M70 is generation-time lowering request resolution only. It consumes lane facts
+as typed inputs; it does not compute them from raw helper text, SVE token text,
+extension names, vector-bit strings, selected type tags, host CPU features,
+backend maps, renderers, or catalog/file reads during lowering evaluation.
+
+Scope:
+
+- Consume accepted M67 `ExactArrayInitializationHelperRequestIr` request
+  records through the accepted M68/M69 array-initialization pipeline after
+  `array_initialization_base_type_request_resolution`.
+- Select only the request record whose kind/leaf identify the exact
+  `value<generation>(vector::length)` helper.
+- Introduce or consume explicit typed vector-length metadata input, supplied
+  before lowering evaluation through `LoweringRequest`, `GenerationContext`,
+  or an equivalent typed request/context value.
+- Use typed candidate context such as candidate id, target extension, source
+  extension, and selected type tag as structured fields, not by parsing
+  `candidate_id` or source text.
+- Produce a typed result such as
+  `ExactArrayInitializationVectorLengthResolutionIr`, carrying:
+  - the source M68 base-type resolution;
+  - the source M67 vector-length request record;
+  - a typed vector-length value or policy value;
+  - remaining unresolved requests for vector alignment and backend uninit;
+  - deterministic provenance including candidate, type, envelope/slot, and
+    source location facts.
+- Append one deterministic stage after
+  `array_initialization_base_type_request_resolution`, for example
+  `array_initialization_vector_length_request_resolution`.
+- Preserve accepted M68 base-type resolution behavior and accepted M69
+  pipeline behavior.
+- Preserve the M69 review follow-up by adding explicit pipeline-level M67
+  diagnostic propagation coverage, since M70 extends the extracted pipeline.
+
+Out of scope:
+
+- Resolution of `value<generation>(vector::alignment)` or
+  `value<backend>(uninit::array)`.
+- Broad vector/register metadata semantics, SVE predicate semantics, register
+  type lowering, byte-size-to-`svptrue_b*` inference, or lane-count inference
+  from `vector_bits`, scalar byte size, selected type tag, extension name, SVE
+  token text, backend id, renderer name, catalog data, `tsldata`, or host CPU
+  state during lowering.
+- Backend translation or backend rendering of vector length, including C++
+  spellings such as `Vec::vector_element_count()`.
+- Broad `var`, `array_type`, declaration, array allocation/lifetime, variable
+  scope, store, return, `tmp.data()`, `emit_return`, direct-intrinsic
+  semantics, loops, calls, casts, or broad TSIL parsing.
+- Generic `value<generation>(...)` evaluator families, broad stage registries,
+  raw helper-string dispatch, or semantic tables keyed by raw helper text,
+  request ordinals, selected type tags, SVE tokens, backend ids, or renderer
+  names.
+- Generated C++ or Rust output, generated tests, golden output, CLI/reporting/
+  writer behavior, compiler execution, lowering-time file/catalog reads, raw
+  TSL parsing, `tsldata` reads during lowering evaluation, or runtime
+  `frozen/` use.
+
+Required input:
+
+- Accepted M67 helper request IR for the exact first-slot helper leaves.
+- Accepted M68 base-type request resolution output, including preserved
+  unresolved vector-length, vector-alignment, and backend-uninit requests.
+- Accepted M69 extracted array-initialization stage pipeline boundary.
+- Typed selected-candidate context already available to lowering, including
+  candidate id, target/source extension, and selected type tag.
+- Explicit in-memory typed vector-length metadata/rules supplied before
+  lowering evaluation. Runtime/scalable metadata must be represented as an
+  explicit typed policy/value or rejected with diagnostics; M70 must not fake a
+  fixed integer lane count for runtime-lane extensions.
+
+Expected outputs:
+
+- One typed vector-length request-resolution IR value for the exact selected
+  request when metadata is sufficient.
+- A typed vector-length value or policy value suitable for later typed lowering
+  consumers, but not renderer-ready text.
+- One deterministic generation-lowering stage after
+  `array_initialization_base_type_request_resolution`.
+- Remaining unresolved request records for vector alignment and backend uninit.
+- No backend translation request, renderer-ready value, generated artifact,
+  golden output, CLI/report/writer, Rust, or compiler behavior change.
+
+Parity criterion:
+
+M70 proves one sibling helper request can be resolved through the M69 extracted
+typed pipeline from explicit metadata without hardwiring vector semantics or
+crossing into backend rendering.
+
+Evidence paths:
+
+- Accepted M67 helper request IR and M68 unresolved-request preservation in
+  `tslgen/src/tslgen/lowering/boundary.py`.
+- Accepted M69 private array-initialization stage pipeline helper in
+  `tslgen/src/tslgen/lowering/boundary.py`.
+- `tsldata/primitives/load_store/array.tsl:105` for the exact selected
+  `value<generation>(vector::length)` request in the accepted first-slot form.
+- `tsldata/extensions/extension.tsl:212-219` and
+  `docs/redesign/open-questions.md` OQ-007 as evidence that SVE scalable/
+  runtime-lane behavior must not be converted into a fake fixed lane count.
+- `tsldata/detail/lang/translate_cpp.tsl:63` only as evidence that backend
+  vector-length spelling exists later; it must not be emitted or consumed by
+  M70.
+
+Tests required:
+
+- Direct resolver tests for the M67/M68 vector-length request using explicit
+  typed vector-length metadata.
+- Normal `lower_candidates` pipeline tests proving the M70 stage appears after
+  `array_initialization_base_type_request_resolution` and preserves M69 output
+  ordering.
+- Tests for static metadata and, if selected by implementation policy, runtime/
+  scalable metadata as a typed policy value rather than a fixed lane count.
+- Diagnostics for missing metadata, duplicate/conflicting metadata,
+  unsupported runtime/scalable numeric resolution, mismatched selected
+  candidate context, malformed/missing/multiple vector-length request records,
+  unsupported source stage, and provenance mismatch.
+- Determinism tests for repeated runs and reversed metadata input order.
+- Regression tests proving vector alignment and backend uninit remain
+  unresolved; M68 base-type behavior remains unchanged; raw helper evaluators
+  are not called on M67 leaf text; raw helper text is not parsed; no catalog,
+  `tsldata`, host CPU, backend translation, rendering, generated output, or
+  golden-file behavior is introduced.
+- Pipeline-level M67 diagnostic propagation coverage, since M70 extends the
+  extracted M69 stage pipeline.
+
+Golden fixtures required:
+
+- None. M70 is lowering-only request resolution and must not change generated
+  C++ or Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M70 vector-length request-resolution test command selected by the
+  executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Hidden hardwiring from `(extension, type_tag)` or SVE token text directly to
+  a semantic value instead of consuming explicit typed vector-length metadata.
+- Treating SVE scalable/runtime-lane metadata as a fixed integer lane count.
+- Reusing backend C++ vector-length spelling as a lowering value.
+- Adding a broad vector metadata resolver, generic helper dispatcher, raw
+  helper parser, broad stage registry, declaration/array lowering, or
+  backend/rendering/output behavior under the vector-length label.
+
+Dependencies on prior milestones:
+
+- Milestones 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, and 69.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m69-acceptance-finalization-prompt.md` is created and
   active pending human acceptance. That finalization prompt will create
-  `docs/agent/runs/m69-execution-review-loop-prompt.md` after explicit human
-  acceptance. Do not start M69 until the acceptance-finalization prompt records
+  `docs/agent/runs/m70-execution-review-loop-prompt.md` after explicit human
+  acceptance. Do not start M70 until the acceptance-finalization prompt records
   acceptance.

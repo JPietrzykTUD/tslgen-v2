@@ -494,15 +494,23 @@ must not resolve vector length, vector alignment, or backend uninit requests,
 parse raw helper text, create backend translation requests, or broaden body
 lowering.
 
-Milestone 69 is selected as a behavior-preserving Stage 8 maintainability
+Milestone 69 is accepted as a behavior-preserving Stage 8 maintainability
 slice. It extracts the accepted M64-M68 exact array-initialization stage
-assembly tail from `_lower_input` into a typed helper or private pipeline
-result while preserving the same `LoweredImplementation` fields, stage names,
-stage order, diagnostics, source locations, deterministic ordering, and
-no-skeleton/no-body behavior. M69 must not add new stage names, new public IR,
-new semantic helper resolution, vector length/alignment resolution, backend
-uninit resolution, generic helper dispatch, backend translation, rendering, or
-generated output.
+assembly tail from `_lower_input` into a private typed helper/result while
+preserving the same `LoweredImplementation` fields, stage names, stage order,
+diagnostics, source locations, deterministic ordering, and no-skeleton/no-body
+behavior. M69 does not add new public IR, new semantic helper resolution,
+vector length/alignment resolution, backend uninit resolution, generic helper
+dispatch, backend translation, rendering, or generated output.
+
+Milestone 70 is selected as the next Stage 8 request-resolution boundary. It
+should resolve exactly the M67 `value<generation>(vector::length)` request
+through the M69 extracted array-initialization pipeline and explicit typed
+vector-length metadata supplied before lowering evaluation. The stage should
+follow `array_initialization_base_type_request_resolution`, preserve unresolved
+vector alignment and backend uninit requests, and must not infer lanes from raw
+helper text, SVE tokens, extension names, vector-bit strings, host CPU state,
+catalog data, backend translation maps, or renderers.
 
 ## Stage 9: Backend Planning
 

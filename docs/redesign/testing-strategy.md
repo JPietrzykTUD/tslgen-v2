@@ -835,14 +835,26 @@ Recommended first parity checks:
   query-string helper evaluator is called on M67 leaf text, no file/catalog
   reads happen during evaluation, and generated outputs/golden files remain
   unchanged.
-- Milestone 69 tests should prove behavior-preserving extraction of the
-  accepted M64-M68 array-initialization stage assembly tail: direct helper or
-  private pipeline tests return the same existing tuples and stage records;
-  normal `lower_candidates` emits identical `LoweredImplementation` fields,
-  stage names/order, diagnostic codes, source locations, and deterministic
-  output; representative M64/M66/M67/M68 failure paths preserve early-return
-  diagnostics; skeleton and no-skeleton paths remain unchanged; and generated
-  outputs/golden files remain unchanged.
+- Milestone 69 tests prove behavior-preserving extraction of the accepted
+  M64-M68 array-initialization stage assembly tail: direct helper/private
+  pipeline tests return the same existing tuples and stage records; normal
+  `lower_candidates` emits identical `LoweredImplementation` fields, stage
+  names/order, diagnostic codes, source locations, and deterministic output;
+  representative M64/M66/M68 failure paths preserve early-return diagnostics;
+  skeleton and no-skeleton paths remain unchanged; raw helper evaluators are
+  not called; and generated outputs/golden files remain unchanged. A
+  pipeline-level M67 diagnostic propagation test remains a non-blocking
+  follow-up for the next slice that touches the extracted pipeline.
+- Milestone 70 tests should prove exact array-initialization vector-length
+  request resolution through explicit typed metadata: direct resolver tests,
+  normal `lower_candidates` stage-order tests after
+  `array_initialization_base_type_request_resolution`, missing/duplicate/
+  conflicting/unsupported metadata diagnostics, malformed or mismatched M67
+  request diagnostics, deterministic ordering for repeated and reversed
+  metadata inputs, unchanged base-type behavior, unresolved vector alignment
+  and backend uninit requests, no raw helper parsing or raw query evaluator
+  calls on M67 leaf text, no catalog/`tsldata`/host CPU reads during lowering
+  evaluation, and no backend translation/rendering or generated-output churn.
 
 Deferred parity checks:
 
