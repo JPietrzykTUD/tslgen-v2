@@ -248,40 +248,52 @@ the remaining exact M67 `value<backend>(uninit::array)` request as a typed
 deferred backend-value boundary. Backend translation, rendering, generated
 output, and declaration/array semantics remain out of scope.
 
+Post-M72 planning selected
+`Milestone 73: Exact First-Slot Declaration-Shell Structural IR Slice`, and
+internal review returned `Accept With Follow-Ups` after local planning-doc
+updates. The selected plan consumes accepted M72 helper-set completions and
+produces typed structural lowering state for the exact `array.tsl:105`
+`var<typed>(array_type<...>, tmp, ...)` shell. It must remain structural IR
+only: generic declaration/array semantics, allocation/lifetime, initializer
+behavior, variable scope, store/return semantics, `tmp.data()`, `emit_return`,
+backend uninit translation, backend translation/rendering, and generated
+output remain out of scope. Human acceptance has been recorded; M73 execution
+is now the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M72 planning.
+Execute Milestone 73.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m72-planning-plus-review-prompt.md
+docs/agent/runs/m73-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Post-M72 planning is active.
+Milestone 73: Exact First-Slot Declaration-Shell Structural IR Slice
 ```
 
 Latest review verdict:
 
 ```text
-The M72 execution-review loop returned Accept With Follow-Ups after focused
-documentation consistency revisions. Human acceptance is not yet recorded for
-the next milestone; post-M72 planning is the next action.
+Post-M72 planning selected M73 and returned Accept With Follow-Ups after local
+planning-doc updates. Human acceptance has been recorded.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M72 planning-plus-review prompt. For the next task, focus
-on lowering. Use the specified read-only planning/review subagents, do not
-implement product code, and do not start M73 execution.
+Run the active M73 execution-review loop prompt. If M73 is already
+implemented and awaiting review, skip implementation and run the review/audit
+subagents. If M73 is not implemented, run exactly one write-capable executor,
+then run the required read-only review/audit subagents. Do not start M74.
 ```
 
 Accepted planning prompt:
@@ -716,10 +728,22 @@ Accepted M72 execution-review loop prompt:
 docs/agent/runs/m72-execution-review-loop-prompt.md
 ```
 
-Active post-M72 planning-plus-review prompt:
+Completed post-M72 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m72-planning-plus-review-prompt.md
+```
+
+Accepted post-M72 acceptance finalization prompt:
+
+```text
+docs/agent/runs/post-m72-acceptance-finalization-prompt.md
+```
+
+Active M73 execution-review loop prompt:
+
+```text
+docs/agent/runs/m73-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1286,6 +1310,27 @@ docs/agent/runs/post-m72-planning-plus-review-prompt.md
   semantics, generic helper dispatch, broad stage registries, broad TSIL
   parsing, lowering-time file/catalog reads, `tsldata` reads during lowering
   evaluation, host CPU queries, or runtime `frozen/` use.
+- M73 is the active executor milestone as exact first-slot declaration-shell
+  structural IR only.
+- M73 must consume accepted M72
+  `ExactArrayInitializationHelperSetCompletionIr` values, the
+  `array_initialization_helper_set_completion` stage output, or a typed
+  `LoweredImplementation` carrying exactly one accepted M72 completion.
+- M73 must produce one typed structural IR value for the exact
+  `array.tsl:105` `var<typed>(array_type<...>, tmp, ...)` shell, preserving
+  accepted M68 base type, accepted M70 vector length, accepted M71 vector
+  alignment, and the M72 deferred backend-uninit boundary.
+- M73 must append one deterministic stage after
+  `array_initialization_helper_set_completion`.
+- M73 must use source text only as provenance/invariant evidence and must not
+  reparse M66 slot text or M67 helper leaf text as semantic input.
+- M73 must not translate or render backend uninit, query backend maps, create
+  backend translation requests, produce renderer-ready IR, render C++/Rust/
+  backend text, change generated output, parse generic `var` or `array_type`,
+  model allocation/lifetime/initializer/variable scope semantics, lower stores
+  or returns, interpret `tmp.data()`, lower `emit_return`, add
+  direct-intrinsic/SVE semantics, parse broad TSIL, read `tsldata`/catalog/
+  backend maps during lowering evaluation, or depend on `frozen/` at runtime.
 
 ## Accepted Milestone 48
 
@@ -2070,10 +2115,25 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   a central stage-name-to-output-type validation table. It is not semantic
   dispatch, but the table is a growing maintainability pressure point before
   many more stages accumulate.
+- Post-M72 planning follow-up for M73 execution: name and scope the slice as
+  exact first-slot declaration-shell structural IR, not generic declaration or
+  array semantics.
+- Post-M72 planning follow-up for M73 execution: consume typed M72 helper-set
+  completions and accepted first-slot provenance, with source text only as
+  provenance/invariant evidence. Do not reparse raw slot/helper text as
+  semantics.
+- Post-M72 planning follow-up for M73 execution: keep backend uninit
+  translation, backend maps, renderer-ready IR, generated output, generic
+  `var`/`array_type` parsing, allocation/lifetime, initializer, variable
+  scope, store, return, `tmp.data()`, `emit_return`, and direct-intrinsic/SVE
+  semantics out of scope.
+- Post-M72 planning follow-up for M73 execution: keep public IR additions
+  narrow, preferably one genuinely consumed structural boundary value rather
+  than a broad `VarIr`/`ArrayTypeIr` family or registry.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with post-M72 planning.
+No stop condition is active. The workflow is ready to execute M73.
 
 ## Validation Expectations
 

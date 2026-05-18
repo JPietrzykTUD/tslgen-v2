@@ -7917,3 +7917,207 @@ Next concrete prompt:
 - `docs/agent/runs/post-m72-planning-plus-review-prompt.md` is created for the
   next lowering-focused planning pass. Do not start Milestone 73 until a
   post-M72 plan is accepted.
+
+### Post-M72 Planning Result
+
+Status:
+
+Selected for human acceptance after post-M72 planning.
+
+Selected milestone:
+
+```text
+Milestone 73: Exact First-Slot Declaration-Shell Structural IR Slice
+```
+
+Candidate comparison:
+
+| Candidate | Value | Risk | Decision |
+| --- | --- | --- | --- |
+| Exact first-slot declaration-shell structural IR | High. Consumes the completed M72 helper-set aggregate and makes the exact `array.tsl:105` first slot structurally usable as typed lowering state. | Medium-high if it is mistaken for broad declaration/array semantics. | Select as M73 with strict wording that the output is structural IR only. |
+| Narrow helper-set-to-envelope handoff | Low. Mostly rewraps M72 without exposing the first-slot statement structure. | Low, but too little functional movement. | Defer. |
+| Backend-uninit handling | Medium later. Eventually needed for output, but M72 intentionally keeps it deferred. | High now because translation/rendering would cross the lowering boundary. | Defer until backend translation/rendering slices are selected. |
+| Generic `var` / `array_type` parsing | Broadly useful later. | Too broad now; would add generic declaration/array semantics and broad TSIL parsing. | Reject for M73. |
+| Store/return/`tmp.data()`/`emit_return` lowering | High later. | Too early; pulls in allocation/lifetime, store, return, and SVE semantics. | Defer. |
+| Private resolver cleanup | Useful maintainability work. | Lower value than a structural IR step unless driven by implementation pressure. | Keep as non-blocking follow-up. |
+
+### Milestone 73: Exact First-Slot Declaration-Shell Structural IR Slice
+
+Status:
+
+Selected for human acceptance after post-M72 planning.
+
+Goal:
+
+Consume the accepted M72 `ExactArrayInitializationHelperSetCompletionIr` for
+the exact first array-initialization slot and produce one typed structural
+declaration-shell IR for the exact `array.tsl:105` shape:
+
+```text
+var<typed>(
+  array_type<base type, vector length, vector alignment>,
+  tmp,
+  deferred backend uninit
+)
+```
+
+M73 is generation-time lowering structural IR only. It turns the completed
+helper facts into typed first-slot statement structure, but it must not define
+generic declaration semantics, generic array semantics, variable scope,
+allocation/lifetime, initializer behavior, backend uninit translation,
+renderer-ready IR, or generated output.
+
+Scope:
+
+- Consume only accepted M72 `ExactArrayInitializationHelperSetCompletionIr`
+  values, the `array_initialization_helper_set_completion` stage output, or a
+  typed `LoweredImplementation` carrying exactly one accepted M72 helper-set
+  completion.
+- Produce one typed IR such as
+  `ExactArrayInitializationDeclarationShellIr`, carrying:
+  - the source M72 helper-set completion;
+  - the source M66 slot-form / M65 envelope provenance reachable through the
+    accepted M72 chain;
+  - the exact structural declaration kind `var<typed>`;
+  - the exact structural array-type shape using the accepted M68 base type,
+    accepted M70 vector length, and accepted M71 vector alignment facts;
+  - variable token `tmp` as preserved M66/M67/M72 provenance;
+  - the accepted M72 deferred backend-uninit boundary/policy;
+  - deterministic provenance including candidate id, target/source extension,
+    selected type tag, branch-chain id, envelope/slot identity, variable
+    token, and source locations.
+- Append one deterministic stage after
+  `array_initialization_helper_set_completion`, for example
+  `array_initialization_declaration_shell_lowering`.
+- Preserve accepted M66/M67/M68/M69/M70/M71/M72 behavior and outputs.
+- Use source text only as provenance/invariant evidence. M73 must consume the
+  typed M72 helper-set facts rather than reparsing M66 slot text or M67 leaf
+  text as semantics.
+
+Out of scope:
+
+- Translating, resolving, or rendering `value<backend>(uninit::array)` to C++,
+  Rust, backend text, initializer syntax, `{}`, `MaybeUninit`, backend
+  translation requests, renderer-ready values, or generated output.
+- Backend manifests, backend maps, language maps, translation maps, renderer
+  calls, generated artifacts, golden files, CLI/report/writer behavior, Rust
+  behavior, compiler execution, or generated-test execution.
+- Generic `var`, generic `array_type`, generic declaration semantics, generic
+  array semantics, array allocation/lifetime, variable binding/scope,
+  initializer semantics, store, return, `tmp.data()`, `emit_return`,
+  `assume_aligned`, aligned-store semantics, direct-intrinsic/SVE semantics,
+  loops, calls, casts, multi-statement lowering, or broad TSIL parsing.
+- Broad helper registries, raw helper-string dispatch, broad stage registries,
+  lowering-time file/catalog reads, raw TSL parsing, `tsldata` reads during
+  lowering evaluation, host CPU queries, backend map reads, or runtime
+  dependency on `frozen/`.
+
+Required input:
+
+- Accepted M72 helper-set completion IR for the exact first-slot helper family.
+- Accepted M66 slot-form and M65 envelope provenance reachable through the M72
+  source chain.
+- Accepted M68 base-type request-resolution output.
+- Accepted M70 vector-length request-resolution output.
+- Accepted M71 vector-alignment request-resolution output.
+- Accepted M72 deferred backend-uninit boundary/policy.
+
+Expected outputs:
+
+- One typed exact first-slot declaration-shell structural IR value.
+- One deterministic generation-lowering stage after
+  `array_initialization_helper_set_completion`.
+- Structured diagnostics for unsupported source/container shapes,
+  missing/duplicate M72 completions, context mismatch, provenance mismatch,
+  malformed or unsupported exact shell invariants, and backend-uninit policy
+  mismatch.
+- No backend translation request, renderer-ready value, generated artifact,
+  golden output, CLI/report/writer, Rust, or compiler behavior change.
+
+Parity criterion:
+
+M73 proves the accepted M66-M72 exact first-slot helper facts can become a
+single typed structural declaration-shell handoff while keeping backend uninit
+deferred and preventing generic declaration/array, allocation, store, return,
+and rendering semantics from leaking into lowering.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:105` for the exact selected
+  `var<typed>(array_type<...>, tmp, value<backend>(uninit::array))` first-slot
+  form.
+- Same-text `array.tsl` repetitions at lines 37, 45, 54, 62, 71, 79, 88, and
+  96 are supporting corpus repetition only, not expanded M73 scope.
+- Structurally similar `construct.tsl` forms with different variable names are
+  future evidence only; M73 remains anchored to the accepted M66 `tmp`
+  first-slot path.
+- Accepted M66/M67/M68/M70/M71/M72 IR and tests in
+  `tslgen/src/tslgen/lowering/boundary.py` and
+  `tslgen/tests/unit/test_lowering_boundary.py`.
+- `tsldata/detail/lang/translate_cpp.tsl` and
+  `tsldata/detail/lang/translate_rust.tsl` backend array/uninit entries are
+  evidence that output behavior exists later; M73 must not read or consume
+  those maps.
+- `frozen/` remains legacy evidence only and must not become runtime input.
+
+Tests required:
+
+- Direct resolver tests from M72 helper-set completion to the M73 structural
+  declaration-shell IR.
+- Normal `lower_candidates` pipeline tests proving the M73 stage appears after
+  `array_initialization_helper_set_completion` and preserves M66-M72 ordering
+  and outputs.
+- Tests proving the structural shell consumes typed M72 facts and preserves
+  the deferred backend-uninit policy without translating it.
+- Diagnostics for missing, duplicate, unsupported source/container, context
+  mismatch, provenance mismatch, malformed exact shell invariants, and
+  backend-uninit policy mismatch.
+- Determinism tests for repeated runs and reordered inputs.
+- Regression tests proving M66/M67/M68/M70/M71/M72 behavior is unchanged.
+- Regression tests proving no backend translation, rendering, generated
+  output, golden-file churn, broad declaration/array lowering, generic
+  `var`/`array_type` parsing, raw helper evaluator calls, raw helper parsing,
+  catalog reads, `tsldata` reads, host CPU queries, backend map reads, or
+  runtime `frozen/` use is introduced.
+
+Golden fixtures required:
+
+- None. M73 is lowering-only structural IR and must not change generated C++
+  or Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M73 declaration-shell structural IR test command selected by the
+  executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Letting "declaration" become generic declaration semantics, variable scope,
+  allocation/lifetime, initializer semantics, renderer-ready IR, or generated
+  output.
+- Reparsing M66 slot text or M67 helper leaf text as semantic input instead
+  of consuming typed M72 helper-set facts.
+- Treating backend uninit as backend translation/rendering under a structural
+  lowering label.
+- Expanding scope to non-`tmp` corpus forms, generic `var`/`array_type`, store
+  or return slots, `tmp.data()`, `emit_return`, `assume_aligned`,
+  direct-intrinsic/SVE semantics, loops, calls, casts, or broad TSIL parsing.
+- Adding a broad `VarIr`, `ArrayTypeIr`, declaration registry, helper-set
+  registry, central stage dispatcher, or public IR family instead of one exact
+  typed boundary value.
+
+Dependencies on prior milestones:
+
+- Milestones 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, and
+  72.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m72-acceptance-finalization-prompt.md` is created and
+  active pending human acceptance. That finalization prompt will create
+  `docs/agent/runs/m73-execution-review-loop-prompt.md` after explicit human
+  acceptance. Do not start M73 until the acceptance-finalization prompt
+  records acceptance.

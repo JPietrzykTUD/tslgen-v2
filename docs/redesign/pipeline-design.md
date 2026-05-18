@@ -530,6 +530,14 @@ fields, and produces one typed aggregate helper-set IR after
 request remains a deferred backend-value boundary; Stage 8 must not translate
 it, render it, query backend maps, lower declarations/arrays, or emit output.
 
+Post-M72 planning selects Milestone 73 as the next Stage 8 boundary after
+`array_initialization_helper_set_completion`. M73 should produce one typed
+exact first-slot declaration-shell structural IR for the accepted
+`array.tsl:105` `var<typed>(array_type<...>, tmp, ...)` shell. It is not a
+Stage 9 backend-planning input, renderer-ready declaration, generic
+`var`/`array_type` parser, allocation/lifetime model, store/return lowering,
+or generated-output step.
+
 ## Stage 9: Backend Planning
 
 Inputs:

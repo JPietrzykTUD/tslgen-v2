@@ -343,9 +343,10 @@ and still does not add compiler execution.
   request resolution from explicit typed metadata, accepted M71 exact
   vector-alignment request resolution from explicit typed metadata, accepted
   M72 exact helper-set completion with backend uninit preserved as a typed
-  deferred boundary, broad TSIL/body-slot parity beyond those request-
-  resolution boundaries, and backend translation-map evaluation beyond the
-  selected M40/M45/M46 requests.
+  deferred boundary, selected M73 exact first-slot declaration-shell
+  structural IR, broad TSIL/body-slot parity beyond those exact structural/
+  request-resolution boundaries, and backend translation-map evaluation beyond
+  the selected M40/M45/M46 requests.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and
   googletest download or vendoring.
 - Full legacy CLI drop-in compatibility and `run_all.sh` replacement.

@@ -591,6 +591,14 @@ boundary. M72 does not resolve backend uninit into backend text, backend
 translation requests, renderer-ready values, generated output, or
 declaration/array semantics.
 
+Post-M72 planning selects Milestone 73 as exact first-slot
+declaration-shell structural IR. It should consume the M72 helper-set
+completion and produce typed structure for the exact `array.tsl:105`
+`var<typed>(array_type<...>, tmp, ...)` shell. Generic declarations, generic
+arrays, allocation/lifetime, initializer behavior, variable scope, stores,
+returns, `tmp.data()`, `emit_return`, backend uninit translation, backend
+translation maps, rendering, and generated output remain deferred.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`

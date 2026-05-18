@@ -875,6 +875,17 @@ Recommended first parity checks:
   parsing or raw query evaluator calls, no catalog/`tsldata`/host CPU/backend
   map reads during lowering evaluation, and no declaration/array lowering,
   backend translation/rendering, golden-file, or generated-output churn.
+- Milestone 73 tests should prove exact first-slot declaration-shell
+  structural IR without generic declaration/array semantics: direct resolver
+  tests from accepted M72 helper-set completion, normal `lower_candidates`
+  stage-order tests after `array_initialization_helper_set_completion`,
+  preservation of M68/M70/M71 helper facts and M72 deferred backend-uninit
+  policy, malformed exact-shell and provenance diagnostics, deterministic
+  ordering, unchanged M66-M72 behavior, no raw helper parsing or raw query
+  evaluator calls, no catalog/`tsldata`/host CPU/backend map reads during
+  lowering evaluation, and no backend translation/rendering, generic
+  `var`/`array_type` parsing, allocation/lifetime, store/return, golden-file,
+  or generated-output churn.
 
 Deferred parity checks:
 
