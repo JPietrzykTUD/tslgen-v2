@@ -59,11 +59,16 @@ type GenerationLoweringStageName = Literal[
     "array_initialization_helper_request_lowering",
     "array_initialization_base_type_request_resolution",
     "array_initialization_vector_length_request_resolution",
+    "array_initialization_vector_alignment_request_resolution",
 ]
 type ExactArrayInitializationVectorLengthKind = Literal[
     "fixed_lanes",
     "runtime_lanes",
     "scalable_lanes",
+]
+type ExactArrayInitializationVectorAlignmentKind = Literal[
+    "fixed_bytes",
+    "unsupported",
 ]
 type GenerationSelectedBranchBodyHandoff = (
     OpaqueSelectedBranchBodyHandoff | NoSelectedBranchBodyHandoff
@@ -129,6 +134,7 @@ type GenerationLoweringStageOutput = (
     | ExactArrayInitializationHelperRequestIr
     | ExactArrayInitializationBaseTypeResolutionIr
     | ExactArrayInitializationVectorLengthResolutionIr
+    | ExactArrayInitializationVectorAlignmentResolutionIr
     | TsilStatement
 )
 
@@ -272,6 +278,26 @@ _EXACT_ARRAY_INITIALIZATION_VECTOR_LENGTH_REQUEST_RULE = (
         ],
     )
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _ExactArrayInitializationVectorAlignmentRequestRule:
+    request_ordinal: int
+    request_kind: Literal["generation_value"]
+    helper_leaf_kind: Literal["value_generation_vector_alignment"]
+    expected_leaf_source_text: str
+
+
+_EXACT_ARRAY_INITIALIZATION_VECTOR_ALIGNMENT_REQUEST_RULE = (
+    _ExactArrayInitializationVectorAlignmentRequestRule(
+        request_ordinal=2,
+        request_kind="generation_value",
+        helper_leaf_kind="value_generation_vector_alignment",
+        expected_leaf_source_text=_EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND[
+            "value_generation_vector_alignment"
+        ],
+    )
+)
 _ARRAY_INITIALIZATION_HELPER_TARGET = rf"{_TSIL_IDENTIFIER}::{_TSIL_IDENTIFIER}"
 _ARRAY_INITIALIZATION_HELPER_SHAPE = (
     rf"(?:type|value)<(?:generation|backend)>\("
@@ -380,6 +406,96 @@ class ExactArrayInitializationVectorLengthMetadata:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactArrayInitializationVectorAlignmentValue:
+    kind: ExactArrayInitializationVectorAlignmentKind
+    bytes: int | None = None
+    unsupported_policy: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind not in ("fixed_bytes", "unsupported"):
+            raise ValueError("array-initialization vector-alignment kind is unsupported")
+        if self.kind == "fixed_bytes":
+            if isinstance(self.bytes, bool) or not isinstance(self.bytes, int):
+                raise ValueError(
+                    "fixed array-initialization vector alignment requires "
+                    "integer bytes"
+                )
+            if self.bytes <= 0:
+                raise ValueError(
+                    "fixed array-initialization vector alignment must be positive"
+                )
+            if self.unsupported_policy is not None:
+                raise ValueError(
+                    "fixed array-initialization vector alignment must not carry "
+                    "an unsupported policy"
+                )
+        else:
+            if self.bytes is not None:
+                raise ValueError(
+                    "unsupported array-initialization vector alignment must not "
+                    "pretend to have fixed integer bytes"
+                )
+            if not self.unsupported_policy:
+                raise ValueError(
+                    "unsupported array-initialization vector alignment requires "
+                    "an explicit policy"
+                )
+
+    @property
+    def key(self) -> tuple[str, int | None, str | None]:
+        return (self.kind, self.bytes, self.unsupported_policy)
+
+
+@dataclass(frozen=True, slots=True)
+class ExactArrayInitializationVectorAlignmentMetadata:
+    candidate_id: str
+    target_extension: str
+    source_extension: str
+    selected_type_tag: str
+    vector_alignment: ExactArrayInitializationVectorAlignmentValue
+    source_location: SourceLocation | None = None
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "candidate_id",
+            "target_extension",
+            "source_extension",
+            "selected_type_tag",
+        ):
+            if not getattr(self, field_name):
+                raise ValueError(
+                    "array-initialization vector-alignment metadata "
+                    f"{field_name} must be non-empty"
+                )
+        if not isinstance(
+            self.vector_alignment,
+            ExactArrayInitializationVectorAlignmentValue,
+        ):
+            raise TypeError(
+                "array-initialization vector-alignment metadata requires a typed "
+                "vector-alignment value"
+            )
+
+    @property
+    def lookup_key(self) -> tuple[str, str, str, str]:
+        return (
+            self.candidate_id,
+            self.target_extension,
+            self.source_extension,
+            self.selected_type_tag,
+        )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        location_key = (
+            self.source_location.sort_key()
+            if self.source_location is not None
+            else ()
+        )
+        return (*self.lookup_key, self.vector_alignment.key, location_key)
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationContext:
     values: FrozenMap[str, CatalogValue] = field(default_factory=FrozenMap.empty)
     primitive_attributes: FrozenMap[str, CatalogValue] | None = None
@@ -401,6 +517,9 @@ class GenerationContext:
     array_initialization_vector_length_metadata: tuple[
         ExactArrayInitializationVectorLengthMetadata, ...
     ] = ()
+    array_initialization_vector_alignment_metadata: tuple[
+        ExactArrayInitializationVectorAlignmentMetadata, ...
+    ] = ()
     implementation_source_location: SourceLocation | None = None
 
     def __post_init__(self) -> None:
@@ -418,6 +537,16 @@ class GenerationContext:
             tuple(
                 sorted(
                     self.array_initialization_vector_length_metadata,
+                    key=lambda metadata: metadata.key,
+                )
+            ),
+        )
+        object.__setattr__(
+            self,
+            "array_initialization_vector_alignment_metadata",
+            tuple(
+                sorted(
+                    self.array_initialization_vector_alignment_metadata,
                     key=lambda metadata: metadata.key,
                 )
             ),
@@ -2073,6 +2202,147 @@ class ExactArrayInitializationVectorLengthResolutionIr:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactArrayInitializationVectorAlignmentResolutionIr:
+    source_vector_length_resolution: ExactArrayInitializationVectorLengthResolutionIr
+    source_vector_alignment_request: ExactArrayInitializationHelperRequestRecord
+    resolved_vector_alignment: ExactArrayInitializationVectorAlignmentValue
+    unresolved_requests: tuple[ExactArrayInitializationHelperRequestRecord, ...]
+    source_location: SourceLocation
+    candidate_id: str
+    target_extension: str
+    source_extension: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+    slot_label: Literal["opaque_pre_branch_array_initialization"]
+    slot_ordinal: int
+    variable_token: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(
+            self.source_vector_length_resolution,
+            ExactArrayInitializationVectorLengthResolutionIr,
+        ):
+            raise TypeError(
+                "array-initialization vector-alignment resolution requires an "
+                "M70 vector-length resolution"
+            )
+        if not isinstance(
+            self.source_vector_alignment_request,
+            ExactArrayInitializationHelperRequestRecord,
+        ):
+            raise TypeError(
+                "array-initialization vector-alignment resolution requires an "
+                "M67 vector-alignment request record"
+            )
+        if self.source_vector_alignment_request not in (
+            self.source_vector_length_resolution.unresolved_requests
+        ):
+            raise ValueError(
+                "array-initialization vector-alignment source request must come "
+                "from the M70 unresolved request records"
+            )
+        if self.source_vector_alignment_request.helper_leaf_kind != (
+            "value_generation_vector_alignment"
+        ):
+            raise ValueError(
+                "array-initialization vector-alignment resolution must resolve "
+                "the M67 value<generation>(vector::alignment) request"
+            )
+        if not isinstance(
+            self.resolved_vector_alignment,
+            ExactArrayInitializationVectorAlignmentValue,
+        ):
+            raise TypeError(
+                "array-initialization vector-alignment resolution requires a "
+                "typed vector-alignment value"
+            )
+        if self.resolved_vector_alignment.kind == "unsupported":
+            raise ValueError(
+                "array-initialization vector-alignment resolution must not turn "
+                "unsupported alignment metadata into a resolved alignment value"
+            )
+        if self.source_location != self.source_vector_length_resolution.source_location:
+            raise ValueError(
+                "array-initialization vector-alignment resolution source "
+                "location must match the M70 vector-length resolution"
+            )
+        if (
+            self.candidate_id != self.source_vector_length_resolution.candidate_id
+            or self.selected_type_tag
+            != self.source_vector_length_resolution.selected_type_tag
+            or self.originating_branch_chain_id
+            != self.source_vector_length_resolution.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "array-initialization vector-alignment resolution provenance "
+                "must match the M70 vector-length resolution"
+            )
+        if (
+            self.target_extension
+            != self.source_vector_length_resolution.target_extension
+            or self.source_extension
+            != self.source_vector_length_resolution.source_extension
+        ):
+            raise ValueError(
+                "array-initialization vector-alignment resolution extension "
+                "context must match the M70 vector-length resolution"
+            )
+        if self.slot_label != self.source_vector_length_resolution.slot_label:
+            raise ValueError(
+                "array-initialization vector-alignment resolution slot label "
+                "must match the M70 vector-length resolution"
+            )
+        if self.slot_ordinal != self.source_vector_length_resolution.slot_ordinal:
+            raise ValueError(
+                "array-initialization vector-alignment resolution slot ordinal "
+                "must match the M70 vector-length resolution"
+            )
+        if self.variable_token != self.source_vector_length_resolution.variable_token:
+            raise ValueError(
+                "array-initialization vector-alignment resolution variable "
+                "token must match the M70 vector-length resolution"
+            )
+        object.__setattr__(self, "unresolved_requests", tuple(self.unresolved_requests))
+        expected_unresolved = tuple(
+            request
+            for request in self.source_vector_length_resolution.unresolved_requests
+            if request is not self.source_vector_alignment_request
+        )
+        if self.unresolved_requests != expected_unresolved:
+            raise ValueError(
+                "array-initialization vector-alignment resolution must preserve "
+                "only backend-uninit requests as unresolved records in "
+                "deterministic order"
+            )
+        for request in self.unresolved_requests:
+            if request.helper_leaf_kind == "value_generation_vector_alignment":
+                raise ValueError(
+                    "array-initialization vector-alignment resolution unresolved "
+                    "requests must not include the resolved vector-alignment "
+                    "request"
+                )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_array_initialization_vector_alignment_resolution_ir",
+            self.source_vector_length_resolution.key,
+            self.source_vector_alignment_request.key,
+            self.resolved_vector_alignment.key,
+            tuple(request.key for request in self.unresolved_requests),
+            self.source_location.sort_key(),
+            self.candidate_id,
+            self.target_extension,
+            self.source_extension,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+            self.slot_label,
+            self.slot_ordinal,
+            self.variable_token,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationValue:
     kind: GenerationValueKind
     value: int
@@ -2171,6 +2441,8 @@ class GenerationLoweringStage:
             expected = (ExactArrayInitializationBaseTypeResolutionIr,)
         elif self.stage == "array_initialization_vector_length_request_resolution":
             expected = (ExactArrayInitializationVectorLengthResolutionIr,)
+        elif self.stage == "array_initialization_vector_alignment_request_resolution":
+            expected = (ExactArrayInitializationVectorAlignmentResolutionIr,)
         else:
             raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
         if not isinstance(self.output, expected):
@@ -2212,6 +2484,9 @@ class LoweredImplementation:
     ] = ()
     array_initialization_vector_length_resolutions: tuple[
         ExactArrayInitializationVectorLengthResolutionIr, ...
+    ] = ()
+    array_initialization_vector_alignment_resolutions: tuple[
+        ExactArrayInitializationVectorAlignmentResolutionIr, ...
     ] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
@@ -2291,6 +2566,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "array_initialization_vector_alignment_resolutions",
+            tuple(self.array_initialization_vector_alignment_resolutions),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -2326,6 +2606,12 @@ class LoweredImplementation:
                 resolution.key
                 for resolution in (
                     self.array_initialization_vector_length_resolutions
+                )
+            ),
+            tuple(
+                resolution.key
+                for resolution in (
+                    self.array_initialization_vector_alignment_resolutions
                 )
             ),
             tuple(stage.key for stage in self.generation_stages),
@@ -3235,6 +3521,127 @@ def lower_exact_array_initialization_vector_length_request(
         )
 
 
+def lower_exact_array_initialization_vector_alignment_request(
+    source: object,
+    context: GenerationContext | None = None,
+    *,
+    selected_candidate_id: str | None = None,
+    target_extension: str | None = None,
+    source_extension: str | None = None,
+    selected_type_tag: str | None = None,
+) -> Result[ExactArrayInitializationVectorAlignmentResolutionIr]:
+    vector_length_result = _array_initialization_vector_alignment_resolution_source(
+        source,
+    )
+    if not vector_length_result.is_ok:
+        return Result.failure(vector_length_result.diagnostics)
+
+    vector_length_resolution = vector_length_result.unwrap()
+    diagnostics = _validate_array_initialization_vector_alignment_resolution_provenance(
+        vector_length_resolution,
+    )
+    vector_alignment_request = _array_initialization_vector_alignment_request_record(
+        vector_length_resolution,
+        diagnostics,
+    )
+    if diagnostics:
+        return Result.failure(sort_diagnostics(tuple(diagnostics)))
+    if vector_alignment_request is None:
+        raise AssertionError(
+            "vector-alignment request diagnostics must be present when missing"
+        )
+
+    generation_context = context or GenerationContext()
+    effective_candidate_id = (
+        selected_candidate_id
+        or generation_context.selected_candidate_id
+        or vector_length_resolution.candidate_id
+    )
+    effective_target_extension = target_extension or vector_length_resolution.target_extension
+    effective_source_extension = source_extension or vector_length_resolution.source_extension
+    effective_type_tag = (
+        selected_type_tag
+        or generation_context.selected_type_tag
+        or vector_length_resolution.selected_type_tag
+    )
+    if (
+        effective_candidate_id != vector_length_resolution.candidate_id
+        or effective_target_extension != vector_length_resolution.target_extension
+        or effective_source_extension != vector_length_resolution.source_extension
+        or effective_type_tag != vector_length_resolution.selected_type_tag
+    ):
+        return Result.failure(
+            (
+                _array_initialization_vector_alignment_context_mismatch_diagnostic(
+                    "array-initialization vector-alignment request resolution "
+                    "requires the typed selected candidate context to match "
+                    "the M70 vector-length resolution candidate id, target "
+                    "extension, source extension, and selected type tag",
+                    vector_alignment_request.leaf_source_location,
+                ),
+            )
+        )
+
+    metadata_result = _array_initialization_vector_alignment_metadata_for_context(
+        generation_context,
+        candidate_id=vector_length_resolution.candidate_id,
+        target_extension=vector_length_resolution.target_extension,
+        source_extension=vector_length_resolution.source_extension,
+        selected_type_tag=vector_length_resolution.selected_type_tag,
+        location=vector_alignment_request.leaf_source_location,
+    )
+    if not metadata_result.is_ok:
+        return Result.failure(metadata_result.diagnostics)
+    metadata = metadata_result.unwrap()
+    if metadata.vector_alignment.kind == "unsupported":
+        return Result.failure(
+            (
+                _array_initialization_vector_alignment_metadata_unsupported_diagnostic(
+                    "array-initialization vector-alignment request resolution "
+                    "received explicit unsupported vector-alignment metadata "
+                    f"policy {metadata.vector_alignment.unsupported_policy!r}",
+                    metadata.source_location
+                    or vector_alignment_request.leaf_source_location,
+                ),
+            )
+        )
+
+    unresolved_requests = tuple(
+        request
+        for request in vector_length_resolution.unresolved_requests
+        if request is not vector_alignment_request
+    )
+    try:
+        return Result.ok(
+            ExactArrayInitializationVectorAlignmentResolutionIr(
+                source_vector_length_resolution=vector_length_resolution,
+                source_vector_alignment_request=vector_alignment_request,
+                resolved_vector_alignment=metadata.vector_alignment,
+                unresolved_requests=unresolved_requests,
+                source_location=vector_length_resolution.source_location,
+                candidate_id=vector_length_resolution.candidate_id,
+                target_extension=vector_length_resolution.target_extension,
+                source_extension=vector_length_resolution.source_extension,
+                selected_type_tag=vector_length_resolution.selected_type_tag,
+                originating_branch_chain_id=(
+                    vector_length_resolution.originating_branch_chain_id
+                ),
+                slot_label=vector_length_resolution.slot_label,
+                slot_ordinal=vector_length_resolution.slot_ordinal,
+                variable_token=vector_length_resolution.variable_token,
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        return Result.failure(
+            (
+                _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+                    str(exc),
+                    vector_length_resolution.source_location,
+                ),
+            )
+        )
+
+
 def resolve_generation_type_query(
     query_text: str,
     context: GenerationContext | None = None,
@@ -3358,6 +3765,9 @@ class _ExactArrayInitializationStagePipelineResult:
     array_initialization_vector_length_resolutions: tuple[
         ExactArrayInitializationVectorLengthResolutionIr, ...
     ] = ()
+    array_initialization_vector_alignment_resolutions: tuple[
+        ExactArrayInitializationVectorAlignmentResolutionIr, ...
+    ] = ()
     stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -3386,6 +3796,11 @@ class _ExactArrayInitializationStagePipelineResult:
             "array_initialization_vector_length_resolutions",
             tuple(self.array_initialization_vector_length_resolutions),
         )
+        object.__setattr__(
+            self,
+            "array_initialization_vector_alignment_resolutions",
+            tuple(self.array_initialization_vector_alignment_resolutions),
+        )
         object.__setattr__(self, "stages", tuple(self.stages))
 
     @property
@@ -3405,6 +3820,12 @@ class _ExactArrayInitializationStagePipelineResult:
                 resolution.key
                 for resolution in (
                     self.array_initialization_vector_length_resolutions
+                )
+            ),
+            tuple(
+                resolution.key
+                for resolution in (
+                    self.array_initialization_vector_alignment_resolutions
                 )
             ),
             tuple(stage.key for stage in self.stages),
@@ -3524,6 +3945,15 @@ def _array_initialization_vector_length_resolution_stage(
     )
 
 
+def _array_initialization_vector_alignment_resolution_stage(
+    output: ExactArrayInitializationVectorAlignmentResolutionIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="array_initialization_vector_alignment_request_resolution",
+        output=output,
+    )
+
+
 def _stage_output_location(
     output: GenerationLoweringStageOutput,
 ) -> SourceLocation | None:
@@ -3552,6 +3982,7 @@ def _stage_output_location(
             ExactArrayInitializationHelperRequestIr,
             ExactArrayInitializationBaseTypeResolutionIr,
             ExactArrayInitializationVectorLengthResolutionIr,
+            ExactArrayInitializationVectorAlignmentResolutionIr,
         ),
     ):
         return output.source_location
@@ -3756,6 +4187,28 @@ def _lower_exact_array_initialization_stage_pipeline(
             vector_length_resolution,
         )
     )
+    vector_alignment_resolution_result = (
+        lower_exact_array_initialization_vector_alignment_request(
+            vector_length_resolution,
+            _context_for_candidate(item, request),
+            selected_candidate_id=item.candidate_id,
+            target_extension=item.candidate.target_extension,
+            source_extension=item.candidate.source_extension,
+            selected_type_tag=(
+                item.candidate.type_tag
+                if request.generation_context.use_candidate_type_tag
+                else None
+            ),
+        )
+    )
+    if not vector_alignment_resolution_result.is_ok:
+        return Result.failure(vector_alignment_resolution_result.diagnostics)
+    vector_alignment_resolution = vector_alignment_resolution_result.unwrap()
+    vector_alignment_resolution_stage = (
+        _array_initialization_vector_alignment_resolution_stage(
+            vector_alignment_resolution,
+        )
+    )
 
     return Result.ok(
         _ExactArrayInitializationStagePipelineResult(
@@ -3768,12 +4221,16 @@ def _lower_exact_array_initialization_stage_pipeline(
             array_initialization_vector_length_resolutions=(
                 vector_length_resolution,
             ),
+            array_initialization_vector_alignment_resolutions=(
+                vector_alignment_resolution,
+            ),
             stages=(
                 array_body_stage,
                 array_initialization_slot_form_stage,
                 array_initialization_helper_request_stage,
                 base_type_resolution_stage,
                 vector_length_resolution_stage,
+                vector_alignment_resolution_stage,
             ),
         )
     )
@@ -4189,6 +4646,70 @@ def _array_initialization_vector_length_resolution_source(
                 "consumes only typed M68 "
                 "ExactArrayInitializationBaseTypeResolutionIr values or "
                 "array_initialization_base_type_request_resolution stage output",
+                None,
+            ),
+        )
+    )
+
+
+def _array_initialization_vector_alignment_resolution_source(
+    source: object,
+) -> Result[ExactArrayInitializationVectorLengthResolutionIr]:
+    if isinstance(source, ExactArrayInitializationVectorLengthResolutionIr):
+        return Result.ok(source)
+    if isinstance(source, GenerationLoweringStage):
+        if (
+            source.stage == "array_initialization_vector_length_request_resolution"
+            and isinstance(source.output, ExactArrayInitializationVectorLengthResolutionIr)
+        ):
+            return Result.ok(source.output)
+        return Result.failure(
+            (
+                _array_initialization_vector_alignment_source_unsupported_diagnostic(
+                    "array-initialization vector-alignment request resolution "
+                    "consumes typed M70 "
+                    "ExactArrayInitializationVectorLengthResolutionIr values, "
+                    "the array_initialization_vector_length_request_resolution "
+                    "stage output, or a LoweredImplementation with a matching "
+                    "M70 vector-length resolution",
+                    _stage_output_location(source.output),
+                ),
+            )
+        )
+    if isinstance(source, LoweredImplementation):
+        if len(source.array_initialization_vector_length_resolutions) == 1:
+            return Result.ok(source.array_initialization_vector_length_resolutions[0])
+        if len(source.array_initialization_vector_length_resolutions) == 0:
+            return Result.failure(
+                (
+                    _array_initialization_vector_alignment_missing_ir_diagnostic(
+                        "array-initialization vector-alignment request "
+                        "resolution requires a LoweredImplementation carrying "
+                        "an accepted M70 "
+                        "array_initialization_vector_length_resolutions entry",
+                        _lowered_implementation_location(source),
+                    ),
+                )
+            )
+        return Result.failure(
+            (
+                _array_initialization_vector_alignment_multiple_ir_diagnostic(
+                    "array-initialization vector-alignment request resolution "
+                    "requires exactly one M70 "
+                    "array_initialization_vector_length_resolutions entry; "
+                    f"got {len(source.array_initialization_vector_length_resolutions)}",
+                    _lowered_implementation_location(source),
+                ),
+            )
+        )
+    return Result.failure(
+        (
+            _array_initialization_vector_alignment_source_unsupported_diagnostic(
+                "array-initialization vector-alignment request resolution "
+                "consumes only typed M70 "
+                "ExactArrayInitializationVectorLengthResolutionIr values or "
+                "array_initialization_vector_length_request_resolution stage "
+                "output",
                 None,
             ),
         )
@@ -4648,6 +5169,233 @@ def _array_initialization_vector_length_metadata_for_context(
             (
                 diagnostic(
                     "array-initialization vector-length metadata requires "
+                    f"exactly one entry for {lookup_key!r}; found "
+                    f"{code_detail} entries",
+                    matches[0].source_location or location,
+                ),
+            )
+        )
+    return Result.ok(matches[0])
+
+
+def _validate_array_initialization_vector_alignment_resolution_provenance(
+    vector_length_resolution: ExactArrayInitializationVectorLengthResolutionIr,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    base_resolution = vector_length_resolution.source_base_type_resolution
+    if vector_length_resolution.source_vector_length_request not in (
+        base_resolution.unresolved_requests
+    ):
+        diagnostics.append(
+            _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+                "M70 vector-length resolution source request must come from its "
+                "M68 base-type resolution",
+                vector_length_resolution.source_location,
+            )
+        )
+    if vector_length_resolution.source_location != base_resolution.source_location:
+        diagnostics.append(
+            _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+                "M70 vector-length resolution source location must match its "
+                "M68 base-type resolution",
+                vector_length_resolution.source_location,
+            )
+        )
+    if (
+        vector_length_resolution.candidate_id != base_resolution.candidate_id
+        or vector_length_resolution.selected_type_tag
+        != base_resolution.selected_type_tag
+        or vector_length_resolution.originating_branch_chain_id
+        != base_resolution.originating_branch_chain_id
+    ):
+        diagnostics.append(
+            _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+                "M70 vector-length resolution provenance must match its M68 "
+                "base-type resolution",
+                vector_length_resolution.source_location,
+            )
+        )
+    if (
+        vector_length_resolution.slot_label != base_resolution.slot_label
+        or vector_length_resolution.slot_ordinal != base_resolution.slot_ordinal
+        or vector_length_resolution.variable_token != base_resolution.variable_token
+    ):
+        diagnostics.append(
+            _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+                "M70 vector-length resolution slot provenance must match its "
+                "M68 base-type resolution",
+                vector_length_resolution.source_location,
+            )
+        )
+    for request in vector_length_resolution.unresolved_requests:
+        if request.source_form != base_resolution.source_request_ir.source_form:
+            diagnostics.append(
+                _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+                    "M70 unresolved request record source form must match the "
+                    "source M67 helper-request IR",
+                    request.leaf_source_location,
+                )
+            )
+        if request.source_envelope != base_resolution.source_request_ir.source_envelope:
+            diagnostics.append(
+                _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+                    "M70 unresolved request record envelope must match the "
+                    "source M67 helper-request IR",
+                    request.leaf_source_location,
+                )
+            )
+        if (
+            request.candidate_id != vector_length_resolution.candidate_id
+            or request.selected_type_tag
+            != vector_length_resolution.selected_type_tag
+            or request.originating_branch_chain_id
+            != vector_length_resolution.originating_branch_chain_id
+            or request.slot_label != vector_length_resolution.slot_label
+            or request.slot_ordinal != vector_length_resolution.slot_ordinal
+            or request.variable_token != vector_length_resolution.variable_token
+        ):
+            diagnostics.append(
+                _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+                    "M70 unresolved request record provenance must match the "
+                    "source vector-length resolution",
+                    request.leaf_source_location,
+                )
+            )
+    return diagnostics
+
+
+def _array_initialization_vector_alignment_request_record(
+    vector_length_resolution: ExactArrayInitializationVectorLengthResolutionIr,
+    diagnostics: list[Diagnostic],
+) -> ExactArrayInitializationHelperRequestRecord | None:
+    rule = _EXACT_ARRAY_INITIALIZATION_VECTOR_ALIGNMENT_REQUEST_RULE
+    vector_alignment_records = tuple(
+        request
+        for request in vector_length_resolution.unresolved_requests
+        if request.helper_leaf_kind == rule.helper_leaf_kind
+    )
+    if not vector_alignment_records:
+        ordinal_or_kind_records = tuple(
+            request
+            for request in vector_length_resolution.unresolved_requests
+            if (
+                request.request_ordinal == rule.request_ordinal
+                or request.request_kind == rule.request_kind
+            )
+        )
+        if ordinal_or_kind_records:
+            for request in ordinal_or_kind_records:
+                diagnostics.append(
+                    _array_initialization_vector_alignment_mismatch_diagnostic(
+                        "array-initialization vector-alignment request "
+                        "resolution expected the M67 vector-alignment request "
+                        f"to carry ordinal {rule.request_ordinal}, kind "
+                        f"{rule.request_kind!r}, and leaf kind "
+                        f"{rule.helper_leaf_kind!r}; got ordinal "
+                        f"{request.request_ordinal}, kind "
+                        f"{request.request_kind!r}, and leaf kind "
+                        f"{request.helper_leaf_kind!r}",
+                        request.leaf_source_location,
+                    )
+                )
+            return None
+        diagnostics.append(
+            _array_initialization_vector_alignment_missing_request_diagnostic(
+                "array-initialization vector-alignment request resolution "
+                "requires one M67 vector-alignment request record preserved by "
+                "M70",
+                vector_length_resolution.source_location,
+            )
+        )
+        return None
+    if len(vector_alignment_records) > 1:
+        for request in vector_alignment_records:
+            diagnostics.append(
+                _array_initialization_vector_alignment_duplicate_request_diagnostic(
+                    "array-initialization vector-alignment request resolution "
+                    "requires exactly one M67 vector-alignment request record; "
+                    f"duplicate record appeared at ordinal "
+                    f"{request.request_ordinal}",
+                    request.leaf_source_location,
+                )
+            )
+        return None
+
+    vector_alignment_request = vector_alignment_records[0]
+    if (
+        vector_alignment_request.request_ordinal != rule.request_ordinal
+        or vector_alignment_request.request_kind != rule.request_kind
+    ):
+        diagnostics.append(
+            _array_initialization_vector_alignment_mismatch_diagnostic(
+                "array-initialization vector-alignment request resolution "
+                f"expected ordinal {rule.request_ordinal} and kind "
+                f"{rule.request_kind!r}; got ordinal "
+                f"{vector_alignment_request.request_ordinal} and kind "
+                f"{vector_alignment_request.request_kind!r}",
+                vector_alignment_request.leaf_source_location,
+            )
+        )
+    if vector_alignment_request.leaf_source_text != rule.expected_leaf_source_text:
+        diagnostics.append(
+            _array_initialization_vector_alignment_unsupported_request_diagnostic(
+                "array-initialization vector-alignment request resolution "
+                "preserves the M67 leaf source text only as provenance and "
+                "accepts only the exact M67 vector-alignment leaf text for "
+                f"that typed request; got "
+                f"{vector_alignment_request.leaf_source_text!r}",
+                vector_alignment_request.leaf_source_location,
+            )
+        )
+    return vector_alignment_request
+
+
+def _array_initialization_vector_alignment_metadata_for_context(
+    context: GenerationContext,
+    *,
+    candidate_id: str,
+    target_extension: str,
+    source_extension: str,
+    selected_type_tag: str,
+    location: SourceLocation | None,
+) -> Result[ExactArrayInitializationVectorAlignmentMetadata]:
+    lookup_key = (
+        candidate_id,
+        target_extension,
+        source_extension,
+        selected_type_tag,
+    )
+    matches = tuple(
+        metadata
+        for metadata in context.array_initialization_vector_alignment_metadata
+        if metadata.lookup_key == lookup_key
+    )
+    if not matches:
+        return Result.failure(
+            (
+                _array_initialization_vector_alignment_metadata_missing_diagnostic(
+                    "array-initialization vector-alignment request resolution "
+                    "requires explicit typed vector-alignment metadata for "
+                    f"candidate {candidate_id!r}, target extension "
+                    f"{target_extension!r}, source extension "
+                    f"{source_extension!r}, and selected type tag "
+                    f"{selected_type_tag!r}",
+                    location,
+                ),
+            )
+        )
+    if len(matches) > 1:
+        values = tuple(metadata.vector_alignment for metadata in matches)
+        code_detail = "conflicting" if len(set(values)) > 1 else "duplicate"
+        diagnostic = (
+            _array_initialization_vector_alignment_metadata_conflict_diagnostic
+            if code_detail == "conflicting"
+            else _array_initialization_vector_alignment_metadata_duplicate_diagnostic
+        )
+        return Result.failure(
+            (
+                diagnostic(
+                    "array-initialization vector-alignment metadata requires "
                     f"exactly one entry for {lookup_key!r}; found "
                     f"{code_detail} entries",
                     matches[0].source_location or location,
@@ -5218,6 +5966,149 @@ def _array_initialization_vector_length_provenance_mismatch_diagnostic(
     )
 
 
+def _array_initialization_vector_alignment_source_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-SOURCE-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_alignment_missing_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-IR-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_alignment_multiple_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-IR-MULTIPLE",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_alignment_missing_request_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_alignment_duplicate_request_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-DUPLICATE",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_alignment_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_alignment_unsupported_request_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_alignment_metadata_missing_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-METADATA-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_alignment_metadata_duplicate_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-METADATA-DUPLICATE",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_alignment_metadata_conflict_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-METADATA-CONFLICT",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_alignment_metadata_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-METADATA-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_alignment_context_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-CONTEXT-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-PROVENANCE-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
 def _duplicate_array_body_envelope_skeleton_diagnostic(
     lookup_key: ExactArrayBodyEnvelopeSkeletonKey,
     skeleton: ExactArrayBodyEnvelopeSkeleton,
@@ -5781,6 +6672,9 @@ def _lower_input(
                     array_initialization_vector_length_resolutions=(
                         array_initialization_pipeline.array_initialization_vector_length_resolutions
                     ),
+                    array_initialization_vector_alignment_resolutions=(
+                        array_initialization_pipeline.array_initialization_vector_alignment_resolutions
+                    ),
                     generation_stages=(
                         _recognition_stage(
                             "generation.control_flow",
@@ -6146,6 +7040,9 @@ def _context_for_candidate(
         ),
         array_initialization_vector_length_metadata=(
             context.array_initialization_vector_length_metadata
+        ),
+        array_initialization_vector_alignment_metadata=(
+            context.array_initialization_vector_alignment_metadata
         ),
         implementation_source_location=(
             context.implementation_source_location or item.source_location

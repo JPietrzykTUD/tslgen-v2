@@ -744,6 +744,51 @@ M70 diagnostics:
   type, branch-chain, slot, variable-token, source-location, or source-request
   provenance required by the boundary.
 
+M71 diagnostics:
+
+- `TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-SOURCE-UNSUPPORTED`:
+  vector-alignment request resolution was invoked with something other than
+  an accepted M70 `ExactArrayInitializationVectorLengthResolutionIr`, the
+  `array_initialization_vector_length_request_resolution` stage output, or a
+  typed `LoweredImplementation` carrying the accepted M70 vector-length
+  resolution.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-IR-MISSING`: a
+  `LoweredImplementation` source does not carry an accepted M70 vector-length
+  resolution.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-IR-MULTIPLE`: a
+  `LoweredImplementation` source carries more than one M70 vector-length
+  resolution at the M71 request-resolution boundary.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-MISSING`: the M70 unresolved
+  request records do not contain the required vector-alignment request.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-DUPLICATE`: the M70
+  unresolved request records contain more than one vector-alignment request.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-MISMATCH`: the selected M67
+  vector-alignment request record does not carry the expected ordinal `2`,
+  request kind `generation_value`, and helper leaf kind
+  `value_generation_vector_alignment`.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-UNSUPPORTED`: the selected
+  M67 vector-alignment request record does not preserve the exact accepted
+  `value<generation>(vector::alignment)` leaf text as provenance/invariant
+  evidence.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-METADATA-MISSING`: explicit typed
+  vector-alignment metadata is absent for the structured candidate id,
+  target/source extension, and selected type tag.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-METADATA-DUPLICATE`: more than one
+  identical vector-alignment metadata entry is supplied for the same
+  structured context.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-METADATA-CONFLICT`: conflicting
+  vector-alignment metadata entries are supplied for the same structured
+  context.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-METADATA-UNSUPPORTED`: a caller
+  requests fixed numeric alignment from typed unsupported alignment metadata.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-CONTEXT-MISMATCH`: the typed
+  selected candidate context disagrees with the M70 vector-length resolution
+  candidate id or selected type tag.
+- `TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-PROVENANCE-MISMATCH`: the M70
+  vector-length resolution, unresolved request records, or M71 result disagree
+  on candidate, type, branch-chain, slot, variable-token, source-location, or
+  source-request provenance required by the boundary.
+
 ## Explicit Deferrals
 
 Deferred beyond the implemented M43-M70 semantic-lowering, structural

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 70 is accepted.
+Milestone 71 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -218,42 +218,49 @@ vector-alignment spellings, or renderers.
 
 Post-M70 planning is accepted. It selected
 `Milestone 71: Exact Array Initialization Vector-Alignment Request Resolution Slice`.
-Human acceptance has been recorded; M71 execution is the next action.
+Human acceptance was recorded.
+
+The M71 execution-review loop returned `Accept With Follow-Ups` after one
+focused documentation revision. Review and audit found no blocking
+implementation, validation, boundary, extensibility, documentation, or evidence
+issues after that revision. M71 resolves only the exact M67
+`value<generation>(vector::alignment)` request through typed M67/M68/M69/M70
+pipeline values and explicit typed vector-alignment metadata; backend uninit
+remains unresolved.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 71.
+Plan the next milestone after Milestone 71.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m71-execution-review-loop-prompt.md
+docs/agent/runs/post-m71-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 71: Exact Array Initialization Vector-Alignment Request Resolution Slice
+None. Post-M71 planning is active.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M70 planning returned Accept With Follow-Ups after selecting M71 as the
-exact array-initialization vector-alignment request resolution slice. Human
-acceptance is recorded; M71 execution is the next action.
+M71 execution-review returned Accept With Follow-Ups after one focused
+documentation revision. Focused re-review accepted the revision.
 ```
 
 Next expected action:
 
 ```text
-Run the active M71 execution-review loop prompt. Use exactly one write-capable
-executor if M71 is not already implemented, then read-only review/audit
-subagents. Do not start M72.
+Run the active post-M71 planning-plus-review prompt. Focus on lowering, use
+the specified read-only planning/review subagents, and do not implement code or
+start Milestone 72 execution.
 ```
 
 Accepted planning prompt:
@@ -664,10 +671,16 @@ Accepted post-M70 acceptance finalization prompt:
 docs/agent/runs/post-m70-acceptance-finalization-prompt.md
 ```
 
-Active M71 execution-review loop prompt:
+Accepted M71 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m71-execution-review-loop-prompt.md
+```
+
+Active post-M71 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m71-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1196,7 +1209,7 @@ docs/agent/runs/m71-execution-review-loop-prompt.md
   tests, CLI/report/writer behavior, Rust, compiler execution, broad TSIL
   parsing, lowering-time file/catalog reads, `tsldata` reads during lowering
   evaluation, host CPU queries, or runtime `frozen/` use.
-- M71 is accepted for execution as exact array-initialization
+- M71 is accepted as exact array-initialization
   vector-alignment request resolution only. M71 must resolve exactly the M67
   `value<generation>(vector::alignment)` request through the accepted M69/M70
   extracted pipeline and explicit typed vector-alignment metadata supplied
@@ -1947,10 +1960,31 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - Post-M70 planning follow-up for M71 execution: include the M70 validation
   hardening follow-up by explicitly guarding against catalog reads, `tsldata`
   reads, and host CPU queries during request resolution.
+- M71 execution addressed the post-M70 vector-alignment follow-ups: review
+  verified explicit typed vector-alignment metadata, typed M67/M68/M69/M70
+  request/result consumption, unchanged M68/M69/M70 behavior, unresolved
+  backend uninit, and no backend/rendering/generated-output expansion.
+- M71 documentation revision follow-up addressed during the execution-review
+  loop: document the new
+  `TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-*` diagnostic codes and replace the
+  stale roadmap handoff that still said post-M70 finalization was pending.
+- M71 validation follow-up: consider adding a broader pipeline-level guard
+  against catalog reads, `tsldata` reads, and host CPU queries. M71 includes
+  direct resolver coverage and validation passed; this is hardening only.
+- M71 extensibility follow-up: the exact array-initialization resolver pattern
+  is becoming repetitive. If M72+ repeats the same provenance/request/metadata
+  shape, consider a small private typed helper extraction rather than a broad
+  registry or raw string dispatcher.
+- M71 public-boundary follow-up: keep future `tslgen.lowering.__all__`
+  additions limited to genuinely consumed typed boundary values as the
+  exported lowering surface grows.
+- M71 documentation follow-up: after M71 acceptance, sweep remaining
+  pre-acceptance wording such as "selected" or "should" to
+  accepted/implemented wording where appropriate in redesign docs.
 
 ## Stop Condition
 
-No stop condition is active. The workflow proceeds with M71 execution.
+No stop condition is active. The workflow proceeds with post-M71 planning.
 
 ## Validation Expectations
 

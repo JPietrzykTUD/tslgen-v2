@@ -7722,8 +7722,6 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m70-acceptance-finalization-prompt.md` is created and
-  active pending human acceptance. That finalization prompt will create
-  `docs/agent/runs/m71-execution-review-loop-prompt.md` after explicit human
-  acceptance. Do not start M71 until the acceptance-finalization prompt records
-  acceptance.
+- Human acceptance after post-M70 planning has been recorded, and
+  `docs/agent/runs/m71-execution-review-loop-prompt.md` is the active
+  execution-review prompt for M71.
