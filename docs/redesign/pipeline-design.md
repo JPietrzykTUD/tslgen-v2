@@ -591,6 +591,24 @@ not create broad registries, semantic dispatchers, hidden backfeeds, generic
 body/call/store/return parsing, backend planning, rendering, or generated
 output.
 
+M78 execution keeps the Stage 8 behavior unchanged while moving exact
+array-initialization helper/slot shape rules into
+`tslgen.lowering._array_body_shapes` and extracted exact array-body
+diagnostics into `tslgen.lowering._array_body_diagnostics`. The `boundary.py`
+facade remains the public import surface and now measures 11,109 physical
+lines, 1,262 below the pre-M78 baseline. The new modules import no
+`boundary.py` internals, so the decomposition does not introduce a circular
+private dependency.
+
+Post-M78 planning selects M79 as behavior-preserving Stage 8 typed model
+ownership extraction. It does not add a new stage, semantic lowering result,
+backfeed behavior, or stage dispatcher. The selected slice should move exact
+array-body / array-initialization model ownership into private typed modules,
+consolidate exact helper alias ownership, and tighten diagnostics typing only
+where the same private model boundary supplies typed inputs. `boundary.py`
+remains the public facade/coordinator, and private modules still must not
+import it.
+
 ## Stage 9: Backend Planning
 
 Inputs:

@@ -10,6 +10,8 @@ import unittest
 from unittest import mock
 
 from _helpers import assert_diagnostic
+import tslgen.lowering._array_body_diagnostics as lowering_array_body_diagnostics
+import tslgen.lowering._array_body_shapes as lowering_array_body_shapes
 import tslgen.lowering._exact_shapes as lowering_exact_shapes
 import tslgen.lowering._pipeline as lowering_pipeline
 import tslgen.lowering.boundary as lowering_boundary
@@ -4750,6 +4752,20 @@ class LoweringBoundaryTests(unittest.TestCase):
         shape = lowering_exact_shapes.EXACT_SELECTED_BODY_ASSIGNMENT_SHAPE
 
         self.assertEqual(shape.target_text, "pg")
+        self.assertEqual(
+            lowering_exact_shapes.EXACT_PREDICATE_INIT_TYPE_TOKEN,
+            "svbool_t",
+        )
+        self.assertEqual(lowering_exact_shapes.EXACT_PREDICATE_TOKEN, "pg")
+        self.assertEqual(
+            lowering_exact_shapes.EXACT_PREDICATE_INIT_DIRECT_INTRINSIC_TOKEN,
+            "svptrue_b8",
+        )
+        self.assertIsNotNone(
+            lowering_exact_shapes.EXACT_PREDICATE_INIT_SLOT_RE.match(
+                "svbool_t pg = intrin<svptrue_b8>();",
+            )
+        )
         self.assertTrue(shape.supports_direct_intrinsic_token("svptrue_b16"))
         self.assertTrue(shape.supports_direct_intrinsic_token("svptrue_b32"))
         self.assertTrue(shape.supports_direct_intrinsic_token("svptrue_b64"))
@@ -4770,6 +4786,63 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(
             lowering_exact_shapes.EXACT_POST_BRANCH_MEMBER_ACCESS_TEXT,
             "tmp.data()",
+        )
+
+    def test_m78_array_body_decomposition_keeps_public_facade_stable(self) -> None:
+        self.assertIs(
+            lowering_boundary.ExactArrayInitializationSlotFormIr,
+            ExactArrayInitializationSlotFormIr,
+        )
+        self.assertIs(
+            lowering_boundary.ExactPredicatePathStructuralRequestIr,
+            ExactPredicatePathStructuralRequestIr,
+        )
+        self.assertIs(
+            lowering_boundary.lower_exact_array_initialization_slot_form,
+            lower_exact_array_initialization_slot_form,
+        )
+        self.assertIs(
+            lowering_boundary.lower_exact_post_branch_intrinsic_call_site_structural_request,
+            lower_exact_post_branch_intrinsic_call_site_structural_request,
+        )
+
+    def test_m78_array_body_package_moves_shapes_and_diagnostics(self) -> None:
+        self.assertIs(
+            lowering_boundary._array_body_shapes,
+            lowering_array_body_shapes,
+        )
+        self.assertIs(
+            lowering_boundary._array_body_diagnostics,
+            lowering_array_body_diagnostics,
+        )
+        self.assertNotIn(
+            "_EXACT_ARRAY_INITIALIZATION_SLOT_RE",
+            lowering_boundary.__dict__,
+        )
+        self.assertNotIn(
+            "_array_initialization_slot_malformed_diagnostic",
+            lowering_boundary.__dict__,
+        )
+
+        slot_match = (
+            lowering_array_body_shapes._EXACT_ARRAY_INITIALIZATION_SLOT_RE.match(
+                "var<typed>(array_type<type<generation>(base::in), "
+                "value<generation>(vector::length), "
+                "value<generation>(vector::alignment)>, tmp, "
+                "value<backend>(uninit::array))",
+            )
+        )
+        self.assertIsNotNone(slot_match)
+        diagnostic = (
+            lowering_array_body_diagnostics
+            ._array_initialization_slot_malformed_diagnostic(
+                "malformed exact array-initialization slot",
+                None,
+            )
+        )
+        self.assertEqual(
+            diagnostic.code,
+            "TSL-LOWER-ARRAY-INIT-SLOT-FORM-MALFORMED",
         )
 
     def test_lower_candidates_structural_sequence_stage_follows_declaration_shell(

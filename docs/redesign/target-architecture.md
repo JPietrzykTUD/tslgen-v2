@@ -527,6 +527,23 @@ Current roadmap note:
   least 1,000 physical lines from the 12,371-line pre-M78 baseline, without
   duplicate moved code, new semantics, backend/rendering/output behavior, broad
   parsing, broad registries, or extension hardwiring.
+- M78 execution realizes the first package decomposition through
+  `tslgen.lowering._array_body_shapes` and
+  `tslgen.lowering._array_body_diagnostics`. The public facade remains
+  `tslgen.lowering.boundary`, and `boundary.py` now measures 11,109 physical
+  lines. The private modules are exact-package-owned helpers and diagnostics,
+  not plugin registries, semantic dispatchers, backend translation hooks, or a
+  broad class hierarchy.
+- Post-M78 planning selects Milestone 79 as exact array-body typed model
+  ownership extraction. M79 may combine the M78 alias-deduplication and
+  diagnostics-typing follow-ups only because they are one ownership boundary:
+  the exact array-body / array-initialization typed models still live in the
+  facade while related helper aliases and diagnostics live in private modules.
+  The target is a private model boundary such as
+  `tslgen.lowering._array_body_models` that `boundary.py` imports and re-
+  exports. Private lowering modules must not import `boundary.py`, and M79 is
+  not permission for a registry, dispatcher, plugin system, broad class
+  hierarchy, backend hook, renderer hook, or new lowering behavior.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

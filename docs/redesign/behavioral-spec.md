@@ -565,6 +565,17 @@ decomposition. M78 also does not add new TSL behavior. It must preserve
 accepted M57-M77 behavior while moving the accepted exact array-body /
 array-initialization package out of `boundary.py` and proving the facade is at
 least 1,000 physical lines smaller than the 12,371-line pre-M78 baseline.
+M78 execution keeps this as a no-behavior-change refactor: exact shape/rule
+values and diagnostics moved to private lowering modules, `boundary.py` remains
+the public facade, and the measured facade size is 11,109 physical lines.
+
+Post-M78 planning selects M79 as another behavior-preserving lowering
+architecture slice. M79 adds no new TSL behavior and no new generation helper
+semantics. It consolidates exact array-body / array-initialization typed model
+ownership into private lowering modules, keeps `boundary.py` as the public
+facade, preserves accepted M57-M78 diagnostics and stage behavior, and uses
+typed model/protocol ownership to remove duplicated exact helper aliases and
+targeted diagnostic `Any` inputs without changing selected-branch behavior.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic

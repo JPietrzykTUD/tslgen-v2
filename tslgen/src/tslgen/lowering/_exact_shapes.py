@@ -53,6 +53,16 @@ EXACT_SELECTED_BODY_ASSIGNMENT_SHAPE = ExactSelectedBodyAssignmentShape(
     ),
 )
 
+EXACT_PREDICATE_INIT_TYPE_TOKEN = "svbool_t"
+EXACT_PREDICATE_TOKEN = "pg"
+EXACT_PREDICATE_INIT_DIRECT_INTRINSIC_TOKEN = "svptrue_b8"
+EXACT_PREDICATE_INIT_SLOT_RE = re.compile(
+    rf"\A\s*(?P<predicate_type>{_TSIL_IDENTIFIER})\s+"
+    rf"(?P<predicate_token>{_TSIL_IDENTIFIER})\s*=\s*"
+    rf"intrin\s*<\s*(?P<direct_intrinsic_token>{_TSIL_IDENTIFIER})\s*>\s*"
+    r"\(\s*\)\s*;\s*\Z"
+)
+
 EXACT_POST_BRANCH_CALL_HEAD_TOKEN = "intrin"
 EXACT_POST_BRANCH_INTRINSIC_TOKEN = "svst1"
 EXACT_POST_BRANCH_MEMBER_ACCESS_TEXT = "tmp.data()"

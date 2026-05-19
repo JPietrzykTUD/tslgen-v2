@@ -1461,6 +1461,23 @@ Consequences:
   of at least 1,000 physical lines. This is not a decision to create a generic
   lowering framework, a broad OO hierarchy, a stage registry, a semantic
   dispatcher, or new body/call/store/return semantics.
+- M78 execution chooses the first concrete decomposition boundary as exact
+  array-body shapes and diagnostics, not the whole package at once:
+  `_array_body_shapes.py` owns exact array-initialization helper/slot
+  structural rule values, `_array_body_diagnostics.py` owns exact array-body
+  diagnostics, and `_exact_shapes.py` owns the remaining exact predicate-init
+  recognizer tokens. `boundary.py` remains the public facade and is reduced to
+  11,109 physical lines without adding semantics or circular imports.
+- Post-M78 planning selects M79 as exact array-body typed model ownership
+  extraction. This deliberately bundles only the follow-ups that share one
+  ownership problem: duplicated exact helper `Literal` aliases and
+  `_array_body_diagnostics.py` `Any` inputs both exist because the exact
+  array-body / array-initialization models remain owned by `boundary.py` while
+  related shapes and diagnostics now live in private modules. M79 is not a
+  general cleanup bundle; it must preserve behavior, keep `boundary.py` as the
+  public facade, prevent private modules from importing `boundary.py`, and
+  avoid registries, dispatchers, plugin systems, broad TSIL parsing, backend
+  hooks, renderer hooks, and new body/call/store/return semantics.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

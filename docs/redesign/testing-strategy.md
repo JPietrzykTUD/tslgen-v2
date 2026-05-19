@@ -949,6 +949,28 @@ Recommended first parity checks:
   semantics, raw helper dispatch, catalog/`tsldata`/host CPU/backend map
   reads, import cycles, duplicate moved code, or runtime `frozen/` use is
   introduced.
+- M78 execution adds focused module-decomposition tests asserting that the
+  accepted exact lowering types/functions still resolve through the
+  `tslgen.lowering`/`boundary.py` facade while exact array-body shape rules and
+  diagnostics resolve through the new private modules. The measured
+  `boundary.py` line count is 11,109, which is 1,262 physical lines below the
+  pre-M78 baseline.
+- Milestone 79 tests must prove behavior-preserving typed model ownership
+  extraction: the full lowering-boundary unit suite remains green; accepted
+  public exact model/function imports remain stable through `tslgen.lowering`
+  and `tslgen.lowering.boundary`; new private model modules import without
+  circular dependency on `boundary.py`; `_array_body_shapes.py` consumes the
+  shared exact helper aliases/specs instead of duplicating them; targeted
+  `_array_body_diagnostics.py` helpers use moved models or small private
+  protocols instead of unconstrained `Any`; representative moved model keys,
+  constructor invariants, diagnostic codes/severity/source locations/messages,
+  stage names/order, selected-branch-only diagnostics, and deterministic
+  ordering remain unchanged; `boundary.py` line count is measured against the
+  11,109-line post-M78 baseline; and no backend translation, rendering,
+  generated output, golden-file churn, broad TSIL/body/call/store/return/
+  declaration/array parsing, raw helper dispatch, catalog/`tsldata`/host CPU/
+  backend map reads, import cycles, duplicate moved code, or runtime `frozen/`
+  use is introduced.
 
 Deferred parity checks:
 

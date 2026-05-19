@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 77 is accepted.
+Milestone 78 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -385,41 +385,68 @@ must move the accepted exact array-body / array-initialization lowering package
 out of `boundary.py` into private typed modules, preserve accepted M57-M77
 behavior, keep public imports stable, and reduce `boundary.py` by at least
 1,000 physical lines from the 12,371-line pre-M78 baseline. Human acceptance
-was recorded, and M78 execution is the active workflow action.
+was recorded.
+
+The M78 execution-review loop returned `Accept With Follow-Ups` with no
+blocking implementation, validation, boundary, documentation, or evidence
+issues. M78 preserves accepted M57-M77 behavior while moving exact
+array-initialization helper/slot shape rules into
+`tslgen.lowering._array_body_shapes`, extracted exact array-body /
+array-initialization diagnostics into
+`tslgen.lowering._array_body_diagnostics`, and exact predicate-init structural
+tokens into `tslgen.lowering._exact_shapes`. The public `tslgen.lowering` and
+`tslgen.lowering.boundary` import surfaces remain stable. `boundary.py` now
+measures 11,109 physical lines, which is 1,262 lines below the 12,371-line
+pre-M78 baseline and satisfies the M78 reduction target. New lowering
+semantics, backend translation, rendering, generated output, broad parsing,
+extension hardwiring, file/catalog reads, `tsldata` reads, host CPU queries,
+backend map reads, and runtime `frozen/` use remain out of scope.
+
+Post-M78 planning selected
+`Milestone 79: Exact Array-Body Typed Model Ownership Extraction Slice`.
+The selected plan is behavior-preserving typed model ownership extraction. It
+must move exact array-body / array-initialization model ownership into private
+lowering modules, consolidate duplicated exact helper `Literal` aliases, and
+tighten targeted `_array_body_diagnostics.py` helper typing where the new
+typed model/protocol boundary supplies the needed inputs. It must preserve
+accepted M57-M78 behavior, keep `boundary.py` as the public facade, prevent
+private lowering modules from importing `boundary.py`, and materially reduce
+the post-M78 11,109-line facade without treating line count as permission to
+move unrelated shared lowering models. Human acceptance was recorded.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 78.
+Execute Milestone 79.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m78-execution-review-loop-prompt.md
+docs/agent/runs/m79-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 78: Lowering Boundary Package Decomposition Slice
+Milestone 79: Exact Array-Body Typed Model Ownership Extraction Slice
 ```
 
 Latest review verdict:
 
 ```text
-Post-M77 planning was accepted by the user. The acceptance finalization
-prepared the M78 execution-review loop prompt.
+Post-M78 planning was accepted by the user. The acceptance finalization
+prepared the M79 execution-review loop prompt.
 ```
 
 Next expected action:
 
 ```text
-Run the active M78 execution-review loop prompt. Use the specified
-single-executor plus read-only review/audit workflow. Do not start M79 until
-M78 review accepts and the next concrete prompt is created.
+Run the active M79 execution-review loop prompt. Use the specified
+single-executor plus read-only review/audit workflow. Do not start M80 until
+M79 review accepts and the next concrete prompt is created.
 ```
 
 Accepted planning prompt:
@@ -956,10 +983,28 @@ Accepted post-M77 acceptance-finalization prompt:
 docs/agent/runs/post-m77-acceptance-finalization-prompt.md
 ```
 
-Active M78 execution-review loop prompt:
+Accepted M78 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m78-execution-review-loop-prompt.md
+```
+
+Completed post-M78 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m78-planning-plus-review-prompt.md
+```
+
+Accepted post-M78 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m78-acceptance-finalization-prompt.md
+```
+
+Active M79 execution-review loop prompt:
+
+```text
+docs/agent/runs/m79-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1642,31 +1687,28 @@ docs/agent/runs/m78-execution-review-loop-prompt.md
   structural evidence only. They must not become extension, SVE, store,
   memory, backend, renderer, or generated-output semantics without a future
   accepted typed semantic milestone.
-- Post-M77 planning selected M78 as behavior-preserving lowering boundary
-  package decomposition only.
-- M78 must move one coherent extraction target: the accepted exact array-body /
-  array-initialization lowering package from M63-M77. It must not attempt a
-  whole-file rewrite or generic lowering framework.
-- M78 must keep public `tslgen.lowering` and `tslgen.lowering.boundary` import
-  surfaces stable while reducing `boundary.py` by at least 1,000 physical lines
-  from the 12,371-line pre-M78 baseline.
-- M78 may move exact package-owned models, orchestration, stage builders,
-  source adapters, validators, and diagnostics only when they are exclusively
-  consumed by the exact array-body / array-initialization path or are necessary
-  to preserve a coherent private module boundary.
-- M78 must move remaining M75 exact predicate-init recognizer tokens such as
-  `svbool_t`, `pg`, and `svptrue_b8` into `_exact_shapes.py` only as
-  slice-local structural evidence, not SVE or extension semantics.
-- M78 must preserve accepted M57-M77 diagnostics, stage names, stage ordering,
-  output identities, keys, deterministic ordering, selected-branch-only
-  diagnostics, public imports, and no-external-input boundaries.
-- M78 must not add new lowering semantics, generic body/call/store/return/
-  declaration/array semantics, broad TSIL parsing, raw helper dispatch,
-  backend translation, rendering, generated output, CLI/report/writer behavior,
-  Rust, compiler execution, lowering-time file/catalog reads, `tsldata` reads,
-  host CPU queries, backend map reads, runtime `frozen/` use, broad registries,
-  runtime plugins, semantic dispatchers, hidden backfeeds, or fixpoint
-  execution.
+- M78 is accepted as behavior-preserving lowering boundary package
+  decomposition only.
+- M78 moved exact array-initialization helper/slot shapes into
+  `tslgen.lowering._array_body_shapes`, extracted exact array-body /
+  array-initialization diagnostics into
+  `tslgen.lowering._array_body_diagnostics`, and remaining M75 exact
+  predicate-init recognizer tokens such as `svbool_t`, `pg`, and `svptrue_b8`
+  into `tslgen.lowering._exact_shapes` as slice-local structural evidence.
+- M78 kept public `tslgen.lowering` and `tslgen.lowering.boundary` import
+  surfaces stable and reduced `boundary.py` to 11,109 physical lines from the
+  12,371-line pre-M78 baseline.
+- Future lowering package decomposition must preserve accepted M57-M78
+  diagnostics, stage names, stage ordering, output identities, keys,
+  deterministic ordering, selected-branch-only diagnostics, public imports, and
+  no-external-input boundaries.
+- Future lowering package decomposition must not add new lowering semantics,
+  generic body/call/store/return/declaration/array semantics, broad TSIL
+  parsing, raw helper dispatch, backend translation, rendering, generated
+  output, CLI/report/writer behavior, Rust, compiler execution,
+  lowering-time file/catalog reads, `tsldata` reads, host CPU queries, backend
+  map reads, runtime `frozen/` use, broad registries, runtime plugins, semantic
+  dispatchers, hidden backfeeds, or fixpoint execution.
 
 ## Accepted Milestone 48
 
@@ -2570,8 +2612,8 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M77 review follow-up: before real backfeed requests are used,
   `ExactArrayBodyPipelineSnapshot.key` should include request kind/source stage
   identity for pending backfeed requests, not only `request.key`.
-- M77 review follow-up: later cleanup can move remaining inline M75
-  predicate-init exact tokens such as `svbool_t`, `pg`, and `svptrue_b8` into
+- M77 review follow-up resolved by M78: remaining inline M75 predicate-init
+  exact tokens such as `svbool_t`, `pg`, and `svptrue_b8` moved into
   `_exact_shapes.py` as slice-local structural evidence.
 - M77 review follow-up: `GenerationLoweringStage.__post_init__` remains a
   growing stage/output validation table and should be revisited as the next
@@ -2587,10 +2629,37 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - Post-M77 planning follow-up for M78 execution: object-oriented structure, if
   used, must be small and local to the exact decomposition boundary; broad
   class hierarchies are out of scope.
+- M78 review follow-up: `_array_body_diagnostics.py` uses `Any` for several
+  attribute-dependent diagnostic helper inputs to preserve one-way private
+  imports and avoid circularity. A later decomposition slice should replace
+  this with small local protocols or move the relevant typed models with the
+  diagnostics.
+- M78 review follow-up: exact helper `Literal` aliases are duplicated between
+  `boundary.py` and `_array_body_shapes.py`; a later typed-model extraction
+  should consolidate ownership to reduce drift risk.
+- Post-M78 planning follow-up for M79 execution: M79 is allowed to combine
+  duplicated helper alias cleanup and targeted diagnostic typing only as one
+  exact array-body typed model ownership slice. It must not become broad
+  package churn, a whole-file rewrite, or multiple unrelated cleanups.
+- Post-M78 planning follow-up for M79 execution: `boundary.py` remains the
+  public facade/coordinator. Private modules such as `_array_body_models.py`,
+  `_array_body_shapes.py`, and `_array_body_diagnostics.py` must not import
+  `boundary.py`; imports should remain one-way from the facade to private
+  typed modules.
+- Post-M78 planning follow-up for M79 execution: the line-count target is
+  measured against the post-M78 11,109-line baseline, but line count must not
+  drive movement of unrelated shared generation/lowering models or creation of
+  a second monolith.
+- Post-M78 planning follow-up for M79 execution: M79 must not add lowering
+  semantics, helper evaluation, stage behavior, registries, dispatchers,
+  fixpoint/backfeed execution, broad TSIL/body/call/store/return/declaration/
+  array parsing, backend translation, rendering, generated output, CLI/report/
+  writer behavior, Rust, compiler execution, file/catalog reads, `tsldata`
+  reads, host CPU queries, backend map reads, or runtime `frozen/` use.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M78 through the
+No stop condition is active. The workflow is ready to execute M79 through the
 active execution-review loop prompt.
 
 ## Validation Expectations
@@ -2608,7 +2677,7 @@ PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
 git diff --check
 ```
 
-For M78 specifically, the active prompt requires:
+For M78, validation completed with:
 
 ```bash
 wc -l tslgen/src/tslgen/lowering/boundary.py
@@ -2617,5 +2686,4 @@ PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
 git diff --check
 ```
 
-It also requires one focused M78 module-decomposition/import-stability command
-chosen by the executor.
+The M78-focused module-decomposition/import-stability command also completed.

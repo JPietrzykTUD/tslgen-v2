@@ -22,6 +22,8 @@ from tslgen.domain.generation_rules import (
 )
 from tslgen.domain.values import CatalogValue
 import tslgen.lowering._exact_shapes as _exact_shapes
+import tslgen.lowering._array_body_diagnostics as _array_body_diagnostics
+import tslgen.lowering._array_body_shapes as _array_body_shapes
 import tslgen.lowering._pipeline as _lowering_pipeline
 
 
@@ -213,168 +215,6 @@ _INTRIN_COMPOSE_RETURN_RE = re.compile(
 )
 _INTRIN_COMPOSE_MARKER_RE = re.compile(r"\bintrin_compose\s*<")
 _EMIT_RETURN_HEAD_RE = re.compile(r"\A\s*emit_return\s*\(")
-_EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND: dict[
-    ExactArrayInitializationHelperLeafKind, str
-] = {
-    "type_generation_base_in": "type<generation>(base::in)",
-    "value_generation_vector_length": "value<generation>(vector::length)",
-    "value_generation_vector_alignment": "value<generation>(vector::alignment)",
-    "value_backend_uninit_array": "value<backend>(uninit::array)",
-}
-
-
-@dataclass(frozen=True, slots=True)
-class _ExactArrayInitializationHelperLeafSpec:
-    field_name: ExactArrayInitializationHelperLeafFieldName
-    expected_leaf_kind: ExactArrayInitializationHelperLeafKind
-    request_kind: ExactArrayInitializationHelperRequestKind
-    request_ordinal: int
-
-
-_EXACT_ARRAY_INITIALIZATION_HELPER_LEAF_SPECS: tuple[
-    _ExactArrayInitializationHelperLeafSpec, ...
-] = (
-    _ExactArrayInitializationHelperLeafSpec(
-        field_name="base_type_leaf",
-        expected_leaf_kind="type_generation_base_in",
-        request_kind="generation_type",
-        request_ordinal=0,
-    ),
-    _ExactArrayInitializationHelperLeafSpec(
-        field_name="vector_length_leaf",
-        expected_leaf_kind="value_generation_vector_length",
-        request_kind="generation_value",
-        request_ordinal=1,
-    ),
-    _ExactArrayInitializationHelperLeafSpec(
-        field_name="vector_alignment_leaf",
-        expected_leaf_kind="value_generation_vector_alignment",
-        request_kind="generation_value",
-        request_ordinal=2,
-    ),
-    _ExactArrayInitializationHelperLeafSpec(
-        field_name="backend_uninit_leaf",
-        expected_leaf_kind="value_backend_uninit_array",
-        request_kind="backend_value",
-        request_ordinal=3,
-    ),
-)
-
-
-@dataclass(frozen=True, slots=True)
-class _ExactArrayInitializationBaseTypeRequestRule:
-    request_ordinal: int
-    request_kind: Literal["generation_type"]
-    helper_leaf_kind: Literal["type_generation_base_in"]
-    expected_leaf_source_text: str
-    result_kind: Literal["base.in"]
-
-
-_EXACT_ARRAY_INITIALIZATION_BASE_TYPE_REQUEST_RULE = (
-    _ExactArrayInitializationBaseTypeRequestRule(
-        request_ordinal=0,
-        request_kind="generation_type",
-        helper_leaf_kind="type_generation_base_in",
-        expected_leaf_source_text=_EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND[
-            "type_generation_base_in"
-        ],
-        result_kind="base.in",
-    )
-)
-
-
-@dataclass(frozen=True, slots=True)
-class _ExactArrayInitializationVectorLengthRequestRule:
-    request_ordinal: int
-    request_kind: Literal["generation_value"]
-    helper_leaf_kind: Literal["value_generation_vector_length"]
-    expected_leaf_source_text: str
-
-
-_EXACT_ARRAY_INITIALIZATION_VECTOR_LENGTH_REQUEST_RULE = (
-    _ExactArrayInitializationVectorLengthRequestRule(
-        request_ordinal=1,
-        request_kind="generation_value",
-        helper_leaf_kind="value_generation_vector_length",
-        expected_leaf_source_text=_EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND[
-            "value_generation_vector_length"
-        ],
-    )
-)
-
-
-@dataclass(frozen=True, slots=True)
-class _ExactArrayInitializationVectorAlignmentRequestRule:
-    request_ordinal: int
-    request_kind: Literal["generation_value"]
-    helper_leaf_kind: Literal["value_generation_vector_alignment"]
-    expected_leaf_source_text: str
-
-
-_EXACT_ARRAY_INITIALIZATION_VECTOR_ALIGNMENT_REQUEST_RULE = (
-    _ExactArrayInitializationVectorAlignmentRequestRule(
-        request_ordinal=2,
-        request_kind="generation_value",
-        helper_leaf_kind="value_generation_vector_alignment",
-        expected_leaf_source_text=_EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND[
-            "value_generation_vector_alignment"
-        ],
-    )
-)
-
-
-@dataclass(frozen=True, slots=True)
-class _ExactArrayInitializationBackendUninitRequestRule:
-    request_ordinal: int
-    request_kind: Literal["backend_value"]
-    helper_leaf_kind: Literal["value_backend_uninit_array"]
-    expected_leaf_source_text: str
-
-
-_EXACT_ARRAY_INITIALIZATION_BACKEND_UNINIT_REQUEST_RULE = (
-    _ExactArrayInitializationBackendUninitRequestRule(
-        request_ordinal=3,
-        request_kind="backend_value",
-        helper_leaf_kind="value_backend_uninit_array",
-        expected_leaf_source_text=_EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND[
-            "value_backend_uninit_array"
-        ],
-    )
-)
-_ARRAY_INITIALIZATION_HELPER_TARGET = rf"{_TSIL_IDENTIFIER}::{_TSIL_IDENTIFIER}"
-_ARRAY_INITIALIZATION_HELPER_SHAPE = (
-    rf"(?:type|value)<(?:generation|backend)>\("
-    rf"{_ARRAY_INITIALIZATION_HELPER_TARGET}\)"
-)
-_EXACT_ARRAY_INITIALIZATION_SLOT_RE = re.compile(
-    r"\A[ \t]*var<typed>\("
-    r"array_type<"
-    r"(?P<base_type>type<generation>\(base::in\))"
-    r",[ \t]*"
-    r"(?P<vector_length>value<generation>\(vector::length\))"
-    r",[ \t]*"
-    r"(?P<vector_alignment>value<generation>\(vector::alignment\))"
-    r">,[ \t]*(?P<variable>tmp),[ \t]*"
-    r"(?P<backend_uninit>value<backend>\(uninit::array\))"
-    r"\)[ \t]*\Z"
-)
-_EXACT_PREDICATE_INIT_SLOT_RE = re.compile(
-    rf"\A\s*(?P<predicate_type>{_TSIL_IDENTIFIER})\s+"
-    rf"(?P<predicate_token>{_TSIL_IDENTIFIER})\s*=\s*"
-    rf"intrin\s*<\s*(?P<direct_intrinsic_token>{_TSIL_IDENTIFIER})\s*>\s*"
-    r"\(\s*\)\s*;\s*\Z"
-)
-_ARRAY_INITIALIZATION_SLOT_HELPER_SHAPE_RE = re.compile(
-    r"\A[ \t]*var<typed>\("
-    rf"array_type<(?P<base_type>{_ARRAY_INITIALIZATION_HELPER_SHAPE})"
-    r",[ \t]*"
-    rf"(?P<vector_length>{_ARRAY_INITIALIZATION_HELPER_SHAPE})"
-    r",[ \t]*"
-    rf"(?P<vector_alignment>{_ARRAY_INITIALIZATION_HELPER_SHAPE})"
-    r">,[ \t]*tmp,[ \t]*"
-    rf"(?P<backend_uninit>{_ARRAY_INITIALIZATION_HELPER_SHAPE})"
-    r"\)[ \t]*\Z"
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1671,7 +1511,7 @@ class ExactArrayInitializationUnresolvedLeaf:
     source_location: SourceLocation
 
     def __post_init__(self) -> None:
-        expected_text = _EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND.get(self.kind)
+        expected_text = _array_body_shapes._EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND.get(self.kind)
         if expected_text is None:
             raise ValueError("array-initialization helper leaf kind is unsupported")
         if self.source_text != expected_text:
@@ -1806,7 +1646,7 @@ class ExactArrayInitializationHelperRequestRecord:
                 "the M66 slot form envelope"
             )
         if self.request_ordinal not in range(
-            len(_EXACT_ARRAY_INITIALIZATION_HELPER_LEAF_SPECS)
+            len(_array_body_shapes._EXACT_ARRAY_INITIALIZATION_HELPER_LEAF_SPECS)
         ):
             raise ValueError(
                 "array-initialization helper request ordinal is unsupported"
@@ -1817,7 +1657,7 @@ class ExactArrayInitializationHelperRequestRecord:
             "backend_value",
         ):
             raise ValueError("array-initialization helper request kind is unsupported")
-        expected_text = _EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND.get(
+        expected_text = _array_body_shapes._EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND.get(
             self.helper_leaf_kind,
         )
         if expected_text is None or self.leaf_source_text != expected_text:
@@ -1935,7 +1775,7 @@ class ExactArrayInitializationHelperRequestIr:
         object.__setattr__(self, "requests", tuple(self.requests))
         expected = tuple(
             (spec.request_ordinal, spec.expected_leaf_kind)
-            for spec in _EXACT_ARRAY_INITIALIZATION_HELPER_LEAF_SPECS
+            for spec in _array_body_shapes._EXACT_ARRAY_INITIALIZATION_HELPER_LEAF_SPECS
         )
         actual = tuple(
             (request.request_ordinal, request.helper_leaf_kind)
@@ -2436,7 +2276,7 @@ class ExactArrayInitializationDeferredBackendUninitValue:
             )
         if (
             request.leaf_source_text
-            != _EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND[
+            != _array_body_shapes._EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND[
                 "value_backend_uninit_array"
             ]
         ):
@@ -4212,7 +4052,7 @@ def assemble_exact_array_body_envelope(
     except (TypeError, ValueError) as exc:
         return Result.failure(
             (
-                _array_body_envelope_shape_unsupported_diagnostic(
+                _array_body_diagnostics._array_body_envelope_shape_unsupported_diagnostic(
                     str(exc),
                     skeleton.source_location,
                 ),
@@ -4232,7 +4072,7 @@ def lower_exact_array_initialization_slot_form(
     if selected_slot is None:
         return Result.failure(
             (
-                _array_initialization_slot_missing_diagnostic(
+                _array_body_diagnostics._array_initialization_slot_missing_diagnostic(
                     "array-initialization slot form lowering requires the M65 "
                     "opaque_pre_branch_array_initialization slot at ordinal 0",
                     envelope.source_location,
@@ -4242,7 +4082,7 @@ def lower_exact_array_initialization_slot_form(
     if not isinstance(selected_slot, ExactArrayBodyEnvelopeOpaqueSlot):
         return Result.failure(
             (
-                _array_initialization_slot_wrong_position_diagnostic(
+                _array_body_diagnostics._array_initialization_slot_wrong_position_diagnostic(
                     "array-initialization slot form lowering requires an opaque "
                     "M65 slot, but the selected slot is not opaque",
                     selected_slot.source_location,
@@ -4257,24 +4097,24 @@ def lower_exact_array_initialization_slot_form(
     if slot_diagnostic is not None:
         return Result.failure((slot_diagnostic,))
 
-    exact_match = _EXACT_ARRAY_INITIALIZATION_SLOT_RE.match(
+    exact_match = _array_body_shapes._EXACT_ARRAY_INITIALIZATION_SLOT_RE.match(
         selected_slot.opaque_source_text,
     )
     if exact_match is None:
-        shape_match = _ARRAY_INITIALIZATION_SLOT_HELPER_SHAPE_RE.match(
+        shape_match = _array_body_shapes._ARRAY_INITIALIZATION_SLOT_HELPER_SHAPE_RE.match(
             selected_slot.opaque_source_text,
         )
         if shape_match is not None:
             return Result.failure(
                 (
-                    _array_initialization_slot_helper_unsupported_diagnostic(
+                    _array_body_diagnostics._array_initialization_slot_helper_unsupported_diagnostic(
                         selected_slot,
                     ),
                 )
             )
         return Result.failure(
             (
-                _array_initialization_slot_malformed_diagnostic(
+                _array_body_diagnostics._array_initialization_slot_malformed_diagnostic(
                     "array-initialization slot form lowering recognizes only "
                     "the exact array.tsl:105 var<typed>(array_type<...>, tmp, "
                     "value<backend>(uninit::array)) form",
@@ -4331,7 +4171,7 @@ def lower_exact_array_initialization_slot_form(
     except (TypeError, ValueError) as exc:
         return Result.failure(
             (
-                _array_initialization_slot_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_slot_provenance_mismatch_diagnostic(
                     str(exc),
                     selected_slot.source_location,
                 ),
@@ -4356,11 +4196,11 @@ def lower_exact_array_initialization_helper_requests(
     diagnostics: list[Diagnostic] = []
     requests: list[ExactArrayInitializationHelperRequestRecord] = []
     seen_leaf_kinds: set[ExactArrayInitializationHelperLeafKind] = set()
-    for spec in _EXACT_ARRAY_INITIALIZATION_HELPER_LEAF_SPECS:
+    for spec in _array_body_shapes._EXACT_ARRAY_INITIALIZATION_HELPER_LEAF_SPECS:
         leaf = getattr(form, spec.field_name, None)
         if not isinstance(leaf, ExactArrayInitializationUnresolvedLeaf):
             diagnostics.append(
-                _array_initialization_helper_request_missing_leaf_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_request_missing_leaf_diagnostic(
                     spec,
                     form,
                 )
@@ -4368,7 +4208,7 @@ def lower_exact_array_initialization_helper_requests(
             continue
         if leaf.kind in seen_leaf_kinds:
             diagnostics.append(
-                _array_initialization_helper_request_duplicate_leaf_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_request_duplicate_leaf_diagnostic(
                     leaf,
                     form,
                 )
@@ -4377,16 +4217,16 @@ def lower_exact_array_initialization_helper_requests(
         seen_leaf_kinds.add(leaf.kind)
         if leaf.kind != spec.expected_leaf_kind:
             diagnostics.append(
-                _array_initialization_helper_request_mismatched_leaf_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_request_mismatched_leaf_diagnostic(
                     spec,
                     leaf,
                 )
             )
             continue
-        expected_text = _EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND.get(leaf.kind)
+        expected_text = _array_body_shapes._EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND.get(leaf.kind)
         if expected_text is None or leaf.source_text != expected_text:
             diagnostics.append(
-                _array_initialization_helper_request_unsupported_leaf_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_request_unsupported_leaf_diagnostic(
                     spec,
                     leaf,
                 )
@@ -4394,7 +4234,7 @@ def lower_exact_array_initialization_helper_requests(
             continue
         if leaf.source_location is None:
             diagnostics.append(
-                _array_initialization_helper_request_missing_leaf_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_request_missing_leaf_diagnostic(
                     spec,
                     form,
                 )
@@ -4420,7 +4260,7 @@ def lower_exact_array_initialization_helper_requests(
             )
         except (TypeError, ValueError) as exc:
             diagnostics.append(
-                _array_initialization_helper_request_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_request_provenance_mismatch_diagnostic(
                     str(exc),
                     leaf.source_location,
                 )
@@ -4448,7 +4288,7 @@ def lower_exact_array_initialization_helper_requests(
     except (TypeError, ValueError) as exc:
         return Result.failure(
             (
-                _array_initialization_helper_request_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_request_provenance_mismatch_diagnostic(
                     str(exc),
                     form.source_location,
                 ),
@@ -4505,7 +4345,7 @@ def lower_exact_array_initialization_base_type_request(
     if type_ref.type_tag != request_ir.selected_type_tag:
         return Result.failure(
             (
-                _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
                     "array-initialization base-type request resolved selected "
                     f"type tag {type_ref.type_tag!r}, but the M67 "
                     "helper-request IR records selected type tag "
@@ -4539,7 +4379,7 @@ def lower_exact_array_initialization_base_type_request(
     except (TypeError, ValueError) as exc:
         return Result.failure(
             (
-                _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
                     str(exc),
                     request_ir.source_location,
                 ),
@@ -4595,7 +4435,7 @@ def lower_exact_array_initialization_vector_length_request(
     ):
         return Result.failure(
             (
-                _array_initialization_vector_length_context_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_length_context_mismatch_diagnostic(
                     "array-initialization vector-length request resolution "
                     "requires the typed selected candidate context to match "
                     "the M68 base-type resolution candidate id and selected "
@@ -4607,7 +4447,7 @@ def lower_exact_array_initialization_vector_length_request(
     if target_extension is None or source_extension is None:
         return Result.failure(
             (
-                _array_initialization_vector_length_metadata_missing_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_length_metadata_missing_diagnostic(
                     "array-initialization vector-length request resolution "
                     "requires typed target/source extension context before "
                     "lowering evaluation",
@@ -4630,7 +4470,7 @@ def lower_exact_array_initialization_vector_length_request(
     if require_fixed_lanes and metadata.vector_length.kind != "fixed_lanes":
         return Result.failure(
             (
-                _array_initialization_vector_length_metadata_unsupported_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_length_metadata_unsupported_diagnostic(
                     "array-initialization vector-length request resolution was "
                     "asked for fixed numeric lanes, but the supplied typed "
                     f"metadata is {metadata.vector_length.kind!r}",
@@ -4667,7 +4507,7 @@ def lower_exact_array_initialization_vector_length_request(
     except (TypeError, ValueError) as exc:
         return Result.failure(
             (
-                _array_initialization_vector_length_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_length_provenance_mismatch_diagnostic(
                     str(exc),
                     base_resolution.source_location,
                 ),
@@ -4726,7 +4566,7 @@ def lower_exact_array_initialization_vector_alignment_request(
     ):
         return Result.failure(
             (
-                _array_initialization_vector_alignment_context_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_alignment_context_mismatch_diagnostic(
                     "array-initialization vector-alignment request resolution "
                     "requires the typed selected candidate context to match "
                     "the M70 vector-length resolution candidate id, target "
@@ -4750,7 +4590,7 @@ def lower_exact_array_initialization_vector_alignment_request(
     if metadata.vector_alignment.kind == "unsupported":
         return Result.failure(
             (
-                _array_initialization_vector_alignment_metadata_unsupported_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_alignment_metadata_unsupported_diagnostic(
                     "array-initialization vector-alignment request resolution "
                     "received explicit unsupported vector-alignment metadata "
                     f"policy {metadata.vector_alignment.unsupported_policy!r}",
@@ -4788,7 +4628,7 @@ def lower_exact_array_initialization_vector_alignment_request(
     except (TypeError, ValueError) as exc:
         return Result.failure(
             (
-                _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_alignment_provenance_mismatch_diagnostic(
                     str(exc),
                     vector_length_resolution.source_location,
                 ),
@@ -4851,7 +4691,7 @@ def lower_exact_array_initialization_helper_set_completion(
     ):
         return Result.failure(
             (
-                _array_initialization_helper_set_context_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_set_context_mismatch_diagnostic(
                     "array-initialization helper-set completion requires the "
                     "typed selected candidate context to match the M71 "
                     "vector-alignment resolution candidate id, target "
@@ -4905,7 +4745,7 @@ def lower_exact_array_initialization_helper_set_completion(
     except (TypeError, ValueError) as exc:
         return Result.failure(
             (
-                _array_initialization_helper_set_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_set_provenance_mismatch_diagnostic(
                     str(exc),
                     vector_alignment_resolution.source_location,
                 ),
@@ -4952,7 +4792,7 @@ def lower_exact_array_initialization_declaration_shell(
     ):
         return Result.failure(
             (
-                _array_initialization_declaration_shell_context_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_declaration_shell_context_mismatch_diagnostic(
                     "array-initialization declaration-shell lowering requires "
                     "the typed selected candidate context to match the M72 "
                     "helper-set completion candidate id, target extension, "
@@ -4995,7 +4835,7 @@ def lower_exact_array_initialization_declaration_shell(
     except (TypeError, ValueError) as exc:
         return Result.failure(
             (
-                _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_declaration_shell_provenance_mismatch_diagnostic(
                     str(exc),
                     completion.source_location,
                 ),
@@ -5043,7 +4883,7 @@ def lower_exact_array_body_structural_sequence(
     ):
         return Result.failure(
             (
-                _array_body_structural_sequence_context_mismatch_diagnostic(
+                _array_body_diagnostics._array_body_structural_sequence_context_mismatch_diagnostic(
                     "array-body structural sequence classification requires "
                     "the typed selected candidate context to match the M73 "
                     "declaration shell candidate id, target extension, source "
@@ -5072,7 +4912,7 @@ def lower_exact_array_body_structural_sequence(
         except (TypeError, ValueError) as exc:
             return Result.failure(
                 (
-                    _array_body_structural_sequence_malformed_diagnostic(
+                    _array_body_diagnostics._array_body_structural_sequence_malformed_diagnostic(
                         str(exc),
                         slot.source_location,
                     ),
@@ -5096,7 +4936,7 @@ def lower_exact_array_body_structural_sequence(
     except (TypeError, ValueError) as exc:
         return Result.failure(
             (
-                _array_body_structural_sequence_malformed_diagnostic(
+                _array_body_diagnostics._array_body_structural_sequence_malformed_diagnostic(
                     str(exc),
                     envelope.source_location,
                 ),
@@ -5619,7 +5459,7 @@ def _build_array_body_envelope_skeleton_lookup(
             skeletons_by_key[lookup_key] = skeleton
             continue
         diagnostics.append(
-            _duplicate_array_body_envelope_skeleton_diagnostic(
+            _array_body_diagnostics._duplicate_array_body_envelope_skeleton_diagnostic(
                 lookup_key,
                 skeleton,
                 conflicting=existing != skeleton,
@@ -5673,7 +5513,7 @@ def _assemble_matching_array_body_envelope(
             return Result.ok(None)
         return Result.failure(
             (
-                _missing_array_body_envelope_skeleton_diagnostic(
+                _array_body_diagnostics._missing_array_body_envelope_skeleton_diagnostic(
                     requirement,
                     envelope_stage.output,
                 ),
@@ -6061,7 +5901,7 @@ def _unused_array_body_envelope_skeleton_diagnostics(
             for envelope_key in envelope_keys
         ):
             diagnostics.append(
-                _mismatched_array_body_envelope_skeleton_diagnostic(
+                _array_body_diagnostics._mismatched_array_body_envelope_skeleton_diagnostic(
                     skeleton_key,
                     skeleton,
                     envelope_keys,
@@ -6069,7 +5909,7 @@ def _unused_array_body_envelope_skeleton_diagnostics(
             )
             continue
         diagnostics.append(
-            _orphan_array_body_envelope_skeleton_diagnostic(skeleton_key, skeleton)
+            _array_body_diagnostics._orphan_array_body_envelope_skeleton_diagnostic(skeleton_key, skeleton)
         )
     return tuple(diagnostics)
 
@@ -6221,7 +6061,7 @@ def _array_initialization_slot_form_source(
         location = _stage_output_location(source.output)
         return Result.failure(
             (
-                _array_initialization_slot_source_unsupported_diagnostic(
+                _array_body_diagnostics._array_initialization_slot_source_unsupported_diagnostic(
                     "array-initialization slot form lowering consumes only "
                     "typed M65 ExactArrayBodyEnvelopeIr values, the "
                     "array_body_envelope_slot_assembly stage output, or a "
@@ -6236,7 +6076,7 @@ def _array_initialization_slot_form_source(
         if len(source.array_body_envelopes) == 0:
             return Result.failure(
                 (
-                    _array_initialization_slot_missing_diagnostic(
+                    _array_body_diagnostics._array_initialization_slot_missing_diagnostic(
                         "array-initialization slot form lowering requires a "
                         "LoweredImplementation carrying an accepted M65 "
                         "array_body_envelopes entry",
@@ -6246,7 +6086,7 @@ def _array_initialization_slot_form_source(
             )
         return Result.failure(
             (
-                _array_initialization_slot_source_unsupported_diagnostic(
+                _array_body_diagnostics._array_initialization_slot_source_unsupported_diagnostic(
                     "array-initialization slot form lowering consumes exactly "
                     "one M65 array-body envelope at this boundary",
                     _lowered_implementation_location(source),
@@ -6255,7 +6095,7 @@ def _array_initialization_slot_form_source(
         )
     return Result.failure(
         (
-            _array_initialization_slot_source_unsupported_diagnostic(
+            _array_body_diagnostics._array_initialization_slot_source_unsupported_diagnostic(
                 "array-initialization slot form lowering consumes only typed "
                 "M65 ExactArrayBodyEnvelopeIr values or "
                 "array_body_envelope_slot_assembly stage output",
@@ -6278,7 +6118,7 @@ def _array_initialization_helper_request_source(
             return Result.ok(source.output)
         return Result.failure(
             (
-                _array_initialization_helper_request_source_unsupported_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_request_source_unsupported_diagnostic(
                     "array-initialization helper request lowering consumes only "
                     "typed M66 ExactArrayInitializationSlotFormIr values, the "
                     "array_initialization_slot_form_lowering stage output, or "
@@ -6293,7 +6133,7 @@ def _array_initialization_helper_request_source(
         if len(source.array_initialization_slot_forms) == 0:
             return Result.failure(
                 (
-                    _array_initialization_helper_request_missing_form_diagnostic(
+                    _array_body_diagnostics._array_initialization_helper_request_missing_form_diagnostic(
                         "array-initialization helper request lowering requires "
                         "a LoweredImplementation carrying an accepted M66 "
                         "array_initialization_slot_forms entry",
@@ -6303,7 +6143,7 @@ def _array_initialization_helper_request_source(
             )
         return Result.failure(
             (
-                _array_initialization_helper_request_source_unsupported_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_request_source_unsupported_diagnostic(
                     "array-initialization helper request lowering consumes "
                     "exactly one M66 array-initialization slot form at this "
                     "boundary",
@@ -6313,7 +6153,7 @@ def _array_initialization_helper_request_source(
         )
     return Result.failure(
         (
-            _array_initialization_helper_request_source_unsupported_diagnostic(
+            _array_body_diagnostics._array_initialization_helper_request_source_unsupported_diagnostic(
                 "array-initialization helper request lowering consumes only "
                 "typed M66 ExactArrayInitializationSlotFormIr values or "
                 "array_initialization_slot_form_lowering stage output",
@@ -6336,7 +6176,7 @@ def _array_initialization_base_type_resolution_source(
             return Result.ok(source.output)
         return Result.failure(
             (
-                _array_initialization_base_type_resolution_source_unsupported_diagnostic(
+                _array_body_diagnostics._array_initialization_base_type_resolution_source_unsupported_diagnostic(
                     "array-initialization base-type request resolution consumes "
                     "typed M67 ExactArrayInitializationHelperRequestIr values, "
                     "the array_initialization_helper_request_lowering stage "
@@ -6352,7 +6192,7 @@ def _array_initialization_base_type_resolution_source(
         if len(source.array_initialization_helper_requests) == 0:
             return Result.failure(
                 (
-                    _array_initialization_base_type_resolution_missing_ir_diagnostic(
+                    _array_body_diagnostics._array_initialization_base_type_resolution_missing_ir_diagnostic(
                         "array-initialization base-type request resolution "
                         "requires a LoweredImplementation carrying an accepted "
                         "M67 array_initialization_helper_requests entry",
@@ -6362,7 +6202,7 @@ def _array_initialization_base_type_resolution_source(
             )
         return Result.failure(
             (
-                _array_initialization_base_type_resolution_multiple_ir_diagnostic(
+                _array_body_diagnostics._array_initialization_base_type_resolution_multiple_ir_diagnostic(
                     "array-initialization base-type request resolution requires "
                     "exactly one M67 array_initialization_helper_requests "
                     f"entry; got {len(source.array_initialization_helper_requests)}",
@@ -6372,7 +6212,7 @@ def _array_initialization_base_type_resolution_source(
         )
     return Result.failure(
         (
-            _array_initialization_base_type_resolution_source_unsupported_diagnostic(
+            _array_body_diagnostics._array_initialization_base_type_resolution_source_unsupported_diagnostic(
                 "array-initialization base-type request resolution consumes "
                 "typed M67 ExactArrayInitializationHelperRequestIr values or "
                 "array_initialization_helper_request_lowering stage output",
@@ -6395,7 +6235,7 @@ def _array_initialization_vector_length_resolution_source(
             return Result.ok(source.output)
         return Result.failure(
             (
-                _array_initialization_vector_length_source_unsupported_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_length_source_unsupported_diagnostic(
                     "array-initialization vector-length request resolution "
                     "consumes typed M68 "
                     "ExactArrayInitializationBaseTypeResolutionIr values, the "
@@ -6412,7 +6252,7 @@ def _array_initialization_vector_length_resolution_source(
         if len(source.array_initialization_base_type_resolutions) == 0:
             return Result.failure(
                 (
-                    _array_initialization_vector_length_missing_ir_diagnostic(
+                    _array_body_diagnostics._array_initialization_vector_length_missing_ir_diagnostic(
                         "array-initialization vector-length request resolution "
                         "requires a LoweredImplementation carrying an accepted "
                         "M68 array_initialization_base_type_resolutions entry",
@@ -6422,7 +6262,7 @@ def _array_initialization_vector_length_resolution_source(
             )
         return Result.failure(
             (
-                _array_initialization_vector_length_multiple_ir_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_length_multiple_ir_diagnostic(
                     "array-initialization vector-length request resolution "
                     "requires exactly one M68 "
                     "array_initialization_base_type_resolutions entry; got "
@@ -6433,7 +6273,7 @@ def _array_initialization_vector_length_resolution_source(
         )
     return Result.failure(
         (
-            _array_initialization_vector_length_source_unsupported_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_length_source_unsupported_diagnostic(
                 "array-initialization vector-length request resolution "
                 "consumes only typed M68 "
                 "ExactArrayInitializationBaseTypeResolutionIr values or "
@@ -6457,7 +6297,7 @@ def _array_initialization_vector_alignment_resolution_source(
             return Result.ok(source.output)
         return Result.failure(
             (
-                _array_initialization_vector_alignment_source_unsupported_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_alignment_source_unsupported_diagnostic(
                     "array-initialization vector-alignment request resolution "
                     "consumes typed M70 "
                     "ExactArrayInitializationVectorLengthResolutionIr values, "
@@ -6474,7 +6314,7 @@ def _array_initialization_vector_alignment_resolution_source(
         if len(source.array_initialization_vector_length_resolutions) == 0:
             return Result.failure(
                 (
-                    _array_initialization_vector_alignment_missing_ir_diagnostic(
+                    _array_body_diagnostics._array_initialization_vector_alignment_missing_ir_diagnostic(
                         "array-initialization vector-alignment request "
                         "resolution requires a LoweredImplementation carrying "
                         "an accepted M70 "
@@ -6485,7 +6325,7 @@ def _array_initialization_vector_alignment_resolution_source(
             )
         return Result.failure(
             (
-                _array_initialization_vector_alignment_multiple_ir_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_alignment_multiple_ir_diagnostic(
                     "array-initialization vector-alignment request resolution "
                     "requires exactly one M70 "
                     "array_initialization_vector_length_resolutions entry; "
@@ -6496,7 +6336,7 @@ def _array_initialization_vector_alignment_resolution_source(
         )
     return Result.failure(
         (
-            _array_initialization_vector_alignment_source_unsupported_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_alignment_source_unsupported_diagnostic(
                 "array-initialization vector-alignment request resolution "
                 "consumes only typed M70 "
                 "ExactArrayInitializationVectorLengthResolutionIr values or "
@@ -6521,7 +6361,7 @@ def _array_initialization_helper_set_completion_source(
             return Result.ok(source.output)
         return Result.failure(
             (
-                _array_initialization_helper_set_source_unsupported_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_set_source_unsupported_diagnostic(
                     "array-initialization helper-set completion consumes typed "
                     "M71 ExactArrayInitializationVectorAlignmentResolutionIr "
                     "values, the "
@@ -6540,7 +6380,7 @@ def _array_initialization_helper_set_completion_source(
         if len(source.array_initialization_vector_alignment_resolutions) == 0:
             return Result.failure(
                 (
-                    _array_initialization_helper_set_missing_ir_diagnostic(
+                    _array_body_diagnostics._array_initialization_helper_set_missing_ir_diagnostic(
                         "array-initialization helper-set completion requires "
                         "a LoweredImplementation carrying an accepted M71 "
                         "array_initialization_vector_alignment_resolutions "
@@ -6551,7 +6391,7 @@ def _array_initialization_helper_set_completion_source(
             )
         return Result.failure(
             (
-                _array_initialization_helper_set_multiple_ir_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_set_multiple_ir_diagnostic(
                     "array-initialization helper-set completion requires "
                     "exactly one M71 "
                     "array_initialization_vector_alignment_resolutions entry; "
@@ -6562,7 +6402,7 @@ def _array_initialization_helper_set_completion_source(
         )
     return Result.failure(
         (
-            _array_initialization_helper_set_source_unsupported_diagnostic(
+            _array_body_diagnostics._array_initialization_helper_set_source_unsupported_diagnostic(
                 "array-initialization helper-set completion consumes only "
                 "typed M71 ExactArrayInitializationVectorAlignmentResolutionIr "
                 "values or "
@@ -6587,7 +6427,7 @@ def _array_initialization_declaration_shell_source(
             return Result.ok(source.output)
         return Result.failure(
             (
-                _array_initialization_declaration_shell_source_unsupported_diagnostic(
+                _array_body_diagnostics._array_initialization_declaration_shell_source_unsupported_diagnostic(
                     "array-initialization declaration-shell lowering consumes "
                     "typed M72 ExactArrayInitializationHelperSetCompletionIr "
                     "values, the array_initialization_helper_set_completion "
@@ -6603,7 +6443,7 @@ def _array_initialization_declaration_shell_source(
         if len(source.array_initialization_helper_set_completions) == 0:
             return Result.failure(
                 (
-                    _array_initialization_declaration_shell_missing_ir_diagnostic(
+                    _array_body_diagnostics._array_initialization_declaration_shell_missing_ir_diagnostic(
                         "array-initialization declaration-shell lowering "
                         "requires a LoweredImplementation carrying an accepted "
                         "M72 array_initialization_helper_set_completions entry",
@@ -6613,7 +6453,7 @@ def _array_initialization_declaration_shell_source(
             )
         return Result.failure(
             (
-                _array_initialization_declaration_shell_multiple_ir_diagnostic(
+                _array_body_diagnostics._array_initialization_declaration_shell_multiple_ir_diagnostic(
                     "array-initialization declaration-shell lowering requires "
                     "exactly one M72 "
                     "array_initialization_helper_set_completions entry; got "
@@ -6624,7 +6464,7 @@ def _array_initialization_declaration_shell_source(
         )
     return Result.failure(
         (
-            _array_initialization_declaration_shell_source_unsupported_diagnostic(
+            _array_body_diagnostics._array_initialization_declaration_shell_source_unsupported_diagnostic(
                 "array-initialization declaration-shell lowering consumes "
                 "only typed M72 "
                 "ExactArrayInitializationHelperSetCompletionIr values or "
@@ -6670,7 +6510,7 @@ def lower_exact_predicate_path_structural_request(
     ):
         return Result.failure(
             (
-                _predicate_path_context_mismatch_diagnostic(
+                _array_body_diagnostics._predicate_path_context_mismatch_diagnostic(
                     "predicate-path structural request lowering requires the "
                     "typed selected candidate context to match the M74 sequence "
                     "candidate id, target extension, source extension, and "
@@ -6691,7 +6531,7 @@ def lower_exact_predicate_path_structural_request(
     store_role = sequence.roles[3]
     assert init_role.opaque_source_text is not None
     assert store_role.opaque_source_text is not None
-    init_match = _EXACT_PREDICATE_INIT_SLOT_RE.match(init_role.opaque_source_text)
+    init_match = _exact_shapes.EXACT_PREDICATE_INIT_SLOT_RE.match(init_role.opaque_source_text)
     store_match = _exact_shapes.EXACT_POST_BRANCH_STORE_PREDICATE_SLOT_RE.match(
         store_role.opaque_source_text,
     )
@@ -6754,7 +6594,7 @@ def lower_exact_predicate_path_structural_request(
     except (TypeError, ValueError) as exc:
         return Result.failure(
             (
-                _predicate_path_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._predicate_path_provenance_mismatch_diagnostic(
                     str(exc),
                     sequence.source_location,
                 ),
@@ -6797,7 +6637,7 @@ def lower_exact_post_branch_intrinsic_call_site_structural_request(
     ):
         return Result.failure(
             (
-                _post_branch_call_site_context_mismatch_diagnostic(
+                _array_body_diagnostics._post_branch_call_site_context_mismatch_diagnostic(
                     "post-branch intrinsic call-site structural request lowering "
                     "requires the typed selected candidate context to match the "
                     "M75 predicate-path request candidate id, target extension, "
@@ -6871,7 +6711,7 @@ def lower_exact_post_branch_intrinsic_call_site_structural_request(
     except (TypeError, ValueError) as exc:
         return Result.failure(
             (
-                _post_branch_call_site_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._post_branch_call_site_provenance_mismatch_diagnostic(
                     str(exc),
                     predicate_path.source_location,
                 ),
@@ -6893,7 +6733,7 @@ def _post_branch_intrinsic_call_site_source(
             return Result.ok(source.output)
         return Result.failure(
             (
-                _post_branch_call_site_source_unsupported_diagnostic(
+                _array_body_diagnostics._post_branch_call_site_source_unsupported_diagnostic(
                     "post-branch intrinsic call-site structural request lowering "
                     "consumes accepted M75 ExactPredicatePathStructuralRequestIr "
                     "values, the predicate_path_structural_request_lowering stage "
@@ -6908,7 +6748,7 @@ def _post_branch_intrinsic_call_site_source(
         if len(source.predicate_path_structural_requests) == 0:
             return Result.failure(
                 (
-                    _post_branch_call_site_missing_ir_diagnostic(
+                    _array_body_diagnostics._post_branch_call_site_missing_ir_diagnostic(
                         "post-branch intrinsic call-site structural request "
                         "lowering requires a LoweredImplementation carrying "
                         "one accepted M75 predicate_path_structural_requests entry",
@@ -6919,7 +6759,7 @@ def _post_branch_intrinsic_call_site_source(
         if len(source.predicate_path_structural_requests) > 1:
             return Result.failure(
                 (
-                    _post_branch_call_site_multiple_ir_diagnostic(
+                    _array_body_diagnostics._post_branch_call_site_multiple_ir_diagnostic(
                         "post-branch intrinsic call-site structural request "
                         "lowering requires exactly one M75 "
                         "predicate_path_structural_requests entry",
@@ -6931,7 +6771,7 @@ def _post_branch_intrinsic_call_site_source(
 
     return Result.failure(
         (
-            _post_branch_call_site_source_unsupported_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_source_unsupported_diagnostic(
                 "post-branch intrinsic call-site structural request lowering "
                 "consumes only accepted M75 predicate-path typed sources",
                 None,
@@ -6948,7 +6788,7 @@ def _array_body_structural_sequence_source(
         if declaration_shell is not None:
             return Result.failure(
                 (
-                    _array_body_structural_sequence_source_unsupported_diagnostic(
+                    _array_body_diagnostics._array_body_structural_sequence_source_unsupported_diagnostic(
                         "array-body structural sequence classification accepts "
                         "a separate declaration-shell argument only when the "
                         "primary source is an M65 envelope source",
@@ -6974,7 +6814,7 @@ def _array_body_structural_sequence_source(
             if declaration_shell is not None:
                 return Result.failure(
                     (
-                        _array_body_structural_sequence_source_unsupported_diagnostic(
+                        _array_body_diagnostics._array_body_structural_sequence_source_unsupported_diagnostic(
                             "array-body structural sequence classification "
                             "accepts a separate declaration-shell argument only "
                             "when the primary source is an M65 envelope source",
@@ -6995,7 +6835,7 @@ def _array_body_structural_sequence_source(
             return Result.ok((source.output, shell_result.unwrap()))
         return Result.failure(
             (
-                _array_body_structural_sequence_source_unsupported_diagnostic(
+                _array_body_diagnostics._array_body_structural_sequence_source_unsupported_diagnostic(
                     "array-body structural sequence classification consumes "
                     "accepted M65 ExactArrayBodyEnvelopeIr values with an M73 "
                     "declaration shell, accepted M73 declaration-shell values "
@@ -7010,7 +6850,7 @@ def _array_body_structural_sequence_source(
         if declaration_shell is not None:
             return Result.failure(
                 (
-                    _array_body_structural_sequence_source_unsupported_diagnostic(
+                    _array_body_diagnostics._array_body_structural_sequence_source_unsupported_diagnostic(
                         "array-body structural sequence classification does "
                         "not accept a separate declaration-shell argument when "
                         "the primary source is a LoweredImplementation",
@@ -7021,7 +6861,7 @@ def _array_body_structural_sequence_source(
         diagnostics: list[Diagnostic] = []
         if len(source.array_body_envelopes) == 0:
             diagnostics.append(
-                _array_body_structural_sequence_missing_ir_diagnostic(
+                _array_body_diagnostics._array_body_structural_sequence_missing_ir_diagnostic(
                     "array-body structural sequence classification requires "
                     "a LoweredImplementation carrying one accepted M65 "
                     "array_body_envelopes entry",
@@ -7030,7 +6870,7 @@ def _array_body_structural_sequence_source(
             )
         elif len(source.array_body_envelopes) > 1:
             diagnostics.append(
-                _array_body_structural_sequence_multiple_ir_diagnostic(
+                _array_body_diagnostics._array_body_structural_sequence_multiple_ir_diagnostic(
                     "array-body structural sequence classification requires "
                     "exactly one M65 array_body_envelopes entry",
                     _lowered_implementation_location(source),
@@ -7038,7 +6878,7 @@ def _array_body_structural_sequence_source(
             )
         if len(source.array_initialization_declaration_shells) == 0:
             diagnostics.append(
-                _array_body_structural_sequence_missing_ir_diagnostic(
+                _array_body_diagnostics._array_body_structural_sequence_missing_ir_diagnostic(
                     "array-body structural sequence classification requires "
                     "a LoweredImplementation carrying one accepted M73 "
                     "array_initialization_declaration_shells entry",
@@ -7047,7 +6887,7 @@ def _array_body_structural_sequence_source(
             )
         elif len(source.array_initialization_declaration_shells) > 1:
             diagnostics.append(
-                _array_body_structural_sequence_multiple_ir_diagnostic(
+                _array_body_diagnostics._array_body_structural_sequence_multiple_ir_diagnostic(
                     "array-body structural sequence classification requires "
                     "exactly one M73 array_initialization_declaration_shells "
                     "entry",
@@ -7065,7 +6905,7 @@ def _array_body_structural_sequence_source(
 
     return Result.failure(
         (
-            _array_body_structural_sequence_source_unsupported_diagnostic(
+            _array_body_diagnostics._array_body_structural_sequence_source_unsupported_diagnostic(
                 "array-body structural sequence classification consumes only "
                 "accepted M65 envelope/M73 declaration-shell typed sources or "
                 "a matching LoweredImplementation",
@@ -7088,7 +6928,7 @@ def _array_body_structural_sequence_shell_source(
             return Result.ok(source.output)
         return Result.failure(
             (
-                _array_body_structural_sequence_source_unsupported_diagnostic(
+                _array_body_diagnostics._array_body_structural_sequence_source_unsupported_diagnostic(
                     "array-body structural sequence classification requires "
                     "the separate source to be an accepted M73 declaration "
                     "shell or array_initialization_declaration_shell_lowering "
@@ -7100,7 +6940,7 @@ def _array_body_structural_sequence_shell_source(
     if source is None:
         return Result.failure(
             (
-                _array_body_structural_sequence_missing_ir_diagnostic(
+                _array_body_diagnostics._array_body_structural_sequence_missing_ir_diagnostic(
                     "array-body structural sequence classification requires "
                     "an accepted M73 declaration-shell value when the primary "
                     "source is an M65 envelope",
@@ -7110,7 +6950,7 @@ def _array_body_structural_sequence_shell_source(
         )
     return Result.failure(
         (
-            _array_body_structural_sequence_source_unsupported_diagnostic(
+            _array_body_diagnostics._array_body_structural_sequence_source_unsupported_diagnostic(
                 "array-body structural sequence classification requires an "
                 "accepted M73 declaration-shell value",
                 None,
@@ -7133,7 +6973,7 @@ def _predicate_path_structural_request_source(
             return Result.ok(source.output)
         return Result.failure(
             (
-                _predicate_path_source_unsupported_diagnostic(
+                _array_body_diagnostics._predicate_path_source_unsupported_diagnostic(
                     "predicate-path structural request lowering consumes "
                     "accepted M74 ExactArrayBodyStructuralSequenceIr values, "
                     "the array_body_structural_sequence_classification stage "
@@ -7148,7 +6988,7 @@ def _predicate_path_structural_request_source(
         if len(source.array_body_structural_sequences) == 0:
             return Result.failure(
                 (
-                    _predicate_path_missing_ir_diagnostic(
+                    _array_body_diagnostics._predicate_path_missing_ir_diagnostic(
                         "predicate-path structural request lowering requires "
                         "a LoweredImplementation carrying one accepted M74 "
                         "array_body_structural_sequences entry",
@@ -7159,7 +6999,7 @@ def _predicate_path_structural_request_source(
         if len(source.array_body_structural_sequences) > 1:
             return Result.failure(
                 (
-                    _predicate_path_multiple_ir_diagnostic(
+                    _array_body_diagnostics._predicate_path_multiple_ir_diagnostic(
                         "predicate-path structural request lowering requires "
                         "exactly one M74 array_body_structural_sequences entry",
                         _lowered_implementation_location(source),
@@ -7170,7 +7010,7 @@ def _predicate_path_structural_request_source(
 
     return Result.failure(
         (
-            _predicate_path_source_unsupported_diagnostic(
+            _array_body_diagnostics._predicate_path_source_unsupported_diagnostic(
                 "predicate-path structural request lowering consumes only "
                 "accepted M74 structural sequence typed sources",
                 None,
@@ -7196,7 +7036,7 @@ def _validate_array_initialization_slot_position(
         or slot.selected_type_tag != envelope.selected_type_tag
         or slot.originating_branch_chain_id != envelope.originating_branch_chain_id
     ):
-        return _array_initialization_slot_provenance_mismatch_diagnostic(
+        return _array_body_diagnostics._array_initialization_slot_provenance_mismatch_diagnostic(
             "array-initialization slot provenance must match the M65 "
             "array-body envelope candidate id, selected type tag, and "
             "branch-chain identity",
@@ -7206,7 +7046,7 @@ def _validate_array_initialization_slot_position(
         slot.label != "opaque_pre_branch_array_initialization"
         or slot.ordinal != 0
     ):
-        return _array_initialization_slot_wrong_position_diagnostic(
+        return _array_body_diagnostics._array_initialization_slot_wrong_position_diagnostic(
             "array-initialization slot form lowering refines only the "
             "opaque_pre_branch_array_initialization slot at ordinal 0; got "
             f"label {slot.label!r} and ordinal {slot.ordinal!r}",
@@ -7219,7 +7059,7 @@ def _validate_array_initialization_helper_form_provenance(
     form: ExactArrayInitializationSlotFormIr,
 ) -> Diagnostic | None:
     if not isinstance(form.source_envelope, ExactArrayBodyEnvelopeIr):
-        return _array_initialization_helper_request_provenance_mismatch_diagnostic(
+        return _array_body_diagnostics._array_initialization_helper_request_provenance_mismatch_diagnostic(
             "array-initialization helper request lowering requires the M66 "
             "slot form to reference an M65 array-body envelope",
             form.source_location,
@@ -7230,26 +7070,26 @@ def _validate_array_initialization_helper_form_provenance(
         or form.originating_branch_chain_id
         != form.source_envelope.originating_branch_chain_id
     ):
-        return _array_initialization_helper_request_provenance_mismatch_diagnostic(
+        return _array_body_diagnostics._array_initialization_helper_request_provenance_mismatch_diagnostic(
             "array-initialization helper request lowering requires M66 form "
             "provenance (candidate id, selected type tag, and branch-chain "
             "identity) to match its M65 envelope",
             form.source_location,
         )
     if form.slot_label != "opaque_pre_branch_array_initialization":
-        return _array_initialization_helper_request_provenance_mismatch_diagnostic(
+        return _array_body_diagnostics._array_initialization_helper_request_provenance_mismatch_diagnostic(
             "array-initialization helper request lowering requires the M66 "
             "opaque_pre_branch_array_initialization slot form",
             form.source_location,
         )
     if form.slot_ordinal != 0:
-        return _array_initialization_helper_request_provenance_mismatch_diagnostic(
+        return _array_body_diagnostics._array_initialization_helper_request_provenance_mismatch_diagnostic(
             "array-initialization helper request lowering requires the M66 "
             "slot form at ordinal 0",
             form.source_location,
         )
     if form.variable_token != "tmp":
-        return _array_initialization_helper_request_provenance_mismatch_diagnostic(
+        return _array_body_diagnostics._array_initialization_helper_request_provenance_mismatch_diagnostic(
             "array-initialization helper request lowering requires the M66 "
             "variable token tmp",
             form.variable_token_location or form.source_location,
@@ -7263,7 +7103,7 @@ def _validate_array_initialization_base_type_request_ir_provenance(
     diagnostics: list[Diagnostic] = []
     if request_ir.source_envelope != request_ir.source_form.source_envelope:
         diagnostics.append(
-            _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
                 "M67 helper-request IR envelope must match its M66 slot form "
                 "envelope",
                 request_ir.source_location,
@@ -7271,7 +7111,7 @@ def _validate_array_initialization_base_type_request_ir_provenance(
         )
     if request_ir.source_location != request_ir.source_form.source_location:
         diagnostics.append(
-            _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
                 "M67 helper-request IR source location must match its M66 slot "
                 "form source location",
                 request_ir.source_location,
@@ -7284,7 +7124,7 @@ def _validate_array_initialization_base_type_request_ir_provenance(
         != request_ir.source_form.originating_branch_chain_id
     ):
         diagnostics.append(
-            _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
                 "M67 helper-request IR provenance must match its M66 slot form",
                 request_ir.source_location,
             )
@@ -7295,7 +7135,7 @@ def _validate_array_initialization_base_type_request_ir_provenance(
         or request_ir.variable_token != request_ir.source_form.variable_token
     ):
         diagnostics.append(
-            _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
                 "M67 helper-request IR slot provenance must match its M66 "
                 "slot form",
                 request_ir.source_location,
@@ -7304,7 +7144,7 @@ def _validate_array_initialization_base_type_request_ir_provenance(
     for request in request_ir.requests:
         if request.source_form != request_ir.source_form:
             diagnostics.append(
-                _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
                     "M67 helper-request record source form must match the "
                     "source helper-request IR",
                     request.leaf_source_location,
@@ -7312,7 +7152,7 @@ def _validate_array_initialization_base_type_request_ir_provenance(
             )
         if request.source_envelope != request_ir.source_envelope:
             diagnostics.append(
-                _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
                     "M67 helper-request record envelope must match the source "
                     "helper-request IR",
                     request.leaf_source_location,
@@ -7328,7 +7168,7 @@ def _validate_array_initialization_base_type_request_ir_provenance(
             or request.variable_token != request_ir.variable_token
         ):
             diagnostics.append(
-                _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
                     "M67 helper-request record provenance must match the "
                     "source helper-request IR",
                     request.leaf_source_location,
@@ -7341,7 +7181,7 @@ def _array_initialization_base_type_request_record(
     request_ir: ExactArrayInitializationHelperRequestIr,
     diagnostics: list[Diagnostic],
 ) -> ExactArrayInitializationHelperRequestRecord | None:
-    rule = _EXACT_ARRAY_INITIALIZATION_BASE_TYPE_REQUEST_RULE
+    rule = _array_body_shapes._EXACT_ARRAY_INITIALIZATION_BASE_TYPE_REQUEST_RULE
     base_records = tuple(
         request
         for request in request_ir.requests
@@ -7359,7 +7199,7 @@ def _array_initialization_base_type_request_record(
         if ordinal_or_kind_records:
             for request in ordinal_or_kind_records:
                 diagnostics.append(
-                    _array_initialization_base_type_resolution_mismatch_diagnostic(
+                    _array_body_diagnostics._array_initialization_base_type_resolution_mismatch_diagnostic(
                         "array-initialization base-type request resolution "
                         "expected the M67 base request to carry ordinal "
                         f"{rule.request_ordinal}, kind {rule.request_kind!r}, "
@@ -7372,7 +7212,7 @@ def _array_initialization_base_type_request_record(
                 )
             return None
         diagnostics.append(
-            _array_initialization_base_type_resolution_missing_request_diagnostic(
+            _array_body_diagnostics._array_initialization_base_type_resolution_missing_request_diagnostic(
                 "array-initialization base-type request resolution requires "
                 "one M67 base-type request record",
                 request_ir.source_location,
@@ -7382,7 +7222,7 @@ def _array_initialization_base_type_request_record(
     if len(base_records) > 1:
         for request in base_records:
             diagnostics.append(
-                _array_initialization_base_type_resolution_duplicate_request_diagnostic(
+                _array_body_diagnostics._array_initialization_base_type_resolution_duplicate_request_diagnostic(
                     "array-initialization base-type request resolution requires "
                     "exactly one M67 base-type request record; duplicate "
                     f"record appeared at ordinal {request.request_ordinal}",
@@ -7397,7 +7237,7 @@ def _array_initialization_base_type_request_record(
         or base_request.request_kind != rule.request_kind
     ):
         diagnostics.append(
-            _array_initialization_base_type_resolution_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_base_type_resolution_mismatch_diagnostic(
                 "array-initialization base-type request resolution expected "
                 f"ordinal {rule.request_ordinal} and kind "
                 f"{rule.request_kind!r}; got ordinal "
@@ -7408,7 +7248,7 @@ def _array_initialization_base_type_request_record(
         )
     if base_request.leaf_source_text != rule.expected_leaf_source_text:
         diagnostics.append(
-            _array_initialization_base_type_resolution_unsupported_request_diagnostic(
+            _array_body_diagnostics._array_initialization_base_type_resolution_unsupported_request_diagnostic(
                 "array-initialization base-type request resolution preserves "
                 "the M67 leaf source text only as provenance and accepts only "
                 "the exact M67 base-type leaf text for that typed request; got "
@@ -7426,7 +7266,7 @@ def _validate_array_initialization_vector_length_resolution_provenance(
     request_ir = base_resolution.source_request_ir
     if base_resolution.source_base_type_request not in request_ir.requests:
         diagnostics.append(
-            _array_initialization_vector_length_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_length_provenance_mismatch_diagnostic(
                 "M68 base-type resolution source request must come from its "
                 "M67 helper-request IR",
                 base_resolution.source_location,
@@ -7434,7 +7274,7 @@ def _validate_array_initialization_vector_length_resolution_provenance(
         )
     if base_resolution.source_location != request_ir.source_location:
         diagnostics.append(
-            _array_initialization_vector_length_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_length_provenance_mismatch_diagnostic(
                 "M68 base-type resolution source location must match its M67 "
                 "helper-request IR",
                 base_resolution.source_location,
@@ -7447,7 +7287,7 @@ def _validate_array_initialization_vector_length_resolution_provenance(
         != request_ir.originating_branch_chain_id
     ):
         diagnostics.append(
-            _array_initialization_vector_length_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_length_provenance_mismatch_diagnostic(
                 "M68 base-type resolution provenance must match its M67 "
                 "helper-request IR",
                 base_resolution.source_location,
@@ -7459,7 +7299,7 @@ def _validate_array_initialization_vector_length_resolution_provenance(
         or base_resolution.variable_token != request_ir.variable_token
     ):
         diagnostics.append(
-            _array_initialization_vector_length_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_length_provenance_mismatch_diagnostic(
                 "M68 base-type resolution slot provenance must match its M67 "
                 "helper-request IR",
                 base_resolution.source_location,
@@ -7468,7 +7308,7 @@ def _validate_array_initialization_vector_length_resolution_provenance(
     for request in base_resolution.unresolved_requests:
         if request.source_form != request_ir.source_form:
             diagnostics.append(
-                _array_initialization_vector_length_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_length_provenance_mismatch_diagnostic(
                     "M68 unresolved request record source form must match the "
                     "source M67 helper-request IR",
                     request.leaf_source_location,
@@ -7476,7 +7316,7 @@ def _validate_array_initialization_vector_length_resolution_provenance(
             )
         if request.source_envelope != request_ir.source_envelope:
             diagnostics.append(
-                _array_initialization_vector_length_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_length_provenance_mismatch_diagnostic(
                     "M68 unresolved request record envelope must match the "
                     "source M67 helper-request IR",
                     request.leaf_source_location,
@@ -7492,7 +7332,7 @@ def _validate_array_initialization_vector_length_resolution_provenance(
             or request.variable_token != base_resolution.variable_token
         ):
             diagnostics.append(
-                _array_initialization_vector_length_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_length_provenance_mismatch_diagnostic(
                     "M68 unresolved request record provenance must match the "
                     "source base-type resolution",
                     request.leaf_source_location,
@@ -7505,7 +7345,7 @@ def _array_initialization_vector_length_request_record(
     base_resolution: ExactArrayInitializationBaseTypeResolutionIr,
     diagnostics: list[Diagnostic],
 ) -> ExactArrayInitializationHelperRequestRecord | None:
-    rule = _EXACT_ARRAY_INITIALIZATION_VECTOR_LENGTH_REQUEST_RULE
+    rule = _array_body_shapes._EXACT_ARRAY_INITIALIZATION_VECTOR_LENGTH_REQUEST_RULE
     vector_length_records = tuple(
         request
         for request in base_resolution.unresolved_requests
@@ -7523,7 +7363,7 @@ def _array_initialization_vector_length_request_record(
         if ordinal_or_kind_records:
             for request in ordinal_or_kind_records:
                 diagnostics.append(
-                    _array_initialization_vector_length_mismatch_diagnostic(
+                    _array_body_diagnostics._array_initialization_vector_length_mismatch_diagnostic(
                         "array-initialization vector-length request resolution "
                         "expected the M67 vector-length request to carry "
                         f"ordinal {rule.request_ordinal}, kind "
@@ -7537,7 +7377,7 @@ def _array_initialization_vector_length_request_record(
                 )
             return None
         diagnostics.append(
-            _array_initialization_vector_length_missing_request_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_length_missing_request_diagnostic(
                 "array-initialization vector-length request resolution "
                 "requires one M67 vector-length request record preserved by "
                 "M68",
@@ -7548,7 +7388,7 @@ def _array_initialization_vector_length_request_record(
     if len(vector_length_records) > 1:
         for request in vector_length_records:
             diagnostics.append(
-                _array_initialization_vector_length_duplicate_request_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_length_duplicate_request_diagnostic(
                     "array-initialization vector-length request resolution "
                     "requires exactly one M67 vector-length request record; "
                     f"duplicate record appeared at ordinal "
@@ -7564,7 +7404,7 @@ def _array_initialization_vector_length_request_record(
         or vector_length_request.request_kind != rule.request_kind
     ):
         diagnostics.append(
-            _array_initialization_vector_length_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_length_mismatch_diagnostic(
                 "array-initialization vector-length request resolution "
                 f"expected ordinal {rule.request_ordinal} and kind "
                 f"{rule.request_kind!r}; got ordinal "
@@ -7575,7 +7415,7 @@ def _array_initialization_vector_length_request_record(
         )
     if vector_length_request.leaf_source_text != rule.expected_leaf_source_text:
         diagnostics.append(
-            _array_initialization_vector_length_unsupported_request_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_length_unsupported_request_diagnostic(
                 "array-initialization vector-length request resolution "
                 "preserves the M67 leaf source text only as provenance and "
                 "accepts only the exact M67 vector-length leaf text for that "
@@ -7609,7 +7449,7 @@ def _array_initialization_vector_length_metadata_for_context(
     if not matches:
         return Result.failure(
             (
-                _array_initialization_vector_length_metadata_missing_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_length_metadata_missing_diagnostic(
                     "array-initialization vector-length request resolution "
                     "requires explicit typed vector-length metadata for "
                     f"candidate {candidate_id!r}, target extension "
@@ -7624,9 +7464,9 @@ def _array_initialization_vector_length_metadata_for_context(
         values = tuple(metadata.vector_length for metadata in matches)
         code_detail = "conflicting" if len(set(values)) > 1 else "duplicate"
         diagnostic = (
-            _array_initialization_vector_length_metadata_conflict_diagnostic
+            _array_body_diagnostics._array_initialization_vector_length_metadata_conflict_diagnostic
             if code_detail == "conflicting"
-            else _array_initialization_vector_length_metadata_duplicate_diagnostic
+            else _array_body_diagnostics._array_initialization_vector_length_metadata_duplicate_diagnostic
         )
         return Result.failure(
             (
@@ -7650,7 +7490,7 @@ def _validate_array_initialization_vector_alignment_resolution_provenance(
         base_resolution.unresolved_requests
     ):
         diagnostics.append(
-            _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_alignment_provenance_mismatch_diagnostic(
                 "M70 vector-length resolution source request must come from its "
                 "M68 base-type resolution",
                 vector_length_resolution.source_location,
@@ -7658,7 +7498,7 @@ def _validate_array_initialization_vector_alignment_resolution_provenance(
         )
     if vector_length_resolution.source_location != base_resolution.source_location:
         diagnostics.append(
-            _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_alignment_provenance_mismatch_diagnostic(
                 "M70 vector-length resolution source location must match its "
                 "M68 base-type resolution",
                 vector_length_resolution.source_location,
@@ -7672,7 +7512,7 @@ def _validate_array_initialization_vector_alignment_resolution_provenance(
         != base_resolution.originating_branch_chain_id
     ):
         diagnostics.append(
-            _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_alignment_provenance_mismatch_diagnostic(
                 "M70 vector-length resolution provenance must match its M68 "
                 "base-type resolution",
                 vector_length_resolution.source_location,
@@ -7684,7 +7524,7 @@ def _validate_array_initialization_vector_alignment_resolution_provenance(
         or vector_length_resolution.variable_token != base_resolution.variable_token
     ):
         diagnostics.append(
-            _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_alignment_provenance_mismatch_diagnostic(
                 "M70 vector-length resolution slot provenance must match its "
                 "M68 base-type resolution",
                 vector_length_resolution.source_location,
@@ -7693,7 +7533,7 @@ def _validate_array_initialization_vector_alignment_resolution_provenance(
     for request in vector_length_resolution.unresolved_requests:
         if request.source_form != base_resolution.source_request_ir.source_form:
             diagnostics.append(
-                _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_alignment_provenance_mismatch_diagnostic(
                     "M70 unresolved request record source form must match the "
                     "source M67 helper-request IR",
                     request.leaf_source_location,
@@ -7701,7 +7541,7 @@ def _validate_array_initialization_vector_alignment_resolution_provenance(
             )
         if request.source_envelope != base_resolution.source_request_ir.source_envelope:
             diagnostics.append(
-                _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_alignment_provenance_mismatch_diagnostic(
                     "M70 unresolved request record envelope must match the "
                     "source M67 helper-request IR",
                     request.leaf_source_location,
@@ -7718,7 +7558,7 @@ def _validate_array_initialization_vector_alignment_resolution_provenance(
             or request.variable_token != vector_length_resolution.variable_token
         ):
             diagnostics.append(
-                _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_alignment_provenance_mismatch_diagnostic(
                     "M70 unresolved request record provenance must match the "
                     "source vector-length resolution",
                     request.leaf_source_location,
@@ -7731,7 +7571,7 @@ def _array_initialization_vector_alignment_request_record(
     vector_length_resolution: ExactArrayInitializationVectorLengthResolutionIr,
     diagnostics: list[Diagnostic],
 ) -> ExactArrayInitializationHelperRequestRecord | None:
-    rule = _EXACT_ARRAY_INITIALIZATION_VECTOR_ALIGNMENT_REQUEST_RULE
+    rule = _array_body_shapes._EXACT_ARRAY_INITIALIZATION_VECTOR_ALIGNMENT_REQUEST_RULE
     vector_alignment_records = tuple(
         request
         for request in vector_length_resolution.unresolved_requests
@@ -7749,7 +7589,7 @@ def _array_initialization_vector_alignment_request_record(
         if ordinal_or_kind_records:
             for request in ordinal_or_kind_records:
                 diagnostics.append(
-                    _array_initialization_vector_alignment_mismatch_diagnostic(
+                    _array_body_diagnostics._array_initialization_vector_alignment_mismatch_diagnostic(
                         "array-initialization vector-alignment request "
                         "resolution expected the M67 vector-alignment request "
                         f"to carry ordinal {rule.request_ordinal}, kind "
@@ -7763,7 +7603,7 @@ def _array_initialization_vector_alignment_request_record(
                 )
             return None
         diagnostics.append(
-            _array_initialization_vector_alignment_missing_request_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_alignment_missing_request_diagnostic(
                 "array-initialization vector-alignment request resolution "
                 "requires one M67 vector-alignment request record preserved by "
                 "M70",
@@ -7774,7 +7614,7 @@ def _array_initialization_vector_alignment_request_record(
     if len(vector_alignment_records) > 1:
         for request in vector_alignment_records:
             diagnostics.append(
-                _array_initialization_vector_alignment_duplicate_request_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_alignment_duplicate_request_diagnostic(
                     "array-initialization vector-alignment request resolution "
                     "requires exactly one M67 vector-alignment request record; "
                     f"duplicate record appeared at ordinal "
@@ -7790,7 +7630,7 @@ def _array_initialization_vector_alignment_request_record(
         or vector_alignment_request.request_kind != rule.request_kind
     ):
         diagnostics.append(
-            _array_initialization_vector_alignment_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_alignment_mismatch_diagnostic(
                 "array-initialization vector-alignment request resolution "
                 f"expected ordinal {rule.request_ordinal} and kind "
                 f"{rule.request_kind!r}; got ordinal "
@@ -7801,7 +7641,7 @@ def _array_initialization_vector_alignment_request_record(
         )
     if vector_alignment_request.leaf_source_text != rule.expected_leaf_source_text:
         diagnostics.append(
-            _array_initialization_vector_alignment_unsupported_request_diagnostic(
+            _array_body_diagnostics._array_initialization_vector_alignment_unsupported_request_diagnostic(
                 "array-initialization vector-alignment request resolution "
                 "preserves the M67 leaf source text only as provenance and "
                 "accepts only the exact M67 vector-alignment leaf text for "
@@ -7836,7 +7676,7 @@ def _array_initialization_vector_alignment_metadata_for_context(
     if not matches:
         return Result.failure(
             (
-                _array_initialization_vector_alignment_metadata_missing_diagnostic(
+                _array_body_diagnostics._array_initialization_vector_alignment_metadata_missing_diagnostic(
                     "array-initialization vector-alignment request resolution "
                     "requires explicit typed vector-alignment metadata for "
                     f"candidate {candidate_id!r}, target extension "
@@ -7851,9 +7691,9 @@ def _array_initialization_vector_alignment_metadata_for_context(
         values = tuple(metadata.vector_alignment for metadata in matches)
         code_detail = "conflicting" if len(set(values)) > 1 else "duplicate"
         diagnostic = (
-            _array_initialization_vector_alignment_metadata_conflict_diagnostic
+            _array_body_diagnostics._array_initialization_vector_alignment_metadata_conflict_diagnostic
             if code_detail == "conflicting"
-            else _array_initialization_vector_alignment_metadata_duplicate_diagnostic
+            else _array_body_diagnostics._array_initialization_vector_alignment_metadata_duplicate_diagnostic
         )
         return Result.failure(
             (
@@ -7879,7 +7719,7 @@ def _validate_array_initialization_helper_set_completion_provenance(
         vector_length_resolution.unresolved_requests
     ):
         diagnostics.append(
-            _array_initialization_helper_set_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_helper_set_provenance_mismatch_diagnostic(
                 "M71 vector-alignment resolution source request must come "
                 "from its M70 vector-length resolution",
                 vector_alignment_resolution.source_location,
@@ -7889,7 +7729,7 @@ def _validate_array_initialization_helper_set_completion_provenance(
         vector_length_resolution.source_location
     ):
         diagnostics.append(
-            _array_initialization_helper_set_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_helper_set_provenance_mismatch_diagnostic(
                 "M71 vector-alignment resolution source location must match "
                 "its M70 vector-length resolution",
                 vector_alignment_resolution.source_location,
@@ -7908,7 +7748,7 @@ def _validate_array_initialization_helper_set_completion_provenance(
         != vector_length_resolution.originating_branch_chain_id
     ):
         diagnostics.append(
-            _array_initialization_helper_set_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_helper_set_provenance_mismatch_diagnostic(
                 "M71 vector-alignment resolution provenance must match its "
                 "M70 vector-length resolution",
                 vector_alignment_resolution.source_location,
@@ -7923,7 +7763,7 @@ def _validate_array_initialization_helper_set_completion_provenance(
         != vector_length_resolution.variable_token
     ):
         diagnostics.append(
-            _array_initialization_helper_set_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_helper_set_provenance_mismatch_diagnostic(
                 "M71 vector-alignment resolution slot provenance must match "
                 "its M70 vector-length resolution",
                 vector_alignment_resolution.source_location,
@@ -7935,7 +7775,7 @@ def _validate_array_initialization_helper_set_completion_provenance(
             .source_request_ir.source_form
         ):
             diagnostics.append(
-                _array_initialization_helper_set_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_set_provenance_mismatch_diagnostic(
                     "M71 unresolved request record source form must match the "
                     "source M67 helper-request IR",
                     request.leaf_source_location,
@@ -7946,7 +7786,7 @@ def _validate_array_initialization_helper_set_completion_provenance(
             .source_request_ir.source_envelope
         ):
             diagnostics.append(
-                _array_initialization_helper_set_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_set_provenance_mismatch_diagnostic(
                     "M71 unresolved request record envelope must match the "
                     "source M67 helper-request IR",
                     request.leaf_source_location,
@@ -7963,7 +7803,7 @@ def _validate_array_initialization_helper_set_completion_provenance(
             or request.variable_token != vector_alignment_resolution.variable_token
         ):
             diagnostics.append(
-                _array_initialization_helper_set_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_set_provenance_mismatch_diagnostic(
                     "M71 unresolved request record provenance must match the "
                     "source vector-alignment resolution",
                     request.leaf_source_location,
@@ -7976,7 +7816,7 @@ def _array_initialization_backend_uninit_request_record(
     vector_alignment_resolution: ExactArrayInitializationVectorAlignmentResolutionIr,
     diagnostics: list[Diagnostic],
 ) -> ExactArrayInitializationHelperRequestRecord | None:
-    rule = _EXACT_ARRAY_INITIALIZATION_BACKEND_UNINIT_REQUEST_RULE
+    rule = _array_body_shapes._EXACT_ARRAY_INITIALIZATION_BACKEND_UNINIT_REQUEST_RULE
     backend_uninit_records = tuple(
         request
         for request in vector_alignment_resolution.unresolved_requests
@@ -7994,7 +7834,7 @@ def _array_initialization_backend_uninit_request_record(
         if ordinal_or_kind_records:
             for request in ordinal_or_kind_records:
                 diagnostics.append(
-                    _array_initialization_helper_set_mismatch_diagnostic(
+                    _array_body_diagnostics._array_initialization_helper_set_mismatch_diagnostic(
                         "array-initialization helper-set completion expected "
                         "the M67 backend-uninit request to carry ordinal "
                         f"{rule.request_ordinal}, kind {rule.request_kind!r}, "
@@ -8007,7 +7847,7 @@ def _array_initialization_backend_uninit_request_record(
                 )
             return None
         diagnostics.append(
-            _array_initialization_helper_set_missing_request_diagnostic(
+            _array_body_diagnostics._array_initialization_helper_set_missing_request_diagnostic(
                 "array-initialization helper-set completion requires one M67 "
                 "backend-uninit request record preserved by M71",
                 vector_alignment_resolution.source_location,
@@ -8017,7 +7857,7 @@ def _array_initialization_backend_uninit_request_record(
     if len(backend_uninit_records) > 1:
         for request in backend_uninit_records:
             diagnostics.append(
-                _array_initialization_helper_set_duplicate_request_diagnostic(
+                _array_body_diagnostics._array_initialization_helper_set_duplicate_request_diagnostic(
                     "array-initialization helper-set completion requires "
                     "exactly one M67 backend-uninit request record; duplicate "
                     f"record appeared at ordinal {request.request_ordinal}",
@@ -8032,7 +7872,7 @@ def _array_initialization_backend_uninit_request_record(
         or backend_uninit_request.request_kind != rule.request_kind
     ):
         diagnostics.append(
-            _array_initialization_helper_set_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_helper_set_mismatch_diagnostic(
                 "array-initialization helper-set completion expected ordinal "
                 f"{rule.request_ordinal} and kind {rule.request_kind!r}; got "
                 f"ordinal {backend_uninit_request.request_ordinal} and kind "
@@ -8042,7 +7882,7 @@ def _array_initialization_backend_uninit_request_record(
         )
     if backend_uninit_request.leaf_source_text != rule.expected_leaf_source_text:
         diagnostics.append(
-            _array_initialization_helper_set_unsupported_request_diagnostic(
+            _array_body_diagnostics._array_initialization_helper_set_unsupported_request_diagnostic(
                 "array-initialization helper-set completion preserves the M67 "
                 "backend-uninit leaf source text only as provenance and "
                 "accepts only the exact M67 backend-uninit leaf text for that "
@@ -8069,7 +7909,7 @@ def _validate_array_initialization_declaration_shell(
         vector_alignment_resolution.source_vector_length_resolution
     ):
         diagnostics.append(
-            _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_declaration_shell_provenance_mismatch_diagnostic(
                 "M72 helper-set completion must carry the M70 vector-length "
                 "resolution accepted by its M71 vector-alignment resolution",
                 completion.source_location,
@@ -8077,7 +7917,7 @@ def _validate_array_initialization_declaration_shell(
         )
     if base_type_resolution is not vector_length_resolution.source_base_type_resolution:
         diagnostics.append(
-            _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_declaration_shell_provenance_mismatch_diagnostic(
                 "M72 helper-set completion must carry the M68 base-type "
                 "resolution accepted by its M70 vector-length resolution",
                 completion.source_location,
@@ -8088,7 +7928,7 @@ def _validate_array_initialization_declaration_shell(
         not in vector_alignment_resolution.unresolved_requests
     ):
         diagnostics.append(
-            _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_declaration_shell_provenance_mismatch_diagnostic(
                 "M72 helper-set completion backend-uninit request must come "
                 "from the M71 unresolved request records",
                 completion.source_location,
@@ -8099,7 +7939,7 @@ def _validate_array_initialization_declaration_shell(
         is not completion.source_backend_uninit_request
     ):
         diagnostics.append(
-            _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_declaration_shell_provenance_mismatch_diagnostic(
                 "M72 deferred backend-uninit boundary must reference the "
                 "selected M67 backend-uninit request",
                 completion.source_location,
@@ -8107,7 +7947,7 @@ def _validate_array_initialization_declaration_shell(
         )
     if backend_uninit.policy != "deferred_backend_value":
         diagnostics.append(
-            _array_initialization_declaration_shell_backend_policy_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_declaration_shell_backend_policy_mismatch_diagnostic(
                 "array-initialization declaration-shell lowering preserves "
                 "only the M72 deferred_backend_value backend-uninit policy; "
                 f"got {backend_uninit.policy!r}",
@@ -8117,7 +7957,7 @@ def _validate_array_initialization_declaration_shell(
 
     if source_form.source_envelope is not source_envelope:
         diagnostics.append(
-            _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_declaration_shell_provenance_mismatch_diagnostic(
                 "M67 helper-request IR source envelope must be the M65 "
                 "envelope carried by its M66 slot form",
                 source_form.source_location,
@@ -8130,7 +7970,7 @@ def _validate_array_initialization_declaration_shell(
         != completion.originating_branch_chain_id
     ):
         diagnostics.append(
-            _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_initialization_declaration_shell_provenance_mismatch_diagnostic(
                 "M65 envelope provenance must match the M72 helper-set "
                 "completion candidate id, selected type tag, and branch-chain "
                 "identity",
@@ -8154,7 +7994,7 @@ def _validate_array_initialization_declaration_shell(
             or source.variable_token != completion.variable_token
         ):
             diagnostics.append(
-                _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_declaration_shell_provenance_mismatch_diagnostic(
                     f"{stage_name} provenance must match the M72 helper-set "
                     "completion",
                     source.source_location,
@@ -8170,7 +8010,7 @@ def _validate_array_initialization_declaration_shell(
             or source.source_extension != completion.source_extension
         ):
             diagnostics.append(
-                _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_initialization_declaration_shell_provenance_mismatch_diagnostic(
                     f"{stage_name} target/source extension provenance must "
                     "match the M72 helper-set completion",
                     source.source_location,
@@ -8186,7 +8026,7 @@ def _validate_array_initialization_declaration_shell(
         or source_form.variable_token != "tmp"
     ):
         diagnostics.append(
-            _array_initialization_declaration_shell_malformed_diagnostic(
+            _array_body_diagnostics._array_initialization_declaration_shell_malformed_diagnostic(
                 "array-initialization declaration-shell lowering supports "
                 "only the exact first-slot "
                 "opaque_pre_branch_array_initialization var<typed>(..., tmp, "
@@ -8207,7 +8047,7 @@ def _validate_array_initialization_declaration_shell(
         "value_backend_uninit_array",
     ):
         diagnostics.append(
-            _array_initialization_declaration_shell_malformed_diagnostic(
+            _array_body_diagnostics._array_initialization_declaration_shell_malformed_diagnostic(
                 "array-initialization declaration-shell lowering requires the "
                 "exact M66 helper-leaf shape for base type, vector length, "
                 "vector alignment, and deferred backend uninit",
@@ -8220,7 +8060,7 @@ def _validate_array_initialization_declaration_shell(
         != completion.selected_type_tag
     ):
         diagnostics.append(
-            _array_initialization_declaration_shell_malformed_diagnostic(
+            _array_body_diagnostics._array_initialization_declaration_shell_malformed_diagnostic(
                 "array-initialization declaration-shell lowering requires the "
                 "accepted M68 base.in type fact for the selected type tag",
                 base_type_resolution.source_location,
@@ -8231,7 +8071,7 @@ def _validate_array_initialization_declaration_shell(
         ExactArrayInitializationVectorLengthValue,
     ):
         diagnostics.append(
-            _array_initialization_declaration_shell_malformed_diagnostic(
+            _array_body_diagnostics._array_initialization_declaration_shell_malformed_diagnostic(
                 "array-initialization declaration-shell lowering requires the "
                 "accepted typed M70 vector-length fact",
                 vector_length_resolution.source_location,
@@ -8242,7 +8082,7 @@ def _validate_array_initialization_declaration_shell(
         ExactArrayInitializationVectorAlignmentValue,
     ) or vector_alignment_resolution.resolved_vector_alignment.kind == "unsupported":
         diagnostics.append(
-            _array_initialization_declaration_shell_malformed_diagnostic(
+            _array_body_diagnostics._array_initialization_declaration_shell_malformed_diagnostic(
                 "array-initialization declaration-shell lowering requires the "
                 "accepted typed M71 vector-alignment fact",
                 vector_alignment_resolution.source_location,
@@ -8259,7 +8099,7 @@ def _validate_array_body_structural_sequence_inputs(
 
     if not isinstance(envelope, ExactArrayBodyEnvelopeIr):
         diagnostics.append(
-            _array_body_structural_sequence_source_unsupported_diagnostic(
+            _array_body_diagnostics._array_body_structural_sequence_source_unsupported_diagnostic(
                 "array-body structural sequence classification requires an "
                 "accepted M65 ExactArrayBodyEnvelopeIr source",
                 None,
@@ -8268,7 +8108,7 @@ def _validate_array_body_structural_sequence_inputs(
         return diagnostics
     if not isinstance(shell, ExactArrayInitializationDeclarationShellIr):
         diagnostics.append(
-            _array_body_structural_sequence_source_unsupported_diagnostic(
+            _array_body_diagnostics._array_body_structural_sequence_source_unsupported_diagnostic(
                 "array-body structural sequence classification requires an "
                 "accepted M73 ExactArrayInitializationDeclarationShellIr source",
                 None,
@@ -8281,7 +8121,7 @@ def _validate_array_body_structural_sequence_inputs(
         ordinals = tuple(slot.ordinal for slot in envelope.slots)
         if len(envelope.slots) == len(_EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS):
             diagnostics.append(
-                _array_body_structural_sequence_role_mismatch_diagnostic(
+                _array_body_diagnostics._array_body_structural_sequence_role_mismatch_diagnostic(
                     "array-body structural sequence classification requires "
                     "the accepted M65 five-slot source order "
                     f"{_EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS!r}; got labels "
@@ -8291,7 +8131,7 @@ def _validate_array_body_structural_sequence_inputs(
             )
         else:
             diagnostics.append(
-                _array_body_structural_sequence_malformed_diagnostic(
+                _array_body_diagnostics._array_body_structural_sequence_malformed_diagnostic(
                     "array-body structural sequence classification requires "
                     f"exactly five accepted M65 slots; got {len(envelope.slots)}",
                     envelope.source_location,
@@ -8304,7 +8144,7 @@ def _validate_array_body_structural_sequence_inputs(
         or envelope.originating_branch_chain_id != shell.originating_branch_chain_id
     ):
         diagnostics.append(
-            _array_body_structural_sequence_context_mismatch_diagnostic(
+            _array_body_diagnostics._array_body_structural_sequence_context_mismatch_diagnostic(
                 "array-body structural sequence classification requires M65 "
                 "envelope and M73 declaration shell candidate id, selected "
                 "type tag, and branch-chain identity to match",
@@ -8314,7 +8154,7 @@ def _validate_array_body_structural_sequence_inputs(
 
     if shell.source_envelope is not envelope:
         diagnostics.append(
-            _array_body_structural_sequence_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._array_body_structural_sequence_provenance_mismatch_diagnostic(
                 "M73 declaration shell must reference the same accepted M65 "
                 "array-body envelope supplied to structural sequence "
                 "classification",
@@ -8326,7 +8166,7 @@ def _validate_array_body_structural_sequence_inputs(
         or shell.slot_ordinal != 0
     ):
         diagnostics.append(
-            _array_body_structural_sequence_malformed_diagnostic(
+            _array_body_diagnostics._array_body_structural_sequence_malformed_diagnostic(
                 "array-body structural sequence classification attaches the "
                 "M73 declaration shell only to the first M65 slot at ordinal 0",
                 shell.source_location,
@@ -8336,7 +8176,7 @@ def _validate_array_body_structural_sequence_inputs(
         selected_slot = envelope.slots[2]
         if not isinstance(selected_slot, ExactArrayBodyEnvelopeSelectedSlot):
             diagnostics.append(
-                _array_body_structural_sequence_role_mismatch_diagnostic(
+                _array_body_diagnostics._array_body_structural_sequence_role_mismatch_diagnostic(
                     "array-body structural sequence classification requires "
                     "the selected-body envelope role at slot ordinal 2",
                     getattr(selected_slot, "source_location", envelope.source_location),
@@ -8350,7 +8190,7 @@ def _validate_array_body_structural_sequence_inputs(
             != envelope.originating_branch_chain_id
         ):
             diagnostics.append(
-                _array_body_structural_sequence_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._array_body_structural_sequence_provenance_mismatch_diagnostic(
                     "M65 selected-body slot must preserve the accepted M63 "
                     "selected/no-body envelope provenance",
                     selected_slot.source_location,
@@ -8365,7 +8205,7 @@ def _validate_predicate_path_structural_request_input(
     diagnostics: list[Diagnostic] = []
     if not isinstance(sequence, ExactArrayBodyStructuralSequenceIr):
         return [
-            _predicate_path_source_unsupported_diagnostic(
+            _array_body_diagnostics._predicate_path_source_unsupported_diagnostic(
                 "predicate-path structural request lowering requires an "
                 "accepted M74 ExactArrayBodyStructuralSequenceIr source",
                 None,
@@ -8377,7 +8217,7 @@ def _validate_predicate_path_structural_request_input(
         _EXACT_ARRAY_BODY_ENVELOPE_SLOT_ORDINALS
     ):
         diagnostics.append(
-            _predicate_path_malformed_diagnostic(
+            _array_body_diagnostics._predicate_path_malformed_diagnostic(
                 "predicate-path structural request lowering requires the "
                 "accepted M74 five-role source order",
                 sequence.source_location,
@@ -8388,7 +8228,7 @@ def _validate_predicate_path_structural_request_input(
     envelope = sequence.source_envelope
     if tuple(role.envelope_slot for role in sequence.roles) != envelope.slots:
         diagnostics.append(
-            _predicate_path_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._predicate_path_provenance_mismatch_diagnostic(
                 "M75 predicate-path roles must preserve the M74 source slot "
                 "identity and order",
                 sequence.source_location,
@@ -8404,7 +8244,7 @@ def _validate_predicate_path_structural_request_input(
             or role.source_extension != sequence.source_extension
         ):
             diagnostics.append(
-                _predicate_path_context_mismatch_diagnostic(
+                _array_body_diagnostics._predicate_path_context_mismatch_diagnostic(
                     "predicate-path structural request roles must match the "
                     "M74 sequence candidate, extension, selected type, and "
                     "branch-chain context",
@@ -8422,7 +8262,7 @@ def _validate_predicate_path_structural_request_input(
         or init_role.opaque_source_text != init_role.envelope_slot.opaque_source_text
     ):
         diagnostics.append(
-            _predicate_path_malformed_diagnostic(
+            _array_body_diagnostics._predicate_path_malformed_diagnostic(
                 "predicate-path structural request requires M74 role ordinal "
                 "1 to be the opaque predicate-init-shaped slot",
                 init_role.source_location,
@@ -8439,7 +8279,7 @@ def _validate_predicate_path_structural_request_input(
         is not envelope.selected_body_slot.selected_body_envelope
     ):
         diagnostics.append(
-            _predicate_path_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._predicate_path_provenance_mismatch_diagnostic(
                 "predicate-path structural request requires M74 role ordinal "
                 "2 to preserve the accepted M63 selected/no-body envelope",
                 selected_role.source_location,
@@ -8452,7 +8292,7 @@ def _validate_predicate_path_structural_request_input(
         or store_role.opaque_source_text != store_role.envelope_slot.opaque_source_text
     ):
         diagnostics.append(
-            _predicate_path_malformed_diagnostic(
+            _array_body_diagnostics._predicate_path_malformed_diagnostic(
                 "predicate-path structural request requires M74 role ordinal "
                 "3 to be the opaque post-branch store-call-shaped slot",
                 store_role.source_location,
@@ -8464,10 +8304,10 @@ def _validate_predicate_path_structural_request_input(
 
     assert init_role.opaque_source_text is not None
     assert store_role.opaque_source_text is not None
-    init_match = _EXACT_PREDICATE_INIT_SLOT_RE.match(init_role.opaque_source_text)
+    init_match = _exact_shapes.EXACT_PREDICATE_INIT_SLOT_RE.match(init_role.opaque_source_text)
     if init_match is None:
         diagnostics.append(
-            _predicate_path_malformed_diagnostic(
+            _array_body_diagnostics._predicate_path_malformed_diagnostic(
                 "predicate-path structural request requires exact predicate-init "
                 "shape 'svbool_t pg = intrin<svptrue_b8>();'",
                 init_role.source_location,
@@ -8478,7 +8318,7 @@ def _validate_predicate_path_structural_request_input(
     )
     if store_match is None:
         diagnostics.append(
-            _predicate_path_malformed_diagnostic(
+            _array_body_diagnostics._predicate_path_malformed_diagnostic(
                 "predicate-path structural request requires exact post-branch "
                 "store-call predicate-token shape",
                 store_role.source_location,
@@ -8494,13 +8334,14 @@ def _validate_predicate_path_structural_request_input(
     store_call_token = store_match.group("call_token")
     store_predicate_token = store_match.group("predicate_token")
     if (
-        predicate_type != "svbool_t"
-        or predicate_token != "pg"
-        or init_direct_token != "svptrue_b8"
+        predicate_type != _exact_shapes.EXACT_PREDICATE_INIT_TYPE_TOKEN
+        or predicate_token != _exact_shapes.EXACT_PREDICATE_TOKEN
+        or init_direct_token
+        != _exact_shapes.EXACT_PREDICATE_INIT_DIRECT_INTRINSIC_TOKEN
         or store_call_token != _exact_shapes.EXACT_POST_BRANCH_INTRINSIC_TOKEN
     ):
         diagnostics.append(
-            _predicate_path_malformed_diagnostic(
+            _array_body_diagnostics._predicate_path_malformed_diagnostic(
                 "predicate-path structural request requires the exact M75 "
                 "predicate-init and store-call structural tokens",
                 init_role.source_location,
@@ -8508,7 +8349,7 @@ def _validate_predicate_path_structural_request_input(
         )
     if store_predicate_token != predicate_token:
         diagnostics.append(
-            _predicate_path_token_mismatch_diagnostic(
+            _array_body_diagnostics._predicate_path_token_mismatch_diagnostic(
                 "predicate-path structural request requires the slot-3 predicate "
                 "argument token to match the slot-1 predicate token",
                 store_role.source_location,
@@ -8519,7 +8360,7 @@ def _validate_predicate_path_structural_request_input(
     if isinstance(selected_body_envelope, SelectedBodyEnvelopeIr):
         if len(selected_body_envelope.entries) != 1:
             diagnostics.append(
-                _predicate_path_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._predicate_path_provenance_mismatch_diagnostic(
                     "predicate-path structural request requires the accepted "
                     "M63 selected-body envelope to carry exactly one M62 entry",
                     selected_body_envelope.source_location,
@@ -8542,7 +8383,7 @@ def _validate_predicate_path_structural_request_input(
             != entry.direct_intrinsic_token_text
         ):
             diagnostics.append(
-                _predicate_path_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._predicate_path_provenance_mismatch_diagnostic(
                     "predicate-path structural request requires M63 selected-body "
                     "envelope and M62 direct-intrinsic body IR provenance to match",
                     entry.source_location,
@@ -8550,7 +8391,7 @@ def _validate_predicate_path_structural_request_input(
             )
         if entry.assignment_target_text != predicate_token:
             diagnostics.append(
-                _predicate_path_token_mismatch_diagnostic(
+                _array_body_diagnostics._predicate_path_token_mismatch_diagnostic(
                     "predicate-path structural request requires the selected-body "
                     "assignment target token to match the slot-1 predicate token",
                     entry.source_location,
@@ -8569,7 +8410,7 @@ def _validate_predicate_path_structural_request_input(
             != selected_body_envelope.source_location
         ):
             diagnostics.append(
-                _predicate_path_provenance_mismatch_diagnostic(
+                _array_body_diagnostics._predicate_path_provenance_mismatch_diagnostic(
                     "predicate-path structural request requires accepted "
                     "no-selected-body envelope provenance to match its M62 "
                     "no-body IR",
@@ -8586,7 +8427,7 @@ def _validate_post_branch_intrinsic_call_site_input(
     diagnostics: list[Diagnostic] = []
     if not isinstance(predicate_path, ExactPredicatePathStructuralRequestIr):
         return [
-            _post_branch_call_site_source_unsupported_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_source_unsupported_diagnostic(
                 "post-branch intrinsic call-site structural request lowering "
                 "requires an accepted M75 ExactPredicatePathStructuralRequestIr "
                 "source",
@@ -8597,7 +8438,7 @@ def _validate_post_branch_intrinsic_call_site_input(
     sequence = predicate_path.source_sequence
     if not isinstance(sequence, ExactArrayBodyStructuralSequenceIr):
         return [
-            _post_branch_call_site_sequence_missing_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_sequence_missing_diagnostic(
                 "post-branch intrinsic call-site structural request lowering "
                 "requires M74 structural sequence provenance carried by M75",
                 predicate_path.store_call_source_location,
@@ -8608,7 +8449,7 @@ def _validate_post_branch_intrinsic_call_site_input(
         ExactArrayInitializationDeclarationShellIr,
     ):
         diagnostics.append(
-            _post_branch_call_site_sequence_missing_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_sequence_missing_diagnostic(
                 "post-branch intrinsic call-site structural request lowering "
                 "requires M73 declaration-shell provenance carried through M74/M75",
                 sequence.source_location,
@@ -8623,7 +8464,7 @@ def _validate_post_branch_intrinsic_call_site_input(
         != sequence.originating_branch_chain_id
     ):
         diagnostics.append(
-            _post_branch_call_site_context_mismatch_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_context_mismatch_diagnostic(
                 "post-branch intrinsic call-site structural request requires M75 "
                 "candidate, extension, selected type, and branch-chain context "
                 "to match the carried M74 sequence",
@@ -8632,7 +8473,7 @@ def _validate_post_branch_intrinsic_call_site_input(
         )
     if len(sequence.roles) <= 3:
         diagnostics.append(
-            _post_branch_call_site_sequence_missing_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_sequence_missing_diagnostic(
                 "post-branch intrinsic call-site structural request requires "
                 "M74 role ordinal 3 provenance",
                 sequence.source_location,
@@ -8649,7 +8490,7 @@ def _validate_post_branch_intrinsic_call_site_input(
         or not predicate_path.store_call_predicate_argument_text
     ):
         diagnostics.append(
-            _post_branch_call_site_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_provenance_mismatch_diagnostic(
                 "post-branch intrinsic call-site request requires the accepted "
                 "M75 slot-3 predicate-token use",
                 predicate_path.source_location,
@@ -8666,7 +8507,7 @@ def _validate_post_branch_intrinsic_call_site_input(
         != post_branch_role.envelope_slot.opaque_source_text
     ):
         diagnostics.append(
-            _post_branch_call_site_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_provenance_mismatch_diagnostic(
                 "post-branch intrinsic call-site request requires M74 role "
                 "ordinal 3 to preserve the accepted opaque post-branch "
                 "call-site slot",
@@ -8680,7 +8521,7 @@ def _validate_post_branch_intrinsic_call_site_input(
         or post_branch_role.role_label != predicate_path.store_call_role_label
     ):
         diagnostics.append(
-            _post_branch_call_site_provenance_mismatch_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_provenance_mismatch_diagnostic(
                 "post-branch intrinsic call-site slot identity must match the "
                 "M75 store-call predicate-token use",
                 post_branch_role.source_location,
@@ -8692,7 +8533,7 @@ def _validate_post_branch_intrinsic_call_site_input(
     source_text = post_branch_role.opaque_source_text
     if source_text is None:
         diagnostics.append(
-            _post_branch_call_site_malformed_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_malformed_diagnostic(
                 "post-branch intrinsic call-site structural request requires "
                 "the accepted M74 opaque source text",
                 post_branch_role.source_location,
@@ -8709,7 +8550,7 @@ def _validate_post_branch_intrinsic_call_site_input(
             _exact_shapes.EXACT_POST_BRANCH_CALL_HEAD_TOKEN,
         ):
             diagnostics.append(
-                _post_branch_call_site_shape_unsupported_diagnostic(
+                _array_body_diagnostics._post_branch_call_site_shape_unsupported_diagnostic(
                     "post-branch intrinsic call-site structural request supports "
                     "only the exact intrin<...>(...) call-site shape",
                     post_branch_role.source_location,
@@ -8717,7 +8558,7 @@ def _validate_post_branch_intrinsic_call_site_input(
             )
         else:
             diagnostics.append(
-                _post_branch_call_site_malformed_diagnostic(
+                _array_body_diagnostics._post_branch_call_site_malformed_diagnostic(
                     "post-branch intrinsic call-site structural request requires "
                     "an exact call-site shaped as "
                     "'intrin<svst1>(pg, tmp.data(), a);'",
@@ -8731,7 +8572,7 @@ def _validate_post_branch_intrinsic_call_site_input(
     arguments = tuple(part.strip() for part in match.group("arguments").split(","))
     if call_head_token != _exact_shapes.EXACT_POST_BRANCH_CALL_HEAD_TOKEN:
         diagnostics.append(
-            _post_branch_call_site_call_head_mismatch_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_call_head_mismatch_diagnostic(
                 "post-branch intrinsic call-site structural request requires "
                 "the exact structural call-head token intrin",
                 post_branch_role.source_location,
@@ -8739,7 +8580,7 @@ def _validate_post_branch_intrinsic_call_site_input(
         )
     if intrinsic_token != _exact_shapes.EXACT_POST_BRANCH_INTRINSIC_TOKEN:
         diagnostics.append(
-            _post_branch_call_site_intrinsic_token_mismatch_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_intrinsic_token_mismatch_diagnostic(
                 "post-branch intrinsic call-site structural request records "
                 "only the exact unresolved intrinsic token svst1",
                 post_branch_role.source_location,
@@ -8747,7 +8588,7 @@ def _validate_post_branch_intrinsic_call_site_input(
         )
     if len(arguments) != 3:
         diagnostics.append(
-            _post_branch_call_site_argument_count_mismatch_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_argument_count_mismatch_diagnostic(
                 "post-branch intrinsic call-site structural request requires "
                 "exactly three structural arguments",
                 post_branch_role.source_location,
@@ -8763,7 +8604,7 @@ def _validate_post_branch_intrinsic_call_site_input(
         != _exact_shapes.EXACT_SELECTED_BODY_ASSIGNMENT_SHAPE.target_text
     ):
         diagnostics.append(
-            _post_branch_call_site_predicate_argument_mismatch_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_predicate_argument_mismatch_diagnostic(
                 "post-branch intrinsic call-site predicate argument must link "
                 "to the accepted M75 slot-3 predicate-token use",
                 post_branch_role.source_location,
@@ -8786,7 +8627,7 @@ def _validate_post_branch_intrinsic_call_site_input(
         != _exact_shapes.EXACT_POST_BRANCH_MEMBER_ACCESS_MEMBER_TOKEN
     ):
         diagnostics.append(
-            _post_branch_call_site_member_access_unsupported_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_member_access_unsupported_diagnostic(
                 "post-branch intrinsic call-site structural request supports "
                 "only the exact structural member-access-shaped token/path "
                 "tmp.data() linked to M73/M74/M75 tmp provenance",
@@ -8800,7 +8641,7 @@ def _validate_post_branch_intrinsic_call_site_input(
         != _exact_shapes.EXACT_POST_BRANCH_SOURCE_OPERAND_TOKEN
     ):
         diagnostics.append(
-            _post_branch_call_site_source_operand_unsupported_diagnostic(
+            _array_body_diagnostics._post_branch_call_site_source_operand_unsupported_diagnostic(
                 "post-branch intrinsic call-site structural request records "
                 "only the exact structural source operand token a",
                 post_branch_role.source_location,
@@ -8920,7 +8761,7 @@ def _validate_exact_array_body_envelope_skeleton(
     envelope: GenerationSelectedBodyEnvelopeIr,
 ) -> Diagnostic | None:
     if not skeleton.is_exact_array_body_shape:
-        return _array_body_envelope_shape_unsupported_diagnostic(
+        return _array_body_diagnostics._array_body_envelope_shape_unsupported_diagnostic(
             "array-body envelope slot assembly supports only the exact "
             "array.tsl:105-111 structural skeleton",
             skeleton.source_location,
@@ -8928,7 +8769,7 @@ def _validate_exact_array_body_envelope_skeleton(
 
     slots = skeleton.slots
     if len(slots) != len(_EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS):
-        return _array_body_envelope_shape_unsupported_diagnostic(
+        return _array_body_diagnostics._array_body_envelope_shape_unsupported_diagnostic(
             "array-body envelope slot assembly requires exactly five slots; "
             f"got {len(slots)}",
             skeleton.source_location,
@@ -8944,7 +8785,7 @@ def _validate_exact_array_body_envelope_skeleton(
                 f"{labels!r}",
                 location=skeleton.source_location,
             )
-        return _array_body_envelope_shape_unsupported_diagnostic(
+        return _array_body_diagnostics._array_body_envelope_shape_unsupported_diagnostic(
             "array-body envelope slot assembly requires exactly one of each "
             f"M64 slot label {_EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS!r}; got "
             f"{labels!r}",
@@ -8979,12 +8820,12 @@ def _validate_exact_array_body_envelope_skeleton(
             slot.label in _EXACT_ARRAY_BODY_ENVELOPE_OPAQUE_SLOT_LABELS
             and not (slot.opaque_source_text or "").strip()
         ):
-            return _array_body_envelope_shape_unsupported_diagnostic(
+            return _array_body_diagnostics._array_body_envelope_shape_unsupported_diagnostic(
                 "array-body envelope opaque slots must preserve opaque source text",
                 slot.source_location,
             )
         if slot.label == "selected_body_envelope" and slot.opaque_source_text is not None:
-            return _array_body_envelope_shape_unsupported_diagnostic(
+            return _array_body_diagnostics._array_body_envelope_shape_unsupported_diagnostic(
                 "array-body envelope selected-body slot must reference the "
                 "M63 envelope without carrying selected branch text",
                 slot.source_location,
@@ -9033,1109 +8874,6 @@ def _has_exact_array_body_labels_once(
     )
 
 
-def _array_body_envelope_shape_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-BODY-ENVELOPE-SHAPE-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_slot_source_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-SLOT-SOURCE-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_slot_missing_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-SLOT-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_slot_wrong_position_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-SLOT-WRONG-POSITION",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_slot_malformed_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-SLOT-FORM-MALFORMED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_slot_helper_unsupported_diagnostic(
-    slot: ExactArrayBodyEnvelopeOpaqueSlot,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-SLOT-HELPER-UNSUPPORTED",
-        "array-initialization slot form lowering preserves only the exact "
-        "unresolved helper leaves type<generation>(base::in), "
-        "value<generation>(vector::length), "
-        "value<generation>(vector::alignment), and "
-        "value<backend>(uninit::array)",
-        location=slot.source_location,
-    )
-
-
-def _array_initialization_slot_provenance_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-SLOT-PROVENANCE-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_helper_request_source_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-SOURCE-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_helper_request_missing_form_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-FORM-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_helper_request_missing_leaf_diagnostic(
-    spec: _ExactArrayInitializationHelperLeafSpec,
-    form: ExactArrayInitializationSlotFormIr,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-MISSING",
-        "array-initialization helper request lowering requires the M66 "
-        f"{spec.field_name} field to carry the unresolved helper leaf "
-        f"{spec.expected_leaf_kind!r}",
-        location=form.source_location,
-    )
-
-
-def _array_initialization_helper_request_mismatched_leaf_diagnostic(
-    spec: _ExactArrayInitializationHelperLeafSpec,
-    leaf: ExactArrayInitializationUnresolvedLeaf,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-MISMATCH",
-        "array-initialization helper request lowering expected the M66 "
-        f"{spec.field_name} field to carry leaf kind "
-        f"{spec.expected_leaf_kind!r}, got {leaf.kind!r}",
-        location=leaf.source_location,
-    )
-
-
-def _array_initialization_helper_request_duplicate_leaf_diagnostic(
-    leaf: ExactArrayInitializationUnresolvedLeaf,
-    form: ExactArrayInitializationSlotFormIr,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-DUPLICATE",
-        "array-initialization helper request lowering requires each of the "
-        "four M66 helper leaf kinds exactly once; duplicate leaf kind "
-        f"{leaf.kind!r} appeared for variable {form.variable_token!r}",
-        location=leaf.source_location,
-    )
-
-
-def _array_initialization_helper_request_unsupported_leaf_diagnostic(
-    spec: _ExactArrayInitializationHelperLeafSpec,
-    leaf: ExactArrayInitializationUnresolvedLeaf,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-UNSUPPORTED",
-        "array-initialization helper request lowering preserves only the "
-        "exact M66 unresolved helper leaf text for "
-        f"{spec.expected_leaf_kind!r}; got {leaf.source_text!r}",
-        location=leaf.source_location,
-    )
-
-
-def _array_initialization_helper_request_provenance_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-PROVENANCE-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_base_type_resolution_source_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-SOURCE-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_base_type_resolution_missing_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-IR-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_base_type_resolution_multiple_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-IR-MULTIPLE",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_base_type_resolution_missing_request_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_base_type_resolution_duplicate_request_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-DUPLICATE",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_base_type_resolution_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_base_type_resolution_unsupported_request_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_base_type_resolution_provenance_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-BASE-TYPE-REQUEST-PROVENANCE-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_length_source_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-SOURCE-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_length_missing_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-IR-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_length_multiple_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-IR-MULTIPLE",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_length_missing_request_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_length_duplicate_request_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-DUPLICATE",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_length_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_length_unsupported_request_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-REQUEST-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_length_metadata_missing_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_length_metadata_duplicate_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-DUPLICATE",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_length_metadata_conflict_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-CONFLICT",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_length_metadata_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-METADATA-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_length_context_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-CONTEXT-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_length_provenance_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-LENGTH-PROVENANCE-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_alignment_source_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-SOURCE-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_alignment_missing_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-IR-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_alignment_multiple_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-IR-MULTIPLE",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_alignment_missing_request_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_alignment_duplicate_request_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-DUPLICATE",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_alignment_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_alignment_unsupported_request_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-REQUEST-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_alignment_metadata_missing_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-METADATA-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_alignment_metadata_duplicate_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-METADATA-DUPLICATE",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_alignment_metadata_conflict_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-METADATA-CONFLICT",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_alignment_metadata_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-METADATA-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_alignment_context_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-CONTEXT-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_vector_alignment_provenance_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-VECTOR-ALIGNMENT-PROVENANCE-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_helper_set_source_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-SET-SOURCE-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_helper_set_missing_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-SET-IR-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_helper_set_multiple_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-SET-IR-MULTIPLE",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_helper_set_missing_request_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-SET-BACKEND-UNINIT-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_helper_set_duplicate_request_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-SET-BACKEND-UNINIT-DUPLICATE",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_helper_set_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-SET-BACKEND-UNINIT-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_helper_set_unsupported_request_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-SET-BACKEND-UNINIT-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_helper_set_context_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-SET-CONTEXT-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_helper_set_provenance_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-HELPER-SET-PROVENANCE-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_declaration_shell_source_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-SOURCE-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_declaration_shell_missing_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-IR-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_declaration_shell_multiple_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-IR-MULTIPLE",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_declaration_shell_context_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-CONTEXT-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_declaration_shell_provenance_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-PROVENANCE-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_declaration_shell_malformed_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-MALFORMED",
-        detail,
-        location=location,
-    )
-
-
-def _array_initialization_declaration_shell_backend_policy_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-INIT-DECLARATION-SHELL-BACKEND-UNINIT-POLICY-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_body_structural_sequence_source_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-SOURCE-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _array_body_structural_sequence_missing_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-IR-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _array_body_structural_sequence_multiple_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-IR-MULTIPLE",
-        detail,
-        location=location,
-    )
-
-
-def _array_body_structural_sequence_context_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-CONTEXT-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_body_structural_sequence_provenance_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-PROVENANCE-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_body_structural_sequence_role_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-ROLE-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _array_body_structural_sequence_malformed_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-BODY-STRUCTURAL-SEQUENCE-MALFORMED",
-        detail,
-        location=location,
-    )
-
-
-def _predicate_path_source_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-PREDICATE-PATH-SOURCE-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _predicate_path_missing_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-PREDICATE-PATH-IR-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _predicate_path_multiple_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-PREDICATE-PATH-IR-MULTIPLE",
-        detail,
-        location=location,
-    )
-
-
-def _predicate_path_context_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-PREDICATE-PATH-CONTEXT-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _predicate_path_provenance_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-PREDICATE-PATH-PROVENANCE-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _predicate_path_malformed_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-PREDICATE-PATH-MALFORMED",
-        detail,
-        location=location,
-    )
-
-
-def _predicate_path_token_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-PREDICATE-PATH-TOKEN-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _post_branch_call_site_source_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-POST-BRANCH-CALL-SITE-SOURCE-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _post_branch_call_site_missing_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-POST-BRANCH-CALL-SITE-IR-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _post_branch_call_site_multiple_ir_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-POST-BRANCH-CALL-SITE-IR-MULTIPLE",
-        detail,
-        location=location,
-    )
-
-
-def _post_branch_call_site_context_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-POST-BRANCH-CALL-SITE-CONTEXT-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _post_branch_call_site_provenance_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-POST-BRANCH-CALL-SITE-PROVENANCE-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _post_branch_call_site_sequence_missing_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-POST-BRANCH-CALL-SITE-SEQUENCE-MISSING",
-        detail,
-        location=location,
-    )
-
-
-def _post_branch_call_site_malformed_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-POST-BRANCH-CALL-SITE-MALFORMED",
-        detail,
-        location=location,
-    )
-
-
-def _post_branch_call_site_shape_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-POST-BRANCH-CALL-SITE-SHAPE-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _post_branch_call_site_call_head_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-POST-BRANCH-CALL-SITE-CALL-HEAD-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _post_branch_call_site_intrinsic_token_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-POST-BRANCH-CALL-SITE-INTRINSIC-TOKEN-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _post_branch_call_site_argument_count_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-POST-BRANCH-CALL-SITE-ARGUMENT-COUNT-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _post_branch_call_site_predicate_argument_mismatch_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-POST-BRANCH-CALL-SITE-PREDICATE-ARGUMENT-MISMATCH",
-        detail,
-        location=location,
-    )
-
-
-def _post_branch_call_site_member_access_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-POST-BRANCH-CALL-SITE-MEMBER-ACCESS-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _post_branch_call_site_source_operand_unsupported_diagnostic(
-    detail: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-POST-BRANCH-CALL-SITE-SOURCE-OPERAND-UNSUPPORTED",
-        detail,
-        location=location,
-    )
-
-
-def _duplicate_array_body_envelope_skeleton_diagnostic(
-    lookup_key: ExactArrayBodyEnvelopeSkeletonKey,
-    skeleton: ExactArrayBodyEnvelopeSkeleton,
-    *,
-    conflicting: bool,
-) -> Diagnostic:
-    code = (
-        "TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-CONFLICT"
-        if conflicting
-        else "TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-DUPLICATE"
-    )
-    detail = "conflicting" if conflicting else "duplicate"
-    return Diagnostic.error(
-        code,
-        f"array-body envelope skeleton input has a {detail} skeleton for "
-        f"candidate {lookup_key.candidate_id!r}, selected type tag "
-        f"{lookup_key.selected_type_tag!r}, and branch-chain identity "
-        f"{lookup_key.originating_branch_chain_id!r}; provide exactly one "
-        "typed skeleton for that envelope key",
-        location=skeleton.source_location,
-    )
-
-
-def _missing_array_body_envelope_skeleton_diagnostic(
-    requirement: ExactArrayBodyEnvelopeSkeletonRequirement,
-    envelope: GenerationSelectedBodyEnvelopeIr,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-MISSING",
-        "array-body envelope skeleton input is required for candidate "
-        f"{envelope.candidate_id!r}, selected type tag "
-        f"{envelope.selected_type_tag!r}, and branch-chain identity "
-        f"{envelope.originating_branch_chain_id!r}, but no matching typed "
-        "ExactArrayBodyEnvelopeSkeleton was supplied",
-        location=requirement.source_location or envelope.source_location,
-    )
-
-
-def _orphan_array_body_envelope_skeleton_diagnostic(
-    lookup_key: ExactArrayBodyEnvelopeSkeletonKey,
-    skeleton: ExactArrayBodyEnvelopeSkeleton,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-ORPHAN",
-        "array-body envelope skeleton input was supplied for candidate "
-        f"{lookup_key.candidate_id!r}, selected type tag "
-        f"{lookup_key.selected_type_tag!r}, and branch-chain identity "
-        f"{lookup_key.originating_branch_chain_id!r}, but normal lowering "
-        "produced no M63 selected-body envelope for that candidate",
-        location=skeleton.source_location,
-    )
-
-
-def _mismatched_array_body_envelope_skeleton_diagnostic(
-    lookup_key: ExactArrayBodyEnvelopeSkeletonKey,
-    skeleton: ExactArrayBodyEnvelopeSkeleton,
-    envelope_keys: tuple[ExactArrayBodyEnvelopeSkeletonKey, ...],
-) -> Diagnostic:
-    candidate_envelope_keys = tuple(
-        envelope_key
-        for envelope_key in envelope_keys
-        if envelope_key.candidate_id == lookup_key.candidate_id
-    )
-    expected = tuple(
-        (
-            envelope_key.selected_type_tag,
-            envelope_key.originating_branch_chain_id,
-        )
-        for envelope_key in candidate_envelope_keys
-    )
-    return Diagnostic.error(
-        "TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-PROVENANCE-MISMATCH",
-        "array-body envelope skeleton input did not match the M63 envelope "
-        "provenance for candidate "
-        f"{lookup_key.candidate_id!r}; got selected type tag "
-        f"{lookup_key.selected_type_tag!r} and branch-chain identity "
-        f"{lookup_key.originating_branch_chain_id!r}, expected one of "
-        f"{expected!r}",
-        location=skeleton.source_location,
-    )
 
 
 def _validate_selected_body_envelope_source(

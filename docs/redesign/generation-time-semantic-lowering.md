@@ -657,6 +657,24 @@ stage behavior, and prove the central facade is materially smaller. The
 pre-M78 line-count baseline is 12,371 physical lines, and M78 requires at
 least 1,000 net lines removed from `boundary.py` without duplicate moved code.
 
+M78 execution keeps generation-time helper behavior unchanged. It moves exact
+array-initialization helper/slot shape and request-rule values into
+`tslgen.lowering._array_body_shapes`, exact package diagnostics into
+`tslgen.lowering._array_body_diagnostics`, and exact predicate-init structural
+tokens into `tslgen.lowering._exact_shapes`. `boundary.py` remains the facade
+and now measures 11,109 physical lines. The new modules do not evaluate helper
+text, query catalogs/backends, render output, or import `boundary.py`.
+
+Post-M78 planning selects M79 as behavior-preserving exact array-body typed
+model ownership extraction. M79 keeps generation-time helper behavior
+unchanged: it must not evaluate helper text, add helper semantics, query
+catalogs/backends, render output, or create a registry/dispatcher. Its purpose
+is to move exact array-body / array-initialization model ownership behind
+private typed modules, consolidate exact helper alias ownership, and tighten
+targeted diagnostic typing where the same private model boundary supplies the
+needed attributes. `boundary.py` remains the public facade and private modules
+must not import it.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
@@ -993,7 +1011,7 @@ structural IR, implemented M74 exact structural-sequence classification,
 accepted M75 exact predicate-path structural/request IR, and accepted M76 exact
 post-branch intrinsic call-site structural/request IR slices, plus the
 implemented M77 behavior-preserving composable lowering pipeline/module
-boundary and the planned M78 behavior-preserving lowering package
+boundary and the accepted M78 behavior-preserving lowering package
 decomposition:
 
 - Full TSIL grammar and general expression evaluation.
