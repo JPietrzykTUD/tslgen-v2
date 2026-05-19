@@ -8548,3 +8548,216 @@ Next concrete prompt:
   The next concrete prompt is
   `docs/agent/runs/post-m75-planning-plus-review-prompt.md`. Do not start M76
   until post-M75 planning is accepted.
+
+### Post-M75 Planning Result
+
+Status:
+
+Accepted for execution after post-M75 planning and human acceptance.
+
+Selected milestone:
+
+```text
+Milestone 76: Exact Post-Branch Intrinsic Call-Site Structural Request IR Slice
+```
+
+Candidate comparison:
+
+| Candidate | Value | Risk | Decision |
+| --- | --- | --- | --- |
+| Exact post-branch intrinsic call-site structural request IR | High. Consumes accepted M75 predicate-path state and records the exact post-branch call-shaped slot as typed lowering state, moving the array-body pipeline forward without assigning store, SVE, or backend meaning. | Medium if the plan treats `svst1`, `tmp.data()`, or `a` as semantic store/memory facts instead of structural tokens and provenance. | Select as M76 with strict structural/request-only wording and no hardwired ARM/store semantics. |
+| Store-call semantic lowering | High later. | Too broad now because it would combine call semantics, memory behavior, alignment, `tmp.data()`, source operand semantics, backend intrinsic behavior, renderer pressure, and generated output. | Defer. |
+| Return-emission structural/request IR | High later. | Lower immediate value for the M75 predicate-path handoff and risks pulling in return semantics and renderer-ready body shape too early. | Defer. |
+| Backend-uninit deferred-value refinement | Useful for the first-slot helper set. | Lower forward movement for the post-branch body path, and backend uninit still belongs at a backend-value boundary rather than this call-site slice. | Defer. |
+| Private resolver/stage-table cleanup | Useful maintainability work. | Does not advance the typed lowering frontier as much as consuming M75 into the next exact post-branch structural value. | Keep as non-blocking follow-up unless a focused cleanup is required by M76. |
+
+### Milestone 76: Exact Post-Branch Intrinsic Call-Site Structural Request IR Slice
+
+Status:
+
+Accepted for execution after post-M75 planning and human acceptance. M76
+execution is active through the generated execution-review loop prompt.
+
+Goal:
+
+Consume accepted M75 exact predicate-path structural/request IR and produce one
+typed structural/request IR value for the exact post-branch call-site shape at
+`array.tsl:110`:
+
+```text
+intrin<svst1>(pg, tmp.data(), a);
+```
+
+M76 records only that the accepted post-branch slot is an exact
+`intrin<...>(...)` call-shaped site with structural argument tokens and
+provenance. It must not define store semantics, ARM/SVE intrinsic semantics,
+memory behavior, `tmp.data()` semantics, operand semantics, backend
+translation, renderer-ready IR, or generated output.
+
+Scope:
+
+- Consume accepted typed M75 `ExactPredicatePathStructuralRequestIr` values,
+  the `predicate_path_structural_request_lowering` stage output, or a typed
+  `LoweredImplementation` carrying exactly one accepted M75 value.
+- Consume accepted M74 exact array-body structural sequence state and accepted
+  M73 declaration-shell state only through the accepted M75/M74 provenance
+  chain; do not reparse raw body text as semantics.
+- Produce one typed IR value such as
+  `ExactPostBranchIntrinsicCallSiteStructuralRequestIr`, carrying:
+  - the source M75 predicate-path value;
+  - the source M74 structural sequence identity and exact post-branch slot
+    identity for slot ordinal `3`;
+  - the structural call-head token `intrin`;
+  - the unresolved intrinsic token `svst1` as source evidence only;
+  - argument ordinal `0` as structural token `pg`, linked to the accepted M75
+    slot-3 predicate-token use;
+  - argument ordinal `1` as exact member-access-shaped structural token/path
+    `tmp.data()`, linked only to accepted structural provenance for `tmp`
+    where that provenance is already carried through M73/M74/M75;
+  - argument ordinal `2` as structural source operand token `a`;
+  - deterministic provenance including candidate id, target/source extension
+    where available, selected type tag, branch-chain id, M74/M75 identity, and
+    source locations.
+- Append one deterministic generation-lowering stage after
+  `predicate_path_structural_request_lowering`, for example
+  `post_branch_intrinsic_call_site_structural_request_lowering`.
+- Preserve accepted M57-M75 behavior and outputs, including selected-branch
+  diagnostics from the earlier branch-pruning/lowering slices.
+- Use source text only as exact shape/provenance evidence. M76 may enforce the
+  selected exact corpus shape as an invariant for this slice, but it must not
+  dispatch semantic behavior from raw helper text, SVE token text, backend ids,
+  renderer names, catalog data, corpus line numbers, or request ordinals.
+- Keep public IR additions narrow: at most one exact public call-site
+  structural/request IR value and one exact stage/output pairing.
+
+Out of scope:
+
+- Store semantics, memory writes, alignment behavior, pointer semantics,
+  operand semantics, variable scope/use-def/lifetime, declaration/array
+  semantics, initializer behavior, return semantics, `emit_return`, or
+  `assume_aligned`.
+- Interpreting `svst1`, `pg`, `tmp.data()`, `a`, `svbool_t`, `svptrue_b*`, or
+  any ARM/SVE predicate/vector/register/intrinsic behavior.
+- Generic call IR, broad direct-intrinsic semantics, generic store-call IR,
+  generic body IR, broad slot-role registries, broad helper registries, broad
+  stage registries, central semantic dispatchers, or raw helper-string
+  dispatch.
+- Backend manifests, backend maps, language maps, translation maps, backend
+  translation requests, renderer-ready values, generated artifacts, golden
+  files, generated tests, CLI/report/writer behavior, Rust behavior, compiler
+  execution, generated-test execution, broad TSIL parsing, lowering-time
+  file/catalog reads, `tsldata` reads during lowering evaluation, host CPU
+  queries, backend map reads, or runtime dependency on `frozen/`.
+
+Required input:
+
+- Accepted M75 exact predicate-path structural/request IR.
+- Accepted M74 exact array-body structural sequence reachable through M75.
+- Accepted M73 first-slot declaration-shell structural IR reachable through
+  M74/M75 when `tmp` provenance is already available.
+- Exact `array.tsl:110` post-branch call-site source evidence as provenance
+  only.
+
+Expected outputs:
+
+- One typed exact post-branch intrinsic call-site structural/request IR value.
+- One deterministic generation-lowering stage after
+  `predicate_path_structural_request_lowering`.
+- Structured diagnostics for unsupported source/container shapes, missing or
+  duplicate M75 values, context mismatch, provenance mismatch, missing M74
+  sequence provenance, malformed exact post-branch call shape, call-head token
+  mismatch, unresolved intrinsic-token mismatch, argument-count mismatch,
+  predicate-argument mismatch against M75, unsupported `tmp.data()` structural
+  shape, unsupported source-operand token shape, and unsupported non-exact
+  call-site shapes.
+- No backend translation request, renderer-ready value, generated artifact,
+  golden output, CLI/report/writer, Rust, compiler, generic call/store/body
+  semantics, ARM/SVE intrinsic behavior, memory behavior, or `tmp.data()`
+  semantic behavior change.
+
+Parity criterion:
+
+M76 proves the accepted `array.tsl:110` post-branch `intrin<svst1>(pg,
+tmp.data(), a);` call site can be carried as typed structural/request lowering
+state after accepted M75 predicate-path lowering, without implementing
+store semantics, ARM/SVE semantics, backend translation, rendering, generated
+output, or compiler parity.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:110` for the exact post-branch
+  call-site shape as structural/request evidence only.
+- Accepted M75 exact predicate-path structural/request IR in
+  `tslgen/src/tslgen/lowering/boundary.py` and
+  `tslgen/tests/unit/test_lowering_boundary.py`.
+- Accepted M74 exact structural sequence and accepted M73 declaration-shell
+  provenance in the same implementation/test files.
+- Same-text `array.tsl` repetitions are supporting corpus repetition only,
+  not expanded M76 scope.
+- Backend translation maps, generated outputs, and `frozen/` remain future
+  evidence only and must not become runtime input.
+
+Tests required:
+
+- Direct resolver tests from accepted M75 predicate-path state to the M76
+  exact post-branch intrinsic call-site structural/request IR.
+- Normal `lower_candidates` pipeline tests proving the M76 stage appears after
+  `predicate_path_structural_request_lowering` and preserves M57-M75 stage
+  ordering and outputs.
+- Tests proving argument `0` `pg` links to the accepted M75 slot-3 predicate
+  token without predicate, SVE, or store semantics.
+- Tests proving `svst1`, `tmp.data()`, and `a` are recorded only as structural
+  tokens/provenance, with no ARM/SVE, memory, pointer, operand, variable-scope,
+  or backend meaning.
+- Diagnostics for missing, duplicate, unsupported source/container, context
+  mismatch, provenance mismatch, malformed exact call shape, call-head token
+  mismatch, unresolved intrinsic-token mismatch, argument-count mismatch,
+  predicate-argument mismatch, unsupported `tmp.data()` structural shape,
+  unsupported source-operand token shape, and unsupported non-exact call-site
+  shape.
+- Determinism tests for repeated runs and reordered inputs.
+- Regression tests proving M57-M75 behavior is unchanged, including
+  selected-branch-only diagnostics.
+- Regression tests proving no backend translation, rendering, generated
+  output, golden-file churn, broad body/declaration/array/call/store
+  lowering, generic parser, raw helper evaluator calls, raw helper parsing,
+  catalog reads, `tsldata` reads, host CPU queries, backend map reads, or
+  runtime `frozen/` use is introduced.
+
+Golden fixtures required:
+
+- None. M76 is lowering-only structural/request IR and must not change
+  generated C++ or Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M76 exact post-branch intrinsic call-site structural/request test
+  command selected by the executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Treating `intrin<svst1>(...)` as store lowering, ARM/SVE intrinsic
+  semantics, memory behavior, or backend translation.
+- Letting `tmp.data()` become pointer, member-access, variable-lifetime, or
+  renderer-ready semantics rather than structural provenance.
+- Treating `a` as an evaluated operand instead of an exact source token.
+- Dispatching semantic behavior from raw helper text, intrinsic token text,
+  backend ids, renderer names, corpus line numbers, request ordinals, or
+  catalog data.
+- Growing the exact call-site value into generic call IR, generic store IR,
+  broad body IR, broad slot-role registries, broad helper registries, broad
+  stage registries, or central semantic dispatchers.
+
+Dependencies on prior milestones:
+
+- Milestones 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72,
+  73, 74, and 75.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m75-acceptance-finalization-prompt.md` ran after
+  explicit human acceptance. The next concrete prompt is
+  `docs/agent/runs/m76-execution-review-loop-prompt.md`. Do not start M77.

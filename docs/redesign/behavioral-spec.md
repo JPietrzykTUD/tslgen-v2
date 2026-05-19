@@ -533,15 +533,25 @@ must not interpret those roles as
 declaration, array, variable, predicate, store, return, intrinsic, SVE,
 backend, renderer, or output semantics.
 
-Post-M74 planning selects Milestone 75 as exact predicate path structural
-request IR. It should consume accepted M74 structural sequence state and
-record the exact predicate path from slot 1 predicate initialization, through
-accepted selected/no-body predicate update evidence in slot 2, to slot 3
-post-branch store-call predicate-token use. M75 must keep `svbool_t`, `pg`,
-`svptrue_b8`, selected `svptrue_b16/b32/b64`, and slot-3 `pg` as structural
-tokens/request provenance only. It must not interpret SVE predicate behavior,
-store behavior, `svst1`, `tmp.data()`, `a`, backend maps, renderer behavior,
-generated output, variable scope, or broad body semantics.
+Milestone 75 implements exact predicate path structural/request IR. It
+consumes accepted M74 structural sequence state and records the exact predicate
+path from slot 1 predicate initialization, through accepted selected/no-body
+predicate update evidence in slot 2, to slot 3 post-branch store-call
+predicate-token use. M75 keeps `svbool_t`, `pg`, `svptrue_b8`, selected
+`svptrue_b16/b32/b64`, and slot-3 `pg` as structural tokens/request
+provenance only. It does not interpret SVE predicate behavior, store behavior,
+`svst1`, `tmp.data()`, `a`, backend maps, renderer behavior, generated output,
+variable scope, or broad body semantics.
+
+Post-M75 planning selects Milestone 76 as exact post-branch intrinsic call-site
+structural/request IR. It should consume accepted M75 predicate-path state and
+record only the exact `array.tsl:110` call-site shape
+`intrin<svst1>(pg, tmp.data(), a);`. The call head `intrin`, unresolved token
+`svst1`, predicate argument `pg`, member-access-shaped token/path
+`tmp.data()`, and source operand token `a` are structural tokens/provenance
+only. M76 must not define store behavior, ARM/SVE intrinsic behavior, memory
+or pointer semantics, variable scope, backend translation, renderer behavior,
+generated output, generic call IR, or broad body semantics.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic

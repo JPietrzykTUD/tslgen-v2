@@ -614,17 +614,29 @@ structural evidence and must not interpret `svbool_t`,
 `assume_aligned`, store/return behavior, SVE/direct-intrinsic behavior,
 backend maps, rendering, generated output, or broad TSIL/body semantics.
 
-Post-M74 planning selects Milestone 75 as exact predicate path structural
-request IR. It should consume the accepted M74 exact array-body structural
-sequence and record the exact predicate path across slot 1 predicate
-initialization, slot 2 accepted selected/no-body predicate update evidence,
-and slot 3 post-branch store-call predicate-token use. The result is typed
-structural/request lowering state only: `svbool_t`, `pg`, `svptrue_b8`,
-selected `svptrue_b16/b32/b64`, and the slot-3 `pg` argument remain structural
-tokens and unresolved direct-intrinsic/request provenance. M75 must not
-interpret SVE predicate semantics, byte-size-to-token relationships, store
-semantics, `svst1`, `tmp.data()`, `a`, backend maps, rendering, generated
-output, variable scope, or broad body semantics.
+Milestone 75 implements exact predicate path structural/request IR. It
+consumes the accepted M74 exact array-body structural sequence and records the
+exact predicate path across slot 1 predicate initialization, slot 2 accepted
+selected/no-body predicate update evidence, and slot 3 post-branch store-call
+predicate-token use. The result is typed structural/request lowering state
+only: `svbool_t`, `pg`, `svptrue_b8`, selected `svptrue_b16/b32/b64`, and the
+slot-3 `pg` argument remain structural tokens and unresolved direct-intrinsic/
+request provenance. M75 does not interpret SVE predicate semantics,
+byte-size-to-token relationships, store semantics, `svst1`, `tmp.data()`, `a`,
+backend maps, rendering, generated output, variable scope, or broad body
+semantics.
+
+Post-M75 planning selects Milestone 76 as exact post-branch intrinsic call-site
+structural/request IR. It should consume accepted M75 predicate-path state and
+record the exact `array.tsl:110` call-site shape
+`intrin<svst1>(pg, tmp.data(), a);` as typed lowering state. The result is
+structural/provenance only: `intrin`, unresolved token `svst1`, predicate
+argument token `pg`, member-access-shaped token/path `tmp.data()`, and source
+operand token `a` must not become ARM/SVE intrinsic semantics, store
+semantics, memory behavior, pointer semantics, variable scope, backend
+translation, renderer-ready IR, or generated output. The M76 stage should
+follow `predicate_path_structural_request_lowering` and must use source text
+only as exact shape/provenance evidence, not as raw helper dispatch.
 
 M61 diagnostics:
 

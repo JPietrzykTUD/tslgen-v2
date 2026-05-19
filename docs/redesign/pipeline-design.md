@@ -549,15 +549,25 @@ variable/allocation model, predicate/store/return lowering, SVE/direct-
 intrinsic semantic slice, backend-planning input, renderer-ready body, or
 generated-output step.
 
-Post-M74 planning selects Milestone 75 as the next Stage 8 boundary after
-`array_body_structural_sequence_classification`. M75 should produce one typed
-exact predicate-path structural/request value for the accepted path spanning
-the predicate-init role, selected-body role, and post-branch store-call-shaped
-role. The proposed stage name is `predicate_path_structural_request_lowering`.
-It must consume accepted M74 sequence state and accepted M63/M62 selected-body
-evidence, and it must not become SVE predicate semantics, variable/use-def
+Milestone 75 adds the Stage 8 boundary after
+`array_body_structural_sequence_classification`. It produces one typed exact
+predicate-path structural/request value for the accepted path spanning the
+predicate-init role, selected-body role, and post-branch store-call-shaped
+role. The stage name is `predicate_path_structural_request_lowering`. It
+consumes accepted M74 sequence state and accepted M63/M62 selected-body
+evidence, and it does not become SVE predicate semantics, variable/use-def
 analysis, store lowering, backend-planning input, renderer-ready body, or a
 generated-output step.
+
+Post-M75 planning selects Milestone 76 as the next Stage 8 boundary after
+`predicate_path_structural_request_lowering`. M76 should produce one typed
+exact post-branch intrinsic call-site structural/request value for the accepted
+`intrin<svst1>(pg, tmp.data(), a);` shape. The proposed stage name is
+`post_branch_intrinsic_call_site_structural_request_lowering`. It must consume
+accepted M75 predicate-path state and accepted M74/M73 provenance only, and it
+must not become store lowering, ARM/SVE intrinsic semantics, variable/use-def
+analysis, backend-planning input, renderer-ready body, or a generated-output
+step.
 
 ## Stage 9: Backend Planning
 

@@ -1361,9 +1361,10 @@ M67 helper-request/provenance IR over the M66 first-slot leaves, accepted M68
 base-type request resolution, accepted M69 behavior-preserving extraction,
 accepted M70 exact vector-length request resolution, accepted M71 exact
 vector-alignment request resolution, accepted M72 exact helper-set completion,
-implemented M73 exact first-slot declaration-shell structural IR, implemented M74
-exact array-body structural sequence and structural/provenance slot-role
-classification, selected M75 exact predicate-path structural/request IR, and
+implemented M73 exact first-slot declaration-shell structural IR, implemented
+M74 exact array-body structural sequence and structural/provenance slot-role
+classification, accepted M75 exact predicate-path structural/request IR,
+selected M76 exact post-branch intrinsic call-site structural/request IR, and
 body-slot semantics beyond those exact structural/request-resolution
 boundaries, including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and

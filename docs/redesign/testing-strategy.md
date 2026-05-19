@@ -915,6 +915,19 @@ Recommended first parity checks:
   CPU/backend map reads during lowering evaluation, and no backend
   translation/rendering, generic predicate/store/body lowering, golden-file,
   or generated-output churn.
+- Milestone 76 tests should prove exact post-branch intrinsic call-site
+  structural/request IR without ARM/SVE, store, memory, pointer,
+  variable-scope, backend, renderer, or output semantics: direct tests from
+  accepted M75 predicate-path state, normal `lower_candidates` stage-order
+  tests after `predicate_path_structural_request_lowering`, exact argument
+  token/provenance recording for `pg`, `tmp.data()`, and `a`, explicit linkage
+  from argument `0` `pg` to the accepted M75 slot-3 predicate-token use,
+  diagnostics for malformed call-site shapes and token/argument mismatches,
+  deterministic ordering, unchanged M57-M75 behavior including
+  selected-branch-only diagnostics, no raw helper parsing or raw query
+  evaluator calls, no catalog/`tsldata`/host CPU/backend map reads during
+  lowering evaluation, and no backend translation/rendering, generic
+  call/store/body lowering, golden-file, or generated-output churn.
 
 Deferred parity checks:
 

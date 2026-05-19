@@ -345,8 +345,9 @@ and still does not add compiler execution.
   M72 exact helper-set completion with backend uninit preserved as a typed
   deferred boundary, implemented M73 exact first-slot declaration-shell
   structural IR, implemented M74 exact source-ordered array-body structural
-  sequence and structural/provenance slot-role classification, selected M75
-  exact predicate-path structural/request IR, broad TSIL/body-slot parity
+  sequence and structural/provenance slot-role classification, accepted M75
+  exact predicate-path structural/request IR, selected M76 exact post-branch
+  intrinsic call-site structural/request IR, broad TSIL/body-slot parity
   beyond those exact structural/request-resolution
   boundaries, and backend translation-map evaluation beyond the selected
   M40/M45/M46 requests.

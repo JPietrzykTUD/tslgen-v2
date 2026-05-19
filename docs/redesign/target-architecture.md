@@ -493,14 +493,22 @@ Current roadmap note:
   IR, variable scope, allocation/lifetime, predicate/store/return semantics,
   SVE/direct-intrinsic semantics, backend translation, renderer-ready IR, or
   generated output.
-- Post-M74 planning selects Milestone 75 as a typed exact predicate-path
-  structural/request boundary after M74. It should consume the accepted M74
-  sequence plus accepted M63/M62 selected-body evidence, then record only the
-  exact predicate initialization/update/use path across slots 1, 2, and 3.
-  `svbool_t`, `pg`, `svptrue_b8`, selected `svptrue_b16/b32/b64`, and slot-3
-  `pg` are structural tokens/request provenance only; they must not become SVE
-  predicate semantics, store semantics, variable scope, backend translation,
-  renderer-ready IR, generated output, broad body IR, or a slot-role registry.
+- Milestone 75 is accepted as a typed exact predicate-path structural/request
+  boundary after M74. It consumes the accepted M74 sequence plus accepted
+  M63/M62 selected-body evidence, then records only the exact predicate
+  initialization/update/use path across slots 1, 2, and 3. `svbool_t`, `pg`,
+  `svptrue_b8`, selected `svptrue_b16/b32/b64`, and slot-3 `pg` are
+  structural tokens/request provenance only; they do not become SVE predicate
+  semantics, store semantics, variable scope, backend translation, renderer-
+  ready IR, generated output, broad body IR, or a slot-role registry.
+- Post-M75 planning selects Milestone 76 as a typed exact post-branch
+  intrinsic call-site structural/request boundary after M75. It should consume
+  accepted M75 predicate-path state plus accepted M74/M73 provenance and record
+  only the exact `intrin<svst1>(pg, tmp.data(), a);` call-site shape.
+  `intrin`, `svst1`, `pg`, `tmp.data()`, and `a` are structural tokens/
+  provenance only; they must not become store semantics, ARM/SVE intrinsic
+  semantics, memory or pointer semantics, variable scope, backend translation,
+  renderer-ready IR, generated output, generic call IR, or broad body IR.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

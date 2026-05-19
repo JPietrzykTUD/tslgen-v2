@@ -1428,14 +1428,21 @@ Consequences:
   body IR, variable scope, allocation/lifetime, predicate semantics, store/
   return semantics, SVE/direct-intrinsic semantics, backend translation,
   renderer-ready IR, or generated output.
-- Post-M74 planning selects Milestone 75 to introduce an exact predicate path
-  structural/request IR before any store-call or SVE predicate semantics. M75
-  should consume accepted M74 sequence state and accepted M63/M62 selected-body
-  evidence, then record the exact `pg` initialization/update/use path as typed
-  lowering state. It must not make `svptrue_b*`, `svst1`, `tmp.data()`, or
-  `a` into SVE/store/backend semantics, and it must not introduce variable
-  scope, generic predicate IR, backend translation, renderer-ready IR, or
-  generated output.
+- Milestone 75 introduces an exact predicate path structural/request IR before
+  any store-call or SVE predicate semantics. M75 consumes accepted M74 sequence
+  state and accepted M63/M62 selected-body evidence, then records the exact
+  `pg` initialization/update/use path as typed lowering state. It does not
+  make `svptrue_b*`, `svst1`, `tmp.data()`, or `a` into SVE/store/backend
+  semantics, and it does not introduce variable scope, generic predicate IR,
+  backend translation, renderer-ready IR, or generated output.
+- Post-M75 planning selects Milestone 76 to introduce an exact post-branch
+  intrinsic call-site structural/request IR before any store-call, ARM/SVE
+  intrinsic, memory, pointer, or backend semantics. M76 should consume accepted
+  M75 predicate-path state and accepted M74/M73 provenance, then record only
+  the exact `intrin<svst1>(pg, tmp.data(), a);` shape as typed lowering state.
+  It must not make `svst1`, `tmp.data()`, or `a` into store/backend semantics,
+  and it must not introduce generic call IR, variable scope, backend
+  translation, renderer-ready IR, or generated output.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
