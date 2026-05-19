@@ -1041,6 +1041,18 @@ Recommended first parity checks:
   validation success with corpus probes `3 passed`, unit discovery `610` tests
   OK, compileall OK, ruff OK, mypy OK across 122 source files, and diff-check
   OK. `boundary.py` now measures 1,898 physical lines.
+- Planned M85 testing should prove selected-body lowering ownership moves
+  without behavior change. Required coverage includes private import-boundary
+  tests for the new selected-body lowering module, public facade import/call
+  stability, replacement of the M84 selected-body-lowerer ownership guard,
+  selected-body diagnostic preservation for unsupported source, missing
+  provenance/body, malformed assignment, unsupported target/RHS,
+  extra-statement, direct-intrinsic unsupported, and envelope inconsistency
+  cases, pipeline snapshot stability, stage order, keys, output identity,
+  selected-branch-only behavior, deterministic source locations, full
+  lowering-boundary preservation, focused lowering mypy, tooling validation,
+  and a line-count check against the accepted M84 1,898-line `boundary.py`
+  baseline.
 
 Deferred parity checks:
 

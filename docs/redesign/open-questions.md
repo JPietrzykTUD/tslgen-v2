@@ -1370,9 +1370,11 @@ accepted M78 behavior-preserving lowering boundary package decomposition, and
 implemented M79 exact array-body typed model ownership extraction, implemented
 M80 exact array-body validation boundary extraction,
 implemented M81 generation-time lowering core ownership extraction,
-implemented M82 selected-body envelope ownership extraction, and
-body-slot semantics beyond those exact structural/request-resolution
-boundaries, including nested expressions, direct
+implemented M82 selected-body envelope ownership extraction, implemented M83
+stage-contract ownership extraction, implemented M84 exact array-body pipeline
+and source-adapter ownership extraction, and planned M85 selected-body lowering
+ownership extraction, while body-slot semantics beyond those exact
+structural/request-resolution boundaries, including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
 `algo`, Rust output, generated tests beyond the selected M49 source fixture,
 CLI/report parity, compiler execution, and broad native rendering.

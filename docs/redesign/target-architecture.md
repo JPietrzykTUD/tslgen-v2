@@ -609,6 +609,16 @@ Current roadmap note:
   physical lines; it does not add broad source parsing, raw-helper dispatch,
   registries, backend/rendering/output hooks, exact return-emission semantics,
   or extension-specific shortcuts.
+- Post-M84 planning selects M85 as selected-body lowering ownership
+  extraction. M85 should move the accepted M60-M63 selected-body lowerer
+  implementation and direct source-helper ownership into a focused private
+  typed lowering module while keeping `boundary.py` as the public facade for
+  request/result models, `lower_candidates`, `_lower_input`, payload
+  classification, mini-TSIL lowering, generation control-flow pruning, and
+  exact array-body pipeline orchestration. This is behavior-preserving
+  architecture work before exact return-emission IR; it must not add selected-
+  body semantics, broad body parsing, backend/rendering/output hooks,
+  registries, dispatchers, or extension-specific shortcuts.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

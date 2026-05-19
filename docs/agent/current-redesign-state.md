@@ -591,39 +591,50 @@ return-emission IR, backend translation, rendering, generated output,
 extension-specific shortcuts, file/catalog reads, `tsldata` reads, host CPU
 queries, backend map reads, or runtime `frozen/` use.
 
+Post-M84 planning selected
+`Milestone 85: Selected-Body Lowering Ownership Extraction Slice`, and
+internal planning review returned `Accept With Follow-Ups` after local
+planning-doc updates. The selected plan is behavior-preserving lowering
+architecture work. It moves the accepted M60-M63 selected-body lowering
+function/source-helper ownership out of `boundary.py` into a private typed
+module such as `tslgen.lowering._selected_body_lowering`, while preserving
+public facade imports, diagnostics, source locations, stage names/order,
+output identities, deterministic keys, selected-branch-only behavior, and
+pipeline snapshots. Human acceptance was recorded, and M85 execution became
+the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Plan the next lowering milestone after M84.
+Execute Milestone 85.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m84-planning-plus-review-prompt.md
+docs/agent/runs/m85-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The next executor milestone has not been selected.
+Milestone 85: Selected-Body Lowering Ownership Extraction Slice
 ```
 
 Latest review verdict:
 
 ```text
-M84 execution-review returned Accept With Follow-Ups after one focused
-revision. Review and audit found no blocking issues after focused re-review.
+Post-M84 planning selected M85. Internal planning review returned
+Accept With Follow-Ups with no blocking issues. Human acceptance was recorded.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M84 planning-plus-review prompt. Use the specified
-read-only planning/review subagents. Do not implement product code and do not
-start M85 execution unless a later accepted prompt explicitly selects it.
+Run the active M85 execution-review loop prompt. Use one write-capable
+executor, then read-only reviewer/auditor subagents. Do not start M86.
 ```
 
 Accepted planning prompt:
@@ -1268,10 +1279,22 @@ Completed M84 execution-review loop prompt:
 docs/agent/runs/m84-execution-review-loop-prompt.md
 ```
 
-Active post-M84 planning-plus-review prompt:
+Completed post-M84 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m84-planning-plus-review-prompt.md
+```
+
+Completed post-M84 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m84-acceptance-finalization-prompt.md
+```
+
+Active M85 execution-review loop prompt:
+
+```text
+docs/agent/runs/m85-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2020,6 +2043,25 @@ docs/agent/runs/post-m84-planning-plus-review-prompt.md
   evaluation, host CPU queries, backend map reads, or runtime `frozen/` use.
 - M84 treats existing exact tokens as structural provenance or invariant
   evidence only, not semantic dispatch keys.
+- Post-M84 planning selects M85 as behavior-preserving selected-body lowering
+  ownership extraction. M85 must move only accepted M60-M63 selected-body
+  lowerer/source-helper ownership into a private typed lowering module while
+  preserving public facade behavior and imports through `tslgen.lowering` and
+  `tslgen.lowering.boundary`.
+- M85 must not move `LoweringRequest`, `LoweredImplementation`,
+  `lower_candidates`, `_lower_input`, payload classification, mini-TSIL
+  lowering, generation control-flow pruning, exact array-body pipeline/source
+  modules, or request/result model ownership.
+- M85 must not add new selected-body semantics, broad TSIL/body/call/store/
+  return semantics, exact return-emission IR, backend translation, rendering,
+  generated output, registries, generic dispatchers, callback maps,
+  fixpoint/backfeed engines, raw-helper dispatch, file/catalog reads,
+  `tsldata` reads during lowering evaluation, host CPU queries, backend map
+  reads, or runtime `frozen/` use.
+- The M85 private selected-body lowering module must not import `boundary.py`,
+  `tslgen.lowering`, `_array_body_sources.py`, or `_array_body_lowering.py` as
+  convenience dispatchers. Use a selected-body-local source-location helper or
+  another narrow private helper if needed.
 - Future lowering package decomposition must preserve accepted M57-M84
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -3147,11 +3189,24 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M84 validation follow-up: future tests may add lightweight guards against
   broad source-adapter protocols, generic dispatchers, or fixpoint/backfeed
   machinery if new lowering stages introduce pressure in that direction.
+- Post-M84 planning follow-up for M85 execution: keep M85 as behavior-
+  preserving selected-body lowering ownership extraction only. Do not combine
+  it with exact return-emission IR, mini-TSIL extraction, public request/result
+  model extraction, lower-candidate orchestration changes, or exact array-body
+  pipeline/source changes.
+- Post-M84 planning follow-up for M85 execution: do not move selected-body
+  lowering behavior into `_selected_body_models.py`; that module remains the
+  value-model owner. Use a new focused private module such as
+  `_selected_body_lowering.py`.
+- Post-M84 planning follow-up for M85 execution: replace the M84 ownership
+  test that asserted selected-body lowerers were boundary-owned with tests
+  proving stable public facade imports plus private selected-body lowering
+  ownership and private import direction.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run post-M84 planning
-through the active post-M84 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M85 through the
+active M85 execution-review loop prompt.
 
 ## Validation Expectations
 
@@ -3295,3 +3350,18 @@ exit 0 with corpus probes `3 passed`, unit discovery `610` tests OK,
 compileall OK, ruff OK, mypy `Success: no issues found in 122 source files`,
 and diff-check OK. The standalone final `git diff --check` returned exit 0
 with no output.
+
+For M85, validation must include:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_selected_body_lowering.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_selected_body_lowering.py tslgen/src/tslgen/lowering/_selected_body_models.py tslgen/src/tslgen/lowering/_generation_models.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_sources.py tslgen/src/tslgen/lowering/_array_body_lowering.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m85 or selected_body_lowering or selected_body_handoff or selected_body_envelope"
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+git diff --check
+```
+
+If M85 uses a different private selected-body lowering module name, update the
+py-compile command consistently in the execution prompt and this state file.

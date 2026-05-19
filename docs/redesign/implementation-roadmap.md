@@ -10566,3 +10566,218 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m84-planning-plus-review-prompt.md` runs the next
   lowering-focused planning pass.
+
+### Milestone 85: Selected-Body Lowering Ownership Extraction Slice
+
+Status:
+
+Planned. Post-M84 planning selected this milestone, and human acceptance was
+recorded. M85 execution is the next workflow action.
+
+Goal:
+
+Move accepted M60-M63 selected-body lowering function/source-helper ownership
+out of `tslgen/src/tslgen/lowering/boundary.py` into a focused private typed
+lowering module, likely `tslgen.lowering._selected_body_lowering`, while
+preserving all accepted M42-M84 behavior, public imports, diagnostics, source
+locations, stage names/order, output identities, deterministic keys,
+selected-branch-only behavior, pipeline snapshots, and no-external-input
+boundaries.
+
+M85 is behavior-preserving lowering architecture work. It closes the ownership
+gap left intentionally by M82 and M84: M82 moved selected-body value models
+into `_selected_body_models.py`, and M84 left the selected-body public
+lowerers in `boundary.py` while extracting exact array-body pipeline/source
+ownership. M85 moves one cohesive selected-body lowering ownership cluster
+without adding new selected-body semantics or broad body parsing.
+
+Scope:
+
+- Create a focused private selected-body lowering module such as
+  `tslgen.lowering._selected_body_lowering`.
+- Move the accepted public selected-body lowerer implementations out of
+  `boundary.py`:
+  - `handoff_opaque_selected_branch_body`
+  - `recognize_selected_branch_body_assignment_form`
+  - `lower_selected_branch_body_ir`
+  - `lower_selected_body_envelope`
+- Move only the private helpers directly owned by those lowerers: selected-body
+  source coercion helpers, originating branch-chain id construction, selected
+  body envelope consistency validation, selected-body assignment-form parsing
+  delegation, and selected-body diagnostic helpers.
+- Preserve public facade imports and calls through `tslgen.lowering.boundary`
+  and `tslgen.lowering` by re-exporting or tiny delegating from the facade.
+- Preserve accepted diagnostics, messages, source locations, stage names/order,
+  stage keys, output object identities, selected-branch-only behavior,
+  deterministic ordering, and pipeline snapshots.
+- Keep private-module imports one-way. The new selected-body lowering module
+  must not import `boundary.py` or the `tslgen.lowering` package facade.
+- Record the post-M85 `boundary.py` line count. Line-count reduction is useful,
+  but the success criterion is cohesive ownership extraction and behavior
+  preservation.
+
+Out of scope:
+
+- New lowering semantics, new selected-body semantics, new stage names, new
+  stage outputs, exact return-emission IR, `emit_return(tmp)` interpretation,
+  `tmp.data()` semantics, store/call/body/return/declaration/array semantics
+  beyond accepted exact structural/request records, broad TSIL parsing, broad
+  selected-body parsing, broad source-adapter support, or helper-family
+  expansion.
+- Moving selected-body behavior into `_selected_body_models.py`; that module
+  remains the value-model owner.
+- Moving `LoweredImplementation`, `LoweringRequest`, `LoweringInput`,
+  `LoweringInputSet`, `LoweringPlan`, `_lower_input`, `lower_candidates`,
+  payload classification, generation control-flow pruning, exact array-body
+  pipeline/source modules, exact array-body lowerers, stage construction for
+  mini-TSIL output, or mini-TSIL parsing/lowering out of the facade.
+- Importing `_array_body_sources.py` or `_array_body_lowering.py` from the new
+  selected-body lowering module as a convenience dispatcher. Use a
+  selected-body-local source-location helper or another narrow private helper
+  if needed.
+- Creating registries, generic dispatchers, plugin systems, callback maps,
+  fixpoint/backfeed engines, raw helper dispatch, token-keyed semantic maps,
+  or a selected-body framework.
+- Treating selected literals, SVE-looking tokens, selected type tags, backend
+  ids, renderer names, corpus line numbers, request ordinals, or raw source
+  text as semantic dispatch keys. Existing exact tokens may remain structural
+  provenance or invariant evidence only.
+- Backend translation, rendering, generated output, golden files, generated
+  tests, CLI/report/writer behavior, Rust behavior, compiler execution,
+  generated-test execution, lowering-time file/catalog reads, `tsldata` reads
+  during lowering evaluation, host CPU queries, backend map reads, or runtime
+  dependency on `frozen/`.
+- Starting M86.
+
+Required input:
+
+- Accepted M42-M84 lowering behavior.
+- The accepted M57-M59 generation predicate/control-flow pruning path.
+- The accepted M60-M63 selected-body handoff/form/body-IR/envelope values and
+  diagnostics.
+- The accepted M82 private selected-body value-model ownership in
+  `_selected_body_models.py`.
+- The accepted M83 stage contract boundary in `_stage_contracts.py`.
+- The accepted M84 exact array-body pipeline/source/lowering modules and the
+  accepted post-M84 `boundary.py` baseline of 1,898 physical lines.
+
+Expected outputs:
+
+- A focused private selected-body lowering ownership module that owns the
+  accepted selected-body lowerer implementations and direct private helpers.
+- Stable public imports and stable public facade behavior for all accepted
+  selected-body lowering names.
+- The same typed outputs as before M85:
+  `GenerationSelectedBranchBodyHandoff`,
+  `GenerationSelectedBranchBodyAssignmentRecognition`,
+  `GenerationSelectedBranchBodyIr`,
+  `GenerationSelectedBodyEnvelopeIr`, and their existing
+  `GenerationLoweringStage` outputs.
+- The same lowered values, diagnostics, source locations, stage snapshots,
+  stage keys, output identities, selected-branch-only behavior, and
+  deterministic ordering as before M85.
+- `boundary.py` remains the public facade/coordinator and becomes smaller.
+- No new semantic IR output and no generated artifact changes.
+
+Parity criterion:
+
+M85 succeeds when selected-body lowering ownership is private and typed,
+`boundary.py` remains the public facade/coordinator for this slice, accepted
+behavior and public imports are unchanged, private lowering modules still have
+one-way imports away from the facade, and the line-count reduction is achieved
+by moving the cohesive selected-body lowering ownership cluster rather than by
+duplicating code or adding broad protocols.
+
+Evidence paths:
+
+- `tslgen/src/tslgen/lowering/boundary.py` for the accepted selected-body
+  lowerer implementations, selected-body source adapters, validation helpers,
+  public facade imports, `_lower_input`, stage construction, and
+  lower-candidate orchestration that must remain behavior-preserving.
+- `tslgen/src/tslgen/lowering/_selected_body_models.py` for accepted
+  selected-body value-model ownership that must remain model-only.
+- `tslgen/src/tslgen/lowering/_stage_contracts.py` for accepted stage/output
+  contracts and import-boundary patterns.
+- `tslgen/src/tslgen/lowering/_exact_shapes.py` for the accepted exact
+  selected-body assignment-form shape parser used as structural evidence, not
+  semantic dispatch.
+- `tslgen/src/tslgen/lowering/__init__.py` for public lowering imports.
+- `tslgen/tests/unit/test_lowering_boundary.py` for accepted selected-body
+  behavior, diagnostics, source-location, no-reparse, public import,
+  import-boundary, pipeline snapshot, and deterministic behavior.
+- `tsldata/primitives/load_store/array.tsl:105-111` as shape/provenance
+  evidence only, not a runtime input or semantic dispatch source.
+
+Tests required:
+
+- Full `tslgen/tests/unit/test_lowering_boundary.py` preservation.
+- Focused M85 tests proving selected-body public imports and public facade
+  calls still return the accepted typed values and diagnostics.
+- Focused M85 tests proving the new private selected-body lowering module does
+  not import `boundary.py`, the package facade, `_array_body_sources.py`, or
+  `_array_body_lowering.py`.
+- Update the M84 ownership guard that asserted selected-body lowerers were
+  boundary-owned so it now proves stable public facade imports plus private
+  selected-body lowering ownership.
+- Focused M85 diagnostic preservation tests for selected-body source
+  unsupported, provenance missing, body missing, malformed assignment,
+  unsupported target/RHS, extra-statement, direct-intrinsic unsupported, and
+  selected-body envelope inconsistency cases.
+- Pipeline snapshot/stage identity regression tests proving stage ordering,
+  keys, output object identity, selected-branch-only behavior, and
+  deterministic source locations remain unchanged.
+- A `boundary.py` line-count validation measured against the accepted M84
+  1,898-line baseline.
+- Regression tests or existing tests proving no backend translation,
+  rendering, generated output, broad TSIL/body/call/store/return/declaration/
+  array semantics, raw helper dispatch, catalog reads, `tsldata` reads, host
+  CPU queries, backend map reads, import cycles, duplicate moved code, or
+  runtime `frozen/` use is introduced.
+
+Golden fixtures required:
+
+- None. M85 is behavior-preserving lowering architecture work and must not
+  change generated C++ or Rust output.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_selected_body_lowering.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_selected_body_lowering.py tslgen/src/tslgen/lowering/_selected_body_models.py tslgen/src/tslgen/lowering/_generation_models.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_sources.py tslgen/src/tslgen/lowering/_array_body_lowering.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m85 or selected_body_lowering or selected_body_handoff or selected_body_envelope"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Creating a circular import by placing selected-body lowering behavior in
+  `_selected_body_models.py` or importing `boundary.py` / the package facade
+  from a private module.
+- Moving too much facade state, such as `LoweredImplementation`,
+  `LoweringRequest`, `_lower_input`, `lower_candidates`, payload
+  classification, stage construction for mini-TSIL output, or mini-TSIL
+  parsing, under a selected-body ownership label.
+- Importing exact array-body source/lowering modules as convenience
+  dispatchers from the selected-body lowerer module.
+- Turning selected-body lowering into a raw-helper dispatcher, registry,
+  callback map, plugin system, token-keyed semantic table, broad source
+  adapter, or fixpoint/backfeed engine.
+- Accidentally changing diagnostics, source locations, stage names, stage
+  ordering, output identities, keys, selected-branch-only behavior, or
+  pipeline snapshots while moving code.
+- Treating exact return-emission, store-call, selected-body SVE-looking token,
+  backend, renderer, or corpus-line evidence as semantic behavior.
+- Reducing line count by duplicating moved code, creating another catch-all
+  module, or mixing unrelated generation, exact array-body, mini-TSIL,
+  backend, or renderer work into M85.
+
+Dependencies on prior milestones:
+
+- Milestones 42 through 84.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m84-acceptance-finalization-prompt.md` finalizes the
+  accepted post-M84 planning result after human acceptance and creates the M85
+  execution-review loop prompt.

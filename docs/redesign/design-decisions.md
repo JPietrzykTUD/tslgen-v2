@@ -1551,6 +1551,18 @@ Consequences:
   diagnostics, source locations, stage ordering, keys, output identities, and
   pipeline snapshots, and must not become raw-helper dispatchers, registries,
   callback maps, plugin systems, or fixpoint/backfeed engines.
+- Post-M84 planning selects M85 as selected-body lowering ownership extraction
+  before exact return-emission IR. The decision is to close the ownership gap
+  left by M82 and M84 by moving the accepted M60-M63 selected-body lowerer
+  implementation and direct source-helper ownership into a focused private
+  typed module, not by adding new selected-body semantics. `boundary.py`
+  remains the public facade for request/result models, `_lower_input`,
+  `lower_candidates`, payload classification, mini-TSIL lowering, generation
+  control-flow pruning, and exact array-body pipeline orchestration. The new
+  module must not be `_selected_body_models.py`, must not import the facade or
+  exact array-body source/lowering modules as convenience dispatchers, and
+  must not become a selected-body framework, raw-helper dispatcher, registry,
+  callback map, plugin system, or fixpoint/backfeed engine.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

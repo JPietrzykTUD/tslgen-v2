@@ -738,6 +738,16 @@ broaden source parsing, interpret `emit_return(tmp)` or store/call semantics,
 introduce raw-helper dispatch, or add backend translation/rendering/output
 behavior.
 
+Post-M84 planning selects M85 as selected-body lowering ownership extraction.
+M85 is also no-new-semantics lowering architecture work: it should move the
+accepted M60-M63 selected-body lowerer implementations and direct private
+helpers out of `boundary.py` into a focused private typed lowering module
+while preserving the same typed values, diagnostics, source locations, stage
+snapshots, and public facade behavior. It must not evaluate new helpers,
+broaden selected-body parsing, interpret SVE-looking direct-intrinsic tokens,
+interpret `emit_return(tmp)` or store/call semantics, introduce raw-helper
+dispatch, or add backend translation/rendering/output behavior.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`

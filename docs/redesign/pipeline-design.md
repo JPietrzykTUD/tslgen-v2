@@ -673,6 +673,20 @@ registry, dispatcher, fixpoint/backfeed engine, broad source adapter, or new
 semantic output, and preserves accepted diagnostics, source locations, stage
 ordering, keys, output identities, and deterministic pipeline snapshots.
 
+Post-M84 planning selects M85 as selected-body lowering ownership extraction.
+M85 should keep Stage 8 behavior unchanged while moving accepted M60-M63
+selected-body lowerer/source-helper ownership behind a focused private typed
+lowering module. `boundary.py` remains the public facade for request/result
+models, lower-candidate orchestration, `_lower_input`, payload classification,
+mini-TSIL lowering, generation control-flow pruning, and exact array-body
+pipeline orchestration. The new private ownership boundary must not import
+`boundary.py`, the package facade, or exact array-body source/lowering modules
+as convenience dispatchers, must not add a stage registry, dispatcher,
+fixpoint/backfeed engine, broad selected-body parser, or new semantic output,
+and must preserve accepted diagnostics, source locations, stage ordering,
+keys, output identities, selected-branch-only behavior, and deterministic
+pipeline snapshots.
+
 ## Stage 9: Backend Planning
 
 Inputs:
