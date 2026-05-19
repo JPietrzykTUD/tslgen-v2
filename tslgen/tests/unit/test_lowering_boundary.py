@@ -13,8 +13,11 @@ from unittest import mock
 
 from _helpers import assert_diagnostic
 import tslgen.lowering._array_body_diagnostics as lowering_array_body_diagnostics
+import tslgen.lowering._array_body_lowering as lowering_array_body_lowering
 import tslgen.lowering._array_body_models as lowering_array_body_models
+import tslgen.lowering._array_body_pipeline as lowering_array_body_pipeline
 import tslgen.lowering._array_body_shapes as lowering_array_body_shapes
+import tslgen.lowering._array_body_sources as lowering_array_body_sources
 import tslgen.lowering._array_body_validation as lowering_array_body_validation
 import tslgen.lowering._exact_shapes as lowering_exact_shapes
 import tslgen.lowering._generation_control_flow as lowering_generation_control_flow
@@ -1296,9 +1299,11 @@ class LoweringBoundaryTests(unittest.TestCase):
                     ),
                 ),
             )
-        lookup = lowering_boundary._build_array_body_envelope_skeleton_lookup(request)
+        lookup = lowering_array_body_pipeline._build_array_body_envelope_skeleton_lookup(
+            request,
+        )
         self.assertTrue(lookup.is_ok, lookup.diagnostics)
-        return lowering_boundary._lower_exact_array_initialization_stage_pipeline(
+        return lowering_array_body_pipeline._lower_exact_array_initialization_stage_pipeline(
             item,
             request,
             envelope_stage,
@@ -5435,6 +5440,84 @@ class LoweringBoundaryTests(unittest.TestCase):
                         )
             self.assertEqual(imported_facade, [], module.__name__)
 
+    def test_m84_private_array_body_modules_do_not_import_facades(
+        self,
+    ) -> None:
+        private_modules = (
+            lowering_array_body_sources,
+            lowering_array_body_lowering,
+            lowering_array_body_pipeline,
+        )
+        for module in private_modules:
+            imported_facade: list[str] = []
+            tree = ast.parse(inspect.getsource(module))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imported_facade.extend(
+                        alias.name
+                        for alias in node.names
+                        if alias.name in ("tslgen.lowering.boundary", "tslgen.lowering")
+                    )
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module in ("tslgen.lowering.boundary", "tslgen.lowering"):
+                        imported_facade.append(node.module)
+                    if node.level and node.module in (None, "", "boundary"):
+                        imported_facade.extend(
+                            alias.name
+                            for alias in node.names
+                            if node.module == "boundary" or alias.name == "boundary"
+                        )
+            self.assertEqual(imported_facade, [], module.__name__)
+
+    def test_m84_array_body_facade_exports_private_owners(self) -> None:
+        self.assertIs(
+            lowering_boundary.assemble_exact_array_body_envelope,
+            lowering_array_body_lowering.assemble_exact_array_body_envelope,
+        )
+        self.assertIs(
+            assemble_exact_array_body_envelope,
+            lowering_array_body_lowering.assemble_exact_array_body_envelope,
+        )
+        self.assertIs(
+            lowering_array_body_pipeline.assemble_exact_array_body_envelope,
+            lowering_array_body_lowering.assemble_exact_array_body_envelope,
+        )
+        self.assertIs(
+            lowering_boundary._lower_exact_array_initialization_stage_pipeline,
+            lowering_array_body_pipeline._lower_exact_array_initialization_stage_pipeline,
+        )
+        self.assertIs(
+            lowering_boundary._stage_output_location,
+            lowering_array_body_sources._stage_output_location,
+        )
+
+    def test_m84_selected_body_lowerers_stay_boundary_owned(self) -> None:
+        for name in (
+            "handoff_opaque_selected_branch_body",
+            "recognize_selected_branch_body_assignment_form",
+            "lower_selected_branch_body_ir",
+            "lower_selected_body_envelope",
+        ):
+            self.assertIn(name, lowering_boundary.__dict__)
+            self.assertEqual(getattr(lowering_boundary, name).__module__, "tslgen.lowering.boundary")
+            self.assertNotIn(name, lowering_array_body_sources.__dict__)
+            self.assertNotIn(name, lowering_array_body_lowering.__dict__)
+            self.assertNotIn(name, lowering_array_body_pipeline.__dict__)
+
+    def test_m84_private_array_body_pipeline_preserves_snapshot_identity(self) -> None:
+        result = self.exact_array_initialization_stage_pipeline("si32")
+        self.assertTrue(result.is_ok, result.diagnostics)
+        pipeline = result.unwrap()
+        self.assertIsInstance(
+            pipeline,
+            lowering_array_body_pipeline._ExactArrayInitializationStagePipelineResult,
+        )
+        self.assertEqual(pipeline.pipeline_snapshot.stages, pipeline.stages)
+        self.assertEqual(
+            tuple(step.produced_fact.value for step in pipeline.pipeline_snapshot.steps),
+            tuple(stage.output for stage in pipeline.stages),
+        )
+
     def test_lower_candidates_structural_sequence_stage_follows_declaration_shell(
         self,
     ) -> None:
@@ -5675,7 +5758,7 @@ class LoweringBoundaryTests(unittest.TestCase):
         )
         lookup = lowering_boundary._build_array_body_envelope_skeleton_lookup(request)
         self.assertTrue(lookup.is_ok, lookup.diagnostics)
-        original = lowering_boundary.lower_exact_array_initialization_helper_requests
+        original = lowering_array_body_pipeline.lower_exact_array_initialization_helper_requests
 
         def fail_m67(*args: object, **kwargs: object):
             return lowering_boundary.Result.failure(
@@ -5688,7 +5771,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 )
             )
 
-        lowering_boundary.lower_exact_array_initialization_helper_requests = fail_m67  # type: ignore[assignment]
+        lowering_array_body_pipeline.lower_exact_array_initialization_helper_requests = fail_m67  # type: ignore[assignment]
         try:
             result = lowering_boundary._lower_exact_array_initialization_stage_pipeline(
                 item,
@@ -5700,7 +5783,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 lookup.unwrap(),
             )
         finally:
-            lowering_boundary.lower_exact_array_initialization_helper_requests = original
+            lowering_array_body_pipeline.lower_exact_array_initialization_helper_requests = original
 
         self.assertFalse(result.is_ok)
         assert_diagnostic(

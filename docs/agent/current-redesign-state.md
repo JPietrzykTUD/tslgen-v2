@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 83 is accepted.
+Milestone 84 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -574,39 +574,56 @@ behavior, and pipeline snapshots. It is the next large step toward making
 campaign target, not permission to create a second monolith or move unrelated
 code for line count. Human acceptance was recorded.
 
+The M84 execution-review loop returned `Accept With Follow-Ups` after one
+focused revision. Review and audit found no blocking implementation,
+validation, boundary, extensibility, documentation, or evidence issues after
+that revision. M84 preserves accepted M42-M83 behavior while moving exact
+array-body pipeline/source-adapter ownership into
+`tslgen.lowering._array_body_pipeline`,
+`tslgen.lowering._array_body_sources`, and
+`tslgen.lowering._array_body_lowering`; selected-body public lowerers and the
+request/result/lower-candidate facade remain in `boundary.py`. Public imports,
+diagnostics, source locations, stage names/order, output identities,
+deterministic keys, selected-branch-only behavior, and pipeline snapshots
+remain stable. `boundary.py` now measures 1,898 physical lines, below the
+accepted M83 4,807-line baseline. M84 added no new lowering semantics, exact
+return-emission IR, backend translation, rendering, generated output,
+extension-specific shortcuts, file/catalog reads, `tsldata` reads, host CPU
+queries, backend map reads, or runtime `frozen/` use.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 84.
+Plan the next lowering milestone after M84.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m84-execution-review-loop-prompt.md
+docs/agent/runs/post-m84-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 84: Exact Array-Body Pipeline And Source Adapter Ownership Extraction Slice
+None. The next executor milestone has not been selected.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M83 planning selected M84. Internal planning review returned
-Accept With Follow-Ups with no blocking issues after read-only reviewer,
-boundary, and documentation re-review. Human acceptance was recorded.
+M84 execution-review returned Accept With Follow-Ups after one focused
+revision. Review and audit found no blocking issues after focused re-review.
 ```
 
 Next expected action:
 
 ```text
-Run the active M84 execution-review loop prompt. Use one write-capable
-executor, then read-only reviewer/auditor subagents. Do not start M85.
+Run the active post-M84 planning-plus-review prompt. Use the specified
+read-only planning/review subagents. Do not implement product code and do not
+start M85 execution unless a later accepted prompt explicitly selects it.
 ```
 
 Accepted planning prompt:
@@ -1245,10 +1262,16 @@ Completed post-M83 acceptance-finalization prompt:
 docs/agent/runs/post-m83-acceptance-finalization-prompt.md
 ```
 
-Active M84 execution-review loop prompt:
+Completed M84 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m84-execution-review-loop-prompt.md
+```
+
+Active post-M84 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m84-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1975,30 +1998,29 @@ docs/agent/runs/m84-execution-review-loop-prompt.md
   deterministic keys, pipeline snapshots, and invalid-stage/output exception
   behavior. `boundary.py` remains the public facade/coordinator and now
   measures 4,807 physical lines from the 4,965-line M82 baseline.
-- M84 is behavior-preserving exact array-body pipeline/source-adapter
-  ownership extraction. It should move one cohesive accepted M64-M76 exact
-  array-body staged-lowering pipeline/source-adapter cluster out of
-  `boundary.py` into private typed lowering modules while preserving accepted
-  M42-M83 behavior, public imports, diagnostics, source locations, stage
-  names/order, output identities, deterministic keys, selected-branch-only
-  behavior, and pipeline snapshots.
-- M84 keeps `boundary.py` as the public facade for request/result
-  models, `lower_candidates`, payload classification, and mini-TSIL lowering.
-  Private exact array-body modules must not import `boundary.py` or the
-  `tslgen.lowering` package facade.
-- M84 must not create a second monolith, registry, generic dispatcher,
-  callback map, plugin system, fixpoint/backfeed engine, raw-helper
-  dispatcher, token-keyed semantic table, broad TSIL parser, broad source
-  adapter, or new semantic evaluator.
-- M84 must not add exact return-emission IR, `emit_return(tmp)`
+- M84 is accepted as behavior-preserving exact array-body pipeline/
+  source-adapter ownership extraction. It moved exact array-body pipeline,
+  source-adapter, and exact-array public lowerer ownership into private typed
+  lowering modules while preserving accepted M42-M83 behavior, public imports,
+  diagnostics, source locations, stage names/order, output identities,
+  deterministic keys, selected-branch-only behavior, and pipeline snapshots.
+- M84 keeps `boundary.py` as the public facade for request/result models,
+  selected-body public lowerers, `lower_candidates`, payload classification,
+  and mini-TSIL lowering. Private exact array-body modules must not import
+  `boundary.py` or the `tslgen.lowering` package facade.
+- M84 did not create a second monolith, registry, generic dispatcher, callback
+  map, plugin system, fixpoint/backfeed engine, raw-helper dispatcher,
+  token-keyed semantic table, broad TSIL parser, broad source adapter, or new
+  semantic evaluator.
+- M84 did not add exact return-emission IR, `emit_return(tmp)`
   interpretation, `tmp.data()` semantics, store/call/body/return/declaration/
   array semantics beyond accepted exact structural/request records, backend
   translation, rendering, generated output, CLI/report/writer behavior, Rust,
   compiler execution, file/catalog reads, `tsldata` reads during lowering
   evaluation, host CPU queries, backend map reads, or runtime `frozen/` use.
-- M84 treats existing exact tokens as structural provenance or
-  invariant evidence only, not semantic dispatch keys.
-- Future lowering package decomposition must preserve accepted M57-M83
+- M84 treats existing exact tokens as structural provenance or invariant
+  evidence only, not semantic dispatch keys.
+- Future lowering package decomposition must preserve accepted M57-M84
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -3109,11 +3131,27 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   move only as structural provenance or invariant evidence. They must not
   become raw-helper dispatch keys, extension/SVE semantics, backend/rendering
   behavior, or generated-output behavior.
+- M84 execution addressed the post-M83 planning follow-ups: review verified
+  exact array-body pipeline/source-adapter ownership moved into private typed
+  modules, selected-body public lowerers remained boundary-owned, public
+  imports and accepted behavior stayed stable, and private exact array-body
+  modules do not import `boundary.py` or the `tslgen.lowering` package facade.
+- M84 maintainability follow-up: `boundary.py` is now materially smaller at
+  1,898 physical lines, but the long-running campaign target remains roughly
+  1,000 lines. Future lowering decomposition should continue through cohesive
+  ownership slices rather than line-count-only moves.
+- M84 maintainability follow-up: `_array_body_lowering.py` and
+  `_array_body_sources.py` must not become new catch-all modules. If they grow
+  further, prefer another behavior-preserving split around a concrete typed
+  ownership boundary.
+- M84 validation follow-up: future tests may add lightweight guards against
+  broad source-adapter protocols, generic dispatchers, or fixpoint/backfeed
+  machinery if new lowering stages introduce pressure in that direction.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M84 through the
-active M84 execution-review loop prompt.
+No stop condition is active. The workflow is ready to run post-M84 planning
+through the active post-M84 planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -3234,18 +3272,26 @@ returned exit 0 with corpus probes `3 passed`, unit discovery `606` tests OK,
 compileall OK, ruff OK, mypy `Success: no issues found in 119 source files`,
 and diff-check OK.
 
-For M84, validation must include:
+For M84, validation completed with:
 
 ```bash
-wc -l tslgen/src/tslgen/lowering/boundary.py
-PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_shapes.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_selected_body_models.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py
-PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m84 or array_body_pipeline or source_adapter or exact_array"
+wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_sources.py tslgen/src/tslgen/lowering/_array_body_lowering.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_sources.py tslgen/src/tslgen/lowering/_array_body_lowering.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_shapes.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_selected_body_models.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m84 or array_body_pipeline or array_body_sources or array_body_lowering or source_adapter or exact_array"
 PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
 MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering
 PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
 git diff --check
 ```
 
-If M84 uses a different private exact array-body pipeline/source module name,
-update the py-compile command consistently in the execution prompt and this
-state file.
+The M84 line counts were `1898 tslgen/src/tslgen/lowering/boundary.py`,
+`835 tslgen/src/tslgen/lowering/_array_body_pipeline.py`,
+`1022 tslgen/src/tslgen/lowering/_array_body_sources.py`, and
+`1378 tslgen/src/tslgen/lowering/_array_body_lowering.py`. The focused M84
+command returned `88 passed, 188 deselected`. The full lowering-boundary suite
+returned `276 passed`. The focused lowering mypy check returned
+`Success: no issues found in 18 source files`. The validation profile returned
+exit 0 with corpus probes `3 passed`, unit discovery `610` tests OK,
+compileall OK, ruff OK, mypy `Success: no issues found in 122 source files`,
+and diff-check OK. The standalone final `git diff --check` returned exit 0
+with no output.

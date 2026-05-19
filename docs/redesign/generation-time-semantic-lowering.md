@@ -728,14 +728,15 @@ return-emission/store-call slots, add backend translation/rendering/output
 behavior, or introduce a registry, dispatcher, plugin system, or
 fixpoint/backfeed engine.
 
-Post-M83 planning selects M84 as exact array-body pipeline and source-adapter
-ownership extraction. M84 is still no-new-semantics lowering architecture work:
-it should move accepted exact array-body pipeline/source-adapter ownership out
-of `boundary.py` into private typed lowering modules while preserving the same
-typed values, diagnostics, source locations, stage snapshots, and public facade
-behavior. It must not evaluate new helpers, broaden source parsing, interpret
-`emit_return(tmp)` or store/call semantics, introduce raw-helper dispatch, or
-add backend translation/rendering/output behavior.
+M84 is accepted as exact array-body pipeline and source-adapter ownership
+extraction. M84 is still no-new-semantics lowering architecture work: it moved
+accepted exact array-body pipeline/source-adapter and exact-array public
+lowerer ownership out of `boundary.py` into private typed lowering modules
+while preserving the same typed values, diagnostics, source locations, stage
+snapshots, and public facade behavior. It must not evaluate new helpers,
+broaden source parsing, interpret `emit_return(tmp)` or store/call semantics,
+introduce raw-helper dispatch, or add backend translation/rendering/output
+behavior.
 
 M61 diagnostics:
 

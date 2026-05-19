@@ -1026,17 +1026,21 @@ Recommended first parity checks:
   tooling validation success with corpus probes `3 passed`, unit discovery
   `606` tests OK, compileall OK, ruff OK, mypy OK across 119 source files, and
   diff-check OK.
-- Planned M84 testing should prove exact array-body pipeline/source-adapter
-  ownership moved without behavior change. Required coverage includes private
-  import-boundary tests for the new exact array-body pipeline/source module or
-  modules, public facade import/call stability, representative direct typed
-  value, stage-output, and `LoweredImplementation`-like source-adapter inputs,
-  diagnostic preservation for unsupported/missing/duplicate/conflict/orphan/
-  provenance-mismatch source cases, pipeline snapshot stability, stage order,
-  keys, output identity, deterministic source locations, full
-  lowering-boundary preservation, focused lowering mypy, tooling validation,
-  and a line-count check against the accepted M83 4,807-line `boundary.py`
-  baseline.
+- M84 testing proves exact array-body pipeline/source-adapter ownership moved
+  without behavior change. Coverage includes private import-boundary tests for
+  the new exact array-body pipeline/source/lowering modules, public facade
+  import/call stability, representative direct typed value, stage-output, and
+  `LoweredImplementation`-like source-adapter inputs, diagnostic preservation
+  for unsupported/missing/duplicate/conflict/orphan/provenance-mismatch source
+  cases, pipeline snapshot stability, stage order, keys, output identity,
+  deterministic source locations, full lowering-boundary preservation, focused
+  lowering mypy, tooling validation, and a line-count check against the
+  accepted M83 4,807-line `boundary.py` baseline. Validation returned focused
+  M84 `88 passed, 188 deselected`, full lowering-boundary `276 passed`,
+  focused lowering mypy success across 18 source files, and full tooling
+  validation success with corpus probes `3 passed`, unit discovery `610` tests
+  OK, compileall OK, ruff OK, mypy OK across 122 source files, and diff-check
+  OK. `boundary.py` now measures 1,898 physical lines.
 
 Deferred parity checks:
 

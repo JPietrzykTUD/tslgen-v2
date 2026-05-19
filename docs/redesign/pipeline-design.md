@@ -662,15 +662,15 @@ return-emission structural/request IR. M83 does not introduce a stage
 registry, dispatcher, source adapter, semantic evaluator, fixpoint/backfeed
 engine, backend/rendering/output hook, or new stage output.
 
-Post-M83 planning selects M84 as exact array-body pipeline and source-adapter
-ownership extraction. M84 should keep Stage 8 behavior unchanged while moving
-the accepted M64-M76 exact array-body pipeline/source-adapter ownership behind
-private typed lowering modules. `boundary.py` remains the public facade for
-request/result models, lower-candidate orchestration, payload classification,
-and mini-TSIL lowering. The new private ownership boundary must not import
-`boundary.py` or the package facade, must not add a stage registry,
-dispatcher, fixpoint/backfeed engine, broad source adapter, or new semantic
-output, and must preserve accepted diagnostics, source locations, stage
+M84 is accepted as exact array-body pipeline and source-adapter ownership
+extraction. It keeps Stage 8 behavior unchanged while moving the accepted
+M64-M76 exact array-body pipeline/source-adapter ownership behind private typed
+lowering modules. `boundary.py` remains the public facade for request/result
+models, selected-body public lowerers, lower-candidate orchestration, payload
+classification, and mini-TSIL lowering. The new private ownership boundary
+does not import `boundary.py` or the package facade, does not add a stage
+registry, dispatcher, fixpoint/backfeed engine, broad source adapter, or new
+semantic output, and preserves accepted diagnostics, source locations, stage
 ordering, keys, output identities, and deterministic pipeline snapshots.
 
 ## Stage 9: Backend Planning

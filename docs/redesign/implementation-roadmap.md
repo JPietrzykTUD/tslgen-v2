@@ -10331,7 +10331,8 @@ Next concrete prompt:
 
 Status:
 
-Planned. Post-M83 planning selected this milestone, pending human acceptance.
+Accepted. M84 execution-review returned `Accept With Follow-Ups` after one
+focused revision.
 
 Goal:
 
@@ -10499,9 +10500,9 @@ Golden fixtures required:
 
 Validation commands:
 
-- `wc -l tslgen/src/tslgen/lowering/boundary.py`
-- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_shapes.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_selected_body_models.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py`
-- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m84 or array_body_pipeline or source_adapter or exact_array"`
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_sources.py tslgen/src/tslgen/lowering/_array_body_lowering.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_sources.py tslgen/src/tslgen/lowering/_array_body_lowering.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_shapes.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_selected_body_models.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m84 or array_body_pipeline or array_body_sources or array_body_lowering or source_adapter or exact_array"`
 - `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
 - `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
 - `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
@@ -10531,8 +10532,37 @@ Dependencies on prior milestones:
 
 - Milestones 42 through 83.
 
+Execution result:
+
+- M84 preserves accepted M42-M83 behavior while moving exact array-body
+  pipeline/source-adapter ownership into private typed lowering modules:
+  `tslgen.lowering._array_body_pipeline`,
+  `tslgen.lowering._array_body_sources`, and
+  `tslgen.lowering._array_body_lowering`.
+- `boundary.py` remains the public facade/coordinator for request/result
+  models, selected-body public lowerers, `lower_candidates`, payload
+  classification, and mini-TSIL lowering.
+- Private exact array-body modules do not import `boundary.py` or the
+  `tslgen.lowering` package facade.
+- Public imports, diagnostics, source locations, stage names/order, output
+  identities, deterministic keys, selected-branch-only behavior, and pipeline
+  snapshots remain stable.
+- `boundary.py` now measures 1,898 physical lines, which is 2,909 lines below
+  the accepted M83 4,807-line baseline. The new private module counts are
+  `_array_body_pipeline.py` 835 lines, `_array_body_sources.py` 1,022 lines,
+  and `_array_body_lowering.py` 1,378 lines.
+- No new lowering semantics, exact return-emission IR, backend translation,
+  rendering, generated output, extension-specific shortcuts, lowering-time
+  file/catalog reads, `tsldata` reads, host CPU queries, backend map reads, or
+  runtime `frozen/` use were added.
+- Review and audit found no blocking implementation, validation, boundary,
+  extensibility, documentation, or evidence issues after one focused revision.
+- Non-blocking follow-ups: continue the longer campaign toward a roughly
+  1,000-line facade through cohesive ownership slices, and prevent
+  `_array_body_sources.py` or `_array_body_lowering.py` from becoming new
+  catch-all modules.
+
 Next concrete prompt:
 
-- `docs/agent/runs/post-m83-acceptance-finalization-prompt.md` finalizes the
-  accepted post-M83 planning result after human acceptance and creates the M84
-  execution-review loop prompt.
+- `docs/agent/runs/post-m84-planning-plus-review-prompt.md` runs the next
+  lowering-focused planning pass.

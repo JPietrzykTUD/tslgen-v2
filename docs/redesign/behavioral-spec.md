@@ -625,14 +625,14 @@ output exception behavior. It adds no new stage, helper semantics,
 return/store/body semantics, source adapter behavior, backend translation,
 rendering, generated output, or extension-specific behavior.
 
-Post-M83 planning selects M84 as another no-behavior-change lowering
-architecture slice. It should move accepted exact array-body pipeline and
-source-adapter ownership out of `boundary.py` into private typed lowering
-modules while preserving the same M42-M83 lowered values, diagnostics, source
+M84 is accepted as another no-behavior-change lowering architecture slice. It
+moved accepted exact array-body pipeline/source-adapter and exact-array public
+lowerer ownership out of `boundary.py` into private typed lowering modules
+while preserving the same M42-M83 lowered values, diagnostics, source
 locations, stage names/order, output identities, deterministic keys, public
-imports, and pipeline snapshots. It adds no new helper semantics, source forms,
-return/store/body semantics, backend translation, rendering, generated output,
-or extension-specific behavior.
+imports, and pipeline snapshots. It adds no new helper semantics, source
+forms, return/store/body semantics, backend translation, rendering, generated
+output, or extension-specific behavior.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
