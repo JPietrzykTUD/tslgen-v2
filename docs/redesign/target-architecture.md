@@ -570,6 +570,14 @@ Current roadmap note:
   7,415-line M80 target. The extraction does not add new semantics,
   source-adapter behavior, backend/rendering/output hooks, registries, or
   hardwired extension behavior.
+- Post-M80 planning selects M81 as generation-time lowering core ownership
+  extraction. The selected architecture moves accepted generation type/value/
+  predicate query models, generation branch-chain parsing/pruning helpers, and
+  related diagnostics into private typed generation modules while preserving
+  the existing `tslgen.lowering` and `tslgen.lowering.boundary` facade imports.
+  It is not a new semantic evaluator, source adapter, dispatcher, registry,
+  backend/rendering/output hook, or hardwired extension-specific lowering
+  step.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

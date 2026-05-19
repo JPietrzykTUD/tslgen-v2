@@ -462,38 +462,56 @@ behavior, backend translation, rendering, generated output, broad parsing,
 extension hardwiring, file/catalog reads, `tsldata` reads, host CPU queries,
 backend map reads, and runtime `frozen/` use remain out of scope.
 
+Post-M80 planning selected
+`Milestone 81: Generation-Time Lowering Core Ownership Extraction Slice`.
+The selected plan is behavior-preserving generation-time lowering core
+ownership extraction. It should move accepted generation-time model, query,
+control-flow, and diagnostic helper ownership out of `boundary.py` into
+private typed modules while preserving accepted M42-M80 behavior. It must keep
+`boundary.py` as the public facade, keep public imports stable, prevent private
+lowering modules from importing `boundary.py`, leave source adapters and
+facade-owned orchestration in `boundary.py` unless a tiny behavior-preserving
+delegation is required, and materially reduce the post-M80 7,208-line facade
+without using line count as permission for unrelated exact array-body moves or
+new semantics. Human acceptance was recorded.
+
+Post-M80 planning is accepted. It selected
+`Milestone 81: Generation-Time Lowering Core Ownership Extraction Slice`.
+Human acceptance was recorded.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Plan the next lowering-focused milestone after M80.
+Execute Milestone 81.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m80-planning-plus-review-prompt.md
+docs/agent/runs/m81-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. M80 is accepted; the active prompt is post-M80 planning.
+Milestone 81: Generation-Time Lowering Core Ownership Extraction Slice
 ```
 
 Latest review verdict:
 
 ```text
-M80 execution-review returned Accept With Follow-Ups. Remaining follow-ups are
-non-blocking maintainability notes recorded below.
+Post-M80 planning was accepted by the user. The acceptance finalization
+prepared the M81 execution-review loop prompt.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M80 planning-plus-review prompt. Focus on lowering. Do not
-implement code unless that prompt explicitly selects an executor task.
+Run the active M81 execution-review loop prompt. Use the specified
+single-executor plus read-only review/audit workflow. Do not start M82 until
+M81 review accepts and the next concrete prompt is created.
 ```
 
 Accepted planning prompt:
@@ -1072,10 +1090,16 @@ Completed M80 execution-review loop prompt:
 docs/agent/runs/m80-execution-review-loop-prompt.md
 ```
 
-Active post-M80 planning-plus-review prompt:
+Completed post-M80 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m80-planning-plus-review-prompt.md
+```
+
+Active M81 execution-review loop prompt:
+
+```text
+docs/agent/runs/m81-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1780,6 +1804,12 @@ docs/agent/runs/post-m80-planning-plus-review-prompt.md
   `tslgen.lowering._array_body_validation`, kept public imports stable, kept
   private modules from importing `boundary.py`, and reduced `boundary.py` to
   7,208 physical lines from the 8,915-line post-M79 baseline.
+- M81 is selected as behavior-preserving generation-time lowering core
+  ownership extraction. It must move accepted generation-time model/query/
+  control-flow/diagnostic helper ownership into private typed modules while
+  preserving accepted M42-M80 behavior and keeping source adapters/facade-owned
+  orchestration in `boundary.py` unless a tiny behavior-preserving delegation
+  is required.
 - Future lowering package decomposition must preserve accepted M57-M80
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -2791,11 +2821,28 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   move selected-body envelope ownership deliberately or keep selected-body
   concrete checks at the facade boundary rather than broadening structural
   checks.
+- Post-M80 planning follow-up for M81 execution: keep M81 as
+  behavior-preserving generation-time lowering core extraction only. Do not add
+  helper semantics, helper evaluation, broad helper families, broad TSIL
+  parsing, backend translation/rendering/output, or generated artifacts.
+- Post-M80 planning follow-up for M81 execution: keep source adapters and
+  orchestration that still depend on `LoweringInput`, `LoweringRequest`,
+  `LoweredImplementation`, `GenerationLoweringStage`, candidate selection, or
+  exact array-body pipeline state in `boundary.py` unless a tiny delegation
+  remains behavior-preserving.
+- Post-M80 planning follow-up for M81 execution: create private generation
+  modules without importing `boundary.py`; use narrow local protocols only
+  where necessary, and prefer leaving helpers in `boundary.py` over broadening
+  structural protocols.
+- Post-M80 planning follow-up for M81 execution: the line-count target is
+  measured against the post-M80 7,208-line baseline, but line count must not
+  drive movement of unrelated exact array-body code, duplicate moved helpers,
+  or creation of a second monolith.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the accepted
-post-M80 lowering-focused planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M81 through the
+active execution-review loop prompt.
 
 ## Validation Expectations
 

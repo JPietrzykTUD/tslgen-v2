@@ -9655,3 +9655,202 @@ Execution result:
   backend translation, rendering, generated output, broad parsing,
   extension hardwiring, file/catalog reads, `tsldata` reads, host CPU queries,
   backend map reads, or runtime `frozen/` use were added.
+
+### Milestone 81: Generation-Time Lowering Core Ownership Extraction Slice
+
+Status:
+
+Selected by post-M80 planning. Human acceptance was recorded; M81 execution is
+the next action.
+
+Goal:
+
+Materially reduce `tslgen/src/tslgen/lowering/boundary.py` by moving the
+accepted generation-time lowering core into private typed lowering modules
+while preserving all accepted M42-M80 behavior.
+
+M81 is a behavior-preserving lowering architecture slice, not a new semantic
+lowering milestone. The post-M80 `boundary.py` baseline is 7,208 physical
+lines. M81 should remove at least 1,400 net physical lines from that facade,
+so the post-M81 count should be 5,808 physical lines or lower, unless the
+executor documents that an import-boundary risk requires a narrower accepted
+reduction. The line-count target must not justify moving unrelated exact
+array-body source adapters, changing diagnostics, broadening semantics, or
+recreating a second monolith.
+
+Scope:
+
+- Create private generation-time lowering modules such as
+  `tslgen.lowering._generation_models`,
+  `tslgen.lowering._generation_queries`,
+  `tslgen.lowering._generation_control_flow`, and
+  `tslgen.lowering._generation_diagnostics`, or an equivalent coherent
+  private module split.
+- Move accepted generation-time model ownership where it can remain
+  import-stable, including `GenerationTypeRef`, `GenerationValue`,
+  `GenerationPredicate`, `GenerationExpressionRecognition`,
+  `PrunedGenerationBranch`, `GenerationSizeByteBranchChainArm`,
+  `GenerationSizeByteBranchChainPruning`,
+  `TsilPrimitiveAttributeCondition`, and `TsilTypeSignednessCondition`.
+- Move accepted generation helper parsing/resolution support where it can move
+  without importing `boundary.py`, including exact generation type/value/
+  predicate query parsing, `base.in`, signed/unsigned companion, scalar
+  `type.size_bytes` / `type.size_bits`, exact size-byte equality predicate,
+  primitive-attribute condition, signedness condition, generation `if` /
+  plain-else / size-byte branch-chain parsing, and related diagnostics.
+- Keep public imports stable through `tslgen.lowering` and
+  `tslgen.lowering.boundary`; `boundary.py` remains the public facade and may
+  delegate to private generation helpers.
+- Keep source adapters and orchestration that still depend on
+  `LoweringInput`, `LoweringRequest`, `LoweredImplementation`,
+  `GenerationLoweringStage`, candidate selection, or the exact array-body
+  pipeline in `boundary.py` unless a tiny delegation move is required and
+  remains behavior-preserving.
+- Preserve accepted M42-M80 diagnostics, diagnostic codes, severities,
+  messages, source locations, selected-branch-only diagnostics, stage names,
+  stage ordering, output identities, keys, deterministic ordering, public
+  facade imports, and no-external-input boundaries.
+- Preserve private-module import direction. New generation-time private
+  modules and existing private lowering modules must not import `boundary.py`.
+
+Out of scope:
+
+- New lowering semantics, new generation helper evaluation, new semantic
+  output values, new stage behavior, new generation helper families, broad
+  `type<generation>` / `value<generation>` / `type<backend>` /
+  `value<backend>` evaluation, exact return-emission IR, store semantics,
+  return semantics, memory behavior, pointer semantics, variable
+  scope/use-def/lifetime, declaration/array semantics, initializer behavior,
+  `tmp.data()` semantics, `emit_return`, `assume_aligned`, ARM/SVE predicate/
+  vector/register/intrinsic semantics, byte-size-to-token inference,
+  source-operand semantics, or generated output.
+- Moving `LoweredImplementation`, `GenerationLoweringStage`,
+  `GenerationContext`, `LoweringRequest`, `lower_candidates`, the full
+  exact array-body stage coordinator, or source adapters that consume
+  `GenerationLoweringStage` / `LoweredImplementation`, unless a tiny dependency
+  move is required and remains behavior-preserving.
+- Moving mini-TSIL return lowering, broad assignment, variable, declaration,
+  array, call, cast, loop, store, return, or multi-statement body lowering;
+  broad direct `intrin<...>` semantics; broad vector metadata semantics;
+  generic body/call/store/return/declaration/array IR; broad TSIL parsing;
+  raw helper dispatch; registry, dispatcher, plugin, or fixpoint/backfeed
+  engine work.
+- Backend manifests, backend maps, language maps, translation maps, backend
+  translation requests, renderer-ready IR, generated artifacts, golden files,
+  generated tests, CLI/report/writer behavior, Rust behavior, compiler
+  execution, generated-test execution, lowering-time file/catalog reads,
+  `tsldata` reads during lowering evaluation, host CPU queries, backend map
+  reads, or runtime dependency on `frozen/`.
+- Starting M82.
+
+Required input:
+
+- Accepted M42-M59 generation-time helper and branch-pruning behavior.
+- Accepted M57-M80 lowering behavior and tests.
+- The post-M80 `boundary.py` baseline of 7,208 physical lines.
+- Existing generation rule-set ownership in `tslgen.domain.generation_rules`.
+- Redesign rules requiring typed semantic lowering, no renderer-side helper
+  evaluation, no raw helper dispatch to semantic outputs, deterministic
+  diagnostics, no circular private imports, and side-effect-free lowering.
+
+Expected outputs:
+
+- Private generation-time lowering modules owning accepted generation model,
+  query, control-flow, and diagnostic helpers that can move without importing
+  `boundary.py`.
+- `boundary.py` delegates accepted generation-time helper resolution and
+  branch pruning to the private generation modules while remaining the public
+  facade/coordinator.
+- `boundary.py` measures 5,808 physical lines or lower, unless a documented
+  import-boundary exception justifies a narrower accepted reduction.
+- Stable public imports from `tslgen.lowering` and
+  `tslgen.lowering.boundary`.
+- Focused private-import-boundary regression coverage for the new generation
+  modules.
+- No public behavior changes to accepted M42-M80 lowering.
+
+Parity criterion:
+
+M81 proves the accepted generation-time lowering core can live outside the
+central `boundary.py` file while preserving accepted behavior. The milestone
+succeeds when generation model/query/control-flow/diagnostic ownership is no
+longer mixed into the facade, the public import surface remains stable,
+diagnostics remain stable, private modules do not import `boundary.py`, and
+`boundary.py` is materially smaller without duplicate moved code.
+
+Evidence paths:
+
+- `tslgen/src/tslgen/lowering/boundary.py` for the post-M80 facade and the
+  remaining generation-time model/query/control-flow/diagnostic cluster.
+- `tslgen/src/tslgen/lowering/_array_body_models.py`,
+  `_array_body_shapes.py`, `_array_body_diagnostics.py`,
+  `_array_body_validation.py`, `_exact_shapes.py`, and `_pipeline.py` for
+  accepted private lowering-module import direction and facade delegation
+  style.
+- `tslgen/src/tslgen/domain/generation_rules.py` for accepted typed
+  generation rule-set ownership.
+- `tslgen/src/tslgen/lowering/__init__.py` for public lowering imports.
+- `tslgen/tests/unit/test_lowering_boundary.py` for accepted M42-M80
+  generation-time helper, branch-pruning, determinism, diagnostics, private
+  module boundary, and public facade coverage.
+
+Tests required:
+
+- Full `tslgen/tests/unit/test_lowering_boundary.py` preservation.
+- Focused M81 tests proving public generation-time imports still resolve
+  through `tslgen.lowering` and `tslgen.lowering.boundary`.
+- Focused private-import-boundary regression proving new generation private
+  modules and accepted private lowering modules do not import `boundary.py`.
+- Focused generation query/control-flow equivalence tests for representative
+  moved helpers, including diagnostic code/severity/message/source-location
+  preservation for type queries, value queries, size-byte predicates,
+  primitive-attribute branches, signedness branches, plain `else`, and
+  size-byte branch chains.
+- A `boundary.py` line-count validation measured against the 7,208-line
+  post-M80 baseline.
+- Regression tests or existing tests proving no backend translation,
+  rendering, generated output, broad TSIL/body/call/store/return/declaration/
+  array semantics, raw helper evaluator calls, raw helper dispatch, catalog
+  reads, `tsldata` reads, host CPU queries, backend map reads, import cycles,
+  duplicate moved code, or runtime `frozen/` use is introduced.
+
+Golden fixtures required:
+
+- None. M81 is behavior-preserving lowering architecture work and must not
+  change generated C++ or Rust output.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_generation_models.py tslgen/src/tslgen/lowering/_generation_queries.py tslgen/src/tslgen/lowering/_generation_control_flow.py tslgen/src/tslgen/lowering/_generation_diagnostics.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_shapes.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M81 generation-core/import-stability command selected by the
+  executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Moving source adapters or orchestration that still depend on facade-owned
+  `GenerationLoweringStage`, `LoweredImplementation`, `LoweringInput`, or
+  `LoweringRequest`, causing circular imports or over-broad protocols.
+- Turning the generation modules into a general helper evaluator, registry,
+  semantic dispatcher, plugin system, or fixpoint/backfeed engine.
+- Changing accepted diagnostic text, code, severity, path, line, or column
+  while moving helpers.
+- Broadening structural protocols to hide missing ownership boundaries.
+- Treating source text, selected type tags, SVE tokens, backend ids, renderer
+  names, or corpus line numbers as semantic dispatch keys rather than
+  provenance/invariant evidence.
+- Reducing line count by moving unrelated exact array-body pipeline code,
+  duplicating moved helpers, or leaving compatibility wrappers around poor
+  abstractions.
+
+Dependencies on prior milestones:
+
+- Milestones 42 through 80.
+
+Next concrete prompt:
+
+- `docs/agent/runs/m81-execution-review-loop-prompt.md` runs the M81
+  execution-review loop after explicit human acceptance.

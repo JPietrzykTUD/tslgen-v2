@@ -597,6 +597,15 @@ facade, and accepted selected branches, diagnostics, stage names/order, output
 identities, deterministic keys, and public imports remain unchanged. The
 facade now measures 7,208 physical lines.
 
+Post-M80 planning selects M81 as another no-behavior-change lowering
+architecture slice. M81 moves accepted generation-time lowering core models,
+query helpers, control-flow/branch-pruning helpers, and diagnostics into
+private typed generation modules while preserving the same selected branches,
+diagnostics, stage names/order, output identities, deterministic keys, and
+public imports. It adds no helper semantics, broad helper parsing, source
+adapter behavior, backend translation, rendering, generated output, or
+extension-specific behavior.
+
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
 suffix request over typed M43 `GenerationTypeRef` inputs. Milestone 46
