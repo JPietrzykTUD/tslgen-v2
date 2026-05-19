@@ -347,9 +347,10 @@ and still does not add compiler execution.
   structural IR, implemented M74 exact source-ordered array-body structural
   sequence and structural/provenance slot-role classification, accepted M75
   exact predicate-path structural/request IR, accepted M76 exact post-branch
-  intrinsic call-site structural/request IR, planned M77 behavior-preserving
-  lowering pipeline/module-boundary cleanup, broad TSIL/body-slot parity
-  beyond those exact structural/request-resolution
+  intrinsic call-site structural/request IR, implemented M77 behavior-preserving
+  lowering pipeline/module-boundary cleanup, planned M78 behavior-preserving
+  lowering boundary package decomposition, broad TSIL/body-slot parity beyond
+  those exact structural/request-resolution
   boundaries, and backend translation-map evaluation beyond the selected
   M40/M45/M46 requests.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and

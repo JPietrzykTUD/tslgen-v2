@@ -638,16 +638,24 @@ translation, renderer-ready IR, or generated output. The M76 stage
 follows `predicate_path_structural_request_lowering` and must use source text
 only as exact shape/provenance evidence, not as raw helper dispatch.
 
-Post-M76 planning selects Milestone 77 as a behavior-preserving composable
-lowering pipeline/module boundary. M77 must not add new generation-time
-helper semantics. It should make the accepted M58-M76 staged lowering path
-easier to extend by moving coherent private stage/pipeline code under
-typed module boundaries and by documenting that future backfeeds are typed
-facts, typed requests, dependencies, or coordinator decisions. Backfeeds must
-not be implemented as hidden recursive stage calls, broad registries, raw
-helper dispatch, or central semantic `if`/`elif` chains. Exact tokens that
-look extension-specific remain slice-local structural evidence until a future
+Milestone 77 implements a behavior-preserving composable lowering
+pipeline/module boundary. M77 does not add new generation-time helper
+semantics. It moves exact recognizer shapes and tokens into
+`tslgen.lowering._exact_shapes` and records the accepted M69-M76 exact
+array-body stage tail through `tslgen.lowering._pipeline` as typed facts,
+dependencies, and an empty typed backfeed-request boundary. Future backfeeds
+must not be implemented as hidden recursive stage calls, broad registries, raw
+helper dispatch, or central semantic `if`/`elif` chains. Exact tokens that look
+extension-specific remain slice-local structural evidence until a future
 milestone supplies explicit typed semantic rules.
+
+Post-M77 planning selects Milestone 78 as behavior-preserving generation-time
+lowering package decomposition. M78 must not add helper semantics. It should
+move the accepted exact array-body / array-initialization lowering package
+from `boundary.py` into private typed modules, preserve all accepted M57-M77
+stage behavior, and prove the central facade is materially smaller. The
+pre-M78 line-count baseline is 12,371 physical lines, and M78 requires at
+least 1,000 net lines removed from `boundary.py` without duplicate moved code.
 
 M61 diagnostics:
 
@@ -983,8 +991,10 @@ extraction, M70 vector-length request resolution, M71 vector-alignment
 request resolution, M72 helper-set completion, M73 exact declaration-shell
 structural IR, implemented M74 exact structural-sequence classification,
 accepted M75 exact predicate-path structural/request IR, and accepted M76 exact
-post-branch intrinsic call-site structural/request IR slices, plus the planned
-M77 behavior-preserving composable lowering pipeline/module boundary:
+post-branch intrinsic call-site structural/request IR slices, plus the
+implemented M77 behavior-preserving composable lowering pipeline/module
+boundary and the planned M78 behavior-preserving lowering package
+decomposition:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask

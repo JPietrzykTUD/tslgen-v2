@@ -8791,7 +8791,9 @@ Candidate comparison:
 
 Status:
 
-Planned by post-M76 planning and awaiting human acceptance.
+Accepted after the M77 execution-review loop returned `Accept With Follow-Ups`
+following one focused documentation revision. It remains behavior-preserving
+lowering architecture work and does not add new lowering semantics.
 
 Goal:
 
@@ -8870,10 +8872,14 @@ Required input:
 
 Expected outputs:
 
-- A smaller public facade in `tslgen/src/tslgen/lowering/boundary.py` or an
-  equivalent stable public import surface that preserves current callers.
-- One or more new private modules under `tslgen/src/tslgen/lowering/` with
-  typed stage/pipeline helpers or a coherent extracted Stage 8 cluster.
+- A stable public facade in `tslgen/src/tslgen/lowering/boundary.py` that
+  preserves current callers.
+- New private modules under `tslgen/src/tslgen/lowering/`:
+  - `_pipeline.py`, carrying the exact array-body pipeline snapshot, typed
+    facts, dependencies, and an empty typed backfeed-request boundary for the
+    accepted M69-M76 stage tail;
+  - `_exact_shapes.py`, carrying exact selected-body/post-branch recognizer
+    shapes and tokens as slice-local structural evidence.
 - No public behavior changes to accepted M57-M76 lowering.
 - No new backend translation, rendering, generated output, CLI/report/writer,
   Rust, compiler, generated-test, file/catalog-read, `tsldata`-read,
@@ -8891,8 +8897,12 @@ central file, raw helper dispatch, or hardwired extension semantics.
 
 Evidence paths:
 
-- `tslgen/src/tslgen/lowering/boundary.py` for the current monolithic Stage 8
-  implementation and exact recognizer constants.
+- `tslgen/src/tslgen/lowering/boundary.py` for the current Stage 8 facade and
+  M77 integration points.
+- `tslgen/src/tslgen/lowering/_exact_shapes.py` for exact selected-body and
+  post-branch recognizer shapes/tokens as slice-local structural evidence.
+- `tslgen/src/tslgen/lowering/_pipeline.py` for the exact array-body pipeline
+  snapshot, typed facts, dependencies, and empty typed backfeed boundary.
 - `tslgen/src/tslgen/lowering/__init__.py` for public lowering imports.
 - `tslgen/tests/unit/test_lowering_boundary.py` for accepted M57-M76 behavior
   and diagnostics.
@@ -8907,9 +8917,9 @@ Evidence paths:
 Tests required:
 
 - Full `tslgen/tests/unit/test_lowering_boundary.py` preservation.
-- Focused tests selected by the executor that prove the extracted module
-  boundary preserves at least the M69-M76 pipeline/stage outputs touched by the
-  refactor.
+- Focused M77 tests proving `_pipeline.py` records the exact M69-M76 stage
+  facts/dependencies without pending backfeeds and `_exact_shapes.py` keeps the
+  exact recognizer tokens slice-local as structural evidence.
 - Import/API stability tests or existing public import tests proving
   `tslgen.lowering` exports remain stable.
 - Diagnostics preservation for representative M57-M76 failures across the
@@ -8958,6 +8968,226 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m76-acceptance-finalization-prompt.md` must run after
-  explicit human acceptance. It will update the workflow state for M77
-  execution and create `docs/agent/runs/m77-execution-review-loop-prompt.md`.
+- `docs/agent/runs/post-m76-acceptance-finalization-prompt.md` ran after
+  explicit human acceptance and created
+  `docs/agent/runs/m77-execution-review-loop-prompt.md`. The M77
+  execution-review loop returned `Accept With Follow-Ups` after one focused
+  documentation revision. The next concrete prompt is
+  `docs/agent/runs/post-m77-planning-plus-review-prompt.md`. Do not start M78
+  until post-M77 planning is accepted.
+
+### Post-M77 Planning Result
+
+Status:
+
+Selected for human acceptance after post-M77 planning. Do not start M78
+execution until the post-M77 acceptance finalization prompt has run.
+
+Selected milestone:
+
+```text
+Milestone 78: Lowering Boundary Package Decomposition Slice
+```
+
+Candidate comparison:
+
+| Candidate | Value | Risk | Decision |
+| --- | --- | --- | --- |
+| Lowering boundary package decomposition | Highest. Directly addresses the M77 shortfall: `boundary.py` still contains the accepted exact array-body / array-initialization implementation and remains about 12.3k lines. | Medium-high if treated as a whole-file rewrite, broad OO redesign, generic registry, or behavior change. | Select as M78 with a single coherent extraction target, strict behavior preservation, and a measurable line-count reduction. |
+| Narrow exact array-initialization pipeline extraction | Useful and safer. | Risks repeating M77 by adding boundaries without materially shrinking `boundary.py`. | Fold into the selected M78 scope as the core extraction target. |
+| Exact return-emission structural/request IR | High later. | Would add the next semantic lowering slice before the current lowering boundary is maintainable, likely growing `boundary.py` further. | Defer until the exact array-body package has a smaller home. |
+| Focused `_pipeline.py` payload/backfeed identity tightening | Useful follow-up. | Too narrow for the current maintainability problem and would not reduce `boundary.py` meaningfully. | Defer unless needed by M78 extraction. |
+| Generic lowering framework / registry cleanup | Too abstract. | Would risk broad registries, semantic dispatchers, hidden backfeeds, or speculative architecture. | Reject for M78. |
+
+### Milestone 78: Lowering Boundary Package Decomposition Slice
+
+Status:
+
+Planned by post-M77 planning and awaiting human acceptance.
+
+Goal:
+
+Materially reduce `tslgen/src/tslgen/lowering/boundary.py` by moving the
+accepted exact array-body / array-initialization lowering package behind
+private, typed modules under `tslgen/src/tslgen/lowering/`, while preserving
+all accepted M57-M77 behavior.
+
+M78 is a behavior-preserving package decomposition. It must not add new
+lowering semantics. Its success is measured partly by maintainability: the
+pre-M78 `boundary.py` baseline is 12,371 physical lines, and M78 must reduce
+that file by at least 1,000 net physical lines without leaving duplicate moved
+code behind. A larger reduction is welcome only if it stays within the exact
+package boundary and keeps imports/test behavior stable.
+
+Scope:
+
+- Keep public imports stable through `tslgen.lowering` and the existing
+  `tslgen.lowering.boundary` facade. Existing exported names must remain
+  importable from their accepted public paths.
+- Extract one coherent private package area: the accepted exact array-body /
+  array-initialization lowering tail from M63-M77. The extraction target may
+  include private modules such as `_array_body_pipeline.py`,
+  `_array_body_models.py`, `_array_body_sources.py`, or
+  `_array_body_diagnostics.py` if those names fit the implementation, but it
+  must not become a broad framework.
+- Move only code exclusively owned by that exact package boundary, such as:
+  - exact array-body envelope slot/skeleton assembly and lookup support;
+  - exact array-initialization slot form, helper request, base-type,
+    vector-length, vector-alignment, helper-set, and declaration-shell
+    lowering orchestration;
+  - exact array-body structural sequence, predicate-path, and post-branch
+    call-site structural/request lowering orchestration;
+  - `_ExactArrayInitializationStagePipelineResult` and the M77 pipeline
+    snapshot integration;
+  - known accepted exact stage-construction helpers for this package;
+  - source adapters, validation helpers, and diagnostic helpers that are used
+    only by the exact array-body / array-initialization path.
+- Move remaining M75 exact predicate-init recognizer tokens such as
+  `svbool_t`, `pg`, and `svptrue_b8` into `_exact_shapes.py` as slice-local
+  structural evidence, not SVE or extension semantics.
+- Leave shared models/helpers in `boundary.py` unless moving them is necessary
+  for the coherent extraction and the public facade continues to re-export
+  them.
+- Avoid circular imports. New private modules should depend on explicit typed
+  inputs and moved shared values, not on broad `boundary.py` internals that
+  would recreate the monolith through imports.
+- Preserve accepted M57-M77 diagnostics, stage names, stage ordering, output
+  identities, keys, deterministic ordering, and selected-branch-only
+  diagnostics.
+- Preserve M77's private `_pipeline.py` fact/dependency snapshot behavior with
+  no pending backfeeds. M78 may tighten `_pipeline.py` typing or backfeed
+  identity only if doing so is directly needed by the decomposition.
+
+Out of scope:
+
+- New lowering semantics or generated behavior.
+- Whole-file rewrite of `boundary.py`, broad OO class hierarchy, migration map
+  from legacy modules, runtime plugin system, broad stage/helper/slot registry,
+  generic semantic dispatcher, hidden recursive backfeeds, or generic
+  fixpoint/backfeed execution.
+- Store semantics, return semantics, memory behavior, pointer semantics,
+  variable scope/use-def/lifetime, declaration/array semantics beyond accepted
+  exact structural IR, initializer behavior, `tmp.data()` semantics,
+  `emit_return`, `assume_aligned`, ARM/SVE predicate/vector/register/intrinsic
+  semantics, byte-size-to-token inference, or source-operand semantics.
+- Generic call IR, generic store IR, generic return IR, broad body IR, broad
+  declaration/array/body/call/store/return parsing, raw helper-string
+  dispatch, raw TSIL expression evaluation, or broad TSIL parsing.
+- Backend manifests, backend maps, language maps, translation maps, backend
+  translation requests, renderer-ready IR, generated artifacts, golden files,
+  generated tests, CLI/report/writer behavior, Rust behavior, compiler
+  execution, generated-test execution, lowering-time file/catalog reads,
+  `tsldata` reads during lowering evaluation, host CPU queries, backend map
+  reads, or runtime dependency on `frozen/`.
+- Starting M79.
+
+Required input:
+
+- Accepted M57-M77 lowering behavior and tests.
+- The M77 private `_exact_shapes.py` and `_pipeline.py` boundaries.
+- The current `tslgen/src/tslgen/lowering/boundary.py` implementation as the
+  decomposition target.
+- The current `boundary.py` line-count baseline of 12,371 physical lines.
+- Redesign docs requiring typed semantic lowering, no renderer-side helper
+  evaluation, no raw helper dispatch, deterministic diagnostics, and
+  side-effect-free lowering.
+
+Expected outputs:
+
+- One or more private modules under `tslgen/src/tslgen/lowering/` containing
+  the exact array-body / array-initialization lowering package previously
+  concentrated in `boundary.py`.
+- A `boundary.py` facade that is at least 1,000 physical lines smaller than
+  the pre-M78 12,371-line baseline and does not retain duplicate copies of
+  moved code.
+- Stable public imports from `tslgen.lowering` and
+  `tslgen.lowering.boundary`.
+- No public behavior changes to accepted M57-M77 lowering.
+- No new backend translation, rendering, generated output, CLI/report/writer,
+  Rust, compiler, generated-test, file/catalog-read, `tsldata`-read,
+  host-CPU-query, backend-map-read, or runtime `frozen/` behavior.
+- Redesign documentation describing the decomposition boundary and the measured
+  `boundary.py` reduction.
+
+Parity criterion:
+
+M78 proves the accepted exact array-body / array-initialization lowering
+package can live outside the central `boundary.py` file while preserving all
+accepted behavior. The milestone is successful when the public facade remains
+stable, tests prove behavior preservation, and `boundary.py` is materially
+smaller.
+
+Evidence paths:
+
+- `tslgen/src/tslgen/lowering/boundary.py` for the current 12,371-line facade,
+  exact array-body models, resolver functions, diagnostics, and normal
+  lowering integration points.
+- `tslgen/src/tslgen/lowering/_exact_shapes.py` for existing exact structural
+  shape evidence and the destination for remaining M75 exact predicate-init
+  tokens.
+- `tslgen/src/tslgen/lowering/_pipeline.py` for M77 typed pipeline facts,
+  dependencies, and empty pending-backfeed boundary.
+- `tslgen/src/tslgen/lowering/__init__.py` for public lowering imports.
+- `tslgen/tests/unit/test_lowering_boundary.py` for accepted M57-M77 behavior,
+  diagnostics, determinism, and public import coverage.
+- `tsldata/primitives/load_store/array.tsl` remains source-shape evidence only
+  and must not become runtime input to lowering evaluation.
+
+Tests required:
+
+- Full `tslgen/tests/unit/test_lowering_boundary.py` preservation.
+- Focused M78 module-decomposition tests proving public imports remain stable
+  and the moved exact array-body / array-initialization pipeline produces the
+  same stage names, outputs, keys, diagnostics, and deterministic ordering.
+- A `boundary.py` line-count validation that records the new physical line
+  count and proves it is at least 1,000 lines below the 12,371-line pre-M78
+  baseline.
+- Regression tests or existing tests proving no backend translation,
+  rendering, generated output, broad body/call/store/return/declaration/array
+  semantics, raw helper evaluator calls, raw helper dispatch, catalog reads,
+  `tsldata` reads, host CPU queries, backend map reads, or runtime `frozen/`
+  use is introduced.
+- Import-cycle/import-stability checks selected by the executor.
+
+Golden fixtures required:
+
+- None. M78 is behavior-preserving lowering architecture work and must not
+  change generated C++ or Rust output.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M78 module-decomposition/import-stability command selected by the
+  executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Reducing line count by moving code but leaving duplicate behavior or
+  compatibility wrappers behind.
+- Creating circular private imports that make the decomposition only cosmetic.
+- Moving helpers that are still shared by unrelated lowering paths and thereby
+  coupling unrelated slices to the exact array-body package.
+- Treating exact tokens such as `svbool_t`, `pg`, `svptrue_b8`,
+  `svptrue_b*`, `intrin`, `svst1`, `tmp.data()`, or `a` as SVE/ARM/store/
+  backend semantics rather than structural evidence.
+- Introducing generic stage factories, broad registries, semantic dispatchers,
+  raw helper evaluators, runtime plugins, or fixpoint/backfeed execution.
+- Changing accepted M57-M77 diagnostics, stage ordering, output identities,
+  public imports, or deterministic behavior while moving code.
+- Adding backend translation, rendering, generated output, broad TSIL parsing,
+  lowering-time file/catalog reads, `tsldata` reads, host CPU queries, backend
+  map reads, or runtime `frozen/` access.
+
+Dependencies on prior milestones:
+
+- Milestones 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72,
+  73, 74, 75, 76, and 77.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m77-acceptance-finalization-prompt.md` must run after
+  explicit human acceptance. It will update the workflow state for M78
+  execution and create `docs/agent/runs/m78-execution-review-loop-prompt.md`.

@@ -10,6 +10,8 @@ import unittest
 from unittest import mock
 
 from _helpers import assert_diagnostic
+import tslgen.lowering._exact_shapes as lowering_exact_shapes
+import tslgen.lowering._pipeline as lowering_pipeline
 import tslgen.lowering.boundary as lowering_boundary
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
 from tslgen.analysis.selection import SelectionRequest, plan_selection
@@ -4617,6 +4619,12 @@ class LoweringBoundaryTests(unittest.TestCase):
             (),
         )
         self.assertEqual(pipeline.stages, ())
+        self.assertIsInstance(
+            pipeline.pipeline_snapshot,
+            lowering_pipeline.ExactArrayBodyPipelineSnapshot,
+        )
+        self.assertEqual(pipeline.pipeline_snapshot.steps, ())
+        self.assertEqual(pipeline.pipeline_snapshot.pending_backfeed_requests, ())
 
     def test_exact_array_initialization_stage_pipeline_matches_lower_candidates_tail(
         self,
@@ -4703,6 +4711,66 @@ class LoweringBoundaryTests(unittest.TestCase):
         )
         self.assertEqual(implementation.generation_stages[-11:], pipeline_result.stages)
         self.assertEqual(implementation.generation_stages[-12], envelope_stage)
+
+    def test_m77_exact_array_pipeline_snapshot_records_stage_facts(self) -> None:
+        result = self.exact_array_initialization_stage_pipeline("si32")
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        pipeline = result.unwrap()
+        snapshot = pipeline.pipeline_snapshot
+        self.assertIsInstance(snapshot, lowering_pipeline.ExactArrayBodyPipelineSnapshot)
+        self.assertEqual(snapshot.stages, pipeline.stages)
+        self.assertEqual(
+            tuple(step.stage_name for step in snapshot.steps),
+            tuple(stage.stage for stage in pipeline.stages),
+        )
+        self.assertEqual(
+            tuple(step.produced_fact.kind for step in snapshot.steps),
+            (
+                "array_body_envelope",
+                "array_initialization_slot_form",
+                "array_initialization_helper_request",
+                "array_initialization_base_type_resolution",
+                "array_initialization_vector_length_resolution",
+                "array_initialization_vector_alignment_resolution",
+                "array_initialization_helper_set_completion",
+                "array_initialization_declaration_shell",
+                "array_body_structural_sequence",
+                "predicate_path_structural_request",
+                "post_branch_intrinsic_call_site_structural_request",
+            ),
+        )
+        self.assertEqual(
+            snapshot.steps[-1].depends_on,
+            ("predicate_path_structural_request",),
+        )
+        self.assertEqual(snapshot.pending_backfeed_requests, ())
+
+    def test_m77_exact_shape_tokens_are_slice_local_evidence(self) -> None:
+        shape = lowering_exact_shapes.EXACT_SELECTED_BODY_ASSIGNMENT_SHAPE
+
+        self.assertEqual(shape.target_text, "pg")
+        self.assertTrue(shape.supports_direct_intrinsic_token("svptrue_b16"))
+        self.assertTrue(shape.supports_direct_intrinsic_token("svptrue_b32"))
+        self.assertTrue(shape.supports_direct_intrinsic_token("svptrue_b64"))
+        parsed = lowering_exact_shapes.parse_exact_selected_body_assignment_form(
+            "pg = intrin<svptrue_b32>();",
+            None,
+        )
+
+        self.assertTrue(parsed.is_ok, parsed.diagnostics)
+        self.assertEqual(
+            parsed.unwrap().direct_intrinsic_token_text,
+            "svptrue_b32",
+        )
+        self.assertEqual(
+            lowering_exact_shapes.EXACT_POST_BRANCH_INTRINSIC_TOKEN,
+            "svst1",
+        )
+        self.assertEqual(
+            lowering_exact_shapes.EXACT_POST_BRANCH_MEMBER_ACCESS_TEXT,
+            "tmp.data()",
+        )
 
     def test_lower_candidates_structural_sequence_stage_follows_declaration_shell(
         self,

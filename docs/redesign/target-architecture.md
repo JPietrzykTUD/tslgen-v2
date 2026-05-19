@@ -509,14 +509,24 @@ Current roadmap note:
   provenance only; they must not become store semantics, ARM/SVE intrinsic
   semantics, memory or pointer semantics, variable scope, backend translation,
   renderer-ready IR, generated output, generic call IR, or broad body IR.
-- Post-M76 planning selects Milestone 77 as a behavior-preserving
-  composable-lowering module boundary. It keeps the public lowering import
-  surface stable while beginning to split the monolithic Stage 8 implementation
-  into typed private modules. The architecture rule for future lowering
+- Milestone 77 implements a behavior-preserving composable-lowering module
+  boundary. It keeps the public lowering import surface stable while adding
+  typed private modules for exact structural recognizers
+  (`tslgen.lowering._exact_shapes`) and the exact array-body pipeline tail
+  (`tslgen.lowering._pipeline`). The architecture rule for future lowering
   backfeeds is explicit typed facts/requests/coordinator decisions, not hidden
   recursive stage calls, broad registries, raw helper dispatch, or central
   semantic branching. Exact ARM-looking tokens remain slice-local structural
   evidence unless a later milestone introduces typed semantic rules for them.
+- Post-M77 planning selects Milestone 78 as a behavior-preserving package
+  decomposition of the accepted exact array-body / array-initialization
+  lowering tail. It should keep `tslgen.lowering` and
+  `tslgen.lowering.boundary` as stable public import surfaces while moving
+  exact package-owned models/helpers/orchestration into private modules. The
+  target is real maintainability improvement: `boundary.py` must shrink by at
+  least 1,000 physical lines from the 12,371-line pre-M78 baseline, without
+  duplicate moved code, new semantics, backend/rendering/output behavior, broad
+  parsing, broad registries, or extension hardwiring.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

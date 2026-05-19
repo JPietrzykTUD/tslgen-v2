@@ -1365,7 +1365,8 @@ implemented M73 exact first-slot declaration-shell structural IR, implemented
 M74 exact array-body structural sequence and structural/provenance slot-role
 classification, accepted M75 exact predicate-path structural/request IR,
 accepted M76 exact post-branch intrinsic call-site structural/request IR,
-planned M77 behavior-preserving lowering pipeline/module-boundary cleanup, and
+implemented M77 behavior-preserving lowering pipeline/module-boundary cleanup,
+planned M78 behavior-preserving lowering boundary package decomposition, and
 body-slot semantics beyond those exact structural/request-resolution
 boundaries, including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and

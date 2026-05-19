@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 76 is accepted.
+Milestone 77 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -311,8 +311,8 @@ SVE predicate semantics, byte-size-to-token inference, store semantics,
 `svst1`, `tmp.data()`, `a`, backend maps, rendering, generated output,
 variable scope, and broad body semantics remain out of scope.
 
-Post-M74 planning is accepted. Human acceptance was recorded, and M75
-execution is the active workflow action.
+Post-M74 planning is accepted. Human acceptance was recorded, and the M75
+execution-review loop has completed.
 
 The M75 execution-review loop returned `Accept With Follow-Ups` after one
 focused validation-coverage revision. Review and audit found no blocking
@@ -339,8 +339,8 @@ semantics, ARM/SVE intrinsic semantics, memory behavior, pointer semantics,
 IR, generated output, variable scope, generic call/store/body IR, or broad TSIL
 semantics.
 
-Post-M75 planning is accepted. Human acceptance was recorded, and M76 execution
-is the active workflow action.
+Post-M75 planning is accepted. Human acceptance was recorded, and the M76
+execution-review loop has completed.
 
 The M76 execution-review loop returned `Accept With Follow-Ups` after one
 focused documentation revision. Review and audit found no blocking
@@ -363,42 +363,68 @@ module/stage boundaries while preserving accepted M57-M76 behavior. It must
 not add new lowering semantics, backend translation, rendering, generated
 output, broad parsing, or hardwired extension semantics.
 
-Post-M76 planning is accepted. Human acceptance was recorded, and M77 execution
-is the active workflow action.
+Post-M76 planning is accepted. Human acceptance was recorded, and the M77
+execution-review loop has completed.
+
+The M77 execution-review loop returned `Accept With Follow-Ups` after one
+focused documentation revision. Review and audit found no blocking
+implementation, validation, boundary, extensibility, documentation, or evidence
+issues after that revision. M77 preserves accepted M57-M76 behavior while
+moving exact selected-body/post-branch recognizer shapes and tokens into
+`tslgen.lowering._exact_shapes` and adding `tslgen.lowering._pipeline` for the
+accepted exact array-body pipeline tail. The pipeline snapshot records typed
+stage facts and dependencies with no pending backfeeds. New lowering
+semantics, backend translation, rendering, generated output, broad parsing,
+extension hardwiring, file/catalog reads, `tsldata` reads, host CPU queries,
+backend map reads, and runtime `frozen/` use remain out of scope.
+
+Post-M77 planning selected
+`Milestone 78: Lowering Boundary Package Decomposition Slice`.
+The selected plan is behavior-preserving lowering package decomposition. It
+must move the accepted exact array-body / array-initialization lowering package
+out of `boundary.py` into private typed modules, preserve accepted M57-M77
+behavior, keep public imports stable, and reduce `boundary.py` by at least
+1,000 physical lines from the 12,371-line pre-M78 baseline. Human acceptance is
+pending.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 77.
+Await human acceptance of post-M77 planning; if accepted, finalize the M78
+execution handoff.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m77-execution-review-loop-prompt.md
+docs/agent/runs/post-m77-acceptance-finalization-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 77: Composable Lowering Pipeline Module Boundary Slice
+None. M78 execution is not active until post-M77 planning is accepted and the
+acceptance-finalization prompt creates the M78 execution-review loop prompt.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M76 planning was accepted by the user. The acceptance finalization
-prepared the M77 execution-review loop prompt.
+Post-M77 planning selected M78 for human acceptance. Planning and audit
+returned Accept With Follow-Ups after tightening the scope to one coherent
+behavior-preserving exact array-body package extraction with a line-count
+reduction target.
 ```
 
 Next expected action:
 
 ```text
-Run the active M77 execution-review loop prompt. Use the specified
-single-executor plus read-only review/audit workflow. Do not start M78 until
-M77 review accepts and the next concrete prompt is created.
+If the user accepts the post-M77 planning result, run the active
+post-M77 acceptance-finalization prompt. It must update this state for M78
+execution and create docs/agent/runs/m78-execution-review-loop-prompt.md.
+Do not implement code or start M78 execution before that finalization.
 ```
 
 Accepted planning prompt:
@@ -917,10 +943,22 @@ Accepted post-M76 acceptance-finalization prompt:
 docs/agent/runs/post-m76-acceptance-finalization-prompt.md
 ```
 
-Active M77 execution-review loop prompt:
+Accepted M77 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m77-execution-review-loop-prompt.md
+```
+
+Completed post-M77 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m77-planning-plus-review-prompt.md
+```
+
+Active post-M77 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m77-acceptance-finalization-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1591,6 +1629,43 @@ docs/agent/runs/m77-execution-review-loop-prompt.md
   translation, rendering, generated output, CLI/report/writer behavior, Rust,
   compiler execution, lowering-time file/catalog reads, `tsldata` reads,
   host CPU queries, backend map reads, or runtime `frozen/` use.
+- M77 is accepted as behavior-preserving composable lowering pipeline/module
+  boundary work. It adds private `tslgen.lowering._exact_shapes` and
+  `tslgen.lowering._pipeline` modules while keeping public `tslgen.lowering`
+  imports stable.
+- M77's private pipeline snapshot records typed facts and dependencies for the
+  accepted exact M69-M76 array-body tail and records no pending backfeed
+  requests. It must not be treated as a generic registry, runtime plugin
+  system, raw helper dispatcher, or semantic evaluator.
+- M77's exact selected-body and post-branch shape tokens are slice-local
+  structural evidence only. They must not become extension, SVE, store,
+  memory, backend, renderer, or generated-output semantics without a future
+  accepted typed semantic milestone.
+- Post-M77 planning selected M78 as behavior-preserving lowering boundary
+  package decomposition only.
+- M78 must move one coherent extraction target: the accepted exact array-body /
+  array-initialization lowering package from M63-M77. It must not attempt a
+  whole-file rewrite or generic lowering framework.
+- M78 must keep public `tslgen.lowering` and `tslgen.lowering.boundary` import
+  surfaces stable while reducing `boundary.py` by at least 1,000 physical lines
+  from the 12,371-line pre-M78 baseline.
+- M78 may move exact package-owned models, orchestration, stage builders,
+  source adapters, validators, and diagnostics only when they are exclusively
+  consumed by the exact array-body / array-initialization path or are necessary
+  to preserve a coherent private module boundary.
+- M78 must move remaining M75 exact predicate-init recognizer tokens such as
+  `svbool_t`, `pg`, and `svptrue_b8` into `_exact_shapes.py` only as
+  slice-local structural evidence, not SVE or extension semantics.
+- M78 must preserve accepted M57-M77 diagnostics, stage names, stage ordering,
+  output identities, keys, deterministic ordering, selected-branch-only
+  diagnostics, public imports, and no-external-input boundaries.
+- M78 must not add new lowering semantics, generic body/call/store/return/
+  declaration/array semantics, broad TSIL parsing, raw helper dispatch,
+  backend translation, rendering, generated output, CLI/report/writer behavior,
+  Rust, compiler execution, lowering-time file/catalog reads, `tsldata` reads,
+  host CPU queries, backend map reads, runtime `frozen/` use, broad registries,
+  runtime plugins, semantic dispatchers, hidden backfeeds, or fixpoint
+  execution.
 
 ## Accepted Milestone 48
 
@@ -2486,11 +2561,37 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   be expressed as typed facts, typed requests, dependencies, or coordinator
   decisions. Do not implement speculative fixpoint/backfeed execution until a
   later milestone consumes a concrete typed need.
+- M77 review follow-up: `_pipeline.py` is typed around stage names, artifact
+  kinds, dependencies, and backfeed policy, but still carries `object` payloads
+  for stage/value references. Future extraction should tighten this with a
+  small local protocol or typed stage/value boundary when a concrete consumer
+  needs it.
+- M77 review follow-up: before real backfeed requests are used,
+  `ExactArrayBodyPipelineSnapshot.key` should include request kind/source stage
+  identity for pending backfeed requests, not only `request.key`.
+- M77 review follow-up: later cleanup can move remaining inline M75
+  predicate-init exact tokens such as `svbool_t`, `pg`, and `svptrue_b8` into
+  `_exact_shapes.py` as slice-local structural evidence.
+- M77 review follow-up: `GenerationLoweringStage.__post_init__` remains a
+  growing stage/output validation table and should be revisited as the next
+  maintainability pressure point before many more lowering stages are added.
+- Post-M77 planning follow-up for M78 execution: replace fuzzy ownership with
+  exact ownership criteria. Move only helpers exclusively consumed by the exact
+  array-body / array-initialization package, or helpers required to preserve a
+  coherent private extraction boundary; leave shared unrelated helpers in
+  `boundary.py`.
+- Post-M77 planning follow-up for M78 execution: watch circular imports. New
+  private modules should depend on explicit typed inputs and moved shared
+  values, not broad `boundary.py` internals that recreate the monolith.
+- Post-M77 planning follow-up for M78 execution: object-oriented structure, if
+  used, must be small and local to the exact decomposition boundary; broad
+  class hierarchies are out of scope.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M77 through the
-active execution-review loop prompt.
+No stop condition is active. The workflow is waiting for human acceptance of
+the post-M77 planning result. If accepted, run the active
+post-M77 acceptance-finalization prompt.
 
 ## Validation Expectations
 

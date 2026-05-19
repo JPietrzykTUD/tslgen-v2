@@ -1443,16 +1443,24 @@ Consequences:
   It must not make `svst1`, `tmp.data()`, or `a` into store/backend semantics,
   and it must not introduce generic call IR, variable scope, backend
   translation, renderer-ready IR, or generated output.
-- Post-M76 planning selects Milestone 77 to address the accepted Stage 8
-  maintainability pressure as architecture rather than semantics. Lowering is
-  treated as a composable typed pipeline: stage boundaries may expose typed
-  facts, typed requests, dependencies, and deterministic coordinator decisions
-  for future backfeeds, but stages must not depend on hidden recursion, broad
-  registries, raw-helper dispatch, or central semantic branching. The M77
-  refactor must preserve accepted M57-M76 behavior and keep exact tokens such
-  as `pg`, `svptrue_b*`, `intrin`, `svst1`, `tmp.data()`, and `a` as
-  slice-local structural evidence unless a future milestone adds typed
-  semantic rules.
+- Milestone 77 addresses the accepted Stage 8 maintainability pressure as
+  architecture rather than semantics. Lowering is treated as a composable typed
+  pipeline: the exact M69-M76 tail now records private typed facts and
+  dependencies in `tslgen.lowering._pipeline`, and exact recognizer tokens live
+  in `tslgen.lowering._exact_shapes` as slice-local structural evidence.
+  Future backfeeds must be explicit typed facts, typed requests, dependencies,
+  and deterministic coordinator decisions; stages must not depend on hidden
+  recursion, broad registries, raw-helper dispatch, or central semantic
+  branching. M77 preserves accepted M57-M76 behavior and does not add semantic
+  rules for `pg`, `svptrue_b*`, `intrin`, `svst1`, `tmp.data()`, or `a`.
+- Post-M77 planning selects Milestone 78 because a module boundary without
+  moving the package did not solve the `boundary.py` size problem. M78 is a
+  behavior-preserving package decomposition decision: move the accepted exact
+  array-body / array-initialization lowering package into private modules,
+  keep public imports stable, and require a measurable `boundary.py` reduction
+  of at least 1,000 physical lines. This is not a decision to create a generic
+  lowering framework, a broad OO hierarchy, a stage registry, a semantic
+  dispatcher, or new body/call/store/return semantics.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

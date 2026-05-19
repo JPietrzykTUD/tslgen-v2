@@ -21,6 +21,8 @@ from tslgen.domain.generation_rules import (
     is_non_integer_generation_type_tag,
 )
 from tslgen.domain.values import CatalogValue
+import tslgen.lowering._exact_shapes as _exact_shapes
+import tslgen.lowering._pipeline as _lowering_pipeline
 
 
 type LoweringStrategy = Literal["mini_tsil", "typed_opaque"]
@@ -211,15 +213,6 @@ _INTRIN_COMPOSE_RETURN_RE = re.compile(
 )
 _INTRIN_COMPOSE_MARKER_RE = re.compile(r"\bintrin_compose\s*<")
 _EMIT_RETURN_HEAD_RE = re.compile(r"\A\s*emit_return\s*\(")
-_SELECTED_BODY_ASSIGNMENT_TARGET = "pg"
-_SELECTED_BODY_ASSIGNMENT_DIRECT_INTRINSIC_TOKENS = (
-    "svptrue_b16",
-    "svptrue_b32",
-    "svptrue_b64",
-)
-_SELECTED_BODY_ASSIGNMENT_RHS_RE = re.compile(
-    rf"\Aintrin\s*<\s*({_TSIL_IDENTIFIER})\s*>\s*\(\s*\)\Z"
-)
 _EXACT_ARRAY_INITIALIZATION_HELPER_TEXT_BY_KIND: dict[
     ExactArrayInitializationHelperLeafKind, str
 ] = {
@@ -370,20 +363,6 @@ _EXACT_PREDICATE_INIT_SLOT_RE = re.compile(
     rf"(?P<predicate_token>{_TSIL_IDENTIFIER})\s*=\s*"
     rf"intrin\s*<\s*(?P<direct_intrinsic_token>{_TSIL_IDENTIFIER})\s*>\s*"
     r"\(\s*\)\s*;\s*\Z"
-)
-_EXACT_POST_BRANCH_STORE_PREDICATE_SLOT_RE = re.compile(
-    rf"\A\s*intrin\s*<\s*(?P<call_token>{_TSIL_IDENTIFIER})\s*>\s*"
-    rf"\(\s*(?P<predicate_token>{_TSIL_IDENTIFIER})\s*,\s*"
-    r"tmp\.data\(\)\s*,\s*a\s*\)\s*;\s*\Z"
-)
-_POST_BRANCH_INTRINSIC_CALL_SITE_CONTAINER_RE = re.compile(
-    rf"\A\s*(?P<call_head>{_TSIL_IDENTIFIER})\s*"
-    rf"<\s*(?P<intrinsic_token>{_TSIL_IDENTIFIER})\s*>\s*"
-    r"\((?P<arguments>.*)\)\s*;\s*\Z"
-)
-_POST_BRANCH_MEMBER_ACCESS_ARGUMENT_RE = re.compile(
-    rf"\A(?P<base_token>{_TSIL_IDENTIFIER})\."
-    rf"(?P<member_token>{_TSIL_IDENTIFIER})\s*\(\s*\)\Z"
 )
 _ARRAY_INITIALIZATION_SLOT_HELPER_SHAPE_RE = re.compile(
     r"\A[ \t]*var<typed>\("
@@ -1097,7 +1076,10 @@ class SelectedBranchBodyAssignmentFormRecognition:
             raise ValueError(
                 "selected-body assignment form requires selected statement location"
             )
-        if self.assignment_target_text != _SELECTED_BODY_ASSIGNMENT_TARGET:
+        if (
+            self.assignment_target_text
+            != _exact_shapes.EXACT_SELECTED_BODY_ASSIGNMENT_SHAPE.target_text
+        ):
             raise ValueError(
                 "selected-body assignment form target must be exact text 'pg'"
             )
@@ -1105,8 +1087,9 @@ class SelectedBranchBodyAssignmentFormRecognition:
             raise ValueError(
                 "selected-body assignment form RHS text must be non-empty"
             )
-        if self.direct_intrinsic_token_text not in (
-            _SELECTED_BODY_ASSIGNMENT_DIRECT_INTRINSIC_TOKENS
+        if not (
+            _exact_shapes.EXACT_SELECTED_BODY_ASSIGNMENT_SHAPE
+            .supports_direct_intrinsic_token(self.direct_intrinsic_token_text)
         ):
             raise ValueError(
                 "selected-body assignment form direct intrinsic token is unsupported"
@@ -3258,12 +3241,18 @@ class ExactPostBranchIntrinsicCallSiteStructuralRequestIr:
             raise ValueError(
                 "post-branch intrinsic call-site request requires source text"
             )
-        if self.call_head_token_text != "intrin":
+        if (
+            self.call_head_token_text
+            != _exact_shapes.EXACT_POST_BRANCH_CALL_HEAD_TOKEN
+        ):
             raise ValueError(
                 "post-branch intrinsic call-site request records only the exact "
                 "structural call-head token intrin"
             )
-        if self.unresolved_intrinsic_token_text != "svst1":
+        if (
+            self.unresolved_intrinsic_token_text
+            != _exact_shapes.EXACT_POST_BRANCH_INTRINSIC_TOKEN
+        ):
             raise ValueError(
                 "post-branch intrinsic call-site request records only the exact "
                 "unresolved intrinsic token svst1"
@@ -3295,9 +3284,12 @@ class ExactPostBranchIntrinsicCallSiteStructuralRequestIr:
                 "must be 1"
             )
         if (
-            self.member_access_argument_text != "tmp.data()"
-            or self.member_access_base_token_text != "tmp"
-            or self.member_access_member_token_text != "data"
+            self.member_access_argument_text
+            != _exact_shapes.EXACT_POST_BRANCH_MEMBER_ACCESS_TEXT
+            or self.member_access_base_token_text
+            != _exact_shapes.EXACT_POST_BRANCH_MEMBER_ACCESS_BASE_TOKEN
+            or self.member_access_member_token_text
+            != _exact_shapes.EXACT_POST_BRANCH_MEMBER_ACCESS_MEMBER_TOKEN
         ):
             raise ValueError(
                 "post-branch intrinsic call-site member-access-shaped argument "
@@ -3318,7 +3310,10 @@ class ExactPostBranchIntrinsicCallSiteStructuralRequestIr:
                 "post-branch intrinsic call-site source-operand argument ordinal "
                 "must be 2"
             )
-        if self.source_operand_argument_token_text != "a":
+        if (
+            self.source_operand_argument_token_text
+            != _exact_shapes.EXACT_POST_BRANCH_SOURCE_OPERAND_TOKEN
+        ):
             raise ValueError(
                 "post-branch intrinsic call-site records only the exact structural "
                 "source operand token a"
@@ -5250,6 +5245,9 @@ class _ExactArrayInitializationStagePipelineResult:
     post_branch_intrinsic_call_site_structural_requests: tuple[
         ExactPostBranchIntrinsicCallSiteStructuralRequestIr, ...
     ] = ()
+    pipeline_snapshot: _lowering_pipeline.ExactArrayBodyPipelineSnapshot = field(
+        default_factory=_lowering_pipeline.ExactArrayBodyPipelineSnapshot.empty,
+    )
     stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -5308,6 +5306,7 @@ class _ExactArrayInitializationStagePipelineResult:
             "post_branch_intrinsic_call_site_structural_requests",
             tuple(self.post_branch_intrinsic_call_site_structural_requests),
         )
+        object.__setattr__(self, "pipeline_snapshot", self.pipeline_snapshot)
         object.__setattr__(self, "stages", tuple(self.stages))
 
     @property
@@ -5357,6 +5356,7 @@ class _ExactArrayInitializationStagePipelineResult:
                     self.post_branch_intrinsic_call_site_structural_requests
                 )
             ),
+            self.pipeline_snapshot.key,
             tuple(stage.key for stage in self.stages),
         )
 
@@ -5881,6 +5881,117 @@ def _lower_exact_array_initialization_stage_pipeline(
             post_branch_call_site,
         )
     )
+    pipeline_stages = (
+        array_body_stage,
+        array_initialization_slot_form_stage,
+        array_initialization_helper_request_stage,
+        base_type_resolution_stage,
+        vector_length_resolution_stage,
+        vector_alignment_resolution_stage,
+        helper_set_completion_stage,
+        declaration_shell_stage,
+        structural_sequence_stage,
+        predicate_path_stage,
+        post_branch_call_site_stage,
+    )
+    pipeline_snapshot = _lowering_pipeline.ExactArrayBodyPipelineSnapshot(
+        steps=(
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="array_body_envelope_slot_assembly",
+                stage=array_body_stage,
+                artifact_kind="array_body_envelope",
+                artifact_key=array_envelope.key,
+                artifact_value=array_envelope,
+            ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="array_initialization_slot_form_lowering",
+                stage=array_initialization_slot_form_stage,
+                artifact_kind="array_initialization_slot_form",
+                artifact_key=array_initialization_slot_form.key,
+                artifact_value=array_initialization_slot_form,
+                depends_on=("array_body_envelope",),
+            ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="array_initialization_helper_request_lowering",
+                stage=array_initialization_helper_request_stage,
+                artifact_kind="array_initialization_helper_request",
+                artifact_key=array_initialization_helper_request.key,
+                artifact_value=array_initialization_helper_request,
+                depends_on=("array_initialization_slot_form",),
+            ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="array_initialization_base_type_request_resolution",
+                stage=base_type_resolution_stage,
+                artifact_kind="array_initialization_base_type_resolution",
+                artifact_key=base_type_resolution.key,
+                artifact_value=base_type_resolution,
+                depends_on=("array_initialization_helper_request",),
+            ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="array_initialization_vector_length_request_resolution",
+                stage=vector_length_resolution_stage,
+                artifact_kind="array_initialization_vector_length_resolution",
+                artifact_key=vector_length_resolution.key,
+                artifact_value=vector_length_resolution,
+                depends_on=("array_initialization_base_type_resolution",),
+            ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="array_initialization_vector_alignment_request_resolution",
+                stage=vector_alignment_resolution_stage,
+                artifact_kind="array_initialization_vector_alignment_resolution",
+                artifact_key=vector_alignment_resolution.key,
+                artifact_value=vector_alignment_resolution,
+                depends_on=("array_initialization_vector_length_resolution",),
+            ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="array_initialization_helper_set_completion",
+                stage=helper_set_completion_stage,
+                artifact_kind="array_initialization_helper_set_completion",
+                artifact_key=helper_set_completion.key,
+                artifact_value=helper_set_completion,
+                depends_on=("array_initialization_vector_alignment_resolution",),
+            ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="array_initialization_declaration_shell_lowering",
+                stage=declaration_shell_stage,
+                artifact_kind="array_initialization_declaration_shell",
+                artifact_key=declaration_shell.key,
+                artifact_value=declaration_shell,
+                depends_on=("array_initialization_helper_set_completion",),
+            ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="array_body_structural_sequence_classification",
+                stage=structural_sequence_stage,
+                artifact_kind="array_body_structural_sequence",
+                artifact_key=structural_sequence.key,
+                artifact_value=structural_sequence,
+                depends_on=(
+                    "array_body_envelope",
+                    "array_initialization_declaration_shell",
+                ),
+            ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="predicate_path_structural_request_lowering",
+                stage=predicate_path_stage,
+                artifact_kind="predicate_path_structural_request",
+                artifact_key=predicate_path.key,
+                artifact_value=predicate_path,
+                depends_on=("array_body_structural_sequence",),
+            ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name=(
+                    "post_branch_intrinsic_call_site_structural_request_lowering"
+                ),
+                stage=post_branch_call_site_stage,
+                artifact_kind=(
+                    "post_branch_intrinsic_call_site_structural_request"
+                ),
+                artifact_key=post_branch_call_site.key,
+                artifact_value=post_branch_call_site,
+                depends_on=("predicate_path_structural_request",),
+            ),
+        ),
+    )
 
     return Result.ok(
         _ExactArrayInitializationStagePipelineResult(
@@ -5911,19 +6022,8 @@ def _lower_exact_array_initialization_stage_pipeline(
             post_branch_intrinsic_call_site_structural_requests=(
                 post_branch_call_site,
             ),
-            stages=(
-                array_body_stage,
-                array_initialization_slot_form_stage,
-                array_initialization_helper_request_stage,
-                base_type_resolution_stage,
-                vector_length_resolution_stage,
-                vector_alignment_resolution_stage,
-                helper_set_completion_stage,
-                declaration_shell_stage,
-                structural_sequence_stage,
-                predicate_path_stage,
-                post_branch_call_site_stage,
-            ),
+            pipeline_snapshot=pipeline_snapshot,
+            stages=pipeline_stages,
         )
     )
 
@@ -6592,7 +6692,7 @@ def lower_exact_predicate_path_structural_request(
     assert init_role.opaque_source_text is not None
     assert store_role.opaque_source_text is not None
     init_match = _EXACT_PREDICATE_INIT_SLOT_RE.match(init_role.opaque_source_text)
-    store_match = _EXACT_POST_BRANCH_STORE_PREDICATE_SLOT_RE.match(
+    store_match = _exact_shapes.EXACT_POST_BRANCH_STORE_PREDICATE_SLOT_RE.match(
         store_role.opaque_source_text,
     )
     if init_match is None or store_match is None:
@@ -6718,13 +6818,17 @@ def lower_exact_post_branch_intrinsic_call_site_structural_request(
     source_text = post_branch_role.opaque_source_text
     if source_text is None:
         raise AssertionError("M76 validation did not enforce source text")
-    match = _POST_BRANCH_INTRINSIC_CALL_SITE_CONTAINER_RE.match(source_text)
+    match = _exact_shapes.POST_BRANCH_INTRINSIC_CALL_SITE_CONTAINER_RE.match(
+        source_text,
+    )
     if match is None:
         raise AssertionError("M76 validation did not enforce call-site shape")
     arguments = tuple(part.strip() for part in match.group("arguments").split(","))
     if len(arguments) != 3:
         raise AssertionError("M76 validation did not enforce argument count")
-    member_match = _POST_BRANCH_MEMBER_ACCESS_ARGUMENT_RE.match(arguments[1])
+    member_match = _exact_shapes.POST_BRANCH_MEMBER_ACCESS_ARGUMENT_RE.match(
+        arguments[1],
+    )
     if member_match is None:
         raise AssertionError("M76 validation did not enforce tmp.data() shape")
     try:
@@ -8369,7 +8473,7 @@ def _validate_predicate_path_structural_request_input(
                 init_role.source_location,
             )
         )
-    store_match = _EXACT_POST_BRANCH_STORE_PREDICATE_SLOT_RE.match(
+    store_match = _exact_shapes.EXACT_POST_BRANCH_STORE_PREDICATE_SLOT_RE.match(
         store_role.opaque_source_text,
     )
     if store_match is None:
@@ -8393,7 +8497,7 @@ def _validate_predicate_path_structural_request_input(
         predicate_type != "svbool_t"
         or predicate_token != "pg"
         or init_direct_token != "svptrue_b8"
-        or store_call_token != "svst1"
+        or store_call_token != _exact_shapes.EXACT_POST_BRANCH_INTRINSIC_TOKEN
     ):
         diagnostics.append(
             _predicate_path_malformed_diagnostic(
@@ -8596,10 +8700,14 @@ def _validate_post_branch_intrinsic_call_site_input(
         )
         return diagnostics
 
-    match = _POST_BRANCH_INTRINSIC_CALL_SITE_CONTAINER_RE.match(source_text)
+    match = _exact_shapes.POST_BRANCH_INTRINSIC_CALL_SITE_CONTAINER_RE.match(
+        source_text,
+    )
     if match is None:
         stripped = source_text.strip()
-        if stripped and not stripped.startswith("intrin"):
+        if stripped and not stripped.startswith(
+            _exact_shapes.EXACT_POST_BRANCH_CALL_HEAD_TOKEN,
+        ):
             diagnostics.append(
                 _post_branch_call_site_shape_unsupported_diagnostic(
                     "post-branch intrinsic call-site structural request supports "
@@ -8621,7 +8729,7 @@ def _validate_post_branch_intrinsic_call_site_input(
     call_head_token = match.group("call_head")
     intrinsic_token = match.group("intrinsic_token")
     arguments = tuple(part.strip() for part in match.group("arguments").split(","))
-    if call_head_token != "intrin":
+    if call_head_token != _exact_shapes.EXACT_POST_BRANCH_CALL_HEAD_TOKEN:
         diagnostics.append(
             _post_branch_call_site_call_head_mismatch_diagnostic(
                 "post-branch intrinsic call-site structural request requires "
@@ -8629,7 +8737,7 @@ def _validate_post_branch_intrinsic_call_site_input(
                 post_branch_role.source_location,
             )
         )
-    if intrinsic_token != "svst1":
+    if intrinsic_token != _exact_shapes.EXACT_POST_BRANCH_INTRINSIC_TOKEN:
         diagnostics.append(
             _post_branch_call_site_intrinsic_token_mismatch_diagnostic(
                 "post-branch intrinsic call-site structural request records "
@@ -8651,7 +8759,8 @@ def _validate_post_branch_intrinsic_call_site_input(
     if (
         predicate_argument
         != predicate_path.store_call_predicate_argument_text
-        or predicate_argument != "pg"
+        or predicate_argument
+        != _exact_shapes.EXACT_SELECTED_BODY_ASSIGNMENT_SHAPE.target_text
     ):
         diagnostics.append(
             _post_branch_call_site_predicate_argument_mismatch_diagnostic(
@@ -8662,16 +8771,19 @@ def _validate_post_branch_intrinsic_call_site_input(
         )
 
     member_access_argument = arguments[1]
-    member_match = _POST_BRANCH_MEMBER_ACCESS_ARGUMENT_RE.match(
+    member_match = _exact_shapes.POST_BRANCH_MEMBER_ACCESS_ARGUMENT_RE.match(
         member_access_argument,
     )
     if (
         member_match is None
-        or member_access_argument != "tmp.data()"
+        or member_access_argument
+        != _exact_shapes.EXACT_POST_BRANCH_MEMBER_ACCESS_TEXT
         or member_match.group("base_token")
         != sequence.declaration_shell.variable_token
-        or member_match.group("base_token") != "tmp"
-        or member_match.group("member_token") != "data"
+        or member_match.group("base_token")
+        != _exact_shapes.EXACT_POST_BRANCH_MEMBER_ACCESS_BASE_TOKEN
+        or member_match.group("member_token")
+        != _exact_shapes.EXACT_POST_BRANCH_MEMBER_ACCESS_MEMBER_TOKEN
     ):
         diagnostics.append(
             _post_branch_call_site_member_access_unsupported_diagnostic(
@@ -8683,7 +8795,10 @@ def _validate_post_branch_intrinsic_call_site_input(
         )
 
     source_operand_argument = arguments[2]
-    if source_operand_argument != "a":
+    if (
+        source_operand_argument
+        != _exact_shapes.EXACT_POST_BRANCH_SOURCE_OPERAND_TOKEN
+    ):
         diagnostics.append(
             _post_branch_call_site_source_operand_unsupported_diagnostic(
                 "post-branch intrinsic call-site structural request records "
@@ -10141,95 +10256,20 @@ def _parse_selected_body_assignment_form(
     body_text: str,
     location: SourceLocation | None,
 ) -> Result[tuple[str, str, str]]:
-    stripped = body_text.strip()
-    if stripped.count(";") > 1:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-LOWER-SELECTED-BODY-FORM-EXTRA-STATEMENTS",
-                    "selected-body assignment-form recognition supports only one "
-                    "selected statement",
-                    location=location,
-                ),
-            )
-        )
-    if not stripped.endswith(";"):
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-LOWER-SELECTED-BODY-FORM-MALFORMED",
-                    "selected-body assignment-form recognition supports only "
-                    "'pg = intrin<svptrue_b16|svptrue_b32|svptrue_b64>();'",
-                    location=location,
-                ),
-            )
-        )
-
-    statement_text = stripped[:-1].strip()
-    if "=" not in statement_text:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-LOWER-SELECTED-BODY-FORM-MALFORMED",
-                    "selected-body assignment-form recognition requires one "
-                    "assignment statement",
-                    location=location,
-                ),
-            )
-        )
-
-    target_text, rhs_text = (
-        part.strip()
-        for part in statement_text.split("=", 1)
+    parsed = _exact_shapes.parse_exact_selected_body_assignment_form(
+        body_text,
+        location,
     )
-    if not target_text or not rhs_text:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-LOWER-SELECTED-BODY-FORM-MALFORMED",
-                    "selected-body assignment-form recognition requires both "
-                    "assignment target text and RHS text",
-                    location=location,
-                ),
-            )
+    if not parsed.is_ok:
+        return Result.failure(parsed.diagnostics)
+    shape = parsed.unwrap()
+    return Result.ok(
+        (
+            shape.assignment_target_text,
+            shape.opaque_rhs_text,
+            shape.direct_intrinsic_token_text,
         )
-    if target_text != _SELECTED_BODY_ASSIGNMENT_TARGET:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-LOWER-SELECTED-BODY-FORM-TARGET-UNSUPPORTED",
-                    "selected-body assignment-form recognition supports only "
-                    "the exact assignment target text 'pg'; got "
-                    f"{target_text!r}",
-                    location=location,
-                ),
-            )
-        )
-
-    match = _SELECTED_BODY_ASSIGNMENT_RHS_RE.fullmatch(rhs_text)
-    if match is None:
-        return Result.failure(
-            (
-                _unsupported_selected_body_assignment_rhs_diagnostic(
-                    rhs_text,
-                    location,
-                ),
-            )
-        )
-    direct_intrinsic_token_text = match.group(1)
-    if direct_intrinsic_token_text not in (
-        _SELECTED_BODY_ASSIGNMENT_DIRECT_INTRINSIC_TOKENS
-    ):
-        return Result.failure(
-            (
-                _unsupported_selected_body_assignment_rhs_diagnostic(
-                    rhs_text,
-                    location,
-                ),
-            )
-        )
-
-    return Result.ok((target_text, rhs_text, direct_intrinsic_token_text))
+    )
 
 
 def _resolve_generation_predicate_query_staged(
@@ -12020,20 +12060,6 @@ def _malformed_generation_if_diagnostic(
         "predicate branch form, and the exact no-final-else size-byte "
         "branch chain with == 2, == 4, then == 8 arms",
         location=item.source_location,
-    )
-
-
-def _unsupported_selected_body_assignment_rhs_diagnostic(
-    rhs_text: str,
-    location: SourceLocation | None,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-SELECTED-BODY-FORM-RHS-UNSUPPORTED",
-        "selected-body assignment-form recognition supports only opaque RHS "
-        "text shaped as 'intrin<svptrue_b16>()', 'intrin<svptrue_b32>()', "
-        "or 'intrin<svptrue_b64>()'; got "
-        f"{rhs_text!r}",
-        location=location,
     )
 
 

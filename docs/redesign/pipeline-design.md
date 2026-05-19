@@ -569,15 +569,27 @@ must not become store lowering, ARM/SVE intrinsic semantics, variable/use-def
 analysis, backend-planning input, renderer-ready body, or a generated-output
 step.
 
-Post-M76 planning selects Milestone 77 as a behavior-preserving Stage 8
-module-boundary slice. M77 does not add a new semantic lowering result.
-Instead, it starts moving the accepted M58-M76 lowering path behind typed,
-private, composable module/stage boundaries under `tslgen.lowering` while
-preserving public imports, stage names, diagnostics, and outputs. Future
-backfeeds must be modeled as typed facts, requests, dependencies, or
-deterministic coordinator decisions; stages must not call arbitrary earlier
-stages through hidden recursion, raw helper dispatch, broad registries, or
-central semantic `if`/`elif` chains.
+Milestone 77 implements a behavior-preserving Stage 8 module-boundary slice.
+M77 does not add a new semantic lowering result. It keeps the public lowering
+facade stable while moving exact recognizer shapes into
+`tslgen.lowering._exact_shapes` and adding
+`tslgen.lowering._pipeline` for the accepted exact array-body pipeline tail.
+The new private pipeline snapshot records typed stage facts and dependencies
+for the M69-M76 tail, with no pending backfeeds. Future backfeeds must be
+modeled as typed facts, requests, dependencies, or deterministic coordinator
+decisions; stages must not call arbitrary earlier stages through hidden
+recursion, raw helper dispatch, broad registries, or central semantic
+`if`/`elif` chains.
+
+Post-M77 planning selects Milestone 78 as a behavior-preserving Stage 8
+package-decomposition slice. M78 does not add a new semantic lowering result.
+It must move the accepted exact array-body / array-initialization package out
+of the central `boundary.py` facade into private typed modules, preserve the
+accepted M57-M77 stage behavior, and reduce `boundary.py` by at least 1,000
+physical lines from its 12,371-line pre-M78 baseline. The decomposition must
+not create broad registries, semantic dispatchers, hidden backfeeds, generic
+body/call/store/return parsing, backend planning, rendering, or generated
+output.
 
 ## Stage 9: Backend Planning
 

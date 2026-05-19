@@ -928,15 +928,27 @@ Recommended first parity checks:
   evaluator calls, no catalog/`tsldata`/host CPU/backend map reads during
   lowering evaluation, and no backend translation/rendering, generic
   call/store/body lowering, golden-file, or generated-output churn.
-- Milestone 77 tests must prove behavior-preserving lowering architecture
+- Milestone 77 tests prove behavior-preserving lowering architecture
   extraction, not new semantics: the full lowering-boundary unit suite remains
-  green, focused tests cover the extracted module/stage cluster touched by the
-  refactor, public `tslgen.lowering` imports remain stable, representative
+  green, focused M77 tests cover the private `_pipeline.py` stage-fact/
+  dependency snapshot and the private `_exact_shapes.py` recognizer-token
+  boundary, public `tslgen.lowering` imports remain stable, representative
   M57-M76 diagnostics keep their codes/severity/source locations where already
   asserted, repeated runs remain deterministic, and no backend translation,
   rendering, generated output, broad body/call/store/return parsing, raw
   helper dispatch, catalog/`tsldata`/host CPU/backend map reads, or runtime
   `frozen/` use is introduced.
+- Milestone 78 tests must prove behavior-preserving package decomposition and
+  real facade shrinkage: the full lowering-boundary unit suite remains green,
+  focused M78 tests prove public import stability and exact array-body /
+  array-initialization pipeline equivalence after code moves, `boundary.py`
+  line-count validation proves at least 1,000 physical lines were removed from
+  the 12,371-line pre-M78 baseline, representative M57-M77 diagnostics and
+  deterministic ordering remain unchanged, and no backend translation,
+  rendering, generated output, broad body/call/store/return/declaration/array
+  semantics, raw helper dispatch, catalog/`tsldata`/host CPU/backend map
+  reads, import cycles, duplicate moved code, or runtime `frozen/` use is
+  introduced.
 
 Deferred parity checks:
 
