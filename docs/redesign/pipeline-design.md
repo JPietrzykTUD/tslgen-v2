@@ -626,6 +626,15 @@ request-record helper ownership behind a private module such as
 ordering, output identities, keys, pipeline snapshots, selected-branch-only
 diagnostics, and public facade imports.
 
+M80 execution accepts that shape: `tslgen.lowering._array_body_validation`
+owns the exact validation/request-record helper boundary, and `boundary.py`
+remains the facade that wires those helpers into the accepted Stage 8
+functions. Stage names, ordering, output identities, keys, pipeline snapshots,
+selected-branch diagnostics, and public imports remain unchanged. The facade
+now measures 7,208 physical lines, meeting the M80 reduction target without a
+new stage dispatcher, source adapter, semantic evaluator, registry, or
+backfeed engine.
+
 ## Stage 9: Backend Planning
 
 Inputs:

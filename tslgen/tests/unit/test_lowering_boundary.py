@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import builtins
 from dataclasses import replace
 import inspect
@@ -13,6 +14,7 @@ from _helpers import assert_diagnostic
 import tslgen.lowering._array_body_diagnostics as lowering_array_body_diagnostics
 import tslgen.lowering._array_body_models as lowering_array_body_models
 import tslgen.lowering._array_body_shapes as lowering_array_body_shapes
+import tslgen.lowering._array_body_validation as lowering_array_body_validation
 import tslgen.lowering._exact_shapes as lowering_exact_shapes
 import tslgen.lowering._pipeline as lowering_pipeline
 import tslgen.lowering.boundary as lowering_boundary
@@ -4914,6 +4916,66 @@ class LoweringBoundaryTests(unittest.TestCase):
             lowering_array_body_diagnostics.ExactArrayInitializationSlotFormLike,
             lowering_array_body_models.ExactArrayInitializationSlotFormLike,
         )
+
+    def test_m80_array_body_validation_ownership_moves_request_helpers(self) -> None:
+        self.assertIs(
+            lowering_boundary._array_body_validation,
+            lowering_array_body_validation,
+        )
+        for helper_name in (
+            "_validate_array_initialization_slot_position",
+            "_array_initialization_base_type_request_record",
+            "_array_initialization_vector_length_metadata_for_context",
+            "_array_initialization_vector_alignment_metadata_for_context",
+            "_validate_array_body_structural_sequence_inputs",
+            "_validate_predicate_path_structural_request_input",
+            "_validate_post_branch_intrinsic_call_site_input",
+            "_structural_role_from_slot",
+            "_array_initialization_leaf",
+        ):
+            self.assertIn(helper_name, lowering_array_body_validation.__dict__)
+            self.assertNotIn(helper_name, lowering_boundary.__dict__)
+        self.assertNotIn("SelectedBodyEnvelopeIr", lowering_array_body_validation.__dict__)
+        self.assertNotIn(
+            "NoSelectedBodyEnvelopeIr",
+            lowering_array_body_validation.__dict__,
+        )
+
+    def test_m80_private_array_body_modules_do_not_import_boundary(self) -> None:
+        private_modules = (
+            lowering_array_body_diagnostics,
+            lowering_array_body_models,
+            lowering_array_body_shapes,
+            lowering_array_body_validation,
+            lowering_exact_shapes,
+            lowering_pipeline,
+        )
+        for module in private_modules:
+            imported_boundary: list[str] = []
+            tree = ast.parse(inspect.getsource(module))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imported_boundary.extend(
+                        alias.name
+                        for alias in node.names
+                        if alias.name == "tslgen.lowering.boundary"
+                    )
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module == "tslgen.lowering.boundary":
+                        imported_boundary.append(node.module)
+                    if node.module == "tslgen.lowering":
+                        imported_boundary.extend(
+                            alias.name
+                            for alias in node.names
+                            if alias.name == "boundary"
+                        )
+                    if node.level and node.module in (None, "", "boundary"):
+                        imported_boundary.extend(
+                            alias.name
+                            for alias in node.names
+                            if node.module == "boundary" or alias.name == "boundary"
+                        )
+            self.assertEqual(imported_boundary, [], module.__name__)
 
     def test_lower_candidates_structural_sequence_stage_follows_declaration_shell(
         self,

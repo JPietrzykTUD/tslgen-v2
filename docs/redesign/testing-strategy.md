@@ -991,6 +991,11 @@ Recommended first parity checks:
   broad TSIL/body/call/store/return/declaration/array parsing, raw helper
   dispatch, catalog/`tsldata`/host CPU/backend map reads, import cycles,
   duplicate moved code, or runtime `frozen/` use is introduced.
+- M80 execution adds focused ownership/import-boundary tests for
+  `tslgen.lowering._array_body_validation`, including AST checks against
+  absolute and relative imports of `boundary.py`. The full lowering-boundary
+  suite remains green, and `boundary.py` measures 7,208 physical lines against
+  the 8,915-line post-M79 baseline.
 
 Deferred parity checks:
 

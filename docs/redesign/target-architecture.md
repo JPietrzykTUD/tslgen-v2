@@ -561,6 +561,15 @@ Current roadmap note:
   not permission to move facade-owned stage/source adapters, create a validator
   registry, broaden structural protocols, add return/store semantics, or
   introduce backend/rendering/output hooks.
+- M80 implements that validation boundary as
+  `tslgen.lowering._array_body_validation`. The module owns exact
+  array-body / array-initialization validation, request-record selection,
+  metadata lookup validation, and small construction helpers over accepted
+  private models and protocols without importing `boundary.py`. The public
+  facade delegates to it and now measures 7,208 physical lines, under the
+  7,415-line M80 target. The extraction does not add new semantics,
+  source-adapter behavior, backend/rendering/output hooks, registries, or
+  hardwired extension behavior.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

@@ -590,6 +590,13 @@ deterministic keys, and public imports. It adds no new helper semantics,
 source adapter behavior, backend translation, rendering, generated output, or
 return/store behavior.
 
+M80 execution preserves the behavioral contract. The validation and
+request-record helper boundary now lives in
+`tslgen.lowering._array_body_validation`, `boundary.py` remains the public
+facade, and accepted selected branches, diagnostics, stage names/order, output
+identities, deterministic keys, and public imports remain unchanged. The
+facade now measures 7,208 physical lines.
+
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
 suffix request over typed M43 `GenerationTypeRef` inputs. Milestone 46

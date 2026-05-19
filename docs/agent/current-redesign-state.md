@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 79 is accepted.
+Milestone 80 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -447,39 +447,53 @@ Post-M79 planning is accepted. It selected
 `Milestone 80: Exact Array-Body Validation Boundary Extraction Slice`.
 Human acceptance was recorded.
 
+The M80 execution-review loop returned `Accept With Follow-Ups` after
+documentation finalization. Review and audit found no blocking
+implementation, validation, boundary, extensibility, documentation, or
+evidence issues. M80 preserves accepted M57-M79 behavior while moving exact
+array-body / array-initialization validation, request-record selection,
+metadata lookup validation, and small construction helper ownership into
+`tslgen.lowering._array_body_validation`. The public `tslgen.lowering` and
+`tslgen.lowering.boundary` import surfaces remain stable. Private lowering
+modules, including `_array_body_validation.py`, do not import `boundary.py`.
+`boundary.py` now measures 7,208 physical lines, below the M80 threshold of
+7,415 lines. New lowering semantics, helper evaluation, source-adapter
+behavior, backend translation, rendering, generated output, broad parsing,
+extension hardwiring, file/catalog reads, `tsldata` reads, host CPU queries,
+backend map reads, and runtime `frozen/` use remain out of scope.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 80.
+Plan the next lowering-focused milestone after M80.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m80-execution-review-loop-prompt.md
+docs/agent/runs/post-m80-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 80: Exact Array-Body Validation Boundary Extraction Slice
+None. M80 is accepted; the active prompt is post-M80 planning.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M79 planning was accepted by the user. The acceptance finalization
-prepared the M80 execution-review loop prompt.
+M80 execution-review returned Accept With Follow-Ups. Remaining follow-ups are
+non-blocking maintainability notes recorded below.
 ```
 
 Next expected action:
 
 ```text
-Run the active M80 execution-review loop prompt. Use the specified
-single-executor plus read-only review/audit workflow. Do not start M81 until
-M80 review accepts and the next concrete prompt is created.
+Run the active post-M80 planning-plus-review prompt. Focus on lowering. Do not
+implement code unless that prompt explicitly selects an executor task.
 ```
 
 Accepted planning prompt:
@@ -1052,10 +1066,16 @@ Accepted post-M79 acceptance-finalization prompt:
 docs/agent/runs/post-m79-acceptance-finalization-prompt.md
 ```
 
-Active M80 execution-review loop prompt:
+Completed M80 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m80-execution-review-loop-prompt.md
+```
+
+Active post-M80 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m80-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1749,7 +1769,18 @@ docs/agent/runs/m80-execution-review-loop-prompt.md
 - M78 kept public `tslgen.lowering` and `tslgen.lowering.boundary` import
   surfaces stable and reduced `boundary.py` to 11,109 physical lines from the
   12,371-line pre-M78 baseline.
-- Future lowering package decomposition must preserve accepted M57-M78
+- M79 is accepted as behavior-preserving exact array-body typed model
+  ownership extraction. It moved exact array-body / array-initialization models
+  into `tslgen.lowering._array_body_models`, kept public imports stable, kept
+  private modules from importing `boundary.py`, and reduced `boundary.py` to
+  8,915 physical lines from the 11,109-line post-M78 baseline.
+- M80 is accepted as behavior-preserving exact array-body validation boundary
+  extraction. It moved exact validation, request-record selection, metadata
+  lookup validation, and small construction helpers into
+  `tslgen.lowering._array_body_validation`, kept public imports stable, kept
+  private modules from importing `boundary.py`, and reduced `boundary.py` to
+  7,208 physical lines from the 8,915-line post-M79 baseline.
+- Future lowering package decomposition must preserve accepted M57-M80
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -2711,10 +2742,11 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   `Literal` aliases and targeted `_array_body_diagnostics.py` `Any` helper
   inputs by moving exact model ownership into `_array_body_models.py` and
   sharing typed protocols with shapes and diagnostics.
-- M79 review follow-up: add a committed regression test proving private
-  lowering modules such as `_array_body_models.py`, `_array_body_shapes.py`,
-  `_array_body_diagnostics.py`, `_exact_shapes.py`, and `_pipeline.py` do not
-  import `boundary.py`.
+- M79 review follow-up resolved by M80: committed private import-boundary
+  regression coverage now proves accepted private lowering modules, including
+  `_array_body_models.py`, `_array_body_shapes.py`,
+  `_array_body_diagnostics.py`, `_array_body_validation.py`,
+  `_exact_shapes.py`, and `_pipeline.py`, do not import `boundary.py`.
 - M79 maintainability follow-up: private protocols in `_array_body_models.py`
   that mirror public generation model names, including `GenerationTypeRef` and
   `GenerationSelectedBodyEnvelopeIr`, are accepted for the import boundary but
@@ -2744,11 +2776,26 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   backend translation, rendering, generated output, CLI/report/writer
   behavior, Rust, compiler execution, file/catalog reads, `tsldata` reads,
   host CPU queries, backend map reads, or runtime `frozen/` use.
+- M80 execution addressed the post-M79 planning follow-ups: review verified
+  behavior-preserving exact validation/request-record helper extraction into
+  `_array_body_validation.py`, one-way private imports, stable public facade
+  imports, no source-adapter/stage-construction moves, no semantic expansion,
+  and line-count reduction from 8,915 to 7,208 physical lines.
+- M80 review follow-up resolved during finalization: the private-import
+  regression test now detects direct absolute facade imports and common
+  relative forms such as `from . import boundary` and
+  `from .boundary import ...`.
+- M80 maintainability follow-up: the selected/no-selected body envelope seam
+  still uses narrow structural protocols/casts because the concrete M63
+  envelope models remain facade-owned. A future lowering slice should either
+  move selected-body envelope ownership deliberately or keep selected-body
+  concrete checks at the facade boundary rather than broadening structural
+  checks.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M80 through the
-active execution-review loop prompt.
+No stop condition is active. The workflow is ready to run the accepted
+post-M80 lowering-focused planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -2792,3 +2839,20 @@ The focused M79 command returned `3 passed, 257 deselected`. The full
 lowering-boundary suite returned `260 passed`. The validation profile returned
 exit 0 with unit discovery `594` tests OK, compileall OK, ruff OK, mypy OK,
 and diff-check OK.
+
+For M80, validation completed with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_shapes.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m80"
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+git diff --check
+```
+
+The M80 line count was `7208 tslgen/src/tslgen/lowering/boundary.py`.
+The focused M80 command returned `2 passed, 260 deselected`. The full
+lowering-boundary suite returned `262 passed`. The validation profile returned
+exit 0 with corpus probes `3 passed`, unit discovery `596` tests OK,
+compileall OK, ruff OK, mypy OK, and diff-check OK.

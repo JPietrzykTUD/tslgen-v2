@@ -692,6 +692,14 @@ rules, and structural provenance only. M80 must not evaluate helper text,
 query catalogs/backends, add source adapters, add return/store semantics,
 render output, or create a validation registry/semantic dispatcher.
 
+M80 execution preserves that boundary. The exact validation and request-record
+helpers now live in `tslgen.lowering._array_body_validation` and consume
+accepted typed models, helper rules, diagnostics, and structural provenance
+without importing `boundary.py`. `boundary.py` remains the facade/coordinator
+and now measures 7,208 physical lines. No generation-time helper evaluation,
+raw helper dispatch, catalog/backend query, source adapter, return/store
+semantic value, renderer-ready value, or output behavior was added.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`

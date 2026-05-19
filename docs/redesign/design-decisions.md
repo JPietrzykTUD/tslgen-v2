@@ -1496,6 +1496,12 @@ Consequences:
   `GenerationLoweringStage` and `LoweredImplementation`. This is a
   maintainability decision, not a registry, dispatcher, fixpoint, or new
   semantic lowering decision.
+- M80 executes that decision by moving exact validation/request-record helper
+  ownership into `tslgen.lowering._array_body_validation`. The module uses
+  accepted private models, shape rules, diagnostics, exact structural evidence,
+  and narrow protocols where facade-owned context-like values are still
+  required. `boundary.py` remains the facade/coordinator, now at 7,208 physical
+  lines, and private modules still do not import `boundary.py`.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

@@ -9438,8 +9438,9 @@ Next concrete prompt:
 
 Status:
 
-Selected by post-M79 planning. Human acceptance was recorded; M80 execution is
-the next action.
+Accepted. M80 execution-review returned `Accept With Follow-Ups` with no
+blocking implementation, validation, boundary, extensibility, documentation,
+or evidence issues after workflow documentation finalization.
 
 Goal:
 
@@ -9634,6 +9635,23 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m79-acceptance-finalization-prompt.md` must run after
-  explicit human acceptance. It will update the workflow state for M80
-  execution and create `docs/agent/runs/m80-execution-review-loop-prompt.md`.
+- `docs/agent/runs/post-m80-planning-plus-review-prompt.md` selects the next
+  lowering-focused milestone after M80.
+
+Execution result:
+
+- M80 preserves accepted M57-M79 behavior while creating
+  `tslgen.lowering._array_body_validation` as the private exact array-body /
+  array-initialization validation and request-record helper owner.
+- `boundary.py` delegates exact validation/request-record helper work to the
+  private module while remaining the public facade/coordinator.
+- Public `tslgen.lowering` and `tslgen.lowering.boundary` imports remain
+  stable.
+- Private lowering modules, including `_array_body_validation.py`, do not
+  import `boundary.py`.
+- `boundary.py` now measures 7,208 physical lines, which is below the M80
+  threshold of 7,415 lines and 1,707 lines below the post-M79 baseline.
+- No new lowering semantics, helper evaluation, source-adapter behavior,
+  backend translation, rendering, generated output, broad parsing,
+  extension hardwiring, file/catalog reads, `tsldata` reads, host CPU queries,
+  backend map reads, or runtime `frozen/` use were added.
