@@ -10115,7 +10115,7 @@ Next concrete prompt:
 
 Status:
 
-Selected by post-M82 planning. Awaiting human acceptance before execution.
+Accepted. M83 execution-review returned `Accept With Follow-Ups`.
 
 Goal:
 
@@ -10287,7 +10287,42 @@ Dependencies on prior milestones:
 
 - Milestones 42 through 82.
 
+Execution result:
+
+- M83 preserves accepted M42-M82 behavior while moving stage-name/output
+  contract ownership into `tslgen.lowering._stage_contracts`.
+- The new private module owns `GenerationLoweringStageName`,
+  `GenerationLoweringStageOutput`, typed `GenerationLoweringStageOutputContract`
+  records, the contract validator, `GenerationLoweringStage`, and the minimal
+  accepted mini-TSIL statement value-model dependency needed by the
+  stage-output union.
+- `boundary.py` remains the public facade/coordinator and re-exports the moved
+  public names through existing public paths. Source adapters,
+  `LoweredImplementation`, `LoweringInput`, `LoweringRequest`, lower-candidate
+  orchestration, and stage construction remain facade-owned.
+- Private lowering modules, including `_stage_contracts.py`, do not import
+  `boundary.py` or the `tslgen.lowering` package facade.
+- Invalid-stage `ValueError`, invalid-output `TypeError`, error message shape,
+  stage names/order, output identities, deterministic keys, pipeline snapshots,
+  diagnostics, and public imports remain stable.
+- `boundary.py` now measures 4,807 physical lines, which is 158 lines below
+  the accepted M82 4,965-line baseline.
+- No new stage behavior, new lowering semantics, exact return-emission IR,
+  return/store/body semantics, helper evaluation, source-adapter behavior,
+  backend translation, rendering, generated output, broad parsing, extension
+  hardwiring, file/catalog reads, `tsldata` reads, host CPU queries, backend
+  map reads, or runtime `frozen/` use were added.
+- Review and audit found no blocking implementation, validation, boundary,
+  extensibility, documentation, or evidence issues after documentation
+  finalization.
+- Non-blocking follow-up: package-level alias coverage is intentionally
+  unchanged. `tslgen.lowering.boundary` exposes `GenerationLoweringStageName`
+  and `GenerationLoweringStageOutput`, while `tslgen.lowering` does not expose
+  those aliases. A future public-surface cleanup may either document those
+  aliases as boundary-only or explicitly export/test them from
+  `tslgen.lowering`.
+
 Next concrete prompt:
 
-- `docs/agent/runs/post-m82-acceptance-finalization-prompt.md` records human
-  acceptance and creates the M83 execution-review-loop prompt.
+- `docs/agent/runs/post-m83-planning-plus-review-prompt.md` runs the next
+  lowering-focused planning pass.

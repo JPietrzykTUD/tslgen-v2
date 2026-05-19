@@ -1011,18 +1011,21 @@ Recommended first parity checks:
   checks replace the broad structural seam, and M64-M76 consumers continue to
   observe the same nested envelope identity, stage order, and no-reparse
   behavior.
-- M83 tests must prove behavior-preserving stage output-contract ownership
-  extraction. The full lowering-boundary suite remains green; focused tests
-  cover every accepted `GenerationLoweringStage` stage/output pairing,
-  unknown-stage and wrong-output rejection with the same exception class and
-  message shape, public import stability for stage contract names, private
-  import direction for the new stage-contract module, stable stage ordering,
-  keys, output identity, and pipeline snapshots, and a `boundary.py` line
-  count below the accepted M82 4,965-line baseline. Tests must also prove no
-  backend translation, rendering, generated output, broad TSIL/body/call/
-  store/return/declaration/array semantics, raw helper dispatch, catalog/
-  `tsldata`/host CPU/backend map reads, import cycles, duplicate moved code,
-  or runtime `frozen/` use is introduced.
+- M83 execution adds focused stage-contract ownership/import-boundary coverage
+  while preserving the full lowering-boundary suite. The tests prove
+  `GenerationLoweringStage`, stage aliases, and accepted mini-TSIL value-model
+  dependencies resolve through `tslgen.lowering.boundary`, the new private
+  stage-contract module owns the accepted stage/output contract, every accepted
+  stage/output pairing validates, unknown-stage and wrong-output rejection keep
+  the same exception class and message shape, private lowering modules do not
+  import `boundary.py` or the package facade, and stage ordering, keys, output
+  identity, and pipeline snapshots remain stable. `boundary.py` now measures
+  4,807 physical lines, below the accepted M82 4,965-line baseline. Validation
+  returned focused M83 `7 passed, 265 deselected`, full lowering-boundary
+  `272 passed`, focused lowering mypy success across 15 source files, and full
+  tooling validation success with corpus probes `3 passed`, unit discovery
+  `606` tests OK, compileall OK, ruff OK, mypy OK across 119 source files, and
+  diff-check OK.
 
 Deferred parity checks:
 

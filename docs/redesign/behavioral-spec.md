@@ -615,15 +615,15 @@ behavior. It adds no selected-body semantics, broad body parsing, source
 adapter behavior, backend translation, rendering, generated output, or
 extension-specific behavior.
 
-Post-M82 planning selects M83 as another no-behavior-change lowering
-architecture slice. It should move only the accepted
-`GenerationLoweringStage` stage-name/output validation contract into a private
-typed module while preserving the same M42-M82 selected branches,
-diagnostics, stage names/order, output identities, deterministic keys, public
-imports, pipeline snapshots, and invalid-stage/output exception behavior. It
-adds no new stage, helper semantics, return/store/body semantics, source
-adapter behavior, backend translation, rendering, generated output, or
-extension-specific behavior.
+M83 is accepted as another no-behavior-change lowering architecture slice. It
+moves only the accepted `GenerationLoweringStage` stage-name/output validation
+contract, `GenerationLoweringStage`, and the minimal mini-TSIL value-model
+dependency into a private typed module while preserving the same M42-M82
+selected branches, diagnostics, stage names/order, output identities,
+deterministic keys, public imports, pipeline snapshots, and invalid-stage/
+output exception behavior. It adds no new stage, helper semantics,
+return/store/body semantics, source adapter behavior, backend translation,
+rendering, generated output, or extension-specific behavior.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic

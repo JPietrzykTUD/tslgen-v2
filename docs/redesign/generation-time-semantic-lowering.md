@@ -717,15 +717,15 @@ It is not a new helper-evaluation slice and does not add selected-body
 semantics, broad TSIL/body parsing, backend translation, rendering, generated
 output, catalog/backend reads, or extension-specific semantic shortcuts.
 
-Post-M82 planning selects M83 as behavior-preserving stage output-contract
-ownership extraction. The next slice should move the accepted
-`GenerationLoweringStage` stage-name/output compatibility contract into a
-private typed lowering module, preserving public imports, stage names/order,
-output identities, keys, and invalid-stage/output error behavior. It is a
-pipeline maintainability step before new semantic stages; it must not evaluate
-helpers, parse broad TSIL, interpret exact return-emission/store-call slots,
-add backend translation/rendering/output behavior, or introduce a registry,
-dispatcher, plugin system, or fixpoint/backfeed engine.
+M83 executes behavior-preserving stage output-contract ownership extraction.
+The accepted `GenerationLoweringStage` stage-name/output compatibility
+contract now lives in a private typed lowering module, preserving public
+imports, stage names/order, output identities, keys, and invalid-stage/output
+error behavior. It is a pipeline maintainability step before new semantic
+stages; it does not evaluate helpers, parse broad TSIL, interpret exact
+return-emission/store-call slots, add backend translation/rendering/output
+behavior, or introduce a registry, dispatcher, plugin system, or
+fixpoint/backfeed engine.
 
 M61 diagnostics:
 

@@ -25,6 +25,7 @@ import tslgen.lowering._generation_queries as _generation_queries
 import tslgen.lowering._array_body_diagnostics as _array_body_diagnostics
 import tslgen.lowering._array_body_validation as _array_body_validation
 import tslgen.lowering._array_body_models as _array_body_models
+import tslgen.lowering._stage_contracts as _stage_contracts
 from tslgen.lowering._selected_body_models import (
     GenerationSelectedBodyEnvelopeIr,
     GenerationSelectedBranchBodyAssignmentRecognition,
@@ -97,6 +98,18 @@ from tslgen.lowering._array_body_models import (
     _EXACT_ARRAY_BODY_STRUCTURAL_ROLE_LABELS,
     _ExactArrayBodyStructuralRole,
 )
+from tslgen.lowering._stage_contracts import (
+    GenerationLoweringStage,
+    GenerationLoweringStageName,
+    GenerationLoweringStageOutput,
+    TsilBinaryExpression,
+    TsilBinaryOperator,
+    TsilExpression,
+    TsilIntrinsicComposeExpression,
+    TsilParameterReference,
+    TsilReturnStatement,
+    TsilStatement,
+)
 import tslgen.lowering._array_body_shapes as _array_body_shapes
 import tslgen.lowering._pipeline as _lowering_pipeline
 
@@ -112,6 +125,19 @@ _ARRAY_BODY_MODEL_FACADE_EXPORTS = (
     ExactArrayInitializationVectorLengthValue,
     ExactArrayInitializationVectorLengthKind,
 )
+_STAGE_CONTRACT_FACADE_EXPORTS = (
+    _stage_contracts,
+    GenerationLoweringStage,
+    GenerationLoweringStageName,
+    GenerationLoweringStageOutput,
+    TsilBinaryExpression,
+    TsilBinaryOperator,
+    TsilExpression,
+    TsilIntrinsicComposeExpression,
+    TsilParameterReference,
+    TsilReturnStatement,
+    TsilStatement,
+)
 
 
 type LoweringStrategy = Literal["mini_tsil", "typed_opaque"]
@@ -122,59 +148,6 @@ type PayloadClassification = Literal[
     "opaque",
 ]
 type LoweringStatus = Literal["lowered", "unsupported"]
-type GenerationLoweringStageName = Literal[
-    "helper_expression_recognition",
-    "typed_generation_value",
-    "typed_generation_predicate",
-    "generation_control_flow_pruning",
-    "selected_body_lowering",
-    "selected_body_form_recognition",
-    "selected_body_ir_lowering",
-    "selected_body_envelope_lowering",
-    "array_body_envelope_slot_assembly",
-    "array_initialization_slot_form_lowering",
-    "array_initialization_helper_request_lowering",
-    "array_initialization_base_type_request_resolution",
-    "array_initialization_vector_length_request_resolution",
-    "array_initialization_vector_alignment_request_resolution",
-    "array_initialization_helper_set_completion",
-    "array_initialization_declaration_shell_lowering",
-    "array_body_structural_sequence_classification",
-    "predicate_path_structural_request_lowering",
-    "post_branch_intrinsic_call_site_structural_request_lowering",
-]
-type TsilBinaryOperator = Literal["+"]
-type TsilExpression = (
-    TsilParameterReference | TsilBinaryExpression | TsilIntrinsicComposeExpression
-)
-type TsilStatement = TsilReturnStatement
-type GenerationLoweringStageOutput = (
-    GenerationExpressionRecognition
-    | GenerationValue
-    | GenerationPredicate
-    | PrunedGenerationBranch
-    | GenerationSizeByteBranchChainPruning
-    | OpaqueSelectedBranchBodyHandoff
-    | NoSelectedBranchBodyHandoff
-    | SelectedBranchBodyAssignmentFormRecognition
-    | NoSelectedBranchBodyAssignmentFormRecognition
-    | SelectedAssignmentDirectIntrinsicBodyIr
-    | NoSelectedAssignmentDirectIntrinsicBodyIr
-    | SelectedBodyEnvelopeIr
-    | NoSelectedBodyEnvelopeIr
-    | ExactArrayBodyEnvelopeIr
-    | ExactArrayInitializationSlotFormIr
-    | ExactArrayInitializationHelperRequestIr
-    | ExactArrayInitializationBaseTypeResolutionIr
-    | ExactArrayInitializationVectorLengthResolutionIr
-    | ExactArrayInitializationVectorAlignmentResolutionIr
-    | ExactArrayInitializationHelperSetCompletionIr
-    | ExactArrayInitializationDeclarationShellIr
-    | ExactArrayBodyStructuralSequenceIr
-    | ExactPredicatePathStructuralRequestIr
-    | ExactPostBranchIntrinsicCallSiteStructuralRequestIr
-    | TsilStatement
-)
 
 _TSIL_IDENTIFIER = r"[A-Za-z_][A-Za-z0-9_]*"
 _TSIL_IDENTIFIER_RE = re.compile(rf"\A{_TSIL_IDENTIFIER}\Z")
@@ -397,137 +370,6 @@ def build_catalog_lowering_request(
             generation_context=context,
         )
     )
-
-
-@dataclass(frozen=True, slots=True)
-class TsilParameterReference:
-    name: str
-
-    def __post_init__(self) -> None:
-        if not self.name:
-            raise ValueError("TSIL parameter reference name must be non-empty")
-
-    @property
-    def key(self) -> tuple[str, str]:
-        return ("parameter", self.name)
-
-
-@dataclass(frozen=True, slots=True)
-class TsilBinaryExpression:
-    operator: TsilBinaryOperator
-    left: TsilParameterReference
-    right: TsilParameterReference
-
-    @property
-    def key(self) -> tuple[object, ...]:
-        return (
-            "binary",
-            self.operator,
-            self.left.key,
-            self.right.key,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class TsilIntrinsicComposeExpression:
-    intrinsic: str
-    arguments: tuple[TsilParameterReference, ...]
-
-    def __post_init__(self) -> None:
-        if not self.intrinsic:
-            raise ValueError("TSIL intrinsic-compose intrinsic must be non-empty")
-        object.__setattr__(self, "arguments", tuple(self.arguments))
-
-    @property
-    def key(self) -> tuple[object, ...]:
-        return (
-            "intrin_compose",
-            self.intrinsic,
-            tuple(argument.key for argument in self.arguments),
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class TsilReturnStatement:
-    expression: TsilExpression
-
-    @property
-    def key(self) -> tuple[object, ...]:
-        return ("return", self.expression.key)
-
-
-@dataclass(frozen=True, slots=True)
-class GenerationLoweringStage:
-    stage: GenerationLoweringStageName
-    output: GenerationLoweringStageOutput
-
-    def __post_init__(self) -> None:
-        expected: tuple[type[object], ...]
-        if self.stage == "helper_expression_recognition":
-            expected = (GenerationExpressionRecognition,)
-        elif self.stage == "typed_generation_value":
-            expected = (GenerationValue,)
-        elif self.stage == "typed_generation_predicate":
-            expected = (GenerationPredicate,)
-        elif self.stage == "generation_control_flow_pruning":
-            expected = (PrunedGenerationBranch, GenerationSizeByteBranchChainPruning)
-        elif self.stage == "selected_body_lowering":
-            expected = (
-                TsilReturnStatement,
-                OpaqueSelectedBranchBodyHandoff,
-                NoSelectedBranchBodyHandoff,
-            )
-        elif self.stage == "selected_body_form_recognition":
-            expected = (
-                SelectedBranchBodyAssignmentFormRecognition,
-                NoSelectedBranchBodyAssignmentFormRecognition,
-            )
-        elif self.stage == "selected_body_ir_lowering":
-            expected = (
-                SelectedAssignmentDirectIntrinsicBodyIr,
-                NoSelectedAssignmentDirectIntrinsicBodyIr,
-            )
-        elif self.stage == "selected_body_envelope_lowering":
-            expected = (
-                SelectedBodyEnvelopeIr,
-                NoSelectedBodyEnvelopeIr,
-            )
-        elif self.stage == "array_body_envelope_slot_assembly":
-            expected = (ExactArrayBodyEnvelopeIr,)
-        elif self.stage == "array_initialization_slot_form_lowering":
-            expected = (ExactArrayInitializationSlotFormIr,)
-        elif self.stage == "array_initialization_helper_request_lowering":
-            expected = (ExactArrayInitializationHelperRequestIr,)
-        elif self.stage == "array_initialization_base_type_request_resolution":
-            expected = (ExactArrayInitializationBaseTypeResolutionIr,)
-        elif self.stage == "array_initialization_vector_length_request_resolution":
-            expected = (ExactArrayInitializationVectorLengthResolutionIr,)
-        elif self.stage == "array_initialization_vector_alignment_request_resolution":
-            expected = (ExactArrayInitializationVectorAlignmentResolutionIr,)
-        elif self.stage == "array_initialization_helper_set_completion":
-            expected = (ExactArrayInitializationHelperSetCompletionIr,)
-        elif self.stage == "array_initialization_declaration_shell_lowering":
-            expected = (ExactArrayInitializationDeclarationShellIr,)
-        elif self.stage == "array_body_structural_sequence_classification":
-            expected = (ExactArrayBodyStructuralSequenceIr,)
-        elif self.stage == "predicate_path_structural_request_lowering":
-            expected = (ExactPredicatePathStructuralRequestIr,)
-        elif (
-            self.stage
-            == "post_branch_intrinsic_call_site_structural_request_lowering"
-        ):
-            expected = (ExactPostBranchIntrinsicCallSiteStructuralRequestIr,)
-        else:
-            raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
-        if not isinstance(self.output, expected):
-            raise TypeError(
-                f"{self.stage} stage requires output type "
-                f"{', '.join(item.__name__ for item in expected)}"
-            )
-
-    @property
-    def key(self) -> tuple[object, ...]:
-        return (self.stage, self.output.key)
 
 
 @dataclass(frozen=True, slots=True)

@@ -7,6 +7,7 @@ import inspect
 import os
 from pathlib import Path, PurePosixPath
 import platform
+from typing import cast
 import unittest
 from unittest import mock
 
@@ -22,6 +23,7 @@ import tslgen.lowering._generation_models as lowering_generation_models
 import tslgen.lowering._generation_queries as lowering_generation_queries
 import tslgen.lowering._pipeline as lowering_pipeline
 import tslgen.lowering._selected_body_models as lowering_selected_body_models
+import tslgen.lowering._stage_contracts as lowering_stage_contracts
 import tslgen.lowering.boundary as lowering_boundary
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
 from tslgen.analysis.selection import SelectionRequest, plan_selection
@@ -5148,6 +5150,254 @@ class LoweringBoundaryTests(unittest.TestCase):
 
     def test_m82_private_selected_body_module_does_not_import_facades(self) -> None:
         private_modules = (
+            lowering_selected_body_models,
+            lowering_generation_control_flow,
+            lowering_generation_diagnostics,
+            lowering_generation_models,
+            lowering_generation_queries,
+            lowering_array_body_diagnostics,
+            lowering_array_body_models,
+            lowering_array_body_shapes,
+            lowering_array_body_validation,
+            lowering_exact_shapes,
+            lowering_pipeline,
+        )
+        for module in private_modules:
+            imported_facade: list[str] = []
+            tree = ast.parse(inspect.getsource(module))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imported_facade.extend(
+                        alias.name
+                        for alias in node.names
+                        if alias.name
+                        in ("tslgen.lowering.boundary", "tslgen.lowering")
+                    )
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module in (
+                        "tslgen.lowering.boundary",
+                        "tslgen.lowering",
+                    ):
+                        imported_facade.append(node.module)
+                    if node.level and node.module in (None, "", "boundary"):
+                        imported_facade.extend(
+                            alias.name
+                            for alias in node.names
+                            if node.module == "boundary" or alias.name == "boundary"
+                        )
+            self.assertEqual(imported_facade, [], module.__name__)
+
+    def test_m83_stage_contract_ownership_moves_stage_models(self) -> None:
+        for name in (
+            "GenerationLoweringStage",
+            "GenerationLoweringStageName",
+            "GenerationLoweringStageOutput",
+            "TsilParameterReference",
+            "TsilBinaryExpression",
+            "TsilIntrinsicComposeExpression",
+            "TsilReturnStatement",
+            "TsilStatement",
+        ):
+            self.assertIs(
+                getattr(lowering_boundary, name),
+                getattr(lowering_stage_contracts, name),
+            )
+        for name in (
+            "GenerationLoweringStage",
+            "TsilParameterReference",
+            "TsilBinaryExpression",
+            "TsilIntrinsicComposeExpression",
+            "TsilReturnStatement",
+        ):
+            self.assertIs(globals()[name], getattr(lowering_stage_contracts, name))
+        self.assertIn(
+            "GenerationLoweringStageOutputContract",
+            lowering_stage_contracts.__dict__,
+        )
+        self.assertNotIn(
+            "class GenerationLoweringStage",
+            inspect.getsource(lowering_boundary),
+        )
+
+    def test_m83_stage_contract_accepts_all_accepted_outputs(self) -> None:
+        predicate = GenerationPredicate(
+            kind="type.size_bytes.equals",
+            literal=2,
+            value=True,
+            type_tag="si16",
+        )
+        branch = PrunedGenerationBranch(
+            condition=TsilTypeSignednessCondition(
+                GenerationTypeRef(kind="base.in", type_tag="si32"),
+            ),
+            selected_branch="true",
+            statement_text="emit_return(left + right);",
+        )
+        chain = GenerationSizeByteBranchChainPruning(
+            arms=tuple(
+                GenerationSizeByteBranchChainArm(
+                    literal=literal,
+                    predicate=GenerationPredicate(
+                        kind="type.size_bytes.equals",
+                        literal=literal,
+                        value=literal == 2,
+                        type_tag="si16",
+                    ),
+                    statement_text=f"pg = intrin<svptrue_b{literal * 8}>();",
+                )
+                for literal in (2, 4, 8)
+            ),
+            type_tag="si16",
+            selected_literal=2,
+            selected_statement_text="pg = intrin<svptrue_b16>();",
+        )
+        statement = TsilReturnStatement(
+            TsilBinaryExpression(
+                operator="+",
+                left=TsilParameterReference("left"),
+                right=TsilParameterReference("right"),
+            ),
+        )
+        handoff = self.assignment_handoff("pg = intrin<svptrue_b16>();")
+        no_handoff = NoSelectedBranchBodyHandoff(
+            candidate_id="candidate-1",
+            selected_type_tag="si8",
+            source_location=SourceLocation(Path("array.tsl"), 107, 15),
+            originating_branch_chain_id="candidate-1:chain",
+            attempted_literals=(2, 4, 8),
+        )
+        form_result = recognize_selected_branch_body_assignment_form(handoff)
+        self.assertTrue(form_result.is_ok, form_result.diagnostics)
+        no_form = NoSelectedBranchBodyAssignmentFormRecognition(
+            candidate_id="candidate-1",
+            selected_type_tag="si8",
+            source_location=SourceLocation(Path("array.tsl"), 107, 15),
+            originating_branch_chain_id="candidate-1:chain",
+            attempted_literals=(2, 4, 8),
+        )
+        body_ir = self.selected_body_ir()
+        no_body_ir = NoSelectedAssignmentDirectIntrinsicBodyIr(
+            candidate_id="candidate-1",
+            selected_type_tag="si8",
+            source_location=SourceLocation(Path("array.tsl"), 107, 15),
+            originating_branch_chain_id="candidate-1:chain",
+            attempted_literals=(2, 4, 8),
+        )
+        exact_array_envelope = self.exact_array_body_envelope()
+        slot_form_result = lower_exact_array_initialization_slot_form(
+            exact_array_envelope,
+        )
+        self.assertTrue(slot_form_result.is_ok, slot_form_result.diagnostics)
+        slot_form = slot_form_result.unwrap()
+
+        cases = (
+            (
+                "helper_expression_recognition",
+                GenerationExpressionRecognition(
+                    kind="generation.value",
+                    source_text="value<generation>(vector::length)",
+                ),
+            ),
+            (
+                "typed_generation_value",
+                GenerationValue(kind="type.size_bytes", value=2, type_tag="si16"),
+            ),
+            ("typed_generation_predicate", predicate),
+            ("generation_control_flow_pruning", branch),
+            ("generation_control_flow_pruning", chain),
+            ("selected_body_lowering", statement),
+            ("selected_body_lowering", handoff),
+            ("selected_body_lowering", no_handoff),
+            ("selected_body_form_recognition", form_result.unwrap()),
+            ("selected_body_form_recognition", no_form),
+            ("selected_body_ir_lowering", body_ir),
+            ("selected_body_ir_lowering", no_body_ir),
+            ("selected_body_envelope_lowering", self.selected_body_envelope()),
+            ("selected_body_envelope_lowering", self.no_selected_body_envelope()),
+            ("array_body_envelope_slot_assembly", exact_array_envelope),
+            ("array_initialization_slot_form_lowering", slot_form),
+            (
+                "array_initialization_helper_request_lowering",
+                self.exact_array_initialization_helper_request_ir(),
+            ),
+            (
+                "array_initialization_base_type_request_resolution",
+                self.exact_array_initialization_base_type_resolution(),
+            ),
+            (
+                "array_initialization_vector_length_request_resolution",
+                self.exact_array_initialization_vector_length_resolution(),
+            ),
+            (
+                "array_initialization_vector_alignment_request_resolution",
+                self.exact_array_initialization_vector_alignment_resolution(),
+            ),
+            (
+                "array_initialization_helper_set_completion",
+                self.exact_array_initialization_helper_set_completion(),
+            ),
+            (
+                "array_initialization_declaration_shell_lowering",
+                self.exact_array_initialization_declaration_shell(),
+            ),
+            (
+                "array_body_structural_sequence_classification",
+                self.exact_array_body_structural_sequence(),
+            ),
+            (
+                "predicate_path_structural_request_lowering",
+                self.exact_predicate_path_structural_request(),
+            ),
+            (
+                "post_branch_intrinsic_call_site_structural_request_lowering",
+                self.exact_post_branch_intrinsic_call_site_structural_request(),
+            ),
+        )
+
+        for stage_name, output in cases:
+            with self.subTest(stage_name=stage_name, output=type(output).__name__):
+                stage = GenerationLoweringStage(
+                    stage=cast(
+                        lowering_stage_contracts.GenerationLoweringStageName,
+                        stage_name,
+                    ),
+                    output=output,
+                )
+
+                self.assertIs(stage.output, output)
+                self.assertEqual(stage.key, (stage_name, output.key))
+
+    def test_m83_stage_contract_rejects_unknown_stage_and_wrong_output(self) -> None:
+        output = GenerationValue(kind="type.size_bytes", value=2, type_tag="si16")
+        with self.assertRaisesRegex(
+            ValueError,
+            "unknown generation lowering stage: 'unknown_stage'",
+        ):
+            GenerationLoweringStage(
+                stage=cast(
+                    lowering_stage_contracts.GenerationLoweringStageName,
+                    "unknown_stage",
+                ),
+                output=output,
+            )
+
+        with self.assertRaisesRegex(
+            TypeError,
+            "typed_generation_value stage requires output type GenerationValue",
+        ):
+            GenerationLoweringStage(
+                stage="typed_generation_value",
+                output=GenerationPredicate(
+                    kind="type.size_bytes.equals",
+                    literal=2,
+                    value=True,
+                    type_tag="si16",
+                ),
+            )
+
+    def test_m83_private_stage_contract_module_does_not_import_facades(self) -> None:
+        private_modules = (
+            lowering_stage_contracts,
             lowering_selected_body_models,
             lowering_generation_control_flow,
             lowering_generation_diagnostics,

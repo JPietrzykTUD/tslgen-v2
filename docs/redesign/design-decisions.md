@@ -1529,15 +1529,17 @@ Consequences:
   concrete private selected-body envelope model checks instead of broad
   structural seams. This remains behavior-preserving ownership work, not new
   selected-body semantics or an extension-specific dispatch layer.
-- Post-M82 planning selects M83 as `GenerationLoweringStage` output-contract
-  ownership extraction rather than exact return-emission IR, pipeline payload
-  tightening, or a small test-hardening slice. The contract extraction comes
-  first because it removes the growing facade-owned stage/output validation
-  ladder before adding another semantic stage. The decision keeps M83 as
-  private typed contract validation only: no new stage names, no output
-  behavior changes, no source-adapter move, no registry/dispatcher/fixpoint
-  engine, no exact return-emission/store/body semantics, and no backend or
-  renderer hooks.
+- M83 executes the `GenerationLoweringStage` output-contract ownership
+  decision. Stage/output compatibility, `GenerationLoweringStage`, and the
+  minimal accepted mini-TSIL value-model dependency move to
+  `tslgen.lowering._stage_contracts`; `boundary.py` remains the public
+  facade/coordinator for source adapters, stage construction, and
+  lower-candidate orchestration. The result removes the growing facade-owned
+  stage/output validation ladder before adding another semantic stage while
+  keeping M83 as private typed contract validation only: no new stage names, no
+  output behavior changes, no source-adapter move, no registry/dispatcher/
+  fixpoint engine, no exact return-emission/store/body semantics, and no
+  backend or renderer hooks.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
