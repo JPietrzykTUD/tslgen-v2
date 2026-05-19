@@ -700,14 +700,14 @@ and now measures 7,208 physical lines. No generation-time helper evaluation,
 raw helper dispatch, catalog/backend query, source adapter, return/store
 semantic value, renderer-ready value, or output behavior was added.
 
-Post-M80 planning selects M81 as behavior-preserving generation-time lowering
-core ownership extraction. M81 should move accepted generation type/value/
-predicate models, exact generation helper query parsing and resolution, the
-accepted generation branch-chain parsing/pruning helpers, and related
-diagnostics into private typed generation modules. It preserves the M42-M80
-helper semantics and diagnostics exactly; it does not add new helper
-evaluation, broad helper parsing, backend translation, rendering, generated
-output, catalog/backend reads, or extension-specific semantic shortcuts.
+M81 executes behavior-preserving generation-time lowering core ownership
+extraction. Accepted generation type/value/predicate models, exact generation
+helper query parsing and resolution, accepted generation branch-chain
+parsing/pruning helpers, and related diagnostics now live in private typed
+generation modules. It preserves the M42-M80 helper semantics and diagnostics
+exactly; it does not add new helper evaluation, broad helper parsing, backend
+translation, rendering, generated output, catalog/backend reads, or
+extension-specific semantic shortcuts.
 
 M61 diagnostics:
 

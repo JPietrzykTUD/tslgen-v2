@@ -570,12 +570,15 @@ Current roadmap note:
   7,415-line M80 target. The extraction does not add new semantics,
   source-adapter behavior, backend/rendering/output hooks, registries, or
   hardwired extension behavior.
-- Post-M80 planning selects M81 as generation-time lowering core ownership
-  extraction. The selected architecture moves accepted generation type/value/
-  predicate query models, generation branch-chain parsing/pruning helpers, and
-  related diagnostics into private typed generation modules while preserving
-  the existing `tslgen.lowering` and `tslgen.lowering.boundary` facade imports.
-  It is not a new semantic evaluator, source adapter, dispatcher, registry,
+- M81 implements generation-time lowering core ownership extraction. Accepted
+  generation type/value/predicate query models, generation branch-chain
+  parsing/pruning helpers, and related diagnostics now live in
+  `tslgen.lowering._generation_models`,
+  `tslgen.lowering._generation_queries`,
+  `tslgen.lowering._generation_control_flow`, and
+  `tslgen.lowering._generation_diagnostics`. The public facade imports remain
+  stable, and `boundary.py` now measures 5,438 physical lines. M81 does not
+  add a new semantic evaluator, source adapter, dispatcher, registry,
   backend/rendering/output hook, or hardwired extension-specific lowering
   step.
 - Milestone 49 is accepted as the test-source rendering slice. It

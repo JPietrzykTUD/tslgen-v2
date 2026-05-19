@@ -996,12 +996,12 @@ Recommended first parity checks:
   absolute and relative imports of `boundary.py`. The full lowering-boundary
   suite remains green, and `boundary.py` measures 7,208 physical lines against
   the 8,915-line post-M79 baseline.
-- M81 execution must add or preserve focused generation-core ownership and
-  import-boundary tests for the private generation modules. The tests must
-  prove public import stability, accepted M42-M80 generation-time semantics
-  and diagnostics, selected-branch-only diagnostics, stage identity/order, and
-  deterministic outputs while rejecting private-module imports of `boundary.py`
-  in absolute or relative form.
+- M81 execution adds and preserves focused generation-core ownership and
+  import-boundary tests for the private generation modules. The tests prove
+  public import stability, private-module import direction, and accepted
+  generation-time behavior through the full lowering-boundary suite while
+  rejecting private-module imports of `boundary.py` in absolute or relative
+  form.
 
 Deferred parity checks:
 

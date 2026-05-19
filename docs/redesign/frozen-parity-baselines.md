@@ -351,7 +351,7 @@ and still does not add compiler execution.
   lowering pipeline/module-boundary cleanup, accepted M78 behavior-preserving
   lowering boundary package decomposition, implemented M79 exact array-body typed
   model ownership extraction, implemented M80 exact array-body validation
-  boundary extraction, planned M81 generation-time lowering core ownership
+  boundary extraction, implemented M81 generation-time lowering core ownership
   extraction, broad TSIL/body-slot parity beyond
   those exact structural/request-resolution
   boundaries, and backend translation-map evaluation beyond the selected

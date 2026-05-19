@@ -1502,11 +1502,11 @@ Consequences:
   and narrow protocols where facade-owned context-like values are still
   required. `boundary.py` remains the facade/coordinator, now at 7,208 physical
   lines, and private modules still do not import `boundary.py`.
-- Post-M80 planning selects M81 as generation-time lowering core ownership
+- Post-M80 planning selected M81 as generation-time lowering core ownership
   extraction rather than return emission, broad TSIL lowering, or a generic
-  evaluator/dispatcher. The accepted generation helper models, exact
-  generation query helpers, control-flow pruning helpers, and diagnostics are
-  the next coherent package that can move behind private typed modules while
+  evaluator/dispatcher. M81 executed that decision by moving accepted
+  generation helper models, exact generation query helpers, control-flow
+  pruning helpers, and diagnostics behind private typed modules while
   preserving facade imports and M42-M80 behavior. Source adapters, stage
   construction, backend/rendering/output behavior, broad helper families, and
   extension-specific semantic shortcuts remain out of scope.

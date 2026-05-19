@@ -16,6 +16,10 @@ import tslgen.lowering._array_body_models as lowering_array_body_models
 import tslgen.lowering._array_body_shapes as lowering_array_body_shapes
 import tslgen.lowering._array_body_validation as lowering_array_body_validation
 import tslgen.lowering._exact_shapes as lowering_exact_shapes
+import tslgen.lowering._generation_control_flow as lowering_generation_control_flow
+import tslgen.lowering._generation_diagnostics as lowering_generation_diagnostics
+import tslgen.lowering._generation_models as lowering_generation_models
+import tslgen.lowering._generation_queries as lowering_generation_queries
 import tslgen.lowering._pipeline as lowering_pipeline
 import tslgen.lowering.boundary as lowering_boundary
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
@@ -4943,6 +4947,115 @@ class LoweringBoundaryTests(unittest.TestCase):
 
     def test_m80_private_array_body_modules_do_not_import_boundary(self) -> None:
         private_modules = (
+            lowering_array_body_diagnostics,
+            lowering_array_body_models,
+            lowering_array_body_shapes,
+            lowering_array_body_validation,
+            lowering_exact_shapes,
+            lowering_pipeline,
+        )
+        for module in private_modules:
+            imported_boundary: list[str] = []
+            tree = ast.parse(inspect.getsource(module))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imported_boundary.extend(
+                        alias.name
+                        for alias in node.names
+                        if alias.name == "tslgen.lowering.boundary"
+                    )
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module == "tslgen.lowering.boundary":
+                        imported_boundary.append(node.module)
+                    if node.module == "tslgen.lowering":
+                        imported_boundary.extend(
+                            alias.name
+                            for alias in node.names
+                            if alias.name == "boundary"
+                        )
+                    if node.level and node.module in (None, "", "boundary"):
+                        imported_boundary.extend(
+                            alias.name
+                            for alias in node.names
+                            if node.module == "boundary" or alias.name == "boundary"
+                        )
+            self.assertEqual(imported_boundary, [], module.__name__)
+
+    def test_m81_generation_core_ownership_moves_models_and_helpers(self) -> None:
+        self.assertIs(
+            lowering_boundary.GenerationTypeRef,
+            lowering_generation_models.GenerationTypeRef,
+        )
+        self.assertIs(
+            lowering_boundary.GenerationValue,
+            lowering_generation_models.GenerationValue,
+        )
+        self.assertIs(
+            lowering_boundary.GenerationPredicate,
+            lowering_generation_models.GenerationPredicate,
+        )
+        self.assertIs(
+            lowering_boundary.PrunedGenerationBranch,
+            lowering_generation_models.PrunedGenerationBranch,
+        )
+        self.assertIs(
+            lowering_boundary.TsilPrimitiveAttributeCondition,
+            lowering_generation_models.TsilPrimitiveAttributeCondition,
+        )
+        self.assertIn(
+            "_generation_type_query_inner",
+            lowering_generation_queries.__dict__,
+        )
+        self.assertIn(
+            "_prune_generation_size_byte_branch_chain",
+            lowering_generation_control_flow.__dict__,
+        )
+        self.assertIn(
+            "_malformed_generation_if_diagnostic",
+            lowering_generation_diagnostics.__dict__,
+        )
+        self.assertNotIn("_generation_type_query_inner", lowering_boundary.__dict__)
+        self.assertNotIn("_prune_generation_branch", lowering_boundary.__dict__)
+        self.assertNotIn(
+            "_malformed_generation_type_query_diagnostic",
+            lowering_boundary.__dict__,
+        )
+
+    def test_m81_generation_public_imports_stay_stable(self) -> None:
+        self.assertIs(lowering_boundary.GenerationTypeRef, GenerationTypeRef)
+        self.assertIs(lowering_boundary.GenerationValue, GenerationValue)
+        self.assertIs(lowering_boundary.GenerationPredicate, GenerationPredicate)
+        self.assertIs(
+            lowering_boundary.GenerationSizeByteBranchChainPruning,
+            GenerationSizeByteBranchChainPruning,
+        )
+        self.assertIs(
+            lowering_boundary.GenerationSizeByteBranchChainArm,
+            GenerationSizeByteBranchChainArm,
+        )
+        self.assertIs(
+            lowering_boundary.TsilTypeSignednessCondition,
+            TsilTypeSignednessCondition,
+        )
+        self.assertIs(
+            lowering_boundary.resolve_generation_type_query,
+            resolve_generation_type_query,
+        )
+        self.assertIs(
+            lowering_boundary.resolve_generation_value_query,
+            resolve_generation_value_query,
+        )
+        self.assertIs(
+            lowering_boundary.resolve_generation_predicate_query,
+            resolve_generation_predicate_query,
+        )
+
+    def test_m81_private_generation_modules_do_not_import_boundary(self) -> None:
+        private_modules = (
+            lowering_generation_control_flow,
+            lowering_generation_diagnostics,
+            lowering_generation_models,
+            lowering_generation_queries,
             lowering_array_body_diagnostics,
             lowering_array_body_models,
             lowering_array_body_shapes,

@@ -635,11 +635,11 @@ now measures 7,208 physical lines, meeting the M80 reduction target without a
 new stage dispatcher, source adapter, semantic evaluator, registry, or
 backfeed engine.
 
-Post-M80 planning selects M81 as another behavior-preserving Stage 8
-ownership extraction. It should move accepted generation-time query models,
-typed query parsing/resolution helpers, generation control-flow recognition,
-branch-chain pruning helpers, and related diagnostics behind private
-generation modules while keeping `boundary.py` as the facade/coordinator.
+M81 executes another behavior-preserving Stage 8 ownership extraction.
+Accepted generation-time query models, typed query parsing/resolution helpers,
+generation control-flow recognition, branch-chain pruning helpers, and related
+diagnostics now live behind private generation modules while `boundary.py`
+remains the facade/coordinator. The facade now measures 5,438 physical lines.
 M81 does not add a new lowering stage, backfeed, source adapter, dispatcher,
 registry, semantic evaluator, backend/rendering/output hook, or helper family.
 

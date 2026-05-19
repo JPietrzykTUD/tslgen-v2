@@ -9660,8 +9660,8 @@ Execution result:
 
 Status:
 
-Selected by post-M80 planning. Human acceptance was recorded; M81 execution is
-the next action.
+Accepted. M81 execution-review returned `Accept With Follow-Ups` after one
+focused maintainability revision.
 
 Goal:
 
@@ -9670,13 +9670,10 @@ accepted generation-time lowering core into private typed lowering modules
 while preserving all accepted M42-M80 behavior.
 
 M81 is a behavior-preserving lowering architecture slice, not a new semantic
-lowering milestone. The post-M80 `boundary.py` baseline is 7,208 physical
-lines. M81 should remove at least 1,400 net physical lines from that facade,
-so the post-M81 count should be 5,808 physical lines or lower, unless the
-executor documents that an import-boundary risk requires a narrower accepted
-reduction. The line-count target must not justify moving unrelated exact
-array-body source adapters, changing diagnostics, broadening semantics, or
-recreating a second monolith.
+lowering milestone. The post-M80 `boundary.py` baseline was 7,208 physical
+lines. M81 reduced that facade to 5,438 physical lines, below the 5,808-line
+target, without moving unrelated exact array-body source adapters, changing
+diagnostics, broadening semantics, or recreating a second monolith.
 
 Scope:
 
@@ -9757,12 +9754,15 @@ Expected outputs:
 
 - Private generation-time lowering modules owning accepted generation model,
   query, control-flow, and diagnostic helpers that can move without importing
-  `boundary.py`.
+  `boundary.py`: `tslgen.lowering._generation_models`,
+  `tslgen.lowering._generation_queries`,
+  `tslgen.lowering._generation_control_flow`, and
+  `tslgen.lowering._generation_diagnostics`.
 - `boundary.py` delegates accepted generation-time helper resolution and
   branch pruning to the private generation modules while remaining the public
   facade/coordinator.
-- `boundary.py` measures 5,808 physical lines or lower, unless a documented
-  import-boundary exception justifies a narrower accepted reduction.
+- `boundary.py` measures 5,438 physical lines, below the 5,808-line M81
+  threshold.
 - Stable public imports from `tslgen.lowering` and
   `tslgen.lowering.boundary`.
 - Focused private-import-boundary regression coverage for the new generation
@@ -9852,5 +9852,27 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/m81-execution-review-loop-prompt.md` runs the M81
-  execution-review loop after explicit human acceptance.
+- `docs/agent/runs/post-m81-planning-plus-review-prompt.md` runs the
+  post-M81 lowering-focused planning and review workflow.
+
+Accepted result:
+
+- M81 preserves accepted M42-M80 behavior while moving generation-time model,
+  query, control-flow, and diagnostic helper ownership into private typed
+  generation modules.
+- Public `tslgen.lowering` and `tslgen.lowering.boundary` imports remain
+  stable, and private lowering modules do not import `boundary.py`.
+- The initial maintainability review found an over-broad private
+  `GenerationControlContext` / candidate-context copy in
+  `_generation_control_flow.py`; the focused revision narrowed the protocol,
+  removed the duplicate private context construction, and kept concrete
+  `GenerationContext` construction in the facade.
+- `boundary.py` now measures 5,438 physical lines, which is below the M81
+  threshold of 5,808 lines and 1,770 lines below the post-M80 7,208-line
+  baseline.
+- Validation completed with the required line-count, py-compile, focused M81
+  generation-core/import-stability command, full lowering-boundary suite, full
+  tooling validation profile, and diff-check.
+- Non-blocking follow-ups remain for broadening focused M81 diagnostic
+  location coverage and hoisting repeated facade-local context/type-tag
+  expressions in the exact-array pipeline call sequence.

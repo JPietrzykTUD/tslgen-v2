@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 80 is accepted.
+Milestone 81 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -479,39 +479,58 @@ Post-M80 planning is accepted. It selected
 `Milestone 81: Generation-Time Lowering Core Ownership Extraction Slice`.
 Human acceptance was recorded.
 
+The M81 execution-review loop returned `Accept With Follow-Ups` after one
+focused maintainability revision. Review and audit found no blocking
+implementation, validation, boundary, extensibility, documentation, or
+evidence issues after that revision. M81 preserves accepted M42-M80 behavior
+while moving generation-time model, query, control-flow, and diagnostic helper
+ownership into `tslgen.lowering._generation_models`,
+`tslgen.lowering._generation_queries`,
+`tslgen.lowering._generation_control_flow`, and
+`tslgen.lowering._generation_diagnostics`. The public `tslgen.lowering` and
+`tslgen.lowering.boundary` import surfaces remain stable. Private lowering
+modules do not import `boundary.py`. `boundary.py` now measures 5,438 physical
+lines, below the M81 threshold of 5,808 lines. New lowering semantics, helper
+evaluation, source-adapter behavior, backend translation, rendering,
+generated output, broad parsing, extension hardwiring, file/catalog reads,
+`tsldata` reads, host CPU queries, backend map reads, and runtime `frozen/`
+use remain out of scope.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 81.
+Run post-M81 lowering-focused planning plus review.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m81-execution-review-loop-prompt.md
+docs/agent/runs/post-m81-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 81: Generation-Time Lowering Core Ownership Extraction Slice
+None. Current action is post-M81 planning; do not execute M82.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M80 planning was accepted by the user. The acceptance finalization
-prepared the M81 execution-review loop prompt.
+M81 execution-review returned Accept With Follow-Ups after a focused
+maintainability revision. The blocking broad private control-flow context
+finding was resolved before acceptance.
 ```
 
 Next expected action:
 
 ```text
-Run the active M81 execution-review loop prompt. Use the specified
-single-executor plus read-only review/audit workflow. Do not start M82 until
-M81 review accepts and the next concrete prompt is created.
+Run the active post-M81 planning-plus-review prompt. Use the specified
+read-only planning/review subagent workflow. Do not implement code or create
+an M82 execution prompt until the post-M81 planning result is explicitly
+accepted.
 ```
 
 Accepted planning prompt:
@@ -1096,10 +1115,16 @@ Completed post-M80 planning-plus-review prompt:
 docs/agent/runs/post-m80-planning-plus-review-prompt.md
 ```
 
-Active M81 execution-review loop prompt:
+Completed M81 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m81-execution-review-loop-prompt.md
+```
+
+Active post-M81 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m81-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1804,13 +1829,13 @@ docs/agent/runs/m81-execution-review-loop-prompt.md
   `tslgen.lowering._array_body_validation`, kept public imports stable, kept
   private modules from importing `boundary.py`, and reduced `boundary.py` to
   7,208 physical lines from the 8,915-line post-M79 baseline.
-- M81 is selected as behavior-preserving generation-time lowering core
-  ownership extraction. It must move accepted generation-time model/query/
-  control-flow/diagnostic helper ownership into private typed modules while
-  preserving accepted M42-M80 behavior and keeping source adapters/facade-owned
-  orchestration in `boundary.py` unless a tiny behavior-preserving delegation
-  is required.
-- Future lowering package decomposition must preserve accepted M57-M80
+- M81 is accepted as behavior-preserving generation-time lowering core
+  ownership extraction. It moved accepted generation-time model/query/
+  control-flow/diagnostic helper ownership into private typed modules,
+  preserved accepted M42-M80 behavior, kept source adapters/facade-owned
+  orchestration in `boundary.py`, and reduced `boundary.py` to 5,438 physical
+  lines from the 7,208-line post-M80 baseline.
+- Future lowering package decomposition must preserve accepted M57-M81
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -2838,11 +2863,28 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   measured against the post-M80 7,208-line baseline, but line count must not
   drive movement of unrelated exact array-body code, duplicate moved helpers,
   or creation of a second monolith.
+- M81 execution addressed the post-M80 planning follow-ups: review verified
+  behavior-preserving generation-time core extraction into private typed
+  modules, one-way private imports, stable public facade imports, no semantic
+  expansion, no source-adapter/stage-construction moves, and line-count
+  reduction from 7,208 to 5,438 physical lines.
+- M81 focused revision resolved the blocking maintainability review finding:
+  `_generation_control_flow.py` no longer carries an over-broad
+  facade-shaped candidate context or duplicate private `_context_for_candidate`
+  construction. It uses a narrow private protocol and delegates query
+  resolution through typed generation query helpers.
+- M81 validation follow-up: the focused M81 selector is mostly
+  ownership/import coverage. A future cleanup may broaden the focused command
+  or add a small M81-tagged diagnostic source-location preservation check.
+- M81 maintainability follow-up: `boundary.py` still repeats
+  `_context_for_candidate(item, request)` and selected-type-tag expressions
+  across the exact-array pipeline call sequence. A future cleanup may hoist
+  those facade-local values for readability.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M81 through the
-active execution-review loop prompt.
+No stop condition is active. The workflow is ready to run post-M81
+lowering-focused planning through the active planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -2902,4 +2944,23 @@ The M80 line count was `7208 tslgen/src/tslgen/lowering/boundary.py`.
 The focused M80 command returned `2 passed, 260 deselected`. The full
 lowering-boundary suite returned `262 passed`. The validation profile returned
 exit 0 with corpus probes `3 passed`, unit discovery `596` tests OK,
+compileall OK, ruff OK, mypy OK, and diff-check OK.
+
+For M81, validation completed with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_generation_models.py tslgen/src/tslgen/lowering/_generation_queries.py tslgen/src/tslgen/lowering/_generation_control_flow.py tslgen/src/tslgen/lowering/_generation_diagnostics.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_shapes.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m81 or size_byte_branch_chain or signedness_branch"
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+git diff --check
+```
+
+The M81 line count was `5438 tslgen/src/tslgen/lowering/boundary.py`.
+The focused M81 command returned `15 passed, 250 deselected`. The full
+lowering-boundary suite returned `265 passed`. The focused lowering mypy check
+returned `Success: no issues found in 13 source files`. The validation profile
+returned exit 0 with corpus probes `3 passed`, unit discovery `599` tests OK,
 compileall OK, ruff OK, mypy OK, and diff-check OK.
