@@ -429,41 +429,57 @@ translation, rendering, generated output, broad parsing, extension hardwiring,
 file/catalog reads, `tsldata` reads, host CPU queries, backend map reads, and
 runtime `frozen/` use remain out of scope.
 
+Post-M79 planning selected
+`Milestone 80: Exact Array-Body Validation Boundary Extraction Slice`.
+The selected plan is behavior-preserving exact array-body validation boundary
+extraction. It should move accepted exact validation, request-record
+selection, metadata lookup validation, and small construction helper ownership
+out of `boundary.py` only where the extraction can remain private, typed,
+import-stable, and behavior-preserving. It must preserve accepted M57-M79
+behavior, keep `boundary.py` as the public facade, prevent private lowering
+modules from importing `boundary.py`, and materially reduce the post-M79
+8,915-line facade without treating line count as permission to move unrelated
+shared lowering models. Internal planning review returned `Needs Revision`
+only for stale workflow handoff state; the handoff was corrected locally.
+Human acceptance was required before M80 execution and is now recorded.
+
+Post-M79 planning is accepted. It selected
+`Milestone 80: Exact Array-Body Validation Boundary Extraction Slice`.
+Human acceptance was recorded.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M79 lowering-focused planning plus review.
+Execute Milestone 80.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m79-planning-plus-review-prompt.md
+docs/agent/runs/m80-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. M80 is not selected yet; the active task is post-M79 planning.
+Milestone 80: Exact Array-Body Validation Boundary Extraction Slice
 ```
 
 Latest review verdict:
 
 ```text
-The M79 execution-review loop returned `Accept With Follow-Ups`. Review and
-audit found no blocking issues. Non-blocking follow-ups were recorded for a
-private-import-boundary regression test and future cleanup of the private
-protocol names/shape checks used to avoid importing `boundary.py`.
+Post-M79 planning was accepted by the user. The acceptance finalization
+prepared the M80 execution-review loop prompt.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M79 planning-plus-review prompt. Focus the next task on
-lowering. Do not implement product code or start M80 unless that planning
-prompt explicitly selects and finalizes an executor task.
+Run the active M80 execution-review loop prompt. Use the specified
+single-executor plus read-only review/audit workflow. Do not start M81 until
+M80 review accepts and the next concrete prompt is created.
 ```
 
 Accepted planning prompt:
@@ -1024,10 +1040,22 @@ Completed M79 execution-review loop prompt:
 docs/agent/runs/m79-execution-review-loop-prompt.md
 ```
 
-Active post-M79 planning-plus-review prompt:
+Completed post-M79 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m79-planning-plus-review-prompt.md
+```
+
+Accepted post-M79 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m79-acceptance-finalization-prompt.md
+```
+
+Active M80 execution-review loop prompt:
+
+```text
+docs/agent/runs/m80-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2696,11 +2724,31 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   in `_array_body_models.py` preserve the private import direction; if M63
   envelope ownership moves later, tighten this boundary deliberately instead
   of broadening structural checks.
+- Post-M79 planning follow-up for M80 execution: keep M80 as
+  behavior-preserving exact validation/request-record helper extraction only.
+  Do not move source adapters or stage construction that still depend on
+  facade-owned `GenerationLoweringStage` or `LoweredImplementation` unless a
+  tiny dependency move is required and remains behavior-preserving.
+- Post-M79 planning follow-up for M80 execution: create a private exact
+  validation boundary such as `_array_body_validation.py` without importing
+  `boundary.py`; use narrow local protocols only where necessary, and prefer
+  leaving a helper in `boundary.py` over broadening structural protocols.
+- Post-M79 planning follow-up for M80 execution: the line-count target is
+  measured against the post-M79 8,915-line baseline, but line count must not
+  drive movement of unrelated shared generation/lowering models, duplicate
+  moved helpers, or creation of a second monolith.
+- Post-M79 planning follow-up for M80 execution: M80 must not add lowering
+  semantics, helper evaluation, stage behavior, source-adapter behavior,
+  stage-construction frameworks, registries, dispatchers, fixpoint/backfeed
+  execution, broad TSIL/body/call/store/return/declaration/array parsing,
+  backend translation, rendering, generated output, CLI/report/writer
+  behavior, Rust, compiler execution, file/catalog reads, `tsldata` reads,
+  host CPU queries, backend map reads, or runtime `frozen/` use.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run post-M79
-lowering-focused planning through the active planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M80 through the
+active execution-review loop prompt.
 
 ## Validation Expectations
 

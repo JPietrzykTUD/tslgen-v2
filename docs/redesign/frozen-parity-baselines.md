@@ -350,7 +350,8 @@ and still does not add compiler execution.
   intrinsic call-site structural/request IR, implemented M77 behavior-preserving
   lowering pipeline/module-boundary cleanup, accepted M78 behavior-preserving
   lowering boundary package decomposition, implemented M79 exact array-body typed
-  model ownership extraction, broad TSIL/body-slot parity beyond
+  model ownership extraction, planned M80 exact array-body validation boundary
+  extraction, broad TSIL/body-slot parity beyond
   those exact structural/request-resolution
   boundaries, and backend translation-map evaluation beyond the selected
   M40/M45/M46 requests.

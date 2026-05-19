@@ -582,6 +582,14 @@ keys are preserved while `tslgen.lowering._array_body_models` becomes the
 private typed owner and `boundary.py` remains only the public facade at 8,915
 physical lines.
 
+Post-M79 planning selects M80 as another no-behavior-change lowering
+architecture slice. M80 moves exact array-body / array-initialization
+validation and request-record helpers into a private boundary while preserving
+the same selected branches, diagnostics, stage names/order, output identities,
+deterministic keys, and public imports. It adds no new helper semantics,
+source adapter behavior, backend translation, rendering, generated output, or
+return/store behavior.
+
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
 suffix request over typed M43 `GenerationTypeRef` inputs. Milestone 46

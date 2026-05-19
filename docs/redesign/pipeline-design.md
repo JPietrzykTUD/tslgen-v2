@@ -617,6 +617,15 @@ remains the facade at 8,915 physical lines. No new stage, helper evaluation,
 backfeed execution, backend translation, rendering, generated output, or
 registry/dispatcher behavior is introduced.
 
+Post-M79 planning selects M80 as behavior-preserving Stage 8 validation
+boundary extraction. It does not add a new stage, semantic lowering result,
+backfeed behavior, source adapter, or stage dispatcher. The selected slice
+should move exact array-body / array-initialization validation and
+request-record helper ownership behind a private module such as
+`tslgen.lowering._array_body_validation`, while preserving stage names, stage
+ordering, output identities, keys, pipeline snapshots, selected-branch-only
+diagnostics, and public facade imports.
+
 ## Stage 9: Backend Planning
 
 Inputs:

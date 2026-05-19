@@ -978,6 +978,19 @@ Recommended first parity checks:
   `Any`. The full lowering-boundary suite remains the primary behavior
   preservation check, and the measured `boundary.py` line count is 8,915,
   which is 2,194 physical lines below the 11,109-line post-M78 baseline.
+- Milestone 80 tests must prove behavior-preserving validation boundary
+  extraction: the full lowering-boundary unit suite remains green; public
+  exact lowering imports remain stable through `tslgen.lowering` and
+  `tslgen.lowering.boundary`; the new private validation module and accepted
+  private lowering modules do not import `boundary.py`; representative moved
+  validators/request-record helpers preserve diagnostic codes, severities,
+  messages, paths, lines, columns, source locations, keys, and deterministic
+  ordering; stage names/order/output identities and pipeline snapshots remain
+  unchanged; `boundary.py` line count is measured against the 8,915-line
+  post-M79 baseline; and no backend translation, rendering, generated output,
+  broad TSIL/body/call/store/return/declaration/array parsing, raw helper
+  dispatch, catalog/`tsldata`/host CPU/backend map reads, import cycles,
+  duplicate moved code, or runtime `frozen/` use is introduced.
 
 Deferred parity checks:
 

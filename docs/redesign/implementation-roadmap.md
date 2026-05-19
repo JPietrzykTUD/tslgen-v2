@@ -9431,7 +9431,209 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m79-planning-plus-review-prompt.md` is the active
-  next prompt. It must plan exactly one lowering-focused post-M79 milestone and
-  must not start M80 execution unless a later accepted prompt explicitly
-  selects that executor task.
+- `docs/agent/runs/post-m79-planning-plus-review-prompt.md` completed the
+  post-M79 planning pass that selected M80.
+
+### Milestone 80: Exact Array-Body Validation Boundary Extraction Slice
+
+Status:
+
+Selected by post-M79 planning. Human acceptance was recorded; M80 execution is
+the next action.
+
+Goal:
+
+Materially reduce `tslgen/src/tslgen/lowering/boundary.py` by moving the
+accepted exact array-body / array-initialization validation and request-record
+helper ownership into a private lowering module while preserving all accepted
+M57-M79 behavior.
+
+M80 is a behavior-preserving lowering architecture slice, not a new semantic
+lowering milestone. The post-M79 `boundary.py` baseline is 8,915 physical
+lines. M80 should remove at least 1,500 net physical lines from that facade,
+so the post-M80 count should be 7,415 physical lines or lower, unless the
+executor documents that import-boundary risk requires a narrower accepted
+reduction. The line-count target must not justify moving unrelated shared
+generation models, changing diagnostics, broadening semantics, or recreating a
+second monolith.
+
+Scope:
+
+- Create a private exact array-body validation module such as
+  `tslgen.lowering._array_body_validation` to own accepted exact-package
+  validation, request-record selection, metadata lookup validation, and small
+  construction helpers that can move without importing `boundary.py`.
+- Move the pure exact array-body / array-initialization helper cluster around:
+  `_validate_array_initialization_*`,
+  `_array_initialization_*_request_record`,
+  `_array_initialization_*_metadata_for_context` where narrow local protocols
+  avoid facade imports, `_validate_array_body_structural_sequence_inputs`,
+  `_validate_predicate_path_structural_request_input`,
+  `_validate_post_branch_intrinsic_call_site_input`,
+  `_exact_array_body_envelope_shape_is_supported`,
+  `_structural_role_from_slot`, and `_array_initialization_leaf`.
+- Use narrow private protocols only where the moved helpers need facade-owned
+  context-like values such as generation context metadata. Prefer leaving a
+  helper in `boundary.py` over making a private module import `boundary.py` or
+  duplicating ownership.
+- Add a committed private-import-boundary regression test covering
+  `_array_body_models.py`, `_array_body_shapes.py`,
+  `_array_body_diagnostics.py`, `_array_body_validation.py`,
+  `_exact_shapes.py`, and `_pipeline.py`.
+- Keep public imports stable through `tslgen.lowering` and
+  `tslgen.lowering.boundary`; `boundary.py` remains the public facade and may
+  delegate to private validation helpers.
+- Preserve accepted M57-M79 diagnostics, diagnostic codes, severities,
+  messages, source locations, stage names, stage ordering, output identities,
+  keys, deterministic ordering, selected-branch-only diagnostics, public facade
+  imports, and no-external-input boundaries.
+- Preserve the M79 private-module import direction. Private modules must not
+  import `boundary.py`.
+
+Out of scope:
+
+- New lowering semantics, new generation helper evaluation, new semantic
+  output values, new stage behavior, exact return-emission IR, store semantics,
+  return semantics, memory behavior, pointer semantics, variable
+  scope/use-def/lifetime, declaration/array semantics beyond accepted exact
+  structural IR, initializer behavior, `tmp.data()` semantics,
+  `emit_return`, `assume_aligned`, ARM/SVE predicate/vector/register/intrinsic
+  semantics, byte-size-to-token inference, source-operand semantics, or
+  generated output.
+- Moving source adapters that consume `GenerationLoweringStage` or
+  `LoweredImplementation`, moving the full exact stage coordinator,
+  moving `GenerationLoweringStage.__post_init__`, or changing public stage
+  construction unless a tiny dependency move is required and remains
+  behavior-preserving.
+- Broad assignment, variable, declaration, array, call, cast, loop, store,
+  return, or multi-statement body lowering; broad direct `intrin<...>`
+  semantics; broad vector metadata semantics; generic body/call/store/return/
+  declaration/array IR; broad TSIL parsing; raw helper dispatch; registry,
+  dispatcher, plugin, or fixpoint/backfeed engine work.
+- Backend manifests, backend maps, language maps, translation maps, backend
+  translation requests, renderer-ready IR, generated artifacts, golden files,
+  generated tests, CLI/report/writer behavior, Rust behavior, compiler
+  execution, generated-test execution, lowering-time file/catalog reads,
+  `tsldata` reads during lowering evaluation, host CPU queries, backend map
+  reads, or runtime dependency on `frozen/`.
+- Starting M81.
+
+Required input:
+
+- Accepted M57-M79 lowering behavior and tests.
+- M79 private model ownership in `tslgen.lowering._array_body_models`.
+- M78/M79 private exact shape, diagnostic, structural-token, and pipeline
+  modules:
+  `tslgen.lowering._array_body_shapes`,
+  `tslgen.lowering._array_body_diagnostics`,
+  `tslgen.lowering._exact_shapes`, and `tslgen.lowering._pipeline`.
+- The post-M79 `boundary.py` baseline of 8,915 physical lines.
+- Redesign rules requiring typed semantic lowering, no renderer-side helper
+  evaluation, no raw helper dispatch, deterministic diagnostics, no circular
+  private imports, and side-effect-free lowering.
+
+Expected outputs:
+
+- A private exact array-body validation module, or an equivalent coherent
+  private module split, owning the accepted exact validation/request-record
+  helper boundary.
+- `boundary.py` delegates to the private validation helpers while remaining the
+  public facade/coordinator.
+- `boundary.py` measures 7,415 physical lines or lower, unless a documented
+  import-boundary exception justifies a narrower accepted reduction.
+- Stable public imports from `tslgen.lowering` and
+  `tslgen.lowering.boundary`.
+- A focused private-import-boundary regression test that protects M79/M80
+  module direction.
+- No public behavior changes to accepted M57-M79 lowering.
+
+Parity criterion:
+
+M80 proves the accepted exact array-body validation/request-record helper
+boundary can live outside the central `boundary.py` file while preserving all
+accepted behavior. The milestone succeeds when validation ownership is no
+longer mixed into the facade, the public import surface remains stable,
+diagnostics remain stable, private modules do not import `boundary.py`, and
+`boundary.py` is materially smaller without duplicate moved code.
+
+Evidence paths:
+
+- `tslgen/src/tslgen/lowering/boundary.py` for the post-M79 facade and the
+  remaining exact validation/request-record helper cluster.
+- `tslgen/src/tslgen/lowering/_array_body_models.py` for accepted exact
+  array-body / array-initialization typed model ownership.
+- `tslgen/src/tslgen/lowering/_array_body_shapes.py` for accepted exact helper
+  aliases/rules and exact shape consumers.
+- `tslgen/src/tslgen/lowering/_array_body_diagnostics.py` for accepted exact
+  diagnostics.
+- `tslgen/src/tslgen/lowering/_exact_shapes.py` for exact structural tokens
+  that must remain shape evidence only.
+- `tslgen/src/tslgen/lowering/_pipeline.py` for accepted private pipeline
+  facts that M80 must not broaden into a registry or fixpoint engine.
+- `tslgen/src/tslgen/lowering/__init__.py` for public lowering imports.
+- `tslgen/tests/unit/test_lowering_boundary.py` for accepted M57-M79 behavior,
+  diagnostics, determinism, private-module boundaries, and public facade
+  coverage.
+- `tsldata/primitives/load_store/array.tsl` remains source-shape evidence only
+  and must not become runtime input to lowering evaluation.
+
+Tests required:
+
+- Full `tslgen/tests/unit/test_lowering_boundary.py` preservation.
+- Focused M80 tests proving public exact lowering functions still resolve
+  through `tslgen.lowering` and `tslgen.lowering.boundary`.
+- Focused private-import-boundary regression proving accepted private lowering
+  modules, including the new validation module, do not import `boundary.py`.
+- Focused validation/request-record equivalence tests for representative moved
+  helpers, including diagnostic code/severity/message/source-location
+  preservation.
+- Focused tests preserving exact array-body pipeline stage names/order/output
+  keys where moved validation helpers are consumed.
+- A `boundary.py` line-count validation measured against the 8,915-line
+  post-M79 baseline.
+- Regression tests or existing tests proving no backend translation,
+  rendering, generated output, broad body/call/store/return/declaration/array
+  semantics, raw helper evaluator calls, raw helper dispatch, catalog reads,
+  `tsldata` reads, host CPU queries, backend map reads, import cycles,
+  duplicate moved code, or runtime `frozen/` use is introduced.
+
+Golden fixtures required:
+
+- None. M80 is behavior-preserving lowering architecture work and must not
+  change generated C++ or Rust output.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_shapes.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M80 validation-boundary/import-stability command selected by the
+  executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Moving source adapters or stage construction that still depend on
+  facade-owned `GenerationLoweringStage` or `LoweredImplementation`, causing
+  circular imports or over-broad protocols.
+- Turning the private validation module into a general validator registry,
+  semantic dispatcher, or stage framework.
+- Changing accepted diagnostic text, code, severity, path, line, or column
+  while moving validators.
+- Broadening structural protocols to hide missing ownership boundaries.
+- Treating exact tokens such as `svst1`, `tmp.data()`, `emit_return(tmp)`,
+  `pg`, `svptrue_b*`, or `a` as semantics rather than structural provenance.
+- Reducing line count by moving unrelated shared lowering/generation code,
+  duplicating moved helpers, or leaving compatibility wrappers around poor
+  abstractions.
+
+Dependencies on prior milestones:
+
+- Milestones 57 through 79.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m79-acceptance-finalization-prompt.md` must run after
+  explicit human acceptance. It will update the workflow state for M80
+  execution and create `docs/agent/runs/m80-execution-review-loop-prompt.md`.

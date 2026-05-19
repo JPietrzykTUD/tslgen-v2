@@ -1487,6 +1487,15 @@ Consequences:
   `_array_body_shapes.py` plus `_array_body_diagnostics.py` consume the model
   boundary without importing the facade. This is a behavior-preserving
   ownership decision, not a new lowering semantic layer.
+- Post-M79 planning selects M80 as exact array-body validation boundary
+  extraction rather than return-emission IR or full coordinator extraction.
+  The validation/request-record helpers are the largest next coherent package
+  that can depend on accepted private models, shapes, diagnostics, exact shape
+  evidence, and pipeline facts without importing `boundary.py`. Source adapters
+  and stage construction remain deferred because they still touch facade-owned
+  `GenerationLoweringStage` and `LoweredImplementation`. This is a
+  maintainability decision, not a registry, dispatcher, fixpoint, or new
+  semantic lowering decision.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

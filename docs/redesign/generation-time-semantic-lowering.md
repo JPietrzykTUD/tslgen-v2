@@ -684,6 +684,14 @@ instead of targeted unconstrained `Any` parameters, and `boundary.py` remains
 the facade at 8,915 physical lines. No helper text is evaluated and no
 catalog, backend map, renderer, or generated-output path is added.
 
+Post-M79 planning selects M80 as behavior-preserving exact array-body
+validation boundary extraction. It keeps generation-time helper behavior
+unchanged: validators and request-record helpers may move to a private module,
+but they must continue to consume typed M57-M79 values, accepted exact helper
+rules, and structural provenance only. M80 must not evaluate helper text,
+query catalogs/backends, add source adapters, add return/store semantics,
+render output, or create a validation registry/semantic dispatcher.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`

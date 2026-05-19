@@ -553,6 +553,14 @@ Current roadmap note:
   model, shape, diagnostic, exact-shape, and pipeline modules still do not
   import `boundary.py`, so the extraction is an ownership split, not a new
   semantic dispatcher or backend/rendering hook.
+- Post-M79 planning selects M80 as exact array-body validation boundary
+  extraction. The next private ownership boundary is validation/request-record
+  support because it can consume the accepted M79 models, M78/M79 shape and
+  diagnostic helpers, and exact structural tokens without importing
+  `boundary.py`. `boundary.py` remains the public facade/coordinator. M80 is
+  not permission to move facade-owned stage/source adapters, create a validator
+  registry, broaden structural protocols, add return/store semantics, or
+  introduce backend/rendering/output hooks.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not
