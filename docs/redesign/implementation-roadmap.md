@@ -10326,3 +10326,213 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m83-planning-plus-review-prompt.md` runs the next
   lowering-focused planning pass.
+
+### Milestone 84: Exact Array-Body Pipeline And Source Adapter Ownership Extraction Slice
+
+Status:
+
+Planned. Post-M83 planning selected this milestone, pending human acceptance.
+
+Goal:
+
+Move the accepted exact array-body staged-lowering pipeline and source-adapter
+ownership out of `tslgen/src/tslgen/lowering/boundary.py` into one or more
+private typed lowering modules while preserving all accepted M42-M83 behavior,
+public imports, diagnostics, stage names/order, output identities, deterministic
+keys, and no-external-input boundaries.
+
+M84 is behavior-preserving lowering architecture work. It is the next large
+step toward making `boundary.py` a small facade, with a campaign target of
+eventually bringing the facade toward roughly 1,000 physical lines. M84 should
+make a material reduction from the accepted M83 4,807-line baseline by moving
+one cohesive ownership cluster, not by scattering unrelated helpers or adding
+compatibility wrappers around poor boundaries.
+
+Scope:
+
+- Create a private exact array-body pipeline/source-adapter ownership module
+  such as `tslgen.lowering._array_body_pipeline`,
+  `tslgen.lowering._array_body_sources`, or an equivalent small set of
+  cohesive private lowering modules.
+- Move the accepted exact array-body stage-pipeline result/coordinator and its
+  direct helper ownership out of `boundary.py`, including the M64-M76 exact
+  array-body pipeline call sequence, stage construction helpers for the exact
+  array-body stages, deterministic stage-output/source-location helpers, and
+  exact pipeline skeleton lookup/assembly helpers.
+- Move the accepted exact array-body source-adapter helpers out of
+  `boundary.py`, including adapters for selected-body handoff, selected-body
+  IR recognition, selected-body envelope, M63 envelope skeletons, M66-M76
+  exact array-initialization outputs, predicate-path structural requests, and
+  post-branch intrinsic-call-site structural requests.
+- Move exact array-body skeleton validation helpers only when they belong to
+  the same private exact array-body source/pipeline ownership boundary and can
+  preserve diagnostics exactly.
+- Keep `boundary.py` as the public facade for `GenerationContext`,
+  `LoweringRequest`, `LoweringInput`, `LoweringInputSet`,
+  `LoweredImplementation`, `LoweringPlan`, `prepare_lowering_inputs`,
+  `lower_candidates`, payload classification, mini-TSIL lowering, and public
+  import compatibility unless a tiny delegate is required for public lowering
+  functions.
+- Preserve public API behavior by re-exporting or delegating from
+  `tslgen.lowering.boundary` and `tslgen.lowering` where names are already
+  public.
+- Use only narrow typed protocols for facade-owned values, if needed. Private
+  exact array-body modules must not import `boundary.py` or the
+  `tslgen.lowering` package facade.
+- Preserve accepted source locations, diagnostic codes/messages, stage names,
+  stage ordering, stage keys, output object identities, pipeline snapshots,
+  selected-branch-only behavior, and deterministic ordering.
+- Record the post-M84 `boundary.py` line count. The expected target is a
+  substantial reduction from 4,807 physical lines, with review pressure toward
+  a facade below roughly 2,000 lines if the exact array-body ownership cluster
+  can move without broad protocols or semantic expansion.
+
+Out of scope:
+
+- New semantic lowering behavior, new stage names, new stage outputs, exact
+  return-emission IR, `emit_return(tmp)` interpretation, `tmp.data()`
+  semantics, store/call/body/return/declaration/array semantics beyond the
+  accepted exact structural/request records, broad TSIL parsing, broad source
+  skeleton recognition, broad source-adapter support, or helper-family
+  expansion.
+- Moving `LoweredImplementation`, `LoweringRequest`, `LoweringInput`,
+  `LoweringInputSet`, `LoweringPlan`, `lower_candidates`, payload
+  classification, or mini-TSIL parsing out of the facade.
+- Creating registries, generic dispatchers, plugin systems, callback maps,
+  fixpoint/backfeed engines, raw helper dispatch, token-keyed semantic maps,
+  or a second monolithic private module.
+- Treating SVE-looking tokens, selected type tags, backend ids, renderer
+  names, corpus line numbers, request ordinals, or raw source text as semantic
+  dispatch keys. Existing exact tokens may move only as structural provenance
+  or invariant evidence.
+- Backend translation, rendering, generated output, golden files, generated
+  tests, CLI/report/writer behavior, Rust behavior, compiler execution,
+  generated-test execution, lowering-time file/catalog reads, `tsldata` reads
+  during lowering evaluation, host CPU queries, backend map reads, or runtime
+  dependency on `frozen/`.
+- Starting M85 or selecting exact return-emission structural/request IR.
+
+Required input:
+
+- Accepted M42-M83 lowering behavior.
+- The accepted M57-M59 generation predicate/control-flow pruning path.
+- The accepted M60-M63 selected-body handoff/form/body-IR/envelope values.
+- The accepted M64-M76 exact array-body envelope, helper request/resolution,
+  declaration shell, predicate-path, and post-branch intrinsic-call-site
+  structural/request path.
+- The accepted M77 pipeline snapshot behavior and M78-M83 private lowering
+  ownership boundaries.
+- Private lowering modules `_array_body_models`, `_array_body_shapes`,
+  `_array_body_diagnostics`, `_array_body_validation`, `_selected_body_models`,
+  `_generation_models`, `_generation_queries`, `_generation_control_flow`,
+  `_generation_diagnostics`, `_exact_shapes`, `_pipeline`, and
+  `_stage_contracts`.
+- The accepted M83 `boundary.py` line-count baseline of 4,807 physical lines.
+
+Expected outputs:
+
+- A private typed exact array-body pipeline/source-adapter ownership boundary
+  that does not import `boundary.py` or the `tslgen.lowering` package facade.
+- Stable public imports and stable public facade behavior for all accepted
+  lowering names.
+- The same lowered values, diagnostics, source locations, stage snapshots,
+  stage keys, output identities, and deterministic ordering as before M84.
+- `boundary.py` remains the public facade/coordinator and becomes materially
+  smaller.
+- No new semantic IR output and no generated artifact changes.
+
+Parity criterion:
+
+M84 succeeds when exact array-body pipeline/source-adapter ownership is private
+and typed, `boundary.py` remains only the public facade/coordinator for this
+slice, accepted behavior and public imports are unchanged, private lowering
+modules still have one-way imports away from the facade, and the line-count
+reduction is achieved by moving the cohesive exact array-body ownership
+cluster rather than by duplicating code or adding broad protocols.
+
+Evidence paths:
+
+- `tslgen/src/tslgen/lowering/boundary.py` for the accepted exact array-body
+  pipeline implementation, source adapters, stage builders, skeleton lookup,
+  validation helpers, public facade imports, and lower-candidate orchestration
+  that must remain behavior-preserving.
+- `tslgen/src/tslgen/lowering/_stage_contracts.py` for accepted stage/output
+  contracts and import-boundary patterns.
+- `tslgen/src/tslgen/lowering/_array_body_models.py`,
+  `_array_body_shapes.py`, `_array_body_diagnostics.py`,
+  `_array_body_validation.py`, `_selected_body_models.py`, `_exact_shapes.py`,
+  and `_pipeline.py` for accepted private exact array-body model, validation,
+  shape, and pipeline dependencies.
+- `tslgen/tests/unit/test_lowering_boundary.py` for accepted stage ordering,
+  output identity, diagnostic, source-location, no-reparse, import-boundary,
+  and deterministic behavior.
+- `tsldata/primitives/load_store/array.tsl:105-111` as shape/provenance
+  evidence only, not a runtime input or semantic dispatch source.
+
+Tests required:
+
+- Full `tslgen/tests/unit/test_lowering_boundary.py` preservation.
+- Focused M84 tests proving the new private exact array-body pipeline/source
+  module or modules do not import `boundary.py` or the package facade.
+- Focused M84 tests proving public imports and public facade calls still
+  return the accepted exact array-body values and stage outputs.
+- Focused M84 tests for representative direct typed values, stage output
+  values, and `LoweredImplementation`-like stage tuples consumed by moved
+  source adapters.
+- Focused M84 diagnostic preservation tests for representative unsupported,
+  missing, duplicate, conflict, orphan, and provenance-mismatch source cases.
+- Focused M84 pipeline snapshot tests proving stage ordering, keys, output
+  object identity, selected-branch-only behavior, and deterministic source
+  locations remain unchanged.
+- A `boundary.py` line-count validation measured against the accepted M83
+  4,807-line baseline.
+- Regression tests or existing tests proving no backend translation, rendering,
+  generated output, broad TSIL/body/call/store/return/declaration/array
+  semantics, raw helper dispatch, catalog reads, `tsldata` reads, host CPU
+  queries, backend map reads, import cycles, duplicate moved code, or runtime
+  `frozen/` use is introduced.
+
+Golden fixtures required:
+
+- None. M84 is behavior-preserving lowering architecture work and must not
+  change generated C++ or Rust output.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_shapes.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_selected_body_models.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m84 or array_body_pipeline or source_adapter or exact_array"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Creating a circular import by moving exact array-body helpers into a private
+  module that imports `boundary.py` or the package facade.
+- Moving too much facade state, such as `LoweredImplementation`,
+  `LoweringRequest`, `lower_candidates`, payload classification, or mini-TSIL
+  parsing, under an exact array-body ownership label.
+- Turning moved source adapters into a raw-helper dispatcher, registry,
+  callback map, plugin system, or token-keyed semantic table.
+- Broadening protocols so much that they hide public facade ownership problems
+  or reintroduce structural `hasattr` seams.
+- Accidentally changing diagnostics, source locations, stage names, stage
+  ordering, output identities, keys, selected-branch-only behavior, or
+  pipeline snapshots while moving code.
+- Treating exact return-emission, store-call, selected-body, SVE-looking token,
+  backend, renderer, or corpus-line evidence as semantic behavior.
+- Reducing line count by duplicating moved code, creating a second monolith, or
+  mixing unrelated generation, selected-body, mini-TSIL, backend, or renderer
+  work into M84.
+
+Dependencies on prior milestones:
+
+- Milestones 42 through 83.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m83-acceptance-finalization-prompt.md` finalizes the
+  accepted post-M83 planning result after human acceptance and creates the M84
+  execution-review loop prompt.

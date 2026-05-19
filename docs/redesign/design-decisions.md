@@ -1529,7 +1529,7 @@ Consequences:
   concrete private selected-body envelope model checks instead of broad
   structural seams. This remains behavior-preserving ownership work, not new
   selected-body semantics or an extension-specific dispatch layer.
-- M83 executes the `GenerationLoweringStage` output-contract ownership
+- M83 is accepted as the `GenerationLoweringStage` output-contract ownership
   decision. Stage/output compatibility, `GenerationLoweringStage`, and the
   minimal accepted mini-TSIL value-model dependency move to
   `tslgen.lowering._stage_contracts`; `boundary.py` remains the public
@@ -1540,6 +1540,17 @@ Consequences:
   output behavior changes, no source-adapter move, no registry/dispatcher/
   fixpoint engine, no exact return-emission/store/body semantics, and no
   backend or renderer hooks.
+- Post-M83 planning selects M84 as exact array-body pipeline and source-adapter
+  ownership extraction before exact return-emission IR. The decision is to
+  shrink `boundary.py` by moving one cohesive accepted M64-M76 ownership
+  cluster behind private typed lowering modules, not by adding new lowering
+  semantics or moving arbitrary code for line count. `boundary.py` remains the
+  public facade for request/result models, `lower_candidates`, payload
+  classification, and mini-TSIL lowering. Private exact array-body modules
+  must not import the facade, must preserve public imports, diagnostics,
+  source locations, stage ordering, keys, output identities, and pipeline
+  snapshots, and must not become raw-helper dispatchers, registries, callback
+  maps, plugin systems, or fixpoint/backfeed engines.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

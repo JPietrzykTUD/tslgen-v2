@@ -717,7 +717,8 @@ It is not a new helper-evaluation slice and does not add selected-body
 semantics, broad TSIL/body parsing, backend translation, rendering, generated
 output, catalog/backend reads, or extension-specific semantic shortcuts.
 
-M83 executes behavior-preserving stage output-contract ownership extraction.
+M83 is accepted as behavior-preserving stage output-contract ownership
+extraction.
 The accepted `GenerationLoweringStage` stage-name/output compatibility
 contract now lives in a private typed lowering module, preserving public
 imports, stage names/order, output identities, keys, and invalid-stage/output
@@ -726,6 +727,15 @@ stages; it does not evaluate helpers, parse broad TSIL, interpret exact
 return-emission/store-call slots, add backend translation/rendering/output
 behavior, or introduce a registry, dispatcher, plugin system, or
 fixpoint/backfeed engine.
+
+Post-M83 planning selects M84 as exact array-body pipeline and source-adapter
+ownership extraction. M84 is still no-new-semantics lowering architecture work:
+it should move accepted exact array-body pipeline/source-adapter ownership out
+of `boundary.py` into private typed lowering modules while preserving the same
+typed values, diagnostics, source locations, stage snapshots, and public facade
+behavior. It must not evaluate new helpers, broaden source parsing, interpret
+`emit_return(tmp)` or store/call semantics, introduce raw-helper dispatch, or
+add backend translation/rendering/output behavior.
 
 M61 diagnostics:
 

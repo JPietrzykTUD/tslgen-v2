@@ -599,6 +599,15 @@ Current roadmap note:
   contract validation, not a registry, dispatcher, source adapter,
   fixpoint/backfeed engine, exact return-emission IR, backend/rendering/output
   hook, or extension-specific semantic shortcut.
+- Post-M83 planning selects M84 as exact array-body pipeline and source-adapter
+  ownership extraction. M84 should move the accepted M64-M76 exact array-body
+  pipeline/source-adapter ownership into private typed lowering modules while
+  keeping `boundary.py` as the public facade for request/result models,
+  lower-candidate orchestration, payload classification, and mini-TSIL
+  lowering. This is behavior-preserving architecture work to continue shrinking
+  the facade toward a maintainable pipeline boundary; it must not add broad
+  source parsing, raw-helper dispatch, registries, backend/rendering/output
+  hooks, exact return-emission semantics, or extension-specific shortcuts.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not
