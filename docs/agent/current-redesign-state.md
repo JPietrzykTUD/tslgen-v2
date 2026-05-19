@@ -355,40 +355,50 @@ backend translation, rendering, generated output, generic call/store/body IR,
 broad TSIL parsing, lowering-time file/catalog reads, `tsldata` reads during
 lowering, host CPU queries, and runtime `frozen/` use remain out of scope.
 
+Post-M76 planning selected
+`Milestone 77: Composable Lowering Pipeline Module Boundary Slice`.
+The selected plan is behavior-preserving lowering architecture work. It starts
+moving the accepted Stage 8 lowering path behind typed, composable private
+module/stage boundaries while preserving accepted M57-M76 behavior. It must
+not add new lowering semantics, backend translation, rendering, generated
+output, broad parsing, or hardwired extension semantics.
+
+Post-M76 planning is accepted. Human acceptance was recorded, and M77 execution
+is the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M76 lowering-focused planning.
+Execute Milestone 77.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m76-planning-plus-review-prompt.md
+docs/agent/runs/m77-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Post-M76 planning is active.
+Milestone 77: Composable Lowering Pipeline Module Boundary Slice
 ```
 
 Latest review verdict:
 
 ```text
-M76 execution-review loop returned Accept With Follow-Ups after one focused
-documentation revision.
+Post-M76 planning was accepted by the user. The acceptance finalization
+prepared the M77 execution-review loop prompt.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M76 planning-plus-review prompt. Focus on lowering. Do not
-implement code, and do not start M77 execution unless post-M76 planning is
-accepted and the workflow state advances through the required finalization
-prompt.
+Run the active M77 execution-review loop prompt. Use the specified
+single-executor plus read-only review/audit workflow. Do not start M78 until
+M77 review accepts and the next concrete prompt is created.
 ```
 
 Accepted planning prompt:
@@ -895,10 +905,22 @@ Accepted M76 execution-review loop prompt:
 docs/agent/runs/m76-execution-review-loop-prompt.md
 ```
 
-Active post-M76 planning-plus-review prompt:
+Completed post-M76 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m76-planning-plus-review-prompt.md
+```
+
+Accepted post-M76 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m76-acceptance-finalization-prompt.md
+```
+
+Active M77 execution-review loop prompt:
+
+```text
+docs/agent/runs/m77-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1549,6 +1571,26 @@ docs/agent/runs/post-m76-planning-plus-review-prompt.md
   semantic dispatchers, raw helper-string dispatch, renderer calls, generated
   artifacts, golden files, CLI/report/writer behavior, Rust behavior, compiler
   execution, or generated-test execution.
+- Post-M76 planning selected M77 as behavior-preserving composable lowering
+  pipeline/module-boundary work only.
+- M77 must preserve accepted M57-M76 behavior, public lowering imports, stage
+  names, output identities, diagnostics, and deterministic ordering.
+- M77 may introduce private typed stage, pipeline, fact, request, dependency,
+  artifact-store, or coordinator-boundary values only where needed for the
+  accepted M58-M76 pattern.
+- Future backfeeds must be represented as typed facts, typed requests,
+  dependencies, or deterministic coordinator decisions. They must not be
+  hidden recursive stage calls, broad registries, raw helper dispatch, or
+  central semantic `if`/`elif` chains.
+- Exact tokens such as `pg`, `svptrue_b16`, `svptrue_b32`, `svptrue_b64`,
+  `intrin`, `svst1`, `tmp.data()`, and `a` must remain slice-local structural
+  evidence unless a future accepted milestone introduces explicit typed
+  semantic rules.
+- M77 must not add new lowering semantics, whole-file rewrite behavior,
+  generic call/body/store/return/declaration/array parsing or IR, backend
+  translation, rendering, generated output, CLI/report/writer behavior, Rust,
+  compiler execution, lowering-time file/catalog reads, `tsldata` reads,
+  host CPU queries, backend map reads, or runtime `frozen/` use.
 
 ## Accepted Milestone 48
 
@@ -2435,11 +2477,20 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   slice-local. M76's comma-split parser is accepted only for the exact
   `intrin<svst1>(pg, tmp.data(), a);` shape and must not become a general
   call/body parser.
+- Post-M76 planning follow-up for M77 execution: keep the refactor
+  behavior-preserving and use it to isolate exact recognizer constants such as
+  `pg`, `svptrue_b16`, `svptrue_b32`, `svptrue_b64`, `intrin`, `svst1`,
+  `tmp.data()`, and `a` as slice-local structural evidence, not extension,
+  SVE, store, memory, or backend semantics.
+- Post-M76 planning follow-up for M77 execution: future backfeed support must
+  be expressed as typed facts, typed requests, dependencies, or coordinator
+  decisions. Do not implement speculative fixpoint/backfeed execution until a
+  later milestone consumes a concrete typed need.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready for post-M76
-lowering-focused planning through the active planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M77 through the
+active execution-review loop prompt.
 
 ## Validation Expectations
 

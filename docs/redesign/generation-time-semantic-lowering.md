@@ -638,6 +638,17 @@ translation, renderer-ready IR, or generated output. The M76 stage
 follows `predicate_path_structural_request_lowering` and must use source text
 only as exact shape/provenance evidence, not as raw helper dispatch.
 
+Post-M76 planning selects Milestone 77 as a behavior-preserving composable
+lowering pipeline/module boundary. M77 must not add new generation-time
+helper semantics. It should make the accepted M58-M76 staged lowering path
+easier to extend by moving coherent private stage/pipeline code under
+typed module boundaries and by documenting that future backfeeds are typed
+facts, typed requests, dependencies, or coordinator decisions. Backfeeds must
+not be implemented as hidden recursive stage calls, broad registries, raw
+helper dispatch, or central semantic `if`/`elif` chains. Exact tokens that
+look extension-specific remain slice-local structural evidence until a future
+milestone supplies explicit typed semantic rules.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
@@ -972,7 +983,8 @@ extraction, M70 vector-length request resolution, M71 vector-alignment
 request resolution, M72 helper-set completion, M73 exact declaration-shell
 structural IR, implemented M74 exact structural-sequence classification,
 accepted M75 exact predicate-path structural/request IR, and accepted M76 exact
-post-branch intrinsic call-site structural/request IR slices:
+post-branch intrinsic call-site structural/request IR slices, plus the planned
+M77 behavior-preserving composable lowering pipeline/module boundary:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask

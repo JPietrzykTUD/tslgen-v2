@@ -553,6 +553,13 @@ only. M76 must not define store behavior, ARM/SVE intrinsic behavior, memory
 or pointer semantics, variable scope, backend translation, renderer behavior,
 generated output, generic call IR, or broad body semantics.
 
+Post-M76 planning selects M77 as behavior-preserving lowering architecture
+work. M77 does not add a new TSL behavior; it preserves accepted M57-M76
+behavior while moving coherent Stage 8 code behind composable typed module
+boundaries. Future backfeeds must be explicit typed facts/requests or
+coordinator decisions, and exact ARM-looking tokens remain structural evidence
+until a later semantic milestone says otherwise.
+
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
 suffix request over typed M43 `GenerationTypeRef` inputs. Milestone 46

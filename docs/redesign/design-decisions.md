@@ -1443,6 +1443,16 @@ Consequences:
   It must not make `svst1`, `tmp.data()`, or `a` into store/backend semantics,
   and it must not introduce generic call IR, variable scope, backend
   translation, renderer-ready IR, or generated output.
+- Post-M76 planning selects Milestone 77 to address the accepted Stage 8
+  maintainability pressure as architecture rather than semantics. Lowering is
+  treated as a composable typed pipeline: stage boundaries may expose typed
+  facts, typed requests, dependencies, and deterministic coordinator decisions
+  for future backfeeds, but stages must not depend on hidden recursion, broad
+  registries, raw-helper dispatch, or central semantic branching. The M77
+  refactor must preserve accepted M57-M76 behavior and keep exact tokens such
+  as `pg`, `svptrue_b*`, `intrin`, `svst1`, `tmp.data()`, and `a` as
+  slice-local structural evidence unless a future milestone adds typed
+  semantic rules.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

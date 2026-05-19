@@ -8763,3 +8763,201 @@ Next concrete prompt:
   concrete prompt is
   `docs/agent/runs/post-m76-planning-plus-review-prompt.md`. Do not start M77
   until post-M76 planning is accepted.
+
+### Post-M76 Planning Result
+
+Status:
+
+Selected for human acceptance after post-M76 planning. Do not start M77
+execution until the post-M76 acceptance finalization prompt has run.
+
+Selected milestone:
+
+```text
+Milestone 77: Composable Lowering Pipeline Module Boundary Slice
+```
+
+Candidate comparison:
+
+| Candidate | Value | Risk | Decision |
+| --- | --- | --- | --- |
+| Composable lowering pipeline module boundary | High. Addresses the concrete M58-M76 maintainability pressure in `tslgen/src/tslgen/lowering/boundary.py` while preserving accepted lowering behavior and making future lowering/backfeed stages explicit and typed. | Medium if treated as a broad rewrite, generic registry, semantic dispatcher, or behavior change. | Select as M77 with strict behavior-preserving, private-boundary wording. |
+| Exact return-emission structural/request IR | High later. | It would continue the exact array-body frontier, but the current 12k-line lowering boundary and growing stage table make the next semantic slice harder to review safely. | Defer until the pipeline/module boundary is easier to extend. |
+| Whole-file lowering rewrite/split | Potentially high. | Too broad for one milestone and likely to mix mechanical movement, behavior changes, and new abstractions. | Reject for M77; use one coherent extraction slice instead. |
+| Generic lowering pipeline framework with backfeed execution | Useful later. | Too speculative before one behavior-preserving module-boundary slice proves the shape. | Defer. M77 may define private typed contracts for future backfeeds, but must not implement broad fixpoint semantics. |
+| Generic call/body/parser cleanup | Tempting because M76 exposed call-shaped evidence. | Violates the exact-slice boundary and risks raw-helper parsing or broad body semantics. | Reject for M77. |
+
+### Milestone 77: Composable Lowering Pipeline Module Boundary Slice
+
+Status:
+
+Planned by post-M76 planning and awaiting human acceptance.
+
+Goal:
+
+Make Stage 8 lowering more maintainable and extensible by introducing a
+behavior-preserving, private composable pipeline/module boundary under
+`tslgen/src/tslgen/lowering/`. M77 starts breaking the large lowering boundary
+apart around accepted M58-M76 stage contracts without adding new lowering
+semantics, backend behavior, rendering, generated output, or broad parsing.
+
+M77 must model lowering as a staged typed pipeline. Future backfeeds should be
+represented as typed facts, typed requests, or deterministic coordinator
+decisions rather than as hidden recursion, direct stage-to-stage callbacks, raw
+helper dispatch, or central semantic `if`/`elif` chains.
+
+Scope:
+
+- Keep the public lowering API stable through `tslgen.lowering` and any
+  existing `boundary.py` facade imports used by tests or downstream code.
+- Introduce private typed pipeline/module contracts only where needed for the
+  accepted M58-M76 pattern. Acceptable private names include concepts such as
+  stage input, stage output, artifact/fact store, stage dependency, or deferred
+  request, provided they are typed values and not a broad runtime plugin
+  system.
+- Move one coherent cluster of Stage 8 lowering implementation out of the
+  monolithic `boundary.py` into one or more modules under
+  `tslgen/src/tslgen/lowering/`, chosen to minimize behavior risk. The
+  preferred cluster is the accepted exact array-body / array-initialization
+  stage assembly and exact structural/request helpers that are already a
+  private lowering pipeline pressure point after M69-M76.
+- Preserve all accepted M57-M76 stage names, outputs, diagnostics,
+  deterministic ordering, and public typed boundary values.
+- Keep exact-shape recognizer constants slice-local. Tokens such as `pg`,
+  `svptrue_b16`, `svptrue_b32`, `svptrue_b64`, `intrin`, `svst1`,
+  `tmp.data()`, and `a` may remain exact structural evidence for accepted
+  slices, but they must not become extension semantics, SVE semantics, store
+  semantics, or backend dispatch keys.
+- Reduce or isolate the growing `GenerationLoweringStage.__post_init__`
+  validation-table pressure only if it can be done by preserving typed
+  stage-specific attachment points. M77 must not replace it with an untyped
+  registry, raw dispatcher, or semantic lookup keyed by strings.
+- Document the private pipeline boundary and future backfeed rule in the
+  redesign docs so later lowering milestones can extend it without guessing.
+
+Out of scope:
+
+- New lowering semantics or new generated behavior.
+- Store semantics, return semantics, memory behavior, pointer semantics,
+  variable scope/use-def/lifetime, declaration/array semantics, initializer
+  behavior, `tmp.data()` semantics, `emit_return`, `assume_aligned`, ARM/SVE
+  predicate/vector/register/intrinsic semantics, or byte-size-to-token
+  inference.
+- Generic call IR, generic store IR, generic return IR, broad body IR, broad
+  slot-role registries, broad helper registries, broad stage registries,
+  central semantic dispatchers, runtime plugin systems, raw helper-string
+  dispatch, raw TSIL expression evaluation, or broad TSIL parsing.
+- Backend manifests, backend maps, language maps, translation maps, backend
+  translation requests, renderer-ready IR, generated artifacts, golden files,
+  generated tests, CLI/report/writer behavior, Rust behavior, compiler
+  execution, generated-test execution, lowering-time file/catalog reads,
+  `tsldata` reads during lowering evaluation, host CPU queries, backend map
+  reads, or runtime dependency on `frozen/`.
+- A whole-file rewrite of `boundary.py` or a migration map organized around
+  legacy modules.
+
+Required input:
+
+- Accepted M58 typed `GenerationLoweringStage` contract and accepted M59-M76
+  Stage 8 lowering behavior.
+- The existing `tslgen/src/tslgen/lowering/boundary.py` implementation as the
+  current module-boundary pressure point.
+- Existing unit tests in `tslgen/tests/unit/test_lowering_boundary.py` as
+  behavior-preservation evidence.
+- Redesign docs that require typed semantic lowering, no renderer-side helper
+  evaluation, no raw helper dispatch, deterministic diagnostics, and
+  side-effect-free lowering.
+
+Expected outputs:
+
+- A smaller public facade in `tslgen/src/tslgen/lowering/boundary.py` or an
+  equivalent stable public import surface that preserves current callers.
+- One or more new private modules under `tslgen/src/tslgen/lowering/` with
+  typed stage/pipeline helpers or a coherent extracted Stage 8 cluster.
+- No public behavior changes to accepted M57-M76 lowering.
+- No new backend translation, rendering, generated output, CLI/report/writer,
+  Rust, compiler, generated-test, file/catalog-read, `tsldata`-read,
+  host-CPU-query, backend-map-read, or runtime `frozen/` behavior.
+- Redesign documentation describing the composable lowering pipeline boundary,
+  future typed backfeed rule, and exact-token evidence boundary.
+
+Parity criterion:
+
+M77 proves the accepted M57-M76 lowering behavior can be preserved while the
+lowering implementation begins moving behind composable typed module/stage
+boundaries. The milestone is successful when future exact lowering slices can
+attach to a clearer private pipeline boundary without relying on a 12k-line
+central file, raw helper dispatch, or hardwired extension semantics.
+
+Evidence paths:
+
+- `tslgen/src/tslgen/lowering/boundary.py` for the current monolithic Stage 8
+  implementation and exact recognizer constants.
+- `tslgen/src/tslgen/lowering/__init__.py` for public lowering imports.
+- `tslgen/tests/unit/test_lowering_boundary.py` for accepted M57-M76 behavior
+  and diagnostics.
+- `docs/redesign/pipeline-design.md`,
+  `docs/redesign/generation-time-semantic-lowering.md`,
+  `docs/redesign/target-architecture.md`, and
+  `docs/redesign/design-decisions.md` for typed Stage 8 boundaries and
+  no-hardwiring rules.
+- `tsldata/primitives/load_store/array.tsl` remains source-shape evidence
+  only. It must not become runtime input to lowering evaluation.
+
+Tests required:
+
+- Full `tslgen/tests/unit/test_lowering_boundary.py` preservation.
+- Focused tests selected by the executor that prove the extracted module
+  boundary preserves at least the M69-M76 pipeline/stage outputs touched by the
+  refactor.
+- Import/API stability tests or existing public import tests proving
+  `tslgen.lowering` exports remain stable.
+- Diagnostics preservation for representative M57-M76 failures across the
+  extracted boundary, including exact code, severity, deterministic ordering,
+  and source location where already asserted.
+- Determinism tests for repeated lowering runs and reordered inputs where the
+  moved cluster participates.
+- Regression tests proving no backend translation, rendering, generated
+  output, broad body/call/store/return parsing, raw helper evaluator calls,
+  raw helper dispatch, catalog reads, `tsldata` reads, host CPU queries,
+  backend map reads, or runtime `frozen/` use is introduced.
+
+Golden fixtures required:
+
+- None. M77 is behavior-preserving lowering architecture work and must not
+  change generated C++ or Rust output.
+
+Validation commands:
+
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M77 module-boundary/import-preservation command selected by the
+  executor.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Treating M77 as permission for a whole-file rewrite or broad OO redesign.
+- Creating a generic stage registry, helper registry, call parser, body parser,
+  central semantic dispatcher, runtime plugin system, or raw-helper evaluator.
+- Moving exact tokens such as `pg`, `svptrue_b*`, `intrin`, `svst1`,
+  `tmp.data()`, or `a` into global extension/backend semantics instead of
+  keeping them slice-local structural evidence.
+- Hiding file/catalog reads, `tsldata` reads, host CPU queries, backend map
+  reads, renderer calls, generated-output writes, or runtime `frozen/` access
+  inside the new modules.
+- Changing accepted M57-M76 diagnostics, stage ordering, output identities, or
+  public imports while moving code.
+- Implementing backfeed/fixpoint execution before a later milestone consumes a
+  concrete need.
+
+Dependencies on prior milestones:
+
+- Milestones 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72,
+  73, 74, 75, and 76.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m76-acceptance-finalization-prompt.md` must run after
+  explicit human acceptance. It will update the workflow state for M77
+  execution and create `docs/agent/runs/m77-execution-review-loop-prompt.md`.

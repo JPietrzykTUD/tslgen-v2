@@ -928,6 +928,15 @@ Recommended first parity checks:
   evaluator calls, no catalog/`tsldata`/host CPU/backend map reads during
   lowering evaluation, and no backend translation/rendering, generic
   call/store/body lowering, golden-file, or generated-output churn.
+- Milestone 77 tests must prove behavior-preserving lowering architecture
+  extraction, not new semantics: the full lowering-boundary unit suite remains
+  green, focused tests cover the extracted module/stage cluster touched by the
+  refactor, public `tslgen.lowering` imports remain stable, representative
+  M57-M76 diagnostics keep their codes/severity/source locations where already
+  asserted, repeated runs remain deterministic, and no backend translation,
+  rendering, generated output, broad body/call/store/return parsing, raw
+  helper dispatch, catalog/`tsldata`/host CPU/backend map reads, or runtime
+  `frozen/` use is introduced.
 
 Deferred parity checks:
 

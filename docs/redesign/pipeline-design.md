@@ -569,6 +569,16 @@ must not become store lowering, ARM/SVE intrinsic semantics, variable/use-def
 analysis, backend-planning input, renderer-ready body, or a generated-output
 step.
 
+Post-M76 planning selects Milestone 77 as a behavior-preserving Stage 8
+module-boundary slice. M77 does not add a new semantic lowering result.
+Instead, it starts moving the accepted M58-M76 lowering path behind typed,
+private, composable module/stage boundaries under `tslgen.lowering` while
+preserving public imports, stage names, diagnostics, and outputs. Future
+backfeeds must be modeled as typed facts, requests, dependencies, or
+deterministic coordinator decisions; stages must not call arbitrary earlier
+stages through hidden recursion, raw helper dispatch, broad registries, or
+central semantic `if`/`elif` chains.
+
 ## Stage 9: Backend Planning
 
 Inputs:
