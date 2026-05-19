@@ -9224,8 +9224,7 @@ Next concrete prompt:
 
 Status:
 
-Planned after post-M78 planning. Human acceptance is required before
-execution starts.
+Accepted. The M79 execution-review loop returned `Accept With Follow-Ups`.
 
 Goal:
 
@@ -9241,6 +9240,19 @@ between `boundary.py`, `_array_body_shapes.py`, and
 physical lines, and M79 should reduce that facade by at least 1,500 net
 physical lines unless the executor documents that an import-boundary risk
 requires a narrower accepted reduction.
+
+M79 execution creates `tslgen.lowering._array_body_models` as the private
+exact array-body / array-initialization model owner. It moves exact-package
+typed aliases, helper rule/spec values, vector metadata values, envelope
+models, helper request/resolution models, declaration shell, structural
+sequence, predicate-path request, and post-branch call-site request values out
+of `boundary.py` while keeping `boundary.py` as the public facade. It also
+updates `_array_body_shapes.py` to consume the model-owned helper aliases and
+rule values, and updates `_array_body_diagnostics.py` to use small local
+protocols from the model boundary instead of unconstrained `Any` inputs for
+the targeted helper diagnostics. `boundary.py` now measures 8,915 physical
+lines, which is 2,194 lines below the post-M78 11,109-line baseline and
+satisfies the M79 reduction target.
 
 Scope:
 
@@ -9314,14 +9326,16 @@ Expected outputs:
 
 - A private exact array-body model module, or equivalent coherent private
   module split, that owns the exact package typed model boundary.
+- M79 execution adds `tslgen/src/tslgen/lowering/_array_body_models.py` for
+  this private model boundary.
 - `_array_body_shapes.py` consuming shared exact helper aliases/spec types from
   the new private model boundary instead of duplicating them with `boundary.py`.
 - `_array_body_diagnostics.py` using local typed protocols or moved typed
   models for targeted helper inputs instead of unconstrained `Any` where the
   M79 boundary owns the needed attributes.
-- `boundary.py` acting as public facade/coordinator and measuring at least
-  1,500 physical lines below the post-M78 11,109-line baseline unless a
-  documented circular-import boundary requires a narrower accepted reduction.
+- `boundary.py` acting as public facade/coordinator and measuring 8,915
+  physical lines, at least 1,500 physical lines below the post-M78 11,109-line
+  baseline, without a documented narrower reduction exception.
 - Stable public imports from `tslgen.lowering` and
   `tslgen.lowering.boundary`.
 - No public behavior changes to accepted M57-M78 lowering.
@@ -9336,12 +9350,15 @@ split, the public facade remains stable, diagnostics stay stable, and
 
 Evidence paths:
 
-- `tslgen/src/tslgen/lowering/boundary.py` for the post-M78 facade and exact
-  array-body typed model definitions.
-- `tslgen/src/tslgen/lowering/_array_body_shapes.py` for duplicated exact
-  helper aliases and helper/rule specs.
-- `tslgen/src/tslgen/lowering/_array_body_diagnostics.py` for M78 `Any`
-  diagnostic helper inputs.
+- `tslgen/src/tslgen/lowering/boundary.py` for the post-M79 facade and the
+  former pre-M79 exact array-body typed model ownership site.
+- `tslgen/src/tslgen/lowering/_array_body_models.py` for the M79 private exact
+  array-body / array-initialization typed model boundary.
+- `tslgen/src/tslgen/lowering/_array_body_shapes.py` for the former
+  duplicated exact helper aliases and current shared helper shape consumers.
+- `tslgen/src/tslgen/lowering/_array_body_diagnostics.py` for the former M78
+  `Any` diagnostic helper inputs and current protocol-typed diagnostic
+  consumers.
 - `tslgen/src/tslgen/lowering/_exact_shapes.py` for exact structural tokens
   that must remain shape evidence only.
 - `tslgen/src/tslgen/lowering/_pipeline.py` for the accepted private pipeline
@@ -9358,6 +9375,10 @@ Tests required:
 - Full `tslgen/tests/unit/test_lowering_boundary.py` preservation.
 - Focused M79 import-stability tests proving accepted public exact model names
   still resolve through `tslgen.lowering` and `tslgen.lowering.boundary`.
+- M79 execution adds focused tests proving the `boundary.py` facade re-exports
+  model-owned exact classes, `_array_body_shapes.py` shares helper aliases and
+  rule values from `_array_body_models.py`, and `_array_body_diagnostics.py`
+  consumes typed protocols instead of importing `Any`.
 - Focused private-boundary tests proving `_array_body_models` or equivalent
   private modules import without importing `boundary.py`, and that
   `_array_body_shapes.py` consumes the shared exact helper aliases/specs.
@@ -9381,7 +9402,7 @@ Golden fixtures required:
 Validation commands:
 
 - `wc -l tslgen/src/tslgen/lowering/boundary.py`
-- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_shapes.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_shapes.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py`
 - `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
 - A focused M79 model-ownership/import-stability command selected by the
   executor.
@@ -9410,6 +9431,7 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m78-acceptance-finalization-prompt.md` must run after
-  explicit human acceptance. It will update the workflow state for M79
-  execution and create `docs/agent/runs/m79-execution-review-loop-prompt.md`.
+- `docs/agent/runs/post-m79-planning-plus-review-prompt.md` is the active
+  next prompt. It must plan exactly one lowering-focused post-M79 milestone and
+  must not start M80 execution unless a later accepted prompt explicitly
+  selects that executor task.

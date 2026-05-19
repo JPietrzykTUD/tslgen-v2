@@ -675,6 +675,15 @@ targeted diagnostic typing where the same private model boundary supplies the
 needed attributes. `boundary.py` remains the public facade and private modules
 must not import it.
 
+M79 execution keeps those generation-time semantics unchanged. The private
+`tslgen.lowering._array_body_models` module now owns exact array-body /
+array-initialization helper aliases, helper rules, typed IR/value models, and
+the small protocols used by diagnostics. `_array_body_shapes.py` shares those
+helper definitions, `_array_body_diagnostics.py` uses protocol-typed inputs
+instead of targeted unconstrained `Any` parameters, and `boundary.py` remains
+the facade at 8,915 physical lines. No helper text is evaluated and no
+catalog, backend map, renderer, or generated-output path is added.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 78 is accepted.
+Milestone 79 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -414,39 +414,56 @@ private lowering modules from importing `boundary.py`, and materially reduce
 the post-M78 11,109-line facade without treating line count as permission to
 move unrelated shared lowering models. Human acceptance was recorded.
 
+The M79 execution-review loop returned `Accept With Follow-Ups` with no
+blocking implementation, validation, boundary, extensibility, documentation,
+or evidence issues. M79 preserves accepted M57-M78 behavior while creating
+`tslgen.lowering._array_body_models` as the private exact array-body /
+array-initialization typed model owner, updating `_array_body_shapes.py` to
+consume shared helper aliases/rules, and updating `_array_body_diagnostics.py`
+to use protocol-typed helper inputs instead of targeted unconstrained `Any`
+inputs. The public `tslgen.lowering` and `tslgen.lowering.boundary` import
+surfaces remain stable. `boundary.py` now measures 8,915 physical lines, which
+is 2,194 lines below the post-M78 11,109-line baseline and satisfies the M79
+reduction target. New lowering semantics, helper evaluation, backend
+translation, rendering, generated output, broad parsing, extension hardwiring,
+file/catalog reads, `tsldata` reads, host CPU queries, backend map reads, and
+runtime `frozen/` use remain out of scope.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 79.
+Run post-M79 lowering-focused planning plus review.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m79-execution-review-loop-prompt.md
+docs/agent/runs/post-m79-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 79: Exact Array-Body Typed Model Ownership Extraction Slice
+None. M80 is not selected yet; the active task is post-M79 planning.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M78 planning was accepted by the user. The acceptance finalization
-prepared the M79 execution-review loop prompt.
+The M79 execution-review loop returned `Accept With Follow-Ups`. Review and
+audit found no blocking issues. Non-blocking follow-ups were recorded for a
+private-import-boundary regression test and future cleanup of the private
+protocol names/shape checks used to avoid importing `boundary.py`.
 ```
 
 Next expected action:
 
 ```text
-Run the active M79 execution-review loop prompt. Use the specified
-single-executor plus read-only review/audit workflow. Do not start M80 until
-M79 review accepts and the next concrete prompt is created.
+Run the active post-M79 planning-plus-review prompt. Focus the next task on
+lowering. Do not implement product code or start M80 unless that planning
+prompt explicitly selects and finalizes an executor task.
 ```
 
 Accepted planning prompt:
@@ -1001,10 +1018,16 @@ Accepted post-M78 acceptance-finalization prompt:
 docs/agent/runs/post-m78-acceptance-finalization-prompt.md
 ```
 
-Active M79 execution-review loop prompt:
+Completed M79 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m79-execution-review-loop-prompt.md
+```
+
+Active post-M79 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m79-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2656,11 +2679,28 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   array parsing, backend translation, rendering, generated output, CLI/report/
   writer behavior, Rust, compiler execution, file/catalog reads, `tsldata`
   reads, host CPU queries, backend map reads, or runtime `frozen/` use.
+- M79 execution addressed the M78 follow-ups for duplicated exact helper
+  `Literal` aliases and targeted `_array_body_diagnostics.py` `Any` helper
+  inputs by moving exact model ownership into `_array_body_models.py` and
+  sharing typed protocols with shapes and diagnostics.
+- M79 review follow-up: add a committed regression test proving private
+  lowering modules such as `_array_body_models.py`, `_array_body_shapes.py`,
+  `_array_body_diagnostics.py`, `_exact_shapes.py`, and `_pipeline.py` do not
+  import `boundary.py`.
+- M79 maintainability follow-up: private protocols in `_array_body_models.py`
+  that mirror public generation model names, including `GenerationTypeRef` and
+  `GenerationSelectedBodyEnvelopeIr`, are accepted for the import boundary but
+  should be renamed, narrowed, or replaced by moved upstream model ownership
+  when a concrete future slice touches that dependency.
+- M79 maintainability follow-up: the structural M63-envelope `hasattr` checks
+  in `_array_body_models.py` preserve the private import direction; if M63
+  envelope ownership moves later, tighten this boundary deliberately instead
+  of broadening structural checks.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M79 through the
-active execution-review loop prompt.
+No stop condition is active. The workflow is ready to run post-M79
+lowering-focused planning through the active planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -2687,3 +2727,20 @@ git diff --check
 ```
 
 The M78-focused module-decomposition/import-stability command also completed.
+
+For M79, validation completed with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_shapes.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m79"
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+git diff --check
+```
+
+The M79 line count was `8915 tslgen/src/tslgen/lowering/boundary.py`.
+The focused M79 command returned `3 passed, 257 deselected`. The full
+lowering-boundary suite returned `260 passed`. The validation profile returned
+exit 0 with unit discovery `594` tests OK, compileall OK, ruff OK, mypy OK,
+and diff-check OK.

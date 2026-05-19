@@ -576,6 +576,11 @@ ownership into private lowering modules, keeps `boundary.py` as the public
 facade, preserves accepted M57-M78 diagnostics and stage behavior, and uses
 typed model/protocol ownership to remove duplicated exact helper aliases and
 targeted diagnostic `Any` inputs without changing selected-branch behavior.
+M79 execution keeps that no-behavior-change contract: the same selected
+branches, diagnostics, stage names/order, output identities, and deterministic
+keys are preserved while `tslgen.lowering._array_body_models` becomes the
+private typed owner and `boundary.py` remains only the public facade at 8,915
+physical lines.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic

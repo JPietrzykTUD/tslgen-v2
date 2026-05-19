@@ -349,7 +349,7 @@ and still does not add compiler execution.
   exact predicate-path structural/request IR, accepted M76 exact post-branch
   intrinsic call-site structural/request IR, implemented M77 behavior-preserving
   lowering pipeline/module-boundary cleanup, accepted M78 behavior-preserving
-  lowering boundary package decomposition, planned M79 exact array-body typed
+  lowering boundary package decomposition, implemented M79 exact array-body typed
   model ownership extraction, broad TSIL/body-slot parity beyond
   those exact structural/request-resolution
   boundaries, and backend translation-map evaluation beyond the selected

@@ -971,6 +971,13 @@ Recommended first parity checks:
   declaration/array parsing, raw helper dispatch, catalog/`tsldata`/host CPU/
   backend map reads, import cycles, duplicate moved code, or runtime `frozen/`
   use is introduced.
+- M79 execution adds focused unit coverage for the `boundary.py` facade
+  re-exporting model-owned exact classes, `_array_body_shapes.py` sharing exact
+  helper aliases/rules from `_array_body_models.py`, and
+  `_array_body_diagnostics.py` consuming typed protocols instead of importing
+  `Any`. The full lowering-boundary suite remains the primary behavior
+  preservation check, and the measured `boundary.py` line count is 8,915,
+  which is 2,194 physical lines below the 11,109-line post-M78 baseline.
 
 Deferred parity checks:
 

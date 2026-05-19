@@ -544,6 +544,15 @@ Current roadmap note:
   exports. Private lowering modules must not import `boundary.py`, and M79 is
   not permission for a registry, dispatcher, plugin system, broad class
   hierarchy, backend hook, renderer hook, or new lowering behavior.
+- M79 execution realizes that model boundary as
+  `tslgen.lowering._array_body_models`. Exact array-body /
+  array-initialization aliases, helper rules, vector metadata, envelope,
+  helper request/resolution, declaration-shell, structural-sequence,
+  predicate-path, and post-branch call-site models now live there; `boundary.py`
+  remains the public facade and now measures 8,915 physical lines. The private
+  model, shape, diagnostic, exact-shape, and pipeline modules still do not
+  import `boundary.py`, so the extraction is an ownership split, not a new
+  semantic dispatcher or backend/rendering hook.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

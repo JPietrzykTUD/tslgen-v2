@@ -609,6 +609,14 @@ where the same private model boundary supplies typed inputs. `boundary.py`
 remains the public facade/coordinator, and private modules still must not
 import it.
 
+M79 execution keeps Stage 8 behavior and ordering unchanged while creating
+`tslgen.lowering._array_body_models` as the private owner for exact
+array-body / array-initialization typed models and tiny protocols. The existing
+shape and diagnostic modules now consume that model boundary, and `boundary.py`
+remains the facade at 8,915 physical lines. No new stage, helper evaluation,
+backfeed execution, backend translation, rendering, generated output, or
+registry/dispatcher behavior is introduced.
+
 ## Stage 9: Backend Planning
 
 Inputs:

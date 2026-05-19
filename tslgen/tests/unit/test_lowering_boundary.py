@@ -11,6 +11,7 @@ from unittest import mock
 
 from _helpers import assert_diagnostic
 import tslgen.lowering._array_body_diagnostics as lowering_array_body_diagnostics
+import tslgen.lowering._array_body_models as lowering_array_body_models
 import tslgen.lowering._array_body_shapes as lowering_array_body_shapes
 import tslgen.lowering._exact_shapes as lowering_exact_shapes
 import tslgen.lowering._pipeline as lowering_pipeline
@@ -4843,6 +4844,75 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(
             diagnostic.code,
             "TSL-LOWER-ARRAY-INIT-SLOT-FORM-MALFORMED",
+        )
+
+    def test_m79_array_body_model_ownership_moves_exact_models(self) -> None:
+        self.assertIs(
+            lowering_boundary._array_body_models,
+            lowering_array_body_models,
+        )
+        self.assertIs(
+            lowering_boundary.ExactArrayBodyEnvelopeIr,
+            lowering_array_body_models.ExactArrayBodyEnvelopeIr,
+        )
+        self.assertIs(
+            lowering_boundary.ExactArrayInitializationHelperRequestIr,
+            lowering_array_body_models.ExactArrayInitializationHelperRequestIr,
+        )
+        self.assertIs(
+            lowering_boundary.ExactPredicatePathStructuralRequestIr,
+            lowering_array_body_models.ExactPredicatePathStructuralRequestIr,
+        )
+        self.assertIs(
+            lowering_boundary.ExactPostBranchIntrinsicCallSiteStructuralRequestIr,
+            (
+                lowering_array_body_models
+                .ExactPostBranchIntrinsicCallSiteStructuralRequestIr
+            ),
+        )
+
+    def test_m79_array_body_shapes_share_helper_model_ownership(self) -> None:
+        self.assertIs(
+            lowering_array_body_shapes.ExactArrayInitializationHelperLeafKind,
+            lowering_array_body_models.ExactArrayInitializationHelperLeafKind,
+        )
+        self.assertIs(
+            (
+                lowering_array_body_shapes
+                ._EXACT_ARRAY_INITIALIZATION_HELPER_LEAF_SPECS
+            ),
+            (
+                lowering_array_body_models
+                ._EXACT_ARRAY_INITIALIZATION_HELPER_LEAF_SPECS
+            ),
+        )
+        self.assertIs(
+            (
+                lowering_array_body_shapes
+                ._EXACT_ARRAY_INITIALIZATION_BASE_TYPE_REQUEST_RULE
+            ),
+            (
+                lowering_array_body_models
+                ._EXACT_ARRAY_INITIALIZATION_BASE_TYPE_REQUEST_RULE
+            ),
+        )
+        self.assertNotIn(
+            "ExactArrayInitializationHelperLeafKind = Literal",
+            inspect.getsource(lowering_boundary),
+        )
+
+    def test_m79_array_body_diagnostics_use_typed_protocols(self) -> None:
+        self.assertNotIn("Any", lowering_array_body_diagnostics.__dict__)
+        self.assertIs(
+            lowering_array_body_diagnostics.ExactArrayInitializationHelperLeafSpecLike,
+            (
+                lowering_array_body_models
+                .ExactArrayInitializationHelperLeafSpecLike
+            ),
+        )
+        self.assertIs(
+            lowering_array_body_diagnostics.ExactArrayInitializationSlotFormLike,
+            lowering_array_body_models.ExactArrayInitializationSlotFormLike,
         )
 
     def test_lower_candidates_structural_sequence_stage_follows_declaration_shell(

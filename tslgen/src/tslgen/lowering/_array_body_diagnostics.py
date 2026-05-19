@@ -1,8 +1,16 @@
 from __future__ import annotations
 
-from typing import Any
-
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
+from tslgen.lowering._array_body_models import (
+    ArrayBodyEnvelopeLike,
+    ArrayBodyEnvelopeSkeletonKeyLike,
+    ArrayBodyEnvelopeSkeletonLike,
+    ArrayBodyEnvelopeSkeletonRequirementLike,
+    ExactArrayInitializationHelperLeafLike,
+    ExactArrayInitializationHelperLeafSpecLike,
+    ExactArrayInitializationSlotFormLike,
+    SourceLocated,
+)
 
 def _array_body_envelope_shape_unsupported_diagnostic(
     detail: str,
@@ -60,7 +68,7 @@ def _array_initialization_slot_malformed_diagnostic(
 
 
 def _array_initialization_slot_helper_unsupported_diagnostic(
-    slot: Any,
+    slot: SourceLocated,
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-LOWER-ARRAY-INIT-SLOT-HELPER-UNSUPPORTED",
@@ -107,8 +115,8 @@ def _array_initialization_helper_request_missing_form_diagnostic(
 
 
 def _array_initialization_helper_request_missing_leaf_diagnostic(
-    spec: Any,
-    form: Any,
+    spec: ExactArrayInitializationHelperLeafSpecLike,
+    form: ExactArrayInitializationSlotFormLike,
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-MISSING",
@@ -120,8 +128,8 @@ def _array_initialization_helper_request_missing_leaf_diagnostic(
 
 
 def _array_initialization_helper_request_mismatched_leaf_diagnostic(
-    spec: Any,
-    leaf: Any,
+    spec: ExactArrayInitializationHelperLeafSpecLike,
+    leaf: ExactArrayInitializationHelperLeafLike,
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-MISMATCH",
@@ -133,8 +141,8 @@ def _array_initialization_helper_request_mismatched_leaf_diagnostic(
 
 
 def _array_initialization_helper_request_duplicate_leaf_diagnostic(
-    leaf: Any,
-    form: Any,
+    leaf: ExactArrayInitializationHelperLeafLike,
+    form: ExactArrayInitializationSlotFormLike,
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-DUPLICATE",
@@ -146,8 +154,8 @@ def _array_initialization_helper_request_duplicate_leaf_diagnostic(
 
 
 def _array_initialization_helper_request_unsupported_leaf_diagnostic(
-    spec: Any,
-    leaf: Any,
+    spec: ExactArrayInitializationHelperLeafSpecLike,
+    leaf: ExactArrayInitializationHelperLeafLike,
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-LOWER-ARRAY-INIT-HELPER-REQUEST-LEAF-UNSUPPORTED",
@@ -1028,8 +1036,8 @@ def _post_branch_call_site_source_operand_unsupported_diagnostic(
 
 
 def _duplicate_array_body_envelope_skeleton_diagnostic(
-    lookup_key: Any,
-    skeleton: Any,
+    lookup_key: ArrayBodyEnvelopeSkeletonKeyLike,
+    skeleton: ArrayBodyEnvelopeSkeletonLike,
     *,
     conflicting: bool,
 ) -> Diagnostic:
@@ -1051,8 +1059,8 @@ def _duplicate_array_body_envelope_skeleton_diagnostic(
 
 
 def _missing_array_body_envelope_skeleton_diagnostic(
-    requirement: Any,
-    envelope: Any,
+    requirement: ArrayBodyEnvelopeSkeletonRequirementLike,
+    envelope: ArrayBodyEnvelopeLike,
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-MISSING",
@@ -1066,8 +1074,8 @@ def _missing_array_body_envelope_skeleton_diagnostic(
 
 
 def _orphan_array_body_envelope_skeleton_diagnostic(
-    lookup_key: Any,
-    skeleton: Any,
+    lookup_key: ArrayBodyEnvelopeSkeletonKeyLike,
+    skeleton: ArrayBodyEnvelopeSkeletonLike,
 ) -> Diagnostic:
     return Diagnostic.error(
         "TSL-LOWER-ARRAY-BODY-ENVELOPE-SKELETON-ORPHAN",
@@ -1081,9 +1089,9 @@ def _orphan_array_body_envelope_skeleton_diagnostic(
 
 
 def _mismatched_array_body_envelope_skeleton_diagnostic(
-    lookup_key: Any,
-    skeleton: Any,
-    envelope_keys: tuple[Any, ...],
+    lookup_key: ArrayBodyEnvelopeSkeletonKeyLike,
+    skeleton: ArrayBodyEnvelopeSkeletonLike,
+    envelope_keys: tuple[ArrayBodyEnvelopeSkeletonKeyLike, ...],
 ) -> Diagnostic:
     candidate_envelope_keys = tuple(
         envelope_key

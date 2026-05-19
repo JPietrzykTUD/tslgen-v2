@@ -1478,6 +1478,15 @@ Consequences:
   public facade, prevent private modules from importing `boundary.py`, and
   avoid registries, dispatchers, plugin systems, broad TSIL parsing, backend
   hooks, renderer hooks, and new body/call/store/return semantics.
+- M79 execution chooses `tslgen.lowering._array_body_models` as the private
+  typed model owner. Exact helper aliases/rules, exact array-body envelope and
+  array-initialization request/resolution models, declaration-shell and
+  structural-sequence values, predicate-path request values, post-branch
+  call-site request values, and local diagnostic protocols move there.
+  `boundary.py` remains the facade/coordinator at 8,915 physical lines, and
+  `_array_body_shapes.py` plus `_array_body_diagnostics.py` consume the model
+  boundary without importing the facade. This is a behavior-preserving
+  ownership decision, not a new lowering semantic layer.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
