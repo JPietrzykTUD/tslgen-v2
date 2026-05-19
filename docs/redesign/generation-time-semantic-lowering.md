@@ -626,16 +626,16 @@ byte-size-to-token relationships, store semantics, `svst1`, `tmp.data()`, `a`,
 backend maps, rendering, generated output, variable scope, or broad body
 semantics.
 
-Post-M75 planning selects Milestone 76 as exact post-branch intrinsic call-site
-structural/request IR. It should consume accepted M75 predicate-path state and
-record the exact `array.tsl:110` call-site shape
+Milestone 76 is accepted as exact post-branch intrinsic call-site structural/
+request IR. It consumes accepted M75 predicate-path state and records the exact
+`array.tsl:110` call-site shape
 `intrin<svst1>(pg, tmp.data(), a);` as typed lowering state. The result is
 structural/provenance only: `intrin`, unresolved token `svst1`, predicate
 argument token `pg`, member-access-shaped token/path `tmp.data()`, and source
 operand token `a` must not become ARM/SVE intrinsic semantics, store
 semantics, memory behavior, pointer semantics, variable scope, backend
-translation, renderer-ready IR, or generated output. The M76 stage should
-follow `predicate_path_structural_request_lowering` and must use source text
+translation, renderer-ready IR, or generated output. The M76 stage
+follows `predicate_path_structural_request_lowering` and must use source text
 only as exact shape/provenance evidence, not as raw helper dispatch.
 
 M61 diagnostics:
@@ -903,7 +903,7 @@ M74 diagnostics:
   declaration shell to a nonzero slot, or otherwise violates the exact
   five-slot structural invariant without implying slot semantics.
 
-M75 planned diagnostics should cover:
+M75 diagnostics:
 
 - `TSL-LOWER-PREDICATE-PATH-SOURCE-UNSUPPORTED`: the source is not an accepted
   M74 structural sequence, M74 stage output, or typed lowered implementation
@@ -925,15 +925,54 @@ M75 planned diagnostics should cover:
   selected-body assignment target token, or slot-3 predicate argument token do
   not match the required structural `pg` path.
 
+M76 diagnostics:
+
+- `TSL-LOWER-POST-BRANCH-CALL-SITE-SOURCE-UNSUPPORTED`: the source is not an
+  accepted M75 predicate-path request, M75 stage output, or typed lowered
+  implementation carrying exactly one M75 value with the required M74 sequence.
+- `TSL-LOWER-POST-BRANCH-CALL-SITE-IR-MISSING`: a typed source container does
+  not carry the required exact M75 predicate-path request.
+- `TSL-LOWER-POST-BRANCH-CALL-SITE-IR-MULTIPLE`: a typed source container
+  carries multiple M75 predicate-path requests where M76 requires exactly one.
+- `TSL-LOWER-POST-BRANCH-CALL-SITE-CONTEXT-MISMATCH`: selected candidate,
+  target extension, source extension, selected type, or branch-chain context
+  does not match the typed M75/M74/M73 inputs.
+- `TSL-LOWER-POST-BRANCH-CALL-SITE-PROVENANCE-MISMATCH`: accepted M75
+  predicate-path state, accepted M74 sequence, accepted M73 declaration shell,
+  or the slot-3 structural role disagree on candidate, extension, selected
+  type, branch-chain identity, role identity, source location, source text, or
+  variable-token provenance required for call-site classification.
+- `TSL-LOWER-POST-BRANCH-CALL-SITE-SEQUENCE-MISSING`: the accepted M75 value
+  does not preserve the M74 structural sequence required by the M76 boundary.
+- `TSL-LOWER-POST-BRANCH-CALL-SITE-MALFORMED`: the slot-3 source text cannot
+  be parsed as the exact `intrin<...>(...);` call-site shape.
+- `TSL-LOWER-POST-BRANCH-CALL-SITE-SHAPE-UNSUPPORTED`: the slot-3 source text
+  has a call-like shape but is not the exact supported post-branch call-site
+  form.
+- `TSL-LOWER-POST-BRANCH-CALL-SITE-CALL-HEAD-MISMATCH`: the structural call
+  head token is not the exact `intrin` token.
+- `TSL-LOWER-POST-BRANCH-CALL-SITE-INTRINSIC-TOKEN-MISMATCH`: the unresolved
+  intrinsic token is not the exact structural `svst1` token.
+- `TSL-LOWER-POST-BRANCH-CALL-SITE-ARGUMENT-COUNT-MISMATCH`: the call-site
+  does not preserve exactly three structural arguments.
+- `TSL-LOWER-POST-BRANCH-CALL-SITE-PREDICATE-ARGUMENT-MISMATCH`: argument 0
+  does not match the accepted M75 slot-3 predicate-token use.
+- `TSL-LOWER-POST-BRANCH-CALL-SITE-MEMBER-ACCESS-UNSUPPORTED`: argument 1 is
+  not the exact structural `tmp.data()` member-access-shaped token/path linked
+  to the M73/M74/M75 `tmp` provenance.
+- `TSL-LOWER-POST-BRANCH-CALL-SITE-SOURCE-OPERAND-UNSUPPORTED`: argument 2 is
+  not the exact structural source operand token `a`.
+
 ## Explicit Deferrals
 
-Deferred beyond the implemented M43-M74 semantic-lowering, structural
+Deferred beyond the implemented M43-M76 semantic-lowering, structural
 slot-assembly, pipeline-integration, exact array-initialization slot form IR,
 M67 helper-request IR, accepted M68 base-type request resolution, M69 pipeline
 extraction, M70 vector-length request resolution, M71 vector-alignment
 request resolution, M72 helper-set completion, M73 exact declaration-shell
-structural IR, implemented M74 exact structural-sequence classification, and
-selected M75 exact predicate-path structural/request IR slices:
+structural IR, implemented M74 exact structural-sequence classification,
+accepted M75 exact predicate-path structural/request IR, and accepted M76 exact
+post-branch intrinsic call-site structural/request IR slices:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -982,13 +1021,16 @@ selected M75 exact predicate-path structural/request IR slices:
   Implemented M73 records only the exact first-slot declaration-shell
   structure over that helper set. Implemented M74 records only exact
   source-ordered body sequence and structural/provenance slot roles around
-  that M73 value. Selected M75 will record only exact predicate-path
+  that M73 value. Accepted M75 records only exact predicate-path
   structural/request state across slots 1, 2, and 3 without SVE or store
-  semantics. Backend uninit translation, broad vector/register metadata,
-  generic declaration/array/body semantics, allocation/lifetime, initializer
-  behavior, variable scope, predicate semantics, direct-intrinsic/SVE
-  semantics, store/return semantics, aligned load/store semantics, rendering,
-  and output remain deferred.
+  semantics. Accepted M76 records only exact post-branch intrinsic call-site
+  structural/request state for slot 3 without store, memory, pointer,
+  variable-scope, ARM/SVE intrinsic, backend translation, rendering, or output
+  semantics. Backend uninit translation, broad
+  vector/register metadata, generic declaration/array/body semantics,
+  allocation/lifetime, initializer behavior, variable scope, predicate
+  semantics, direct-intrinsic/SVE semantics, store/return semantics, aligned
+  load/store semantics, rendering, and output remain deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only

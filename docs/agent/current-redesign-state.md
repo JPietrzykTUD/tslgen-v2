@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 75 is accepted.
+Milestone 76 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -342,40 +342,53 @@ semantics.
 Post-M75 planning is accepted. Human acceptance was recorded, and M76 execution
 is the active workflow action.
 
+The M76 execution-review loop returned `Accept With Follow-Ups` after one
+focused documentation revision. Review and audit found no blocking
+implementation, validation, boundary, extensibility, documentation, or evidence
+issues after that revision. M76 consumes accepted M75 predicate-path state and
+records the exact `array.tsl:110` `intrin<svst1>(pg, tmp.data(), a);`
+call-site shape as typed structural/request lowering state only. The slice
+keeps `intrin`, `svst1`, `pg`, `tmp.data()`, and `a` as structural
+tokens/provenance only. Store semantics, ARM/SVE intrinsic semantics, memory
+behavior, pointer semantics, operand semantics, variable scope, backend maps,
+backend translation, rendering, generated output, generic call/store/body IR,
+broad TSIL parsing, lowering-time file/catalog reads, `tsldata` reads during
+lowering, host CPU queries, and runtime `frozen/` use remain out of scope.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 76.
+Run post-M76 lowering-focused planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m76-execution-review-loop-prompt.md
+docs/agent/runs/post-m76-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 76: Exact Post-Branch Intrinsic Call-Site Structural Request IR Slice
+None. Post-M76 planning is active.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M75 planning accepted after human acceptance. M76 execution-review loop is
-pending.
+M76 execution-review loop returned Accept With Follow-Ups after one focused
+documentation revision.
 ```
 
 Next expected action:
 
 ```text
-Run the active M76 execution-review loop prompt. If M76 is already implemented
-and awaiting review, skip implementation and run review/audit subagents. If M76
-is not implemented, run one write-capable executor and then review/audit
-subagents. Do not start M77.
+Run the active post-M76 planning-plus-review prompt. Focus on lowering. Do not
+implement code, and do not start M77 execution unless post-M76 planning is
+accepted and the workflow state advances through the required finalization
+prompt.
 ```
 
 Accepted planning prompt:
@@ -876,10 +889,16 @@ Accepted post-M75 acceptance finalization prompt:
 docs/agent/runs/post-m75-acceptance-finalization-prompt.md
 ```
 
-Active M76 execution-review loop prompt:
+Accepted M76 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m76-execution-review-loop-prompt.md
+```
+
+Active post-M76 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m76-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1506,8 +1525,8 @@ docs/agent/runs/m76-execution-review-loop-prompt.md
   broad TSIL parsing, lowering-time file/catalog reads, `tsldata` reads during
   lowering evaluation, host CPU queries, backend map reads, or runtime
   `frozen/` use.
-- Post-M75 planning is accepted and selected M76 as exact post-branch
-  intrinsic call-site structural/request IR only.
+- M76 is accepted as exact post-branch intrinsic call-site structural/request
+  IR only.
 - M76 must consume accepted M75 `ExactPredicatePathStructuralRequestIr` values,
   the `predicate_path_structural_request_lowering` stage output, or a typed
   `LoweredImplementation` carrying exactly one accepted M75 value.
@@ -2403,11 +2422,24 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   behavior and selected-branch diagnostics, and include no-raw-helper,
   no-catalog, no-`tsldata`, no-host-CPU, no-backend-map, no-renderer, and
   no-`frozen/` regression coverage where practical.
+- M76 documentation revision follow-up addressed during the execution-review
+  loop: update stale planned/selected wording and record the new
+  `TSL-LOWER-POST-BRANCH-CALL-SITE-*` diagnostic codes across the redesign
+  docs.
+- M76 extensibility follow-up: `GenerationLoweringStage.__post_init__` remains
+  a central stage-name-to-output-type validation table and is growing with each
+  exact Stage 8 slice. Before several more exact lowering stages land, plan a
+  small cleanup that preserves typed stage-specific attachment points without
+  turning into a broad registry or dispatcher.
+- M76 extensibility follow-up: keep future exact-shape recognizers
+  slice-local. M76's comma-split parser is accepted only for the exact
+  `intrin<svst1>(pg, tmp.data(), a);` shape and must not become a general
+  call/body parser.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready for M76 execution through
-the active execution-review loop prompt.
+No stop condition is active. The workflow is ready for post-M76
+lowering-focused planning through the active planning-plus-review prompt.
 
 ## Validation Expectations
 

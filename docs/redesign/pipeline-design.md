@@ -559,11 +559,11 @@ evidence, and it does not become SVE predicate semantics, variable/use-def
 analysis, store lowering, backend-planning input, renderer-ready body, or a
 generated-output step.
 
-Post-M75 planning selects Milestone 76 as the next Stage 8 boundary after
-`predicate_path_structural_request_lowering`. M76 should produce one typed
-exact post-branch intrinsic call-site structural/request value for the accepted
-`intrin<svst1>(pg, tmp.data(), a);` shape. The proposed stage name is
-`post_branch_intrinsic_call_site_structural_request_lowering`. It must consume
+Milestone 76 implements the next Stage 8 boundary after
+`predicate_path_structural_request_lowering`. M76 produces one typed exact
+post-branch intrinsic call-site structural/request value for the accepted
+`intrin<svst1>(pg, tmp.data(), a);` shape. The stage name is
+`post_branch_intrinsic_call_site_structural_request_lowering`. It consumes
 accepted M75 predicate-path state and accepted M74/M73 provenance only, and it
 must not become store lowering, ARM/SVE intrinsic semantics, variable/use-def
 analysis, backend-planning input, renderer-ready body, or a generated-output

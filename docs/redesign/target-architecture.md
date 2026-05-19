@@ -501,10 +501,10 @@ Current roadmap note:
   structural tokens/request provenance only; they do not become SVE predicate
   semantics, store semantics, variable scope, backend translation, renderer-
   ready IR, generated output, broad body IR, or a slot-role registry.
-- Post-M75 planning selects Milestone 76 as a typed exact post-branch
-  intrinsic call-site structural/request boundary after M75. It should consume
-  accepted M75 predicate-path state plus accepted M74/M73 provenance and record
-  only the exact `intrin<svst1>(pg, tmp.data(), a);` call-site shape.
+- Milestone 76 is accepted as a typed exact post-branch intrinsic call-site
+  structural/request boundary after M75. It consumes accepted M75
+  predicate-path state plus accepted M74/M73 provenance and records only the
+  exact `intrin<svst1>(pg, tmp.data(), a);` call-site shape.
   `intrin`, `svst1`, `pg`, `tmp.data()`, and `a` are structural tokens/
   provenance only; they must not become store semantics, ARM/SVE intrinsic
   semantics, memory or pointer semantics, variable scope, backend translation,

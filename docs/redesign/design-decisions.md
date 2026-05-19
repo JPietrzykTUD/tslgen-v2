@@ -1435,11 +1435,11 @@ Consequences:
   make `svptrue_b*`, `svst1`, `tmp.data()`, or `a` into SVE/store/backend
   semantics, and it does not introduce variable scope, generic predicate IR,
   backend translation, renderer-ready IR, or generated output.
-- Post-M75 planning selects Milestone 76 to introduce an exact post-branch
-  intrinsic call-site structural/request IR before any store-call, ARM/SVE
-  intrinsic, memory, pointer, or backend semantics. M76 should consume accepted
-  M75 predicate-path state and accepted M74/M73 provenance, then record only
-  the exact `intrin<svst1>(pg, tmp.data(), a);` shape as typed lowering state.
+- Milestone 76 is accepted as an exact post-branch intrinsic call-site
+  structural/request IR before any store-call, ARM/SVE intrinsic, memory,
+  pointer, or backend semantics. M76 consumes accepted M75 predicate-path state
+  and accepted M74/M73 provenance, then records only the exact
+  `intrin<svst1>(pg, tmp.data(), a);` shape as typed lowering state.
   It must not make `svst1`, `tmp.data()`, or `a` into store/backend semantics,
   and it must not introduce generic call IR, variable scope, backend
   translation, renderer-ready IR, or generated output.

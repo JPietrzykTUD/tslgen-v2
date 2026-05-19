@@ -8575,8 +8575,7 @@ Candidate comparison:
 
 Status:
 
-Accepted for execution after post-M75 planning and human acceptance. M76
-execution is active through the generated execution-review loop prompt.
+Accepted after M76 execution-review loop.
 
 Goal:
 
@@ -8759,5 +8758,8 @@ Dependencies on prior milestones:
 Next concrete prompt:
 
 - `docs/agent/runs/post-m75-acceptance-finalization-prompt.md` ran after
-  explicit human acceptance. The next concrete prompt is
-  `docs/agent/runs/m76-execution-review-loop-prompt.md`. Do not start M77.
+  explicit human acceptance. The M76 execution-review loop returned
+  `Accept With Follow-Ups` after one focused documentation revision. The next
+  concrete prompt is
+  `docs/agent/runs/post-m76-planning-plus-review-prompt.md`. Do not start M77
+  until post-M76 planning is accepted.

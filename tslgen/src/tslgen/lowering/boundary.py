@@ -64,6 +64,7 @@ type GenerationLoweringStageName = Literal[
     "array_initialization_declaration_shell_lowering",
     "array_body_structural_sequence_classification",
     "predicate_path_structural_request_lowering",
+    "post_branch_intrinsic_call_site_structural_request_lowering",
 ]
 type ExactPredicatePathSelectedUpdateState = Literal[
     "accepted_selected_update",
@@ -154,6 +155,7 @@ type GenerationLoweringStageOutput = (
     | ExactArrayInitializationDeclarationShellIr
     | ExactArrayBodyStructuralSequenceIr
     | ExactPredicatePathStructuralRequestIr
+    | ExactPostBranchIntrinsicCallSiteStructuralRequestIr
     | TsilStatement
 )
 
@@ -373,6 +375,15 @@ _EXACT_POST_BRANCH_STORE_PREDICATE_SLOT_RE = re.compile(
     rf"\A\s*intrin\s*<\s*(?P<call_token>{_TSIL_IDENTIFIER})\s*>\s*"
     rf"\(\s*(?P<predicate_token>{_TSIL_IDENTIFIER})\s*,\s*"
     r"tmp\.data\(\)\s*,\s*a\s*\)\s*;\s*\Z"
+)
+_POST_BRANCH_INTRINSIC_CALL_SITE_CONTAINER_RE = re.compile(
+    rf"\A\s*(?P<call_head>{_TSIL_IDENTIFIER})\s*"
+    rf"<\s*(?P<intrinsic_token>{_TSIL_IDENTIFIER})\s*>\s*"
+    r"\((?P<arguments>.*)\)\s*;\s*\Z"
+)
+_POST_BRANCH_MEMBER_ACCESS_ARGUMENT_RE = re.compile(
+    rf"\A(?P<base_token>{_TSIL_IDENTIFIER})\."
+    rf"(?P<member_token>{_TSIL_IDENTIFIER})\s*\(\s*\)\Z"
 )
 _ARRAY_INITIALIZATION_SLOT_HELPER_SHAPE_RE = re.compile(
     r"\A[ \t]*var<typed>\("
@@ -3190,6 +3201,232 @@ class ExactPredicatePathStructuralRequestIr:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactPostBranchIntrinsicCallSiteStructuralRequestIr:
+    source_predicate_path: ExactPredicatePathStructuralRequestIr
+    source_sequence: ExactArrayBodyStructuralSequenceIr
+    post_branch_role_label: Literal["opaque_post_branch_store_call_shaped_slot"]
+    post_branch_slot_ordinal: Literal[3]
+    post_branch_source_location: SourceLocation
+    original_call_source_text: str
+    call_head_token_text: str
+    unresolved_intrinsic_token_text: str
+    predicate_argument_ordinal: Literal[0]
+    predicate_argument_token_text: str
+    predicate_argument_source_slot_ordinal: Literal[3]
+    predicate_argument_source_token_text: str
+    member_access_argument_ordinal: Literal[1]
+    member_access_argument_text: str
+    member_access_base_token_text: str
+    member_access_member_token_text: str
+    member_access_source_variable_token_text: str
+    source_operand_argument_ordinal: Literal[2]
+    source_operand_argument_token_text: str
+    candidate_id: str
+    target_extension: str
+    source_extension: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(
+            self.source_predicate_path,
+            ExactPredicatePathStructuralRequestIr,
+        ):
+            raise TypeError(
+                "post-branch intrinsic call-site request requires an M75 "
+                "predicate-path request"
+            )
+        if self.source_sequence is not self.source_predicate_path.source_sequence:
+            raise ValueError(
+                "post-branch intrinsic call-site request must preserve the M74 "
+                "sequence carried by M75"
+            )
+        if self.post_branch_role_label != "opaque_post_branch_store_call_shaped_slot":
+            raise ValueError(
+                "post-branch intrinsic call-site request requires the M74 "
+                "post-branch store-call-shaped role"
+            )
+        if self.post_branch_slot_ordinal != 3:
+            raise ValueError(
+                "post-branch intrinsic call-site request slot ordinal must be 3"
+            )
+        if self.post_branch_source_location is None:
+            raise ValueError(
+                "post-branch intrinsic call-site request requires a source location"
+            )
+        if not self.original_call_source_text.strip():
+            raise ValueError(
+                "post-branch intrinsic call-site request requires source text"
+            )
+        if self.call_head_token_text != "intrin":
+            raise ValueError(
+                "post-branch intrinsic call-site request records only the exact "
+                "structural call-head token intrin"
+            )
+        if self.unresolved_intrinsic_token_text != "svst1":
+            raise ValueError(
+                "post-branch intrinsic call-site request records only the exact "
+                "unresolved intrinsic token svst1"
+            )
+        if self.predicate_argument_ordinal != 0:
+            raise ValueError(
+                "post-branch intrinsic call-site predicate argument ordinal must be 0"
+            )
+        if self.predicate_argument_source_slot_ordinal != (
+            self.source_predicate_path.store_call_slot_ordinal
+        ):
+            raise ValueError(
+                "post-branch intrinsic call-site predicate argument source slot "
+                "must be the M75 slot-3 predicate-token use"
+            )
+        if (
+            self.predicate_argument_token_text
+            != self.source_predicate_path.store_call_predicate_argument_text
+            or self.predicate_argument_source_token_text
+            != self.source_predicate_path.store_call_predicate_argument_text
+        ):
+            raise ValueError(
+                "post-branch intrinsic call-site predicate argument must link "
+                "to the accepted M75 slot-3 predicate-token use"
+            )
+        if self.member_access_argument_ordinal != 1:
+            raise ValueError(
+                "post-branch intrinsic call-site member-access argument ordinal "
+                "must be 1"
+            )
+        if (
+            self.member_access_argument_text != "tmp.data()"
+            or self.member_access_base_token_text != "tmp"
+            or self.member_access_member_token_text != "data"
+        ):
+            raise ValueError(
+                "post-branch intrinsic call-site member-access-shaped argument "
+                "must remain the exact structural token/path tmp.data()"
+            )
+        if (
+            self.member_access_source_variable_token_text
+            != self.source_sequence.declaration_shell.variable_token
+            or self.member_access_base_token_text
+            != self.source_sequence.declaration_shell.variable_token
+        ):
+            raise ValueError(
+                "post-branch intrinsic call-site tmp.data() argument must link "
+                "only to the structural tmp provenance carried through M73/M74/M75"
+            )
+        if self.source_operand_argument_ordinal != 2:
+            raise ValueError(
+                "post-branch intrinsic call-site source-operand argument ordinal "
+                "must be 2"
+            )
+        if self.source_operand_argument_token_text != "a":
+            raise ValueError(
+                "post-branch intrinsic call-site records only the exact structural "
+                "source operand token a"
+            )
+        store_location = self.source_predicate_path.store_call_source_location
+        if store_location is None:
+            raise ValueError(
+                "post-branch intrinsic call-site request requires the M75 "
+                "store-call source location"
+            )
+        if (
+            self.post_branch_slot_ordinal
+            != self.source_predicate_path.store_call_slot_ordinal
+            or self.post_branch_role_label
+            != self.source_predicate_path.store_call_role_label
+            or self.post_branch_source_location != store_location
+        ):
+            raise ValueError(
+                "post-branch intrinsic call-site slot identity must match the "
+                "accepted M75 store-call predicate-token use"
+            )
+        if len(self.source_sequence.roles) <= 3:
+            raise ValueError(
+                "post-branch intrinsic call-site request requires M74 role "
+                "ordinal 3 provenance"
+            )
+        post_branch_role = self.source_sequence.roles[3]
+        if (
+            post_branch_role.role_label != self.post_branch_role_label
+            or post_branch_role.role_ordinal != self.post_branch_slot_ordinal
+            or post_branch_role.source_location != self.post_branch_source_location
+            or post_branch_role.opaque_source_text != self.original_call_source_text
+        ):
+            raise ValueError(
+                "post-branch intrinsic call-site source text and slot provenance "
+                "must match the accepted M74 role carried by M75"
+            )
+        for field_name in (
+            "candidate_id",
+            "target_extension",
+            "source_extension",
+            "selected_type_tag",
+            "originating_branch_chain_id",
+        ):
+            if not getattr(self, field_name):
+                raise ValueError(
+                    f"post-branch intrinsic call-site request {field_name} "
+                    "must be non-empty"
+                )
+        if (
+            self.candidate_id != self.source_predicate_path.candidate_id
+            or self.target_extension != self.source_predicate_path.target_extension
+            or self.source_extension != self.source_predicate_path.source_extension
+            or self.selected_type_tag != self.source_predicate_path.selected_type_tag
+            or self.originating_branch_chain_id
+            != self.source_predicate_path.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "post-branch intrinsic call-site request provenance must match M75"
+            )
+        if (
+            self.candidate_id != self.source_sequence.candidate_id
+            or self.target_extension != self.source_sequence.target_extension
+            or self.source_extension != self.source_sequence.source_extension
+            or self.selected_type_tag != self.source_sequence.selected_type_tag
+            or self.originating_branch_chain_id
+            != self.source_sequence.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "post-branch intrinsic call-site request provenance must match M74"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_post_branch_intrinsic_call_site_structural_request_ir",
+            self.source_predicate_path.key,
+            self.source_sequence.key,
+            self.post_branch_role_label,
+            self.post_branch_slot_ordinal,
+            self.post_branch_source_location.sort_key(),
+            self.original_call_source_text,
+            self.call_head_token_text,
+            self.unresolved_intrinsic_token_text,
+            self.predicate_argument_ordinal,
+            self.predicate_argument_token_text,
+            self.predicate_argument_source_slot_ordinal,
+            self.predicate_argument_source_token_text,
+            self.member_access_argument_ordinal,
+            self.member_access_argument_text,
+            self.member_access_base_token_text,
+            self.member_access_member_token_text,
+            self.member_access_source_variable_token_text,
+            self.source_operand_argument_ordinal,
+            self.source_operand_argument_token_text,
+            self.candidate_id,
+            self.target_extension,
+            self.source_extension,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+        )
+
+    @property
+    def source_location(self) -> SourceLocation:
+        return self.post_branch_source_location
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationValue:
     kind: GenerationValueKind
     value: int
@@ -3298,6 +3535,11 @@ class GenerationLoweringStage:
             expected = (ExactArrayBodyStructuralSequenceIr,)
         elif self.stage == "predicate_path_structural_request_lowering":
             expected = (ExactPredicatePathStructuralRequestIr,)
+        elif (
+            self.stage
+            == "post_branch_intrinsic_call_site_structural_request_lowering"
+        ):
+            expected = (ExactPostBranchIntrinsicCallSiteStructuralRequestIr,)
         else:
             raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
         if not isinstance(self.output, expected):
@@ -3354,6 +3596,9 @@ class LoweredImplementation:
     ] = ()
     predicate_path_structural_requests: tuple[
         ExactPredicatePathStructuralRequestIr, ...
+    ] = ()
+    post_branch_intrinsic_call_site_structural_requests: tuple[
+        ExactPostBranchIntrinsicCallSiteStructuralRequestIr, ...
     ] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
@@ -3458,6 +3703,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "post_branch_intrinsic_call_site_structural_requests",
+            tuple(self.post_branch_intrinsic_call_site_structural_requests),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -3516,6 +3766,12 @@ class LoweredImplementation:
             tuple(
                 request.key
                 for request in self.predicate_path_structural_requests
+            ),
+            tuple(
+                request.key
+                for request in (
+                    self.post_branch_intrinsic_call_site_structural_requests
+                )
             ),
             tuple(stage.key for stage in self.generation_stages),
         )
@@ -4991,6 +5247,9 @@ class _ExactArrayInitializationStagePipelineResult:
     predicate_path_structural_requests: tuple[
         ExactPredicatePathStructuralRequestIr, ...
     ] = ()
+    post_branch_intrinsic_call_site_structural_requests: tuple[
+        ExactPostBranchIntrinsicCallSiteStructuralRequestIr, ...
+    ] = ()
     stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -5044,6 +5303,11 @@ class _ExactArrayInitializationStagePipelineResult:
             "predicate_path_structural_requests",
             tuple(self.predicate_path_structural_requests),
         )
+        object.__setattr__(
+            self,
+            "post_branch_intrinsic_call_site_structural_requests",
+            tuple(self.post_branch_intrinsic_call_site_structural_requests),
+        )
         object.__setattr__(self, "stages", tuple(self.stages))
 
     @property
@@ -5086,6 +5350,12 @@ class _ExactArrayInitializationStagePipelineResult:
             tuple(
                 request.key
                 for request in self.predicate_path_structural_requests
+            ),
+            tuple(
+                request.key
+                for request in (
+                    self.post_branch_intrinsic_call_site_structural_requests
+                )
             ),
             tuple(stage.key for stage in self.stages),
         )
@@ -5249,6 +5519,15 @@ def _predicate_path_structural_request_stage(
     )
 
 
+def _post_branch_intrinsic_call_site_structural_request_stage(
+    output: ExactPostBranchIntrinsicCallSiteStructuralRequestIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="post_branch_intrinsic_call_site_structural_request_lowering",
+        output=output,
+    )
+
+
 def _stage_output_location(
     output: GenerationLoweringStageOutput,
 ) -> SourceLocation | None:
@@ -5282,6 +5561,7 @@ def _stage_output_location(
             ExactArrayInitializationDeclarationShellIr,
             ExactArrayBodyStructuralSequenceIr,
             ExactPredicatePathStructuralRequestIr,
+            ExactPostBranchIntrinsicCallSiteStructuralRequestIr,
         ),
     ):
         return output.source_location
@@ -5579,6 +5859,28 @@ def _lower_exact_array_initialization_stage_pipeline(
         return Result.failure(predicate_path_result.diagnostics)
     predicate_path = predicate_path_result.unwrap()
     predicate_path_stage = _predicate_path_structural_request_stage(predicate_path)
+    post_branch_call_site_result = (
+        lower_exact_post_branch_intrinsic_call_site_structural_request(
+            predicate_path_stage,
+            _context_for_candidate(item, request),
+            selected_candidate_id=item.candidate_id,
+            target_extension=item.candidate.target_extension,
+            source_extension=item.candidate.source_extension,
+            selected_type_tag=(
+                item.candidate.type_tag
+                if request.generation_context.use_candidate_type_tag
+                else None
+            ),
+        )
+    )
+    if not post_branch_call_site_result.is_ok:
+        return Result.failure(post_branch_call_site_result.diagnostics)
+    post_branch_call_site = post_branch_call_site_result.unwrap()
+    post_branch_call_site_stage = (
+        _post_branch_intrinsic_call_site_structural_request_stage(
+            post_branch_call_site,
+        )
+    )
 
     return Result.ok(
         _ExactArrayInitializationStagePipelineResult(
@@ -5606,6 +5908,9 @@ def _lower_exact_array_initialization_stage_pipeline(
             predicate_path_structural_requests=(
                 predicate_path,
             ),
+            post_branch_intrinsic_call_site_structural_requests=(
+                post_branch_call_site,
+            ),
             stages=(
                 array_body_stage,
                 array_initialization_slot_form_stage,
@@ -5617,6 +5922,7 @@ def _lower_exact_array_initialization_stage_pipeline(
                 declaration_shell_stage,
                 structural_sequence_stage,
                 predicate_path_stage,
+                post_branch_call_site_stage,
             ),
         )
     )
@@ -6354,6 +6660,180 @@ def lower_exact_predicate_path_structural_request(
                 ),
             )
         )
+
+
+def lower_exact_post_branch_intrinsic_call_site_structural_request(
+    source: object,
+    context: GenerationContext | None = None,
+    *,
+    selected_candidate_id: str | None = None,
+    target_extension: str | None = None,
+    source_extension: str | None = None,
+    selected_type_tag: str | None = None,
+) -> Result[ExactPostBranchIntrinsicCallSiteStructuralRequestIr]:
+    source_result = _post_branch_intrinsic_call_site_source(source)
+    if not source_result.is_ok:
+        return Result.failure(source_result.diagnostics)
+    predicate_path = source_result.unwrap()
+
+    generation_context = context or GenerationContext()
+    effective_candidate_id = (
+        selected_candidate_id
+        or generation_context.selected_candidate_id
+        or predicate_path.candidate_id
+    )
+    effective_target_extension = target_extension or predicate_path.target_extension
+    effective_source_extension = source_extension or predicate_path.source_extension
+    effective_type_tag = (
+        selected_type_tag
+        or generation_context.selected_type_tag
+        or predicate_path.selected_type_tag
+    )
+    if (
+        effective_candidate_id != predicate_path.candidate_id
+        or effective_target_extension != predicate_path.target_extension
+        or effective_source_extension != predicate_path.source_extension
+        or effective_type_tag != predicate_path.selected_type_tag
+    ):
+        return Result.failure(
+            (
+                _post_branch_call_site_context_mismatch_diagnostic(
+                    "post-branch intrinsic call-site structural request lowering "
+                    "requires the typed selected candidate context to match the "
+                    "M75 predicate-path request candidate id, target extension, "
+                    "source extension, and selected type tag",
+                    predicate_path.source_location,
+                ),
+            )
+        )
+
+    validation_diagnostics = _validate_post_branch_intrinsic_call_site_input(
+        predicate_path,
+    )
+    if validation_diagnostics:
+        return Result.failure(sort_diagnostics(tuple(validation_diagnostics)))
+
+    sequence = predicate_path.source_sequence
+    post_branch_role = sequence.roles[3]
+    source_text = post_branch_role.opaque_source_text
+    if source_text is None:
+        raise AssertionError("M76 validation did not enforce source text")
+    match = _POST_BRANCH_INTRINSIC_CALL_SITE_CONTAINER_RE.match(source_text)
+    if match is None:
+        raise AssertionError("M76 validation did not enforce call-site shape")
+    arguments = tuple(part.strip() for part in match.group("arguments").split(","))
+    if len(arguments) != 3:
+        raise AssertionError("M76 validation did not enforce argument count")
+    member_match = _POST_BRANCH_MEMBER_ACCESS_ARGUMENT_RE.match(arguments[1])
+    if member_match is None:
+        raise AssertionError("M76 validation did not enforce tmp.data() shape")
+    try:
+        return Result.ok(
+            ExactPostBranchIntrinsicCallSiteStructuralRequestIr(
+                source_predicate_path=predicate_path,
+                source_sequence=sequence,
+                post_branch_role_label="opaque_post_branch_store_call_shaped_slot",
+                post_branch_slot_ordinal=3,
+                post_branch_source_location=post_branch_role.source_location,
+                original_call_source_text=source_text,
+                call_head_token_text=match.group("call_head"),
+                unresolved_intrinsic_token_text=match.group("intrinsic_token"),
+                predicate_argument_ordinal=0,
+                predicate_argument_token_text=arguments[0],
+                predicate_argument_source_slot_ordinal=(
+                    predicate_path.store_call_slot_ordinal
+                ),
+                predicate_argument_source_token_text=(
+                    predicate_path.store_call_predicate_argument_text
+                ),
+                member_access_argument_ordinal=1,
+                member_access_argument_text=arguments[1],
+                member_access_base_token_text=member_match.group("base_token"),
+                member_access_member_token_text=member_match.group("member_token"),
+                member_access_source_variable_token_text=(
+                    sequence.declaration_shell.variable_token
+                ),
+                source_operand_argument_ordinal=2,
+                source_operand_argument_token_text=arguments[2],
+                candidate_id=predicate_path.candidate_id,
+                target_extension=predicate_path.target_extension,
+                source_extension=predicate_path.source_extension,
+                selected_type_tag=predicate_path.selected_type_tag,
+                originating_branch_chain_id=(
+                    predicate_path.originating_branch_chain_id
+                ),
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        return Result.failure(
+            (
+                _post_branch_call_site_provenance_mismatch_diagnostic(
+                    str(exc),
+                    predicate_path.source_location,
+                ),
+            )
+        )
+
+
+def _post_branch_intrinsic_call_site_source(
+    source: object,
+) -> Result[ExactPredicatePathStructuralRequestIr]:
+    if isinstance(source, ExactPredicatePathStructuralRequestIr):
+        return Result.ok(source)
+
+    if isinstance(source, GenerationLoweringStage):
+        if (
+            source.stage == "predicate_path_structural_request_lowering"
+            and isinstance(source.output, ExactPredicatePathStructuralRequestIr)
+        ):
+            return Result.ok(source.output)
+        return Result.failure(
+            (
+                _post_branch_call_site_source_unsupported_diagnostic(
+                    "post-branch intrinsic call-site structural request lowering "
+                    "consumes accepted M75 ExactPredicatePathStructuralRequestIr "
+                    "values, the predicate_path_structural_request_lowering stage "
+                    "output, or a LoweredImplementation carrying exactly one "
+                    "M75 value",
+                    _stage_output_location(source.output),
+                ),
+            )
+        )
+
+    if isinstance(source, LoweredImplementation):
+        if len(source.predicate_path_structural_requests) == 0:
+            return Result.failure(
+                (
+                    _post_branch_call_site_missing_ir_diagnostic(
+                        "post-branch intrinsic call-site structural request "
+                        "lowering requires a LoweredImplementation carrying "
+                        "one accepted M75 predicate_path_structural_requests entry",
+                        _lowered_implementation_location(source),
+                    ),
+                )
+            )
+        if len(source.predicate_path_structural_requests) > 1:
+            return Result.failure(
+                (
+                    _post_branch_call_site_multiple_ir_diagnostic(
+                        "post-branch intrinsic call-site structural request "
+                        "lowering requires exactly one M75 "
+                        "predicate_path_structural_requests entry",
+                        _lowered_implementation_location(source),
+                    ),
+                )
+            )
+        return Result.ok(source.predicate_path_structural_requests[0])
+
+    return Result.failure(
+        (
+            _post_branch_call_site_source_unsupported_diagnostic(
+                "post-branch intrinsic call-site structural request lowering "
+                "consumes only accepted M75 predicate-path typed sources",
+                None,
+            ),
+        )
+    )
 
 
 def _array_body_structural_sequence_source(
@@ -7996,6 +8476,225 @@ def _validate_predicate_path_structural_request_input(
     return diagnostics
 
 
+def _validate_post_branch_intrinsic_call_site_input(
+    predicate_path: ExactPredicatePathStructuralRequestIr,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if not isinstance(predicate_path, ExactPredicatePathStructuralRequestIr):
+        return [
+            _post_branch_call_site_source_unsupported_diagnostic(
+                "post-branch intrinsic call-site structural request lowering "
+                "requires an accepted M75 ExactPredicatePathStructuralRequestIr "
+                "source",
+                None,
+            )
+        ]
+
+    sequence = predicate_path.source_sequence
+    if not isinstance(sequence, ExactArrayBodyStructuralSequenceIr):
+        return [
+            _post_branch_call_site_sequence_missing_diagnostic(
+                "post-branch intrinsic call-site structural request lowering "
+                "requires M74 structural sequence provenance carried by M75",
+                predicate_path.store_call_source_location,
+            )
+        ]
+    if not isinstance(
+        sequence.declaration_shell,
+        ExactArrayInitializationDeclarationShellIr,
+    ):
+        diagnostics.append(
+            _post_branch_call_site_sequence_missing_diagnostic(
+                "post-branch intrinsic call-site structural request lowering "
+                "requires M73 declaration-shell provenance carried through M74/M75",
+                sequence.source_location,
+            )
+        )
+    if (
+        predicate_path.candidate_id != sequence.candidate_id
+        or predicate_path.target_extension != sequence.target_extension
+        or predicate_path.source_extension != sequence.source_extension
+        or predicate_path.selected_type_tag != sequence.selected_type_tag
+        or predicate_path.originating_branch_chain_id
+        != sequence.originating_branch_chain_id
+    ):
+        diagnostics.append(
+            _post_branch_call_site_context_mismatch_diagnostic(
+                "post-branch intrinsic call-site structural request requires M75 "
+                "candidate, extension, selected type, and branch-chain context "
+                "to match the carried M74 sequence",
+                predicate_path.source_location,
+            )
+        )
+    if len(sequence.roles) <= 3:
+        diagnostics.append(
+            _post_branch_call_site_sequence_missing_diagnostic(
+                "post-branch intrinsic call-site structural request requires "
+                "M74 role ordinal 3 provenance",
+                sequence.source_location,
+            )
+        )
+        return diagnostics
+
+    post_branch_role = sequence.roles[3]
+    if (
+        predicate_path.store_call_role_label
+        != "opaque_post_branch_store_call_shaped_slot"
+        or predicate_path.store_call_slot_ordinal != 3
+        or predicate_path.store_call_source_location is None
+        or not predicate_path.store_call_predicate_argument_text
+    ):
+        diagnostics.append(
+            _post_branch_call_site_provenance_mismatch_diagnostic(
+                "post-branch intrinsic call-site request requires the accepted "
+                "M75 slot-3 predicate-token use",
+                predicate_path.source_location,
+            )
+        )
+    if (
+        post_branch_role.role_label != "opaque_post_branch_store_call_shaped_slot"
+        or post_branch_role.role_ordinal != 3
+        or not isinstance(
+            post_branch_role.envelope_slot,
+            ExactArrayBodyEnvelopeOpaqueSlot,
+        )
+        or post_branch_role.opaque_source_text
+        != post_branch_role.envelope_slot.opaque_source_text
+    ):
+        diagnostics.append(
+            _post_branch_call_site_provenance_mismatch_diagnostic(
+                "post-branch intrinsic call-site request requires M74 role "
+                "ordinal 3 to preserve the accepted opaque post-branch "
+                "call-site slot",
+                post_branch_role.source_location,
+            )
+        )
+    if (
+        post_branch_role.source_location
+        != predicate_path.store_call_source_location
+        or post_branch_role.role_ordinal != predicate_path.store_call_slot_ordinal
+        or post_branch_role.role_label != predicate_path.store_call_role_label
+    ):
+        diagnostics.append(
+            _post_branch_call_site_provenance_mismatch_diagnostic(
+                "post-branch intrinsic call-site slot identity must match the "
+                "M75 store-call predicate-token use",
+                post_branch_role.source_location,
+            )
+        )
+    if diagnostics:
+        return diagnostics
+
+    source_text = post_branch_role.opaque_source_text
+    if source_text is None:
+        diagnostics.append(
+            _post_branch_call_site_malformed_diagnostic(
+                "post-branch intrinsic call-site structural request requires "
+                "the accepted M74 opaque source text",
+                post_branch_role.source_location,
+            )
+        )
+        return diagnostics
+
+    match = _POST_BRANCH_INTRINSIC_CALL_SITE_CONTAINER_RE.match(source_text)
+    if match is None:
+        stripped = source_text.strip()
+        if stripped and not stripped.startswith("intrin"):
+            diagnostics.append(
+                _post_branch_call_site_shape_unsupported_diagnostic(
+                    "post-branch intrinsic call-site structural request supports "
+                    "only the exact intrin<...>(...) call-site shape",
+                    post_branch_role.source_location,
+                )
+            )
+        else:
+            diagnostics.append(
+                _post_branch_call_site_malformed_diagnostic(
+                    "post-branch intrinsic call-site structural request requires "
+                    "an exact call-site shaped as "
+                    "'intrin<svst1>(pg, tmp.data(), a);'",
+                    post_branch_role.source_location,
+                )
+            )
+        return diagnostics
+
+    call_head_token = match.group("call_head")
+    intrinsic_token = match.group("intrinsic_token")
+    arguments = tuple(part.strip() for part in match.group("arguments").split(","))
+    if call_head_token != "intrin":
+        diagnostics.append(
+            _post_branch_call_site_call_head_mismatch_diagnostic(
+                "post-branch intrinsic call-site structural request requires "
+                "the exact structural call-head token intrin",
+                post_branch_role.source_location,
+            )
+        )
+    if intrinsic_token != "svst1":
+        diagnostics.append(
+            _post_branch_call_site_intrinsic_token_mismatch_diagnostic(
+                "post-branch intrinsic call-site structural request records "
+                "only the exact unresolved intrinsic token svst1",
+                post_branch_role.source_location,
+            )
+        )
+    if len(arguments) != 3:
+        diagnostics.append(
+            _post_branch_call_site_argument_count_mismatch_diagnostic(
+                "post-branch intrinsic call-site structural request requires "
+                "exactly three structural arguments",
+                post_branch_role.source_location,
+            )
+        )
+        return diagnostics
+
+    predicate_argument = arguments[0]
+    if (
+        predicate_argument
+        != predicate_path.store_call_predicate_argument_text
+        or predicate_argument != "pg"
+    ):
+        diagnostics.append(
+            _post_branch_call_site_predicate_argument_mismatch_diagnostic(
+                "post-branch intrinsic call-site predicate argument must link "
+                "to the accepted M75 slot-3 predicate-token use",
+                post_branch_role.source_location,
+            )
+        )
+
+    member_access_argument = arguments[1]
+    member_match = _POST_BRANCH_MEMBER_ACCESS_ARGUMENT_RE.match(
+        member_access_argument,
+    )
+    if (
+        member_match is None
+        or member_access_argument != "tmp.data()"
+        or member_match.group("base_token")
+        != sequence.declaration_shell.variable_token
+        or member_match.group("base_token") != "tmp"
+        or member_match.group("member_token") != "data"
+    ):
+        diagnostics.append(
+            _post_branch_call_site_member_access_unsupported_diagnostic(
+                "post-branch intrinsic call-site structural request supports "
+                "only the exact structural member-access-shaped token/path "
+                "tmp.data() linked to M73/M74/M75 tmp provenance",
+                post_branch_role.source_location,
+            )
+        )
+
+    source_operand_argument = arguments[2]
+    if source_operand_argument != "a":
+        diagnostics.append(
+            _post_branch_call_site_source_operand_unsupported_diagnostic(
+                "post-branch intrinsic call-site structural request records "
+                "only the exact structural source operand token a",
+                post_branch_role.source_location,
+            )
+        )
+
+    return diagnostics
+
+
 def _exact_array_body_envelope_shape_is_supported(
     envelope: ExactArrayBodyEnvelopeIr,
 ) -> bool:
@@ -8084,6 +8783,10 @@ def _source_span_for_match_group(
 def _lowered_implementation_location(
     implementation: LoweredImplementation,
 ) -> SourceLocation | None:
+    for call_site in implementation.post_branch_intrinsic_call_site_structural_requests:
+        return call_site.source_location
+    for predicate_path in implementation.predicate_path_structural_requests:
+        return predicate_path.source_location
     for array_envelope in implementation.array_body_envelopes:
         return array_envelope.source_location
     for declaration_shell in implementation.array_initialization_declaration_shells:
@@ -9084,6 +9787,160 @@ def _predicate_path_token_mismatch_diagnostic(
     )
 
 
+def _post_branch_call_site_source_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-POST-BRANCH-CALL-SITE-SOURCE-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _post_branch_call_site_missing_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-POST-BRANCH-CALL-SITE-IR-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _post_branch_call_site_multiple_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-POST-BRANCH-CALL-SITE-IR-MULTIPLE",
+        detail,
+        location=location,
+    )
+
+
+def _post_branch_call_site_context_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-POST-BRANCH-CALL-SITE-CONTEXT-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _post_branch_call_site_provenance_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-POST-BRANCH-CALL-SITE-PROVENANCE-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _post_branch_call_site_sequence_missing_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-POST-BRANCH-CALL-SITE-SEQUENCE-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _post_branch_call_site_malformed_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-POST-BRANCH-CALL-SITE-MALFORMED",
+        detail,
+        location=location,
+    )
+
+
+def _post_branch_call_site_shape_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-POST-BRANCH-CALL-SITE-SHAPE-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _post_branch_call_site_call_head_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-POST-BRANCH-CALL-SITE-CALL-HEAD-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _post_branch_call_site_intrinsic_token_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-POST-BRANCH-CALL-SITE-INTRINSIC-TOKEN-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _post_branch_call_site_argument_count_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-POST-BRANCH-CALL-SITE-ARGUMENT-COUNT-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _post_branch_call_site_predicate_argument_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-POST-BRANCH-CALL-SITE-PREDICATE-ARGUMENT-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _post_branch_call_site_member_access_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-POST-BRANCH-CALL-SITE-MEMBER-ACCESS-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _post_branch_call_site_source_operand_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-POST-BRANCH-CALL-SITE-SOURCE-OPERAND-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
 def _duplicate_array_body_envelope_skeleton_diagnostic(
     lookup_key: ExactArrayBodyEnvelopeSkeletonKey,
     skeleton: ExactArrayBodyEnvelopeSkeleton,
@@ -9661,6 +10518,9 @@ def _lower_input(
                     ),
                     predicate_path_structural_requests=(
                         array_initialization_pipeline.predicate_path_structural_requests
+                    ),
+                    post_branch_intrinsic_call_site_structural_requests=(
+                        array_initialization_pipeline.post_branch_intrinsic_call_site_structural_requests
                     ),
                     generation_stages=(
                         _recognition_stage(

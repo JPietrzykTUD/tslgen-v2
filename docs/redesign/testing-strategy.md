@@ -901,7 +901,7 @@ Recommended first parity checks:
   and no backend translation/rendering, generic body/declaration/array
   parsing, variable/allocation/store/return semantics, golden-file, or
   generated-output churn.
-- Milestone 75 tests should prove exact predicate path structural/request IR
+- Milestone 75 tests prove exact predicate path structural/request IR
   without SVE, store, variable-scope, backend, renderer, or output semantics:
   direct tests from accepted M74 sequence state, normal `lower_candidates`
   stage-order tests after `array_body_structural_sequence_classification`,
@@ -915,7 +915,7 @@ Recommended first parity checks:
   CPU/backend map reads during lowering evaluation, and no backend
   translation/rendering, generic predicate/store/body lowering, golden-file,
   or generated-output churn.
-- Milestone 76 tests should prove exact post-branch intrinsic call-site
+- Milestone 76 tests now prove exact post-branch intrinsic call-site
   structural/request IR without ARM/SVE, store, memory, pointer,
   variable-scope, backend, renderer, or output semantics: direct tests from
   accepted M75 predicate-path state, normal `lower_candidates` stage-order

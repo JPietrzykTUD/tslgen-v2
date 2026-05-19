@@ -543,9 +543,9 @@ provenance only. It does not interpret SVE predicate behavior, store behavior,
 `svst1`, `tmp.data()`, `a`, backend maps, renderer behavior, generated output,
 variable scope, or broad body semantics.
 
-Post-M75 planning selects Milestone 76 as exact post-branch intrinsic call-site
-structural/request IR. It should consume accepted M75 predicate-path state and
-record only the exact `array.tsl:110` call-site shape
+Milestone 76 is accepted as exact post-branch intrinsic call-site structural/
+request IR. It consumes accepted M75 predicate-path state and records only the
+exact `array.tsl:110` call-site shape
 `intrin<svst1>(pg, tmp.data(), a);`. The call head `intrin`, unresolved token
 `svst1`, predicate argument `pg`, member-access-shaped token/path
 `tmp.data()`, and source operand token `a` are structural tokens/provenance
