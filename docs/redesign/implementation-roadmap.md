@@ -8333,9 +8333,9 @@ Dependencies on prior milestones:
 Next concrete prompt:
 
 - `docs/agent/runs/m74-execution-review-loop-prompt.md` completed the M74
-  implementation and review loop. Post-M74 planning is accepted, and the
-  active concrete prompt is
-  `docs/agent/runs/m75-execution-review-loop-prompt.md`.
+  implementation and review loop. Post-M74 planning was accepted, M75
+  execution is accepted, and the active concrete prompt is
+  `docs/agent/runs/post-m75-planning-plus-review-prompt.md`.
 
 ### Post-M74 Planning Result
 
@@ -8363,7 +8363,7 @@ Candidate comparison:
 
 Status:
 
-Selected for human acceptance after post-M74 planning.
+Accepted after M75 execution-review loop.
 
 Goal:
 
@@ -8377,7 +8377,7 @@ slot 2: accepted selected-body assignment envelope for pg = intrin<svptrue_b*>()
 slot 3: intrin<svst1>(pg, tmp.data(), a);
 ```
 
-M75 should connect the exact predicate initialization, accepted selected
+M75 connects the exact predicate initialization, accepted selected
 predicate update evidence, and post-branch predicate-token use as typed
 lowering state only. It must not define SVE predicate semantics, variable
 scope, store semantics, backend translation, renderer-ready IR, or generated
@@ -8542,5 +8542,9 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/m75-execution-review-loop-prompt.md` is active after
-  explicit human acceptance. Do not start M76 during M75 execution.
+- `docs/agent/runs/m75-execution-review-loop-prompt.md` ran after explicit
+  human acceptance. The M75 execution-review loop returned
+  `Accept With Follow-Ups` after one focused validation-coverage revision.
+  The next concrete prompt is
+  `docs/agent/runs/post-m75-planning-plus-review-prompt.md`. Do not start M76
+  until post-M75 planning is accepted.

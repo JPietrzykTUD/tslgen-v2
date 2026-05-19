@@ -63,6 +63,11 @@ type GenerationLoweringStageName = Literal[
     "array_initialization_helper_set_completion",
     "array_initialization_declaration_shell_lowering",
     "array_body_structural_sequence_classification",
+    "predicate_path_structural_request_lowering",
+]
+type ExactPredicatePathSelectedUpdateState = Literal[
+    "accepted_selected_update",
+    "accepted_no_update",
 ]
 type ExactArrayInitializationVectorLengthKind = Literal[
     "fixed_lanes",
@@ -148,6 +153,7 @@ type GenerationLoweringStageOutput = (
     | ExactArrayInitializationHelperSetCompletionIr
     | ExactArrayInitializationDeclarationShellIr
     | ExactArrayBodyStructuralSequenceIr
+    | ExactPredicatePathStructuralRequestIr
     | TsilStatement
 )
 
@@ -356,6 +362,17 @@ _EXACT_ARRAY_INITIALIZATION_SLOT_RE = re.compile(
     r">,[ \t]*(?P<variable>tmp),[ \t]*"
     r"(?P<backend_uninit>value<backend>\(uninit::array\))"
     r"\)[ \t]*\Z"
+)
+_EXACT_PREDICATE_INIT_SLOT_RE = re.compile(
+    rf"\A\s*(?P<predicate_type>{_TSIL_IDENTIFIER})\s+"
+    rf"(?P<predicate_token>{_TSIL_IDENTIFIER})\s*=\s*"
+    rf"intrin\s*<\s*(?P<direct_intrinsic_token>{_TSIL_IDENTIFIER})\s*>\s*"
+    r"\(\s*\)\s*;\s*\Z"
+)
+_EXACT_POST_BRANCH_STORE_PREDICATE_SLOT_RE = re.compile(
+    rf"\A\s*intrin\s*<\s*(?P<call_token>{_TSIL_IDENTIFIER})\s*>\s*"
+    rf"\(\s*(?P<predicate_token>{_TSIL_IDENTIFIER})\s*,\s*"
+    r"tmp\.data\(\)\s*,\s*a\s*\)\s*;\s*\Z"
 )
 _ARRAY_INITIALIZATION_SLOT_HELPER_SHAPE_RE = re.compile(
     r"\A[ \t]*var<typed>\("
@@ -2978,6 +2995,201 @@ class ExactArrayBodyStructuralSequenceIr:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactPredicatePathStructuralRequestIr:
+    source_sequence: ExactArrayBodyStructuralSequenceIr
+    predicate_init_role_label: Literal["opaque_predicate_init_shaped_slot"]
+    predicate_init_slot_ordinal: Literal[1]
+    predicate_init_source_location: SourceLocation
+    predicate_type_token_text: str
+    predicate_token_text: str
+    predicate_init_direct_intrinsic_token_text: str
+    selected_update_state: ExactPredicatePathSelectedUpdateState
+    selected_body_envelope: GenerationSelectedBodyEnvelopeIr
+    selected_update_slot_ordinal: Literal[2]
+    selected_update_source_location: SourceLocation
+    selected_update_assignment_target_text: str | None = None
+    selected_update_direct_intrinsic_token_text: str | None = None
+    store_call_role_label: Literal["opaque_post_branch_store_call_shaped_slot"] = (
+        "opaque_post_branch_store_call_shaped_slot"
+    )
+    store_call_slot_ordinal: Literal[3] = 3
+    store_call_source_location: SourceLocation | None = None
+    store_call_predicate_argument_text: str = ""
+    candidate_id: str = ""
+    target_extension: str = ""
+    source_extension: str = ""
+    selected_type_tag: str = ""
+    originating_branch_chain_id: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_sequence, ExactArrayBodyStructuralSequenceIr):
+            raise TypeError(
+                "predicate-path structural request requires an M74 sequence"
+            )
+        if self.predicate_init_role_label != "opaque_predicate_init_shaped_slot":
+            raise ValueError(
+                "predicate-path structural request requires the M74 predicate-init role"
+            )
+        if self.predicate_init_slot_ordinal != 1:
+            raise ValueError(
+                "predicate-path structural request predicate-init ordinal must be 1"
+            )
+        if self.predicate_init_source_location is None:
+            raise ValueError(
+                "predicate-path structural request requires predicate-init location"
+            )
+        for field_name in (
+            "predicate_type_token_text",
+            "predicate_token_text",
+            "predicate_init_direct_intrinsic_token_text",
+        ):
+            if not getattr(self, field_name):
+                raise ValueError(
+                    f"predicate-path structural request {field_name} must be non-empty"
+                )
+        if self.selected_update_state not in (
+            "accepted_selected_update",
+            "accepted_no_update",
+        ):
+            raise ValueError(
+                "predicate-path structural request selected update state is unsupported"
+            )
+        if not isinstance(
+            self.selected_body_envelope,
+            (SelectedBodyEnvelopeIr, NoSelectedBodyEnvelopeIr),
+        ):
+            raise TypeError(
+                "predicate-path structural request requires the accepted M63 envelope"
+            )
+        if self.selected_update_slot_ordinal != 2:
+            raise ValueError(
+                "predicate-path structural request selected update ordinal must be 2"
+            )
+        if self.selected_update_source_location is None:
+            raise ValueError(
+                "predicate-path structural request requires selected-update location"
+            )
+        if self.selected_update_state == "accepted_selected_update":
+            if not isinstance(self.selected_body_envelope, SelectedBodyEnvelopeIr):
+                raise ValueError(
+                    "selected predicate update state requires a selected-body envelope"
+                )
+            if not self.selected_update_assignment_target_text:
+                raise ValueError(
+                    "selected predicate update state requires an assignment target"
+                )
+            if not self.selected_update_direct_intrinsic_token_text:
+                raise ValueError(
+                    "selected predicate update state requires a direct-intrinsic token"
+                )
+        else:
+            if not isinstance(self.selected_body_envelope, NoSelectedBodyEnvelopeIr):
+                raise ValueError(
+                    "no-update predicate state requires a no-selected-body envelope"
+                )
+            if (
+                self.selected_update_assignment_target_text is not None
+                or self.selected_update_direct_intrinsic_token_text is not None
+            ):
+                raise ValueError(
+                    "no-update predicate state must not synthesize update tokens"
+                )
+        if self.store_call_role_label != "opaque_post_branch_store_call_shaped_slot":
+            raise ValueError(
+                "predicate-path structural request requires the M74 store-call role"
+            )
+        if self.store_call_slot_ordinal != 3:
+            raise ValueError(
+                "predicate-path structural request store-call ordinal must be 3"
+            )
+        if self.store_call_source_location is None:
+            raise ValueError(
+                "predicate-path structural request requires store-call location"
+            )
+        if not self.store_call_predicate_argument_text:
+            raise ValueError(
+                "predicate-path structural request requires a store predicate token"
+            )
+        for field_name in (
+            "candidate_id",
+            "target_extension",
+            "source_extension",
+            "selected_type_tag",
+            "originating_branch_chain_id",
+        ):
+            if not getattr(self, field_name):
+                raise ValueError(
+                    f"predicate-path structural request {field_name} must be non-empty"
+                )
+        if (
+            self.candidate_id != self.source_sequence.candidate_id
+            or self.target_extension != self.source_sequence.target_extension
+            or self.source_extension != self.source_sequence.source_extension
+            or self.selected_type_tag != self.source_sequence.selected_type_tag
+            or self.originating_branch_chain_id
+            != self.source_sequence.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "predicate-path structural request provenance must match M74 sequence"
+            )
+        if self.selected_body_envelope is not self.source_sequence.roles[
+            2
+        ].selected_body_envelope:
+            raise ValueError(
+                "predicate-path structural request must preserve the M74 selected-body "
+                "envelope identity"
+            )
+        if (
+            self.selected_body_envelope.candidate_id != self.candidate_id
+            or self.selected_body_envelope.selected_type_tag != self.selected_type_tag
+            or self.selected_body_envelope.originating_branch_chain_id
+            != self.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "predicate-path structural request selected-body provenance "
+                "must match M74"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        store_call_source_location = self.store_call_source_location
+        if store_call_source_location is None:
+            raise AssertionError(
+                "predicate-path structural request store-call location "
+                "was not validated"
+            )
+        return (
+            "exact_predicate_path_structural_request_ir",
+            self.source_sequence.key,
+            self.predicate_init_role_label,
+            self.predicate_init_slot_ordinal,
+            self.predicate_init_source_location.sort_key(),
+            self.predicate_type_token_text,
+            self.predicate_token_text,
+            self.predicate_init_direct_intrinsic_token_text,
+            self.selected_update_state,
+            self.selected_body_envelope.key,
+            self.selected_update_slot_ordinal,
+            self.selected_update_source_location.sort_key(),
+            self.selected_update_assignment_target_text or "",
+            self.selected_update_direct_intrinsic_token_text or "",
+            self.store_call_role_label,
+            self.store_call_slot_ordinal,
+            store_call_source_location.sort_key(),
+            self.store_call_predicate_argument_text,
+            self.candidate_id,
+            self.target_extension,
+            self.source_extension,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+        )
+
+    @property
+    def source_location(self) -> SourceLocation:
+        return self.source_sequence.source_location
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationValue:
     kind: GenerationValueKind
     value: int
@@ -3084,6 +3296,8 @@ class GenerationLoweringStage:
             expected = (ExactArrayInitializationDeclarationShellIr,)
         elif self.stage == "array_body_structural_sequence_classification":
             expected = (ExactArrayBodyStructuralSequenceIr,)
+        elif self.stage == "predicate_path_structural_request_lowering":
+            expected = (ExactPredicatePathStructuralRequestIr,)
         else:
             raise ValueError(f"unknown generation lowering stage: {self.stage!r}")
         if not isinstance(self.output, expected):
@@ -3137,6 +3351,9 @@ class LoweredImplementation:
     ] = ()
     array_body_structural_sequences: tuple[
         ExactArrayBodyStructuralSequenceIr, ...
+    ] = ()
+    predicate_path_structural_requests: tuple[
+        ExactPredicatePathStructuralRequestIr, ...
     ] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
@@ -3236,6 +3453,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "predicate_path_structural_requests",
+            tuple(self.predicate_path_structural_requests),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -3290,6 +3512,10 @@ class LoweredImplementation:
             tuple(
                 sequence.key
                 for sequence in self.array_body_structural_sequences
+            ),
+            tuple(
+                request.key
+                for request in self.predicate_path_structural_requests
             ),
             tuple(stage.key for stage in self.generation_stages),
         )
@@ -4762,6 +4988,9 @@ class _ExactArrayInitializationStagePipelineResult:
     array_body_structural_sequences: tuple[
         ExactArrayBodyStructuralSequenceIr, ...
     ] = ()
+    predicate_path_structural_requests: tuple[
+        ExactPredicatePathStructuralRequestIr, ...
+    ] = ()
     stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -4810,6 +5039,11 @@ class _ExactArrayInitializationStagePipelineResult:
             "array_body_structural_sequences",
             tuple(self.array_body_structural_sequences),
         )
+        object.__setattr__(
+            self,
+            "predicate_path_structural_requests",
+            tuple(self.predicate_path_structural_requests),
+        )
         object.__setattr__(self, "stages", tuple(self.stages))
 
     @property
@@ -4848,6 +5082,10 @@ class _ExactArrayInitializationStagePipelineResult:
             tuple(
                 sequence.key
                 for sequence in self.array_body_structural_sequences
+            ),
+            tuple(
+                request.key
+                for request in self.predicate_path_structural_requests
             ),
             tuple(stage.key for stage in self.stages),
         )
@@ -5002,6 +5240,15 @@ def _array_body_structural_sequence_stage(
     )
 
 
+def _predicate_path_structural_request_stage(
+    output: ExactPredicatePathStructuralRequestIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="predicate_path_structural_request_lowering",
+        output=output,
+    )
+
+
 def _stage_output_location(
     output: GenerationLoweringStageOutput,
 ) -> SourceLocation | None:
@@ -5034,6 +5281,7 @@ def _stage_output_location(
             ExactArrayInitializationHelperSetCompletionIr,
             ExactArrayInitializationDeclarationShellIr,
             ExactArrayBodyStructuralSequenceIr,
+            ExactPredicatePathStructuralRequestIr,
         ),
     ):
         return output.source_location
@@ -5315,6 +5563,22 @@ def _lower_exact_array_initialization_stage_pipeline(
     structural_sequence_stage = _array_body_structural_sequence_stage(
         structural_sequence,
     )
+    predicate_path_result = lower_exact_predicate_path_structural_request(
+        structural_sequence_stage,
+        _context_for_candidate(item, request),
+        selected_candidate_id=item.candidate_id,
+        target_extension=item.candidate.target_extension,
+        source_extension=item.candidate.source_extension,
+        selected_type_tag=(
+            item.candidate.type_tag
+            if request.generation_context.use_candidate_type_tag
+            else None
+        ),
+    )
+    if not predicate_path_result.is_ok:
+        return Result.failure(predicate_path_result.diagnostics)
+    predicate_path = predicate_path_result.unwrap()
+    predicate_path_stage = _predicate_path_structural_request_stage(predicate_path)
 
     return Result.ok(
         _ExactArrayInitializationStagePipelineResult(
@@ -5339,6 +5603,9 @@ def _lower_exact_array_initialization_stage_pipeline(
             array_body_structural_sequences=(
                 structural_sequence,
             ),
+            predicate_path_structural_requests=(
+                predicate_path,
+            ),
             stages=(
                 array_body_stage,
                 array_initialization_slot_form_stage,
@@ -5349,6 +5616,7 @@ def _lower_exact_array_initialization_stage_pipeline(
                 helper_set_completion_stage,
                 declaration_shell_stage,
                 structural_sequence_stage,
+                predicate_path_stage,
             ),
         )
     )
@@ -5958,7 +6226,134 @@ def _array_initialization_declaration_shell_source(
                 None,
             ),
         )
+        )
+
+
+def lower_exact_predicate_path_structural_request(
+    source: object,
+    context: GenerationContext | None = None,
+    *,
+    selected_candidate_id: str | None = None,
+    target_extension: str | None = None,
+    source_extension: str | None = None,
+    selected_type_tag: str | None = None,
+) -> Result[ExactPredicatePathStructuralRequestIr]:
+    source_result = _predicate_path_structural_request_source(source)
+    if not source_result.is_ok:
+        return Result.failure(source_result.diagnostics)
+    sequence = source_result.unwrap()
+
+    generation_context = context or GenerationContext()
+    effective_candidate_id = (
+        selected_candidate_id
+        or generation_context.selected_candidate_id
+        or sequence.candidate_id
     )
+    effective_target_extension = target_extension or sequence.target_extension
+    effective_source_extension = source_extension or sequence.source_extension
+    effective_type_tag = (
+        selected_type_tag
+        or generation_context.selected_type_tag
+        or sequence.selected_type_tag
+    )
+    if (
+        effective_candidate_id != sequence.candidate_id
+        or effective_target_extension != sequence.target_extension
+        or effective_source_extension != sequence.source_extension
+        or effective_type_tag != sequence.selected_type_tag
+    ):
+        return Result.failure(
+            (
+                _predicate_path_context_mismatch_diagnostic(
+                    "predicate-path structural request lowering requires the "
+                    "typed selected candidate context to match the M74 sequence "
+                    "candidate id, target extension, source extension, and "
+                    "selected type tag",
+                    sequence.source_location,
+                ),
+            )
+        )
+
+    validation_diagnostics = _validate_predicate_path_structural_request_input(
+        sequence,
+    )
+    if validation_diagnostics:
+        return Result.failure(sort_diagnostics(tuple(validation_diagnostics)))
+
+    init_role = sequence.roles[1]
+    selected_role = sequence.roles[2]
+    store_role = sequence.roles[3]
+    assert init_role.opaque_source_text is not None
+    assert store_role.opaque_source_text is not None
+    init_match = _EXACT_PREDICATE_INIT_SLOT_RE.match(init_role.opaque_source_text)
+    store_match = _EXACT_POST_BRANCH_STORE_PREDICATE_SLOT_RE.match(
+        store_role.opaque_source_text,
+    )
+    if init_match is None or store_match is None:
+        raise AssertionError("predicate-path validation did not enforce exact shapes")
+    selected_body_envelope = selected_role.selected_body_envelope
+    assert isinstance(
+        selected_body_envelope,
+        (SelectedBodyEnvelopeIr, NoSelectedBodyEnvelopeIr),
+    )
+    if isinstance(selected_body_envelope, SelectedBodyEnvelopeIr):
+        entry = selected_body_envelope.entries[0]
+        selected_update_state: ExactPredicatePathSelectedUpdateState = (
+            "accepted_selected_update"
+        )
+        selected_update_assignment_target_text = entry.assignment_target_text
+        selected_update_direct_intrinsic_token_text = entry.direct_intrinsic_token_text
+        selected_update_source_location = entry.source_location
+    else:
+        selected_update_state = "accepted_no_update"
+        selected_update_assignment_target_text = None
+        selected_update_direct_intrinsic_token_text = None
+        selected_update_source_location = selected_body_envelope.source_location
+
+    try:
+        return Result.ok(
+            ExactPredicatePathStructuralRequestIr(
+                source_sequence=sequence,
+                predicate_init_role_label="opaque_predicate_init_shaped_slot",
+                predicate_init_slot_ordinal=1,
+                predicate_init_source_location=init_role.source_location,
+                predicate_type_token_text=init_match.group("predicate_type"),
+                predicate_token_text=init_match.group("predicate_token"),
+                predicate_init_direct_intrinsic_token_text=init_match.group(
+                    "direct_intrinsic_token",
+                ),
+                selected_update_state=selected_update_state,
+                selected_body_envelope=selected_body_envelope,
+                selected_update_slot_ordinal=2,
+                selected_update_source_location=selected_update_source_location,
+                selected_update_assignment_target_text=(
+                    selected_update_assignment_target_text
+                ),
+                selected_update_direct_intrinsic_token_text=(
+                    selected_update_direct_intrinsic_token_text
+                ),
+                store_call_role_label="opaque_post_branch_store_call_shaped_slot",
+                store_call_slot_ordinal=3,
+                store_call_source_location=store_role.source_location,
+                store_call_predicate_argument_text=store_match.group(
+                    "predicate_token",
+                ),
+                candidate_id=sequence.candidate_id,
+                target_extension=sequence.target_extension,
+                source_extension=sequence.source_extension,
+                selected_type_tag=sequence.selected_type_tag,
+                originating_branch_chain_id=sequence.originating_branch_chain_id,
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        return Result.failure(
+            (
+                _predicate_path_provenance_mismatch_diagnostic(
+                    str(exc),
+                    sequence.source_location,
+                ),
+            )
+        )
 
 
 def _array_body_structural_sequence_source(
@@ -6134,6 +6529,66 @@ def _array_body_structural_sequence_shell_source(
             _array_body_structural_sequence_source_unsupported_diagnostic(
                 "array-body structural sequence classification requires an "
                 "accepted M73 declaration-shell value",
+                None,
+            ),
+        )
+    )
+
+
+def _predicate_path_structural_request_source(
+    source: object,
+) -> Result[ExactArrayBodyStructuralSequenceIr]:
+    if isinstance(source, ExactArrayBodyStructuralSequenceIr):
+        return Result.ok(source)
+
+    if isinstance(source, GenerationLoweringStage):
+        if (
+            source.stage == "array_body_structural_sequence_classification"
+            and isinstance(source.output, ExactArrayBodyStructuralSequenceIr)
+        ):
+            return Result.ok(source.output)
+        return Result.failure(
+            (
+                _predicate_path_source_unsupported_diagnostic(
+                    "predicate-path structural request lowering consumes "
+                    "accepted M74 ExactArrayBodyStructuralSequenceIr values, "
+                    "the array_body_structural_sequence_classification stage "
+                    "output, or a LoweredImplementation carrying exactly one "
+                    "M74 value",
+                    _stage_output_location(source.output),
+                ),
+            )
+        )
+
+    if isinstance(source, LoweredImplementation):
+        if len(source.array_body_structural_sequences) == 0:
+            return Result.failure(
+                (
+                    _predicate_path_missing_ir_diagnostic(
+                        "predicate-path structural request lowering requires "
+                        "a LoweredImplementation carrying one accepted M74 "
+                        "array_body_structural_sequences entry",
+                        _lowered_implementation_location(source),
+                    ),
+                )
+            )
+        if len(source.array_body_structural_sequences) > 1:
+            return Result.failure(
+                (
+                    _predicate_path_multiple_ir_diagnostic(
+                        "predicate-path structural request lowering requires "
+                        "exactly one M74 array_body_structural_sequences entry",
+                        _lowered_implementation_location(source),
+                    ),
+                )
+            )
+        return Result.ok(source.array_body_structural_sequences[0])
+
+    return Result.failure(
+        (
+            _predicate_path_source_unsupported_diagnostic(
+                "predicate-path structural request lowering consumes only "
+                "accepted M74 structural sequence typed sources",
                 None,
             ),
         )
@@ -7320,6 +7775,227 @@ def _validate_array_body_structural_sequence_inputs(
     return diagnostics
 
 
+def _validate_predicate_path_structural_request_input(
+    sequence: ExactArrayBodyStructuralSequenceIr,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if not isinstance(sequence, ExactArrayBodyStructuralSequenceIr):
+        return [
+            _predicate_path_source_unsupported_diagnostic(
+                "predicate-path structural request lowering requires an "
+                "accepted M74 ExactArrayBodyStructuralSequenceIr source",
+                None,
+            )
+        ]
+    if tuple(role.role_label for role in sequence.roles) != (
+        _EXACT_ARRAY_BODY_STRUCTURAL_ROLE_LABELS
+    ) or tuple(role.role_ordinal for role in sequence.roles) != (
+        _EXACT_ARRAY_BODY_ENVELOPE_SLOT_ORDINALS
+    ):
+        diagnostics.append(
+            _predicate_path_malformed_diagnostic(
+                "predicate-path structural request lowering requires the "
+                "accepted M74 five-role source order",
+                sequence.source_location,
+            )
+        )
+        return diagnostics
+
+    envelope = sequence.source_envelope
+    if tuple(role.envelope_slot for role in sequence.roles) != envelope.slots:
+        diagnostics.append(
+            _predicate_path_provenance_mismatch_diagnostic(
+                "M75 predicate-path roles must preserve the M74 source slot "
+                "identity and order",
+                sequence.source_location,
+            )
+        )
+    for role in sequence.roles:
+        if (
+            role.candidate_id != sequence.candidate_id
+            or role.selected_type_tag != sequence.selected_type_tag
+            or role.originating_branch_chain_id
+            != sequence.originating_branch_chain_id
+            or role.target_extension != sequence.target_extension
+            or role.source_extension != sequence.source_extension
+        ):
+            diagnostics.append(
+                _predicate_path_context_mismatch_diagnostic(
+                    "predicate-path structural request roles must match the "
+                    "M74 sequence candidate, extension, selected type, and "
+                    "branch-chain context",
+                    role.source_location,
+                )
+            )
+
+    init_role = sequence.roles[1]
+    selected_role = sequence.roles[2]
+    store_role = sequence.roles[3]
+    if (
+        init_role.role_label != "opaque_predicate_init_shaped_slot"
+        or init_role.role_ordinal != 1
+        or not isinstance(init_role.envelope_slot, ExactArrayBodyEnvelopeOpaqueSlot)
+        or init_role.opaque_source_text != init_role.envelope_slot.opaque_source_text
+    ):
+        diagnostics.append(
+            _predicate_path_malformed_diagnostic(
+                "predicate-path structural request requires M74 role ordinal "
+                "1 to be the opaque predicate-init-shaped slot",
+                init_role.source_location,
+            )
+        )
+    if (
+        selected_role.role_label != "selected_body_envelope_slot"
+        or selected_role.role_ordinal != 2
+        or not isinstance(
+            selected_role.selected_body_envelope,
+            (SelectedBodyEnvelopeIr, NoSelectedBodyEnvelopeIr),
+        )
+        or selected_role.selected_body_envelope
+        is not envelope.selected_body_slot.selected_body_envelope
+    ):
+        diagnostics.append(
+            _predicate_path_provenance_mismatch_diagnostic(
+                "predicate-path structural request requires M74 role ordinal "
+                "2 to preserve the accepted M63 selected/no-body envelope",
+                selected_role.source_location,
+            )
+        )
+    if (
+        store_role.role_label != "opaque_post_branch_store_call_shaped_slot"
+        or store_role.role_ordinal != 3
+        or not isinstance(store_role.envelope_slot, ExactArrayBodyEnvelopeOpaqueSlot)
+        or store_role.opaque_source_text != store_role.envelope_slot.opaque_source_text
+    ):
+        diagnostics.append(
+            _predicate_path_malformed_diagnostic(
+                "predicate-path structural request requires M74 role ordinal "
+                "3 to be the opaque post-branch store-call-shaped slot",
+                store_role.source_location,
+            )
+        )
+
+    if diagnostics:
+        return diagnostics
+
+    assert init_role.opaque_source_text is not None
+    assert store_role.opaque_source_text is not None
+    init_match = _EXACT_PREDICATE_INIT_SLOT_RE.match(init_role.opaque_source_text)
+    if init_match is None:
+        diagnostics.append(
+            _predicate_path_malformed_diagnostic(
+                "predicate-path structural request requires exact predicate-init "
+                "shape 'svbool_t pg = intrin<svptrue_b8>();'",
+                init_role.source_location,
+            )
+        )
+    store_match = _EXACT_POST_BRANCH_STORE_PREDICATE_SLOT_RE.match(
+        store_role.opaque_source_text,
+    )
+    if store_match is None:
+        diagnostics.append(
+            _predicate_path_malformed_diagnostic(
+                "predicate-path structural request requires exact post-branch "
+                "store-call predicate-token shape",
+                store_role.source_location,
+            )
+        )
+
+    if init_match is None or store_match is None:
+        return diagnostics
+
+    predicate_type = init_match.group("predicate_type")
+    predicate_token = init_match.group("predicate_token")
+    init_direct_token = init_match.group("direct_intrinsic_token")
+    store_call_token = store_match.group("call_token")
+    store_predicate_token = store_match.group("predicate_token")
+    if (
+        predicate_type != "svbool_t"
+        or predicate_token != "pg"
+        or init_direct_token != "svptrue_b8"
+        or store_call_token != "svst1"
+    ):
+        diagnostics.append(
+            _predicate_path_malformed_diagnostic(
+                "predicate-path structural request requires the exact M75 "
+                "predicate-init and store-call structural tokens",
+                init_role.source_location,
+            )
+        )
+    if store_predicate_token != predicate_token:
+        diagnostics.append(
+            _predicate_path_token_mismatch_diagnostic(
+                "predicate-path structural request requires the slot-3 predicate "
+                "argument token to match the slot-1 predicate token",
+                store_role.source_location,
+            )
+        )
+
+    selected_body_envelope = selected_role.selected_body_envelope
+    if isinstance(selected_body_envelope, SelectedBodyEnvelopeIr):
+        if len(selected_body_envelope.entries) != 1:
+            diagnostics.append(
+                _predicate_path_provenance_mismatch_diagnostic(
+                    "predicate-path structural request requires the accepted "
+                    "M63 selected-body envelope to carry exactly one M62 entry",
+                    selected_body_envelope.source_location,
+                )
+            )
+            return diagnostics
+        entry = selected_body_envelope.entries[0]
+        if (
+            entry.candidate_id != selected_body_envelope.candidate_id
+            or entry.selected_type_tag != selected_body_envelope.selected_type_tag
+            or entry.originating_branch_chain_id
+            != selected_body_envelope.originating_branch_chain_id
+            or entry.source_location != selected_body_envelope.source_location
+            or entry.source_body_ir.candidate_id != entry.candidate_id
+            or entry.source_body_ir.selected_type_tag != entry.selected_type_tag
+            or entry.source_body_ir.originating_branch_chain_id
+            != entry.originating_branch_chain_id
+            or entry.source_body_ir.source_location != entry.source_location
+            or entry.source_body_ir.direct_intrinsic_token_text
+            != entry.direct_intrinsic_token_text
+        ):
+            diagnostics.append(
+                _predicate_path_provenance_mismatch_diagnostic(
+                    "predicate-path structural request requires M63 selected-body "
+                    "envelope and M62 direct-intrinsic body IR provenance to match",
+                    entry.source_location,
+                )
+            )
+        if entry.assignment_target_text != predicate_token:
+            diagnostics.append(
+                _predicate_path_token_mismatch_diagnostic(
+                    "predicate-path structural request requires the selected-body "
+                    "assignment target token to match the slot-1 predicate token",
+                    entry.source_location,
+                )
+            )
+    elif isinstance(selected_body_envelope, NoSelectedBodyEnvelopeIr):
+        if (
+            selected_body_envelope.entries
+            or selected_body_envelope.source_body_ir.candidate_id
+            != selected_body_envelope.candidate_id
+            or selected_body_envelope.source_body_ir.selected_type_tag
+            != selected_body_envelope.selected_type_tag
+            or selected_body_envelope.source_body_ir.originating_branch_chain_id
+            != selected_body_envelope.originating_branch_chain_id
+            or selected_body_envelope.source_body_ir.source_location
+            != selected_body_envelope.source_location
+        ):
+            diagnostics.append(
+                _predicate_path_provenance_mismatch_diagnostic(
+                    "predicate-path structural request requires accepted "
+                    "no-selected-body envelope provenance to match its M62 "
+                    "no-body IR",
+                    selected_body_envelope.source_location,
+                )
+            )
+
+    return diagnostics
+
+
 def _exact_array_body_envelope_shape_is_supported(
     envelope: ExactArrayBodyEnvelopeIr,
 ) -> bool:
@@ -8331,6 +9007,83 @@ def _array_body_structural_sequence_malformed_diagnostic(
     )
 
 
+def _predicate_path_source_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-PREDICATE-PATH-SOURCE-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _predicate_path_missing_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-PREDICATE-PATH-IR-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _predicate_path_multiple_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-PREDICATE-PATH-IR-MULTIPLE",
+        detail,
+        location=location,
+    )
+
+
+def _predicate_path_context_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-PREDICATE-PATH-CONTEXT-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _predicate_path_provenance_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-PREDICATE-PATH-PROVENANCE-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _predicate_path_malformed_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-PREDICATE-PATH-MALFORMED",
+        detail,
+        location=location,
+    )
+
+
+def _predicate_path_token_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-PREDICATE-PATH-TOKEN-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
 def _duplicate_array_body_envelope_skeleton_diagnostic(
     lookup_key: ExactArrayBodyEnvelopeSkeletonKey,
     skeleton: ExactArrayBodyEnvelopeSkeleton,
@@ -8905,6 +9658,9 @@ def _lower_input(
                     ),
                     array_body_structural_sequences=(
                         array_initialization_pipeline.array_body_structural_sequences
+                    ),
+                    predicate_path_structural_requests=(
+                        array_initialization_pipeline.predicate_path_structural_requests
                     ),
                     generation_stages=(
                         _recognition_stage(
