@@ -384,47 +384,42 @@ The selected plan is behavior-preserving lowering package decomposition. It
 must move the accepted exact array-body / array-initialization lowering package
 out of `boundary.py` into private typed modules, preserve accepted M57-M77
 behavior, keep public imports stable, and reduce `boundary.py` by at least
-1,000 physical lines from the 12,371-line pre-M78 baseline. Human acceptance is
-pending.
+1,000 physical lines from the 12,371-line pre-M78 baseline. Human acceptance
+was recorded, and M78 execution is the active workflow action.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Await human acceptance of post-M77 planning; if accepted, finalize the M78
-execution handoff.
+Execute Milestone 78.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m77-acceptance-finalization-prompt.md
+docs/agent/runs/m78-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. M78 execution is not active until post-M77 planning is accepted and the
-acceptance-finalization prompt creates the M78 execution-review loop prompt.
+Milestone 78: Lowering Boundary Package Decomposition Slice
 ```
 
 Latest review verdict:
 
 ```text
-Post-M77 planning selected M78 for human acceptance. Planning and audit
-returned Accept With Follow-Ups after tightening the scope to one coherent
-behavior-preserving exact array-body package extraction with a line-count
-reduction target.
+Post-M77 planning was accepted by the user. The acceptance finalization
+prepared the M78 execution-review loop prompt.
 ```
 
 Next expected action:
 
 ```text
-If the user accepts the post-M77 planning result, run the active
-post-M77 acceptance-finalization prompt. It must update this state for M78
-execution and create docs/agent/runs/m78-execution-review-loop-prompt.md.
-Do not implement code or start M78 execution before that finalization.
+Run the active M78 execution-review loop prompt. Use the specified
+single-executor plus read-only review/audit workflow. Do not start M79 until
+M78 review accepts and the next concrete prompt is created.
 ```
 
 Accepted planning prompt:
@@ -955,10 +950,16 @@ Completed post-M77 planning-plus-review prompt:
 docs/agent/runs/post-m77-planning-plus-review-prompt.md
 ```
 
-Active post-M77 acceptance-finalization prompt:
+Accepted post-M77 acceptance-finalization prompt:
 
 ```text
 docs/agent/runs/post-m77-acceptance-finalization-prompt.md
+```
+
+Active M78 execution-review loop prompt:
+
+```text
+docs/agent/runs/m78-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2589,9 +2590,8 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is waiting for human acceptance of
-the post-M77 planning result. If accepted, run the active
-post-M77 acceptance-finalization prompt.
+No stop condition is active. The workflow is ready to execute M78 through the
+active execution-review loop prompt.
 
 ## Validation Expectations
 
@@ -2607,3 +2607,15 @@ For implementation milestones, run the milestone-specific targeted tests plus:
 PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
 git diff --check
 ```
+
+For M78 specifically, the active prompt requires:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+git diff --check
+```
+
+It also requires one focused M78 module-decomposition/import-stability command
+chosen by the executor.
