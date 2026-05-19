@@ -496,41 +496,57 @@ generated output, broad parsing, extension hardwiring, file/catalog reads,
 `tsldata` reads, host CPU queries, backend map reads, and runtime `frozen/`
 use remain out of scope.
 
+Post-M81 planning selected
+`Milestone 82: Selected-Body Envelope Ownership Extraction Slice`.
+The selected plan is behavior-preserving selected-body value-model ownership
+extraction. It should move the minimal cohesive accepted M60-M63 selected-body
+handoff/form/body-IR/envelope model cluster into a private typed module while
+preserving accepted M42-M81 behavior and public import paths. It must keep
+`boundary.py` as the public facade/coordinator, keep private lowering modules
+from importing `boundary.py` or the package facade, avoid circular imports,
+tighten exact array-body selected/no-selected envelope consumers where
+possible, and add no new lowering semantics, selected-body semantics, helper
+evaluation, backend translation, rendering, generated output, broad parsing,
+or extension hardwiring. Human acceptance was recorded.
+
+Post-M81 planning is accepted. It selected
+`Milestone 82: Selected-Body Envelope Ownership Extraction Slice`.
+Human acceptance was recorded, and M82 execution is the next action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M81 lowering-focused planning plus review.
+Execute Milestone 82.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m81-planning-plus-review-prompt.md
+docs/agent/runs/m82-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Current action is post-M81 planning; do not execute M82.
+Milestone 82: Selected-Body Envelope Ownership Extraction Slice.
 ```
 
 Latest review verdict:
 
 ```text
-M81 execution-review returned Accept With Follow-Ups after a focused
-maintainability revision. The blocking broad private control-flow context
-finding was resolved before acceptance.
+Post-M81 planning review returned Accept With Follow-Ups after a focused
+documentation correction. Boundary re-review accepted the selected M82 scope.
+Human acceptance has been recorded.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M81 planning-plus-review prompt. Use the specified
-read-only planning/review subagent workflow. Do not implement code or create
-an M82 execution prompt until the post-M81 planning result is explicitly
-accepted.
+Run the active M82 execution-review loop prompt. Use exactly one write-capable
+executor for implementation, then the required read-only review/audit workflow.
+Do not start M83.
 ```
 
 Accepted planning prompt:
@@ -1121,10 +1137,22 @@ Completed M81 execution-review loop prompt:
 docs/agent/runs/m81-execution-review-loop-prompt.md
 ```
 
-Active post-M81 planning-plus-review prompt:
+Completed post-M81 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m81-planning-plus-review-prompt.md
+```
+
+Completed post-M81 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m81-acceptance-finalization-prompt.md
+```
+
+Active M82 execution-review loop prompt:
+
+```text
+docs/agent/runs/m82-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1835,6 +1863,21 @@ docs/agent/runs/post-m81-planning-plus-review-prompt.md
   preserved accepted M42-M80 behavior, kept source adapters/facade-owned
   orchestration in `boundary.py`, and reduced `boundary.py` to 5,438 physical
   lines from the 7,208-line post-M80 baseline.
+- Post-M81 planning is accepted. It selected M82 as behavior-preserving
+  selected-body value-model ownership extraction. M82 should move only the
+  minimal cohesive M60-M63 selected-body handoff/form/body-IR/envelope
+  value-model cluster into a private typed module such as
+  `tslgen.lowering._selected_body_models`, keep `boundary.py` as the public
+  facade/coordinator, preserve public imports and accepted behavior, and
+  tighten exact array-body selected/no-selected envelope consumers where
+  possible.
+- M82 must not add selected-body semantics, helper evaluation, broad body or
+  TSIL parsing, source-adapter behavior, stage-construction frameworks,
+  backend translation, rendering, generated output, raw helper dispatch,
+  extension hardwiring, or runtime `frozen/` use. It must not move
+  `GenerationLoweringStage`, `LoweredImplementation`, `GenerationContext`,
+  `LoweringRequest`, `lower_candidates`, source adapters, or the exact
+  array-body stage coordinator.
 - Future lowering package decomposition must preserve accepted M57-M81
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -2880,11 +2923,23 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   `_context_for_candidate(item, request)` and selected-type-tag expressions
   across the exact-array pipeline call sequence. A future cleanup may hoist
   those facade-local values for readability.
+- Post-M81 planning follow-up for M82 execution: avoid moving only envelope
+  classes if that would create circular imports through M62 body-IR ownership.
+  Move the minimal cohesive selected-body value-model cluster needed for an
+  import-safe private boundary.
+- Post-M81 planning follow-up for M82 execution: do not broaden the existing
+  selected/no-selected structural protocols to hide the seam. Prefer concrete
+  private model ownership where possible, with narrow local protocols only
+  where a facade-owned value must remain.
+- Post-M81 planning follow-up for M82 execution: line-count reduction is useful
+  but must not drive movement of unrelated exact array-body pipeline code,
+  generation core helpers, source adapters, stage construction, or lowering
+  behavior.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run post-M81
-lowering-focused planning through the active planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M82 through the
+active execution-review loop prompt.
 
 ## Validation Expectations
 

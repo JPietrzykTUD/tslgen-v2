@@ -1369,7 +1369,8 @@ implemented M77 behavior-preserving lowering pipeline/module-boundary cleanup,
 accepted M78 behavior-preserving lowering boundary package decomposition, and
 implemented M79 exact array-body typed model ownership extraction, implemented
 M80 exact array-body validation boundary extraction,
-implemented M81 generation-time lowering core ownership extraction, and
+implemented M81 generation-time lowering core ownership extraction, planned
+M82 selected-body envelope ownership extraction, and
 body-slot semantics beyond those exact structural/request-resolution
 boundaries, including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and

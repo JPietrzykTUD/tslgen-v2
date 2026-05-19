@@ -1510,6 +1510,16 @@ Consequences:
   preserving facade imports and M42-M80 behavior. Source adapters, stage
   construction, backend/rendering/output behavior, broad helper families, and
   extension-specific semantic shortcuts remain out of scope.
+- Post-M81 planning selects M82 as selected-body envelope ownership
+  extraction rather than return-emission IR, stage-contract extraction, or
+  exact-array readability cleanup. The selected-body envelope seam is the
+  narrowest current lowering ownership problem: M60-M63 concrete body/envelope
+  models still live in the facade while private exact array-body modules
+  consume broad protocols and casts. M82 should move the minimal cohesive
+  selected-body value-model cluster into a private typed module, preserve
+  public facade imports and accepted behavior, and avoid new selected-body
+  semantics, broad body parsing, registries, dispatchers, backend hooks,
+  renderer hooks, and extension-specific shortcuts.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

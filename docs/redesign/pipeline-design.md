@@ -643,6 +643,15 @@ remains the facade/coordinator. The facade now measures 5,438 physical lines.
 M81 does not add a new lowering stage, backfeed, source adapter, dispatcher,
 registry, semantic evaluator, backend/rendering/output hook, or helper family.
 
+Post-M81 planning selects M82 as another behavior-preserving Stage 8 ownership
+extraction. The target is the selected-body value-model cluster around the
+accepted M60-M63 handoff/form/body-IR/envelope values, so private exact
+array-body modules can consume concrete selected-body envelope models instead
+of broad structural checks. M82 must preserve stage names, ordering, output
+identities, keys, and diagnostics; it does not add a new stage, backfeed,
+source adapter, registry, semantic evaluator, backend/rendering/output hook,
+or selected-body/body-slot semantics.
+
 ## Stage 9: Backend Planning
 
 Inputs:

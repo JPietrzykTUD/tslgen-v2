@@ -9876,3 +9876,209 @@ Accepted result:
 - Non-blocking follow-ups remain for broadening focused M81 diagnostic
   location coverage and hoisting repeated facade-local context/type-tag
   expressions in the exact-array pipeline call sequence.
+
+### Milestone 82: Selected-Body Envelope Ownership Extraction Slice
+
+Status:
+
+Selected by post-M81 planning. Human acceptance is required before execution.
+
+Goal:
+
+Move accepted selected-body envelope concrete model ownership out of
+`tslgen/src/tslgen/lowering/boundary.py` into a private typed lowering module
+while preserving all accepted M42-M81 behavior and public import paths.
+
+M82 is a behavior-preserving lowering architecture slice, not a new semantic
+lowering milestone. It addresses the M80/M81 follow-up that the concrete M63
+selected/no-selected body envelope models still live in the facade, forcing
+`_array_body_models.py` and `_array_body_validation.py` to consume broad
+structural protocols, `hasattr` checks, and casts. The slice should remove
+that seam through concrete private model ownership rather than broader
+protocols.
+
+Scope:
+
+- Create a private selected-body model module such as
+  `tslgen.lowering._selected_body_models`, or an equivalent coherent private
+  module.
+- Move the minimal cohesive selected-body value-model cluster needed to avoid
+  circular private imports while preserving public facade imports. The expected
+  ownership set includes:
+  - `OpaqueSelectedBranchBodyHandoff`
+  - `NoSelectedBranchBodyHandoff`
+  - `SelectedBranchBodyAssignmentFormRecognition`
+  - `NoSelectedBranchBodyAssignmentFormRecognition`
+  - `SelectedAssignmentDirectIntrinsicBodyIr`
+  - `NoSelectedAssignmentDirectIntrinsicBodyIr`
+  - `SelectedBodyEnvelopeEntry`
+  - `SelectedBodyEnvelopeIr`
+  - `NoSelectedBodyEnvelopeIr`
+  - the selected-body union aliases that can move without importing
+    `boundary.py`
+- Keep `boundary.py` as the public facade/coordinator and re-export the moved
+  public names through existing public paths.
+- Keep selected-body lowering functions in `boundary.py` unless a tiny helper
+  move is required and remains behavior-preserving:
+  `handoff_opaque_selected_branch_body`,
+  `recognize_selected_branch_body_assignment_form`,
+  `lower_selected_branch_body_ir`, and `lower_selected_body_envelope`.
+- Tighten `_array_body_models.py` and `_array_body_validation.py` to consume
+  the concrete private selected-body envelope model types where possible,
+  removing or narrowing the M63 selected/no-selected `hasattr`/cast seam.
+- Preserve accepted M42-M81 diagnostics, diagnostic codes, severities,
+  messages, source locations, selected-branch-only diagnostics, stage names,
+  stage ordering, output identities, keys, deterministic ordering, public
+  facade imports, and no-external-input boundaries.
+- Preserve private-module import direction. New selected-body private modules
+  and existing private lowering modules must not import `boundary.py` or the
+  `tslgen.lowering` package facade.
+
+Out of scope:
+
+- New lowering semantics, new selected-body semantics, new generation helper
+  semantics, helper evaluation, broad direct-intrinsic semantics, broad TSIL
+  parsing, exact return-emission IR, store semantics, return semantics,
+  memory behavior, pointer semantics, variable scope/use-def/lifetime,
+  declaration/array semantics, initializer behavior, `tmp.data()` semantics,
+  `emit_return`, `assume_aligned`, ARM/SVE predicate/vector/register/
+  intrinsic semantics, byte-size-to-token inference, source-operand semantics,
+  or generated output.
+- Moving `GenerationLoweringStage`, `GenerationContext`,
+  `LoweredImplementation`, `LoweringRequest`, `lower_candidates`, source
+  adapters, the exact array-body stage coordinator, or the M81 generation
+  query/control-flow modules' ownership.
+- Moving selected-body lowering functions beyond tiny behavior-preserving
+  helper delegation.
+- Moving mini-TSIL return lowering, broad assignment, variable, declaration,
+  array, call, cast, loop, store, return, or multi-statement body lowering;
+  broad vector metadata semantics; generic body/call/store/return/
+  declaration/array IR; raw helper dispatch; registry, dispatcher, plugin, or
+  fixpoint/backfeed engine work.
+- Backend manifests, backend maps, language maps, translation maps, backend
+  translation requests, renderer-ready IR, generated artifacts, golden files,
+  generated tests, CLI/report/writer behavior, Rust behavior, compiler
+  execution, generated-test execution, lowering-time file/catalog reads,
+  `tsldata` reads during lowering evaluation, host CPU queries, backend map
+  reads, or runtime dependency on `frozen/`.
+- Starting M83.
+
+Required input:
+
+- Accepted M60 opaque selected-body handoff behavior.
+- Accepted M61 selected assignment-form recognition behavior.
+- Accepted M62 selected/no-body assignment/direct-intrinsic body IR behavior.
+- Accepted M63 selected/no-selected body envelope behavior.
+- Accepted M64-M81 exact array-body consumers, validation, pipeline, stage,
+  public import, and private import-direction behavior.
+- The post-M81 `boundary.py` baseline of 5,438 physical lines.
+- Redesign rules requiring typed semantic lowering, no renderer-side helper
+  evaluation, no raw helper dispatch to semantic outputs, deterministic
+  diagnostics, no circular private imports, and side-effect-free lowering.
+
+Expected outputs:
+
+- A private selected-body model module owning the moved selected-body handoff,
+  form-recognition, body-IR, and envelope model values that can move without
+  importing `boundary.py`.
+- Stable public imports from `tslgen.lowering` and
+  `tslgen.lowering.boundary`.
+- The same `selected_body_envelope_lowering` stage output identity and
+  `LoweredImplementation.selected_body_envelopes` behavior.
+- `_array_body_models.py` and `_array_body_validation.py` consume concrete
+  selected-body envelope model types where possible rather than broad M63
+  selected/no-selected structural checks.
+- `boundary.py` remains the public facade/coordinator and is materially
+  smaller, with no duplicate moved model code.
+- No public behavior changes to accepted M42-M81 lowering.
+
+Parity criterion:
+
+M82 succeeds when selected-body envelope concrete ownership is no longer mixed
+into the facade, the M63 selected/no-selected envelope seam in private
+array-body modules is concrete or deliberately narrow, public imports remain
+stable, diagnostics remain stable, private modules do not import `boundary.py`,
+and no new semantics or output behavior are introduced.
+
+Evidence paths:
+
+- `tslgen/src/tslgen/lowering/boundary.py` for the post-M81 facade,
+  selected-body value-model cluster, selected-body lowering functions,
+  `GenerationLoweringStage`, `LoweredImplementation`, and exact array-body
+  orchestration that must remain facade-owned.
+- `tslgen/src/tslgen/lowering/_array_body_models.py` for the existing
+  selected/no-selected envelope structural checks and concrete model consumer
+  pressure.
+- `tslgen/src/tslgen/lowering/_array_body_validation.py` for existing
+  selected/no-selected envelope protocols/casts.
+- `tslgen/src/tslgen/lowering/__init__.py` for public lowering imports.
+- `tslgen/tests/unit/test_lowering_boundary.py` for accepted M60-M63
+  selected-body handoff/form/body-IR/envelope behavior, diagnostics,
+  determinism, no-reparse guarantees, nested envelope identity, and stage
+  order/output coverage.
+
+Tests required:
+
+- Full `tslgen/tests/unit/test_lowering_boundary.py` preservation.
+- Focused M82 tests proving public selected-body model imports still resolve
+  through `tslgen.lowering` and `tslgen.lowering.boundary`.
+- Focused private-import-boundary regression proving the new selected-body
+  private module and accepted private lowering modules do not import
+  `boundary.py` or the `tslgen.lowering` package facade.
+- Focused selected/no-selected envelope behavior and diagnostic preservation
+  tests, including source locations, keys, deterministic output, and no
+  selected-body reparsing.
+- Regression coverage through M64-M76 consumers proving nested envelope
+  identity and stage order remain stable.
+- A `boundary.py` line-count validation measured against the 5,438-line
+  post-M81 baseline.
+- Regression tests or existing tests proving no backend translation,
+  rendering, generated output, broad TSIL/body/call/store/return/declaration/
+  array semantics, raw helper evaluator calls, raw helper dispatch, catalog
+  reads, `tsldata` reads, host CPU queries, backend map reads, import cycles,
+  duplicate moved code, or runtime `frozen/` use is introduced.
+
+Golden fixtures required:
+
+- None. M82 is behavior-preserving lowering architecture work and must not
+  change generated C++ or Rust output.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_selected_body_models.py tslgen/src/tslgen/lowering/_generation_models.py tslgen/src/tslgen/lowering/_generation_queries.py tslgen/src/tslgen/lowering/_generation_control_flow.py tslgen/src/tslgen/lowering/_generation_diagnostics.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_shapes.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- A focused M82 selected-body ownership/import-stability command selected by
+  the executor.
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Moving only envelope classes and creating circular imports because M63
+  envelopes depend on M62 body IR classes still in `boundary.py`.
+- Moving too much selected-body lowering behavior under an ownership label.
+- Replacing the old structural seam with broader protocols instead of concrete
+  private model ownership.
+- Changing accepted diagnostic text, code, severity, path, line, or column
+  while moving models.
+- Moving source adapters or orchestration that still depend on facade-owned
+  `GenerationLoweringStage`, `LoweredImplementation`, `LoweringInput`, or
+  `LoweringRequest`.
+- Treating SVE-looking tokens, selected type tags, source text, backend ids,
+  renderer names, or corpus line numbers as semantic dispatch keys rather
+  than provenance/invariant evidence.
+- Reducing line count by moving unrelated exact array-body pipeline code,
+  duplicating moved helpers, or leaving compatibility wrappers around poor
+  abstractions.
+
+Dependencies on prior milestones:
+
+- Milestones 60 through 81.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m81-acceptance-finalization-prompt.md` records human
+  acceptance of the post-M81 planning result before an M82 execution prompt is
+  created.

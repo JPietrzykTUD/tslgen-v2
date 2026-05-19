@@ -1002,6 +1002,14 @@ Recommended first parity checks:
   generation-time behavior through the full lowering-boundary suite while
   rejecting private-module imports of `boundary.py` in absolute or relative
   form.
+- Planned M82 tests should preserve the full lowering-boundary suite while
+  adding focused selected-body ownership/import-boundary coverage. Public
+  selected-body model imports through `tslgen.lowering` and
+  `tslgen.lowering.boundary` should remain stable, the new private
+  selected-body model module must not import `boundary.py` or the package
+  facade, selected/no-selected envelope diagnostics and source locations must
+  remain unchanged, and M64-M76 consumers must continue to observe the same
+  nested envelope identity, stage order, and no-reparse behavior.
 
 Deferred parity checks:
 

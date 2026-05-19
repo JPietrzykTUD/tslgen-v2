@@ -709,6 +709,15 @@ exactly; it does not add new helper evaluation, broad helper parsing, backend
 translation, rendering, generated output, catalog/backend reads, or
 extension-specific semantic shortcuts.
 
+Post-M81 planning selects M82 as behavior-preserving selected-body envelope
+ownership extraction. The selected slice should move the minimal cohesive
+M60-M63 selected-body model cluster into a private typed module while keeping
+the accepted lowering functions, source adapters, stage construction, and
+public facade behavior stable. It is not a new helper-evaluation slice and
+must not add selected-body semantics, broad TSIL/body parsing, backend
+translation, rendering, generated output, catalog/backend reads, or
+extension-specific semantic shortcuts.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
@@ -1045,8 +1054,11 @@ structural IR, implemented M74 exact structural-sequence classification,
 accepted M75 exact predicate-path structural/request IR, and accepted M76 exact
 post-branch intrinsic call-site structural/request IR slices, plus the
 implemented M77 behavior-preserving composable lowering pipeline/module
-boundary and the accepted M78 behavior-preserving lowering package
-decomposition:
+boundary, the accepted M78 behavior-preserving lowering package
+decomposition, implemented M79 exact array-body typed model ownership,
+implemented M80 exact array-body validation boundary extraction, implemented
+M81 generation-time lowering core ownership extraction, and planned M82
+selected-body envelope ownership extraction:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
