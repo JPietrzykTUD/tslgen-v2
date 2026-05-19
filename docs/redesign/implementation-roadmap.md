@@ -10110,3 +10110,184 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m82-planning-plus-review-prompt.md` runs the next
   lowering-focused planning pass.
+
+### Milestone 83: GenerationLoweringStage Output Contract Extraction Slice
+
+Status:
+
+Selected by post-M82 planning. Awaiting human acceptance before execution.
+
+Goal:
+
+Move the accepted generation lowering stage-name/output validation contract out
+of `tslgen/src/tslgen/lowering/boundary.py` into a private typed lowering
+module while preserving all accepted M42-M82 behavior, public import paths,
+stage names, stage ordering, output identities, deterministic keys,
+diagnostics, and no-external-input boundaries.
+
+M83 is behavior-preserving lowering architecture work. It prepares the staged
+lowering pipeline for future semantic slices such as exact return-emission
+structural/request IR by taking the growing `GenerationLoweringStage` output
+contract out of the facade-owned validation ladder. It is contract validation,
+not stage execution dispatch, a registry, a plugin system, a fixpoint engine,
+or a new semantic lowering slice.
+
+Scope:
+
+- Create a private typed stage-contract module such as
+  `tslgen.lowering._stage_contracts`, or an equivalent coherent private
+  lowering module.
+- Move or own the stage contract data currently encoded by
+  `GenerationLoweringStage.__post_init__`, including the accepted mapping from
+  each `GenerationLoweringStageName` to the allowed output model type or types.
+- Preserve the existing public `GenerationLoweringStage` behavior and import
+  paths through `tslgen.lowering` and `tslgen.lowering.boundary`.
+- Keep stage names, stage ordering, output object identity, `key` behavior,
+  error class/message shape for invalid stage/output pairings, and deterministic
+  pipeline snapshots unchanged.
+- Keep `boundary.py` as the public facade/coordinator for lowering requests,
+  candidate/source adapters, `LoweredImplementation`, lower-candidate
+  orchestration, and existing stage construction unless a tiny dependency move
+  is required to avoid an import cycle.
+- If import safety requires it, move only the minimal mini-TSIL value-model
+  cluster needed by the stage-output union into a private model module. Do not
+  move mini-TSIL parsing or broad TSIL semantics under this milestone.
+- Preserve one-way private imports. The new stage-contract module and existing
+  private lowering modules must not import `boundary.py` or the
+  `tslgen.lowering` package facade.
+- Reduce `boundary.py` line count from the accepted M82 baseline of 4,965
+  physical lines without duplicating moved contract code.
+
+Out of scope:
+
+- New stage names, new stage ordering, new stage outputs, new diagnostics, new
+  lowering semantics, exact return-emission IR, store/call/body/return
+  semantics, broad TSIL parsing, generic body/call/store/return/declaration/
+  array IR, generic source adapters, source skeleton recognition, helper
+  evaluation, broad generation helper families, raw helper dispatch, semantic
+  dispatchers, registries, runtime plugins, fixpoint/backfeed execution, or
+  broad pipeline payload rewrites.
+- Moving `LoweredImplementation`, `LoweringInput`, `LoweringRequest`,
+  `lower_candidates`, source adapters, exact array-body pipeline
+  coordination, or backend/rendering/output-facing behavior.
+- Interpreting `emit_return`, `tmp`, `tmp.data()`, `svst1`, `pg`, SVE-looking
+  tokens, selected type tags, backend ids, renderer names, or corpus line
+  numbers as semantic dispatch keys.
+- Backend translation, rendering, generated output, golden files, generated
+  tests, CLI/report/writer behavior, Rust behavior, compiler execution,
+  generated-test execution, lowering-time file/catalog reads, `tsldata` reads
+  during lowering evaluation, host CPU queries, backend map reads, or runtime
+  dependency on `frozen/`.
+- Starting M84.
+
+Required input:
+
+- Accepted M42-M82 lowering behavior.
+- The accepted M58 `GenerationLoweringStage` record contract.
+- The accepted M59-M76 stage names, ordering, output identities, keys, and
+  exact structural/request stage outputs.
+- The accepted M77 pipeline snapshot behavior.
+- The private module ownership boundaries accepted in M78-M82:
+  `_array_body_models`, `_array_body_shapes`, `_array_body_diagnostics`,
+  `_array_body_validation`, `_generation_models`, `_generation_queries`,
+  `_generation_control_flow`, `_generation_diagnostics`, `_exact_shapes`,
+  `_pipeline`, and `_selected_body_models`.
+- The accepted M82 `boundary.py` line-count baseline of 4,965 physical lines.
+
+Expected outputs:
+
+- A private typed stage-contract module, or equivalent private ownership
+  boundary, containing the accepted stage-to-output compatibility contract.
+- The same public `GenerationLoweringStage` values, keys, output identities,
+  invalid-stage errors, and invalid-output-type errors as before M83.
+- Stable public imports from `tslgen.lowering` and
+  `tslgen.lowering.boundary`.
+- Stable stage snapshots and `LoweredImplementation` stage tuples.
+- `boundary.py` remains the public facade/coordinator and becomes smaller.
+- No new semantic IR output.
+
+Parity criterion:
+
+M83 succeeds when stage/output compatibility is owned by a private typed
+lowering boundary, public stage imports and accepted stage behavior remain
+unchanged, private modules still do not import the facade, `boundary.py` is
+smaller than the accepted M82 baseline, and no new lowering semantics or output
+behavior are introduced.
+
+Evidence paths:
+
+- `tslgen/src/tslgen/lowering/boundary.py` for
+  `GenerationLoweringStageName`, `GenerationLoweringStageOutput`,
+  `GenerationLoweringStage.__post_init__`, stage helper construction, public
+  facade exports, `LoweredImplementation`, source adapters, and lower-candidate
+  orchestration that must remain behavior-preserving.
+- `tslgen/src/tslgen/lowering/_pipeline.py` for accepted stage snapshot and
+  dependency behavior that must remain unchanged.
+- `tslgen/src/tslgen/lowering/_array_body_models.py`,
+  `_selected_body_models.py`, and `_generation_models.py` for private model
+  owner patterns and existing output types consumed by the stage contract.
+- `tslgen/src/tslgen/lowering/__init__.py` for public lowering imports.
+- `tslgen/tests/unit/test_lowering_boundary.py` for accepted stage ordering,
+  output identity, public import, diagnostic, and deterministic behavior.
+
+Tests required:
+
+- Full `tslgen/tests/unit/test_lowering_boundary.py` preservation.
+- Focused M83 tests for every accepted stage/output pairing, including
+  representative M42-M76 stage outputs.
+- Focused rejection tests for unknown stage names and wrong output object
+  types, preserving the same exception classes and message shape.
+- Focused public import stability tests for `GenerationLoweringStage`,
+  `GenerationLoweringStageName`, and accepted stage output aliases through
+  `tslgen.lowering` and `tslgen.lowering.boundary`.
+- Focused private-import-boundary tests proving the new private stage-contract
+  module and existing private lowering modules do not import `boundary.py` or
+  the `tslgen.lowering` package facade.
+- Pipeline snapshot/stage identity regression tests proving stage ordering,
+  keys, and output object identity remain unchanged.
+- A `boundary.py` line-count validation measured against the accepted 4,965
+  line M82 baseline.
+- Regression tests or existing tests proving no backend translation,
+  rendering, generated output, broad TSIL/body/call/store/return/declaration/
+  array semantics, raw helper dispatch, catalog reads, `tsldata` reads, host
+  CPU queries, backend map reads, import cycles, duplicate moved code, or
+  runtime `frozen/` use is introduced.
+
+Golden fixtures required:
+
+- None. M83 is behavior-preserving lowering architecture work and must not
+  change generated C++ or Rust output.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_stage_contracts.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m83 or stage_contract or generation_lowering_stage"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Creating a circular import by moving the stage contract into a private module
+  that imports `boundary.py` or the package facade.
+- Moving too much orchestration, source-adapter behavior, or pipeline execution
+  under a "contract extraction" label.
+- Accidentally changing stage names, stage ordering, output identities, keys,
+  exception classes, or error message shape for invalid stage/output pairings.
+- Turning stage contract validation into a broad registry, plugin system,
+  semantic dispatcher, or fixpoint/backfeed engine.
+- Treating exact return-emission, store-call, selected-body, SVE-looking token,
+  backend, renderer, or corpus-line evidence as semantic behavior.
+- Reducing line count by moving unrelated exact array-body, generation-helper,
+  selected-body, source-adapter, or lower-candidate coordination code.
+
+Dependencies on prior milestones:
+
+- Milestones 42 through 82.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m82-acceptance-finalization-prompt.md` records human
+  acceptance and creates the M83 execution-review-loop prompt.

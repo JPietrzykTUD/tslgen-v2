@@ -652,6 +652,15 @@ identities, keys, and diagnostics remain unchanged; M82 does not add a new
 stage, backfeed, source adapter, registry, semantic evaluator,
 backend/rendering/output hook, or selected-body/body-slot semantics.
 
+Post-M82 planning selects M83 as behavior-preserving Stage 8 stage-contract
+ownership extraction. M83 should move the accepted `GenerationLoweringStage`
+stage-name/output validation contract out of the facade into a private typed
+module while keeping stage execution/coordinator behavior in `boundary.py`.
+This keeps the staged lowering pipeline easier to extend before adding new
+semantic stages such as exact return-emission structural/request IR. It must
+not introduce a stage registry, dispatcher, source adapter, semantic evaluator,
+fixpoint/backfeed engine, backend/rendering/output hook, or new stage output.
+
 ## Stage 9: Backend Planning
 
 Inputs:

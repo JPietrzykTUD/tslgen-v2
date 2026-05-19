@@ -1011,6 +1011,18 @@ Recommended first parity checks:
   checks replace the broad structural seam, and M64-M76 consumers continue to
   observe the same nested envelope identity, stage order, and no-reparse
   behavior.
+- M83 tests must prove behavior-preserving stage output-contract ownership
+  extraction. The full lowering-boundary suite remains green; focused tests
+  cover every accepted `GenerationLoweringStage` stage/output pairing,
+  unknown-stage and wrong-output rejection with the same exception class and
+  message shape, public import stability for stage contract names, private
+  import direction for the new stage-contract module, stable stage ordering,
+  keys, output identity, and pipeline snapshots, and a `boundary.py` line
+  count below the accepted M82 4,965-line baseline. Tests must also prove no
+  backend translation, rendering, generated output, broad TSIL/body/call/
+  store/return/declaration/array semantics, raw helper dispatch, catalog/
+  `tsldata`/host CPU/backend map reads, import cycles, duplicate moved code,
+  or runtime `frozen/` use is introduced.
 
 Deferred parity checks:
 

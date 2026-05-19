@@ -590,6 +590,14 @@ Current roadmap note:
   behavior-preserving architecture work, not a new selected-body semantic
   evaluator, stage registry, source adapter, backend/rendering/output hook, or
   extension-specific lowering shortcut.
+- Post-M82 planning selects M83 as generation-lowering stage output-contract
+  ownership extraction. The selected slice should move the accepted
+  `GenerationLoweringStage` stage-name/output compatibility contract into a
+  private typed module while preserving public imports, stage names, stage
+  ordering, output identities, keys, diagnostics, and `boundary.py` facade/
+  coordinator ownership. M83 is contract validation, not a registry,
+  dispatcher, source adapter, fixpoint/backfeed engine, exact return-emission
+  IR, backend/rendering/output hook, or extension-specific semantic shortcut.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

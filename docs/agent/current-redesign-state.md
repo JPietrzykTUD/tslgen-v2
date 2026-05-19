@@ -527,41 +527,58 @@ adapter behavior, backend translation, rendering, generated output, broad
 parsing, extension hardwiring, file/catalog reads, `tsldata` reads, host CPU
 queries, backend map reads, and runtime `frozen/` use remain out of scope.
 
+Post-M82 planning selected
+`Milestone 83: GenerationLoweringStage Output Contract Extraction Slice`.
+The selected plan is behavior-preserving stage-contract ownership extraction.
+It should move the accepted `GenerationLoweringStage` stage-name/output
+validation contract into a private typed lowering module while preserving
+accepted M42-M82 behavior, public imports, stage names/order, output
+identities, deterministic keys, pipeline snapshots, and invalid-stage/output
+error behavior. It must keep `boundary.py` as facade/coordinator for
+lower-candidate orchestration and source adapters, avoid circular imports,
+avoid registries/dispatchers/fixpoint engines, and add no new stage behavior,
+return/store/body semantics, backend translation, rendering, generated output,
+broad parsing, or extension hardwiring. Internal planning review returned
+`Accept` after a focused workflow-state wording correction.
+
+Post-M82 planning is accepted. It selected
+`Milestone 83: GenerationLoweringStage Output Contract Extraction Slice`.
+Human acceptance was recorded.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M82 lowering-focused planning plus review.
+Execute Milestone 83.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m82-planning-plus-review-prompt.md
+docs/agent/runs/m83-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Current action is post-M82 planning; do not execute M83.
+Milestone 83: GenerationLoweringStage Output Contract Extraction Slice
 ```
 
 Latest review verdict:
 
 ```text
-M82 execution-review returned Accept. Review and audit found no blocking
-implementation, validation, boundary, extensibility, documentation, or
-evidence issues.
+M82 execution-review returned Accept. Post-M82 planning selected M83; internal
+planning review returned Accept after a focused workflow-state wording
+correction. Human acceptance was recorded.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M82 planning-plus-review prompt. Use the specified
-read-only planning/review subagent workflow. Do not implement code or create
-an M83 execution prompt until the post-M82 planning result is explicitly
-accepted.
+Run the active M83 execution-review-loop prompt. Use exactly one write-capable
+executor for implementation, then run the specified read-only review/audit
+subagents. Do not start M84.
 ```
 
 Accepted planning prompt:
@@ -1170,10 +1187,22 @@ Completed M82 execution-review loop prompt:
 docs/agent/runs/m82-execution-review-loop-prompt.md
 ```
 
-Active post-M82 planning-plus-review prompt:
+Completed post-M82 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m82-planning-plus-review-prompt.md
+```
+
+Completed post-M82 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m82-acceptance-finalization-prompt.md
+```
+
+Active M83 execution-review loop prompt:
+
+```text
+docs/agent/runs/m83-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1892,7 +1921,12 @@ docs/agent/runs/post-m82-planning-plus-review-prompt.md
   exact array-body selected/no-selected envelope consumers to concrete private
   model checks, and reduced `boundary.py` to 4,965 physical lines from the
   5,438-line post-M81 baseline.
-- Future lowering package decomposition must preserve accepted M57-M81
+- M83 is selected as behavior-preserving `GenerationLoweringStage` output
+  contract extraction. It must move only the accepted stage-name/output
+  validation contract into a private typed lowering module while preserving
+  public imports, stage names/order, output identities, deterministic keys,
+  pipeline snapshots, and invalid-stage/output exception behavior.
+- Future lowering package decomposition must preserve accepted M57-M82
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -2956,11 +2990,25 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   stage construction stayed facade-owned, and line-count reduction did not
   drive unrelated moves.
 - M82 review recorded no non-blocking follow-ups.
+- Post-M82 planning follow-up for M83 execution: keep M83 as
+  behavior-preserving stage output-contract ownership extraction only. Do not
+  add new stage names, new stage behavior, exact return-emission IR, pipeline
+  payload rewrites, source adapters, broad TSIL/body/call/store/return/
+  declaration/array semantics, helper evaluation, backend translation,
+  rendering, generated output, or extension-specific shortcuts.
+- Post-M82 planning follow-up for M83 execution: preserve public
+  `GenerationLoweringStage` imports and stage behavior through
+  `tslgen.lowering` and `tslgen.lowering.boundary`; private stage-contract
+  modules must not import `boundary.py` or the package facade.
+- Post-M82 planning follow-up for M83 execution: if the stage-output union
+  depends on mini-TSIL statement models, move only the minimal value-model
+  dependency needed to avoid circular imports, not mini-TSIL parsing or broad
+  statement semantics.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run post-M82
-lowering-focused planning through the active planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M83 through the
+active execution-review-loop prompt.
 
 ## Validation Expectations
 
