@@ -5,6 +5,7 @@ from typing import Literal, Protocol
 
 from tslgen.core.diagnostics import SourceLocation
 import tslgen.lowering._exact_shapes as _exact_shapes
+import tslgen.lowering._selected_body_models as _selected_body_models
 
 
 class _KeyedProtocol(Protocol):
@@ -26,58 +27,21 @@ class GenerationTypeRefLike(_KeyedProtocol, Protocol):
 type GenerationTypeRef = GenerationTypeRefLike
 
 
-class GenerationSelectedBodyEnvelopeIr(_KeyedProtocol, Protocol):
-    @property
-    def candidate_id(self) -> str: ...
-
-    @property
-    def selected_type_tag(self) -> str: ...
-
-    @property
-    def source_location(self) -> SourceLocation: ...
-
-    @property
-    def originating_branch_chain_id(self) -> str: ...
-
-    @property
-    def entries(self) -> tuple[object, ...]: ...
+type GenerationSelectedBodyEnvelopeIr = (
+    _selected_body_models.GenerationSelectedBodyEnvelopeIr
+)
 
 
-def _is_generation_selected_body_envelope_like(value: object) -> bool:
-    return all(
-        hasattr(value, name)
-        for name in (
-            "candidate_id",
-            "selected_type_tag",
-            "source_location",
-            "originating_branch_chain_id",
-            "entries",
-            "key",
-        )
-    )
+def _is_generation_selected_body_envelope(value: object) -> bool:
+    return _selected_body_models.is_generation_selected_body_envelope_ir(value)
 
 
-def _is_selected_body_envelope_like(value: object) -> bool:
-    if not _is_generation_selected_body_envelope_like(value):
-        return False
-    entries = getattr(value, "entries", None)
-    return isinstance(entries, tuple) and len(entries) == 1 and not hasattr(
-        value,
-        "attempted_literals",
-    )
+def _is_selected_body_envelope(value: object) -> bool:
+    return _selected_body_models.is_selected_body_envelope_ir(value)
 
 
-def _is_no_selected_body_envelope_like(value: object) -> bool:
-    if not _is_generation_selected_body_envelope_like(value):
-        return False
-    entries = getattr(value, "entries", None)
-    attempted_literals = getattr(value, "attempted_literals", None)
-    return (
-        isinstance(entries, tuple)
-        and not entries
-        and attempted_literals == (2, 4, 8)
-        and hasattr(value, "source_body_ir")
-    )
+def _is_no_selected_body_envelope(value: object) -> bool:
+    return _selected_body_models.is_no_selected_body_envelope_ir(value)
 
 
 type ExactArrayInitializationHelperLeafKind = Literal[
@@ -724,7 +688,7 @@ class ExactArrayBodyEnvelopeSelectedSlot:
             )
         if self.ordinal not in _EXACT_ARRAY_BODY_ENVELOPE_SLOT_ORDINALS:
             raise ValueError("array-body envelope selected slot ordinal is unsupported")
-        if not _is_generation_selected_body_envelope_like(
+        if not _is_generation_selected_body_envelope(
             self.selected_body_envelope,
         ):
             raise TypeError("array-body envelope selected slot requires M63 envelope")
@@ -2146,7 +2110,7 @@ class ExactPredicatePathStructuralRequestIr:
             raise ValueError(
                 "predicate-path structural request selected update state is unsupported"
             )
-        if not _is_generation_selected_body_envelope_like(
+        if not _is_generation_selected_body_envelope(
             self.selected_body_envelope,
         ):
             raise TypeError(
@@ -2161,7 +2125,7 @@ class ExactPredicatePathStructuralRequestIr:
                 "predicate-path structural request requires selected-update location"
             )
         if self.selected_update_state == "accepted_selected_update":
-            if not _is_selected_body_envelope_like(self.selected_body_envelope):
+            if not _is_selected_body_envelope(self.selected_body_envelope):
                 raise ValueError(
                     "selected predicate update state requires a selected-body envelope"
                 )
@@ -2174,7 +2138,7 @@ class ExactPredicatePathStructuralRequestIr:
                     "selected predicate update state requires a direct-intrinsic token"
                 )
         else:
-            if not _is_no_selected_body_envelope_like(self.selected_body_envelope):
+            if not _is_no_selected_body_envelope(self.selected_body_envelope):
                 raise ValueError(
                     "no-update predicate state requires a no-selected-body envelope"
                 )

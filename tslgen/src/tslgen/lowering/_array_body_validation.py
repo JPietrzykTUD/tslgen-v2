@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import re
-from typing import Protocol, cast
+from typing import Protocol
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.core.result import Result
 import tslgen.lowering._array_body_diagnostics as _array_body_diagnostics
 import tslgen.lowering._array_body_models as _array_body_models
+import tslgen.lowering._selected_body_models as _selected_body_models
 from tslgen.lowering._array_body_models import (
     ExactArrayBodyEnvelopeIr,
     ExactArrayBodyEnvelopeOpaqueSlot,
@@ -50,79 +51,6 @@ class _ArrayInitializationVectorAlignmentMetadataContext(Protocol):
     def array_initialization_vector_alignment_metadata(
         self,
     ) -> tuple[ExactArrayInitializationVectorAlignmentMetadata, ...]: ...
-
-
-class _SelectedAssignmentDirectIntrinsicBodyIrLike(Protocol):
-    @property
-    def candidate_id(self) -> str: ...
-
-    @property
-    def selected_type_tag(self) -> str: ...
-
-    @property
-    def originating_branch_chain_id(self) -> str: ...
-
-    @property
-    def source_location(self) -> SourceLocation: ...
-
-    @property
-    def direct_intrinsic_token_text(self) -> str: ...
-
-
-class _SelectedBodyEnvelopeEntryLike(Protocol):
-    @property
-    def source_body_ir(self) -> _SelectedAssignmentDirectIntrinsicBodyIrLike: ...
-
-    @property
-    def candidate_id(self) -> str: ...
-
-    @property
-    def selected_type_tag(self) -> str: ...
-
-    @property
-    def originating_branch_chain_id(self) -> str: ...
-
-    @property
-    def source_location(self) -> SourceLocation: ...
-
-    @property
-    def assignment_target_text(self) -> str: ...
-
-    @property
-    def direct_intrinsic_token_text(self) -> str: ...
-
-
-class _SelectedBodyEnvelopeLike(
-    _array_body_models.GenerationSelectedBodyEnvelopeIr,
-    Protocol,
-):
-    @property
-    def entries(self) -> tuple[_SelectedBodyEnvelopeEntryLike, ...]: ...
-
-
-class _NoSelectedAssignmentDirectIntrinsicBodyIrLike(Protocol):
-    @property
-    def candidate_id(self) -> str: ...
-
-    @property
-    def selected_type_tag(self) -> str: ...
-
-    @property
-    def originating_branch_chain_id(self) -> str: ...
-
-    @property
-    def source_location(self) -> SourceLocation: ...
-
-
-class _NoSelectedBodyEnvelopeLike(
-    _array_body_models.GenerationSelectedBodyEnvelopeIr,
-    Protocol,
-):
-    @property
-    def source_body_ir(self) -> _NoSelectedAssignmentDirectIntrinsicBodyIrLike: ...
-
-    @property
-    def entries(self) -> tuple[object, ...]: ...
 
 
 def _validate_array_initialization_slot_position(
@@ -1370,10 +1298,10 @@ def _validate_predicate_path_structural_request_input(
         selected_role.role_label != "selected_body_envelope_slot"
         or selected_role.role_ordinal != 2
         or not (
-            _array_body_models._is_selected_body_envelope_like(
+            _selected_body_models.is_selected_body_envelope_ir(
                 selected_role.selected_body_envelope,
             )
-            or _array_body_models._is_no_selected_body_envelope_like(
+            or _selected_body_models.is_no_selected_body_envelope_ir(
                 selected_role.selected_body_envelope,
             )
         )
@@ -1459,8 +1387,11 @@ def _validate_predicate_path_structural_request_input(
         )
 
     selected_body_envelope = selected_role.selected_body_envelope
-    if _array_body_models._is_selected_body_envelope_like(selected_body_envelope):
-        selected_envelope = cast(_SelectedBodyEnvelopeLike, selected_body_envelope)
+    if isinstance(
+        selected_body_envelope,
+        _selected_body_models.SelectedBodyEnvelopeIr,
+    ):
+        selected_envelope = selected_body_envelope
         if len(selected_envelope.entries) != 1:
             diagnostics.append(
                 _array_body_diagnostics._predicate_path_provenance_mismatch_diagnostic(
@@ -1500,11 +1431,11 @@ def _validate_predicate_path_structural_request_input(
                     entry.source_location,
                 )
             )
-    elif _array_body_models._is_no_selected_body_envelope_like(selected_body_envelope):
-        no_selected_envelope = cast(
-            _NoSelectedBodyEnvelopeLike,
-            selected_body_envelope,
-        )
+    elif isinstance(
+        selected_body_envelope,
+        _selected_body_models.NoSelectedBodyEnvelopeIr,
+    ):
+        no_selected_envelope = selected_body_envelope
         if (
             no_selected_envelope.entries
             or no_selected_envelope.source_body_ir.candidate_id

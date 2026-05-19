@@ -581,14 +581,15 @@ Current roadmap note:
   add a new semantic evaluator, source adapter, dispatcher, registry,
   backend/rendering/output hook, or hardwired extension-specific lowering
   step.
-- Post-M81 planning selects M82 as selected-body envelope ownership
-  extraction. The selected slice should move the minimal cohesive M60-M63
-  selected-body value-model cluster into a private typed module such as
-  `tslgen.lowering._selected_body_models`, keep `boundary.py` as the public
-  facade/coordinator, and tighten exact array-body consumers away from broad
-  structural envelope checks. M82 is behavior-preserving architecture work,
-  not a new selected-body semantic evaluator, stage registry, source adapter,
-  backend/rendering/output hook, or extension-specific lowering shortcut.
+- M82 implements selected-body envelope ownership extraction. The minimal
+  cohesive M60-M63 selected-body value-model cluster now lives in
+  `tslgen.lowering._selected_body_models`, `boundary.py` remains the public
+  facade/coordinator, and exact array-body consumers use concrete private
+  selected-body envelope model checks instead of broad structural envelope
+  checks. `boundary.py` now measures 4,965 physical lines. M82 is
+  behavior-preserving architecture work, not a new selected-body semantic
+  evaluator, stage registry, source adapter, backend/rendering/output hook, or
+  extension-specific lowering shortcut.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 81 is accepted.
+Milestone 82 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -511,42 +511,57 @@ or extension hardwiring. Human acceptance was recorded.
 
 Post-M81 planning is accepted. It selected
 `Milestone 82: Selected-Body Envelope Ownership Extraction Slice`.
-Human acceptance was recorded, and M82 execution is the next action.
+Human acceptance was recorded.
+
+The M82 execution-review loop returned `Accept`. Review and audit found no
+blocking implementation, validation, boundary, extensibility, documentation,
+or evidence issues. M82 preserves accepted M42-M81 behavior while moving the
+selected-body handoff/form/body-IR/envelope value-model cluster into
+`tslgen.lowering._selected_body_models`. `boundary.py` remains the public
+facade/coordinator, public imports remain stable, private lowering modules do
+not import `boundary.py` or the package facade, exact array-body consumers now
+use concrete private selected-body envelope model checks, and `boundary.py`
+now measures 4,965 physical lines, below the 5,438-line post-M81 baseline.
+New lowering semantics, selected-body semantics, helper evaluation, source
+adapter behavior, backend translation, rendering, generated output, broad
+parsing, extension hardwiring, file/catalog reads, `tsldata` reads, host CPU
+queries, backend map reads, and runtime `frozen/` use remain out of scope.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 82.
+Run post-M82 lowering-focused planning plus review.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m82-execution-review-loop-prompt.md
+docs/agent/runs/post-m82-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 82: Selected-Body Envelope Ownership Extraction Slice.
+None. Current action is post-M82 planning; do not execute M83.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M81 planning review returned Accept With Follow-Ups after a focused
-documentation correction. Boundary re-review accepted the selected M82 scope.
-Human acceptance has been recorded.
+M82 execution-review returned Accept. Review and audit found no blocking
+implementation, validation, boundary, extensibility, documentation, or
+evidence issues.
 ```
 
 Next expected action:
 
 ```text
-Run the active M82 execution-review loop prompt. Use exactly one write-capable
-executor for implementation, then the required read-only review/audit workflow.
-Do not start M83.
+Run the active post-M82 planning-plus-review prompt. Use the specified
+read-only planning/review subagent workflow. Do not implement code or create
+an M83 execution prompt until the post-M82 planning result is explicitly
+accepted.
 ```
 
 Accepted planning prompt:
@@ -1149,10 +1164,16 @@ Completed post-M81 acceptance-finalization prompt:
 docs/agent/runs/post-m81-acceptance-finalization-prompt.md
 ```
 
-Active M82 execution-review loop prompt:
+Completed M82 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m82-execution-review-loop-prompt.md
+```
+
+Active post-M82 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m82-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -1863,21 +1884,14 @@ docs/agent/runs/m82-execution-review-loop-prompt.md
   preserved accepted M42-M80 behavior, kept source adapters/facade-owned
   orchestration in `boundary.py`, and reduced `boundary.py` to 5,438 physical
   lines from the 7,208-line post-M80 baseline.
-- Post-M81 planning is accepted. It selected M82 as behavior-preserving
-  selected-body value-model ownership extraction. M82 should move only the
-  minimal cohesive M60-M63 selected-body handoff/form/body-IR/envelope
-  value-model cluster into a private typed module such as
-  `tslgen.lowering._selected_body_models`, keep `boundary.py` as the public
-  facade/coordinator, preserve public imports and accepted behavior, and
-  tighten exact array-body selected/no-selected envelope consumers where
-  possible.
-- M82 must not add selected-body semantics, helper evaluation, broad body or
-  TSIL parsing, source-adapter behavior, stage-construction frameworks,
-  backend translation, rendering, generated output, raw helper dispatch,
-  extension hardwiring, or runtime `frozen/` use. It must not move
-  `GenerationLoweringStage`, `LoweredImplementation`, `GenerationContext`,
-  `LoweringRequest`, `lower_candidates`, source adapters, or the exact
-  array-body stage coordinator.
+- M82 is accepted as behavior-preserving selected-body value-model ownership
+  extraction. It moved the minimal cohesive M60-M63 selected-body handoff/
+  form/body-IR/envelope value-model cluster into
+  `tslgen.lowering._selected_body_models`, kept `boundary.py` as the public
+  facade/coordinator, preserved public imports and accepted behavior, tightened
+  exact array-body selected/no-selected envelope consumers to concrete private
+  model checks, and reduced `boundary.py` to 4,965 physical lines from the
+  5,438-line post-M81 baseline.
 - Future lowering package decomposition must preserve accepted M57-M81
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -2935,11 +2949,18 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   but must not drive movement of unrelated exact array-body pipeline code,
   generation core helpers, source adapters, stage construction, or lowering
   behavior.
+- M82 execution addressed the post-M81 planning follow-ups: review verified
+  the minimal cohesive selected-body value-model cluster moved without circular
+  imports, exact array-body consumers use concrete private selected-body
+  envelope model checks instead of broad structural seams, source adapters and
+  stage construction stayed facade-owned, and line-count reduction did not
+  drive unrelated moves.
+- M82 review recorded no non-blocking follow-ups.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M82 through the
-active execution-review loop prompt.
+No stop condition is active. The workflow is ready to run post-M82
+lowering-focused planning through the active planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -3019,3 +3040,23 @@ lowering-boundary suite returned `265 passed`. The focused lowering mypy check
 returned `Success: no issues found in 13 source files`. The validation profile
 returned exit 0 with corpus probes `3 passed`, unit discovery `599` tests OK,
 compileall OK, ruff OK, mypy OK, and diff-check OK.
+
+For M82, validation completed with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_selected_body_models.py tslgen/src/tslgen/lowering/_generation_models.py tslgen/src/tslgen/lowering/_generation_queries.py tslgen/src/tslgen/lowering/_generation_control_flow.py tslgen/src/tslgen/lowering/_generation_diagnostics.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_shapes.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m82"
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+git diff --check
+```
+
+The M82 line count was `4965 tslgen/src/tslgen/lowering/boundary.py`.
+The focused M82 command returned `3 passed, 265 deselected`. The full
+lowering-boundary suite returned `268 passed`. The focused lowering mypy check
+returned `Success: no issues found in 14 source files`. The validation profile
+returned exit 0 with corpus probes `3 passed`, unit discovery `602` tests OK,
+compileall OK, ruff OK, mypy `Success: no issues found in 118 source files`,
+and diff-check OK.

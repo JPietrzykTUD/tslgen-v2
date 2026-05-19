@@ -352,7 +352,7 @@ and still does not add compiler execution.
   lowering boundary package decomposition, implemented M79 exact array-body typed
   model ownership extraction, implemented M80 exact array-body validation
   boundary extraction, implemented M81 generation-time lowering core ownership
-  extraction, planned M82 selected-body envelope ownership extraction, broad
+  extraction, implemented M82 selected-body envelope ownership extraction, broad
   TSIL/body-slot parity beyond
   those exact structural/request-resolution
   boundaries, and backend translation-map evaluation beyond the selected

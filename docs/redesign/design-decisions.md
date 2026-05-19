@@ -1520,6 +1520,15 @@ Consequences:
   public facade imports and accepted behavior, and avoid new selected-body
   semantics, broad body parsing, registries, dispatchers, backend hooks,
   renderer hooks, and extension-specific shortcuts.
+- M82 executes that decision by creating
+  `tslgen.lowering._selected_body_models` as the private selected-body
+  value-model owner. The selected-body handoff/form/body-IR/envelope dataclass
+  cluster and selected-body union aliases move out of `boundary.py`, while
+  selected-body lowering functions, source adapters, stage construction, and
+  the public facade stay in `boundary.py`. Exact array-body modules now use
+  concrete private selected-body envelope model checks instead of broad
+  structural seams. This remains behavior-preserving ownership work, not new
+  selected-body semantics or an extension-specific dispatch layer.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

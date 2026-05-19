@@ -21,6 +21,7 @@ import tslgen.lowering._generation_diagnostics as lowering_generation_diagnostic
 import tslgen.lowering._generation_models as lowering_generation_models
 import tslgen.lowering._generation_queries as lowering_generation_queries
 import tslgen.lowering._pipeline as lowering_pipeline
+import tslgen.lowering._selected_body_models as lowering_selected_body_models
 import tslgen.lowering.boundary as lowering_boundary
 from tslgen.analysis.candidates import CandidateSelection, select_implementation_candidates
 from tslgen.analysis.selection import SelectionRequest, plan_selection
@@ -5089,6 +5090,100 @@ class LoweringBoundaryTests(unittest.TestCase):
                             if node.module == "boundary" or alias.name == "boundary"
                         )
             self.assertEqual(imported_boundary, [], module.__name__)
+
+    def test_m82_selected_body_model_ownership_moves_cluster(self) -> None:
+        for name in (
+            "OpaqueSelectedBranchBodyHandoff",
+            "NoSelectedBranchBodyHandoff",
+            "SelectedBranchBodyAssignmentFormRecognition",
+            "NoSelectedBranchBodyAssignmentFormRecognition",
+            "SelectedAssignmentDirectIntrinsicBodyIr",
+            "NoSelectedAssignmentDirectIntrinsicBodyIr",
+            "SelectedBodyEnvelopeEntry",
+            "SelectedBodyEnvelopeIr",
+            "NoSelectedBodyEnvelopeIr",
+        ):
+            self.assertIs(
+                getattr(lowering_boundary, name),
+                getattr(lowering_selected_body_models, name),
+            )
+            self.assertIs(
+                globals()[name],
+                getattr(lowering_selected_body_models, name),
+            )
+
+    def test_m82_array_body_consumers_use_concrete_selected_body_models(self) -> None:
+        selected_envelope = self.selected_body_envelope(selected_type_tag="si16")
+        no_selected_envelope = self.no_selected_body_envelope("si8")
+
+        self.assertTrue(
+            lowering_array_body_models._is_generation_selected_body_envelope(
+                selected_envelope,
+            ),
+        )
+        self.assertTrue(
+            lowering_array_body_models._is_selected_body_envelope(
+                selected_envelope,
+            ),
+        )
+        self.assertFalse(
+            lowering_array_body_models._is_selected_body_envelope(object()),
+        )
+        self.assertTrue(
+            lowering_array_body_models._is_no_selected_body_envelope(
+                no_selected_envelope,
+            ),
+        )
+        self.assertFalse(
+            lowering_array_body_models._is_no_selected_body_envelope(object()),
+        )
+        self.assertIsInstance(
+            selected_envelope,
+            lowering_selected_body_models.SelectedBodyEnvelopeIr,
+        )
+        self.assertIsInstance(
+            no_selected_envelope,
+            lowering_selected_body_models.NoSelectedBodyEnvelopeIr,
+        )
+
+    def test_m82_private_selected_body_module_does_not_import_facades(self) -> None:
+        private_modules = (
+            lowering_selected_body_models,
+            lowering_generation_control_flow,
+            lowering_generation_diagnostics,
+            lowering_generation_models,
+            lowering_generation_queries,
+            lowering_array_body_diagnostics,
+            lowering_array_body_models,
+            lowering_array_body_shapes,
+            lowering_array_body_validation,
+            lowering_exact_shapes,
+            lowering_pipeline,
+        )
+        for module in private_modules:
+            imported_facade: list[str] = []
+            tree = ast.parse(inspect.getsource(module))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imported_facade.extend(
+                        alias.name
+                        for alias in node.names
+                        if alias.name
+                        in ("tslgen.lowering.boundary", "tslgen.lowering")
+                    )
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module in (
+                        "tslgen.lowering.boundary",
+                        "tslgen.lowering",
+                    ):
+                        imported_facade.append(node.module)
+                    if node.level and node.module in (None, "", "boundary"):
+                        imported_facade.extend(
+                            alias.name
+                            for alias in node.names
+                            if node.module == "boundary" or alias.name == "boundary"
+                        )
+            self.assertEqual(imported_facade, [], module.__name__)
 
     def test_lower_candidates_structural_sequence_stage_follows_declaration_shell(
         self,

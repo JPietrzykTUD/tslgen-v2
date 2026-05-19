@@ -9881,7 +9881,7 @@ Accepted result:
 
 Status:
 
-Selected by post-M81 planning. Human acceptance is required before execution.
+Accepted. M82 execution-review returned `Accept`.
 
 Goal:
 
@@ -10077,8 +10077,36 @@ Dependencies on prior milestones:
 
 - Milestones 60 through 81.
 
+Execution result:
+
+- M82 preserves accepted M42-M81 behavior while moving selected-body
+  handoff/form/body-IR/envelope model ownership into
+  `tslgen.lowering._selected_body_models`.
+- The moved private model module owns:
+  `OpaqueSelectedBranchBodyHandoff`, `NoSelectedBranchBodyHandoff`,
+  `SelectedBranchBodyAssignmentFormRecognition`,
+  `NoSelectedBranchBodyAssignmentFormRecognition`,
+  `SelectedAssignmentDirectIntrinsicBodyIr`,
+  `NoSelectedAssignmentDirectIntrinsicBodyIr`,
+  `SelectedBodyEnvelopeEntry`, `SelectedBodyEnvelopeIr`,
+  `NoSelectedBodyEnvelopeIr`, and the selected-body union aliases.
+- `boundary.py` remains the public facade/coordinator and re-exports the
+  moved public names through existing public paths.
+- `_array_body_models.py` and `_array_body_validation.py` now consume concrete
+  private selected-body envelope model types through the private module rather
+  than broad selected/no-selected structural `hasattr` or cast seams.
+- Private lowering modules, including `_selected_body_models.py`, do not
+  import `boundary.py` or the `tslgen.lowering` package facade.
+- `boundary.py` now measures 4,965 physical lines, which is 473 lines below
+  the post-M81 5,438-line baseline.
+- No new lowering semantics, selected-body semantics, helper evaluation,
+  source-adapter behavior, backend translation, rendering, generated output,
+  broad parsing, extension hardwiring, file/catalog reads, `tsldata` reads,
+  host CPU queries, backend map reads, or runtime `frozen/` use were added.
+- Review and audit found no blocking implementation, validation, boundary,
+  extensibility, documentation, or evidence issues.
+
 Next concrete prompt:
 
-- `docs/agent/runs/post-m81-acceptance-finalization-prompt.md` records human
-  acceptance of the post-M81 planning result before an M82 execution prompt is
-  created.
+- `docs/agent/runs/post-m82-planning-plus-review-prompt.md` runs the next
+  lowering-focused planning pass.
