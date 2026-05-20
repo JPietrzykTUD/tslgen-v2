@@ -624,8 +624,8 @@ Current roadmap note:
   facade/coordinator and measured 1,417 physical lines after the move; the
   private module owns only the accepted selected-body lowerers and their
   direct source/diagnostic/validation helpers.
-- Post-M85 planning selects M86 as candidate payload-intake and mini-TSIL leaf
-  return lowering extraction. M86 should move accepted payload classification,
+- M86 is accepted as candidate payload-intake and mini-TSIL leaf return
+  lowering extraction. It moved accepted payload classification,
   typed-opaque unsupported-payload diagnostics, direct parameter-add return
   lowering, and `intrin_compose<add>` return lowering into focused private
   typed modules while keeping `boundary.py` as the public facade for
@@ -633,7 +633,7 @@ Current roadmap note:
   `lower_candidates`, `_lower_input`, generation query/control-flow staging,
   selected-body lowering, and exact array-body pipeline orchestration. This is
   behavior-preserving architecture work before exact return-emission IR; it
-  must not add broad TSIL parsing, new return semantics, backend/rendering/
+  does not add broad TSIL parsing, new return semantics, backend/rendering/
   output hooks, registries, dispatchers, fixpoint/backfeed machinery, or
   extension-specific shortcuts.
 - Milestone 49 is accepted as the test-source rendering slice. It

@@ -343,18 +343,21 @@ and still does not add compiler execution.
   request resolution from explicit typed metadata, accepted M71 exact
   vector-alignment request resolution from explicit typed metadata, accepted
   M72 exact helper-set completion with backend uninit preserved as a typed
-  deferred boundary, implemented M73 exact first-slot declaration-shell
-  structural IR, implemented M74 exact source-ordered array-body structural
+  deferred boundary, accepted M73 exact first-slot declaration-shell
+  structural IR, accepted M74 exact source-ordered array-body structural
   sequence and structural/provenance slot-role classification, accepted M75
   exact predicate-path structural/request IR, accepted M76 exact post-branch
-  intrinsic call-site structural/request IR, implemented M77 behavior-preserving
+  intrinsic call-site structural/request IR, accepted M77 behavior-preserving
   lowering pipeline/module-boundary cleanup, accepted M78 behavior-preserving
-  lowering boundary package decomposition, implemented M79 exact array-body typed
-  model ownership extraction, implemented M80 exact array-body validation
-  boundary extraction, implemented M81 generation-time lowering core ownership
-  extraction, implemented M82 selected-body envelope ownership extraction, broad
-  TSIL/body-slot parity beyond
-  those exact structural/request-resolution
+  lowering boundary package decomposition, accepted M79 exact array-body typed
+  model ownership extraction, accepted M80 exact array-body validation
+  boundary extraction, accepted M81 generation-time lowering core ownership
+  extraction, accepted M82 selected-body envelope ownership extraction,
+  accepted M83 stage-contract ownership extraction, accepted M84 exact
+  array-body pipeline and source-adapter ownership extraction, accepted M85
+  selected-body lowering ownership extraction, accepted M86 candidate
+  payload-intake and mini-TSIL leaf return lowering ownership extraction,
+  broad TSIL/body-slot parity beyond those exact structural/request-resolution
   boundaries, and backend translation-map evaluation beyond the selected
   M40/M45/M46 requests.
 - Executable generated tests, compiler invocation, qemu, rustup targets, and

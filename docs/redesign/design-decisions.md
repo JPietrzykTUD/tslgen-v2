@@ -1569,16 +1569,16 @@ Consequences:
   the accepted lowerer implementation and direct helper cluster without
   importing `boundary.py`, the package facade, `_array_body_sources.py`, or
   `_array_body_lowering.py`.
-- Post-M85 planning selects M86 as candidate payload-intake and mini-TSIL leaf
-  return lowering extraction before exact return-emission IR. The decision is
-  to remove the remaining payload classifier and mini-TSIL parser/lowerer
-  island from `boundary.py` while keeping central `_lower_input`
-  orchestration, request/result models, generation query/control-flow staging,
-  selected-body lowering, and exact array-body pipeline orchestration in the
-  facade. The new private modules must not import `boundary.py` or the package
-  facade, must not become a broad TSIL parser, registry, callback map, plugin
-  system, raw text rewrite engine, or fixpoint/backfeed engine, and must not
-  add new return semantics or generated-output behavior.
+- M86 is accepted as candidate payload-intake and mini-TSIL leaf return
+  lowering extraction before exact return-emission IR. The decision removes
+  the remaining payload classifier and mini-TSIL parser/lowerer island from
+  `boundary.py` while keeping central `_lower_input` orchestration,
+  request/result models, generation query/control-flow staging, selected-body
+  lowering, and exact array-body pipeline orchestration in the facade. The new
+  private modules do not import `boundary.py` or the package facade, do not
+  become a broad TSIL parser, registry, callback map, plugin system, raw text
+  rewrite engine, or fixpoint/backfeed engine, and do not add new return
+  semantics or generated-output behavior.
   Exact return-emission structural/request IR remains the next high-value
   semantic frontier, but M86 deliberately chooses a broader maintainability
   slice first because payload classification and mini-TSIL leaf lowering are

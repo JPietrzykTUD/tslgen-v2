@@ -1064,17 +1064,19 @@ Recommended first parity checks:
   compileall OK, ruff OK, mypy OK across 123 source files, and diff-check OK.
   `boundary.py` now measures 1,417 physical lines and
   `_selected_body_lowering.py` measures 538 physical lines.
-- Planned M86 testing should prove candidate payload-intake and mini-TSIL leaf
-  lowering ownership moves without behavior change. Required coverage includes
-  private import-boundary tests for the new payload-intake and mini-TSIL
-  modules, public facade import/call stability, payload classification and
-  typed-opaque diagnostic preservation, direct parameter-add return lowering,
-  `intrin_compose<add>` return lowering, mini-TSIL diagnostic/source-location
-  preservation for unsupported or malformed forms, pipeline snapshot
-  stability, stage order, keys, output identity, selected-branch-only behavior,
-  deterministic source locations, full lowering-boundary preservation, focused
-  lowering mypy, tooling validation, and a line-count check against the
-  accepted M85 1,417-line `boundary.py` baseline.
+- M86 execution added focused public facade identity/call stability, private
+  import-direction checks for `_lowering_inputs.py` and
+  `_mini_tsil_lowering.py`, payload classification and typed-opaque diagnostic
+  preservation, direct parameter-add return lowering, `intrin_compose<add>`
+  return lowering, mini-TSIL diagnostic/source-location preservation,
+  stage/output identity, deterministic pipeline, and selected-branch-only
+  coverage. Validation returned focused M86 `9 passed, 277 deselected`, full
+  lowering-boundary `286 passed`, focused lowering mypy success across
+  21 source files, and full tooling validation success with corpus probes
+  `3 passed`, unit discovery `620` tests OK, compileall OK, ruff OK, mypy OK
+  across 125 source files, and diff-check OK. `boundary.py` now measures
+  1,145 physical lines, `_lowering_inputs.py` measures 128 physical lines, and
+  `_mini_tsil_lowering.py` measures 188 physical lines.
 
 Deferred parity checks:
 

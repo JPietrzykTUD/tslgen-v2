@@ -1365,16 +1365,16 @@ implemented M73 exact first-slot declaration-shell structural IR, implemented
 M74 exact array-body structural sequence and structural/provenance slot-role
 classification, accepted M75 exact predicate-path structural/request IR,
 accepted M76 exact post-branch intrinsic call-site structural/request IR,
-implemented M77 behavior-preserving lowering pipeline/module-boundary cleanup,
+accepted M77 behavior-preserving lowering pipeline/module-boundary cleanup,
 accepted M78 behavior-preserving lowering boundary package decomposition, and
-implemented M79 exact array-body typed model ownership extraction, implemented
-M80 exact array-body validation boundary extraction,
-implemented M81 generation-time lowering core ownership extraction,
-implemented M82 selected-body envelope ownership extraction, implemented M83
-stage-contract ownership extraction, implemented M84 exact array-body pipeline
-and source-adapter ownership extraction, implemented M85 selected-body
-lowering ownership extraction, and planned M86 candidate payload-intake and
-mini-TSIL leaf return lowering ownership extraction, while body-slot semantics
+accepted M79 exact array-body typed model ownership extraction, accepted M80
+exact array-body validation boundary extraction, accepted M81 generation-time
+lowering core ownership extraction, accepted M82 selected-body envelope
+ownership extraction, accepted M83 stage-contract ownership extraction,
+accepted M84 exact array-body pipeline and source-adapter ownership
+extraction, accepted M85 selected-body lowering ownership extraction, and
+accepted M86 candidate payload-intake and mini-TSIL leaf return lowering
+ownership extraction, while body-slot semantics
 beyond those exact
 structural/request-resolution boundaries, including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and

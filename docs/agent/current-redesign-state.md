@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 85 is accepted.
+Milestone 86 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -634,39 +634,61 @@ names/order, output identities, deterministic keys, selected-branch-only
 behavior, and pipeline snapshots. Human acceptance was recorded, and M86
 execution became the active workflow action.
 
+The M86 execution-review loop returned `Accept` with no focused revision.
+Review and audit found no blocking implementation, validation, boundary,
+extensibility, documentation, or evidence issues after finalization. M86 is
+accepted as behavior-preserving candidate payload-intake and mini-TSIL leaf
+return lowering ownership extraction. It moved accepted payload classification
+and unsupported-payload diagnostics into `tslgen.lowering._lowering_inputs`,
+and accepted direct parameter-add / `intrin_compose<add>` mini-TSIL leaf
+return lowering into `tslgen.lowering._mini_tsil_lowering`. `boundary.py`
+remains the public facade/coordinator for request/result models,
+`LoweringInputSet`, `prepare_lowering_inputs`, `_lower_input`,
+`lower_candidates`, generation query/control-flow staging, selected-body
+lowering, and exact array-body pipeline orchestration. Public imports,
+diagnostics, source locations, stage names/order, output identities,
+deterministic keys, selected-branch-only behavior, and pipeline snapshots
+remain stable. `boundary.py` now measures 1,145 physical lines, below the
+accepted M85 1,417-line baseline. `_lowering_inputs.py` measures 128 lines
+and `_mini_tsil_lowering.py` measures 188 lines. M86 added no new TSIL syntax,
+broad return/body/call/store semantics, exact return-emission IR, backend
+translation, rendering, generated output, extension-specific shortcuts,
+file/catalog reads, `tsldata` reads, host CPU queries, backend map reads, or
+runtime `frozen/` use.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 86.
+Plan the next lowering milestone after M86.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m86-execution-review-loop-prompt.md
+docs/agent/runs/post-m86-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 86: Candidate Payload Intake And Mini-TSIL Leaf Lowering Extraction Slice
+None. The next executor milestone has not been selected.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M85 planning selected M86. Internal planning/audit review returned
-Accept With Follow-Ups after local planning-doc updates. Human acceptance was
-recorded.
+M86 execution-review returned Accept with no focused revision. Review and
+audit found no blocking issues after finalization.
 ```
 
 Next expected action:
 
 ```text
-Run the active M86 execution-review loop prompt. Use one write-capable
-executor, then read-only reviewer/auditor subagents. Do not start M87.
+Run the active post-M86 planning-plus-review prompt. Use the specified
+read-only planning/review subagents. Do not implement product code and do not
+start M87 execution unless a later accepted prompt explicitly selects it.
 ```
 
 Accepted planning prompt:
@@ -1341,10 +1363,16 @@ Completed post-M85 acceptance-finalization prompt:
 docs/agent/runs/post-m85-acceptance-finalization-prompt.md
 ```
 
-Active M86 execution-review loop prompt:
+Completed M86 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m86-execution-review-loop-prompt.md
+```
+
+Active post-M86 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m86-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2112,31 +2140,31 @@ docs/agent/runs/m86-execution-review-loop-prompt.md
   `tslgen.lowering`, `_array_body_sources.py`, or `_array_body_lowering.py` as
   convenience dispatchers. It uses a selected-body-local source-location
   helper for selected-body stage diagnostics.
-- Post-M85 planning selects M86 as behavior-preserving candidate
-  payload-intake and mini-TSIL leaf return lowering extraction. M86 should
-  move `LoweringStrategy`, `PayloadClassification`, `ClassifiedPayload`,
-  `LoweringInput`, `_classify_payload`, `_unsupported_payload_diagnostic`, and
-  the accepted direct parameter-add / `intrin_compose<add>` mini-TSIL return
-  lowerers into focused private typed modules.
-- M86 must keep `LoweringInputSet`, `LoweringRequest`, `GenerationContext`,
+- M86 is accepted as behavior-preserving candidate payload-intake and
+  mini-TSIL leaf return lowering extraction. It moved `LoweringStrategy`,
+  `PayloadClassification`, `ClassifiedPayload`, `LoweringInput`,
+  `_classify_payload`, `_unsupported_payload_diagnostic`, and the accepted
+  direct parameter-add / `intrin_compose<add>` mini-TSIL return lowerers into
+  focused private typed modules.
+- M86 kept `LoweringInputSet`, `LoweringRequest`, `GenerationContext`,
   `LoweredImplementation`, `LoweringPlan`, `prepare_lowering_inputs`,
   `lower_candidates`, `_lower_input`, stage builders, `_context_for_candidate`,
   generation query payload lowering, generation control-flow pruning,
   selected-body lowering, exact array-body lowering, and exact array-body
   pipeline orchestration facade-owned.
-- M86 must not introduce a handler registry, plugin system, callback map,
+- M86 did not introduce a handler registry, plugin system, callback map,
   ordered lowerer table, generic TSIL statement dispatcher, raw text rewrite
   engine, raw-helper dispatch, token-keyed semantic map, broad source-adapter
   protocol, fixpoint/backfeed engine, or broad TSIL/body/call/store/return
   semantics.
-- The intended M86 import direction is `boundary.py -> _lowering_inputs`,
+- The accepted M86 import direction is `boundary.py -> _lowering_inputs`,
   `boundary.py -> _mini_tsil_lowering`,
   `_mini_tsil_lowering -> _lowering_inputs and _stage_contracts`, and
-  `_lowering_inputs -> candidates, diagnostics, result, values` only. The new
+  `_lowering_inputs -> candidates, diagnostics, result, values` only. The
   private modules must not import `boundary.py`, `tslgen.lowering`, selected-
   body lowering modules, exact array-body modules, backend modules, renderers,
   `tsldata`, or `frozen/`.
-- Future lowering package decomposition must preserve accepted M57-M85
+- Future lowering package decomposition must preserve accepted M57-M86
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -3289,11 +3317,19 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   and `intrin_compose<add>` return forms without adding new TSIL syntax, broad
   expression/body/return semantics, generation helper evaluation, selected-
   body/exact-array dependencies, backend translation, or renderer-facing IR.
+- M86 execution addressed the post-M85 planning follow-ups: review verified
+  payload-intake ownership moved into `_lowering_inputs.py`, mini-TSIL leaf
+  return-lowering ownership moved into `_mini_tsil_lowering.py`, request/result
+  models and `_lower_input` remained facade-owned, accepted behavior stayed
+  stable, and the private modules keep the planned one-way import direction.
+- M86 continuing follow-up: exact return-emission structural/request IR remains
+  a high-value semantic frontier after the facade cleanup, but it is not part
+  of M86.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M86 through the
-active M86 execution-review loop prompt.
+No stop condition is active. The workflow is ready to run post-M86 planning
+through the active post-M86 planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -3460,7 +3496,7 @@ compileall OK, ruff OK, mypy `Success: no issues found in 123 source files`,
 and diff-check OK. The standalone final `git diff --check` returned exit 0
 with no output.
 
-For planned M86 execution, validation must include:
+For M86, validation completed with:
 
 ```bash
 wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_lowering_inputs.py tslgen/src/tslgen/lowering/_mini_tsil_lowering.py
@@ -3471,3 +3507,14 @@ MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/t
 PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
 git diff --check
 ```
+
+The M86 line counts were `1145 tslgen/src/tslgen/lowering/boundary.py`,
+`128 tslgen/src/tslgen/lowering/_lowering_inputs.py`, and
+`188 tslgen/src/tslgen/lowering/_mini_tsil_lowering.py`. The focused M86
+command returned `9 passed, 277 deselected`. The full lowering-boundary suite
+returned `286 passed`. The focused lowering mypy check returned
+`Success: no issues found in 21 source files`. The validation profile returned
+exit 0 with corpus probes `3 passed`, unit discovery `620` tests OK,
+compileall OK, ruff OK, mypy `Success: no issues found in 125 source files`,
+and diff-check OK. The standalone final `git diff --check` returned exit 0
+with no output.

@@ -24,6 +24,8 @@ import tslgen.lowering._generation_control_flow as lowering_generation_control_f
 import tslgen.lowering._generation_diagnostics as lowering_generation_diagnostics
 import tslgen.lowering._generation_models as lowering_generation_models
 import tslgen.lowering._generation_queries as lowering_generation_queries
+import tslgen.lowering._lowering_inputs as lowering_inputs
+import tslgen.lowering._mini_tsil_lowering as lowering_mini_tsil_lowering
 import tslgen.lowering._pipeline as lowering_pipeline
 import tslgen.lowering._selected_body_lowering as lowering_selected_body_lowering
 import tslgen.lowering._selected_body_models as lowering_selected_body_models
@@ -42,6 +44,7 @@ from tslgen.domain.generation_rules import (
 from tslgen.domain.types import TypeGroup
 from tslgen.io.sources import SourceDocument, SourceKind, load_sources
 from tslgen.lowering import (
+    ClassifiedPayload,
     ExactArrayBodyEnvelopeIr,
     ExactArrayBodyEnvelopeOpaqueSlot,
     ExactArrayBodyEnvelopeSelectedSlot,
@@ -77,6 +80,7 @@ from tslgen.lowering import (
     GenerationTypeRef,
     GenerationValue,
     LoweredImplementation,
+    LoweringInput,
     LoweringRequest,
     PrunedGenerationBranch,
     SelectedAssignmentDirectIntrinsicBodyIr,
@@ -5786,6 +5790,220 @@ class LoweringBoundaryTests(unittest.TestCase):
             path="array.tsl",
             line=107,
             column=15,
+        )
+
+    def test_m86_payload_and_mini_tsil_private_owners_back_facade(self) -> None:
+        self.assertIs(lowering_boundary._lowering_inputs, lowering_inputs)
+        self.assertIs(
+            lowering_boundary._mini_tsil_lowering,
+            lowering_mini_tsil_lowering,
+        )
+        self.assertIs(
+            lowering_boundary.ClassifiedPayload,
+            lowering_inputs.ClassifiedPayload,
+        )
+        self.assertIs(lowering_boundary.LoweringInput, lowering_inputs.LoweringInput)
+        self.assertIs(
+            lowering_boundary.LoweringStrategy,
+            lowering_inputs.LoweringStrategy,
+        )
+        self.assertIs(
+            lowering_boundary.PayloadClassification,
+            lowering_inputs.PayloadClassification,
+        )
+        self.assertIs(ClassifiedPayload, lowering_inputs.ClassifiedPayload)
+        self.assertIs(LoweringInput, lowering_inputs.LoweringInput)
+        self.assertIs(
+            lowering_boundary._classify_payload,
+            lowering_inputs._classify_payload,
+        )
+        self.assertIs(
+            lowering_boundary._unsupported_payload_diagnostic,
+            lowering_inputs._unsupported_payload_diagnostic,
+        )
+        self.assertIs(
+            lowering_boundary._mini_return_statement,
+            lowering_mini_tsil_lowering._mini_return_statement,
+        )
+        self.assertEqual(
+            lowering_boundary._mini_return_statement.__module__,
+            "tslgen.lowering._mini_tsil_lowering",
+        )
+        self.assertNotIn("_DIRECT_PARAMETER_ADD_RETURN_RE", lowering_boundary.__dict__)
+        self.assertNotIn(
+            "_direct_parameter_add_return_statement",
+            lowering_boundary.__dict__,
+        )
+        self.assertIn(
+            "_DIRECT_PARAMETER_ADD_RETURN_RE",
+            lowering_mini_tsil_lowering.__dict__,
+        )
+        self.assertIn(
+            "_direct_parameter_add_return_statement",
+            lowering_mini_tsil_lowering.__dict__,
+        )
+
+    def test_m86_private_lowering_modules_keep_intended_import_direction(self) -> None:
+        lowering_inputs_imports: set[str] = set()
+        tree = ast.parse(inspect.getsource(lowering_inputs))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                lowering_inputs_imports.update(
+                    alias.name
+                    for alias in node.names
+                    if alias.name.startswith("tslgen.")
+                )
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                if node.module.startswith("tslgen."):
+                    lowering_inputs_imports.add(node.module)
+        self.assertEqual(
+            lowering_inputs_imports,
+            {
+                "tslgen.analysis.candidates",
+                "tslgen.core.diagnostics",
+                "tslgen.core.result",
+                "tslgen.domain.values",
+            },
+        )
+
+        mini_tsil_lowering_imports: set[str] = set()
+        tree = ast.parse(inspect.getsource(lowering_mini_tsil_lowering))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                mini_tsil_lowering_imports.update(
+                    alias.name
+                    for alias in node.names
+                    if alias.name.startswith("tslgen.lowering")
+                )
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                if node.module.startswith("tslgen.lowering"):
+                    mini_tsil_lowering_imports.add(node.module)
+        self.assertEqual(
+            mini_tsil_lowering_imports,
+            {
+                "tslgen.lowering._lowering_inputs",
+                "tslgen.lowering._stage_contracts",
+            },
+        )
+
+    def test_m86_payload_classification_and_typed_opaque_behavior_stay_stable(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation")
+        candidate = selection.candidates[0]
+
+        private_classified = lowering_inputs._classify_payload(candidate)
+        facade_classified = lowering_boundary._classify_payload(candidate)
+
+        self.assertTrue(private_classified.is_ok, private_classified.diagnostics)
+        self.assertTrue(facade_classified.is_ok, facade_classified.diagnostics)
+        self.assertEqual(facade_classified.unwrap(), private_classified.unwrap())
+        self.assertEqual(private_classified.unwrap().classification, "tsil")
+        self.assertTrue(private_classified.unwrap().has_generation_condition)
+
+        typed_opaque = lower_candidates(
+            selection,
+            LoweringRequest(strategy="typed_opaque", backend_id="cpp"),
+        )
+
+        self.assertFalse(typed_opaque.is_ok)
+        assert_diagnostic(
+            self,
+            typed_opaque.diagnostics[0],
+            code="TSL-LOWER-TSIL-UNSUPPORTED",
+            severity="error",
+        )
+        self.assertIn("typed-opaque strategy", typed_opaque.diagnostics[0].message)
+        self.assertIn("generation-time helpers", typed_opaque.diagnostics[0].message)
+        self.assertEqual(
+            typed_opaque.diagnostics[0].location,
+            candidate.variant.source.declaration.source_span.location,
+        )
+
+    def test_m86_mini_tsil_private_lowerer_preserves_diagnostics_and_locations(
+        self,
+    ) -> None:
+        prepared = prepare_lowering_inputs(
+            self.selection_for("lower_intrin_expression_arg")
+        )
+        self.assertTrue(prepared.is_ok, prepared.diagnostics)
+        item = prepared.unwrap().inputs[0]
+
+        private_result = lowering_mini_tsil_lowering._mini_return_statement(item)
+        facade_result = lowering_boundary._mini_return_statement(item)
+
+        self.assertFalse(private_result.is_ok)
+        self.assertEqual(facade_result.diagnostics, private_result.diagnostics)
+        assert_diagnostic(
+            self,
+            private_result.diagnostics[0],
+            code="TSL-LOWER-TSIL-INTRIN-ARGUMENT",
+            severity="error",
+        )
+        self.assertEqual(private_result.diagnostics[0].location, item.source_location)
+        self.assertIn("left + right", private_result.diagnostics[0].message)
+
+    def test_m86_mini_tsil_pipeline_stage_identity_and_determinism(self) -> None:
+        selection = self.selection_for("lower_intrin_add")
+
+        first = lower_candidates(selection)
+        second = lower_candidates(selection)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        first_impl = first.unwrap().implementations[0]
+        second_impl = second.unwrap().implementations[0]
+        self.assertEqual(first.unwrap(), second.unwrap())
+        self.assertEqual(
+            tuple(stage.stage for stage in first_impl.generation_stages),
+            ("selected_body_lowering",),
+        )
+        self.assertIs(first_impl.generation_stages[0].output, first_impl.statements[0])
+        self.assertEqual(
+            tuple(stage.key for stage in first_impl.generation_stages),
+            tuple(stage.key for stage in second_impl.generation_stages),
+        )
+
+    def test_m86_mini_tsil_leaf_lowering_consumes_only_selected_branch_body(
+        self,
+    ) -> None:
+        selection = self.selection_for(
+            "lower_generation_signedness_unselected_helper_si32"
+        )
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation = result.unwrap().implementations[0]
+        self.assertEqual(len(implementation.generation_branches), 1)
+        self.assertEqual(implementation.generation_branches[0].selected_branch, "true")
+        self.assertEqual(
+            implementation.generation_branches[0].statement_text,
+            "emit_return(left + right);",
+        )
+        self.assertEqual(
+            implementation.statements,
+            (
+                TsilReturnStatement(
+                    TsilBinaryExpression(
+                        operator="+",
+                        left=TsilParameterReference("left"),
+                        right=TsilParameterReference("right"),
+                    )
+                ),
+            ),
+        )
+        self.assertEqual(
+            tuple(stage.stage for stage in implementation.generation_stages),
+            (
+                "helper_expression_recognition",
+                "generation_control_flow_pruning",
+                "selected_body_lowering",
+            ),
+        )
+        self.assertIs(
+            implementation.generation_stages[-1].output,
+            implementation.statements[0],
         )
 
     def test_m85_selected_body_pipeline_snapshot_preserves_stage_identity(

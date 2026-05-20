@@ -10827,8 +10827,7 @@ Next concrete prompt:
 
 Status:
 
-Planned. Post-M85 planning selected this milestone, and human acceptance was
-recorded. M86 execution is the next workflow action.
+Accepted. M86 execution-review returned `Accept` with no focused revision.
 
 Goal:
 
@@ -11037,16 +11036,46 @@ Dependencies on prior milestones:
 
 - Milestones 42 through 85.
 
-Planning result:
+Execution result:
 
-- Post-M85 planning selects M86 as the next lowering-focused milestone because
-  it removes the remaining payload-classification and mini-TSIL parser/lowerer
-  island from `boundary.py` while keeping central lowering orchestration
-  stable. This is broader than a mini-TSIL-only extraction, but it remains one
-  cohesive behavior-preserving ownership slice and prepares the facade for a
-  later exact return-emission structural/request milestone.
+- M86 preserves accepted M42-M85 behavior while moving candidate
+  payload-intake ownership into `tslgen.lowering._lowering_inputs` and
+  mini-TSIL leaf return-lowering ownership into
+  `tslgen.lowering._mini_tsil_lowering`.
+- `_lowering_inputs.py` owns `LoweringStrategy`, `PayloadClassification`,
+  `ClassifiedPayload`, `LoweringInput`, `_classify_payload`, and
+  `_unsupported_payload_diagnostic`.
+- `_mini_tsil_lowering.py` owns the accepted direct parameter-add and
+  `intrin_compose<add>` mini-TSIL leaf return lowerers, including the
+  accepted regexes, argument splitting, declared-parameter validation, and
+  mini-TSIL diagnostics.
+- `boundary.py` remains the public facade/coordinator for request/result
+  models, `LoweringInputSet`, `prepare_lowering_inputs`, `_lower_input`,
+  `lower_candidates`, stage construction, generation query/control-flow
+  staging, selected-body lowering, and exact array-body pipeline
+  orchestration.
+- Private lowering modules keep the planned one-way import direction:
+  `boundary.py -> _lowering_inputs`,
+  `boundary.py -> _mini_tsil_lowering`,
+  `_mini_tsil_lowering -> _lowering_inputs and _stage_contracts`, and
+  `_lowering_inputs -> candidates, diagnostics, result, values`.
+- Public imports, diagnostics, source locations, stage names/order, output
+  identities, deterministic keys, selected-branch-only behavior, typed-opaque
+  behavior, payload classification keys, and pipeline snapshots remain stable.
+- `boundary.py` now measures 1,145 physical lines, which is 272 lines below
+  the accepted M85 1,417-line baseline. `_lowering_inputs.py` measures
+  128 physical lines and `_mini_tsil_lowering.py` measures 188 physical lines.
+- No new TSIL syntax, broad return/body/call/store semantics, exact
+  return-emission IR, backend translation, rendering, generated output,
+  extension-specific shortcuts, lowering-time file/catalog reads, `tsldata`
+  reads, host CPU queries, backend map reads, or runtime `frozen/` use were
+  added.
+- Review and audit found no blocking implementation, validation, boundary,
+  extensibility, documentation, or evidence issues after finalization.
+- Non-blocking follow-ups: exact return-emission structural/request IR remains
+  a high-value semantic frontier after the facade cleanup.
 
 Next concrete prompt:
 
-- `docs/agent/runs/m86-execution-review-loop-prompt.md` runs the accepted M86
-  execution-review loop.
+- `docs/agent/runs/post-m86-planning-plus-review-prompt.md` runs the next
+  lowering-focused planning pass.

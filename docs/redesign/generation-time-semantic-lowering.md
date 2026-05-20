@@ -754,15 +754,15 @@ M85 is accepted as that move in
 does not add selected-body semantics or change the accepted Stage 8 selected-
 body snapshots.
 
-Post-M85 planning selects M86 as candidate payload-intake and mini-TSIL leaf
-return lowering extraction. M86 is also no-new-semantics lowering architecture
-work: it should move accepted payload classification, typed-opaque
-unsupported-payload diagnostics, direct parameter-add return lowering, and
-`intrin_compose<add>` return lowering out of `boundary.py` while preserving
-the same typed mini-TSIL return statements, diagnostics, source locations,
-stage snapshots, and public facade behavior. It must not broaden TSIL parsing,
-interpret `emit_return(tmp)` or return/store/call semantics, introduce raw
-helper dispatch, or add backend translation/rendering/output behavior.
+M86 is accepted as candidate payload-intake and mini-TSIL leaf return lowering
+extraction. It is also no-new-semantics lowering architecture work: it moved
+accepted payload classification, typed-opaque unsupported-payload diagnostics,
+direct parameter-add return lowering, and `intrin_compose<add>` return
+lowering out of `boundary.py` while preserving the same typed mini-TSIL return
+statements, diagnostics, source locations, stage snapshots, and public facade
+behavior. It does not broaden TSIL parsing, interpret `emit_return(tmp)` or
+return/store/call semantics, introduce raw helper dispatch, or add backend
+translation/rendering/output behavior.
 
 M61 diagnostics:
 
@@ -1096,15 +1096,18 @@ slot-assembly, pipeline-integration, exact array-initialization slot form IR,
 M67 helper-request IR, accepted M68 base-type request resolution, M69 pipeline
 extraction, M70 vector-length request resolution, M71 vector-alignment
 request resolution, M72 helper-set completion, M73 exact declaration-shell
-structural IR, implemented M74 exact structural-sequence classification,
+structural IR, accepted M74 exact structural-sequence classification,
 accepted M75 exact predicate-path structural/request IR, and accepted M76 exact
 post-branch intrinsic call-site structural/request IR slices, plus the
-implemented M77 behavior-preserving composable lowering pipeline/module
+accepted M77 behavior-preserving composable lowering pipeline/module
 boundary, the accepted M78 behavior-preserving lowering package
-decomposition, implemented M79 exact array-body typed model ownership,
-implemented M80 exact array-body validation boundary extraction, implemented
-M81 generation-time lowering core ownership extraction, and implemented M82
-selected-body envelope ownership extraction:
+decomposition, accepted M79 exact array-body typed model ownership, accepted
+M80 exact array-body validation boundary extraction, accepted M81
+generation-time lowering core ownership extraction, accepted M82 selected-body
+envelope ownership extraction, accepted M83 stage-contract ownership
+extraction, accepted M84 exact array-body pipeline/source-adapter ownership
+extraction, accepted M85 selected-body lowering ownership extraction, and
+accepted M86 payload-intake / mini-TSIL leaf lowering ownership extraction:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask

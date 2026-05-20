@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-import re
 from typing import Literal
 
-from tslgen.analysis.candidates import CandidateSelection, ImplementationCandidate
+from tslgen.analysis.candidates import CandidateSelection
 from tslgen.core.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslgen.core.frozen_map import FrozenMap
 from tslgen.core.result import Result
@@ -28,8 +27,16 @@ import tslgen.lowering._array_body_pipeline as _array_body_pipeline
 import tslgen.lowering._array_body_shapes as _array_body_shapes
 import tslgen.lowering._array_body_sources as _array_body_sources
 import tslgen.lowering._array_body_validation as _array_body_validation
+import tslgen.lowering._lowering_inputs as _lowering_inputs
+import tslgen.lowering._mini_tsil_lowering as _mini_tsil_lowering
 import tslgen.lowering._selected_body_lowering as _selected_body_lowering
 import tslgen.lowering._stage_contracts as _stage_contracts
+from tslgen.lowering._lowering_inputs import (
+    ClassifiedPayload as ClassifiedPayload,
+    LoweringInput as LoweringInput,
+    LoweringStrategy as LoweringStrategy,
+    PayloadClassification as PayloadClassification,
+)
 from tslgen.lowering._selected_body_models import (
     GenerationSelectedBodyEnvelopeIr,
     GenerationSelectedBranchBodyAssignmentRecognition,
@@ -166,28 +173,11 @@ lower_exact_array_initialization_declaration_shell = _array_body_lowering.lower_
 lower_exact_array_body_structural_sequence = _array_body_lowering.lower_exact_array_body_structural_sequence
 lower_exact_predicate_path_structural_request = _array_body_lowering.lower_exact_predicate_path_structural_request
 lower_exact_post_branch_intrinsic_call_site_structural_request = _array_body_lowering.lower_exact_post_branch_intrinsic_call_site_structural_request
+_classify_payload = _lowering_inputs._classify_payload
+_unsupported_payload_diagnostic = _lowering_inputs._unsupported_payload_diagnostic
+_mini_return_statement = _mini_tsil_lowering._mini_return_statement
 
-type LoweringStrategy = Literal["mini_tsil", "typed_opaque"]
-type PayloadClassification = Literal[
-    "tsil",
-    "intrinsic",
-    "backend_specific",
-    "opaque",
-]
 type LoweringStatus = Literal["lowered", "unsupported"]
-
-_TSIL_IDENTIFIER = r"[A-Za-z_][A-Za-z0-9_]*"
-_TSIL_IDENTIFIER_RE = re.compile(rf"\A{_TSIL_IDENTIFIER}\Z")
-_DIRECT_PARAMETER_ADD_RETURN_RE = re.compile(
-    rf"\A\s*emit_return\(\s*({_TSIL_IDENTIFIER})\s*\+\s*"
-    rf"({_TSIL_IDENTIFIER})\s*\)\s*;\s*\Z"
-)
-_INTRIN_COMPOSE_RETURN_RE = re.compile(
-    rf"\A\s*emit_return\(\s*intrin_compose\s*<\s*({_TSIL_IDENTIFIER})\s*>\s*"
-    r"\(([^()]*)\)\s*\)\s*;\s*\Z"
-)
-_INTRIN_COMPOSE_MARKER_RE = re.compile(r"\bintrin_compose\s*<")
-_EMIT_RETURN_HEAD_RE = re.compile(r"\A\s*emit_return\s*\(")
 
 
 @dataclass(frozen=True, slots=True)
@@ -299,49 +289,6 @@ class LoweringRequest:
                     key=lambda requirement: requirement.key,
                 )
             ),
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class ClassifiedPayload:
-    body_kind: str
-    classification: PayloadClassification
-    raw_payload: CatalogValue
-    text: str | None = None
-    has_generation_condition: bool = False
-
-    def __post_init__(self) -> None:
-        if not self.body_kind:
-            raise ValueError("classified payload body kind must be non-empty")
-
-    @property
-    def key(self) -> tuple[object, ...]:
-        return (
-            self.classification,
-            self.body_kind,
-            self.text or "",
-            self.has_generation_condition,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class LoweringInput:
-    candidate: ImplementationCandidate
-    payload: ClassifiedPayload
-
-    @property
-    def candidate_id(self) -> str:
-        return self.candidate.candidate_id
-
-    @property
-    def source_location(self) -> SourceLocation:
-        return self.candidate.variant.source.declaration.source_span.location
-
-    @property
-    def key(self) -> tuple[object, ...]:
-        return (
-            self.candidate.candidate_id,
-            self.payload.key,
         )
 
 
@@ -912,35 +859,6 @@ def _selected_body_envelope_stage(
     )
 
 
-def _classify_payload(candidate: ImplementationCandidate) -> Result[ClassifiedPayload]:
-    body = candidate.implementation.body
-    text = body.text
-    if body.kind == "tsil" and text is None:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-LOWER-PAYLOAD-SHAPE",
-                    f"candidate {candidate.candidate_id!r} has a TSIL payload "
-                    "that is not text",
-                    location=candidate.variant.source.declaration.source_span.location,
-                ),
-            )
-        )
-
-    return Result.ok(
-        ClassifiedPayload(
-            body_kind=body.kind,
-            classification=body.classification,
-            raw_payload=body.payload,
-            text=text,
-            has_generation_condition=(
-                text is not None
-                and _has_generation_helper(text)
-            ),
-        )
-    )
-
-
 def _lower_input(
     item: LoweringInput,
     request: LoweringRequest,
@@ -1225,193 +1143,3 @@ def _lower_generation_value_query_payload(
         selected_candidate_type_tag=selected_candidate_type_tag,
         location=item.source_location,
     )
-
-
-def _mini_return_statement(
-    item: LoweringInput,
-    text: str | None = None,
-) -> Result[TsilReturnStatement]:
-    text = item.payload.text or "" if text is None else text
-    match = _DIRECT_PARAMETER_ADD_RETURN_RE.fullmatch(text)
-    if match is not None:
-        return _direct_parameter_add_return_statement(item, match)
-    if _INTRIN_COMPOSE_MARKER_RE.search(text):
-        return _intrinsic_compose_return_statement(item, text)
-    if _EMIT_RETURN_HEAD_RE.match(text):
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-LOWER-TSIL-RETURN-SHAPE",
-                    "mini TSIL lowering supports only direct parameter addition "
-                    "returns shaped as 'emit_return(<parameter> + <parameter>);' "
-                    "or intrinsic-compose returns shaped as "
-                    "'emit_return(intrin_compose<add>(<parameter>, <parameter>));'",
-                    location=item.source_location,
-                ),
-            )
-        )
-    return Result.failure((_unsupported_payload_diagnostic(item),))
-
-
-def _direct_parameter_add_return_statement(
-    item: LoweringInput,
-    match: re.Match[str],
-) -> Result[TsilReturnStatement]:
-    left_name, right_name = match.groups()
-    unknown = _unknown_parameter_names(item, (left_name, right_name))
-    if unknown:
-        return Result.failure((_unknown_parameter_diagnostic(item, unknown),))
-
-    return Result.ok(
-        TsilReturnStatement(
-            expression=TsilBinaryExpression(
-                operator="+",
-                left=TsilParameterReference(left_name),
-                right=TsilParameterReference(right_name),
-            )
-        )
-    )
-
-
-def _intrinsic_compose_return_statement(
-    item: LoweringInput,
-    text: str,
-) -> Result[TsilReturnStatement]:
-    match = _INTRIN_COMPOSE_RETURN_RE.fullmatch(text)
-    if match is None:
-        return Result.failure((_malformed_intrinsic_compose_diagnostic(item),))
-
-    intrinsic_name, arguments_text = match.groups()
-    if intrinsic_name != "add":
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-LOWER-TSIL-INTRIN-UNSUPPORTED",
-                    "mini TSIL lowering supports only intrinsic-compose "
-                    f"intrinsic 'add'; got {intrinsic_name!r}",
-                    location=item.source_location,
-                ),
-            )
-        )
-
-    argument_names = _intrinsic_argument_names(arguments_text)
-    invalid_arguments = tuple(
-        argument
-        for argument in argument_names
-        if _TSIL_IDENTIFIER_RE.fullmatch(argument) is None
-    )
-    if invalid_arguments:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-LOWER-TSIL-INTRIN-ARGUMENT",
-                    "mini TSIL lowering supports only primitive parameter "
-                    "references as intrin_compose<add> arguments; invalid "
-                    f"argument(s): "
-                    f"{', '.join(repr(argument) for argument in invalid_arguments)}",
-                    location=item.source_location,
-                ),
-            )
-        )
-
-    if len(argument_names) != 2:
-        return Result.failure(
-            (
-                Diagnostic.error(
-                    "TSL-LOWER-TSIL-INTRIN-ARITY",
-                    "mini TSIL lowering supports only "
-                    "intrin_compose<add> with exactly two arguments; got "
-                    f"{len(argument_names)}",
-                    location=item.source_location,
-                ),
-            )
-        )
-
-    unknown = _unknown_parameter_names(item, argument_names)
-    if unknown:
-        return Result.failure((_unknown_parameter_diagnostic(item, unknown),))
-
-    return Result.ok(
-        TsilReturnStatement(
-            expression=TsilIntrinsicComposeExpression(
-                intrinsic=intrinsic_name,
-                arguments=tuple(
-                    TsilParameterReference(argument) for argument in argument_names
-                ),
-            )
-        )
-    )
-
-
-def _intrinsic_argument_names(arguments_text: str) -> tuple[str, ...]:
-    stripped = arguments_text.strip()
-    if not stripped:
-        return ()
-    return tuple(argument.strip() for argument in arguments_text.split(","))
-
-
-def _unknown_parameter_names(
-    item: LoweringInput,
-    names: tuple[str, ...],
-) -> tuple[str, ...]:
-    parameter_names = tuple(
-        parameter.name
-        for parameter in item.candidate.variant.source.declaration.parameters
-    )
-    return tuple(name for name in names if name not in parameter_names)
-
-
-def _unknown_parameter_diagnostic(
-    item: LoweringInput,
-    unknown_names: tuple[str, ...],
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-TSIL-UNKNOWN-PARAMETER",
-        "mini TSIL lowering can reference only declared primitive "
-        f"parameters; unknown name(s): "
-        f"{', '.join(repr(name) for name in unknown_names)}",
-        location=item.source_location,
-    )
-
-
-def _malformed_intrinsic_compose_diagnostic(
-    item: LoweringInput,
-) -> Diagnostic:
-    return Diagnostic.error(
-        "TSL-LOWER-TSIL-INTRIN-MALFORMED",
-        "mini TSIL lowering supports only intrinsic-compose returns shaped as "
-        "'emit_return(intrin_compose<add>(<parameter>, <parameter>));'",
-        location=item.source_location,
-    )
-
-
-def _unsupported_payload_diagnostic(
-    item: LoweringInput,
-    *,
-    strategy: LoweringStrategy = "mini_tsil",
-) -> Diagnostic:
-    if item.payload.classification == "tsil":
-        code = "TSL-LOWER-TSIL-UNSUPPORTED"
-        if strategy == "typed_opaque":
-            message = (
-                f"candidate {item.candidate_id!r} has a TSIL payload; semantic "
-                "TSIL lowering is disabled by the typed-opaque strategy"
-            )
-        else:
-            message = (
-                f"candidate {item.candidate_id!r} has a TSIL payload; semantic "
-                "TSIL lowering supports only the mini direct parameter-add return "
-                "and intrinsic-compose add return slices"
-            )
-        if item.payload.has_generation_condition:
-            message += (
-                " and contains generation-time helpers that must be evaluated "
-                "by a future lowering slice"
-            )
-    else:
-        code = "TSL-LOWER-PAYLOAD-UNSUPPORTED"
-        message = (
-            f"candidate {item.candidate_id!r} has unsupported implementation "
-            f"payload kind {item.payload.body_kind!r}"
-        )
-    return Diagnostic.error(code, message, location=item.source_location)
