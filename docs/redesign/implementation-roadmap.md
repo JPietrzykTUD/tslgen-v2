@@ -11957,3 +11957,110 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m90-planning-plus-review-prompt.md` runs the next
   lowering-focused planning pass.
+
+### Milestone 91: Stage 8 Exact Array Pipeline Ownership Consolidation Slice
+
+Status:
+
+Selected by accepted post-M90 planning. Human acceptance is recorded. M91 is
+ready for execution through
+`docs/agent/runs/m91-execution-review-loop-prompt.md`.
+
+Goal:
+
+Perform a behavior-preserving Stage 8 exact array pipeline ownership
+consolidation after M90. Move exact array pipeline result aggregation,
+stage/snapshot assembly, and public handoff aggregation out of catch-all
+facade/orchestration ownership so later lowering milestones can build on the
+accepted M64-M90 handoff without growing `boundary.py` or
+`_array_body_pipeline.py`.
+
+Scope:
+
+- Add focused private ownership for exact array pipeline result/aggregate DTOs,
+  including behavior currently concentrated around the M90-era exact array
+  pipeline aggregate result.
+- Add focused private ownership for exact array stage construction and
+  snapshot-step assembly over accepted M64-M90 outputs.
+- Keep `boundary.py` as a public facade/projection surface and
+  `_array_body_pipeline.py` as orchestration over focused helpers.
+- Preserve accepted M64-M90 diagnostics, source locations, public imports,
+  stage names/order, artifact kinds, deterministic keys, output identities,
+  selected-branch-only behavior, no-external-input boundaries, and pipeline
+  snapshots.
+- Add or preserve import-boundary, line-count, behavior-preservation, and
+  snapshot-stability tests for the public handoff.
+
+Out of scope:
+
+- New lowering semantics.
+- Backend-uninit resolution, backend maps/catalog reads, backend translation,
+  Stage 9 backend planning, renderer-ready IR, rendering, generated output,
+  CLI/report/writer behavior, Rust, or compiler execution.
+- Broad TSIL parsing, broad body/declaration/array/store/return/call/SVE
+  semantics, `tmp.data()` semantics, `emit_return` semantics, or
+  source-body repair.
+- Broad protocols, registries, raw-helper dispatch, callback maps, plugin
+  systems, hidden backfeeds, fixpoint machinery, or extension-specific
+  hardwiring.
+- Changing public behavior, diagnostic codes, accepted keys, or snapshot
+  ordering.
+
+Required input:
+
+- Accepted M64-M90 exact array pipeline stage outputs and public facade
+  expectations.
+- Existing exact array pipeline aggregate/result behavior.
+- M90 line-count pressure: `boundary.py` measured 1,226 physical lines and
+  `_array_body_pipeline.py` measured 1,043 physical lines after M90.
+
+Expected outputs:
+
+- New focused private module ownership for exact array pipeline result
+  aggregation and stage/snapshot assembly.
+- Stable public `tslgen.lowering` and `tslgen.lowering.boundary` imports.
+- Stable deterministic Stage 8 pipeline snapshots and accepted exact array
+  handoff keys.
+- Reduced or stabilized responsibilities in `boundary.py` and
+  `_array_body_pipeline.py`.
+
+Tests required:
+
+- Behavior-preservation tests proving accepted M64-M90 stage names/order,
+  diagnostics, output identities, deterministic keys, selected-branch-only
+  behavior, and pipeline snapshots remain unchanged.
+- Import-boundary tests proving new private modules do not import
+  `boundary.py`, the `tslgen.lowering` package facade, backend modules,
+  renderers, `tsldata`, or `frozen`.
+- Line-count reporting for `boundary.py`, `_array_body_pipeline.py`, and the
+  new private ownership modules.
+- Negative tests or existing assertions proving M91 does not add backend map
+  reads, backend translation, Stage 9 planning, rendering, generated output,
+  broad TSIL parsing, source-body repair, broad protocols, or fixpoint
+  behavior.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_completion_package.py <new-private-modules>`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_completion_package.py <new-private-modules>`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m91 or pipeline_ownership or exact_array_body_pipeline or lowering_completion"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Moving code without creating a clearer ownership boundary.
+- Creating a replacement private monolith.
+- Changing stage names/order, keys, public imports, diagnostics, snapshots, or
+  selected-branch-only behavior while claiming no behavior change.
+- Turning exact array handoff aggregation into a broad source protocol,
+  registry, callback dispatcher, hidden backfeed, or fixpoint coordinator.
+- Letting backend planning, backend maps, renderer-ready IR, rendering, or
+  generated output enter Stage 8 lowering ownership.
+
+Next concrete prompt:
+
+- `docs/agent/runs/m91-execution-review-loop-prompt.md` runs the M91
+  execution-review loop.

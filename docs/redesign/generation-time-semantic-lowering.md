@@ -802,6 +802,17 @@ read backend maps/catalogs, create Stage 9 backend plans, create renderer-
 ready body IR, render output, evaluate generic backend helpers, infer body
 semantics, or repair source text.
 
+Post-M90 planning selects M91 as behavior-preserving Stage 8 exact array
+pipeline ownership consolidation. M91 should extract focused private
+ownership for exact array pipeline result aggregation, stage/snapshot
+assembly, and public handoff aggregation over the accepted M64-M90 facts. It
+must preserve accepted lowering values, diagnostics, source locations, stage
+names/order, deterministic keys, object identities, public imports,
+selected-branch-only behavior, and pipeline snapshots. It must not add new
+semantic lowering, backend planning, backend map reads, renderer-ready IR,
+rendering, generated output, broad TSIL parsing, source-body repair, broad
+protocols, hidden backfeeds, or fixpoint machinery.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
@@ -1183,7 +1194,8 @@ accepted M86 payload-intake / mini-TSIL leaf lowering ownership extraction,
 accepted M87 exact return-emission structural/request IR, accepted M88 exact
 array-body structural package assembly, accepted M89 exact array
 backend-deferred request inventory, and accepted M90 exact array lowering
-completion-package handoff:
+completion-package handoff, plus the planned M91 behavior-preserving exact
+array pipeline ownership consolidation:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask

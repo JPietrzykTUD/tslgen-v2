@@ -1362,6 +1362,12 @@ unresolved dependencies. That accepted package still leaves actual backend-
 uninit translation, backend maps, Stage 9 backend planning, renderer-ready IR,
 generated output, declaration/array/store/return/SVE semantics, and broad
 `value<backend>(...)` evaluation open.
+Post-M90 planning selects M91 to narrow the maintainability side of the same
+handoff path before adding more semantics. M91 should consolidate exact array
+pipeline result aggregation, stage/snapshot assembly, and public handoff
+aggregation into focused private ownership. It does not answer backend-uninit
+resolution, renderer-ready body IR, broad body semantics, broad TSIL parsing,
+generic source protocols, or fixpoint/backfeed policy.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1396,7 +1402,8 @@ accepted M86 candidate payload-intake and mini-TSIL leaf return lowering
 ownership extraction, accepted M87 exact return-emission structural/request IR,
 accepted M88 exact array-body structural package assembly, accepted M89 exact
 array backend-deferred request inventory, and accepted M90 exact array
-lowering completion-package handoff, while body-slot semantics beyond those
+lowering completion-package handoff, plus the planned M91 exact array pipeline
+ownership consolidation, while body-slot semantics beyond those
 exact structural/request/inventory/package boundaries, including nested
 expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and

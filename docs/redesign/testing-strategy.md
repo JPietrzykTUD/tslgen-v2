@@ -1145,6 +1145,16 @@ Recommended first parity checks:
   lowering mypy success across 25 source files, and full tooling validation
   success with corpus probes `3 passed`, unit discovery `647` tests OK,
   compileall OK, ruff OK, mypy OK across 129 source files, and diff-check OK.
+- Planned M91 coverage should be behavior-preserving exact array pipeline
+  ownership consolidation coverage. Tests should prove the same accepted
+  M64-M90 diagnostics, stage names/order, deterministic keys, output
+  identities, public imports, selected-branch-only behavior, and pipeline
+  snapshots survive the extraction. Coverage should include import-boundary
+  checks for new focused private modules, line-count reporting for
+  `boundary.py`, `_array_body_pipeline.py`, and the new modules, and negative
+  assertions that M91 adds no backend map reads, backend translation, Stage 9
+  planning, rendering, generated output, broad TSIL parsing, source-body
+  repair, broad protocols, hidden backfeeds, or fixpoint behavior.
 
 Deferred parity checks:
 

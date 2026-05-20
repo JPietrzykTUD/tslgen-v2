@@ -756,41 +756,54 @@ renderer-ready IR, rendering, generated output, generic backend-value
 evaluation, source-body repair, broad protocols, hidden backfeeds, or semantic
 body completion.
 
+Post-M90 planning selected
+`Milestone 91: Stage 8 Exact Array Pipeline Ownership Consolidation Slice`.
+The selected plan is a behavior-preserving Stage 8 maintainability
+consolidation that broadens the originally proposed aggregate extraction into
+focused ownership for exact array pipeline results, stage/snapshot assembly,
+and public handoff aggregation. It must preserve accepted M64-M90 behavior and
+add no new lowering semantics, backend planning, backend maps, rendering,
+generated output, broad TSIL parsing, source-body repair, broad protocols, or
+fixpoint machinery. Planning review returned `Accept With Follow-Ups`, with
+behavior-preserving scope, line-count, and import-boundary guardrails recorded
+as non-blocking follow-ups. Human acceptance is recorded, and M91 execution is
+the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M90 planning.
+Execute Milestone 91.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m90-planning-plus-review-prompt.md
+docs/agent/runs/m91-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The next active task is read-only post-M90 planning and review.
+Milestone 91: Stage 8 Exact Array Pipeline Ownership Consolidation Slice
 ```
 
 Latest review verdict:
 
 ```text
-M90 execution-review returned Accept With Follow-Ups after one focused
-diagnostic-boundary revision. Remaining follow-ups are maintainability
-guardrails, not blockers.
+Post-M90 planning is accepted. It selected M91 and returned Accept With
+Follow-Ups. Follow-ups are behavior-preserving scope, line-count, and
+import-boundary guardrails for M91, not blockers.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M90 planning-plus-review prompt. Focus the next task on
-lowering. Use read-only planning/review subagents, do not implement code, and
-create the next concrete prompt before finishing unless the prompt records a
-stop condition.
+Run the active M91 execution-review loop prompt. Use exactly one write-capable
+executor followed by read-only review/audit subagents, preserve accepted
+M64-M90 behavior, and do not start post-M91 planning until M91 review returns
+Accept or Accept With Follow-Ups.
 ```
 
 Accepted planning prompt:
@@ -1543,10 +1556,22 @@ Completed M90 execution-review loop prompt:
 docs/agent/runs/m90-execution-review-loop-prompt.md
 ```
 
-Active post-M90 planning-plus-review prompt:
+Completed post-M90 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m90-planning-plus-review-prompt.md
+```
+
+Completed post-M90 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m90-acceptance-finalization-prompt.md
+```
+
+Active M91 execution-review loop prompt:
+
+```text
+docs/agent/runs/m91-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2407,6 +2432,17 @@ docs/agent/runs/post-m90-planning-plus-review-prompt.md
   `_array_body_pipeline.py`, `_array_body_models.py`,
   `_array_body_backend_deferred_requests.py`, or
   `_array_body_completion_package.py` into broader catch-all modules.
+- M91 is selected as behavior-preserving Stage 8 exact array pipeline
+  ownership consolidation only. It may move exact array pipeline result DTOs,
+  stage construction helpers, snapshot step assembly, and public handoff
+  aggregation into focused private modules, but it must not add new lowering
+  semantics or change accepted behavior.
+- M91 must preserve accepted M64-M90 diagnostics, source locations, stage
+  names/order, output identities, deterministic keys, selected-branch-only
+  behavior, public imports, and pipeline snapshots. It must not add backend
+  planning, backend maps/catalog reads, renderer-ready IR, rendering,
+  generated output, broad TSIL parsing, source-body repair, broad protocols,
+  hidden backfeeds, or fixpoint machinery.
 - Future lowering package decomposition must preserve accepted M57-M90
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -3622,11 +3658,23 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M90 execution follow-up: the runtime source adapter is narrow and validated,
   but future slices should not broaden it into a shared protocol for arbitrary
   lowered-implementation facts.
+- Post-M90 planning follow-up for M91 execution: keep M91 behavior-preserving.
+  The milestone may consolidate exact array pipeline ownership, but it must
+  not add semantic lowering, backend planning, rendering, generated output, or
+  broad parser/source-adapter behavior.
+- Post-M90 planning follow-up for M91 execution: materially reduce pressure on
+  `boundary.py` and `_array_body_pipeline.py` by moving coherent ownership into
+  focused private modules with one-way imports. Do not create a replacement
+  monolith.
+- Post-M90 planning follow-up for M91 execution: add or preserve
+  import-boundary and behavior-preservation tests proving public exports,
+  stage order, snapshot keys, diagnostics, and selected-branch-only behavior
+  remain stable.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run post-M90 planning
-through the active post-M90 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M91 through the
+active M91 execution-review loop prompt.
 
 ## Validation Expectations
 
@@ -3635,6 +3683,22 @@ For docs-only planning tasks:
 ```bash
 git diff --check
 ```
+
+For post-M90 planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
+
+For post-M90 acceptance finalization, validation completed with:
+
+```bash
+git diff --check -- docs/agent/current-redesign-state.md docs/agent/runs/post-m90-acceptance-finalization-prompt.md docs/agent/runs/m91-execution-review-loop-prompt.md docs/redesign/implementation-roadmap.md docs/redesign/behavioral-spec.md docs/redesign/generation-time-semantic-lowering.md docs/redesign/pipeline-design.md docs/redesign/target-architecture.md docs/redesign/testing-strategy.md docs/redesign/design-decisions.md docs/redesign/open-questions.md
+```
+
+The command returned exit 0 with no output.
 
 For post-M89 planning, validation completed with:
 
