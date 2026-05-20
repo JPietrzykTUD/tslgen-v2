@@ -714,13 +714,13 @@ malformed nearby source and does not repair source text, become a generic
 return parser, interpret return/store/variable semantics, add backend
 translation, or render output.
 
-Post-M87 planning selects M88 as the next Stage 8 package assembly step. The
-planned stage, such as `array_body_structural_package_assembly`, should run
-after `return_emission_structural_request_lowering` and aggregate accepted
-M64-M87 exact array-body facts into one typed structural package. The stage is
-typed aggregation and provenance validation only: it must not reparse raw body
-text, repair source bodies, infer declaration/store/return/SVE/backend
-semantics, create renderer-ready IR, or add generated output.
+M88 is accepted as the next Stage 8 package assembly step. The
+`array_body_structural_package_assembly` stage runs after
+`return_emission_structural_request_lowering` and aggregates accepted M64-M87
+exact array-body facts into one typed structural package. The stage is typed
+aggregation and provenance validation only: it does not reparse raw body text,
+repair source bodies, infer declaration/store/return/SVE/backend semantics,
+create renderer-ready IR, or add generated output.
 
 ## Stage 9: Backend Planning
 

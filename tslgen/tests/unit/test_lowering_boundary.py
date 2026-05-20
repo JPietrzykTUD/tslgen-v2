@@ -15,6 +15,7 @@ from _helpers import assert_diagnostic
 import tslgen.lowering._array_body_diagnostics as lowering_array_body_diagnostics
 import tslgen.lowering._array_body_lowering as lowering_array_body_lowering
 import tslgen.lowering._array_body_models as lowering_array_body_models
+import tslgen.lowering._array_body_package as lowering_array_body_package
 import tslgen.lowering._array_body_pipeline as lowering_array_body_pipeline
 import tslgen.lowering._array_body_shapes as lowering_array_body_shapes
 import tslgen.lowering._array_body_sources as lowering_array_body_sources
@@ -52,6 +53,7 @@ from tslgen.lowering import (
     ExactArrayBodyEnvelopeSkeleton,
     ExactArrayBodyEnvelopeSkeletonRequirement,
     ExactArrayBodyEnvelopeSkeletonSlot,
+    ExactArrayBodyStructuralPackageIr,
     ExactArrayBodyStructuralSequenceIr,
     ExactArrayInitializationBaseTypeResolutionIr,
     ExactArrayInitializationDeclarationShellIr,
@@ -99,6 +101,7 @@ from tslgen.lowering import (
     build_catalog_lowering_request,
     handoff_opaque_selected_branch_body,
     lower_candidates,
+    lower_exact_array_body_structural_package,
     lower_exact_array_body_structural_sequence,
     lower_exact_array_initialization_declaration_shell,
     lower_exact_array_initialization_base_type_request,
@@ -1265,6 +1268,19 @@ class LoweringBoundaryTests(unittest.TestCase):
             selected_type_tag=selected_type_tag,
         )
         result = lower_exact_return_emission_structural_request(call_site)
+        if not result.is_ok:
+            raise AssertionError(result.diagnostics)
+        return result.unwrap()
+
+    def exact_array_body_structural_package(
+        self,
+        *,
+        selected_type_tag: str = "si16",
+    ) -> ExactArrayBodyStructuralPackageIr:
+        return_emission = self.exact_return_emission_structural_request(
+            selected_type_tag=selected_type_tag,
+        )
+        result = lower_exact_array_body_structural_package(return_emission)
         if not result.is_ok:
             raise AssertionError(result.diagnostics)
         return result.unwrap()
@@ -3846,6 +3862,10 @@ class LoweringBoundaryTests(unittest.TestCase):
                         (),
                     )
                     self.assertEqual(
+                        implementation.array_body_structural_packages,
+                        (),
+                    )
+                    self.assertEqual(
                         tuple(stage.stage for stage in implementation.generation_stages),
                         tuple(stage.stage for stage in baseline_impl.generation_stages),
                     )
@@ -4022,104 +4042,117 @@ class LoweringBoundaryTests(unittest.TestCase):
                     structural_sequence,
                 )
                 self.assertIs(
-                    implementation.generation_stages[-12].output,
+                    implementation.generation_stages[-13].output,
                     array_envelope,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-12].stage,
+                    implementation.generation_stages[-13].stage,
                     "array_body_envelope_slot_assembly",
                 )
-                self.assertIs(implementation.generation_stages[-11].output, slot_form)
+                self.assertIs(implementation.generation_stages[-12].output, slot_form)
                 self.assertEqual(
-                    implementation.generation_stages[-11].stage,
+                    implementation.generation_stages[-12].stage,
                     "array_initialization_slot_form_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-10].output,
+                    implementation.generation_stages[-11].output,
                     helper_request,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-10].stage,
+                    implementation.generation_stages[-11].stage,
                     "array_initialization_helper_request_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-9].output,
+                    implementation.generation_stages[-10].output,
                     base_type_resolution,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-9].stage,
+                    implementation.generation_stages[-10].stage,
                     "array_initialization_base_type_request_resolution",
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-8].stage,
+                    implementation.generation_stages[-9].stage,
                     "array_initialization_vector_length_request_resolution",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-8].output,
+                    implementation.generation_stages[-9].output,
                     vector_length_resolution,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-7].stage,
+                    implementation.generation_stages[-8].stage,
                     "array_initialization_vector_alignment_request_resolution",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-7].output,
+                    implementation.generation_stages[-8].output,
                     vector_alignment_resolution,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-6].stage,
+                    implementation.generation_stages[-7].stage,
                     "array_initialization_helper_set_completion",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-6].output,
+                    implementation.generation_stages[-7].output,
                     helper_set_completion,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-5].stage,
+                    implementation.generation_stages[-6].stage,
                     "array_initialization_declaration_shell_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-5].output,
+                    implementation.generation_stages[-6].output,
                     declaration_shell,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-4].stage,
+                    implementation.generation_stages[-5].stage,
                     "array_body_structural_sequence_classification",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-4].output,
+                    implementation.generation_stages[-5].output,
                     structural_sequence,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-3].stage,
+                    implementation.generation_stages[-4].stage,
                     "predicate_path_structural_request_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-3].output,
+                    implementation.generation_stages[-4].output,
                     predicate_path,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-2].stage,
+                    implementation.generation_stages[-3].stage,
                     "post_branch_intrinsic_call_site_structural_request_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-2].output,
+                    implementation.generation_stages[-3].output,
                     post_branch_call_site,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-1].stage,
+                    implementation.generation_stages[-2].stage,
                     "return_emission_structural_request_lowering",
                 )
                 self.assertEqual(
-                    tuple(stage.stage for stage in implementation.generation_stages[:-12]),
+                    implementation.generation_stages[-1].stage,
+                    "array_body_structural_package_assembly",
+                )
+                self.assertEqual(len(implementation.array_body_structural_packages), 1)
+                structural_package = implementation.array_body_structural_packages[0]
+                self.assertIs(implementation.generation_stages[-1].output, structural_package)
+                self.assertIs(structural_package.source_envelope, array_envelope)
+                self.assertIs(structural_package.helper_set_completion, helper_set_completion)
+                self.assertIs(structural_package.declaration_shell, declaration_shell)
+                self.assertIs(structural_package.source_sequence, structural_sequence)
+                self.assertIs(structural_package.predicate_path, predicate_path)
+                self.assertIs(structural_package.post_branch_call_site, post_branch_call_site)
+                self.assertEqual(
+                    tuple(stage.stage for stage in implementation.generation_stages[:-13]),
                     tuple(stage.stage for stage in baseline_impl.generation_stages),
                 )
                 self.assertEqual(
-                    tuple(stage.output for stage in implementation.generation_stages[:-12]),
+                    tuple(stage.output for stage in implementation.generation_stages[:-13]),
                     tuple(stage.output for stage in baseline_impl.generation_stages),
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-13].stage,
+                    implementation.generation_stages[-14].stage,
                     "selected_body_envelope_lowering",
                 )
                 self.assertEqual(slot_form.slot_ordinal, 0)
@@ -4552,6 +4585,24 @@ class LoweringBoundaryTests(unittest.TestCase):
                     post_branch_call_site.source_predicate_path,
                     predicate_path,
                 )
+                self.assertEqual(len(pipeline.array_body_structural_packages), 1)
+                structural_package = pipeline.array_body_structural_packages[0]
+                self.assertIs(structural_package.source_envelope, array_envelope)
+                self.assertIs(
+                    structural_package.helper_set_completion,
+                    helper_set_completion,
+                )
+                self.assertIs(structural_package.declaration_shell, declaration_shell)
+                self.assertIs(structural_package.source_sequence, structural_sequence)
+                self.assertIs(structural_package.predicate_path, predicate_path)
+                self.assertIs(
+                    structural_package.post_branch_call_site,
+                    post_branch_call_site,
+                )
+                self.assertIs(
+                    structural_package.return_emission,
+                    pipeline.return_emission_structural_requests[0],
+                )
                 self.assertEqual(
                     tuple(stage.stage for stage in pipeline.stages),
                     (
@@ -4567,6 +4618,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                         "predicate_path_structural_request_lowering",
                         "post_branch_intrinsic_call_site_structural_request_lowering",
                         "return_emission_structural_request_lowering",
+                        "array_body_structural_package_assembly",
                     ),
                 )
                 self.assertEqual(
@@ -4584,6 +4636,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                         predicate_path,
                         post_branch_call_site,
                         pipeline.return_emission_structural_requests[0],
+                        structural_package,
                     ),
                 )
 
@@ -4637,7 +4690,8 @@ class LoweringBoundaryTests(unittest.TestCase):
                     1,
                 )
                 self.assertEqual(len(pipeline.return_emission_structural_requests), 1)
-                self.assertEqual(len(pipeline.stages), 12)
+                self.assertEqual(len(pipeline.array_body_structural_packages), 1)
+                self.assertEqual(len(pipeline.stages), 13)
 
     def test_exact_array_initialization_stage_pipeline_no_skeleton_is_empty(
         self,
@@ -4664,6 +4718,7 @@ class LoweringBoundaryTests(unittest.TestCase):
             (),
         )
         self.assertEqual(pipeline.return_emission_structural_requests, ())
+        self.assertEqual(pipeline.array_body_structural_packages, ())
         self.assertEqual(pipeline.stages, ())
         self.assertIsInstance(
             pipeline.pipeline_snapshot,
@@ -4759,8 +4814,12 @@ class LoweringBoundaryTests(unittest.TestCase):
             implementation.return_emission_structural_requests,
             pipeline_result.return_emission_structural_requests,
         )
-        self.assertEqual(implementation.generation_stages[-12:], pipeline_result.stages)
-        self.assertEqual(implementation.generation_stages[-13], envelope_stage)
+        self.assertEqual(
+            implementation.array_body_structural_packages,
+            pipeline_result.array_body_structural_packages,
+        )
+        self.assertEqual(implementation.generation_stages[-13:], pipeline_result.stages)
+        self.assertEqual(implementation.generation_stages[-14], envelope_stage)
 
     def test_m77_exact_array_pipeline_snapshot_records_stage_facts(self) -> None:
         result = self.exact_array_initialization_stage_pipeline("si32")
@@ -4789,13 +4848,19 @@ class LoweringBoundaryTests(unittest.TestCase):
                 "predicate_path_structural_request",
                 "post_branch_intrinsic_call_site_structural_request",
                 "return_emission_structural_request",
+                "array_body_structural_package",
             ),
         )
         self.assertEqual(
             snapshot.steps[-1].depends_on,
             (
+                "array_body_envelope",
+                "array_initialization_helper_set_completion",
+                "array_initialization_declaration_shell",
                 "array_body_structural_sequence",
+                "predicate_path_structural_request",
                 "post_branch_intrinsic_call_site_structural_request",
+                "return_emission_structural_request",
             ),
         )
         self.assertEqual(snapshot.pending_backfeed_requests, ())
@@ -5397,6 +5462,10 @@ class LoweringBoundaryTests(unittest.TestCase):
             (
                 "return_emission_structural_request_lowering",
                 self.exact_return_emission_structural_request(),
+            ),
+            (
+                "array_body_structural_package_assembly",
+                self.exact_array_body_structural_package(),
             ),
         )
 
@@ -6160,28 +6229,32 @@ class LoweringBoundaryTests(unittest.TestCase):
             item.candidate_id
         ]
         self.assertEqual(
-            implementation.generation_stages[-6].stage,
+            implementation.generation_stages[-7].stage,
             "array_initialization_helper_set_completion",
         )
         self.assertEqual(
-            implementation.generation_stages[-5].stage,
+            implementation.generation_stages[-6].stage,
             "array_initialization_declaration_shell_lowering",
         )
         self.assertEqual(
-            implementation.generation_stages[-4].stage,
+            implementation.generation_stages[-5].stage,
             "array_body_structural_sequence_classification",
         )
         self.assertEqual(
-            implementation.generation_stages[-3].stage,
+            implementation.generation_stages[-4].stage,
             "predicate_path_structural_request_lowering",
         )
         self.assertEqual(
-            implementation.generation_stages[-2].stage,
+            implementation.generation_stages[-3].stage,
             "post_branch_intrinsic_call_site_structural_request_lowering",
         )
         self.assertEqual(
-            implementation.generation_stages[-1].stage,
+            implementation.generation_stages[-2].stage,
             "return_emission_structural_request_lowering",
+        )
+        self.assertEqual(
+            implementation.generation_stages[-1].stage,
+            "array_body_structural_package_assembly",
         )
         helper_set_completion = implementation.array_initialization_helper_set_completions[
             0
@@ -6193,15 +6266,17 @@ class LoweringBoundaryTests(unittest.TestCase):
             implementation.post_branch_intrinsic_call_site_structural_requests[0]
         )
         return_emission = implementation.return_emission_structural_requests[0]
-        self.assertIs(implementation.generation_stages[-6].output, helper_set_completion)
-        self.assertIs(implementation.generation_stages[-5].output, declaration_shell)
-        self.assertIs(implementation.generation_stages[-4].output, structural_sequence)
-        self.assertIs(implementation.generation_stages[-3].output, predicate_path)
+        structural_package = implementation.array_body_structural_packages[0]
+        self.assertIs(implementation.generation_stages[-7].output, helper_set_completion)
+        self.assertIs(implementation.generation_stages[-6].output, declaration_shell)
+        self.assertIs(implementation.generation_stages[-5].output, structural_sequence)
+        self.assertIs(implementation.generation_stages[-4].output, predicate_path)
         self.assertIs(
-            implementation.generation_stages[-2].output,
+            implementation.generation_stages[-3].output,
             post_branch_call_site,
         )
-        self.assertIs(implementation.generation_stages[-1].output, return_emission)
+        self.assertIs(implementation.generation_stages[-2].output, return_emission)
+        self.assertIs(implementation.generation_stages[-1].output, structural_package)
         self.assertIs(
             declaration_shell.source_helper_set_completion,
             helper_set_completion,
@@ -9588,22 +9663,23 @@ class LoweringBoundaryTests(unittest.TestCase):
         )
         self.assertIs(predicate_path.source_sequence, structural_sequence)
         self.assertEqual(
-            tuple(stage.stage for stage in implementation.generation_stages[-4:]),
+            tuple(stage.stage for stage in implementation.generation_stages[-5:]),
             (
                 "array_body_structural_sequence_classification",
                 "predicate_path_structural_request_lowering",
                 "post_branch_intrinsic_call_site_structural_request_lowering",
                 "return_emission_structural_request_lowering",
+                "array_body_structural_package_assembly",
             ),
         )
-        self.assertIs(implementation.generation_stages[-4].output, structural_sequence)
-        self.assertIs(implementation.generation_stages[-3].output, predicate_path)
+        self.assertIs(implementation.generation_stages[-5].output, structural_sequence)
+        self.assertIs(implementation.generation_stages[-4].output, predicate_path)
         self.assertIs(
-            implementation.generation_stages[-2].output,
+            implementation.generation_stages[-3].output,
             post_branch_call_site,
         )
         self.assertEqual(
-            implementation.generation_stages[-5].stage,
+            implementation.generation_stages[-6].stage,
             "array_initialization_declaration_shell_lowering",
         )
 
@@ -10167,16 +10243,17 @@ class LoweringBoundaryTests(unittest.TestCase):
         )
         self.assertIs(call_site.source_predicate_path, predicate_path)
         self.assertEqual(
-            tuple(stage.stage for stage in implementation.generation_stages[-4:]),
+            tuple(stage.stage for stage in implementation.generation_stages[-5:]),
             (
                 "array_body_structural_sequence_classification",
                 "predicate_path_structural_request_lowering",
                 "post_branch_intrinsic_call_site_structural_request_lowering",
                 "return_emission_structural_request_lowering",
+                "array_body_structural_package_assembly",
             ),
         )
-        self.assertIs(implementation.generation_stages[-3].output, predicate_path)
-        self.assertIs(implementation.generation_stages[-2].output, call_site)
+        self.assertIs(implementation.generation_stages[-4].output, predicate_path)
+        self.assertIs(implementation.generation_stages[-3].output, call_site)
         self.assertEqual(call_site.predicate_argument_token_text, "pg")
         self.assertEqual(call_site.member_access_argument_text, "tmp.data()")
         self.assertEqual(call_site.source_operand_argument_token_text, "a")
@@ -10799,16 +10876,17 @@ class LoweringBoundaryTests(unittest.TestCase):
         return_emission = implementation.return_emission_structural_requests[0]
         self.assertIs(return_emission.source_post_branch_call_site, call_site)
         self.assertEqual(
-            tuple(stage.stage for stage in implementation.generation_stages[-4:]),
+            tuple(stage.stage for stage in implementation.generation_stages[-5:]),
             (
                 "array_body_structural_sequence_classification",
                 "predicate_path_structural_request_lowering",
                 "post_branch_intrinsic_call_site_structural_request_lowering",
                 "return_emission_structural_request_lowering",
+                "array_body_structural_package_assembly",
             ),
         )
-        self.assertIs(implementation.generation_stages[-2].output, call_site)
-        self.assertIs(implementation.generation_stages[-1].output, return_emission)
+        self.assertIs(implementation.generation_stages[-3].output, call_site)
+        self.assertIs(implementation.generation_stages[-2].output, return_emission)
         implementations_with_return = tuple(
             lowered.candidate_id
             for lowered in plan.implementations
@@ -10825,24 +10903,24 @@ class LoweringBoundaryTests(unittest.TestCase):
         result = pipeline.unwrap()
         self.assertEqual(len(result.return_emission_structural_requests), 1)
         return_emission = result.return_emission_structural_requests[0]
-        self.assertIs(result.stages[-1].output, return_emission)
+        self.assertIs(result.stages[-2].output, return_emission)
         snapshot = result.pipeline_snapshot
         self.assertEqual(
-            tuple(step.stage_name for step in snapshot.steps[-2:]),
+            tuple(step.stage_name for step in snapshot.steps[-3:-1]),
             (
                 "post_branch_intrinsic_call_site_structural_request_lowering",
                 "return_emission_structural_request_lowering",
             ),
         )
-        self.assertIs(snapshot.steps[-1].stage, result.stages[-1])
+        self.assertIs(snapshot.steps[-2].stage, result.stages[-2])
         self.assertEqual(
-            snapshot.steps[-1].produced_fact.kind,
+            snapshot.steps[-2].produced_fact.kind,
             "return_emission_structural_request",
         )
-        self.assertIs(snapshot.steps[-1].produced_fact.value, return_emission)
-        self.assertEqual(snapshot.steps[-1].produced_fact.key, return_emission.key)
+        self.assertIs(snapshot.steps[-2].produced_fact.value, return_emission)
+        self.assertEqual(snapshot.steps[-2].produced_fact.key, return_emission.key)
         self.assertEqual(
-            snapshot.steps[-1].depends_on,
+            snapshot.steps[-2].depends_on,
             (
                 "array_body_structural_sequence",
                 "post_branch_intrinsic_call_site_structural_request",
@@ -10882,6 +10960,453 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertIs(
             lower_exact_return_emission_structural_request,
             lowering_return_emission.lower_exact_return_emission_structural_request,
+        )
+
+    def test_m88_exact_array_body_structural_package_lowers_m87_sources(self) -> None:
+        return_emission = self.exact_return_emission_structural_request(
+            selected_type_tag="si16",
+        )
+
+        class M87OnlyLoweredImplementationSource:
+            def __init__(
+                self,
+                request: ExactReturnEmissionStructuralRequestIr,
+            ) -> None:
+                self.return_emission_structural_requests = (request,)
+
+        sources = (
+            return_emission,
+            GenerationLoweringStage(
+                stage="return_emission_structural_request_lowering",
+                output=return_emission,
+            ),
+            LoweredImplementation(
+                candidate_id=return_emission.candidate_id,
+                status="lowered",
+                return_emission_structural_requests=(return_emission,),
+            ),
+            M87OnlyLoweredImplementationSource(return_emission),
+        )
+
+        for source in sources:
+            with self.subTest(source=type(source).__name__):
+                result = lower_exact_array_body_structural_package(
+                    source,
+                    GenerationContext(
+                        selected_candidate_id=return_emission.candidate_id,
+                        selected_type_tag=return_emission.selected_type_tag,
+                    ),
+                    selected_candidate_id=return_emission.candidate_id,
+                    target_extension=return_emission.target_extension,
+                    source_extension=return_emission.source_extension,
+                    selected_type_tag=return_emission.selected_type_tag,
+                )
+
+                self.assertTrue(result.is_ok, result.diagnostics)
+                package = result.unwrap()
+                self.assertIs(package.return_emission, return_emission)
+                self.assertIs(
+                    package.post_branch_call_site,
+                    return_emission.source_post_branch_call_site,
+                )
+                self.assertIs(
+                    package.predicate_path,
+                    return_emission.source_post_branch_call_site.source_predicate_path,
+                )
+                self.assertIs(package.source_sequence, return_emission.source_sequence)
+                self.assertIs(
+                    package.declaration_shell,
+                    return_emission.source_sequence.declaration_shell,
+                )
+                self.assertIs(
+                    package.helper_set_completion,
+                    package.declaration_shell.source_helper_set_completion,
+                )
+                self.assertIs(
+                    package.source_envelope,
+                    return_emission.source_sequence.source_envelope,
+                )
+                self.assertEqual(
+                    tuple(member.kind for member in package.members),
+                    (
+                        "declaration_shell",
+                        "predicate_path",
+                        "selected_update",
+                        "post_branch_call_site",
+                        "return_emission",
+                    ),
+                )
+                self.assertEqual(
+                    tuple(member.role_ordinal for member in package.members),
+                    (0, 1, 2, 3, 4),
+                )
+                self.assertIs(package.members[0].fact, package.declaration_shell)
+                self.assertIs(package.members[1].fact, package.predicate_path)
+                self.assertIs(package.members[2].fact, package.predicate_path)
+                self.assertIs(package.members[3].fact, package.post_branch_call_site)
+                self.assertIs(package.members[4].fact, return_emission)
+                self.assertFalse(hasattr(package, "body_semantics"))
+                self.assertFalse(hasattr(package, "backend_translation"))
+                self.assertFalse(hasattr(package, "renderer_value"))
+
+    def test_m88_structural_package_reports_source_and_context_diagnostics(
+        self,
+    ) -> None:
+        return_emission = self.exact_return_emission_structural_request()
+        duplicate = LoweredImplementation(
+            candidate_id=return_emission.candidate_id,
+            status="lowered",
+            return_emission_structural_requests=(return_emission, return_emission),
+        )
+        missing = LoweredImplementation(
+            candidate_id=return_emission.candidate_id,
+            status="lowered",
+        )
+
+        class MalformedM87OnlyLoweredImplementationSource:
+            def __init__(self) -> None:
+                self.return_emission_structural_requests: tuple[object, ...] = (
+                    object(),
+                )
+
+        cases = (
+            (
+                "bad_stage",
+                GenerationLoweringStage(
+                    stage="post_branch_intrinsic_call_site_structural_request_lowering",
+                    output=return_emission.source_post_branch_call_site,
+                ),
+                "TSL-LOWER-ARRAY-BODY-PACKAGE-SOURCE-UNSUPPORTED",
+                "M87",
+            ),
+            (
+                "bad_type",
+                object(),
+                "TSL-LOWER-ARRAY-BODY-PACKAGE-SOURCE-UNSUPPORTED",
+                "M87",
+            ),
+            (
+                "missing",
+                missing,
+                "TSL-LOWER-ARRAY-BODY-PACKAGE-IR-MISSING",
+                "return_emission_structural_requests",
+            ),
+            (
+                "malformed_entry",
+                MalformedM87OnlyLoweredImplementationSource(),
+                "TSL-LOWER-ARRAY-BODY-PACKAGE-SOURCE-UNSUPPORTED",
+                "ExactReturnEmissionStructuralRequestIr",
+            ),
+            (
+                "duplicate",
+                duplicate,
+                "TSL-LOWER-ARRAY-BODY-PACKAGE-IR-MULTIPLE",
+                "exactly one",
+            ),
+        )
+
+        for name, source, code, message in cases:
+            with self.subTest(name=name):
+                result = lower_exact_array_body_structural_package(source)
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
+                self.assertIn(message, result.diagnostics[0].message)
+
+        result = lower_exact_array_body_structural_package(
+            return_emission,
+            context=GenerationContext(selected_candidate_id="other-candidate"),
+        )
+
+        self.assertFalse(result.is_ok)
+        assert_diagnostic(
+            self,
+            result.diagnostics[0],
+            code="TSL-LOWER-ARRAY-BODY-PACKAGE-CONTEXT-MISMATCH",
+            severity="error",
+            path="tsldata/primitives/load_store/array.tsl",
+            line=111,
+        )
+
+    def test_m88_structural_package_reports_member_and_provenance_diagnostics(
+        self,
+    ) -> None:
+        missing_helper = self.exact_return_emission_structural_request()
+        object.__setattr__(
+            missing_helper.source_sequence.declaration_shell,
+            "source_helper_set_completion",
+            None,
+        )
+        out_of_order = self.exact_return_emission_structural_request()
+        roles = out_of_order.source_sequence.roles
+        object.__setattr__(
+            out_of_order.source_sequence,
+            "roles",
+            (roles[1], roles[0], roles[2], roles[3], roles[4]),
+        )
+        provenance_mismatch = self.exact_return_emission_structural_request()
+        other_predicate_path = self.exact_predicate_path_structural_request(
+            selected_type_tag="si32",
+        )
+        object.__setattr__(
+            provenance_mismatch.source_post_branch_call_site,
+            "source_predicate_path",
+            other_predicate_path,
+        )
+        cases = (
+            (
+                "missing_helper",
+                missing_helper,
+                "TSL-LOWER-ARRAY-BODY-PACKAGE-MEMBER-MISSING",
+                "M72",
+            ),
+            (
+                "out_of_order",
+                out_of_order,
+                "TSL-LOWER-ARRAY-BODY-PACKAGE-SOURCE-ORDER-MISMATCH",
+                "source-ordered",
+            ),
+            (
+                "provenance_mismatch",
+                provenance_mismatch,
+                "TSL-LOWER-ARRAY-BODY-PACKAGE-PROVENANCE-MISMATCH",
+                "M64-M87",
+            ),
+        )
+
+        for name, source, code, message in cases:
+            with self.subTest(name=name):
+                result = lower_exact_array_body_structural_package(source)
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
+                self.assertIn(message, result.diagnostics[0].message)
+
+    def test_m88_structural_package_stage_follows_return_emission(self) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+        item, envelope = self.size_byte_branch_chain_item_and_envelope("si32")
+        skeleton = self.exact_array_body_skeleton_for_envelope(envelope)
+
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                array_body_envelope_skeletons=(skeleton,),
+                generation_context=GenerationContext(
+                    array_initialization_vector_length_metadata=(
+                        self.vector_length_metadata_for_item(item),
+                    ),
+                    array_initialization_vector_alignment_metadata=(
+                        self.vector_alignment_metadata_for_item(item),
+                    ),
+                ),
+            ),
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        plan = result.unwrap()
+        implementation = plan.implementations_by_candidate_id[item.candidate_id]
+        self.assertEqual(len(implementation.array_body_structural_packages), 1)
+        return_emission = implementation.return_emission_structural_requests[0]
+        package = implementation.array_body_structural_packages[0]
+        self.assertIs(package.return_emission, return_emission)
+        self.assertEqual(
+            tuple(stage.stage for stage in implementation.generation_stages[-2:]),
+            (
+                "return_emission_structural_request_lowering",
+                "array_body_structural_package_assembly",
+            ),
+        )
+        self.assertIs(implementation.generation_stages[-2].output, return_emission)
+        self.assertIs(implementation.generation_stages[-1].output, package)
+        implementations_with_package = tuple(
+            lowered.candidate_id
+            for lowered in plan.implementations
+            if lowered.array_body_structural_packages
+        )
+        self.assertEqual(implementations_with_package, (item.candidate_id,))
+
+    def test_m88_exact_array_body_pipeline_snapshot_preserves_package_identity(
+        self,
+    ) -> None:
+        pipeline = self.exact_array_initialization_stage_pipeline("si32")
+
+        self.assertTrue(pipeline.is_ok, pipeline.diagnostics)
+        result = pipeline.unwrap()
+        self.assertEqual(len(result.array_body_structural_packages), 1)
+        package = result.array_body_structural_packages[0]
+        self.assertIs(result.stages[-1].output, package)
+        snapshot = result.pipeline_snapshot
+        self.assertEqual(
+            snapshot.steps[-1].stage_name,
+            "array_body_structural_package_assembly",
+        )
+        self.assertIs(snapshot.steps[-1].stage, result.stages[-1])
+        self.assertEqual(
+            snapshot.steps[-1].produced_fact.kind,
+            "array_body_structural_package",
+        )
+        self.assertIs(snapshot.steps[-1].produced_fact.value, package)
+        self.assertEqual(snapshot.steps[-1].produced_fact.key, package.key)
+        self.assertEqual(
+            snapshot.steps[-1].depends_on,
+            (
+                "array_body_envelope",
+                "array_initialization_helper_set_completion",
+                "array_initialization_declaration_shell",
+                "array_body_structural_sequence",
+                "predicate_path_structural_request",
+                "post_branch_intrinsic_call_site_structural_request",
+                "return_emission_structural_request",
+            ),
+        )
+
+    def test_m88_structural_package_is_deterministic_for_reordered_inputs(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+        baseline = lower_candidates(selection)
+        self.assertTrue(baseline.is_ok, baseline.diagnostics)
+        implementations = tuple(
+            implementation
+            for implementation in baseline.unwrap().implementations
+            if implementation.selected_body_envelopes
+            and implementation.selected_body_envelopes[0].selected_type_tag
+            in ("si16", "si32")
+        )
+        skeletons = tuple(
+            self.exact_array_body_skeleton_for_envelope(
+                implementation.selected_body_envelopes[0],
+            )
+            for implementation in implementations
+        )
+        length_metadata = tuple(
+            self.vector_length_metadata(
+                candidate_id=implementation.candidate_id,
+                target_extension=selection.candidates_by_id[
+                    implementation.candidate_id
+                ].target_extension,
+                source_extension=selection.candidates_by_id[
+                    implementation.candidate_id
+                ].source_extension,
+                selected_type_tag=selection.candidates_by_id[
+                    implementation.candidate_id
+                ].type_tag,
+            )
+            for implementation in implementations
+        )
+        alignment_metadata = tuple(
+            self.vector_alignment_metadata(
+                candidate_id=implementation.candidate_id,
+                target_extension=selection.candidates_by_id[
+                    implementation.candidate_id
+                ].target_extension,
+                source_extension=selection.candidates_by_id[
+                    implementation.candidate_id
+                ].source_extension,
+                selected_type_tag=selection.candidates_by_id[
+                    implementation.candidate_id
+                ].type_tag,
+            )
+            for implementation in implementations
+        )
+
+        first = lower_candidates(
+            selection,
+            LoweringRequest(
+                array_body_envelope_skeletons=skeletons,
+                generation_context=GenerationContext(
+                    array_initialization_vector_length_metadata=length_metadata,
+                    array_initialization_vector_alignment_metadata=alignment_metadata,
+                ),
+            ),
+        )
+        second = lower_candidates(
+            selection,
+            LoweringRequest(
+                array_body_envelope_skeletons=tuple(reversed(skeletons)),
+                generation_context=GenerationContext(
+                    array_initialization_vector_length_metadata=tuple(
+                        reversed(length_metadata),
+                    ),
+                    array_initialization_vector_alignment_metadata=tuple(
+                        reversed(alignment_metadata),
+                    ),
+                ),
+            ),
+        )
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+
+        def package_keys(plan) -> dict[str, tuple[tuple[object, ...], ...]]:
+            return {
+                implementation.candidate_id: tuple(
+                    package.key
+                    for package in implementation.array_body_structural_packages
+                )
+                for implementation in plan.unwrap().implementations
+            }
+
+        self.assertEqual(package_keys(first), package_keys(second))
+
+    def test_m88_structural_package_module_import_boundary(self) -> None:
+        forbidden_exact_modules = (
+            "tslgen.lowering.boundary",
+            "tslgen.lowering",
+            "tslgen.lowering._array_body_pipeline",
+            "tslgen.lowering._array_body_sources",
+            "tslgen.lowering._stage_contracts",
+        )
+        forbidden_prefixes = (
+            "tslgen.backends",
+            "tslgen.rendering",
+            "tsldata",
+            "frozen",
+        )
+        imported_forbidden: list[str] = []
+        tree = ast.parse(inspect.getsource(lowering_array_body_package))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name in forbidden_exact_modules or alias.name.startswith(
+                        forbidden_prefixes,
+                    ):
+                        imported_forbidden.append(alias.name)
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if module in forbidden_exact_modules or module.startswith(
+                    forbidden_prefixes,
+                ):
+                    imported_forbidden.append(module)
+                if node.level and node.module in (None, "", "boundary"):
+                    imported_forbidden.extend(
+                        alias.name
+                        for alias in node.names
+                        if node.module == "boundary" or alias.name == "boundary"
+                    )
+
+        self.assertEqual(imported_forbidden, [])
+        self.assertIs(
+            lowering_boundary.lower_exact_array_body_structural_package,
+            lowering_array_body_package.lower_exact_array_body_structural_package,
+        )
+        self.assertIs(
+            lower_exact_array_body_structural_package,
+            lowering_array_body_package.lower_exact_array_body_structural_package,
+        )
+        self.assertIs(
+            lowering_boundary.ExactArrayBodyStructuralPackageIr,
+            lowering_array_body_package.ExactArrayBodyStructuralPackageIr,
         )
 
     def test_exact_array_initialization_slot_form_api_uses_envelope_slot_only(

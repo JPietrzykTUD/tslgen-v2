@@ -23,6 +23,7 @@ import tslgen.lowering._generation_queries as _generation_queries
 import tslgen.lowering._array_body_diagnostics as _array_body_diagnostics
 import tslgen.lowering._array_body_lowering as _array_body_lowering
 import tslgen.lowering._array_body_models as _array_body_models
+import tslgen.lowering._array_body_package as _array_body_package
 import tslgen.lowering._array_body_pipeline as _array_body_pipeline
 import tslgen.lowering._array_body_shapes as _array_body_shapes
 import tslgen.lowering._array_body_sources as _array_body_sources
@@ -106,6 +107,9 @@ from tslgen.lowering._array_body_models import (
     ExactPredicatePathStructuralRequestIr,
     ExactReturnEmissionStructuralRequestIr,
 )
+from tslgen.lowering._array_body_package import (
+    ExactArrayBodyStructuralPackageIr,
+)
 from tslgen.lowering._stage_contracts import (
     GenerationLoweringStage,
     GenerationLoweringStageName,
@@ -123,6 +127,7 @@ from tslgen.lowering._stage_contracts import (
 _ARRAY_BODY_MODEL_FACADE_EXPORTS = (
     _array_body_diagnostics,
     _array_body_models,
+    _array_body_package,
     _array_body_shapes,
     _array_body_validation,
     _return_emission,
@@ -177,6 +182,7 @@ lower_exact_array_body_structural_sequence = _array_body_lowering.lower_exact_ar
 lower_exact_predicate_path_structural_request = _array_body_lowering.lower_exact_predicate_path_structural_request
 lower_exact_post_branch_intrinsic_call_site_structural_request = _array_body_lowering.lower_exact_post_branch_intrinsic_call_site_structural_request
 lower_exact_return_emission_structural_request = _return_emission.lower_exact_return_emission_structural_request
+lower_exact_array_body_structural_package = _array_body_package.lower_exact_array_body_structural_package
 _classify_payload = _lowering_inputs._classify_payload
 _unsupported_payload_diagnostic = _lowering_inputs._unsupported_payload_diagnostic
 _mini_return_statement = _mini_tsil_lowering._mini_return_statement
@@ -400,6 +406,9 @@ class LoweredImplementation:
     return_emission_structural_requests: tuple[
         ExactReturnEmissionStructuralRequestIr, ...
     ] = ()
+    array_body_structural_packages: tuple[
+        ExactArrayBodyStructuralPackageIr, ...
+    ] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -513,6 +522,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "array_body_structural_packages",
+            tuple(self.array_body_structural_packages),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -580,6 +594,9 @@ class LoweredImplementation:
             ),
             tuple(
                 request.key for request in self.return_emission_structural_requests
+            ),
+            tuple(
+                package.key for package in self.array_body_structural_packages
             ),
             tuple(stage.key for stage in self.generation_stages),
         )
@@ -1032,6 +1049,9 @@ def _lower_input(
                     ),
                     return_emission_structural_requests=(
                         array_initialization_pipeline.return_emission_structural_requests
+                    ),
+                    array_body_structural_packages=(
+                        array_initialization_pipeline.array_body_structural_packages
                     ),
                     generation_stages=(
                         _recognition_stage(

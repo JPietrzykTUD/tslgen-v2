@@ -773,15 +773,15 @@ declaration-shell variable token as provenance. M87 does not repair wrong
 return semantics, add renderer-ready IR, or add backend/rendering/output
 behavior. Unsupported nearby forms remain diagnostics.
 
-Post-M87 planning selects M88 as exact array-body structural package assembly.
-M88 should consume accepted M64-M87 typed facts and assemble one typed,
-source-ordered package for the selected `array.tsl:105-111` structural body.
-This package is an aggregation/provenance-validation boundary only: it must not
-reparse or repair source bodies, infer declaration/store/return/SVE/backend
-semantics, query catalogs or backend maps, add renderer-ready IR, or produce
-generated output. The package should give later lowering/backend-planning work
-one stable typed handoff instead of requiring every future stage to understand
-the separate exact array-body facts.
+M88 is accepted as exact array-body structural package assembly. It consumes
+accepted M64-M87 typed facts and assembles one typed, source-ordered package
+for the selected `array.tsl:105-111` structural body. This package is an
+aggregation/provenance-validation boundary only: it does not reparse or repair
+source bodies, infer declaration/store/return/SVE/backend semantics, query
+catalogs or backend maps, add renderer-ready IR, or produce generated output.
+The package gives later lowering/backend-planning work one stable typed
+handoff instead of requiring every future stage to understand the separate
+exact array-body facts.
 
 M61 diagnostics:
 

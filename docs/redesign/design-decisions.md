@@ -1597,16 +1597,17 @@ Consequences:
   support, return-value semantics, variable lifetime/scope semantics,
   renderer-ready IR, backend translation, generated output, and generic TSIL
   statement dispatch.
-- Post-M87 planning selects M88 as exact array-body structural package
-  assembly before backend-uninit refinement, store semantics, or renderer-ready
-  body IR. The decision is to turn the accepted M64-M87 exact array-body facts
-  into one typed, source-ordered package that later stages can consume without
-  reaching across many pipeline outputs. M88 should use focused private package
-  ownership, preserve member fact identity/provenance, and reject missing,
-  duplicate, mismatched, or provenance-inconsistent inputs with diagnostics.
-  It deliberately remains typed aggregation only, not body semantics, source
-  repair, backend translation, rendering, generated output, a broad source
-  protocol, or a generic TSIL/body package framework.
+- M88 is accepted as exact array-body structural package assembly before
+  backend-uninit refinement, store semantics, or renderer-ready body IR. The
+  decision turns the accepted M64-M87 exact array-body facts into one typed,
+  source-ordered package that later stages can consume without reaching across
+  many pipeline outputs. M88 uses focused private package ownership, preserves
+  member fact identity/provenance, appends the
+  `array_body_structural_package_assembly` stage after M87, and rejects
+  missing, duplicate, malformed, mismatched, or provenance-inconsistent inputs
+  with diagnostics. It deliberately remains typed aggregation only, not body
+  semantics, source repair, backend translation, rendering, generated output,
+  a broad source protocol, or a generic TSIL/body package framework.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

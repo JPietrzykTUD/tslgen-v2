@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 87 is accepted.
+Milestone 88 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -684,41 +684,56 @@ Post-M87 planning is accepted. It selected
 `Milestone 88: Exact Array Body Structural Package Assembly Slice`. Human
 acceptance was recorded, and M88 execution became the active workflow action.
 
+The M88 execution-review loop returned `Accept With Follow-Ups` after one
+focused extensibility revision. Review and audit found no blocking
+implementation, validation, boundary, extensibility, or documentation issues
+after that revision. M88 is accepted as exact array-body structural package
+assembly. It adds focused `tslgen.lowering._array_body_package` ownership,
+assembles accepted M64-M87 exact array-body facts into one source-ordered typed
+structural package, appends the deterministic
+`array_body_structural_package_assembly` stage after the M87 return-emission
+stage, and preserves member object identity/provenance. The focused revision
+ensures protocol-shaped return-emission sources treat their entries as
+untrusted runtime data and diagnose malformed entries instead of raising
+attribute errors. M88 remains typed aggregation/provenance validation only; it
+does not add source-body repair, semantic body lowering, declaration/store/
+return/SVE/backend semantics, renderer-ready IR, rendering, generated output,
+broad TSIL parsing, broad dispatch, hidden backfeeds, or runtime `frozen/` use.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 88.
+Run post-M88 planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m88-execution-review-loop-prompt.md
+docs/agent/runs/post-m88-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 88: Exact Array Body Structural Package Assembly Slice
+None. The next active task is read-only post-M88 planning and review.
 ```
 
 Latest review verdict:
 
 ```text
-M87 execution-review returned Accept With Follow-Ups after one focused
-maintainability revision. Post-M87 planning selected M88 and internal planning
-review returned Accept With Follow-Ups after a focused workflow-state wording
-correction.
+M88 execution-review returned Accept With Follow-Ups after one focused
+extensibility revision for malformed protocol-shaped M87 source entries.
 ```
 
 Next expected action:
 
 ```text
-Run the active M88 execution-review loop prompt. Use one write-capable
-executor, then read-only reviewer/auditor subagents. Do not start post-M88
-planning until M88 review returns Accept or Accept With Follow-Ups.
+Run the active post-M88 planning-plus-review prompt. Focus the next task on
+lowering. Use read-only planning/review subagents, do not implement code, and
+create the next concrete prompt before finishing unless the prompt records a
+stop condition.
 ```
 
 Accepted planning prompt:
@@ -1429,10 +1444,16 @@ Completed post-M87 acceptance-finalization prompt:
 docs/agent/runs/post-m87-acceptance-finalization-prompt.md
 ```
 
-Active M88 execution-review loop prompt:
+Completed M88 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m88-execution-review-loop-prompt.md
+```
+
+Active post-M88 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m88-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2259,18 +2280,17 @@ docs/agent/runs/m88-execution-review-loop-prompt.md
   push it materially past the roughly 1,000-line guardrail, prefer a focused
   private return-emission module with one-way imports and import-boundary
   tests, or document why a temporary exception is safer.
-- Post-M87 planning selected M88 as exact array-body structural package
-  assembly, and human acceptance was recorded. M88 must consume accepted
-  M64-M87 typed facts and assemble one source-ordered typed structural package
-  only.
-- M88 must remain typed aggregation/provenance validation. It must not reparse
-  or repair source bodies, infer declaration/store/return/SVE/backend
-  semantics, query catalogs or backend maps, create renderer-ready IR, render
-  output, generate code/tests, or broaden TSIL/body parsing.
-- M88 should use focused private package ownership, such as
-  `_array_body_package.py`, and must not grow central exact array-body modules
-  into catch-all files or add broad source protocols.
-- Future lowering package decomposition must preserve accepted M57-M87
+- M88 is accepted as exact array-body structural package assembly. It consumes
+  accepted M64-M87 typed facts and assembles one source-ordered typed
+  structural package only.
+- M88 remains typed aggregation/provenance validation. It must not reparse or
+  repair source bodies, infer declaration/store/return/SVE/backend semantics,
+  query catalogs or backend maps, create renderer-ready IR, render output,
+  generate code/tests, or broaden TSIL/body parsing.
+- M88 uses focused private `_array_body_package.py` ownership. Protocol-shaped
+  M87 sources are treated as untrusted runtime data and malformed entries must
+  diagnose rather than raise or become implicit semantic inputs.
+- Future lowering package decomposition must preserve accepted M57-M88
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -3464,8 +3484,8 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run M88 execution through
-the active M88 execution-review loop prompt.
+No stop condition is active. The workflow is ready to run post-M88 planning
+through the active post-M88 planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -3679,3 +3699,32 @@ validation profile returned exit 0 with corpus probes `3 passed`, unit
 discovery `626` tests OK, compileall OK, ruff OK, mypy
 `Success: no issues found in 126 source files`, and diff-check OK. The
 standalone final `git diff --check` returned exit 0 with no output.
+
+For M88, validation completed after the focused extensibility revision with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_sources.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_return_emission.py tslgen/src/tslgen/lowering/_array_body_package.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_sources.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_return_emission.py tslgen/src/tslgen/lowering/_array_body_package.py tslgen/src/tslgen/lowering/_pipeline.py tslgen/src/tslgen/lowering/_stage_contracts.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m88 or structural_package or exact_array_body_pipeline"
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+git diff --check
+```
+
+The M88 line counts were `1183 tslgen/src/tslgen/lowering/boundary.py`,
+`2629 tslgen/src/tslgen/lowering/_array_body_models.py`,
+`950 tslgen/src/tslgen/lowering/_array_body_pipeline.py`,
+`1111 tslgen/src/tslgen/lowering/_array_body_sources.py`,
+`1890 tslgen/src/tslgen/lowering/_array_body_validation.py`,
+`1205 tslgen/src/tslgen/lowering/_array_body_diagnostics.py`,
+`112 tslgen/src/tslgen/lowering/_return_emission.py`,
+`708 tslgen/src/tslgen/lowering/_array_body_package.py`, and `9788 total`.
+The py-compile command returned exit 0 with no output. The focused M88 command
+returned `8 passed, 291 deselected in 3.20s`. The full lowering-boundary suite
+returned `299 passed in 44.20s`. The focused lowering mypy check returned
+`Success: no issues found in 23 source files`. The validation profile returned
+exit 0 with corpus probes `3 passed in 5.98s`, unit discovery `633` tests OK
+in `111.925s`, compileall OK, ruff `All checks passed!`, mypy `Success: no
+issues found in 127 source files`, and diff-check OK. The standalone final
+`git diff --check` returned exit 0 with no output.

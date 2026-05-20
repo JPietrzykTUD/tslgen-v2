@@ -1344,13 +1344,12 @@ predicate semantics, SVE/direct-intrinsic semantics, generic body/declaration/
 array semantics, variable scope, allocation/lifetime, initializer behavior,
 `tmp.data()`, store semantics, broad return semantics, backend uninit
 translation, rendering, output, and broad vector/register metadata policy open.
-Post-M87 planning selects M88 to narrow one more structural question by
-assembling the accepted M64-M87 exact array-body facts into a single typed,
-source-ordered package. That planned package remains structural/provenance
-state only; it still leaves declaration semantics, array semantics, store
-semantics, `tmp.data()` pointer semantics, SVE meaning, return semantics,
-backend uninit translation, renderer-ready IR, generated output, and broad
-TSIL/body semantics open.
+M88 narrows one more structural question by assembling the accepted M64-M87
+exact array-body facts into a single typed, source-ordered package. That
+accepted package remains structural/provenance state only; it still leaves
+declaration semantics, array semantics, store semantics, `tmp.data()` pointer
+semantics, SVE meaning, return semantics, backend uninit translation,
+renderer-ready IR, generated output, and broad TSIL/body semantics open.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1383,9 +1382,9 @@ accepted M84 exact array-body pipeline and source-adapter ownership
 extraction, accepted M85 selected-body lowering ownership extraction, and
 accepted M86 candidate payload-intake and mini-TSIL leaf return lowering
 ownership extraction, accepted M87 exact return-emission structural/request IR,
-and planned M88 exact array-body structural package assembly, while body-slot semantics
-beyond those exact
-structural/request-resolution boundaries, including nested expressions, direct
+and accepted M88 exact array-body structural package assembly, while body-slot
+semantics beyond those exact structural/request-resolution boundaries,
+including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
 `algo`, Rust output, generated tests beyond the selected M49 source fixture,
 CLI/report parity, compiler execution, and broad native rendering.

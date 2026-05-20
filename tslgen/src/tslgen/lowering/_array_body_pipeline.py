@@ -36,6 +36,10 @@ from tslgen.lowering._array_body_models import (
     ExactPostBranchIntrinsicCallSiteStructuralRequestIr,
     ExactReturnEmissionStructuralRequestIr,
 )
+from tslgen.lowering._array_body_package import (
+    ExactArrayBodyStructuralPackageIr,
+    lower_exact_array_body_structural_package,
+)
 from tslgen.lowering._array_body_sources import (
     ExactArrayBodyLoweredImplementationSource,
     ExactArrayBodyPipelineInput,
@@ -137,6 +141,9 @@ class _ExactArrayInitializationStagePipelineResult:
     return_emission_structural_requests: tuple[
         ExactReturnEmissionStructuralRequestIr, ...
     ] = ()
+    array_body_structural_packages: tuple[
+        ExactArrayBodyStructuralPackageIr, ...
+    ] = ()
     pipeline_snapshot: _lowering_pipeline.ExactArrayBodyPipelineSnapshot = field(
         default_factory=_lowering_pipeline.ExactArrayBodyPipelineSnapshot.empty,
     )
@@ -203,6 +210,11 @@ class _ExactArrayInitializationStagePipelineResult:
             "return_emission_structural_requests",
             tuple(self.return_emission_structural_requests),
         )
+        object.__setattr__(
+            self,
+            "array_body_structural_packages",
+            tuple(self.array_body_structural_packages),
+        )
         object.__setattr__(self, "pipeline_snapshot", self.pipeline_snapshot)
         object.__setattr__(self, "stages", tuple(self.stages))
 
@@ -255,6 +267,9 @@ class _ExactArrayInitializationStagePipelineResult:
             ),
             tuple(
                 request.key for request in self.return_emission_structural_requests
+            ),
+            tuple(
+                package.key for package in self.array_body_structural_packages
             ),
             self.pipeline_snapshot.key,
             tuple(stage.key for stage in self.stages),
@@ -364,6 +379,15 @@ def _return_emission_structural_request_stage(
 ) -> GenerationLoweringStage:
     return GenerationLoweringStage(
         stage="return_emission_structural_request_lowering",
+        output=output,
+    )
+
+
+def _array_body_structural_package_stage(
+    output: ExactArrayBodyStructuralPackageIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="array_body_structural_package_assembly",
         output=output,
     )
 
@@ -684,6 +708,24 @@ def _lower_exact_array_initialization_stage_pipeline(
     return_emission_stage = _return_emission_structural_request_stage(
         return_emission,
     )
+    structural_package_result = lower_exact_array_body_structural_package(
+        return_emission_stage,
+        request.generation_context,
+        selected_candidate_id=item.candidate_id,
+        target_extension=item.candidate.target_extension,
+        source_extension=item.candidate.source_extension,
+        selected_type_tag=(
+            item.candidate.type_tag
+            if request.generation_context.use_candidate_type_tag
+            else None
+        ),
+    )
+    if not structural_package_result.is_ok:
+        return Result.failure(structural_package_result.diagnostics)
+    structural_package = structural_package_result.unwrap()
+    structural_package_stage = _array_body_structural_package_stage(
+        structural_package,
+    )
     pipeline_stages = (
         array_body_stage,
         array_initialization_slot_form_stage,
@@ -697,6 +739,7 @@ def _lower_exact_array_initialization_stage_pipeline(
         predicate_path_stage,
         post_branch_call_site_stage,
         return_emission_stage,
+        structural_package_stage,
     )
     pipeline_snapshot = _lowering_pipeline.ExactArrayBodyPipelineSnapshot(
         steps=(
@@ -805,6 +848,22 @@ def _lower_exact_array_initialization_stage_pipeline(
                     "post_branch_intrinsic_call_site_structural_request",
                 ),
             ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="array_body_structural_package_assembly",
+                stage=structural_package_stage,
+                artifact_kind="array_body_structural_package",
+                artifact_key=structural_package.key,
+                artifact_value=structural_package,
+                depends_on=(
+                    "array_body_envelope",
+                    "array_initialization_helper_set_completion",
+                    "array_initialization_declaration_shell",
+                    "array_body_structural_sequence",
+                    "predicate_path_structural_request",
+                    "post_branch_intrinsic_call_site_structural_request",
+                    "return_emission_structural_request",
+                ),
+            ),
         ),
     )
 
@@ -838,6 +897,7 @@ def _lower_exact_array_initialization_stage_pipeline(
                 post_branch_call_site,
             ),
             return_emission_structural_requests=(return_emission,),
+            array_body_structural_packages=(structural_package,),
             pipeline_snapshot=pipeline_snapshot,
             stages=pipeline_stages,
         )

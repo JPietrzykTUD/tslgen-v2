@@ -672,13 +672,15 @@ operands, implement return semantics, evaluate variable lifetime/scope, add
 backend translation, render output, or turn nearby malformed forms into
 supported syntax. Nearby forms are diagnostic cases.
 
-M88 is planned as the exact array-body structural package assembly slice. It
-should assemble accepted M64-M87 exact array-body facts into one typed,
-source-ordered structural package for the selected `array.tsl:105-111` body.
-Missing, duplicate, mismatched, out-of-order, or provenance-inconsistent facts
-should produce diagnostics rather than source repair. M88 must not implement
-declaration, array, store, return, pointer, SVE, backend, renderer, generated-
-output, or broad TSIL body semantics.
+M88 is accepted as the exact array-body structural package assembly slice. It
+assembles accepted M64-M87 exact array-body facts into one typed, source-
+ordered structural package for the selected `array.tsl:105-111` body and adds
+the deterministic `array_body_structural_package_assembly` stage after
+`return_emission_structural_request_lowering`. Missing, duplicate, malformed,
+mismatched, out-of-order, or provenance-inconsistent facts produce diagnostics
+rather than source repair. M88 does not implement declaration, array, store,
+return, pointer, SVE, backend, renderer, generated-output, or broad TSIL body
+semantics.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic

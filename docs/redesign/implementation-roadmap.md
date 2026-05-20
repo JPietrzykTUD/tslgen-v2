@@ -11317,8 +11317,9 @@ Next concrete prompt:
 
 Status:
 
-Planned. Post-M87 planning selected M88 as the next lowering-focused
-milestone. Human acceptance is required before execution.
+Accepted. The M88 execution-review loop returned `Accept With Follow-Ups`
+after one focused extensibility revision for malformed protocol-shaped M87
+source entries.
 
 Goal:
 
@@ -11416,6 +11417,25 @@ typed structural package over the accepted M64-M87 facts and rejects missing,
 duplicate, mismatched, or provenance-inconsistent inputs with diagnostics. It
 must not produce backend/rendering/output artifacts or semantic body nodes.
 
+Execution result:
+
+- Added focused `tslgen.lowering._array_body_package` ownership for
+  `ExactArrayBodyStructuralPackageIr`, package members, source selection, and
+  package diagnostics.
+- Added the deterministic `array_body_structural_package_assembly` stage after
+  `return_emission_structural_request_lowering`.
+- The package consumes accepted typed M64-M87 facts, preserves member object
+  identity/provenance, validates candidate/source-extension/target-extension/
+  selected-type/source-order consistency, and returns diagnostics for missing,
+  duplicate, malformed, mismatched, or provenance-inconsistent facts.
+- The focused revision treats protocol-shaped
+  `return_emission_structural_requests` entries as untrusted runtime data and
+  diagnoses malformed entries instead of raising attribute errors.
+- M88 remains structural aggregation/provenance validation only; it did not
+  add source-body repair, semantic body lowering, declaration/store/return/
+  SVE/backend semantics, renderer-ready IR, rendering, generated output, broad
+  TSIL parsing, broad dispatch, hidden backfeeds, or runtime `frozen/` use.
+
 Evidence paths:
 
 - `tsldata/primitives/load_store/array.tsl:105-111` for the exact source
@@ -11425,7 +11445,7 @@ Evidence paths:
 - `tslgen/src/tslgen/lowering/_array_body_pipeline.py` for deterministic
   stage wiring and pipeline snapshot identity.
 - `tslgen/src/tslgen/lowering/_return_emission.py` for the focused M87 stage
-  ownership pattern that M88 should follow.
+  ownership pattern that M88 followed.
 - `tslgen/src/tslgen/lowering/_pipeline.py` and
   `_stage_contracts.py` for stage/output contract updates.
 - `tslgen/tests/unit/test_lowering_boundary.py` for accepted exact array-body
@@ -11486,5 +11506,5 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m87-acceptance-finalization-prompt.md` records human
-  acceptance and creates the M88 execution-review loop prompt.
+- `docs/agent/runs/post-m88-planning-plus-review-prompt.md` runs the next
+  lowering-focused planning pass.
