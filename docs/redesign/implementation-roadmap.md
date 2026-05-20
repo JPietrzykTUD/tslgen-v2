@@ -12106,15 +12106,18 @@ Next concrete prompt:
 
 Status:
 
-Selected by accepted post-M91 planning. Human acceptance is recorded. M92 is
-ready for execution through
-`docs/agent/runs/m92-execution-review-loop-prompt.md`.
+Accepted. Selected by accepted post-M91 planning and implemented through
+`docs/agent/runs/m92-execution-review-loop-prompt.md`. The M92
+execution-review loop returned `Accept With Follow-Ups`; review and audit
+found no blocking implementation, validation, boundary, extensibility, or
+evidence issues after a focused documentation update recorded the M92
+diagnostics and final roadmap/status wording.
 
 Goal:
 
 Create the typed lowering-side handoff request that lets future backend
 planning consume the accepted M90 exact array lowering completion package
-without reaching back through pipeline internals. M92 should bridge Stage 8
+without reaching back through pipeline internals. M92 bridges Stage 8
 lowering completion to a future Stage 9 backend-planning boundary while
 remaining request/provenance data only.
 
@@ -12211,6 +12214,23 @@ Validation commands:
 - `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
 - `git diff --check`
 
+Validation result:
+
+- Line counts were `1245 tslgen/src/tslgen/lowering/boundary.py`,
+  `616 tslgen/src/tslgen/lowering/_array_body_pipeline.py`,
+  `667 tslgen/src/tslgen/lowering/_array_body_backend_handoff.py`, and
+  `2528 total`.
+- The py-compile command returned exit 0 with no output.
+- The focused M92 command returned `17 passed, 306 deselected in 12.13s`.
+- The full lowering-boundary suite returned `323 passed in 107.02s`.
+- The focused lowering mypy check returned
+  `Success: no issues found in 28 source files`.
+- The validation profile returned exit 0 with corpus probes
+  `3 passed in 10.44s`, unit discovery `657` tests OK in `239.885s`,
+  compileall OK, ruff `All checks passed!`, mypy
+  `Success: no issues found in 132 source files`, and diff-check OK.
+- The standalone final `git diff --check` returned exit 0 with no output.
+
 Review risks:
 
 - Creating a wrapper-only abstraction that does not add a concrete typed
@@ -12228,5 +12248,5 @@ Review risks:
 
 Next concrete prompt:
 
-- `docs/agent/runs/m92-execution-review-loop-prompt.md` runs the accepted M92
-  execution-review loop.
+- `docs/agent/runs/post-m92-planning-plus-review-prompt.md` runs the next
+  lowering-focused planning pass.

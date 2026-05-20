@@ -7,6 +7,9 @@ from tslgen.lowering._array_body_backend_deferred_requests import (
 from tslgen.lowering._array_body_completion_package import (
     ExactArrayLoweringCompletionPackageIr,
 )
+from tslgen.lowering._array_body_backend_handoff import (
+    ExactArrayBackendHandoffRequestIr,
+)
 from tslgen.lowering._array_body_models import (
     ExactArrayBodyEnvelopeIr,
     ExactArrayBodyStructuralSequenceIr,
@@ -165,6 +168,15 @@ def _array_lowering_completion_package_stage(
     )
 
 
+def _array_backend_handoff_request_stage(
+    output: ExactArrayBackendHandoffRequestIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="array_backend_handoff_request",
+        output=output,
+    )
+
+
 def _assemble_exact_array_initialization_stage_pipeline_result(
     *,
     array_body_stage: GenerationLoweringStage,
@@ -197,6 +209,8 @@ def _assemble_exact_array_initialization_stage_pipeline_result(
     backend_deferred_inventory: ExactArrayBackendDeferredRequestInventoryIr,
     completion_package_stage: GenerationLoweringStage,
     completion_package: ExactArrayLoweringCompletionPackageIr,
+    backend_handoff_request_stage: GenerationLoweringStage,
+    backend_handoff_request: ExactArrayBackendHandoffRequestIr,
 ) -> _ExactArrayInitializationStagePipelineResult:
     pipeline_stages = (
         array_body_stage,
@@ -214,6 +228,7 @@ def _assemble_exact_array_initialization_stage_pipeline_result(
         structural_package_stage,
         backend_deferred_inventory_stage,
         completion_package_stage,
+        backend_handoff_request_stage,
     )
     pipeline_snapshot = _assemble_exact_array_body_pipeline_snapshot(
         array_body_stage=array_body_stage,
@@ -248,6 +263,8 @@ def _assemble_exact_array_initialization_stage_pipeline_result(
         backend_deferred_inventory=backend_deferred_inventory,
         completion_package_stage=completion_package_stage,
         completion_package=completion_package,
+        backend_handoff_request_stage=backend_handoff_request_stage,
+        backend_handoff_request=backend_handoff_request,
     )
 
     return _ExactArrayInitializationStagePipelineResult(
@@ -284,6 +301,7 @@ def _assemble_exact_array_initialization_stage_pipeline_result(
             backend_deferred_inventory,
         ),
         array_lowering_completion_packages=(completion_package,),
+        array_backend_handoff_requests=(backend_handoff_request,),
         pipeline_snapshot=pipeline_snapshot,
         stages=pipeline_stages,
     )
@@ -321,6 +339,8 @@ def _assemble_exact_array_body_pipeline_snapshot(
     backend_deferred_inventory: ExactArrayBackendDeferredRequestInventoryIr,
     completion_package_stage: GenerationLoweringStage,
     completion_package: ExactArrayLoweringCompletionPackageIr,
+    backend_handoff_request_stage: GenerationLoweringStage,
+    backend_handoff_request: ExactArrayBackendHandoffRequestIr,
 ) -> _lowering_pipeline.ExactArrayBodyPipelineSnapshot:
     return _lowering_pipeline.ExactArrayBodyPipelineSnapshot(
         steps=(
@@ -460,6 +480,14 @@ def _assemble_exact_array_body_pipeline_snapshot(
                 artifact_key=completion_package.key,
                 artifact_value=completion_package,
                 depends_on=("array_backend_deferred_request_inventory",),
+            ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="array_backend_handoff_request",
+                stage=backend_handoff_request_stage,
+                artifact_kind="array_backend_handoff_request",
+                artifact_key=backend_handoff_request.key,
+                artifact_value=backend_handoff_request,
+                depends_on=("array_lowering_completion_package",),
             ),
         ),
     )

@@ -713,11 +713,11 @@ imports, selected-branch-only behavior, pipeline snapshots, backend
 boundaries, rendering/output behavior, broad TSIL/body semantics, or
 source-body repair policy.
 
-Post-M91 planning selects M92 as an exact array lowering backend-handoff
-request slice. It should consume the accepted M90 completion package through
-the stable M91 pipeline ownership and produce one typed lowering-side request
-for later backend planning. The request is not backend planning, backend
-translation, renderer-ready IR, or generated output: it preserves accepted
+M92 is accepted as an exact array lowering backend-handoff request slice. It
+consumes the accepted M90 completion package through stable M91 pipeline
+ownership and produces one typed lowering-side request for later backend
+planning. The request is not backend planning, backend translation,
+renderer-ready IR, or generated output: it preserves accepted
 completion-package and unresolved-dependency identity/provenance while leaving
 backend-uninit resolution and declaration/array/store/return/SVE/body
 semantics open.

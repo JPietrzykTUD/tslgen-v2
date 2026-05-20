@@ -1154,18 +1154,22 @@ Recommended first parity checks:
   27 source files, and full tooling validation success with corpus probes
   `3 passed`, unit discovery `650` tests OK, compileall OK, ruff OK, mypy OK
   across 131 source files, and diff-check OK.
-- Planned M92 coverage should prove exact array lowering backend-handoff
-  request behavior without backend planning. Tests should cover positive
-  direct M90 completion-package input, M90 stage-output input, and narrowly
-  validated one-completion source input; identity/provenance preservation for
-  accepted M90/M89/M88/M72/M67 values; diagnostics for unsupported, missing,
-  duplicate, malformed, context-mismatched, source-location-mismatched,
-  wrong-dependency-set, wrong-policy, and provenance-mismatched inputs;
-  deterministic stage order after `array_lowering_completion_package`;
-  selected-branch-only behavior; pipeline snapshot stability; import-boundary
-  checks; and negative assertions that no backend map reads, backend-uninit
-  resolution, Stage 9 planning, rendering, generated output, source repair, or
-  generic backend-value evaluation is introduced.
+- M92 execution added exact array lowering backend-handoff request coverage
+  without backend planning. Tests cover direct M90 completion-package input,
+  M90 stage-output input, narrowly validated one-completion source input,
+  identity/provenance preservation for accepted M90/M89/M88/M72/M67 values,
+  diagnostics for unsupported, missing, duplicate, malformed, context-
+  mismatched, source-location-mismatched, wrong-dependency-set, wrong-policy,
+  and provenance-mismatched inputs, deterministic stage order after
+  `array_lowering_completion_package`, selected-branch-only behavior, pipeline
+  snapshot stability, import-boundary checks, and negative assertions that no
+  backend map reads, backend-uninit resolution, Stage 9 planning, rendering,
+  generated output, source repair, or generic backend-value evaluation is
+  introduced. Validation returned focused M92 `17 passed, 306 deselected`,
+  full lowering-boundary `323 passed`, focused lowering mypy success across
+  28 source files, and full tooling validation success with corpus probes
+  `3 passed`, unit discovery `657` tests OK, compileall OK, ruff OK, mypy OK
+  across 132 source files, and diff-check OK.
 
 Deferred parity checks:
 

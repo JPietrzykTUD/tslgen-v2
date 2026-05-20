@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 91 is accepted.
+Milestone 92 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -795,43 +795,59 @@ creating Stage 9 backend plans, producing renderer-ready IR, rendering output,
 or inferring declaration/array/store/return/SVE/body semantics. Planning
 review returned `Accept With Follow-Ups`, with backend-boundary and
 wrapper-only-abstraction guardrails recorded as non-blocking follow-ups. Human
-acceptance is recorded, and M92 execution is the active workflow action.
+acceptance is recorded.
+
+The M92 execution-review loop returned `Accept With Follow-Ups` after a
+focused documentation update recorded the M92 diagnostics and final
+roadmap/status wording. Review and audit found no blocking implementation,
+validation, boundary, extensibility, documentation, or evidence issues after
+that revision. M92 is accepted as exact Stage 8 array lowering backend-handoff
+request work. It adds focused
+`tslgen.lowering._array_body_backend_handoff` ownership, consumes accepted M90
+completion packages through M91 stable pipeline ownership, produces one typed
+`array_backend_handoff_request` for later backend planning, appends that stage
+after `array_lowering_completion_package`, and preserves accepted
+M90/M89/M88/M72/M67 identity and provenance. M92 remains lowering-side
+request/provenance data only; it does not resolve backend-uninit, read backend
+maps/catalogs, create Stage 9 plans, create renderer-ready IR, render output,
+generate artifacts, infer declaration/array/store/return/SVE/body semantics,
+repair source text, broaden protocols, introduce hidden backfeeds, or add
+fixpoint machinery.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 92.
+Run post-M92 planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m92-execution-review-loop-prompt.md
+docs/agent/runs/post-m92-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 92: Exact Array Lowering Backend-Handoff Request Slice
+None. The active workflow is post-M92 planning.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M91 planning is accepted. It selected M92 and returned
-Accept With Follow-Ups. Follow-ups are to keep M92 a concrete typed
-lowering-side request, not a wrapper-only abstraction and not Stage 9 backend
-planning.
+M92 execution-review returned Accept With Follow-Ups. The blocking
+documentation mismatch was fixed locally; the remaining wording follow-up was
+also cleaned up during finalization.
 ```
 
 Next expected action:
 
 ```text
-Run the active M92 execution-review loop prompt. Use exactly one write-capable
-executor followed by read-only review/audit subagents. Do not start post-M92
-planning until M92 review returns Accept or Accept With Follow-Ups.
+Run the active post-M92 planning-plus-review prompt. Use the specified
+read-only planning/review/audit subagents. Do not implement code unless the
+prompt explicitly selects an executor task.
 ```
 
 Accepted planning prompt:
@@ -1614,10 +1630,16 @@ Completed post-M91 acceptance-finalization prompt:
 docs/agent/runs/post-m91-acceptance-finalization-prompt.md
 ```
 
-Active M92 execution-review loop prompt:
+Completed M92 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m92-execution-review-loop-prompt.md
+```
+
+Active post-M92 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m92-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2494,6 +2516,10 @@ docs/agent/runs/m92-execution-review-loop-prompt.md
   may consume accepted typed M90 completion packages through M91 stable
   ownership and produce one concrete typed handoff request for later backend
   planning, but it must not resolve backend values or start backend planning.
+- M92 uses focused private `_array_body_backend_handoff.py` ownership for the
+  handoff request. Future work must not stretch that module into backend
+  planning, generic backend-helper evaluation, broad source protocols,
+  renderer-ready IR, or generated-output ownership.
 - M92 must preserve accepted M64-M91 diagnostics, source locations, stage
   names/order, output identities, deterministic keys, selected-branch-only
   behavior, public imports, no-external-input boundaries, and pipeline
@@ -2501,7 +2527,7 @@ docs/agent/runs/m92-execution-review-loop-prompt.md
   create renderer-ready IR, render output, broaden TSIL parsing, repair source
   bodies, infer declaration/array/store/return/SVE/body semantics, introduce
   broad protocols, hidden backfeeds, fixpoint machinery, or hardwiring.
-- Future lowering package decomposition must preserve accepted M57-M91
+- Future lowering package decomposition must preserve accepted M57-M92
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -3732,17 +3758,20 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   compatibility facade. M91 did not grow it, but future lowering milestones
   should continue avoiding new ownership there and should prefer focused
   private modules with one-way imports.
-- Post-M91 planning follow-up for M92 execution: keep M92 as a concrete typed
-  lowering-side handoff request and not a wrapper-only abstraction.
-- Post-M91 planning follow-up for M92 execution: unresolved dependency records
-  remain typed request/provenance facts only. They must not become backend map
-  keys, resolved backend text, renderer slots, artifact paths, scheduling
-  decisions, broad protocols, hidden backfeeds, or fixpoint machinery.
+- M92 execution addressed the post-M91 planning follow-ups: review verified
+  the slice is a concrete typed lowering-side handoff request, not a wrapper-
+  only abstraction, and unresolved dependency records remain request/
+  provenance facts rather than backend map keys, resolved backend text,
+  renderer slots, artifact paths, scheduling decisions, broad protocols,
+  hidden backfeeds, or fixpoint machinery.
+- M92 documentation re-review follow-up was addressed during finalization:
+  wording in `generation-time-semantic-lowering.md` and `pipeline-design.md`
+  no longer calls accepted M92 the "next" step.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M92 through the
-active M92 execution-review loop prompt.
+No stop condition is active. The workflow is ready for post-M92 planning
+through the active post-M92 planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -3804,6 +3833,35 @@ git diff --check
 ```
 
 The command returned exit 0 with no output.
+
+For M92, validation completed with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_backend_handoff.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_pipeline_results.py tslgen/src/tslgen/lowering/_array_body_stage_assembly.py tslgen/src/tslgen/lowering/_array_body_completion_package.py tslgen/src/tslgen/lowering/_array_body_backend_handoff.py tslgen/src/tslgen/lowering/_pipeline.py tslgen/src/tslgen/lowering/_stage_contracts.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m92 or backend_handoff or lowering_completion or exact_array_body_pipeline"
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+git diff --check
+```
+
+Validation results:
+
+- Line counts: `1245 tslgen/src/tslgen/lowering/boundary.py`,
+  `616 tslgen/src/tslgen/lowering/_array_body_pipeline.py`,
+  `667 tslgen/src/tslgen/lowering/_array_body_backend_handoff.py`, and
+  `2528 total`.
+- Py-compile returned exit 0 with no output.
+- Focused M92 pytest returned `17 passed, 306 deselected in 12.13s`.
+- Full lowering-boundary pytest returned `323 passed in 107.02s`.
+- Focused lowering mypy returned
+  `Success: no issues found in 28 source files`.
+- Full tooling validation returned exit 0 with corpus probes
+  `3 passed in 10.44s`, unit discovery `657` tests OK in `239.885s`,
+  compileall OK, ruff `All checks passed!`, mypy
+  `Success: no issues found in 132 source files`, and diff-check OK.
+- Standalone final `git diff --check` returned exit 0 with no output.
 
 For post-M91 planning, validation completed with:
 

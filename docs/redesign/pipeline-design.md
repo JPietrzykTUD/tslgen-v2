@@ -754,9 +754,9 @@ does not introduce broad dispatchers, hidden recursive backfeeds, fixpoint
 coordination, backend planning, rendering, generated output, or broad source
 protocols.
 
-Post-M91 planning selects M92 as the next Stage 8 exact array handoff step.
-The proposed `array_backend_handoff_request` stage should run after
-`array_lowering_completion_package` and consume the accepted M90 completion
+M92 is accepted as a Stage 8 exact array handoff step. The
+`array_backend_handoff_request` stage runs after
+`array_lowering_completion_package` and consumes the accepted M90 completion
 package to produce one typed lowering-side backend handoff request for later
 Stage 9 work. The stage is still Stage 8 request/provenance data: it must not
 resolve backend uninit, read backend maps/catalogs, create Stage 9 plans,

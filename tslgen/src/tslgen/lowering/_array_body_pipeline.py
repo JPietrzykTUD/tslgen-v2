@@ -34,6 +34,9 @@ from tslgen.lowering._array_body_backend_deferred_requests import (
 from tslgen.lowering._array_body_completion_package import (
     lower_exact_array_lowering_completion_package,
 )
+from tslgen.lowering._array_body_backend_handoff import (
+    lower_exact_array_backend_handoff_request,
+)
 from tslgen.lowering._array_body_pipeline_results import (
     _ExactArrayInitializationStagePipelineResult,
 )
@@ -499,6 +502,26 @@ def _lower_exact_array_initialization_stage_pipeline(
             completion_package,
         )
     )
+    backend_handoff_request_result = lower_exact_array_backend_handoff_request(
+        completion_package_stage,
+        request.generation_context,
+        selected_candidate_id=item.candidate_id,
+        target_extension=item.candidate.target_extension,
+        source_extension=item.candidate.source_extension,
+        selected_type_tag=(
+            item.candidate.type_tag
+            if request.generation_context.use_candidate_type_tag
+            else None
+        ),
+    )
+    if not backend_handoff_request_result.is_ok:
+        return Result.failure(backend_handoff_request_result.diagnostics)
+    backend_handoff_request = backend_handoff_request_result.unwrap()
+    backend_handoff_request_stage = (
+        _array_body_stage_assembly._array_backend_handoff_request_stage(
+            backend_handoff_request,
+        )
+    )
 
     return Result.ok(
         _array_body_stage_assembly._assemble_exact_array_initialization_stage_pipeline_result(
@@ -538,6 +561,8 @@ def _lower_exact_array_initialization_stage_pipeline(
             backend_deferred_inventory=backend_deferred_inventory,
             completion_package_stage=completion_package_stage,
             completion_package=completion_package,
+            backend_handoff_request_stage=backend_handoff_request_stage,
+            backend_handoff_request=backend_handoff_request,
         )
     )
 

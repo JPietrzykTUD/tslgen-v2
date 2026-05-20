@@ -813,14 +813,14 @@ snapshots. It does not add new semantic lowering, backend planning, backend
 map reads, renderer-ready IR, rendering, generated output, broad TSIL parsing,
 source-body repair, broad protocols, hidden backfeeds, or fixpoint machinery.
 
-Post-M91 planning selects M92 as the next exact Stage 8 lowering handoff
-boundary. M92 should consume accepted M90 completion packages through M91
-stable ownership and produce one typed exact array backend-handoff request for
-later backend planning. It must remain request/provenance data only: no
-backend-uninit resolution, backend maps/catalog reads, Stage 9 backend
-planning, backend translation, renderer-ready IR, rendering, generated output,
-generic backend helper evaluation, source-body repair, broad protocols, hidden
-backfeeds, or fixpoint machinery.
+M92 is accepted as an exact Stage 8 lowering handoff boundary. It consumes
+accepted M90 completion packages through M91 stable ownership and produces one
+typed exact array backend-handoff request for later backend
+planning. It remains request/provenance data only: no backend-uninit
+resolution, backend maps/catalog reads, Stage 9 backend planning, backend
+translation, renderer-ready IR, rendering, generated output, generic backend
+helper evaluation, source-body repair, broad protocols, hidden backfeeds, or
+fixpoint machinery.
 
 M61 diagnostics:
 
@@ -1181,6 +1181,34 @@ M90 diagnostics:
   request record, or completion dependency disagree on object identity or
   required provenance.
 
+M92 diagnostics:
+
+- `TSL-LOWER-ARRAY-BACKEND-HANDOFF-SOURCE-UNSUPPORTED`: backend-handoff
+  request lowering was invoked with something other than an accepted M90
+  completion package, the M90 completion-package stage output, or a narrow
+  source carrying exactly one accepted M90 completion package.
+- `TSL-LOWER-ARRAY-BACKEND-HANDOFF-COMPLETION-MISSING`: the narrow source
+  lacks the required accepted M90 completion package.
+- `TSL-LOWER-ARRAY-BACKEND-HANDOFF-COMPLETION-MULTIPLE`: the narrow source
+  carries more than one M90 completion package where M92 requires exactly one.
+- `TSL-LOWER-ARRAY-BACKEND-HANDOFF-CONTEXT-MISMATCH`: candidate id,
+  extension, selected type, or branch-chain context does not match the
+  accepted M90 completion package, accepted M89 inventory, or supplied
+  selected-candidate context.
+- `TSL-LOWER-ARRAY-BACKEND-HANDOFF-SOURCE-LOCATION-MISMATCH`: the accepted
+  M90 package, M89 inventory/member, or unresolved-dependency source
+  locations no longer match the provenance expected by the handoff request.
+- `TSL-LOWER-ARRAY-BACKEND-HANDOFF-DEPENDENCY-SET-MISMATCH`: the accepted M90
+  completion package does not contain exactly the single supported
+  `value_backend_uninit_array` unresolved backend-value dependency.
+- `TSL-LOWER-ARRAY-BACKEND-HANDOFF-POLICY-MISMATCH`: the accepted M90
+  unresolved dependency no longer preserves the `deferred_backend_value`
+  policy required for request/provenance handoff.
+- `TSL-LOWER-ARRAY-BACKEND-HANDOFF-PROVENANCE-MISMATCH`: the accepted M90
+  package, accepted M89 inventory member, accepted M88 structural package, M72
+  deferred backend-uninit value, or M67 backend-value request record disagree
+  on required object identity or provenance.
+
 ## Explicit Deferrals
 
 Deferred beyond the implemented M43-M76 semantic-lowering, structural
@@ -1204,7 +1232,7 @@ accepted M87 exact return-emission structural/request IR, accepted M88 exact
 array-body structural package assembly, accepted M89 exact array
 backend-deferred request inventory, accepted M90 exact array lowering
 completion-package handoff, accepted M91 behavior-preserving exact array
-pipeline ownership consolidation, and planned M92 exact array lowering
+pipeline ownership consolidation, and accepted M92 exact array lowering
 backend-handoff request:
 
 - Full TSIL grammar and general expression evaluation.

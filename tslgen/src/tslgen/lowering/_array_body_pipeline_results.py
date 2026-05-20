@@ -9,6 +9,9 @@ from tslgen.lowering._array_body_backend_deferred_requests import (
 from tslgen.lowering._array_body_completion_package import (
     ExactArrayLoweringCompletionPackageIr,
 )
+from tslgen.lowering._array_body_backend_handoff import (
+    ExactArrayBackendHandoffRequestIr,
+)
 from tslgen.lowering._array_body_models import (
     ExactArrayBodyEnvelopeIr,
     ExactArrayBodyStructuralSequenceIr,
@@ -73,6 +76,9 @@ class _ExactArrayInitializationStagePipelineResult:
     ] = ()
     array_lowering_completion_packages: tuple[
         ExactArrayLoweringCompletionPackageIr, ...
+    ] = ()
+    array_backend_handoff_requests: tuple[
+        ExactArrayBackendHandoffRequestIr, ...
     ] = ()
     pipeline_snapshot: _lowering_pipeline.ExactArrayBodyPipelineSnapshot = field(
         default_factory=_lowering_pipeline.ExactArrayBodyPipelineSnapshot.empty,
@@ -155,6 +161,11 @@ class _ExactArrayInitializationStagePipelineResult:
             "array_lowering_completion_packages",
             tuple(self.array_lowering_completion_packages),
         )
+        object.__setattr__(
+            self,
+            "array_backend_handoff_requests",
+            tuple(self.array_backend_handoff_requests),
+        )
         object.__setattr__(self, "pipeline_snapshot", self.pipeline_snapshot)
         object.__setattr__(self, "stages", tuple(self.stages))
 
@@ -219,6 +230,9 @@ class _ExactArrayInitializationStagePipelineResult:
             tuple(
                 package.key
                 for package in self.array_lowering_completion_packages
+            ),
+            tuple(
+                request.key for request in self.array_backend_handoff_requests
             ),
             self.pipeline_snapshot.key,
             tuple(stage.key for stage in self.stages),
