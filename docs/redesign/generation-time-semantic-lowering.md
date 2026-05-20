@@ -842,6 +842,16 @@ package families, broad source protocols, backend planning, renderer-ready IR,
 source repair, registries, dispatchers, hidden backfeeds, or fixpoint
 machinery.
 
+Post-M94 planning selects M95 as a focused selected-body direct-intrinsic
+operation-package family over already accepted M63 `SelectedBodyEnvelopeIr`
+values and the enclosed accepted M62 `SelectedAssignmentDirectIntrinsicBodyIr`.
+With human acceptance recorded, M95 may package the exact singleton
+selected-body envelope as typed Stage 8 provenance only. It must not parse raw
+selected-body text, validate or interpret `svptrue_b*`/`pg` as SVE semantics,
+infer byte size or backend support from tokens, repair source bodies, create
+renderer-ready IR, or introduce backend planning, registries, dispatchers,
+hidden backfeeds, or fixpoint machinery.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`

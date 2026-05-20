@@ -12633,3 +12633,140 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m94-planning-plus-review-prompt.md` runs post-M94
   planning and review with a lowering focus.
+
+### Milestone 95: Selected-Body Direct-Intrinsic Operation Package Slice
+
+Status:
+
+Planned. Post-M94 planning selected this milestone and internal planning,
+boundary, extensibility, and documentation review returned
+`Accept With Follow-Ups`. Human acceptance was recorded before M95 execution
+became the active workflow action.
+
+Goal:
+
+Add one focused Stage 8 lowering operation-package family for already accepted
+selected-body direct-intrinsic facts. M95 proves the post-M94 package design
+can grow by family-specific typed ownership without turning
+`_operation_package_sources.py` into a generic source protocol or dispatcher.
+
+Scope:
+
+- Consume only accepted M63 `SelectedBodyEnvelopeIr` values from the
+  `selected_body_envelope_lowering` stage or equivalent narrow typed
+  container input.
+- Preserve the enclosed accepted M62 `SelectedAssignmentDirectIntrinsicBodyIr`
+  as the source of typed selected-body direct-intrinsic provenance.
+- Add exactly one package source family, such as
+  `selected_body_direct_intrinsic`, with one focused package entry for the
+  exact singleton selected-body assignment/direct-intrinsic envelope already
+  accepted by M62/M63.
+- Preserve candidate id, selected type tag, selected literal, originating
+  branch-chain id, assignment target text, direct-intrinsic token text,
+  original selected body text, source location, and deterministic keys as
+  typed provenance.
+- Produce no selected-body direct-intrinsic package for
+  `NoSelectedBodyEnvelopeIr`, except a clear diagnostic when that source family
+  is explicitly requested.
+- Keep existing M86 mini-TSIL leaf-return and M92 exact-array backend-handoff
+  package behavior, public imports, package keys, diagnostics, stage ordering,
+  snapshots, object identity, deterministic ordering, and
+  selected-branch-only behavior stable.
+- Put selected-body package validation and entry ownership in a focused module
+  such as `_operation_package_selected_body.py`; `_operation_package_sources.py`
+  may receive only narrow explicit integration and must not become a generic
+  source dispatcher or protocol.
+
+Out of scope:
+
+- Backend translation, backend map/catalog reads, backend-uninit resolution,
+  Stage 9 backend planning, renderer-ready IR, rendering, generated C++ or
+  Rust output, generated tests, CLI/report/writer behavior, compiler
+  execution, or Rust.
+- Direct-intrinsic/SVE predicate semantics, `pg` type/scope proof, byte-size
+  to `svptrue_b*` inference, vector metadata, store/return semantics, primitive
+  dependency closure, operation scheduling, wrapper planning, or artifact
+  planning.
+- Raw selected-body text parsing, source-body repair, nearby malformed body
+  acceptance, broad TSIL/body parsing, generic operation registries, callback
+  maps, package-family registries, semantic dispatchers, hidden backfeeds,
+  fixpoint machinery, or placeholder package kinds for future families.
+- Treating `svptrue_b16`, `svptrue_b32`, `svptrue_b64`, `pg`, selected
+  literals, selected type tags, extension ids, primitive names, backend ids, or
+  corpus line numbers as semantic dispatch keys.
+
+Required input:
+
+- Accepted M62 `SelectedAssignmentDirectIntrinsicBodyIr` and
+  `NoSelectedAssignmentDirectIntrinsicBodyIr` behavior and diagnostics.
+- Accepted M63 `SelectedBodyEnvelopeIr` and `NoSelectedBodyEnvelopeIr`
+  behavior, source locations, deterministic keys, and stage output contracts.
+- Accepted M93/M94 `LoweringOperationPackageIr` behavior, package source-family
+  distinction, facade imports, diagnostics, and module-size/import guardrails.
+
+Expected outputs:
+
+- A focused selected-body direct-intrinsic operation-package entry/family over
+  accepted M63/M62 typed values.
+- Stable public operation-package facade imports for the new family, if a
+  public import is added.
+- Deterministic package keys and stage/snapshot integration that preserve
+  source-family identity and object provenance.
+- Diagnostics for unsupported source, wrong stage/source family, no selected
+  body, malformed/non-singleton envelope state, context/source-location
+  mismatch, and provenance mismatch.
+- Tests proving no raw text parsing, SVE/direct-intrinsic interpretation,
+  backend planning, renderer-ready IR, source repair, registry/dispatcher, or
+  second operation-package monolith is introduced.
+
+Tests required:
+
+- Positive tests for direct accepted M63 envelope input, stage input, and
+  narrow lowered-implementation/container input where applicable.
+- Negative tests for `NoSelectedBodyEnvelopeIr`, unsupported stages, malformed
+  envelopes, source-family mismatch, candidate/source-location mismatch, and
+  M62/M63 provenance mismatch.
+- Determinism tests for package keys and reordered typed inputs.
+- Pipeline/stage tests proving selected-body packages append after
+  `selected_body_envelope_lowering` without changing existing M86/M92 package
+  behavior.
+- Import-boundary and line-count tests proving focused operation-package
+  modules keep one-way imports and stay comfortably below the 1,000-line
+  guardrail.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/_operation_package.py tslgen/src/tslgen/lowering/_operation_package_*.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_operation_package.py tslgen/src/tslgen/lowering/_operation_package_*.py tslgen/src/tslgen/lowering/_selected_body_models.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_pipeline.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m95 or operation_package or selected_body"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Growing `_operation_package_sources.py` from a narrow accepted-source bridge
+  into a generic source protocol, dispatcher, callback map, or package-family
+  registry.
+- Interpreting `svptrue_b*`, `pg`, selected literals, type tags, primitive
+  names, extension ids, backend ids, or source locations as semantic dispatch
+  keys instead of preserving them as typed provenance.
+- Treating selected-body package creation as SVE/direct-intrinsic semantics,
+  backend planning, renderer-ready IR, broad body parsing, or source-body
+  repair.
+- Creating a new private operation-package module that becomes a replacement
+  monolith despite the M94 split.
+
+Planning follow-ups:
+
+- The M95 executor prompt must explicitly prevent
+  `_operation_package_sources.py` from becoming a generic source protocol or
+  dispatcher while adding this third package family.
+- A future maintainability pass may tighten the current operation-package
+  private-module line-count ceiling below 1,000 lines.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m94-acceptance-finalization-prompt.md` converts human
+  acceptance of this post-M94 plan into the M95 execution-review-loop prompt.

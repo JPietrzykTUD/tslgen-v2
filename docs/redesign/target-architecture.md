@@ -698,6 +698,14 @@ Current roadmap note:
   keep one-way imports, preserve the accepted M93 public facade, and avoid
   becoming broad source protocols, registries, dispatchers, backend-planning
   hooks, renderer hooks, or replacement monoliths.
+- Post-M94 planning selects M95 as a focused package-family growth test over
+  accepted M63/M62 selected-body direct-intrinsic facts. The architecture
+  should add selected-body package ownership in a family-specific private
+  module rather than expanding `_operation_package_sources.py` into a generic
+  source protocol, registry, dispatcher, or callback map. The package records
+  typed provenance only and must not infer SVE/direct-intrinsic semantics,
+  byte-size-to-token mappings, backend support, renderer-ready IR, source
+  repairs, hidden backfeeds, or fixpoint behavior.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

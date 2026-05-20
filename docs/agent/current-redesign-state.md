@@ -875,39 +875,52 @@ full tooling validation with corpus probes `3 passed`, unittest discovery
 `665` tests OK, compileall OK, ruff OK, mypy OK across `138` source files,
 and diff-check OK.
 
+Post-M94 planning selected
+`Milestone 95: Selected-Body Direct-Intrinsic Operation Package Slice`, and
+internal planner, boundary, extensibility, and documentation review returned
+`Accept With Follow-Ups`. Human acceptance was recorded, and M95 execution
+became the active workflow action. The selected plan adds one focused Stage 8
+operation-package family over accepted M63 selected-body envelopes and the
+enclosed accepted M62 selected assignment/direct-intrinsic body IR. It records
+`pg`, `svptrue_b*`, selected literals, type tags, branch ids, and source
+locations as provenance only; it must not infer SVE/direct-intrinsic
+semantics, byte-size-to-token mappings, backend support, renderer-ready IR,
+source repairs, registries, dispatchers, hidden backfeeds, or fixpoint
+behavior.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M94 planning and review with a lowering focus.
+Execute Milestone 95 through the active execution-review-loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m94-planning-plus-review-prompt.md
+docs/agent/runs/m95-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. M94 is accepted; the active action is post-M94 planning.
+Milestone 95: Selected-Body Direct-Intrinsic Operation Package Slice
 ```
 
 Latest review verdict:
 
 ```text
-M94 execution-review loop returned Accept With Follow-Ups after one focused
-validation-coverage revision.
+Post-M94 planning/review returned Accept With Follow-Ups with no blocking
+issues, and human acceptance was recorded.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M94 planning-plus-review prompt. Focus on lowering. Do not
-implement code unless the prompt explicitly selects an executor task. Before
-finishing, update this state file and create the next concrete run prompt.
+Run the active M95 execution-review-loop prompt. Use exactly one write-capable
+executor followed by read-only review/audit subagents. Before finishing,
+update this state file and create the next concrete run prompt.
 ```
 
 Accepted planning prompt:
@@ -1732,10 +1745,22 @@ Completed M94 execution-review loop prompt:
 docs/agent/runs/m94-execution-review-loop-prompt.md
 ```
 
-Active post-M94 planning-plus-review prompt:
+Completed post-M94 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m94-planning-plus-review-prompt.md
+```
+
+Completed post-M94 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m94-acceptance-finalization-prompt.md
+```
+
+Active M95 execution-review loop prompt:
+
+```text
+docs/agent/runs/m95-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2643,6 +2668,25 @@ docs/agent/runs/post-m94-planning-plus-review-prompt.md
   backend translation, renderer-ready IR, rendering, generated output, broad
   source protocols, registries, semantic dispatchers, hidden backfeeds,
   fixpoint machinery, source repair, or hardwiring.
+- Post-M94 planning selected M95 as a Stage 8 operation-package family slice
+  over accepted M63 `SelectedBodyEnvelopeIr` values and enclosed accepted M62
+  `SelectedAssignmentDirectIntrinsicBodyIr` values. Human acceptance was
+  recorded, and M95 is active for execution.
+- M95 must preserve selected-body direct-intrinsic facts as typed provenance
+  only. `svptrue_b16`, `svptrue_b32`, `svptrue_b64`, `pg`, selected literals,
+  selected type tags, branch ids, extension ids, primitive names, backend ids,
+  and source locations must not become semantic dispatch keys.
+- M95 must not infer byte size, vector width, predicate meaning, backend
+  support, or SVE/direct-intrinsic semantics from direct-intrinsic tokens. It
+  must not parse raw selected-body text, repair source bodies, add backend
+  translation, Stage 9 planning, renderer-ready IR, rendering, generated
+  output, broad TSIL/body semantics, registries, dispatchers, hidden
+  backfeeds, fixpoint machinery, or hardwiring.
+- M95 must isolate selected-body package validation and entry ownership in a
+  focused module such as `_operation_package_selected_body.py`.
+  `_operation_package_sources.py` may receive only narrow explicit integration
+  and must not become a generic source protocol, callback map, registry, or
+  dispatcher.
 - Future lowering package decomposition must preserve accepted M57-M94
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -3905,11 +3949,16 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   operation-package module remains below 1,000 lines. A future maintainability
   pass may choose a tighter threshold for operation-package private modules so
   a near-guardrail replacement monolith cannot technically pass.
+- Post-M94 planning follow-up for M95 execution: prevent
+  `_operation_package_sources.py` from growing into a generic source protocol,
+  callback map, registry, or dispatcher while adding the selected-body
+  direct-intrinsic package family. Use focused selected-body package ownership
+  and keep `svptrue_b*`/`pg` fields as provenance only.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready for post-M94 planning
-through the active post-M94 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M95 through the
+active M95 execution-review-loop prompt.
 
 ## Validation Expectations
 

@@ -1389,6 +1389,11 @@ intentionally leaves new package families, semantic primitive calls, dependency
 closure, backend-uninit resolution, Stage 9 planning, renderer-ready body IR,
 generated output, broad body semantics, and broad `value<backend>(...)`
 evaluation open.
+Post-M94 planning selects one new package family for M95, but only over
+accepted M63/M62 selected-body direct-intrinsic facts. This does not resolve
+SVE/direct-intrinsic semantics, byte-size-to-token inference, backend support,
+primitive dependencies, Stage 9 planning, renderer-ready body IR, generated
+output, broad body semantics, or broad `value<backend>(...)` evaluation.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,

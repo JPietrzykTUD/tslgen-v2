@@ -740,6 +740,16 @@ keys, identities, stage order, and public import behavior. It adds no new
 lowering semantics, new operation families, backend planning, renderer-ready
 IR, broad source protocols, semantic dispatchers, or source-body repair.
 
+Post-M94 planning selects M95 as the next focused package-family slice. With
+human acceptance recorded, M95 is the active execution milestone for packaging
+only accepted M63 `SelectedBodyEnvelopeIr` selected cases and their enclosed
+accepted M62 selected assignment/direct-intrinsic body IR as typed Stage 8
+operation-package provenance. `svptrue_b16`,
+`svptrue_b32`, `svptrue_b64`, `pg`, selected literals, and selected type tags
+remain preserved fields, not semantics or dispatch keys. No package is
+produced for `NoSelectedBodyEnvelopeIr` except diagnostics when the selected
+body direct-intrinsic family is explicitly requested.
+
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
 suffix request over typed M43 `GenerationTypeRef` inputs. Milestone 46
