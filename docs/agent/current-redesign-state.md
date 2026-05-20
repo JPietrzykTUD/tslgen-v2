@@ -656,39 +656,44 @@ translation, rendering, generated output, extension-specific shortcuts,
 file/catalog reads, `tsldata` reads, host CPU queries, backend map reads, or
 runtime `frozen/` use.
 
+Post-M86 planning is accepted. It selected
+`Milestone 87: Exact Return-Emission Structural Request IR Slice`. Human
+acceptance was recorded, and M87 execution became the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Plan the next lowering milestone after M86.
+Execute Milestone 87.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m86-planning-plus-review-prompt.md
+docs/agent/runs/m87-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The next executor milestone has not been selected.
+Milestone 87: Exact Return-Emission Structural Request IR Slice.
 ```
 
 Latest review verdict:
 
 ```text
-M86 execution-review returned Accept with no focused revision. Review and
-audit found no blocking issues after finalization.
+Post-M86 planning is accepted after human acceptance. M87 execution is the
+next action.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M86 planning-plus-review prompt. Use the specified
-read-only planning/review subagents. Do not implement product code and do not
-start M87 execution unless a later accepted prompt explicitly selects it.
+Run the active M87 execution-review-loop prompt. Use one write-capable
+executor, then read-only review/audit subagents as specified there. Do not
+start post-M87 planning until M87 review returns Accept or Accept With
+Follow-Ups.
 ```
 
 Accepted planning prompt:
@@ -1369,10 +1374,22 @@ Completed M86 execution-review loop prompt:
 docs/agent/runs/m86-execution-review-loop-prompt.md
 ```
 
-Active post-M86 planning-plus-review prompt:
+Completed post-M86 planning prompt:
 
 ```text
 docs/agent/runs/post-m86-planning-plus-review-prompt.md
+```
+
+Completed post-M86 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m86-acceptance-finalization-prompt.md
+```
+
+Active M87 execution-review loop prompt:
+
+```text
+docs/agent/runs/m87-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2164,6 +2181,33 @@ docs/agent/runs/post-m86-planning-plus-review-prompt.md
   private modules must not import `boundary.py`, `tslgen.lowering`, selected-
   body lowering modules, exact array-body modules, backend modules, renderers,
   `tsldata`, or `frozen/`.
+- M87 is generation-time/lowering structural-request work only.
+- M87 consumes accepted M74 `ExactArrayBodyStructuralSequenceIr` provenance
+  and accepted M76 post-branch call-site provenance as typed inputs.
+- M87 records only the exact trailing `emit_return(tmp);` source shape,
+  allowing insignificant whitespace.
+- The M87 returned token must match the accepted M73 declaration-shell
+  variable token as provenance only.
+- M87 must not correct, normalize, rewrite, complete, reorder, or guess the
+  intended meaning of malformed `.tsl` implementation bodies.
+- Nearby or malformed return-emission forms are M87 diagnostic boundaries, not
+  supported syntax.
+- M87 must not broaden `emit_return(...)`, lower expressions inside
+  `emit_return`, implement return-value semantics, variable lifetime/scope,
+  `tmp.data()` semantics, store/call semantics, array semantics, backend
+  translation, renderer-ready IR, rendering, generated output, generated
+  tests, CLI/report/writer behavior, Rust, compiler execution, broad TSIL
+  parsing, registries, dispatchers, plugin systems, raw helper dispatch, raw
+  text rewriting, fixpoint/backfeed machinery, file/catalog reads, `tsldata`
+  reads during lowering evaluation, backend map reads, host CPU queries, or
+  runtime `frozen/` use.
+- M87 must preserve accepted M64-M86 diagnostics, source locations, stage
+  names/order, output identities, deterministic keys, selected-branch-only
+  behavior, public imports, and pipeline snapshots.
+- If M87 would turn an existing exact array-body module into a catch-all or
+  push it materially past the roughly 1,000-line guardrail, prefer a focused
+  private return-emission module with one-way imports and import-boundary
+  tests, or document why a temporary exception is safer.
 - Future lowering package decomposition must preserve accepted M57-M86
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -3322,14 +3366,32 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   return-lowering ownership moved into `_mini_tsil_lowering.py`, request/result
   models and `_lower_input` remained facade-owned, accepted behavior stayed
   stable, and the private modules keep the planned one-way import direction.
-- M86 continuing follow-up: exact return-emission structural/request IR remains
-  a high-value semantic frontier after the facade cleanup, but it is not part
-  of M86.
+- Post-M86 planning selects
+  `Milestone 87: Exact Return-Emission Structural Request IR Slice`, and human
+  acceptance was recorded. M87 should consume accepted M74 structural sequence
+  provenance plus accepted M76 post-branch call-site provenance and record only
+  the exact trailing `emit_return(tmp);` structural request, allowing
+  insignificant whitespace and requiring `tmp` to match the accepted
+  declaration-shell variable token.
+- M87 must treat implementation bodies as source inputs, not repair targets.
+  It may recognize the exact selected return-emission shape and emit typed IR;
+  nearby or malformed forms are diagnostics/negative tests, not extra
+  supported syntax. It must not correct, normalize into a different shape,
+  infer intended operands, broaden `emit_return(...)`, interpret return value
+  semantics, evaluate variable lifetime/scope, interpret `tmp.data()`, lower
+  stores, add backend translation/rendering/output, or read catalogs,
+  `tsldata`, backend maps, host CPU state, or `frozen/` at lowering time.
+- Post-M86 planning also records durable workflow guardrails in `AGENTS.md`:
+  lowering must not fix possibly wrong `.tsl` implementation bodies, and
+  future implementation work should keep production files cohesive, prefer
+  focused modules and encapsulated typed ownership, and plan a split or
+  explicit temporary exception when a file approaches roughly 1,000 physical
+  lines.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run post-M86 planning
-through the active post-M86 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to run the active M87
+execution-review-loop prompt.
 
 ## Validation Expectations
 

@@ -1584,6 +1584,15 @@ Consequences:
   slice first because payload classification and mini-TSIL leaf lowering are
   still facade-owned after M85 and can move behind typed private boundaries
   without changing behavior.
+- Post-M86 planning selects M87 as exact return-emission structural/request
+  IR. This is the first semantic step after the M77-M86 cleanup, but it is
+  deliberately still structural/request-only: recognize the exact trailing
+  `emit_return(tmp);` slot from the accepted array-body path, link the returned
+  token to accepted declaration-shell provenance, and emit diagnostics for
+  nearby or malformed forms. The decision explicitly rejects source-body
+  repair, broad `emit_return(...)` support, return-value semantics,
+  variable lifetime/scope semantics, renderer-ready IR, backend translation,
+  generated output, and generic TSIL statement dispatch.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

@@ -662,6 +662,16 @@ adds no new TSIL syntax, broad return/body semantics, exact return-emission IR,
 backend translation, rendering, generated output, or extension-specific
 behavior.
 
+Post-M86 planning selects M87 as the exact return-emission structural/request
+IR slice. M87 should recognize only the selected trailing array-body slot shaped
+as `emit_return(tmp);` with insignificant whitespace, link the returned token to
+the accepted M73 declaration-shell variable token, and record typed structural
+request data. It must not correct malformed `.tsl` bodies, broaden
+`emit_return(...)`, infer intended operands, implement return semantics,
+evaluate variable lifetime/scope, add backend translation, render output, or
+turn nearby malformed forms into supported syntax. Nearby forms are diagnostic
+cases.
+
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
 suffix request over typed M43 `GenerationTypeRef` inputs. Milestone 46

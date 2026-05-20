@@ -705,6 +705,15 @@ become a broad TSIL parser or dispatcher, and preserve accepted diagnostics,
 source locations, stage ordering, keys, output identities, and deterministic
 pipeline snapshots.
 
+Post-M86 planning selects M87 as the next Stage 8 semantic frontier. M87 should
+add a typed `return_emission_structural_request_lowering` step after the
+accepted M76 post-branch call-site step in the exact array-body pipeline. That
+step records only the exact trailing `emit_return(tmp);` structural request and
+links `tmp` to accepted declaration-shell provenance. It must remain
+diagnostic-first for malformed nearby source and must not repair source text,
+become a generic return parser, interpret return/store/variable semantics, add
+backend translation, or render output.
+
 ## Stage 9: Backend Planning
 
 Inputs:

@@ -11075,7 +11075,184 @@ Execution result:
 - Non-blocking follow-ups: exact return-emission structural/request IR remains
   a high-value semantic frontier after the facade cleanup.
 
+### Milestone 87: Exact Return-Emission Structural Request IR Slice
+
+Status:
+
+Planned after M86; waiting for human acceptance.
+
+Goal:
+
+Add the next lowering semantic frontier after the M77-M86 facade/module cleanup:
+record the exact trailing return-emission-shaped slot from the accepted exact
+array-body path as typed structural/request IR. M87 recognizes only the exact
+source form shaped as `emit_return(tmp);` with insignificant whitespace, links
+the returned token to the accepted M73 declaration-shell variable token, and
+keeps the result structural/request-only.
+
+This is not a `.tsl` body repair milestone. If the source body is wrong,
+nearby, malformed, or merely resembles the selected form, M87 must emit a
+structured diagnostic instead of correcting or broadening the accepted shape.
+
+Scope:
+
+- Add a typed exact return-emission structural/request IR value, such as
+  `ExactReturnEmissionStructuralRequestIr`, behind the private exact array-body
+  lowering boundary.
+- Consume accepted M74 `ExactArrayBodyStructuralSequenceIr` provenance and the
+  accepted M76 post-branch intrinsic call-site structural request as typed
+  inputs so the return-emission request is ordered after the accepted
+  post-branch call-site path without interpreting store semantics.
+- Recognize only the M74 role ordinal `4` /
+  `opaque_return_emission_shaped_slot` source text with the exact
+  `emit_return(<token>);` shape, allowing insignificant whitespace.
+- Require the returned token text to match the accepted M73 declaration-shell
+  variable token carried by the M74 sequence. This is provenance linkage only,
+  not variable lifetime, allocation, or return-value semantics.
+- Add a deterministic `return_emission_structural_request_lowering` stage after
+  the accepted post-branch call-site stage in the exact array-body pipeline.
+- Preserve public facade imports through `tslgen.lowering.boundary` and
+  `tslgen.lowering` if new public aliases are exposed; otherwise keep new
+  model/lowering helpers private and test the public pipeline result.
+- Keep implementation cohesive. If existing exact array-body modules would grow
+  into catch-all files, create a focused private return-emission module with
+  one-way imports rather than adding a large new cluster to an already
+  substantial file.
+
+Out of scope:
+
+- Correcting, normalizing, rewriting, completing, reordering, or guessing the
+  intended meaning of malformed `.tsl` implementation bodies.
+- Supporting broad `emit_return(...)`, expressions inside `emit_return`,
+  multiple return statements, missing semicolons, alternate variables,
+  `tmp.data()`, stores, calls, direct `intrin<...>` semantics, variable
+  lifetime/scope, allocation semantics, array value semantics, or return-value
+  semantics.
+- Backend translation, renderer-ready return IR, rendering, generated C++ or
+  Rust output, generated tests, golden files, CLI/report/writer behavior,
+  compiler execution, or generated-test execution.
+- Broad TSIL parsing, source-file reads during lowering, catalog reads,
+  `tsldata` reads, backend map reads, host CPU queries, runtime dependency on
+  `frozen/`, registries, dispatchers, plugin systems, raw text rewrite
+  engines, raw helper dispatch, or fixpoint/backfeed machinery.
+- Moving unrelated request/result models, `LoweringInputSet`,
+  `prepare_lowering_inputs`, `_lower_input`, `lower_candidates`, selected-body
+  lowering, generation query/control-flow staging, or broad exact array-body
+  orchestration out of `boundary.py`.
+
+Required input:
+
+- Accepted M64-M65 exact array-body envelope and pipeline integration.
+- Accepted M73 declaration-shell structural IR and declaration variable token.
+- Accepted M74 source-ordered array-body structural sequence with role ordinal
+  `4` / `opaque_return_emission_shaped_slot` provenance.
+- Accepted M75 predicate-path and M76 post-branch call-site structural request
+  values as typed ordering/provenance inputs.
+- Accepted M84 exact array-body pipeline/source/lowering module boundaries and
+  M86 public facade behavior.
+- Corpus evidence:
+  `tsldata/primitives/load_store/array.tsl:104-112`, especially the trailing
+  `emit_return(tmp) ;` shape at line 111.
+
+Expected outputs:
+
+- A typed exact return-emission structural/request IR value carrying:
+  source sequence identity, post-branch call-site identity, return role label,
+  slot ordinal `4`, source location, original source text, `emit_return` token,
+  returned token text, declaration-shell variable-token link, candidate id,
+  target extension, source extension, selected type tag, and branch-chain id.
+- Deterministic key/provenance behavior matching accepted M74-M86 conventions.
+- A pipeline stage snapshot entry for the exact return-emission structural
+  request when the exact shape is present.
+- Structured diagnostics for unsupported source, missing return slot, malformed
+  return-emission shape, returned-token mismatch, context mismatch, and
+  provenance mismatch.
+- No backend/rendering/output artifacts and no semantic correction of source
+  bodies.
+
+Parity criterion:
+
+M87 succeeds when the accepted exact array-body lowering path can carry a typed
+return-emission structural/request value for the selected corpus shape, while
+unsupported or malformed nearby forms produce diagnostics. The new IR must be
+proof that lowering can identify the exact return-emission slot as data; it
+must not be proof that return semantics or generated output are implemented.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:104-112` for the selected exact
+  source shape.
+- `tslgen/src/tslgen/lowering/_array_body_models.py` for M73-M76 typed exact
+  array-body model ownership and the new request model location or import
+  boundary.
+- `tslgen/src/tslgen/lowering/_array_body_lowering.py` and, if created, a
+  focused private return-emission module for the exact recognizer/lowerer.
+- `tslgen/src/tslgen/lowering/_array_body_pipeline.py` for deterministic
+  stage wiring and pipeline snapshot identity.
+- `tslgen/src/tslgen/lowering/_exact_shapes.py` for exact structural token
+  constants/regexes, if the implementation adds a focused exact return shape.
+- `tslgen/src/tslgen/lowering/_array_body_diagnostics.py` and
+  `_array_body_validation.py` for diagnostic and input-boundary ownership.
+- `tslgen/tests/unit/test_lowering_boundary.py` for accepted M64-M86
+  lowering behavior, exact array-body pipeline snapshots, diagnostics, and
+  import-boundary tests.
+
+Tests required:
+
+- Focused M87 positive tests for the exact `emit_return(tmp);` shape with
+  whitespace matching the selected corpus style.
+- Tests proving the returned token links to the accepted declaration-shell
+  variable token and does not infer a different variable or repair source
+  text.
+- Negative tests for malformed `emit_return`, wrong returned token, missing
+  semicolon, extra arguments/expression forms, missing return slot, wrong slot
+  ordinal/source role, context mismatch, and provenance mismatch.
+- Pipeline tests proving the new stage appears after the M76 post-branch
+  call-site stage, preserves stage order, keys, output object identity,
+  source locations, deterministic ordering, and selected-branch-only behavior.
+- Import-boundary tests if a new private return-emission module is created:
+  it must not import `boundary.py`, `tslgen.lowering`, backend modules,
+  renderers, or unrelated exact array-body modules as convenience dispatchers.
+- Full lowering-boundary preservation plus focused mypy and tooling
+  validation.
+
+Golden fixtures required:
+
+- None. M87 must not change generated C++ or Rust output.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_lowering.py tslgen/src/tslgen/lowering/_array_body_pipeline.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_lowering.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_exact_shapes.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m87 or return_emission or exact_array_body_pipeline"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Accidentally implementing return semantics, variable lifetime/scope,
+  `tmp.data()`, store-call semantics, backend translation, or renderer-ready
+  return IR instead of structural/request IR.
+- Treating malformed source as something to correct rather than diagnose.
+- Generalizing to broad `emit_return(...)` parsing or a TSIL statement
+  dispatcher.
+- Using raw helper text, extension names, SVE tokens, corpus line numbers,
+  backend ids, renderer names, or request ordinals as direct semantic dispatch
+  shortcuts.
+- Adding another catch-all lowering module or growing an existing exact
+  array-body module without a focused ownership boundary.
+- Changing accepted diagnostics, source locations, stage names/order, output
+  identities, keys, selected-branch-only behavior, public imports, or pipeline
+  snapshots from M64-M86.
+
+Dependencies on prior milestones:
+
+- Milestones 64 through 86.
+
 Next concrete prompt:
 
-- `docs/agent/runs/post-m86-planning-plus-review-prompt.md` runs the next
-  lowering-focused planning pass.
+- `docs/agent/runs/post-m86-acceptance-finalization-prompt.md` records human
+  acceptance of the post-M86 plan and creates the M87 execution-review-loop
+  prompt.

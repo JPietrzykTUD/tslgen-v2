@@ -84,6 +84,37 @@ A lookup table is acceptable only when its entries are typed rule values with do
 
 Do not implement semantic behavior through raw text rewriting. String templates or rendered text may appear only after lowering/translation has produced typed values for the selected slice.
 
+## Source Body Integrity
+
+TSL implementation bodies are source inputs, not repair targets. The generator
+may recognize documented exact forms, lower them into typed IR/facts, and emit
+diagnostics for malformed or unsupported forms. It must not silently correct,
+normalize, rewrite, complete, reorder, or guess the intended meaning of a
+possibly wrong `.tsl` implementation body.
+
+Milestones that handle narrow implementation-body shapes must name the accepted
+forms exactly. Nearby forms, malformed variants, missing operands, surprising
+tokens, or source-data mistakes are negative tests and diagnostic boundaries,
+not invitations to add extra supported syntax. Generated output must reflect
+accepted typed lowering/translation results only, never a best-effort repair of
+the original source text.
+
+## Module Size And Encapsulation Guardrails
+
+Keep production files cohesive and small enough to review. Prefer multiple
+focused modules with explicit ownership, typed value objects, typed rule
+records, and narrow public functions over large catch-all files. Object-oriented
+encapsulation is encouraged when a concept owns state, invariants, or behavior;
+pure functions remain appropriate for simple stateless transformations.
+
+When a production file approaches roughly 1,000 physical lines, or a milestone
+would add a large new responsibility to an already substantial file, the plan
+must either split the work into a focused module or document why a temporary
+exception is safer. New private modules must not become replacement monoliths:
+state their ownership, keep imports one-way where practical, avoid facade
+back-imports, and add boundary tests for public surface stability and import
+direction when the risk is meaningful.
+
 ## Testing Expectations
 
 Every implementation milestone needs tests proportionate to its risk:
