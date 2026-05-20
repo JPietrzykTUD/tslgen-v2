@@ -1335,14 +1335,15 @@ question but still leaves generic declaration/array semantics, allocation/
 lifetime, initializer behavior, variable scope, store/return semantics,
 `tmp.data()`, `emit_return`, backend uninit translation, rendering, output,
 and broad vector/register metadata policy open.
-Milestone 74 implements the next exact structural lowering step: typed
-source-ordered array-body structural sequence and structural/provenance
-slot-role classification for the accepted `array.tsl:105-111` shape. M74
-narrows whole-body structure but still leaves predicate semantics,
-SVE/direct-intrinsic semantics, generic body/declaration/array semantics,
-variable scope, allocation/lifetime, initializer behavior, `tmp.data()`,
-store/return semantics, `emit_return`, backend uninit translation, rendering,
-output, and broad vector/register metadata policy open.
+Milestone 74 implements the exact source-ordered array-body structural
+sequence and structural/provenance slot-role classification for the accepted
+`array.tsl:105-111` shape. M87 later records the exact trailing
+`emit_return(tmp);` slot as structural/request IR only. These milestones narrow
+whole-body structure and one exact return-emission-shaped slot, but still leave
+predicate semantics, SVE/direct-intrinsic semantics, generic body/declaration/
+array semantics, variable scope, allocation/lifetime, initializer behavior,
+`tmp.data()`, store semantics, broad return semantics, backend uninit
+translation, rendering, output, and broad vector/register metadata policy open.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,

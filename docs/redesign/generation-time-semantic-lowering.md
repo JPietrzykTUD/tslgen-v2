@@ -764,14 +764,14 @@ behavior. It does not broaden TSIL parsing, interpret `emit_return(tmp)` or
 return/store/call semantics, introduce raw helper dispatch, or add backend
 translation/rendering/output behavior.
 
-Post-M86 planning selects M87 as exact return-emission structural/request IR.
-The selected slice should consume accepted M74 structural sequence provenance
-and accepted M76 post-branch call-site provenance, then record only the exact
-trailing `emit_return(tmp);` shape with insignificant whitespace. The returned
-token must match the accepted declaration-shell variable token as provenance.
-M87 must not repair wrong `.tsl` bodies, broaden `emit_return(...)`, infer
-return operands, implement return semantics, add renderer-ready IR, or add
-backend/rendering/output behavior. Unsupported nearby forms remain diagnostics.
+M87 is accepted as exact return-emission structural/request IR. The accepted
+slice consumes M74 structural sequence provenance and M76 post-branch call-site
+provenance, then records only the exact trailing `emit_return(tmp);` shape with
+insignificant whitespace. The returned token must match the accepted
+declaration-shell variable token as provenance. M87 does not repair wrong
+`.tsl` bodies, broaden `emit_return(...)`, infer return operands, implement
+return semantics, add renderer-ready IR, or add backend/rendering/output
+behavior. Unsupported nearby forms remain diagnostics.
 
 M61 diagnostics:
 

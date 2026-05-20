@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 86 is accepted.
+Milestone 87 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -660,40 +660,55 @@ Post-M86 planning is accepted. It selected
 `Milestone 87: Exact Return-Emission Structural Request IR Slice`. Human
 acceptance was recorded, and M87 execution became the active workflow action.
 
+The M87 execution-review loop returned `Accept With Follow-Ups` after one
+focused maintainability revision. Review and audit found no blocking
+implementation, validation, boundary, extensibility, documentation, or
+evidence issues after that revision. M87 is accepted as exact return-emission
+structural/request IR. It records only the exact trailing `emit_return(tmp);`
+shape with insignificant whitespace, links the returned token to the accepted
+M73 declaration-shell variable token through accepted M74/M76 provenance, and
+adds the deterministic `return_emission_structural_request_lowering` stage
+after the accepted M76 post-branch call-site stage. M87 added focused
+`tslgen.lowering._return_emission` ownership and did not add source-body
+repair, broad `emit_return(...)`, return/store/variable semantics, backend
+translation, rendering, generated output, broad TSIL parsing, or runtime
+`frozen/` use. The focused revision removed M87 output from the shared runtime
+lowered-implementation source protocol to avoid broad protocol/backfeed creep.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 87.
+Plan the next lowering milestone after M87.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m87-execution-review-loop-prompt.md
+docs/agent/runs/post-m87-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 87: Exact Return-Emission Structural Request IR Slice.
+None. The next executor milestone has not been selected.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M86 planning is accepted after human acceptance. M87 execution is the
-next action.
+M87 execution-review returned Accept With Follow-Ups after one focused
+maintainability revision.
 ```
 
 Next expected action:
 
 ```text
-Run the active M87 execution-review-loop prompt. Use one write-capable
-executor, then read-only review/audit subagents as specified there. Do not
-start post-M87 planning until M87 review returns Accept or Accept With
-Follow-Ups.
+Run the active post-M87 planning-plus-review prompt. For the next task, focus
+on lowering. Use the specified read-only planning/review subagents. Do not
+implement product code and do not start M88 execution unless a later accepted
+prompt explicitly selects it.
 ```
 
 Accepted planning prompt:
@@ -1386,10 +1401,16 @@ Completed post-M86 acceptance-finalization prompt:
 docs/agent/runs/post-m86-acceptance-finalization-prompt.md
 ```
 
-Active M87 execution-review loop prompt:
+Completed M87 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m87-execution-review-loop-prompt.md
+```
+
+Active post-M87 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m87-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2204,11 +2225,19 @@ docs/agent/runs/m87-execution-review-loop-prompt.md
 - M87 must preserve accepted M64-M86 diagnostics, source locations, stage
   names/order, output identities, deterministic keys, selected-branch-only
   behavior, public imports, and pipeline snapshots.
+- M87 is accepted as exact return-emission structural/request IR. It records
+  only typed structural/provenance data in `ExactReturnEmissionStructuralRequestIr`
+  and appends the deterministic `return_emission_structural_request_lowering`
+  stage after the M76 post-branch call-site stage.
+- M87's focused `_return_emission.py` module consumes direct M76 call-site
+  values, the M76 stage output, or a private M76-only source protocol. It must
+  not broaden the shared runtime lowered-implementation source protocol with
+  M87 output.
 - If M87 would turn an existing exact array-body module into a catch-all or
   push it materially past the roughly 1,000-line guardrail, prefer a focused
   private return-emission module with one-way imports and import-boundary
   tests, or document why a temporary exception is safer.
-- Future lowering package decomposition must preserve accepted M57-M86
+- Future lowering package decomposition must preserve accepted M57-M87
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -3387,11 +3416,23 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   focused modules and encapsulated typed ownership, and plan a split or
   explicit temporary exception when a file approaches roughly 1,000 physical
   lines.
+- M87 execution addressed the blocking extensibility review finding with a
+  focused revision: `_return_emission.py` now consumes direct M76 call-site
+  values, the M76 stage output, or a private M76-only source protocol, and the
+  shared runtime lowered-implementation source protocol no longer includes
+  `return_emission_structural_requests`.
+- M87 non-blocking follow-up: improve the returned-token mismatch diagnostic
+  so it names the actual returned token and expected declaration token.
+- M87 maintainability follow-up: future exact array-body stages should split
+  stage-specific source, validation, and diagnostic ownership instead of
+  continuing to grow central exact array-body modules.
+- M87 validation-hardening follow-up: future import-boundary tests may
+  prefix-match backend/rendering submodules and include `frozen` / `tsldata`.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M87
-execution-review-loop prompt.
+No stop condition is active. The workflow is ready to run post-M87 planning
+through the active post-M87 planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -3580,3 +3621,28 @@ exit 0 with corpus probes `3 passed`, unit discovery `620` tests OK,
 compileall OK, ruff OK, mypy `Success: no issues found in 125 source files`,
 and diff-check OK. The standalone final `git diff --check` returned exit 0
 with no output.
+
+For M87, validation completed with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_lowering.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_return_emission.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_lowering.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_sources.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_return_emission.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m87 or return_emission or exact_array_body_pipeline"
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+git diff --check
+```
+
+The M87 line counts were `1163 tslgen/src/tslgen/lowering/boundary.py`,
+`2629 tslgen/src/tslgen/lowering/_array_body_models.py`,
+`1378 tslgen/src/tslgen/lowering/_array_body_lowering.py`,
+`890 tslgen/src/tslgen/lowering/_array_body_pipeline.py`, and
+`112 tslgen/src/tslgen/lowering/_return_emission.py`. The focused M87
+command returned `6 passed, 286 deselected in 2.18s`. The full
+lowering-boundary suite returned `292 passed in 39.25s`. The focused lowering
+mypy check returned `Success: no issues found in 22 source files`. The
+validation profile returned exit 0 with corpus probes `3 passed`, unit
+discovery `626` tests OK, compileall OK, ruff OK, mypy
+`Success: no issues found in 126 source files`, and diff-check OK. The
+standalone final `git diff --check` returned exit 0 with no output.

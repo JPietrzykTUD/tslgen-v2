@@ -2480,3 +2480,150 @@ class ExactPostBranchIntrinsicCallSiteStructuralRequestIr:
     @property
     def source_location(self) -> SourceLocation:
         return self.post_branch_source_location
+
+
+@dataclass(frozen=True, slots=True)
+class ExactReturnEmissionStructuralRequestIr:
+    source_post_branch_call_site: ExactPostBranchIntrinsicCallSiteStructuralRequestIr
+    source_sequence: ExactArrayBodyStructuralSequenceIr
+    return_role_label: Literal["opaque_return_emission_shaped_slot"]
+    return_slot_ordinal: Literal[4]
+    return_source_location: SourceLocation
+    original_return_source_text: str
+    emit_return_token_text: str
+    returned_token_text: str
+    declaration_variable_token_text: str
+    candidate_id: str
+    target_extension: str
+    source_extension: str
+    selected_type_tag: str
+    originating_branch_chain_id: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(
+            self.source_post_branch_call_site,
+            ExactPostBranchIntrinsicCallSiteStructuralRequestIr,
+        ):
+            raise TypeError(
+                "return-emission structural request requires an M76 "
+                "post-branch call-site request"
+            )
+        if self.source_sequence is not self.source_post_branch_call_site.source_sequence:
+            raise ValueError(
+                "return-emission structural request must preserve the M74 "
+                "sequence carried by M76"
+            )
+        if self.return_role_label != "opaque_return_emission_shaped_slot":
+            raise ValueError(
+                "return-emission structural request requires the M74 "
+                "return-emission-shaped role"
+            )
+        if self.return_slot_ordinal != 4:
+            raise ValueError(
+                "return-emission structural request slot ordinal must be 4"
+            )
+        if self.return_source_location is None:
+            raise ValueError(
+                "return-emission structural request requires a source location"
+            )
+        if not self.original_return_source_text.strip():
+            raise ValueError(
+                "return-emission structural request requires source text"
+            )
+        if (
+            self.emit_return_token_text
+            != _exact_shapes.EXACT_RETURN_EMISSION_CALL_HEAD_TOKEN
+        ):
+            raise ValueError(
+                "return-emission structural request records only the exact "
+                "emit_return token"
+            )
+        if not self.returned_token_text:
+            raise ValueError(
+                "return-emission structural request returned token must be non-empty"
+            )
+        if (
+            self.declaration_variable_token_text
+            != self.source_sequence.declaration_shell.variable_token
+            or self.returned_token_text != self.declaration_variable_token_text
+        ):
+            raise ValueError(
+                "return-emission returned token must link only to the accepted "
+                "M73 declaration-shell variable token"
+            )
+        if len(self.source_sequence.roles) <= 4:
+            raise ValueError(
+                "return-emission structural request requires M74 role ordinal 4"
+            )
+        return_role = self.source_sequence.roles[4]
+        if (
+            return_role.role_label != self.return_role_label
+            or return_role.role_ordinal != self.return_slot_ordinal
+            or return_role.source_location != self.return_source_location
+            or return_role.opaque_source_text != self.original_return_source_text
+        ):
+            raise ValueError(
+                "return-emission source text and slot provenance must match the "
+                "accepted M74 return role carried by M76"
+            )
+        for field_name in (
+            "candidate_id",
+            "target_extension",
+            "source_extension",
+            "selected_type_tag",
+            "originating_branch_chain_id",
+        ):
+            if not getattr(self, field_name):
+                raise ValueError(
+                    f"return-emission structural request {field_name} "
+                    "must be non-empty"
+                )
+        if (
+            self.candidate_id != self.source_post_branch_call_site.candidate_id
+            or self.target_extension
+            != self.source_post_branch_call_site.target_extension
+            or self.source_extension
+            != self.source_post_branch_call_site.source_extension
+            or self.selected_type_tag
+            != self.source_post_branch_call_site.selected_type_tag
+            or self.originating_branch_chain_id
+            != self.source_post_branch_call_site.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "return-emission structural request provenance must match M76"
+            )
+        if (
+            self.candidate_id != self.source_sequence.candidate_id
+            or self.target_extension != self.source_sequence.target_extension
+            or self.source_extension != self.source_sequence.source_extension
+            or self.selected_type_tag != self.source_sequence.selected_type_tag
+            or self.originating_branch_chain_id
+            != self.source_sequence.originating_branch_chain_id
+        ):
+            raise ValueError(
+                "return-emission structural request provenance must match M74"
+            )
+
+    @property
+    def key(self) -> tuple[object, ...]:
+        return (
+            "exact_return_emission_structural_request_ir",
+            self.source_post_branch_call_site.key,
+            self.source_sequence.key,
+            self.return_role_label,
+            self.return_slot_ordinal,
+            self.return_source_location.sort_key(),
+            self.original_return_source_text,
+            self.emit_return_token_text,
+            self.returned_token_text,
+            self.declaration_variable_token_text,
+            self.candidate_id,
+            self.target_extension,
+            self.source_extension,
+            self.selected_type_tag,
+            self.originating_branch_chain_id,
+        )
+
+    @property
+    def source_location(self) -> SourceLocation:
+        return self.return_source_location

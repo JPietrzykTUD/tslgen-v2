@@ -30,6 +30,7 @@ from tslgen.lowering._array_body_models import (
     ExactArrayInitializationVectorLengthResolutionIr,
     ExactArrayInitializationVectorLengthValue,
     ExactPredicatePathStructuralRequestIr,
+    ExactPostBranchIntrinsicCallSiteStructuralRequestIr,
     _EXACT_ARRAY_BODY_ENVELOPE_SLOT_LABELS,
     _EXACT_ARRAY_BODY_ENVELOPE_SLOT_ORDINALS,
     _EXACT_ARRAY_BODY_STRUCTURAL_ROLE_LABELS,
@@ -1687,6 +1688,119 @@ def _validate_post_branch_intrinsic_call_site_input(
         )
 
     return diagnostics
+
+
+def _validate_return_emission_structural_request_input(
+    post_branch_call_site: ExactPostBranchIntrinsicCallSiteStructuralRequestIr,
+) -> tuple[Diagnostic, ...]:
+    diagnostics: list[Diagnostic] = []
+    if not isinstance(
+        post_branch_call_site,
+        ExactPostBranchIntrinsicCallSiteStructuralRequestIr,
+    ):
+        return (
+            _array_body_diagnostics._return_emission_source_unsupported_diagnostic(
+                "return-emission structural request lowering requires an "
+                "accepted M76 "
+                "ExactPostBranchIntrinsicCallSiteStructuralRequestIr source",
+                None,
+            ),
+        )
+
+    sequence = post_branch_call_site.source_sequence
+    if not isinstance(sequence, ExactArrayBodyStructuralSequenceIr):
+        return (
+            _array_body_diagnostics._return_emission_slot_missing_diagnostic(
+                "return-emission structural request lowering requires M74 "
+                "structural sequence provenance carried by M76",
+                post_branch_call_site.source_location,
+            ),
+        )
+    if post_branch_call_site.source_sequence is not (
+        post_branch_call_site.source_predicate_path.source_sequence
+    ):
+        diagnostics.append(
+            _array_body_diagnostics._return_emission_provenance_mismatch_diagnostic(
+                "return-emission structural request requires the M76 call-site "
+                "request to preserve the M74 sequence carried by M75",
+                post_branch_call_site.source_location,
+            )
+        )
+    if (
+        post_branch_call_site.candidate_id != sequence.candidate_id
+        or post_branch_call_site.target_extension != sequence.target_extension
+        or post_branch_call_site.source_extension != sequence.source_extension
+        or post_branch_call_site.selected_type_tag != sequence.selected_type_tag
+        or post_branch_call_site.originating_branch_chain_id
+        != sequence.originating_branch_chain_id
+    ):
+        diagnostics.append(
+            _array_body_diagnostics._return_emission_context_mismatch_diagnostic(
+                "return-emission structural request requires M76 candidate, "
+                "extension, selected type, and branch-chain context to match "
+                "the carried M74 sequence",
+                post_branch_call_site.source_location,
+            )
+        )
+    if len(sequence.roles) <= 4:
+        diagnostics.append(
+            _array_body_diagnostics._return_emission_slot_missing_diagnostic(
+                "return-emission structural request requires the accepted M74 "
+                "opaque_return_emission_shaped_slot at role ordinal 4",
+                sequence.source_location,
+            )
+        )
+        return tuple(diagnostics)
+
+    return_role = sequence.roles[4]
+    if (
+        return_role.role_label != "opaque_return_emission_shaped_slot"
+        or return_role.role_ordinal != 4
+        or not isinstance(return_role.envelope_slot, ExactArrayBodyEnvelopeOpaqueSlot)
+        or return_role.opaque_source_text
+        != return_role.envelope_slot.opaque_source_text
+    ):
+        diagnostics.append(
+            _array_body_diagnostics._return_emission_provenance_mismatch_diagnostic(
+                "return-emission structural request requires M74 role ordinal "
+                "4 to preserve the accepted opaque return-emission slot",
+                return_role.source_location,
+            )
+        )
+    if diagnostics:
+        return tuple(diagnostics)
+
+    source_text = return_role.opaque_source_text
+    if source_text is None:
+        return (
+            _array_body_diagnostics._return_emission_malformed_diagnostic(
+                "return-emission structural request requires the accepted M74 "
+                "opaque source text",
+                return_role.source_location,
+            ),
+        )
+
+    match = _exact_shapes.EXACT_RETURN_EMISSION_SLOT_RE.match(source_text)
+    if match is None:
+        return (
+            _array_body_diagnostics._return_emission_malformed_diagnostic(
+                "return-emission structural request recognizes only the exact "
+                "trailing shape 'emit_return(tmp);' with insignificant whitespace",
+                return_role.source_location,
+            ),
+        )
+
+    returned_token = match.group("returned_token")
+    declaration_token = sequence.declaration_shell.variable_token
+    if returned_token != declaration_token:
+        return (
+            _array_body_diagnostics._return_emission_returned_token_mismatch_diagnostic(
+                "return-emission returned token must match the accepted M73 "
+                "declaration-shell variable token",
+                return_role.source_location,
+            ),
+        )
+    return ()
 
 
 def _exact_array_body_envelope_shape_is_supported(

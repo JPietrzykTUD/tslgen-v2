@@ -30,6 +30,7 @@ from tslgen.lowering._array_body_models import (
     ExactArrayBodyStructuralSequenceIr,
     ExactPredicatePathStructuralRequestIr,
     ExactPostBranchIntrinsicCallSiteStructuralRequestIr,
+    ExactReturnEmissionStructuralRequestIr,
 )
 from tslgen.lowering._generation_models import (
     GenerationSizeByteBranchChainPruning,
@@ -196,6 +197,14 @@ class ExactArrayBodyLoweredImplementationSource(Protocol):
     def generation_stages(self) -> tuple[GenerationLoweringStage, ...]: ...
 
 
+@runtime_checkable
+class _ReturnEmissionPostBranchCallSiteSource(Protocol):
+    @property
+    def post_branch_intrinsic_call_site_structural_requests(
+        self,
+    ) -> tuple[ExactPostBranchIntrinsicCallSiteStructuralRequestIr, ...]: ...
+
+
 
 def _stage_output_location(
     output: GenerationLoweringStageOutput,
@@ -231,6 +240,7 @@ def _stage_output_location(
             ExactArrayBodyStructuralSequenceIr,
             ExactPredicatePathStructuralRequestIr,
             ExactPostBranchIntrinsicCallSiteStructuralRequestIr,
+            ExactReturnEmissionStructuralRequestIr,
         ),
     ):
         return output.source_location
@@ -753,6 +763,85 @@ def _post_branch_intrinsic_call_site_source(
             ),
         )
     )
+
+
+def _return_emission_structural_request_source(
+    source: object,
+) -> Result[ExactPostBranchIntrinsicCallSiteStructuralRequestIr]:
+    if isinstance(source, ExactPostBranchIntrinsicCallSiteStructuralRequestIr):
+        return Result.ok(source)
+
+    if isinstance(source, GenerationLoweringStage):
+        if (
+            source.stage
+            == "post_branch_intrinsic_call_site_structural_request_lowering"
+            and isinstance(
+                source.output,
+                ExactPostBranchIntrinsicCallSiteStructuralRequestIr,
+            )
+        ):
+            return Result.ok(source.output)
+        return Result.failure(
+            (
+                _array_body_diagnostics._return_emission_source_unsupported_diagnostic(
+                    "return-emission structural request lowering consumes "
+                    "accepted M76 "
+                    "ExactPostBranchIntrinsicCallSiteStructuralRequestIr "
+                    "values, the "
+                    "post_branch_intrinsic_call_site_structural_request_lowering "
+                    "stage output, or a LoweredImplementation carrying exactly "
+                    "one M76 value",
+                    _stage_output_location(source.output),
+                ),
+            )
+        )
+
+    if isinstance(source, _ReturnEmissionPostBranchCallSiteSource):
+        if len(source.post_branch_intrinsic_call_site_structural_requests) == 0:
+            return Result.failure(
+                (
+                    _array_body_diagnostics._return_emission_missing_ir_diagnostic(
+                        "return-emission structural request lowering requires "
+                        "a LoweredImplementation carrying one accepted M76 "
+                        "post_branch_intrinsic_call_site_structural_requests "
+                        "entry",
+                        _return_emission_source_location(source),
+                    ),
+                )
+            )
+        if len(source.post_branch_intrinsic_call_site_structural_requests) > 1:
+            return Result.failure(
+                (
+                    _array_body_diagnostics._return_emission_multiple_ir_diagnostic(
+                        "return-emission structural request lowering requires "
+                        "exactly one M76 "
+                        "post_branch_intrinsic_call_site_structural_requests "
+                        "entry",
+                        _return_emission_source_location(source),
+                    ),
+                )
+            )
+        return Result.ok(source.post_branch_intrinsic_call_site_structural_requests[0])
+
+    return Result.failure(
+        (
+            _array_body_diagnostics._return_emission_source_unsupported_diagnostic(
+                "return-emission structural request lowering consumes only "
+                "accepted M76 post-branch call-site typed sources",
+                None,
+            ),
+        )
+    )
+
+
+def _return_emission_source_location(
+    source: _ReturnEmissionPostBranchCallSiteSource,
+) -> SourceLocation | None:
+    for call_site in source.post_branch_intrinsic_call_site_structural_requests:
+        return call_site.source_location
+    if isinstance(source, ExactArrayBodyLoweredImplementationSource):
+        return _lowered_implementation_location(source)
+    return None
 
 
 def _array_body_structural_sequence_source(

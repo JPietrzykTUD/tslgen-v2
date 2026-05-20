@@ -11079,7 +11079,8 @@ Execution result:
 
 Status:
 
-Planned after M86; waiting for human acceptance.
+Accepted. M87 execution-review returned `Accept With Follow-Ups` after one
+focused maintainability revision.
 
 Goal:
 
@@ -11222,8 +11223,8 @@ Golden fixtures required:
 
 Validation commands:
 
-- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_lowering.py tslgen/src/tslgen/lowering/_array_body_pipeline.py`
-- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_lowering.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_exact_shapes.py`
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_lowering.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_return_emission.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_lowering.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_sources.py tslgen/src/tslgen/lowering/_exact_shapes.py tslgen/src/tslgen/lowering/_pipeline.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_return_emission.py`
 - `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m87 or return_emission or exact_array_body_pipeline"`
 - `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
 - `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
@@ -11251,8 +11252,61 @@ Dependencies on prior milestones:
 
 - Milestones 64 through 86.
 
+Execution result:
+
+- M87 implements exact return-emission structural/request IR as
+  `ExactReturnEmissionStructuralRequestIr`.
+- The focused private module `tslgen.lowering._return_emission` owns the M87
+  lowerer. It consumes direct M76 post-branch call-site values, the M76 stage
+  output, or a private M76-only source protocol; the focused revision removed
+  M87 output from the shared runtime `ExactArrayBodyLoweredImplementationSource`
+  protocol so the central source adapter does not grow with downstream stages.
+- The exact recognizer accepts only `emit_return(<token>);` with insignificant
+  whitespace, and M87 requires that token to match the accepted M73
+  declaration-shell variable token. The selected corpus shape
+  `emit_return(tmp) ;` is accepted through this structural rule.
+- The exact array-body pipeline now appends
+  `return_emission_structural_request_lowering` after the accepted M76
+  post-branch call-site stage. Pipeline snapshots record the produced
+  `return_emission_structural_request` fact and preserve identity, keys, and
+  deterministic ordering.
+- Public facade exports expose `ExactReturnEmissionStructuralRequestIr` and
+  `lower_exact_return_emission_structural_request` through
+  `tslgen.lowering.boundary` and `tslgen.lowering`.
+- M87 added diagnostics for unsupported sources, missing or multiple source IR
+  when lowering from a lowered implementation, context mismatch, missing return
+  slot, malformed return-emission shape, returned-token mismatch, and
+  provenance mismatch.
+- M87 added focused tests for exact accepted whitespace, M76 source forms,
+  returned-token/declaration linkage, unsupported source and context
+  diagnostics, malformed nearby forms, wrong token, missing slot, provenance
+  mismatch, selected-candidate-only behavior, pipeline stage ordering,
+  snapshot identity, and import boundaries.
+- M87 did not repair source bodies, broaden `emit_return(...)`, implement
+  return-value semantics, variable lifetime/scope, `tmp.data()`, store/call
+  semantics, backend translation, renderer-ready IR, rendering, generated
+  output, generated tests, CLI/report/writer behavior, Rust, compiler
+  execution, broad TSIL parsing, raw helper dispatch, file/catalog reads,
+  `tsldata` reads during lowering evaluation, backend map reads, host CPU
+  queries, or runtime `frozen/` use.
+- Line counts after M87 are `boundary.py` 1,163,
+  `_array_body_models.py` 2,629, `_array_body_lowering.py` 1,378,
+  `_array_body_pipeline.py` 890, and `_return_emission.py` 112.
+- Validation completed with focused M87 tests returning
+  `6 passed, 286 deselected in 2.18s`, the full lowering-boundary suite
+  returning `292 passed in 39.25s`, focused lowering mypy returning
+  `Success: no issues found in 22 source files`, and full tooling validation
+  returning exit 0 with corpus probes `3 passed`, unit discovery `626` tests
+  OK, compileall OK, ruff OK, mypy `Success: no issues found in 126 source
+  files`, and diff-check OK.
+- Non-blocking follow-ups: improve the returned-token mismatch diagnostic to
+  include the actual and expected token text; future exact array-body stages
+  should continue splitting stage-specific source/validation/diagnostic
+  ownership instead of growing central exact array-body modules; future import
+  boundary tests may prefix-match backend/rendering submodules and include
+  `frozen` / `tsldata`.
+
 Next concrete prompt:
 
-- `docs/agent/runs/post-m86-acceptance-finalization-prompt.md` records human
-  acceptance of the post-M86 plan and creates the M87 execution-review-loop
-  prompt.
+- `docs/agent/runs/post-m87-planning-plus-review-prompt.md` runs the next
+  lowering-focused planning pass.

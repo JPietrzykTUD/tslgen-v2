@@ -29,6 +29,7 @@ import tslgen.lowering._array_body_sources as _array_body_sources
 import tslgen.lowering._array_body_validation as _array_body_validation
 import tslgen.lowering._lowering_inputs as _lowering_inputs
 import tslgen.lowering._mini_tsil_lowering as _mini_tsil_lowering
+import tslgen.lowering._return_emission as _return_emission
 import tslgen.lowering._selected_body_lowering as _selected_body_lowering
 import tslgen.lowering._stage_contracts as _stage_contracts
 from tslgen.lowering._lowering_inputs import (
@@ -103,6 +104,7 @@ from tslgen.lowering._array_body_models import (
     ExactPostBranchIntrinsicCallSiteStructuralRequestIr,
     ExactPredicatePathSelectedUpdateState as ExactPredicatePathSelectedUpdateState,
     ExactPredicatePathStructuralRequestIr,
+    ExactReturnEmissionStructuralRequestIr,
 )
 from tslgen.lowering._stage_contracts import (
     GenerationLoweringStage,
@@ -123,6 +125,7 @@ _ARRAY_BODY_MODEL_FACADE_EXPORTS = (
     _array_body_models,
     _array_body_shapes,
     _array_body_validation,
+    _return_emission,
     ExactArrayBodyEnvelopeSkeletonSlot,
     ExactArrayBodyStructuralRoleLabel,
     ExactArrayInitializationHelperLeafFieldName,
@@ -173,6 +176,7 @@ lower_exact_array_initialization_declaration_shell = _array_body_lowering.lower_
 lower_exact_array_body_structural_sequence = _array_body_lowering.lower_exact_array_body_structural_sequence
 lower_exact_predicate_path_structural_request = _array_body_lowering.lower_exact_predicate_path_structural_request
 lower_exact_post_branch_intrinsic_call_site_structural_request = _array_body_lowering.lower_exact_post_branch_intrinsic_call_site_structural_request
+lower_exact_return_emission_structural_request = _return_emission.lower_exact_return_emission_structural_request
 _classify_payload = _lowering_inputs._classify_payload
 _unsupported_payload_diagnostic = _lowering_inputs._unsupported_payload_diagnostic
 _mini_return_statement = _mini_tsil_lowering._mini_return_statement
@@ -393,6 +397,9 @@ class LoweredImplementation:
     post_branch_intrinsic_call_site_structural_requests: tuple[
         ExactPostBranchIntrinsicCallSiteStructuralRequestIr, ...
     ] = ()
+    return_emission_structural_requests: tuple[
+        ExactReturnEmissionStructuralRequestIr, ...
+    ] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -501,6 +508,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "return_emission_structural_requests",
+            tuple(self.return_emission_structural_requests),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -565,6 +577,9 @@ class LoweredImplementation:
                 for request in (
                     self.post_branch_intrinsic_call_site_structural_requests
                 )
+            ),
+            tuple(
+                request.key for request in self.return_emission_structural_requests
             ),
             tuple(stage.key for stage in self.generation_stages),
         )
@@ -1014,6 +1029,9 @@ def _lower_input(
                     ),
                     post_branch_intrinsic_call_site_structural_requests=(
                         array_initialization_pipeline.post_branch_intrinsic_call_site_structural_requests
+                    ),
+                    return_emission_structural_requests=(
+                        array_initialization_pipeline.return_emission_structural_requests
                     ),
                     generation_stages=(
                         _recognition_stage(

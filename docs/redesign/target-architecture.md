@@ -636,12 +636,12 @@ Current roadmap note:
   does not add broad TSIL parsing, new return semantics, backend/rendering/
   output hooks, registries, dispatchers, fixpoint/backfeed machinery, or
   extension-specific shortcuts.
-- Post-M86 planning selects M87 as exact return-emission structural/request
-  IR. M87 should record only the exact accepted trailing `emit_return(tmp);`
-  slot as typed lowering data, linked to the accepted declaration-shell
-  variable token and M74/M76 provenance. It must not repair malformed source
-  bodies, broaden `emit_return(...)`, implement return semantics, add
-  renderer-ready IR, or add backend/rendering/output hooks.
+- M87 is accepted as exact return-emission structural/request IR. It records
+  only the exact accepted trailing `emit_return(tmp);` slot as typed lowering
+  data, linked to the accepted declaration-shell variable token and M74/M76
+  provenance. It does not repair malformed source bodies, broaden
+  `emit_return(...)`, implement return semantics, add renderer-ready IR, or
+  add backend/rendering/output hooks.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

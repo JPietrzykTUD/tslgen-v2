@@ -1077,17 +1077,21 @@ Recommended first parity checks:
   across 125 source files, and diff-check OK. `boundary.py` now measures
   1,145 physical lines, `_lowering_inputs.py` measures 128 physical lines, and
   `_mini_tsil_lowering.py` measures 188 physical lines.
-- Planned M87 testing should prove exact return-emission structural/request IR
-  without source-body repair. Required coverage includes the exact
+- M87 execution added focused exact return-emission structural/request IR
+  coverage without source-body repair. Coverage includes the exact
   `emit_return(tmp);` shape with accepted whitespace, returned-token linkage to
-  the M73 declaration-shell variable token, deterministic stage insertion after
-  the M76 post-branch call-site stage, source-location and key preservation,
-  selected-branch-only behavior, and negative diagnostics for malformed
-  `emit_return`, wrong returned token, missing semicolon, expression/extra
-  argument forms, missing/wrong return slot, context mismatch, and provenance
-  mismatch. Tests must prove M87 does not broaden `emit_return(...)`, interpret
-  return/store/variable semantics, add backend/rendering/output behavior, or
-  introduce a catch-all lowering module.
+  the M73 declaration-shell variable token, M76 source forms, a narrow
+  M76-only source protocol regression, deterministic stage insertion after the
+  M76 post-branch call-site stage, source-location and key preservation,
+  selected-branch-only behavior, snapshot identity, import boundaries, and
+  negative diagnostics for malformed `emit_return`, wrong returned token,
+  missing semicolon, expression/extra argument/member-access forms, missing or
+  wrong return slot, context mismatch, and provenance mismatch. Validation
+  returned focused M87 `6 passed, 286 deselected`, full lowering-boundary
+  `292 passed`, focused lowering mypy success across 22 source files, and full
+  tooling validation success with corpus probes `3 passed`, unit discovery
+  `626` tests OK, compileall OK, ruff OK, mypy OK across 126 source files, and
+  diff-check OK.
 
 Deferred parity checks:
 

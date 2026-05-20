@@ -16,6 +16,7 @@ type ExactArrayBodyPipelineArtifactKind = Literal[
     "array_body_structural_sequence",
     "predicate_path_structural_request",
     "post_branch_intrinsic_call_site_structural_request",
+    "return_emission_structural_request",
 ]
 type ExactArrayBodyPipelineStageName = Literal[
     "array_body_envelope_slot_assembly",
@@ -29,6 +30,7 @@ type ExactArrayBodyPipelineStageName = Literal[
     "array_body_structural_sequence_classification",
     "predicate_path_structural_request_lowering",
     "post_branch_intrinsic_call_site_structural_request_lowering",
+    "return_emission_structural_request_lowering",
 ]
 type ExactArrayBodyPipelineBackfeedPolicy = Literal[
     "none",

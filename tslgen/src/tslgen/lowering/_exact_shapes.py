@@ -69,6 +69,7 @@ EXACT_POST_BRANCH_MEMBER_ACCESS_TEXT = "tmp.data()"
 EXACT_POST_BRANCH_MEMBER_ACCESS_BASE_TOKEN = "tmp"
 EXACT_POST_BRANCH_MEMBER_ACCESS_MEMBER_TOKEN = "data"
 EXACT_POST_BRANCH_SOURCE_OPERAND_TOKEN = "a"
+EXACT_RETURN_EMISSION_CALL_HEAD_TOKEN = "emit_return"
 
 EXACT_POST_BRANCH_STORE_PREDICATE_SLOT_RE = re.compile(
     rf"\A\s*intrin\s*<\s*(?P<call_token>{_TSIL_IDENTIFIER})\s*>\s*"
@@ -83,6 +84,10 @@ POST_BRANCH_INTRINSIC_CALL_SITE_CONTAINER_RE = re.compile(
 POST_BRANCH_MEMBER_ACCESS_ARGUMENT_RE = re.compile(
     rf"\A(?P<base_token>{_TSIL_IDENTIFIER})\."
     rf"(?P<member_token>{_TSIL_IDENTIFIER})\s*\(\s*\)\Z",
+)
+EXACT_RETURN_EMISSION_SLOT_RE = re.compile(
+    rf"\A\s*(?P<emit_return_token>{EXACT_RETURN_EMISSION_CALL_HEAD_TOKEN})"
+    rf"\s*\(\s*(?P<returned_token>{_TSIL_IDENTIFIER})\s*\)\s*;\s*\Z",
 )
 
 

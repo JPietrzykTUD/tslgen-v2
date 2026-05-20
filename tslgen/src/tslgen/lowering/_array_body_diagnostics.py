@@ -1035,6 +1035,94 @@ def _post_branch_call_site_source_operand_unsupported_diagnostic(
     )
 
 
+def _return_emission_source_unsupported_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-RETURN-EMISSION-SOURCE-UNSUPPORTED",
+        detail,
+        location=location,
+    )
+
+
+def _return_emission_missing_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-RETURN-EMISSION-IR-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _return_emission_multiple_ir_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-RETURN-EMISSION-IR-MULTIPLE",
+        detail,
+        location=location,
+    )
+
+
+def _return_emission_context_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-RETURN-EMISSION-CONTEXT-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _return_emission_provenance_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-RETURN-EMISSION-PROVENANCE-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
+def _return_emission_slot_missing_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-RETURN-EMISSION-SLOT-MISSING",
+        detail,
+        location=location,
+    )
+
+
+def _return_emission_malformed_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-RETURN-EMISSION-MALFORMED",
+        detail,
+        location=location,
+    )
+
+
+def _return_emission_returned_token_mismatch_diagnostic(
+    detail: str,
+    location: SourceLocation | None,
+) -> Diagnostic:
+    return Diagnostic.error(
+        "TSL-LOWER-RETURN-EMISSION-RETURNED-TOKEN-MISMATCH",
+        detail,
+        location=location,
+    )
+
+
 def _duplicate_array_body_envelope_skeleton_diagnostic(
     lookup_key: ArrayBodyEnvelopeSkeletonKeyLike,
     skeleton: ArrayBodyEnvelopeSkeletonLike,
