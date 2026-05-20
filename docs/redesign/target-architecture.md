@@ -657,6 +657,16 @@ Current roadmap note:
   planning, backend map lookup, backend translation, renderer-ready IR,
   rendering, generated output, broad source protocols, or generic
   `value<backend>(...)` evaluation.
+- M90 is selected as exact array lowering completion-package ownership. It
+  should add focused private `tslgen.lowering._array_body_completion_package`
+  ownership for one typed Stage 8 handoff over accepted M88/M89 facts. The
+  module should keep imports one-way, preserve typed object identity and
+  provenance, and carry unresolved dependencies as typed facts only. It must
+  not grow `boundary.py`, `_array_body_pipeline.py`, `_array_body_models.py`,
+  or `_array_body_backend_deferred_requests.py` into catch-all modules, and it
+  must not introduce backend planning, backend maps, rendering, generated
+  output, raw helper dispatch, broad protocols, hidden backfeeds, source-body
+  repair, or generic backend-value evaluation.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

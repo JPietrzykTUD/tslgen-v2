@@ -1356,6 +1356,12 @@ the M88 package. That accepted inventory is still Stage 8
 lowering/provenance state only; it leaves actual backend-uninit translation,
 backend maps, renderer-ready IR, generated output, declaration/array
 semantics, store semantics, and broad `value<backend>(...)` evaluation open.
+Planned M90 narrows the lowering handoff organization question by packaging
+accepted M88/M89 exact facts into one Stage 8 completion package with explicit
+unresolved dependencies. That planned package still leaves actual backend-
+uninit translation, backend maps, Stage 9 backend planning, renderer-ready IR,
+generated output, declaration/array/store/return/SVE semantics, and broad
+`value<backend>(...)` evaluation open.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1389,8 +1395,9 @@ extraction, accepted M85 selected-body lowering ownership extraction, and
 accepted M86 candidate payload-intake and mini-TSIL leaf return lowering
 ownership extraction, accepted M87 exact return-emission structural/request IR,
 accepted M88 exact array-body structural package assembly, and accepted M89
-exact array backend-deferred request inventory, while body-slot semantics
-beyond those exact structural/request/inventory boundaries, including nested
+exact array backend-deferred request inventory, and planned M90 exact array
+lowering completion-package handoff, while body-slot semantics beyond those
+exact structural/request/inventory/package boundaries, including nested
 expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
 `algo`, Rust output, generated tests beyond the selected M49 source fixture,

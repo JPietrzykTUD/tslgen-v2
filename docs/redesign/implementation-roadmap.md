@@ -11724,3 +11724,189 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m89-planning-plus-review-prompt.md` runs the next
   lowering-focused planning pass.
+
+### Milestone 90: Exact Array Lowering Completion Package Slice
+
+Status:
+
+Selected by post-M89 planning and accepted for execution by human acceptance.
+M90 is not yet implemented or accepted as a completed milestone.
+
+Goal:
+
+Consume the accepted M89 exact array backend-deferred request inventory and
+its accepted M88 structural package, then produce one typed Stage 8 exact
+array lowering completion package for the selected `array.tsl:105-111` body.
+
+"Completion" means completion of the current lowering-side handoff: all
+accepted exact array lowering facts are packaged with explicit unresolved
+dependencies for later backend planning. It does not mean semantic completion
+of declaration, array, store, return, SVE, backend, renderer, generated-output,
+or broad TSIL body behavior.
+
+Scope:
+
+- Add focused private ownership, such as
+  `tslgen.lowering._array_body_completion_package`, for exact array lowering
+  completion-package assembly, source selection, validation, and diagnostics.
+- Consume accepted `ExactArrayBackendDeferredRequestInventoryIr` values, the
+  `array_backend_deferred_request_inventory` stage output, or one narrowly
+  validated source carrying exactly one accepted M88 package and one matching
+  accepted M89 inventory.
+- Reach accepted M64-M87 structural facts through the M88 package and accepted
+  M89 inventory references, not by re-collecting broad pipeline outputs.
+- Produce a typed value, such as `ExactArrayLoweringCompletionPackageIr`,
+  carrying stable identity, source location/provenance, candidate id, target
+  extension, source extension, selected type tag, branch-chain id, the accepted
+  M88 package reference, the accepted M89 inventory reference, and explicit
+  unresolved dependency records.
+- Represent the accepted M89 `value_backend_uninit_array` inventory member as
+  an unresolved dependency by typed reference only. Preserve object identity to
+  the accepted M72 deferred backend-uninit value and M67 backend-value request
+  record.
+- Add one deterministic Stage 8 stage after
+  `array_backend_deferred_request_inventory`, such as
+  `array_lowering_completion_package`.
+- Treat protocol-shaped/runtime sources as untrusted until concrete typed M88
+  package and M89 inventory payloads are validated.
+- Keep `boundary.py`, `_array_body_pipeline.py`, `_array_body_models.py`, and
+  `_array_body_backend_deferred_requests.py` changes minimal. The new focused
+  module should own the completion-package logic.
+
+Out of scope:
+
+- Backend-uninit resolution, backend map reads, backend catalog reads,
+  `tsldata/detail/lang` reads, Stage 9 backend planning, backend translation,
+  renderer-ready IR, rendering, generated C++ or Rust output, generated tests,
+  CLI/report/writer behavior, compiler execution, or Rust.
+- Generic `value<backend>(...)`, `type<backend>(...)`, backend modifier, or
+  backend helper evaluation.
+- Declaration semantics, array semantics, allocation/lifetime, initializer
+  behavior, variable scope, store semantics, return semantics, `tmp.data()`
+  pointer semantics, SVE predicate/vector/register semantics, memory behavior,
+  direct-intrinsic semantics, or broad body semantics.
+- Re-interpreting `svst1`, `tmp.data()`, `svptrue_b*`, `emit_return(tmp)`, or
+  the accepted structural slots as semantic body facts.
+- Correcting, normalizing, rewriting, completing, reordering, reparsing, or
+  guessing intended meaning for malformed `.tsl` implementation bodies.
+- Broad TSIL parsing, raw helper dispatch, registries, callback maps, plugin
+  systems, dispatch tables keyed by raw helper text/backend id/extension/type
+  tag/corpus line number, reflection over package members, hidden backfeeds,
+  fixpoint execution, or broad source protocols.
+
+Required input:
+
+- Accepted M89 `ExactArrayBackendDeferredRequestInventoryIr`.
+- Accepted M88 `ExactArrayBodyStructuralPackageIr`, reached through the M89
+  inventory and validated by identity/provenance.
+- Accepted M73 declaration shell, M72 deferred backend-uninit value, and M67
+  backend-value request record as references through M88/M89.
+- Corpus evidence:
+  `tsldata/primitives/load_store/array.tsl:105-111`.
+
+Expected outputs:
+
+- A typed exact array lowering completion package carrying stable completion
+  identity, source location/provenance, candidate id, target extension, source
+  extension, selected type tag, branch-chain id, accepted M88 package
+  reference, accepted M89 inventory reference, package member references, and
+  explicit unresolved dependency records.
+- One unresolved dependency record for the accepted M89
+  `value_backend_uninit_array` inventory member, preserving typed
+  `deferred_backend_value` policy and M72/M67 object identity.
+- A deterministic pipeline stage snapshot entry for the completion-package
+  stage after `array_backend_deferred_request_inventory`.
+- Structured diagnostics for unsupported source, missing/duplicate package,
+  missing/duplicate inventory, malformed entries, package/inventory mismatch,
+  context mismatch, source-location mismatch, wrong inventory member set,
+  wrong policy, and provenance mismatch.
+
+Parity criterion:
+
+M90 succeeds when the accepted exact array-body lowering path produces one
+typed completion package that proves the Stage 8 exact array handoff is
+assembled and dependency-inventoried, while leaving backend-uninit translation,
+renderer-ready IR, generated output, and semantic body lowering unresolved.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:105-111` for the exact selected
+  array body.
+- `tslgen/src/tslgen/lowering/_array_body_package.py` for accepted M88 package
+  input ownership and provenance.
+- `tslgen/src/tslgen/lowering/_array_body_backend_deferred_requests.py` for
+  accepted M89 inventory input and unresolved backend-deferred member
+  provenance.
+- `tslgen/src/tslgen/lowering/_array_body_pipeline.py` for deterministic stage
+  wiring and pipeline snapshot identity.
+- `tslgen/src/tslgen/lowering/_pipeline.py` and
+  `tslgen/src/tslgen/lowering/_stage_contracts.py` for stage/output contract
+  updates.
+- `tslgen/tests/unit/test_lowering_boundary.py` for accepted exact array-body
+  pipeline behavior, diagnostics, import-boundary tests, and M90 coverage.
+
+Tests required:
+
+- Positive M90 tests for direct M89 inventory input, M89 stage-output input,
+  and narrowly validated one-source package-plus-inventory input.
+- Identity/provenance tests proving the completion package references accepted
+  M88/M89/M73/M72/M67 objects rather than duplicating or re-collecting them.
+- Negative tests for unsupported source, missing package, duplicate package,
+  missing inventory, duplicate inventory, malformed runtime entries,
+  package/inventory mismatch, target/source extension mismatch, selected-type
+  mismatch, branch-chain mismatch, source-location mismatch, wrong inventory
+  member set, wrong policy, and provenance mismatch.
+- Pipeline tests proving `array_lowering_completion_package` appears after
+  `array_backend_deferred_request_inventory`, preserves stage order, keys,
+  output object identity, source locations, deterministic ordering, selected-
+  branch-only behavior, and pipeline snapshots.
+- Import-boundary tests proving the focused completion module does not import
+  `boundary.py`, `tslgen.lowering`, `_array_body_pipeline.py`, backend modules,
+  renderers, `tsldata`, `frozen`, or unrelated private modules as convenience
+  dispatchers.
+- Tests or assertions proving M90 does not read backend maps, resolve
+  `uninit::array`, produce renderer-ready values, render output, infer
+  declaration/store/return/SVE semantics, repair source text, or widen to
+  generic backend-value evaluation.
+
+Golden fixtures required:
+
+- None. M90 must not change generated C++ or Rust output.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_package.py tslgen/src/tslgen/lowering/_array_body_backend_deferred_requests.py tslgen/src/tslgen/lowering/_array_body_completion_package.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_package.py tslgen/src/tslgen/lowering/_array_body_backend_deferred_requests.py tslgen/src/tslgen/lowering/_array_body_completion_package.py tslgen/src/tslgen/lowering/_pipeline.py tslgen/src/tslgen/lowering/_stage_contracts.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m90 or lowering_completion or backend_deferred or structural_package or exact_array_body_pipeline"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Overclaiming the word "completion" as semantic body completion, backend
+  readiness, renderer readiness, or generated output.
+- Building a wrapper-only abstraction that does not add a stable typed stage
+  output, diagnostics, deterministic key, and pipeline snapshot.
+- Reaching across all M64-M87 outputs from `LoweredImplementation` instead of
+  consuming the accepted M89 inventory and validating its accepted M88 package
+  identity.
+- Turning unresolved dependency records into Stage 9 backend planning,
+  backend map keys, resolved backend text, renderer slots, artifact paths, or
+  scheduling decisions.
+- Adding broad protocols, registries, callback dispatch, raw-helper dispatch,
+  hidden backfeeds, fixpoint machinery, or generic backend-value evaluation.
+- Growing `boundary.py`, `_array_body_pipeline.py`, `_array_body_models.py`,
+  or `_array_body_backend_deferred_requests.py` into catch-all modules instead
+  of adding focused completion-package ownership.
+
+Dependencies on prior milestones:
+
+- Milestones 67, 72, 73, 88, and 89, plus the accepted exact array-body chain
+  from Milestones 64 through 87.
+
+Next concrete prompt:
+
+- `docs/agent/runs/m90-execution-review-loop-prompt.md` executes and reviews
+  the accepted M90 plan.

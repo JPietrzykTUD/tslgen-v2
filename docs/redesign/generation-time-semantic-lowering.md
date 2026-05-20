@@ -792,6 +792,16 @@ fields without reading backend maps, querying backend catalogs, creating
 renderer-ready IR, rendering output, or evaluating generic
 `value<backend>(...)` helpers.
 
+M90 is selected as the next exact Stage 8 lowering package boundary. It will
+consume the accepted M89 inventory and validate the accepted M88 package
+identity to assemble one typed `ExactArrayLoweringCompletionPackageIr`-style
+handoff for the selected `array.tsl:105-111` body. The package records that
+the accepted exact lowering handoff is assembled and still carries explicit
+unresolved backend-deferred dependencies. It must not resolve backend uninit,
+read backend maps/catalogs, create Stage 9 backend plans, create renderer-
+ready body IR, render output, evaluate generic backend helpers, infer body
+semantics, or repair source text.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`

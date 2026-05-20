@@ -728,40 +728,51 @@ backend planning, renderer-ready IR, rendering, generated output, generic
 backend-value evaluation, source-body repair, broad protocols, hidden
 backfeeds, or broad body semantics.
 
+Post-M89 planning is accepted. It selected
+`Milestone 90: Exact Array Lowering Completion Package Slice`, and internal
+planning/review returned `Accept With Follow-Ups` after tightening the
+"completion" wording to mean Stage 8 exact lowering handoff completion only.
+The selected plan consumes accepted M88 structural packages and accepted M89
+backend-deferred inventories to produce one typed completion package with
+explicit unresolved dependency records. It must not complete declaration,
+array, store, return, SVE, backend, renderer, generated-output, broad TSIL, or
+source-repair semantics. Human acceptance is recorded, and M90 execution is
+the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M89 planning.
+Execute Milestone 90.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m89-planning-plus-review-prompt.md
+docs/agent/runs/m90-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The next active task is read-only post-M89 planning and review.
+Milestone 90: Exact Array Lowering Completion Package Slice
 ```
 
 Latest review verdict:
 
 ```text
-M89 execution-review returned Accept With Follow-Ups with no blocking issues
-and no focused revision.
+Post-M89 planning returned Accept With Follow-Ups and is human-accepted.
+Follow-ups are boundary wording and maintainability guardrails for M90, not
+blockers.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M89 planning-plus-review prompt. Focus the next task on
-lowering. Use read-only planning/review subagents, do not implement code, and
-create the next concrete prompt before finishing unless the prompt records a
-stop condition.
+Run the active M90 execution-review loop prompt. Use exactly one write-capable
+executor followed by read-only review/audit subagents, and do not start
+post-M90 planning until M90 review returns Accept or Accept With Follow-Ups.
 ```
 
 Accepted planning prompt:
@@ -1496,10 +1507,22 @@ Completed M89 execution-review loop prompt:
 docs/agent/runs/m89-execution-review-loop-prompt.md
 ```
 
-Active post-M89 planning-plus-review prompt:
+Completed post-M89 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m89-planning-plus-review-prompt.md
+```
+
+Completed post-M89 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m89-acceptance-finalization-prompt.md
+```
+
+Active M90 execution-review loop prompt:
+
+```text
+docs/agent/runs/m90-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2345,10 +2368,25 @@ docs/agent/runs/post-m89-planning-plus-review-prompt.md
   renderer-ready IR, rendering, generated output, generic backend-value
   evaluation, declaration/array/store/return/SVE semantics, raw helper
   dispatch, broad protocols, hidden backfeeds, or source-body repair.
+- M90 is selected as Stage 8 exact array lowering completion-package work
+  only. "Completion" means the accepted exact lowering handoff is packaged
+  with explicit unresolved dependencies; it does not mean semantic body
+  completion, backend readiness, renderer readiness, or generated output.
+- M90 must consume accepted typed M88/M89 facts, validate context and
+  identity/provenance, and produce one typed handoff package. It must not
+  resolve backend values, read backend maps/catalogs, start Stage 9 backend
+  planning, render output, infer declaration/store/return/SVE/backend
+  semantics, repair source text, broaden TSIL parsing, or introduce generic
+  backend-value evaluation.
+- M90 must use focused private ownership for completion-package logic. It must
+  not grow `boundary.py`, `_array_body_pipeline.py`,
+  `_array_body_models.py`, or `_array_body_backend_deferred_requests.py` into
+  broader catch-all modules.
 - Future lowering package decomposition must preserve accepted M57-M89
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
-  no-external-input boundaries.
+  no-external-input boundaries. The selected M90 boundary expectations become
+  accepted constraints only after human acceptance and M90 execution review.
 - Future lowering package decomposition must not add new lowering semantics,
   generic body/call/store/return/declaration/array semantics, broad TSIL
   parsing, raw helper dispatch, backend translation, rendering, generated
@@ -3536,11 +3574,24 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   continuing to grow central exact array-body modules.
 - M87 validation-hardening follow-up: future import-boundary tests may
   prefix-match backend/rendering submodules and include `frozen` / `tsldata`.
+- Post-M89 planning follow-up for M90 execution: keep "completion" narrowed to
+  Stage 8 exact lowering handoff completion only. M90 must not imply semantic
+  completion of declaration, array, store, return, SVE, backend, renderer,
+  generated-output, broad TSIL, or source-repair behavior.
+- Post-M89 planning follow-up for M90 execution: put completion-package logic
+  in focused private ownership and keep `boundary.py`, `_array_body_pipeline.py`,
+  `_array_body_models.py`, and `_array_body_backend_deferred_requests.py` from
+  becoming broader catch-all modules. If pipeline wiring growth is material,
+  split focused ownership or document a temporary exception.
+- Post-M89 planning follow-up for M90 execution: unresolved dependency records
+  are typed handoff facts only. They must not become backend map keys, resolved
+  text, renderer slots, artifact paths, scheduling decisions, broad protocols,
+  hidden backfeeds, or fixpoint machinery.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run post-M89 planning
-through the active post-M89 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M90 through the
+active M90 execution-review loop prompt.
 
 ## Validation Expectations
 
@@ -3549,6 +3600,22 @@ For docs-only planning tasks:
 ```bash
 git diff --check
 ```
+
+For post-M89 planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
+
+For post-M89 acceptance finalization, validation completed with:
+
+```bash
+git diff --check -- docs/agent/current-redesign-state.md docs/agent/runs/post-m89-acceptance-finalization-prompt.md docs/agent/runs/m90-execution-review-loop-prompt.md docs/redesign/behavioral-spec.md docs/redesign/design-decisions.md docs/redesign/generation-time-semantic-lowering.md docs/redesign/implementation-roadmap.md docs/redesign/open-questions.md docs/redesign/pipeline-design.md docs/redesign/target-architecture.md docs/redesign/testing-strategy.md
+```
+
+The command returned exit 0 with no output.
 
 For implementation milestones, run the milestone-specific targeted tests plus:
 
