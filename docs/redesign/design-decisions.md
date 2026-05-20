@@ -1650,15 +1650,15 @@ Consequences:
   distinct typed Stage 8 entries. M93 must not create a broad operation
   framework, semantic dispatcher, operation registry, dependency solver, Stage
   9 backend plan, renderer-ready IR, or source-body repair path.
-- Post-M93 planning selects M94 as behavior-preserving operation-package
-  diagnostics/provenance ownership split before adding more package families.
-  The decision keeps the accepted M93 package contract stable while preventing
-  `_operation_package.py` from becoming a replacement monolith. M94 should move
-  diagnostics, accepted-source narrowing, mini-TSIL package-contract, and
-  exact-array provenance validation into focused private modules with one-way
-  imports; it must not add new semantics, a package registry, semantic
-  dispatcher, backend-planning hook, renderer-ready IR, or source-body repair
-  path.
+- M94 is accepted as behavior-preserving operation-package diagnostics/
+  provenance ownership split before adding more package families. The decision
+  keeps the accepted M93 package contract stable while preventing
+  `_operation_package.py` from becoming a replacement monolith. M94 moves
+  diagnostics, accepted-source narrowing, mini-TSIL package-contract,
+  exact-array provenance validation, and package models into focused private
+  modules with one-way imports; it adds no new semantics, package registry,
+  semantic dispatcher, backend-planning hook, renderer-ready IR, or source-body
+  repair path.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

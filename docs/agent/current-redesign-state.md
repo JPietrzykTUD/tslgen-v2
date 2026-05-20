@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 93 is accepted.
+Milestone 94 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -845,39 +845,69 @@ contract, and exact-array provenance validation into focused private modules
 before adding more package families. Human acceptance was recorded, and M94
 execution became the active workflow action.
 
+The M94 execution-review loop returned `Accept With Follow-Ups` after one
+focused validation-coverage revision. M94 is accepted as behavior-preserving
+operation-package ownership work. It keeps `_operation_package.py` as a
+19-line facade/re-export surface while moving package models, diagnostics,
+accepted M86 mini-TSIL shape checks, accepted M92 exact-array provenance
+checks, and source/stage/container narrowing into focused private modules.
+Accepted M93 package behavior, public imports, diagnostics, source locations,
+keys, identities, stage name/order, snapshots, deterministic ordering, and
+selected-branch-only behavior are preserved. M94 adds no new package families,
+new lowering semantics, backend planning, renderer-ready IR, rendering,
+generated output, source repair, registries, dispatchers, broad source
+protocols, hidden backfeeds, or fixpoint machinery.
+
+M94 changed `tslgen/src/tslgen/lowering/_operation_package.py`, added
+`_operation_package_diagnostics.py`, `_operation_package_exact_array.py`,
+`_operation_package_mini_tsil.py`, `_operation_package_models.py`, and
+`_operation_package_sources.py`, and updated
+`tslgen/tests/unit/test_lowering_boundary.py`. Final line counts were
+`boundary.py` 1,280, `_operation_package.py` 19,
+`_operation_package_diagnostics.py` 136,
+`_operation_package_exact_array.py` 174,
+`_operation_package_mini_tsil.py` 36,
+`_operation_package_models.py` 153, and
+`_operation_package_sources.py` 604. Final validation passed: focused M94
+pytest `38 passed, 293 deselected`, full lowering-boundary pytest
+`331 passed`, lowering mypy `Success: no issues found in 34 source files`,
+full tooling validation with corpus probes `3 passed`, unittest discovery
+`665` tests OK, compileall OK, ruff OK, mypy OK across `138` source files,
+and diff-check OK.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 94 through the active execution-review loop prompt.
+Run post-M94 planning and review with a lowering focus.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m94-execution-review-loop-prompt.md
+docs/agent/runs/post-m94-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 94: Lowering Operation Package Diagnostics and Provenance Ownership Split Slice
+None. M94 is accepted; the active action is post-M94 planning.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M93 planning/review returned Accept With Follow-Ups for Milestone 94.
-Human acceptance was recorded.
+M94 execution-review loop returned Accept With Follow-Ups after one focused
+validation-coverage revision.
 ```
 
 Next expected action:
 
 ```text
-Run the active M94 execution-review loop prompt. Use one write-capable
-executor, then read-only review/audit subagents. Before finishing, update this
-state file and create the next concrete run prompt under docs/agent/runs/.
+Run the active post-M94 planning-plus-review prompt. Focus on lowering. Do not
+implement code unless the prompt explicitly selects an executor task. Before
+finishing, update this state file and create the next concrete run prompt.
 ```
 
 Accepted planning prompt:
@@ -1696,10 +1726,16 @@ Completed post-M93 acceptance-finalization prompt:
 docs/agent/runs/post-m93-acceptance-finalization-prompt.md
 ```
 
-Active M94 execution-review loop prompt:
+Completed M94 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m94-execution-review-loop-prompt.md
+```
+
+Active post-M94 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m94-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2597,17 +2633,17 @@ docs/agent/runs/m94-execution-review-loop-prompt.md
   wrapper planning, artifact path planning, broad TSIL parsing, source repair,
   broad body/call/store/return/declaration/array/SVE semantics, registries,
   semantic dispatchers, hidden backfeeds, fixpoint machinery, or hardwiring.
-- M94 is selected as behavior-preserving operation-package maintainability
-  work. It may split M93 diagnostics, accepted-source narrowing, mini-TSIL
+- M94 is accepted as behavior-preserving operation-package maintainability
+  work. It split M93 diagnostics, accepted-source narrowing, mini-TSIL
   package-contract checks, exact-array provenance validation, and package
-  value models into focused private modules, but it must preserve accepted M93
+  value models into focused private modules while preserving accepted M93
   package behavior exactly.
-- M94 must not add new operation package families, new lowering semantics,
-  backend maps/catalog reads, backend-uninit resolution, Stage 9 backend
-  planning, backend translation, renderer-ready IR, rendering, generated
-  output, broad source protocols, registries, semantic dispatchers, hidden
-  backfeeds, fixpoint machinery, source repair, or hardwiring.
-- Future lowering package decomposition must preserve accepted M57-M93
+- M94 adds no new operation package families, new lowering semantics, backend
+  maps/catalog reads, backend-uninit resolution, Stage 9 backend planning,
+  backend translation, renderer-ready IR, rendering, generated output, broad
+  source protocols, registries, semantic dispatchers, hidden backfeeds,
+  fixpoint machinery, source repair, or hardwiring.
+- Future lowering package decomposition must preserve accepted M57-M94
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -3857,23 +3893,23 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   diagnostics/provenance helpers before adding more families. `boundary.py`
   is 1,280 lines and should not absorb new ownership. Future package source
   narrowing must not evolve into a central semantic dispatcher.
-- Post-M93 planning follow-up for M94 execution: keep M94 as
-  behavior-preserving diagnostics/provenance/source-narrowing/model ownership
-  split only. It must not add package families, semantic lowering behavior,
-  backend planning, renderer-ready IR, source repair, registries,
-  dispatchers, broad source protocols, hidden backfeeds, or fixpoint
-  machinery.
-- Post-M93 planning follow-up for M94 execution: prove `_operation_package.py`
-  drops materially below the roughly 1,000-line guardrail and that no new
-  private operation-package module becomes a replacement monolith.
-- Post-M93 planning follow-up for M94 execution: add or preserve import-
-  boundary tests for every new operation-package module, not only the aggregate
-  `_operation_package.py` facade.
+- M94 execution addressed the post-M93 planning follow-ups: review verified
+  behavior-preserving split ownership, `_operation_package.py` reduction from
+  1,044 lines to 19 lines, no replacement operation-package monolith, and
+  import-boundary coverage for every new operation-package module.
+- M94 execution follow-up: `_operation_package_sources.py` remains focused at
+  604 lines but necessarily uses duck-typed accepted containers through
+  `hasattr`/`getattr` for the M93 surface. Future package-family work must not
+  grow that into a generic source protocol or dispatcher.
+- M94 execution follow-up: the current line-count test asserts each
+  operation-package module remains below 1,000 lines. A future maintainability
+  pass may choose a tighter threshold for operation-package private modules so
+  a near-guardrail replacement monolith cannot technically pass.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready for M94 execution through
-the active M94 execution-review loop prompt.
+No stop condition is active. The workflow is ready for post-M94 planning
+through the active post-M94 planning-plus-review prompt.
 
 ## Validation Expectations
 

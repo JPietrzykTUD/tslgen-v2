@@ -831,15 +831,16 @@ primitive-call discovery, dependency closure, backend planning,
 renderer-ready IR, rendering, generated output, generic TSIL parsing, source
 repair, registries, dispatchers, hidden backfeeds, or fixpoint machinery.
 
-Post-M93 planning selects M94 as behavior-preserving package maintainability
-work. M94 should split operation-package diagnostics, source narrowing, and
-M92/M90/M89/M88/M72/M67 provenance validation into focused private ownership
-before any new package family is added. It must preserve the accepted M93
-`lowering_operation_package` fact, public imports, diagnostics, identities,
-keys, source-family distinction, and stage snapshots; it must not introduce new
-generation-time helper semantics, package families, broad source protocols,
-backend planning, renderer-ready IR, source repair, registries, dispatchers,
-hidden backfeeds, or fixpoint machinery.
+M94 is accepted as behavior-preserving package maintainability work. It splits
+operation-package diagnostics, source narrowing, accepted M86 mini-TSIL package
+checks, M92/M90/M89/M88/M72/M67 provenance validation, and package models into
+focused private ownership before any new package family is added. It preserves
+the accepted M93 `lowering_operation_package` fact, public imports,
+diagnostic codes and locations, identities, keys, source-family distinction,
+and stage snapshots; it introduces no new generation-time helper semantics,
+package families, broad source protocols, backend planning, renderer-ready IR,
+source repair, registries, dispatchers, hidden backfeeds, or fixpoint
+machinery.
 
 M61 diagnostics:
 

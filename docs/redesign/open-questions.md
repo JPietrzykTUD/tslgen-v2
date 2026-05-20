@@ -1381,13 +1381,14 @@ distinct Stage 8 typed entries, while still leaving semantic primitive calls,
 dependency closure, backend-uninit resolution, backend maps, Stage 9 backend
 planning, renderer-ready body IR, generated output, broad body semantics, and
 broad `value<backend>(...)` evaluation open.
-Post-M93 planning selects M94 to reduce operation-package maintainability risk
-before any of those semantic gaps are tackled. M94 is expected to split M93
-diagnostics, source narrowing, and exact-array provenance validation into
-focused private modules, but it intentionally leaves new package families,
-semantic primitive calls, dependency closure, backend-uninit resolution, Stage
-9 planning, renderer-ready body IR, generated output, broad body semantics,
-and broad `value<backend>(...)` evaluation open.
+M94 is accepted and reduces operation-package maintainability risk before any
+of those semantic gaps are tackled. It splits M93 diagnostics, source
+narrowing, accepted M86 mini-TSIL package checks, exact-array provenance
+validation, and package models into focused private modules, but it
+intentionally leaves new package families, semantic primitive calls, dependency
+closure, backend-uninit resolution, Stage 9 planning, renderer-ready body IR,
+generated output, broad body semantics, and broad `value<backend>(...)`
+evaluation open.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,

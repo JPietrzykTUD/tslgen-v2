@@ -33,6 +33,11 @@ import tslgen.lowering._generation_queries as lowering_generation_queries
 import tslgen.lowering._lowering_inputs as lowering_inputs
 import tslgen.lowering._mini_tsil_lowering as lowering_mini_tsil_lowering
 import tslgen.lowering._operation_package as lowering_operation_package
+import tslgen.lowering._operation_package_diagnostics as lowering_operation_package_diagnostics
+import tslgen.lowering._operation_package_exact_array as lowering_operation_package_exact_array
+import tslgen.lowering._operation_package_mini_tsil as lowering_operation_package_mini_tsil
+import tslgen.lowering._operation_package_models as lowering_operation_package_models
+import tslgen.lowering._operation_package_sources as lowering_operation_package_sources
 import tslgen.lowering._pipeline as lowering_pipeline
 import tslgen.lowering._return_emission as lowering_return_emission
 import tslgen.lowering._selected_body_lowering as lowering_selected_body_lowering
@@ -13691,18 +13696,23 @@ class LoweringBoundaryTests(unittest.TestCase):
                 ),
             )
         )
-        cases: tuple[tuple[str, object, dict[str, Any], str], ...] = (
+        cases: tuple[
+            tuple[str, object, dict[str, Any], str, SourceLocation | None],
+            ...
+        ] = (
             (
                 "unsupported",
                 object(),
                 {},
                 "TSL-LOWER-OPERATION-PACKAGE-SOURCE-UNSUPPORTED",
+                None,
             ),
             (
                 "missing",
                 LoweredImplementation(candidate_id="candidate-1", status="lowered"),
-                {},
+                {"source_location": location},
                 "TSL-LOWER-OPERATION-PACKAGE-VALUE-MISSING",
+                location,
             ),
             (
                 "duplicate",
@@ -13713,6 +13723,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 ),
                 {"source_location": location},
                 "TSL-LOWER-OPERATION-PACKAGE-VALUE-MULTIPLE",
+                location,
             ),
             (
                 "malformed",
@@ -13723,6 +13734,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 )(),
                 {},
                 "TSL-LOWER-OPERATION-PACKAGE-MALFORMED",
+                None,
             ),
             (
                 "non_m86_mini_tsil",
@@ -13732,6 +13744,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                     "source_location": location,
                 },
                 "TSL-LOWER-OPERATION-PACKAGE-MALFORMED",
+                location,
             ),
             (
                 "family",
@@ -13742,12 +13755,14 @@ class LoweringBoundaryTests(unittest.TestCase):
                     "source_family": "exact_array_backend_handoff",
                 },
                 "TSL-LOWER-OPERATION-PACKAGE-SOURCE-FAMILY-MISMATCH",
+                location,
             ),
             (
                 "context",
                 handoff,
                 {"candidate_id": "other-candidate"},
                 "TSL-LOWER-OPERATION-PACKAGE-CONTEXT-MISMATCH",
+                handoff.source_location,
             ),
             (
                 "exact_container_context",
@@ -13758,6 +13773,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 ),
                 {},
                 "TSL-LOWER-OPERATION-PACKAGE-CONTEXT-MISMATCH",
+                handoff.source_location,
             ),
             (
                 "exact_container_explicit_context_mask",
@@ -13768,6 +13784,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 ),
                 {"candidate_id": handoff.candidate_id},
                 "TSL-LOWER-OPERATION-PACKAGE-CONTEXT-MISMATCH",
+                handoff.source_location,
             ),
             (
                 "existing_package_container_context",
@@ -13778,6 +13795,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 ),
                 {},
                 "TSL-LOWER-OPERATION-PACKAGE-CONTEXT-MISMATCH",
+                package.source_location,
             ),
             (
                 "existing_package_container_explicit_context_mask",
@@ -13788,12 +13806,14 @@ class LoweringBoundaryTests(unittest.TestCase):
                 ),
                 {"candidate_id": package.candidate_id},
                 "TSL-LOWER-OPERATION-PACKAGE-CONTEXT-MISMATCH",
+                package.source_location,
             ),
             (
                 "location",
                 handoff,
                 {"source_location": other_location},
                 "TSL-LOWER-OPERATION-PACKAGE-SOURCE-LOCATION-MISMATCH",
+                handoff.source_location,
             ),
             (
                 "ambiguous",
@@ -13805,10 +13825,11 @@ class LoweringBoundaryTests(unittest.TestCase):
                 ),
                 {"source_location": location},
                 "TSL-LOWER-OPERATION-PACKAGE-SOURCE-AMBIGUOUS",
+                location,
             ),
         )
 
-        for name, source, kwargs, code in cases:
+        for name, source, kwargs, code, expected_location in cases:
             with self.subTest(name=name):
                 result = lower_lowering_operation_package(source, **kwargs)
 
@@ -13819,6 +13840,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                     code=code,
                     severity="error",
                 )
+                self.assertEqual(result.diagnostics[0].location, expected_location)
 
     def test_m93_operation_package_reports_handoff_provenance_mismatches(
         self,
@@ -13835,6 +13857,7 @@ class LoweringBoundaryTests(unittest.TestCase):
             code="TSL-LOWER-OPERATION-PACKAGE-PROVENANCE-MISMATCH",
             severity="error",
         )
+        self.assertEqual(provenance.diagnostics[0].location, broken_package.source_location)
 
         broken_dependency = self.exact_array_backend_handoff_request()
         object.__setattr__(
@@ -13851,6 +13874,10 @@ class LoweringBoundaryTests(unittest.TestCase):
             dependency.diagnostics[0],
             code="TSL-LOWER-OPERATION-PACKAGE-DEPENDENCY-PROVENANCE-MISMATCH",
             severity="error",
+        )
+        self.assertEqual(
+            dependency.diagnostics[0].location,
+            broken_dependency.value_backend_uninit_array_request.source_location,
         )
 
     def test_m93_operation_package_determinism_for_reordered_inputs(self) -> None:
@@ -13940,6 +13967,14 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(package_keys(first), package_keys(second))
 
     def test_m93_operation_package_import_boundary_and_public_facade(self) -> None:
+        operation_package_modules = (
+            lowering_operation_package,
+            lowering_operation_package_diagnostics,
+            lowering_operation_package_exact_array,
+            lowering_operation_package_mini_tsil,
+            lowering_operation_package_models,
+            lowering_operation_package_sources,
+        )
         forbidden_exact_modules = (
             "tslgen.lowering.boundary",
             "tslgen.lowering",
@@ -13954,39 +13989,60 @@ class LoweringBoundaryTests(unittest.TestCase):
             "frozen",
         )
         imported_forbidden: list[str] = []
-        tree = ast.parse(inspect.getsource(lowering_operation_package))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.name in forbidden_exact_modules or alias.name.startswith(
+        for operation_package_module in operation_package_modules:
+            tree = ast.parse(inspect.getsource(operation_package_module))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if (
+                            alias.name in forbidden_exact_modules
+                            or alias.name.startswith(forbidden_prefixes)
+                        ):
+                            imported_forbidden.append(alias.name)
+                elif isinstance(node, ast.ImportFrom):
+                    module = node.module or ""
+                    if module in forbidden_exact_modules or module.startswith(
                         forbidden_prefixes,
                     ):
-                        imported_forbidden.append(alias.name)
-            elif isinstance(node, ast.ImportFrom):
-                module = node.module or ""
-                if module in forbidden_exact_modules or module.startswith(
-                    forbidden_prefixes,
-                ):
-                    imported_forbidden.append(module)
-                if node.level and node.module in (None, "", "boundary"):
-                    imported_forbidden.extend(
-                        alias.name
-                        for alias in node.names
-                        if node.module == "boundary" or alias.name == "boundary"
-                    )
+                        imported_forbidden.append(module)
+                    if node.level and node.module in (None, "", "boundary"):
+                        imported_forbidden.extend(
+                            alias.name
+                            for alias in node.names
+                            if node.module == "boundary" or alias.name == "boundary"
+                        )
 
         self.assertEqual(imported_forbidden, [])
-        source = inspect.getsource(lowering_operation_package)
-        self.assertNotIn("backend_map", source)
-        self.assertNotIn("tsldata/detail/lang", source)
-        self.assertNotIn("uninit::array", source)
-        self.assertNotIn("value<backend>", source)
-        self.assertNotIn("type<backend>", source)
-        self.assertNotIn("Stage9", source)
-        self.assertNotIn("registry", source.lower())
+        for operation_package_module in operation_package_modules:
+            source = inspect.getsource(operation_package_module)
+            self.assertNotIn("backend_map", source)
+            self.assertNotIn("tsldata/detail/lang", source)
+            self.assertNotIn("uninit::array", source)
+            self.assertNotIn("value<backend>", source)
+            self.assertNotIn("type<backend>", source)
+            self.assertNotIn("Stage9", source)
+            self.assertNotIn("registry", source.lower())
+
+        module_paths = tuple(
+            Path(cast(str, operation_package_module.__file__))
+            for operation_package_module in operation_package_modules
+        )
+        line_counts = {
+            path.name: len(path.read_text(encoding="utf-8").splitlines())
+            for path in module_paths
+        }
+        self.assertLess(line_counts["_operation_package.py"], 1000)
+        for path_name, line_count in line_counts.items():
+            with self.subTest(path_name=path_name):
+                self.assertLess(line_count, 1000)
+
         self.assertIs(
             lowering_boundary.lower_lowering_operation_package,
             lowering_operation_package.lower_lowering_operation_package,
+        )
+        self.assertIs(
+            lowering_operation_package.lower_lowering_operation_package,
+            lowering_operation_package_sources.lower_lowering_operation_package,
         )
         self.assertIs(
             lower_lowering_operation_package,
@@ -13997,6 +14053,10 @@ class LoweringBoundaryTests(unittest.TestCase):
             lowering_operation_package.LoweringOperationPackageIr,
         )
         self.assertIs(
+            lowering_operation_package.LoweringOperationPackageIr,
+            lowering_operation_package_models.LoweringOperationPackageIr,
+        )
+        self.assertIs(
             LoweringOperationPackageIr,
             lowering_operation_package.LoweringOperationPackageIr,
         )
@@ -14005,8 +14065,16 @@ class LoweringBoundaryTests(unittest.TestCase):
             lowering_operation_package.MiniTsilLeafReturnOperationPackageEntryIr,
         )
         self.assertIs(
+            lowering_operation_package.MiniTsilLeafReturnOperationPackageEntryIr,
+            lowering_operation_package_models.MiniTsilLeafReturnOperationPackageEntryIr,
+        )
+        self.assertIs(
             lowering_boundary.ExactArrayBackendHandoffOperationPackageEntryIr,
             lowering_operation_package.ExactArrayBackendHandoffOperationPackageEntryIr,
+        )
+        self.assertIs(
+            lowering_operation_package.ExactArrayBackendHandoffOperationPackageEntryIr,
+            lowering_operation_package_models.ExactArrayBackendHandoffOperationPackageEntryIr,
         )
         self.assertIn(
             "lowering_operation_package",

@@ -12425,8 +12425,8 @@ Next concrete prompt:
 
 Status:
 
-Selected by post-M93 planning. Internal planning/review returned
-`Accept With Follow-Ups`. Human acceptance is required before M94 execution.
+Accepted. The M94 execution-review loop returned `Accept With Follow-Ups`
+after one focused validation-coverage revision.
 
 Goal:
 
@@ -12514,6 +12514,50 @@ Expected outputs:
   public-surface stability, import-boundary discipline, and line-count
   guardrails.
 
+Accepted result:
+
+- Kept `tslgen.lowering._operation_package` as a 19-line facade/re-export
+  surface for the accepted M93 public operation-package API.
+- Added focused private operation-package ownership:
+  - `_operation_package_models.py` owns package/entry value models,
+    source-family literal ownership, and deterministic keys.
+  - `_operation_package_diagnostics.py` owns M93 diagnostic constructors and
+    source-location helper behavior.
+  - `_operation_package_sources.py` owns accepted source/stage/container
+    narrowing and exactly-one-packageable-value checks for the two accepted
+    M93 source families.
+  - `_operation_package_mini_tsil.py` owns the accepted M86 leaf-return shape
+    predicate.
+  - `_operation_package_exact_array.py` owns accepted
+    M92/M90/M89/M88/M72/M67 identity/provenance contract validation.
+- Preserved accepted M93 behavior, public imports, diagnostic codes and source
+  locations, package keys, stage name/order, snapshots, object identity,
+  deterministic ordering, selected-branch-only behavior, and no-external-input
+  boundaries.
+- Added focused validation coverage proving operation-package public facade
+  stability, one-way import boundaries for every split module, line-count
+  guardrails, and representative diagnostic source-location preservation.
+
+Files changed:
+
+- `tslgen/src/tslgen/lowering/_operation_package.py`
+- `tslgen/src/tslgen/lowering/_operation_package_diagnostics.py`
+- `tslgen/src/tslgen/lowering/_operation_package_exact_array.py`
+- `tslgen/src/tslgen/lowering/_operation_package_mini_tsil.py`
+- `tslgen/src/tslgen/lowering/_operation_package_models.py`
+- `tslgen/src/tslgen/lowering/_operation_package_sources.py`
+- `tslgen/tests/unit/test_lowering_boundary.py`
+
+Final line counts:
+
+- `tslgen/src/tslgen/lowering/boundary.py`: 1,280
+- `tslgen/src/tslgen/lowering/_operation_package.py`: 19
+- `tslgen/src/tslgen/lowering/_operation_package_diagnostics.py`: 136
+- `tslgen/src/tslgen/lowering/_operation_package_exact_array.py`: 174
+- `tslgen/src/tslgen/lowering/_operation_package_mini_tsil.py`: 36
+- `tslgen/src/tslgen/lowering/_operation_package_models.py`: 153
+- `tslgen/src/tslgen/lowering/_operation_package_sources.py`: 604
+
 Tests required:
 
 - Existing M93 positive, diagnostic, identity/provenance, determinism,
@@ -12528,6 +12572,28 @@ Tests required:
   resolution, Stage 9 planning, renderer-ready IR, rendering, generated
   output, source repair, operation registry, semantic dispatcher, generic TSIL
   parsing, or generic backend-helper evaluation is introduced.
+
+Final validation results:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_operation_package.py tslgen/src/tslgen/lowering/_operation_package_*.py`:
+  `boundary.py` 1,280, `_operation_package.py` 19,
+  `_operation_package_diagnostics.py` 136,
+  `_operation_package_exact_array.py` 174,
+  `_operation_package_mini_tsil.py` 36,
+  `_operation_package_models.py` 153,
+  `_operation_package_sources.py` 604, total 2,402.
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_operation_package.py tslgen/src/tslgen/lowering/_operation_package_*.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_pipeline.py`:
+  exit 0, no output.
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m94 or operation_package or provenance or diagnostics"`:
+  38 passed, 293 deselected.
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`:
+  331 passed.
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`:
+  `Success: no issues found in 34 source files`.
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`: corpus probes
+  3 passed, unittest discovery ran 665 tests OK, compileall OK, ruff all
+  checks passed, mypy success across 138 source files, and diff-check OK.
+- `git diff --check`: exit 0, no output.
 
 Validation commands:
 
@@ -12552,7 +12618,18 @@ Review risks:
 - Adding new package families before the M93 maintainability follow-up is
   resolved.
 
+Review follow-ups:
+
+- `_operation_package_sources.py` remains focused at 604 lines but necessarily
+  uses duck-typed accepted containers through `hasattr`/`getattr` for the M93
+  surface. Future package-family work must not grow this into a generic source
+  protocol or dispatcher.
+- The current line-count test asserts each operation-package module remains
+  below 1,000 lines. A future maintainability pass may choose a tighter
+  threshold for operation-package private modules so a near-guardrail
+  replacement monolith cannot technically pass.
+
 Next concrete prompt:
 
-- `docs/agent/runs/post-m93-acceptance-finalization-prompt.md` converts human
-  acceptance of post-M93 planning into the M94 execution-review loop prompt.
+- `docs/agent/runs/post-m94-planning-plus-review-prompt.md` runs post-M94
+  planning and review with a lowering focus.
