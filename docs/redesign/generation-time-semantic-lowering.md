@@ -822,15 +822,14 @@ translation, renderer-ready IR, rendering, generated output, generic backend
 helper evaluation, source-body repair, broad protocols, hidden backfeeds, or
 fixpoint machinery.
 
-Post-M92 planning selects M93 as a dual-source lowering operation package
-boundary, pending human acceptance. M93 should package exactly two already
-accepted typed source families: M86 mini-TSIL leaf return statements and M92
-exact array backend-handoff requests. This is a Stage 8 typed package boundary
-only, not broad cross-primitive semantics: it must preserve distinct
-source-family identity/provenance and must not introduce primitive-call
-discovery, dependency closure, backend planning, renderer-ready IR, rendering,
-generated output, generic TSIL parsing, source repair, registries,
-dispatchers, hidden backfeeds, or fixpoint machinery.
+M93 is accepted as a dual-source lowering operation package boundary. It
+packages exactly two already accepted typed source families: M86 mini-TSIL
+leaf return statements and M92 exact array backend-handoff requests. This is a
+Stage 8 typed package boundary only, not broad cross-primitive semantics: it
+preserves distinct source-family identity/provenance and must not introduce
+primitive-call discovery, dependency closure, backend planning,
+renderer-ready IR, rendering, generated output, generic TSIL parsing, source
+repair, registries, dispatchers, hidden backfeeds, or fixpoint machinery.
 
 M61 diagnostics:
 
@@ -1219,6 +1218,36 @@ M92 diagnostics:
   deferred backend-uninit value, or M67 backend-value request record disagree
   on required object identity or provenance.
 
+M93 diagnostics:
+
+- `TSL-LOWER-OPERATION-PACKAGE-SOURCE-UNSUPPORTED`: the source is not an
+  accepted M86 `TsilReturnStatement`, accepted M86 `selected_body_lowering`
+  stage, accepted M92 `ExactArrayBackendHandoffRequestIr`, accepted M92
+  `array_backend_handoff_request` stage, or narrow container carrying exactly
+  one such accepted typed value.
+- `TSL-LOWER-OPERATION-PACKAGE-VALUE-MISSING`: a narrow source/container does
+  not carry the selected packageable accepted M86 or M92 value.
+- `TSL-LOWER-OPERATION-PACKAGE-VALUE-MULTIPLE`: a narrow source/container
+  carries more than one packageable accepted value.
+- `TSL-LOWER-OPERATION-PACKAGE-MALFORMED`: a runtime container entry is not
+  the expected typed value, or a mini-TSIL return statement does not match the
+  accepted M86 leaf-return shapes.
+- `TSL-LOWER-OPERATION-PACKAGE-SOURCE-FAMILY-MISMATCH`: a requested package
+  source family does not match the accepted typed source value.
+- `TSL-LOWER-OPERATION-PACKAGE-CONTEXT-MISMATCH`: candidate context on an
+  explicit argument or narrow container does not match the accepted package
+  source value.
+- `TSL-LOWER-OPERATION-PACKAGE-SOURCE-LOCATION-MISMATCH`: explicit source
+  location context disagrees with the accepted M92 request or existing package.
+- `TSL-LOWER-OPERATION-PACKAGE-PROVENANCE-MISMATCH`: the accepted M92 request
+  no longer preserves its M90/M89/M88 identity chain.
+- `TSL-LOWER-OPERATION-PACKAGE-DEPENDENCY-PROVENANCE-MISMATCH`: the accepted
+  M92 dependency request no longer preserves its M90/M89/M72/M67 identity
+  chain.
+- `TSL-LOWER-OPERATION-PACKAGE-SOURCE-AMBIGUOUS`: a narrow source/container
+  carries both accepted M86 and accepted M92 packageable values and no
+  `source_family` was provided.
+
 ## Explicit Deferrals
 
 Deferred beyond the implemented M43-M76 semantic-lowering, structural
@@ -1242,9 +1271,9 @@ accepted M87 exact return-emission structural/request IR, accepted M88 exact
 array-body structural package assembly, accepted M89 exact array
 backend-deferred request inventory, accepted M90 exact array lowering
 completion-package handoff, accepted M91 behavior-preserving exact array
-pipeline ownership consolidation, and accepted M92 exact array lowering
-backend-handoff request, plus selected pending M93 dual-source lowering
-operation package boundary planning:
+pipeline ownership consolidation, accepted M92 exact array lowering
+backend-handoff request, and accepted M93 dual-source lowering operation
+package boundary:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask

@@ -12255,15 +12255,14 @@ Next concrete prompt:
 
 Status:
 
-Selected by accepted post-M92 planning. Human acceptance is recorded. M93 is
-ready for execution through
-`docs/agent/runs/m93-execution-review-loop-prompt.md`. The selected plan is a
-Stage 8 lowering operation package boundary seed over exactly two accepted
-typed source families: accepted M86 mini-TSIL leaf return statements and
-accepted M92 exact array backend-handoff requests. The slice is intended to
-prove that lowering packaging is not array-only without creating a broad
-operation framework, dispatcher, backend plan, renderer input, or semantic
-body normalizer.
+Accepted. The M93 execution-review loop returned `Accept With Follow-Ups`
+after a focused revision for container-context validation and M86 mini-TSIL
+source-shape narrowing. M93 implemented a Stage 8 lowering operation package
+boundary seed over exactly two accepted typed source families: accepted M86
+mini-TSIL leaf return statements and accepted M92 exact array backend-handoff
+requests. The slice proves that lowering packaging is not array-only without
+creating a broad operation framework, dispatcher, backend plan, renderer
+input, or semantic body normalizer.
 
 Goal:
 
@@ -12348,6 +12347,24 @@ Expected outputs:
   mismatch, context mismatch, source-location mismatch, dependency/provenance
   mismatch, and package-source ambiguity.
 
+Accepted result:
+
+- Added focused private `tslgen.lowering._operation_package` ownership for
+  `LoweringOperationPackageIr`, the two exact package entry variants, package
+  keys, source narrowing, provenance validation, and M93 diagnostics.
+- Added `LoweredImplementation.operation_packages` and the typed
+  `lowering_operation_package` stage/snapshot fact after accepted M86
+  `selected_body_lowering` outputs or accepted M92
+  `array_backend_handoff_request` outputs.
+- Preserved accepted M86 `TsilReturnStatement` object identity and accepted
+  M92/M90/M89/M88/M72/M67 provenance identity. Mini-TSIL package inputs are
+  narrowed to the accepted M86 leaf-return shapes rather than all possible
+  manually constructed `TsilReturnStatement` values.
+- Review recorded non-blocking follow-ups to keep `_operation_package.py` from
+  becoming a replacement monolith, avoid future facade growth in
+  `boundary.py`, and prevent package source narrowing from evolving into a
+  central semantic dispatcher.
+
 Tests required:
 
 - Positive M93 tests for direct M86 statement plus explicit candidate context,
@@ -12401,5 +12418,5 @@ Review risks:
 
 Next concrete prompt:
 
-- `docs/agent/runs/m93-execution-review-loop-prompt.md` runs the accepted M93
-  execution-review loop.
+- `docs/agent/runs/post-m93-planning-plus-review-prompt.md` runs post-M93
+  planning and review with a lowering focus.

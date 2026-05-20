@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 92 is accepted.
+Milestone 93 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -821,44 +821,54 @@ remaining narrow: it packages exactly accepted M86 mini-TSIL leaf return
 values and accepted M92 exact array backend-handoff requests as distinct Stage
 8 typed/provenance entries. Planning review returned `Accept With Follow-Ups`
 after the initial cross-primitive wording was tightened from a broad operation
-framework into a dual-source package boundary seed. Human acceptance is
-recorded, and M93 execution is the active workflow action.
+framework into a dual-source package boundary seed. Human acceptance was
+recorded before M93 execution began.
+
+The M93 execution-review loop returned `Accept With Follow-Ups` after focused
+revision. The revision tightened narrow container candidate-context validation
+and rejected manually constructed mini-TSIL return statements outside the
+accepted M86 leaf-return shapes. M93 is accepted as Stage 8 dual-source
+operation package boundary work: it adds focused
+`tslgen.lowering._operation_package` ownership, exposes
+`LoweredImplementation.operation_packages`, and appends
+`lowering_operation_package` facts for accepted M86 mini-TSIL leaf returns and
+accepted M92 exact array backend-handoff requests without adding backend
+planning, renderer-ready IR, broad body semantics, source repair, registries,
+or dispatchers.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 93.
+Run post-M93 planning and review with a lowering focus.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m93-execution-review-loop-prompt.md
+docs/agent/runs/post-m93-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 93: Dual-Source Lowering Operation Package Boundary Slice
+None. M93 is accepted; the active action is post-M93 planning.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M92 planning is accepted. It selected M93 and returned
-Accept With Follow-Ups after tightening M93 into a dual-source package
-boundary over accepted M86 and M92 facts, not a broad cross-primitive
-operation framework.
+M93 execution-review loop returned Accept With Follow-Ups after focused
+implementation and documentation revisions.
 ```
 
 Next expected action:
 
 ```text
-Run the active M93 execution-review loop prompt. Use exactly one write-capable
-executor followed by read-only review/audit subagents. Do not start post-M93
-planning until M93 review returns Accept or Accept With Follow-Ups.
+Run the active post-M93 planning-plus-review prompt. Focus on lowering. Do not
+implement code unless the prompt explicitly selects an executor task. Before
+finishing, update this state file and create the next concrete run prompt.
 ```
 
 Accepted planning prompt:
@@ -1663,6 +1673,12 @@ Active M93 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m93-execution-review-loop-prompt.md
+```
+
+Active post-M93 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m93-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2550,10 +2566,10 @@ docs/agent/runs/m93-execution-review-loop-prompt.md
   create renderer-ready IR, render output, broaden TSIL parsing, repair source
   bodies, infer declaration/array/store/return/SVE/body semantics, introduce
   broad protocols, hidden backfeeds, fixpoint machinery, or hardwiring.
-- M93 is selected for execution as a dual-source lowering operation package
-  boundary only. It may package accepted M86 mini-TSIL leaf return values and
-  accepted M92 exact array backend-handoff requests as distinct typed Stage 8
-  entries, but it must not become a broad cross-primitive operation framework.
+- M93 is accepted as a dual-source lowering operation package boundary only.
+  It packages accepted M86 mini-TSIL leaf return values and accepted M92 exact
+  array backend-handoff requests as distinct typed Stage 8 entries, but it
+  must not become a broad cross-primitive operation framework.
 - M93 must not add backend maps/catalog reads, backend-uninit resolution,
   Stage 9 backend planning, backend translation, renderer-ready IR, rendering,
   generated output, primitive dependency closure, operation scheduling,
@@ -3805,11 +3821,16 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   broaden it into a generic cross-primitive operation framework, operation
   registry, semantic dispatcher, dependency solver, backend plan, or renderer
   input.
+- M93 execution follow-ups: `_operation_package.py` is cohesive but close to
+  the 1,000-line guardrail, so the next package-family milestone should split
+  diagnostics/provenance helpers before adding more families. `boundary.py`
+  is 1,280 lines and should not absorb new ownership. Future package source
+  narrowing must not evolve into a central semantic dispatcher.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M93 through the
-active M93 execution-review loop prompt.
+No stop condition is active. The workflow is ready for post-M93 planning
+through the active post-M93 planning-plus-review prompt.
 
 ## Validation Expectations
 

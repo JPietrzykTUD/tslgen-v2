@@ -33,6 +33,7 @@ import tslgen.lowering._array_body_sources as _array_body_sources
 import tslgen.lowering._array_body_validation as _array_body_validation
 import tslgen.lowering._lowering_inputs as _lowering_inputs
 import tslgen.lowering._mini_tsil_lowering as _mini_tsil_lowering
+import tslgen.lowering._operation_package as _operation_package
 import tslgen.lowering._return_emission as _return_emission
 import tslgen.lowering._selected_body_lowering as _selected_body_lowering
 import tslgen.lowering._stage_contracts as _stage_contracts
@@ -125,6 +126,12 @@ from tslgen.lowering._array_body_backend_handoff import (
     ExactArrayBackendHandoffRequestIr as ExactArrayBackendHandoffRequestIr,
     ExactArrayBackendHandoffUnresolvedDependencyRequestIr as ExactArrayBackendHandoffUnresolvedDependencyRequestIr,
 )
+from tslgen.lowering._operation_package import (
+    ExactArrayBackendHandoffOperationPackageEntryIr as ExactArrayBackendHandoffOperationPackageEntryIr,
+    LoweringOperationPackageIr as LoweringOperationPackageIr,
+    LoweringOperationPackageSourceFamily as LoweringOperationPackageSourceFamily,
+    MiniTsilLeafReturnOperationPackageEntryIr as MiniTsilLeafReturnOperationPackageEntryIr,
+)
 from tslgen.lowering._stage_contracts import (
     GenerationLoweringStage,
     GenerationLoweringStageName,
@@ -146,6 +153,7 @@ _ARRAY_BODY_MODEL_FACADE_EXPORTS = (
     _array_body_backend_deferred_requests,
     _array_body_completion_package,
     _array_body_backend_handoff,
+    _operation_package,
     _array_body_shapes,
     _array_body_validation,
     _return_emission,
@@ -204,6 +212,7 @@ lower_exact_array_body_structural_package = _array_body_package.lower_exact_arra
 lower_exact_array_backend_deferred_request_inventory = _array_body_backend_deferred_requests.lower_exact_array_backend_deferred_request_inventory
 lower_exact_array_lowering_completion_package = _array_body_completion_package.lower_exact_array_lowering_completion_package
 lower_exact_array_backend_handoff_request = _array_body_backend_handoff.lower_exact_array_backend_handoff_request
+lower_lowering_operation_package = _operation_package.lower_lowering_operation_package
 _classify_payload = _lowering_inputs._classify_payload
 _unsupported_payload_diagnostic = _lowering_inputs._unsupported_payload_diagnostic
 _mini_return_statement = _mini_tsil_lowering._mini_return_statement
@@ -439,6 +448,7 @@ class LoweredImplementation:
     array_backend_handoff_requests: tuple[
         ExactArrayBackendHandoffRequestIr, ...
     ] = ()
+    operation_packages: tuple[LoweringOperationPackageIr, ...] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -572,6 +582,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "operation_packages",
+            tuple(self.operation_packages),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -651,6 +666,7 @@ class LoweredImplementation:
                 package.key for package in self.array_lowering_completion_packages
             ),
             tuple(request.key for request in self.array_backend_handoff_requests),
+            tuple(package.key for package in self.operation_packages),
             tuple(stage.key for stage in self.generation_stages),
         )
 
@@ -917,6 +933,12 @@ def _selected_body_stage(
     return GenerationLoweringStage(stage="selected_body_lowering", output=output)
 
 
+def _lowering_operation_package_stage(
+    output: LoweringOperationPackageIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(stage="lowering_operation_package", output=output)
+
+
 def _selected_body_form_recognition_stage(
     output: GenerationSelectedBranchBodyAssignmentRecognition,
 ) -> GenerationLoweringStage:
@@ -1115,6 +1137,9 @@ def _lower_input(
                     array_backend_handoff_requests=(
                         array_initialization_pipeline.array_backend_handoff_requests
                     ),
+                    operation_packages=(
+                        array_initialization_pipeline.operation_packages
+                    ),
                     generation_stages=(
                         _recognition_stage(
                             "generation.control_flow",
@@ -1156,6 +1181,14 @@ def _lower_input(
     if not statement.is_ok:
         return Result.failure(statement.diagnostics)
     lowered_statement = statement.unwrap()
+    operation_package_result = lower_lowering_operation_package(
+        lowered_statement,
+        candidate_id=item.candidate_id,
+        source_location=item.source_location,
+    )
+    if not operation_package_result.is_ok:
+        return Result.failure(operation_package_result.diagnostics)
+    operation_package = operation_package_result.unwrap()
 
     return Result.ok(
         LoweredImplementation(
@@ -1163,9 +1196,11 @@ def _lower_input(
             status="lowered",
             statements=(lowered_statement,),
             generation_branches=generation_branches,
+            operation_packages=(operation_package,),
             generation_stages=(
                 *generation_stages,
                 _selected_body_stage(lowered_statement),
+                _lowering_operation_package_stage(operation_package),
             ),
         )
     )

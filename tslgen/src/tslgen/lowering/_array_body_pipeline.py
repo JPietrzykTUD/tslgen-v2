@@ -37,6 +37,7 @@ from tslgen.lowering._array_body_completion_package import (
 from tslgen.lowering._array_body_backend_handoff import (
     lower_exact_array_backend_handoff_request,
 )
+from tslgen.lowering._operation_package import lower_lowering_operation_package
 from tslgen.lowering._array_body_pipeline_results import (
     _ExactArrayInitializationStagePipelineResult,
 )
@@ -522,6 +523,17 @@ def _lower_exact_array_initialization_stage_pipeline(
             backend_handoff_request,
         )
     )
+    operation_package_result = lower_lowering_operation_package(
+        backend_handoff_request_stage,
+    )
+    if not operation_package_result.is_ok:
+        return Result.failure(operation_package_result.diagnostics)
+    operation_package = operation_package_result.unwrap()
+    operation_package_stage = (
+        _array_body_stage_assembly._lowering_operation_package_stage(
+            operation_package,
+        )
+    )
 
     return Result.ok(
         _array_body_stage_assembly._assemble_exact_array_initialization_stage_pipeline_result(
@@ -563,6 +575,8 @@ def _lower_exact_array_initialization_stage_pipeline(
             completion_package=completion_package,
             backend_handoff_request_stage=backend_handoff_request_stage,
             backend_handoff_request=backend_handoff_request,
+            operation_package_stage=operation_package_stage,
+            operation_package=operation_package,
         )
     )
 

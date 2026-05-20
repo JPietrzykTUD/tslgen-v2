@@ -29,6 +29,7 @@ from tslgen.lowering._array_body_models import (
 from tslgen.lowering._array_body_package import (
     ExactArrayBodyStructuralPackageIr,
 )
+from tslgen.lowering._operation_package import LoweringOperationPackageIr
 from tslgen.lowering._stage_contracts import GenerationLoweringStage
 
 
@@ -80,6 +81,7 @@ class _ExactArrayInitializationStagePipelineResult:
     array_backend_handoff_requests: tuple[
         ExactArrayBackendHandoffRequestIr, ...
     ] = ()
+    operation_packages: tuple[LoweringOperationPackageIr, ...] = ()
     pipeline_snapshot: _lowering_pipeline.ExactArrayBodyPipelineSnapshot = field(
         default_factory=_lowering_pipeline.ExactArrayBodyPipelineSnapshot.empty,
     )
@@ -166,6 +168,11 @@ class _ExactArrayInitializationStagePipelineResult:
             "array_backend_handoff_requests",
             tuple(self.array_backend_handoff_requests),
         )
+        object.__setattr__(
+            self,
+            "operation_packages",
+            tuple(self.operation_packages),
+        )
         object.__setattr__(self, "pipeline_snapshot", self.pipeline_snapshot)
         object.__setattr__(self, "stages", tuple(self.stages))
 
@@ -234,6 +241,7 @@ class _ExactArrayInitializationStagePipelineResult:
             tuple(
                 request.key for request in self.array_backend_handoff_requests
             ),
+            tuple(package.key for package in self.operation_packages),
             self.pipeline_snapshot.key,
             tuple(stage.key for stage in self.stages),
         )

@@ -30,6 +30,7 @@ from tslgen.lowering._array_body_package import (
 from tslgen.lowering._array_body_pipeline_results import (
     _ExactArrayInitializationStagePipelineResult,
 )
+from tslgen.lowering._operation_package import LoweringOperationPackageIr
 from tslgen.lowering._stage_contracts import GenerationLoweringStage
 
 
@@ -177,6 +178,15 @@ def _array_backend_handoff_request_stage(
     )
 
 
+def _lowering_operation_package_stage(
+    output: LoweringOperationPackageIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="lowering_operation_package",
+        output=output,
+    )
+
+
 def _assemble_exact_array_initialization_stage_pipeline_result(
     *,
     array_body_stage: GenerationLoweringStage,
@@ -211,6 +221,8 @@ def _assemble_exact_array_initialization_stage_pipeline_result(
     completion_package: ExactArrayLoweringCompletionPackageIr,
     backend_handoff_request_stage: GenerationLoweringStage,
     backend_handoff_request: ExactArrayBackendHandoffRequestIr,
+    operation_package_stage: GenerationLoweringStage,
+    operation_package: LoweringOperationPackageIr,
 ) -> _ExactArrayInitializationStagePipelineResult:
     pipeline_stages = (
         array_body_stage,
@@ -229,6 +241,7 @@ def _assemble_exact_array_initialization_stage_pipeline_result(
         backend_deferred_inventory_stage,
         completion_package_stage,
         backend_handoff_request_stage,
+        operation_package_stage,
     )
     pipeline_snapshot = _assemble_exact_array_body_pipeline_snapshot(
         array_body_stage=array_body_stage,
@@ -265,6 +278,8 @@ def _assemble_exact_array_initialization_stage_pipeline_result(
         completion_package=completion_package,
         backend_handoff_request_stage=backend_handoff_request_stage,
         backend_handoff_request=backend_handoff_request,
+        operation_package_stage=operation_package_stage,
+        operation_package=operation_package,
     )
 
     return _ExactArrayInitializationStagePipelineResult(
@@ -302,6 +317,7 @@ def _assemble_exact_array_initialization_stage_pipeline_result(
         ),
         array_lowering_completion_packages=(completion_package,),
         array_backend_handoff_requests=(backend_handoff_request,),
+        operation_packages=(operation_package,),
         pipeline_snapshot=pipeline_snapshot,
         stages=pipeline_stages,
     )
@@ -341,6 +357,8 @@ def _assemble_exact_array_body_pipeline_snapshot(
     completion_package: ExactArrayLoweringCompletionPackageIr,
     backend_handoff_request_stage: GenerationLoweringStage,
     backend_handoff_request: ExactArrayBackendHandoffRequestIr,
+    operation_package_stage: GenerationLoweringStage,
+    operation_package: LoweringOperationPackageIr,
 ) -> _lowering_pipeline.ExactArrayBodyPipelineSnapshot:
     return _lowering_pipeline.ExactArrayBodyPipelineSnapshot(
         steps=(
@@ -488,6 +506,14 @@ def _assemble_exact_array_body_pipeline_snapshot(
                 artifact_key=backend_handoff_request.key,
                 artifact_value=backend_handoff_request,
                 depends_on=("array_lowering_completion_package",),
+            ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="lowering_operation_package",
+                stage=operation_package_stage,
+                artifact_kind="lowering_operation_package",
+                artifact_key=operation_package.key,
+                artifact_value=operation_package,
+                depends_on=("array_backend_handoff_request",),
             ),
         ),
     )

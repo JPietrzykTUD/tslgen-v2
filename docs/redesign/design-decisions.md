@@ -1643,14 +1643,13 @@ Consequences:
   M92 is not a wrapper-only abstraction, and it does not resolve backend
   values, read backend maps, create Stage 9 plans, render output, introduce
   broad protocols, or repair source bodies.
-- Post-M92 planning selects M93 as a dual-source lowering operation package
-  boundary before backend planning, pending human acceptance. The decision is
-  to prove the lowering package shape is not array-only by packaging exactly
-  the accepted M86 mini-TSIL leaf return source family and accepted M92 exact
-  array backend-handoff source family as distinct typed Stage 8 entries. M93
-  must not create a broad operation framework, semantic dispatcher, operation
-  registry, dependency solver, Stage 9 backend plan, renderer-ready IR, or
-  source-body repair path.
+- M93 is accepted as a dual-source lowering operation package boundary before
+  backend planning. The decision proves the lowering package shape is not
+  array-only by packaging exactly the accepted M86 mini-TSIL leaf return source
+  family and accepted M92 exact array backend-handoff source family as
+  distinct typed Stage 8 entries. M93 must not create a broad operation
+  framework, semantic dispatcher, operation registry, dependency solver, Stage
+  9 backend plan, renderer-ready IR, or source-body repair path.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

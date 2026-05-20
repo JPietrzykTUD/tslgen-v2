@@ -1170,18 +1170,23 @@ Recommended first parity checks:
   28 source files, and full tooling validation success with corpus probes
   `3 passed`, unit discovery `657` tests OK, compileall OK, ruff OK, mypy OK
   across 132 source files, and diff-check OK.
-- Planned M93 coverage should prove a dual-source lowering operation package
-  boundary without backend planning or broad semantic normalization. Tests
-  should cover accepted M86 mini-TSIL leaf return package entries, accepted
-  M92 exact array backend-handoff package entries, direct typed value input,
-  stage/container input, normal lowered-implementation/plan integration,
-  identity/provenance preservation, deterministic package keys and ordering,
-  diagnostics for unsupported/missing/duplicate/malformed/ambiguous sources
-  and context/provenance mismatches, import-boundary checks, and negative
-  assertions that no backend map reads, backend-uninit resolution, Stage 9
-  planning, renderer-ready IR, rendering, generated output, source repair,
-  operation registry, semantic dispatcher, generic TSIL parsing, or generic
-  backend-helper evaluation is introduced.
+- M93 coverage proves a dual-source lowering operation package boundary
+  without backend planning or broad semantic normalization. Tests cover
+  accepted M86 mini-TSIL leaf return package entries, accepted M92 exact array
+  backend-handoff package entries, direct typed value input, stage/container
+  input, normal lowered-implementation/plan integration, pipeline snapshot
+  integration, identity/provenance preservation, deterministic package keys
+  and ordering, diagnostics for unsupported/missing/duplicate/malformed/
+  ambiguous sources and context/provenance mismatches, import-boundary checks,
+  and negative assertions that no backend map reads, backend-uninit
+  resolution, Stage 9 planning, renderer-ready IR, rendering, generated
+  output, source repair, operation registry, semantic dispatcher, generic TSIL
+  parsing, or generic backend-helper evaluation is introduced. M93 validation
+  returned focused package tests `18 passed, 313 deselected`, full
+  lowering-boundary `331 passed`, focused lowering mypy success across 29
+  source files, and full tooling validation success with corpus probes
+  `3 passed`, unit discovery `665` tests OK, compileall OK, ruff OK, mypy OK
+  across 133 source files, and diff-check OK.
 
 Deferred parity checks:
 
