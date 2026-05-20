@@ -702,15 +702,16 @@ backend planning. M90 does not complete declaration, array, store, return,
 pointer, SVE, backend, renderer, generated-output, generic backend-value, or
 broad TSIL body semantics, and it does not repair source bodies.
 
-Post-M90 planning selects M91 as a behavior-preserving Stage 8 exact array
-pipeline ownership consolidation slice. It should move exact array pipeline
-result aggregation, stage/snapshot assembly, and public handoff aggregation
-into focused private ownership while preserving accepted M64-M90 behavior.
-M91 is not a semantic lowering milestone: it must not change diagnostics,
-stage names/order, deterministic keys, output identities, public imports,
-selected-branch-only behavior, pipeline snapshots, backend boundaries,
-rendering/output behavior, broad TSIL/body semantics, or source-body repair
-policy.
+M91 is accepted as a behavior-preserving Stage 8 exact array pipeline
+ownership consolidation slice. It moves exact array pipeline result DTO/key
+ownership into `tslgen.lowering._array_body_pipeline_results` and exact stage
+construction plus result/snapshot assembly into
+`tslgen.lowering._array_body_stage_assembly`, while preserving accepted
+M64-M90 behavior. M91 is not a semantic lowering milestone: it does not change
+diagnostics, stage names/order, deterministic keys, output identities, public
+imports, selected-branch-only behavior, pipeline snapshots, backend
+boundaries, rendering/output behavior, broad TSIL/body semantics, or
+source-body repair policy.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic

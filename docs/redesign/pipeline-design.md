@@ -742,15 +742,15 @@ backend maps/catalogs, resolve backend uninit, create renderer-ready IR, render
 output, infer declaration/store/return/SVE/backend semantics, or repair source
 text.
 
-Post-M90 planning selects M91 as a behavior-preserving Stage 8 exact array
-pipeline ownership consolidation step. It should not add a new semantic
-lowering stage or alter the accepted stage order. Instead, it should move
-exact array pipeline result aggregation, stage construction, snapshot step
-assembly, and public handoff aggregation into focused private modules. The
-pipeline contract remains the accepted M64-M90 contract: same stage names,
+M91 is accepted as a behavior-preserving Stage 8 exact array pipeline
+ownership consolidation step. It does not add a new semantic lowering stage or
+alter the accepted stage order. Instead, it moves exact array pipeline result
+aggregation into `_array_body_pipeline_results.py` and exact stage
+construction plus snapshot step assembly into `_array_body_stage_assembly.py`.
+The pipeline contract remains the accepted M64-M90 contract: same stage names,
 same stage ordering, same deterministic keys, same output object identities,
-same diagnostics, same selected-branch-only behavior, and same snapshots.
-M91 must not introduce broad dispatchers, hidden recursive backfeeds, fixpoint
+same diagnostics, same selected-branch-only behavior, and same snapshots. M91
+does not introduce broad dispatchers, hidden recursive backfeeds, fixpoint
 coordination, backend planning, rendering, generated output, or broad source
 protocols.
 

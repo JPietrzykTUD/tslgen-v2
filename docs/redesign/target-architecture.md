@@ -668,14 +668,14 @@ Current roadmap note:
   introduce backend planning, backend maps, rendering, generated output, raw
   helper dispatch, broad protocols, hidden backfeeds, source-body repair, or
   generic backend-value evaluation.
-- Post-M90 planning selects M91 as exact array pipeline ownership
-  consolidation. The intended architecture is behavior-preserving: keep
-  `boundary.py` as public facade/projection and `_array_body_pipeline.py` as
-  orchestration, while moving exact array result aggregation, stage/snapshot
-  assembly, and public handoff aggregation into focused private modules with
-  one-way imports. The new modules must not become replacement monoliths,
-  broad registries, raw-helper dispatchers, backend/rendering hooks, hidden
-  backfeed engines, or fixpoint coordinators.
+- M91 is accepted as exact array pipeline ownership consolidation. The
+  architecture is behavior-preserving: `boundary.py` remains the public
+  facade/projection, `_array_body_pipeline.py` is now orchestration at 591
+  lines, `_array_body_pipeline_results.py` owns exact array result DTO/key
+  behavior, and `_array_body_stage_assembly.py` owns stage/snapshot assembly.
+  The new modules do not become replacement monoliths, broad registries,
+  raw-helper dispatchers, backend/rendering hooks, hidden backfeed engines, or
+  fixpoint coordinators.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

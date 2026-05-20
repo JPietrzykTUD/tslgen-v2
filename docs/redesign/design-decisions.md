@@ -1626,15 +1626,16 @@ Consequences:
   planning, renderer-ready IR, rendering, generated output, generic
   backend-value evaluation, broad protocols, raw helper dispatch, hidden
   backfeeds, fixpoint machinery, and source-body repair.
-- Post-M90 planning selects M91 as a behavior-preserving exact array pipeline
-  ownership consolidation before adding more lowering semantics. The decision
-  is to reduce future Stage 8 friction by giving exact array pipeline result
-  aggregation, stage/snapshot assembly, and public handoff aggregation focused
-  private ownership instead of adding another stage or aggregate field to
-  `boundary.py` or `_array_body_pipeline.py`. M91 must preserve accepted
-  M64-M90 behavior and must not become a semantic lowering slice, backend
-  planning boundary, renderer hook, broad protocol, registry, hidden backfeed
-  engine, fixpoint coordinator, or source-body repair mechanism.
+- M91 is accepted as a behavior-preserving exact array pipeline ownership
+  consolidation before adding more lowering semantics. The decision reduces
+  future Stage 8 friction by giving exact array pipeline result aggregation
+  focused `_array_body_pipeline_results.py` ownership and stage/snapshot
+  assembly focused `_array_body_stage_assembly.py` ownership instead of adding
+  another stage or aggregate field to `boundary.py` or
+  `_array_body_pipeline.py`. M91 preserves accepted M64-M90 behavior and does
+  not become a semantic lowering slice, backend planning boundary, renderer
+  hook, broad protocol, registry, hidden backfeed engine, fixpoint
+  coordinator, or source-body repair mechanism.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

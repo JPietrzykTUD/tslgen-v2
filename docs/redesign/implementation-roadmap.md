@@ -11962,9 +11962,9 @@ Next concrete prompt:
 
 Status:
 
-Selected by accepted post-M90 planning. Human acceptance is recorded. M91 is
-ready for execution through
-`docs/agent/runs/m91-execution-review-loop-prompt.md`.
+Accepted. The M91 execution-review loop returned `Accept With Follow-Ups` with
+no blocking implementation, validation, boundary, documentation, evidence, or
+review issues.
 
 Goal:
 
@@ -12024,6 +12024,26 @@ Expected outputs:
 - Reduced or stabilized responsibilities in `boundary.py` and
   `_array_body_pipeline.py`.
 
+Execution result:
+
+- Added focused `tslgen.lowering._array_body_pipeline_results` ownership for
+  the exact array pipeline result DTO/key behavior previously concentrated in
+  `_array_body_pipeline.py`.
+- Added focused `tslgen.lowering._array_body_stage_assembly` ownership for
+  exact Stage 8 stage construction, result assembly, and pipeline snapshot
+  assembly over accepted M64-M90 outputs.
+- Kept `tslgen.lowering._array_body_pipeline` as orchestration over accepted
+  lowerers and the focused assembly helpers.
+- Preserved accepted M64-M90 diagnostics, source locations, public imports,
+  stage names/order, artifact kinds, deterministic keys, output identities,
+  selected-branch-only behavior, no-external-input boundaries, and pipeline
+  snapshots.
+- Added M91 tests for result DTO ownership, stage/snapshot stability,
+  import-boundary preservation, and line-count guardrails.
+- Reduced `_array_body_pipeline.py` from the M90 1,043-line pressure point to
+  591 physical lines without changing behavior. `boundary.py` remained
+  unchanged at 1,226 lines.
+
 Tests required:
 
 - Behavior-preservation tests proving accepted M64-M90 stage names/order,
@@ -12049,6 +12069,23 @@ Validation commands:
 - `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
 - `git diff --check`
 
+Validation result:
+
+- Line counts: `1226 boundary.py`, `591 _array_body_pipeline.py`,
+  `829 _array_body_completion_package.py`,
+  `225 _array_body_pipeline_results.py`,
+  `465 _array_body_stage_assembly.py`, `3336 total`.
+- Py-compile returned exit 0 with no output.
+- Focused M91 pytest returned `13 passed, 303 deselected in 5.67s`; read-only
+  smoke re-runs returned `13 passed, 303 deselected in 5.58s` and
+  `13 passed, 303 deselected in 5.34s`.
+- Full lowering-boundary pytest returned `316 passed in 55.88s`.
+- Focused lowering mypy returned `Success: no issues found in 27 source files`.
+- Full tooling validation returned exit 0 with corpus probes `3 passed`, unit
+  discovery `650` tests OK, compileall OK, ruff `All checks passed!`, mypy
+  `Success: no issues found in 131 source files`, and diff-check OK.
+- Standalone `git diff --check` returned exit 0 with no output.
+
 Review risks:
 
 - Moving code without creating a clearer ownership boundary.
@@ -12062,5 +12099,5 @@ Review risks:
 
 Next concrete prompt:
 
-- `docs/agent/runs/m91-execution-review-loop-prompt.md` runs the M91
-  execution-review loop.
+- `docs/agent/runs/post-m91-planning-plus-review-prompt.md` runs the next
+  lowering-focused planning pass.

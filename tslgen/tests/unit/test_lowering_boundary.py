@@ -19,8 +19,10 @@ import tslgen.lowering._array_body_lowering as lowering_array_body_lowering
 import tslgen.lowering._array_body_models as lowering_array_body_models
 import tslgen.lowering._array_body_package as lowering_array_body_package
 import tslgen.lowering._array_body_pipeline as lowering_array_body_pipeline
+import tslgen.lowering._array_body_pipeline_results as lowering_array_body_pipeline_results
 import tslgen.lowering._array_body_shapes as lowering_array_body_shapes
 import tslgen.lowering._array_body_sources as lowering_array_body_sources
+import tslgen.lowering._array_body_stage_assembly as lowering_array_body_stage_assembly
 import tslgen.lowering._array_body_validation as lowering_array_body_validation
 import tslgen.lowering._exact_shapes as lowering_exact_shapes
 import tslgen.lowering._generation_control_flow as lowering_generation_control_flow
@@ -12688,6 +12690,161 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertIs(
             lowering_boundary.ExactArrayLoweringUnresolvedDependencyIr,
             lowering_array_body_completion_package.ExactArrayLoweringUnresolvedDependencyIr,
+        )
+
+    def test_m91_pipeline_result_dto_is_owned_by_results_module(self) -> None:
+        pipeline = self.exact_array_initialization_stage_pipeline("si32")
+
+        self.assertTrue(pipeline.is_ok, pipeline.diagnostics)
+        result = pipeline.unwrap()
+        self.assertIsInstance(
+            result,
+            lowering_array_body_pipeline_results._ExactArrayInitializationStagePipelineResult,
+        )
+        self.assertIs(
+            lowering_array_body_pipeline._ExactArrayInitializationStagePipelineResult,
+            lowering_array_body_pipeline_results._ExactArrayInitializationStagePipelineResult,
+        )
+        self.assertEqual(
+            type(result).__module__,
+            "tslgen.lowering._array_body_pipeline_results",
+        )
+        self.assertEqual(result.pipeline_snapshot.stages, result.stages)
+
+    def test_m91_stage_assembly_module_preserves_pipeline_snapshot_contract(
+        self,
+    ) -> None:
+        pipeline = self.exact_array_initialization_stage_pipeline("si32")
+
+        self.assertTrue(pipeline.is_ok, pipeline.diagnostics)
+        result = pipeline.unwrap()
+        expected_stage_names = (
+            "array_body_envelope_slot_assembly",
+            "array_initialization_slot_form_lowering",
+            "array_initialization_helper_request_lowering",
+            "array_initialization_base_type_request_resolution",
+            "array_initialization_vector_length_request_resolution",
+            "array_initialization_vector_alignment_request_resolution",
+            "array_initialization_helper_set_completion",
+            "array_initialization_declaration_shell_lowering",
+            "array_body_structural_sequence_classification",
+            "predicate_path_structural_request_lowering",
+            "post_branch_intrinsic_call_site_structural_request_lowering",
+            "return_emission_structural_request_lowering",
+            "array_body_structural_package_assembly",
+            "array_backend_deferred_request_inventory",
+            "array_lowering_completion_package",
+        )
+        expected_stage_helper_names = (
+            "_array_body_envelope_slot_assembly_stage",
+            "_array_initialization_slot_form_stage",
+            "_array_initialization_helper_request_stage",
+            "_array_initialization_base_type_resolution_stage",
+            "_array_initialization_vector_length_resolution_stage",
+            "_array_initialization_vector_alignment_resolution_stage",
+            "_array_initialization_helper_set_completion_stage",
+            "_array_initialization_declaration_shell_stage",
+            "_array_body_structural_sequence_stage",
+            "_predicate_path_structural_request_stage",
+            "_post_branch_intrinsic_call_site_structural_request_stage",
+            "_return_emission_structural_request_stage",
+            "_array_body_structural_package_stage",
+            "_array_backend_deferred_request_inventory_stage",
+            "_array_lowering_completion_package_stage",
+        )
+
+        self.assertEqual(
+            tuple(stage.stage for stage in result.stages),
+            expected_stage_names,
+        )
+        self.assertEqual(
+            tuple(step.stage_name for step in result.pipeline_snapshot.steps),
+            expected_stage_names,
+        )
+        self.assertEqual(
+            tuple(step.stage for step in result.pipeline_snapshot.steps),
+            result.stages,
+        )
+        self.assertEqual(
+            tuple(step.produced_fact.value for step in result.pipeline_snapshot.steps),
+            tuple(stage.output for stage in result.stages),
+        )
+        for helper_name in expected_stage_helper_names:
+            with self.subTest(helper_name=helper_name):
+                self.assertIn(helper_name, lowering_array_body_stage_assembly.__dict__)
+                self.assertNotIn(helper_name, lowering_array_body_pipeline.__dict__)
+
+    def test_m91_pipeline_ownership_modules_import_boundary_and_line_counts(
+        self,
+    ) -> None:
+        private_modules = (
+            lowering_array_body_pipeline_results,
+            lowering_array_body_stage_assembly,
+        )
+        forbidden_exact_modules = (
+            "tslgen.lowering.boundary",
+            "tslgen.lowering",
+            "tslgen.lowering._array_body_pipeline",
+            "tslgen.lowering._array_body_sources",
+        )
+        forbidden_prefixes = (
+            "tslgen.backends",
+            "tslgen.rendering",
+            "tsldata",
+            "frozen",
+        )
+        for module in private_modules:
+            with self.subTest(module=module.__name__):
+                imported_forbidden: list[str] = []
+                tree = ast.parse(inspect.getsource(module))
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            if alias.name in forbidden_exact_modules:
+                                imported_forbidden.append(alias.name)
+                            elif alias.name.startswith(forbidden_prefixes):
+                                imported_forbidden.append(alias.name)
+                    elif isinstance(node, ast.ImportFrom):
+                        module_name = node.module or ""
+                        if module_name in forbidden_exact_modules:
+                            imported_forbidden.append(module_name)
+                        elif module_name.startswith(forbidden_prefixes):
+                            imported_forbidden.append(module_name)
+                        if node.level and node.module in (None, "", "boundary"):
+                            imported_forbidden.extend(
+                                alias.name
+                                for alias in node.names
+                                if node.module == "boundary"
+                                or alias.name == "boundary"
+                            )
+
+                source = inspect.getsource(module)
+                self.assertEqual(imported_forbidden, [])
+                self.assertNotIn("backend_map", source)
+                self.assertNotIn("render", source)
+                self.assertNotIn("open(", source)
+
+        line_counts = {
+            module.__name__: len(inspect.getsource(module).splitlines())
+            for module in (
+                lowering_boundary,
+                lowering_array_body_pipeline,
+                lowering_array_body_pipeline_results,
+                lowering_array_body_stage_assembly,
+            )
+        }
+        self.assertLessEqual(line_counts["tslgen.lowering.boundary"], 1226)
+        self.assertLessEqual(
+            line_counts["tslgen.lowering._array_body_pipeline"],
+            1043,
+        )
+        self.assertLess(
+            line_counts["tslgen.lowering._array_body_pipeline_results"],
+            1000,
+        )
+        self.assertLess(
+            line_counts["tslgen.lowering._array_body_stage_assembly"],
+            1000,
         )
 
     def test_exact_array_initialization_slot_form_api_uses_envelope_slot_only(

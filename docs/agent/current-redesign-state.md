@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 90 is accepted.
+Milestone 91 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -756,7 +756,7 @@ renderer-ready IR, rendering, generated output, generic backend-value
 evaluation, source-body repair, broad protocols, hidden backfeeds, or semantic
 body completion.
 
-Post-M90 planning selected
+Post-M90 planning is accepted. It selected
 `Milestone 91: Stage 8 Exact Array Pipeline Ownership Consolidation Slice`.
 The selected plan is a behavior-preserving Stage 8 maintainability
 consolidation that broadens the originally proposed aggregate extraction into
@@ -766,44 +766,59 @@ add no new lowering semantics, backend planning, backend maps, rendering,
 generated output, broad TSIL parsing, source-body repair, broad protocols, or
 fixpoint machinery. Planning review returned `Accept With Follow-Ups`, with
 behavior-preserving scope, line-count, and import-boundary guardrails recorded
-as non-blocking follow-ups. Human acceptance is recorded, and M91 execution is
-the active workflow action.
+as non-blocking follow-ups. Human acceptance was recorded.
+
+The M91 execution-review loop returned `Accept With Follow-Ups` with no
+blocking implementation, validation, boundary, documentation, evidence, or
+review issues. M91 is accepted as behavior-preserving Stage 8 exact array
+pipeline ownership consolidation. It moves exact array pipeline result DTO/key
+ownership into `tslgen.lowering._array_body_pipeline_results`, moves exact
+stage construction plus result/snapshot assembly into
+`tslgen.lowering._array_body_stage_assembly`, and keeps
+`tslgen.lowering._array_body_pipeline` as orchestration over accepted M64-M90
+lowerers and focused assembly helpers. M91 preserves accepted diagnostics,
+source locations, public imports, stage names/order, artifact kinds,
+deterministic keys, output identities, selected-branch-only behavior,
+no-external-input boundaries, and pipeline snapshots. It adds no new lowering
+semantics, backend planning, backend maps, rendering, generated output, broad
+TSIL parsing, source-body repair, broad protocols, hidden backfeeds, fixpoint
+machinery, or hardwiring.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 91.
+Run post-M91 planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m91-execution-review-loop-prompt.md
+docs/agent/runs/post-m91-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 91: Stage 8 Exact Array Pipeline Ownership Consolidation Slice
+None. The next active task is read-only post-M91 planning and review.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M90 planning is accepted. It selected M91 and returned Accept With
-Follow-Ups. Follow-ups are behavior-preserving scope, line-count, and
-import-boundary guardrails for M91, not blockers.
+M91 execution-review returned Accept With Follow-Ups. Remaining follow-up is
+that `boundary.py` remains a broad 1,226-line compatibility facade, so future
+lowering milestones should keep avoiding new ownership there.
 ```
 
 Next expected action:
 
 ```text
-Run the active M91 execution-review loop prompt. Use exactly one write-capable
-executor followed by read-only review/audit subagents, preserve accepted
-M64-M90 behavior, and do not start post-M91 planning until M91 review returns
-Accept or Accept With Follow-Ups.
+Run the active post-M91 planning-plus-review prompt. Focus the next task on
+lowering. Use read-only planning/review subagents, do not implement code, and
+create the next concrete prompt before finishing unless the prompt records a
+stop condition.
 ```
 
 Accepted planning prompt:
@@ -1568,10 +1583,16 @@ Completed post-M90 acceptance-finalization prompt:
 docs/agent/runs/post-m90-acceptance-finalization-prompt.md
 ```
 
-Active M91 execution-review loop prompt:
+Completed M91 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m91-execution-review-loop-prompt.md
+```
+
+Active post-M91 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m91-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2432,18 +2453,19 @@ docs/agent/runs/m91-execution-review-loop-prompt.md
   `_array_body_pipeline.py`, `_array_body_models.py`,
   `_array_body_backend_deferred_requests.py`, or
   `_array_body_completion_package.py` into broader catch-all modules.
-- M91 is selected as behavior-preserving Stage 8 exact array pipeline
-  ownership consolidation only. It may move exact array pipeline result DTOs,
-  stage construction helpers, snapshot step assembly, and public handoff
-  aggregation into focused private modules, but it must not add new lowering
-  semantics or change accepted behavior.
-- M91 must preserve accepted M64-M90 diagnostics, source locations, stage
+- M91 is accepted as behavior-preserving Stage 8 exact array pipeline
+  ownership consolidation only. It moves exact array pipeline result DTO/key
+  ownership into `_array_body_pipeline_results.py` and exact stage
+  construction plus result/snapshot assembly into
+  `_array_body_stage_assembly.py`.
+- M91 preserves accepted M64-M90 diagnostics, source locations, stage
   names/order, output identities, deterministic keys, selected-branch-only
-  behavior, public imports, and pipeline snapshots. It must not add backend
-  planning, backend maps/catalog reads, renderer-ready IR, rendering,
-  generated output, broad TSIL parsing, source-body repair, broad protocols,
-  hidden backfeeds, or fixpoint machinery.
-- Future lowering package decomposition must preserve accepted M57-M90
+  behavior, public imports, no-external-input boundaries, and pipeline
+  snapshots. It adds no backend planning, backend maps/catalog reads,
+  renderer-ready IR, rendering, generated output, broad TSIL parsing,
+  source-body repair, broad protocols, hidden backfeeds, fixpoint machinery,
+  or hardwiring.
+- Future lowering package decomposition must preserve accepted M57-M91
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -3670,11 +3692,15 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   import-boundary and behavior-preservation tests proving public exports,
   stage order, snapshot keys, diagnostics, and selected-branch-only behavior
   remain stable.
+- M91 execution follow-up: `boundary.py` remains a 1,226-line broad
+  compatibility facade. M91 did not grow it, but future lowering milestones
+  should continue avoiding new ownership there and should prefer focused
+  private modules with one-way imports.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M91 through the
-active M91 execution-review loop prompt.
+No stop condition is active. The workflow is ready to run post-M91 planning
+through the active post-M91 planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -3696,6 +3722,43 @@ For post-M90 acceptance finalization, validation completed with:
 
 ```bash
 git diff --check -- docs/agent/current-redesign-state.md docs/agent/runs/post-m90-acceptance-finalization-prompt.md docs/agent/runs/m91-execution-review-loop-prompt.md docs/redesign/implementation-roadmap.md docs/redesign/behavioral-spec.md docs/redesign/generation-time-semantic-lowering.md docs/redesign/pipeline-design.md docs/redesign/target-architecture.md docs/redesign/testing-strategy.md docs/redesign/design-decisions.md docs/redesign/open-questions.md
+```
+
+The command returned exit 0 with no output.
+
+For M91, validation completed with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_completion_package.py tslgen/src/tslgen/lowering/_array_body_pipeline_results.py tslgen/src/tslgen/lowering/_array_body_stage_assembly.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_completion_package.py tslgen/src/tslgen/lowering/_array_body_pipeline_results.py tslgen/src/tslgen/lowering/_array_body_stage_assembly.py tslgen/src/tslgen/lowering/_pipeline.py tslgen/src/tslgen/lowering/_stage_contracts.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m91 or pipeline_ownership or exact_array_body_pipeline or lowering_completion"
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+git diff --check
+```
+
+Validation results:
+
+- Line counts: `1226 boundary.py`, `591 _array_body_pipeline.py`,
+  `829 _array_body_completion_package.py`,
+  `225 _array_body_pipeline_results.py`,
+  `465 _array_body_stage_assembly.py`, `3336 total`.
+- Py-compile returned exit 0 with no output.
+- Focused M91 pytest returned `13 passed, 303 deselected in 5.67s`; read-only
+  smoke re-runs returned `13 passed, 303 deselected in 5.58s` and
+  `13 passed, 303 deselected in 5.34s`.
+- Full lowering-boundary pytest returned `316 passed in 55.88s`.
+- Focused lowering mypy returned `Success: no issues found in 27 source files`.
+- Full tooling validation returned exit 0 with corpus probes `3 passed`, unit
+  discovery `650` tests OK, compileall OK, ruff `All checks passed!`, mypy
+  `Success: no issues found in 131 source files`, and diff-check OK.
+- Standalone `git diff --check` returned exit 0 with no output.
+
+For final M91 state and next-prompt updates, validation completed with:
+
+```bash
+git diff --check
 ```
 
 The command returned exit 0 with no output.
