@@ -784,41 +784,54 @@ semantics, backend planning, backend maps, rendering, generated output, broad
 TSIL parsing, source-body repair, broad protocols, hidden backfeeds, fixpoint
 machinery, or hardwiring.
 
+Post-M91 planning selected
+`Milestone 92: Exact Array Lowering Backend-Handoff Request Slice`.
+The selected plan is a lowering-side typed handoff boundary over the accepted
+M90 completion package and M91 stable pipeline ownership. It should produce
+one concrete typed request for later backend planning that carries accepted
+completion-package identity, unresolved dependency identity/provenance, and
+deterministic keys without reading backend maps, resolving backend values,
+creating Stage 9 backend plans, producing renderer-ready IR, rendering output,
+or inferring declaration/array/store/return/SVE/body semantics. Planning
+review returned `Accept With Follow-Ups`, with backend-boundary and
+wrapper-only-abstraction guardrails recorded as non-blocking follow-ups. Human
+acceptance is recorded, and M92 execution is the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M91 planning.
+Execute Milestone 92.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m91-planning-plus-review-prompt.md
+docs/agent/runs/m92-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The next active task is read-only post-M91 planning and review.
+Milestone 92: Exact Array Lowering Backend-Handoff Request Slice
 ```
 
 Latest review verdict:
 
 ```text
-M91 execution-review returned Accept With Follow-Ups. Remaining follow-up is
-that `boundary.py` remains a broad 1,226-line compatibility facade, so future
-lowering milestones should keep avoiding new ownership there.
+Post-M91 planning is accepted. It selected M92 and returned
+Accept With Follow-Ups. Follow-ups are to keep M92 a concrete typed
+lowering-side request, not a wrapper-only abstraction and not Stage 9 backend
+planning.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M91 planning-plus-review prompt. Focus the next task on
-lowering. Use read-only planning/review subagents, do not implement code, and
-create the next concrete prompt before finishing unless the prompt records a
-stop condition.
+Run the active M92 execution-review loop prompt. Use exactly one write-capable
+executor followed by read-only review/audit subagents. Do not start post-M92
+planning until M92 review returns Accept or Accept With Follow-Ups.
 ```
 
 Accepted planning prompt:
@@ -1589,10 +1602,22 @@ Completed M91 execution-review loop prompt:
 docs/agent/runs/m91-execution-review-loop-prompt.md
 ```
 
-Active post-M91 planning-plus-review prompt:
+Completed post-M91 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m91-planning-plus-review-prompt.md
+```
+
+Completed post-M91 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m91-acceptance-finalization-prompt.md
+```
+
+Active M92 execution-review loop prompt:
+
+```text
+docs/agent/runs/m92-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2465,6 +2490,17 @@ docs/agent/runs/post-m91-planning-plus-review-prompt.md
   renderer-ready IR, rendering, generated output, broad TSIL parsing,
   source-body repair, broad protocols, hidden backfeeds, fixpoint machinery,
   or hardwiring.
+- M92 is accepted as a lowering-side backend-handoff request boundary only. It
+  may consume accepted typed M90 completion packages through M91 stable
+  ownership and produce one concrete typed handoff request for later backend
+  planning, but it must not resolve backend values or start backend planning.
+- M92 must preserve accepted M64-M91 diagnostics, source locations, stage
+  names/order, output identities, deterministic keys, selected-branch-only
+  behavior, public imports, no-external-input boundaries, and pipeline
+  snapshots. It must not read backend maps/catalogs, create Stage 9 plans,
+  create renderer-ready IR, render output, broaden TSIL parsing, repair source
+  bodies, infer declaration/array/store/return/SVE/body semantics, introduce
+  broad protocols, hidden backfeeds, fixpoint machinery, or hardwiring.
 - Future lowering package decomposition must preserve accepted M57-M91
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -3696,11 +3732,17 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   compatibility facade. M91 did not grow it, but future lowering milestones
   should continue avoiding new ownership there and should prefer focused
   private modules with one-way imports.
+- Post-M91 planning follow-up for M92 execution: keep M92 as a concrete typed
+  lowering-side handoff request and not a wrapper-only abstraction.
+- Post-M91 planning follow-up for M92 execution: unresolved dependency records
+  remain typed request/provenance facts only. They must not become backend map
+  keys, resolved backend text, renderer slots, artifact paths, scheduling
+  decisions, broad protocols, hidden backfeeds, or fixpoint machinery.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run post-M91 planning
-through the active post-M91 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M92 through the
+active M92 execution-review loop prompt.
 
 ## Validation Expectations
 
@@ -3759,6 +3801,22 @@ For final M91 state and next-prompt updates, validation completed with:
 
 ```bash
 git diff --check
+```
+
+The command returned exit 0 with no output.
+
+For post-M91 planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
+
+For post-M91 acceptance finalization, validation completed with:
+
+```bash
+git diff --check -- docs/agent/current-redesign-state.md docs/agent/runs/post-m91-acceptance-finalization-prompt.md docs/agent/runs/m92-execution-review-loop-prompt.md docs/redesign/implementation-roadmap.md docs/redesign/behavioral-spec.md docs/redesign/generation-time-semantic-lowering.md docs/redesign/pipeline-design.md docs/redesign/target-architecture.md docs/redesign/testing-strategy.md docs/redesign/design-decisions.md docs/redesign/open-questions.md
 ```
 
 The command returned exit 0 with no output.

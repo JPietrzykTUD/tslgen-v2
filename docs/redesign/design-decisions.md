@@ -1636,6 +1636,13 @@ Consequences:
   not become a semantic lowering slice, backend planning boundary, renderer
   hook, broad protocol, registry, hidden backfeed engine, fixpoint
   coordinator, or source-body repair mechanism.
+- Post-M91 planning selects M92 as exact array lowering backend-handoff request
+  before backend planning. The decision is to create one concrete typed
+  request/provenance output from the accepted M90 completion package so later
+  backend planning can consume stable lowering facts without reaching across
+  pipeline internals. M92 must not be a wrapper-only abstraction, and it must
+  not resolve backend values, read backend maps, create Stage 9 plans, render
+  output, introduce broad protocols, or repair source bodies.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

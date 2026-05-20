@@ -813,6 +813,15 @@ snapshots. It does not add new semantic lowering, backend planning, backend
 map reads, renderer-ready IR, rendering, generated output, broad TSIL parsing,
 source-body repair, broad protocols, hidden backfeeds, or fixpoint machinery.
 
+Post-M91 planning selects M92 as the next exact Stage 8 lowering handoff
+boundary. M92 should consume accepted M90 completion packages through M91
+stable ownership and produce one typed exact array backend-handoff request for
+later backend planning. It must remain request/provenance data only: no
+backend-uninit resolution, backend maps/catalog reads, Stage 9 backend
+planning, backend translation, renderer-ready IR, rendering, generated output,
+generic backend helper evaluation, source-body repair, broad protocols, hidden
+backfeeds, or fixpoint machinery.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
@@ -1194,8 +1203,9 @@ accepted M86 payload-intake / mini-TSIL leaf lowering ownership extraction,
 accepted M87 exact return-emission structural/request IR, accepted M88 exact
 array-body structural package assembly, accepted M89 exact array
 backend-deferred request inventory, accepted M90 exact array lowering
-completion-package handoff, and accepted M91 behavior-preserving exact array
-pipeline ownership consolidation:
+completion-package handoff, accepted M91 behavior-preserving exact array
+pipeline ownership consolidation, and planned M92 exact array lowering
+backend-handoff request:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask

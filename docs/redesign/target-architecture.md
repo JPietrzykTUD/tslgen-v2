@@ -676,6 +676,13 @@ Current roadmap note:
   The new modules do not become replacement monoliths, broad registries,
   raw-helper dispatchers, backend/rendering hooks, hidden backfeed engines, or
   fixpoint coordinators.
+- Post-M91 planning selects M92 as exact array lowering backend-handoff request
+  ownership. The intended architecture is focused private ownership, such as
+  `_array_body_backend_handoff.py`, that consumes accepted M90 completion
+  packages and emits one typed request for later backend planning. The module
+  must keep one-way imports and must not become Stage 9 planning, backend map
+  lookup, backend translation, renderer-ready IR, rendering/output, a generic
+  backend-helper evaluator, or a broad source protocol.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not
