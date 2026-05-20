@@ -691,6 +691,14 @@ Current roadmap note:
   semantic dispatcher, backend planning surface, renderer-ready IR, source
   parser, source-repair mechanism, dependency solver, or fixpoint/backfeed
   coordinator.
+- Post-M93 planning selects M94 to keep the operation-package boundary
+  maintainable before package-family expansion. The intended architecture is a
+  thin `_operation_package.py` coordinator over focused private model,
+  diagnostics, source-narrowing, mini-TSIL package-contract, and exact-array
+  provenance modules. Those modules must keep one-way imports, preserve the
+  accepted M93 public facade, and avoid becoming broad source protocols,
+  registries, dispatchers, backend-planning hooks, renderer hooks, or
+  replacement monoliths.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

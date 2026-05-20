@@ -836,39 +836,48 @@ accepted M92 exact array backend-handoff requests without adding backend
 planning, renderer-ready IR, broad body semantics, source repair, registries,
 or dispatchers.
 
+Post-M93 planning is accepted. It selected
+`Milestone 94: Lowering Operation Package Diagnostics and Provenance Ownership Split Slice`.
+Internal planning/review returned `Accept With Follow-Ups`. The selected plan
+is behavior-preserving Stage 8 lowering maintainability work: split M93
+operation-package diagnostics, accepted-source narrowing, mini-TSIL package
+contract, and exact-array provenance validation into focused private modules
+before adding more package families. Human acceptance was recorded, and M94
+execution became the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M93 planning and review with a lowering focus.
+Execute Milestone 94 through the active execution-review loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m93-planning-plus-review-prompt.md
+docs/agent/runs/m94-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. M93 is accepted; the active action is post-M93 planning.
+Milestone 94: Lowering Operation Package Diagnostics and Provenance Ownership Split Slice
 ```
 
 Latest review verdict:
 
 ```text
-M93 execution-review loop returned Accept With Follow-Ups after focused
-implementation and documentation revisions.
+Post-M93 planning/review returned Accept With Follow-Ups for Milestone 94.
+Human acceptance was recorded.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M93 planning-plus-review prompt. Focus on lowering. Do not
-implement code unless the prompt explicitly selects an executor task. Before
-finishing, update this state file and create the next concrete run prompt.
+Run the active M94 execution-review loop prompt. Use one write-capable
+executor, then read-only review/audit subagents. Before finishing, update this
+state file and create the next concrete run prompt under docs/agent/runs/.
 ```
 
 Accepted planning prompt:
@@ -1669,16 +1678,28 @@ Completed post-M92 acceptance-finalization prompt:
 docs/agent/runs/post-m92-acceptance-finalization-prompt.md
 ```
 
-Active M93 execution-review loop prompt:
+Completed M93 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m93-execution-review-loop-prompt.md
 ```
 
-Active post-M93 planning-plus-review prompt:
+Completed post-M93 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m93-planning-plus-review-prompt.md
+```
+
+Completed post-M93 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m93-acceptance-finalization-prompt.md
+```
+
+Active M94 execution-review loop prompt:
+
+```text
+docs/agent/runs/m94-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2576,7 +2597,17 @@ docs/agent/runs/post-m93-planning-plus-review-prompt.md
   wrapper planning, artifact path planning, broad TSIL parsing, source repair,
   broad body/call/store/return/declaration/array/SVE semantics, registries,
   semantic dispatchers, hidden backfeeds, fixpoint machinery, or hardwiring.
-- Future lowering package decomposition must preserve accepted M57-M92
+- M94 is selected as behavior-preserving operation-package maintainability
+  work. It may split M93 diagnostics, accepted-source narrowing, mini-TSIL
+  package-contract checks, exact-array provenance validation, and package
+  value models into focused private modules, but it must preserve accepted M93
+  package behavior exactly.
+- M94 must not add new operation package families, new lowering semantics,
+  backend maps/catalog reads, backend-uninit resolution, Stage 9 backend
+  planning, backend translation, renderer-ready IR, rendering, generated
+  output, broad source protocols, registries, semantic dispatchers, hidden
+  backfeeds, fixpoint machinery, source repair, or hardwiring.
+- Future lowering package decomposition must preserve accepted M57-M93
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -3826,11 +3857,23 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   diagnostics/provenance helpers before adding more families. `boundary.py`
   is 1,280 lines and should not absorb new ownership. Future package source
   narrowing must not evolve into a central semantic dispatcher.
+- Post-M93 planning follow-up for M94 execution: keep M94 as
+  behavior-preserving diagnostics/provenance/source-narrowing/model ownership
+  split only. It must not add package families, semantic lowering behavior,
+  backend planning, renderer-ready IR, source repair, registries,
+  dispatchers, broad source protocols, hidden backfeeds, or fixpoint
+  machinery.
+- Post-M93 planning follow-up for M94 execution: prove `_operation_package.py`
+  drops materially below the roughly 1,000-line guardrail and that no new
+  private operation-package module becomes a replacement monolith.
+- Post-M93 planning follow-up for M94 execution: add or preserve import-
+  boundary tests for every new operation-package module, not only the aggregate
+  `_operation_package.py` facade.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready for post-M93 planning
-through the active post-M93 planning-plus-review prompt.
+No stop condition is active. The workflow is ready for M94 execution through
+the active M94 execution-review loop prompt.
 
 ## Validation Expectations
 

@@ -773,6 +773,15 @@ plans, resolve backend values, build operation schedules, read backend maps,
 produce renderer-ready IR, render output, repair source text, or install a
 generic operation dispatcher/registry.
 
+Post-M93 planning selects M94 as a behavior-preserving ownership split around
+the accepted `lowering_operation_package` stage. M94 should keep the same stage
+name, stage order, snapshots, package keys, object identities, diagnostics, and
+public handoff behavior while moving diagnostics, accepted-source narrowing,
+and exact-array provenance validation into focused private modules. It must not
+add a new Stage 8 semantic fact, Stage 9 planning, backend map reads,
+renderer-ready IR, broad source dispatch, hidden backfeeds, or fixpoint
+machinery.
+
 ## Stage 9: Backend Planning
 
 Inputs:

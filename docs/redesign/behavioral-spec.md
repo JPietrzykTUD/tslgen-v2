@@ -731,6 +731,15 @@ introduce backend planning, backend translation, renderer-ready IR, rendering,
 generated output, source-body repair, broad TSIL parsing, operation
 registries, semantic dispatchers, hidden backfeeds, or fixpoint machinery.
 
+Post-M93 planning selects M94 as behavior-preserving operation-package
+maintainability work before adding more package families. M94 should split M93
+diagnostics, accepted-source narrowing, and exact-array provenance validation
+into focused private modules while preserving the accepted M93 package outputs,
+diagnostics, keys, identities, stage order, and public import behavior. It
+must not add new lowering semantics, new operation families, backend planning,
+renderer-ready IR, broad source protocols, semantic dispatchers, or source-body
+repair.
+
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
 suffix request over typed M43 `GenerationTypeRef` inputs. Milestone 46

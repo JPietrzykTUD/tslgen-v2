@@ -1187,6 +1187,15 @@ Recommended first parity checks:
   source files, and full tooling validation success with corpus probes
   `3 passed`, unit discovery `665` tests OK, compileall OK, ruff OK, mypy OK
   across 133 source files, and diff-check OK.
+- M94 planned coverage must prove behavior-preserving operation-package
+  ownership split and contract hardening. Existing M93 package behavior tests
+  must continue to pass, while new focused assertions cover public facade
+  stability, import direction for each new private module, diagnostic/code/
+  location preservation, deterministic key/stage/snapshot preservation, and
+  line-count guardrails. Negative assertions must prove the split adds no new
+  package family, backend planning, backend map/catalog reads, renderer-ready
+  IR, rendering, generated output, source repair, operation registry, semantic
+  dispatcher, broad TSIL parsing, hidden backfeed, or fixpoint machinery.
 
 Deferred parity checks:
 

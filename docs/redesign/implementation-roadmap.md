@@ -12420,3 +12420,139 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m93-planning-plus-review-prompt.md` runs post-M93
   planning and review with a lowering focus.
+
+### Milestone 94: Lowering Operation Package Diagnostics and Provenance Ownership Split Slice
+
+Status:
+
+Selected by post-M93 planning. Internal planning/review returned
+`Accept With Follow-Ups`. Human acceptance is required before M94 execution.
+
+Goal:
+
+Keep the accepted M93 lowering operation package boundary maintainable before
+any future package-family expansion. M94 is behavior-preserving Stage 8
+lowering architecture work: it splits M93 diagnostics, source narrowing, and
+exact-array provenance validation into focused private ownership so
+`_operation_package.py` remains a small package/coordinator surface instead of
+becoming a replacement monolith.
+
+Scope:
+
+- Preserve accepted M93 behavior for exactly the two packageable source
+  families: accepted M86 mini-TSIL leaf return statements and accepted M92
+  exact array backend-handoff requests.
+- Keep the public `tslgen.lowering` and `tslgen.lowering.boundary` import
+  surfaces stable, including `lower_lowering_operation_package`,
+  `LoweringOperationPackageIr`, package entry types, and source-family values.
+- Split focused private ownership out of `_operation_package.py`, such as:
+  - `_operation_package_models.py` for package/entry value models,
+    source-family literal ownership, and deterministic keys.
+  - `_operation_package_diagnostics.py` for M93 diagnostic constructors and
+    source-location helper behavior.
+  - `_operation_package_sources.py` for accepted source/stage/container
+    narrowing and exactly-one-packageable-value checks.
+  - `_operation_package_mini_tsil.py` for the accepted M86 leaf-return
+    package contract and exact accepted-shape predicate.
+  - `_operation_package_exact_array.py` for M92/M90/M89/M88/M72/M67
+    identity/provenance contract validation.
+- Keep `_operation_package.py` as the narrow coordinator/facade over those
+  focused modules, not as the owner of diagnostics, provenance, and source
+  narrowing.
+- Preserve accepted M93 diagnostics, diagnostic codes, diagnostic locations,
+  package keys, stage name `lowering_operation_package`, stage ordering,
+  snapshots, object identity, deterministic ordering, and selected-branch-only
+  behavior.
+- Add or update import-boundary and contract tests for the new modules, proving
+  one-way private imports and public-surface stability.
+- Include line-count validation proving `_operation_package.py` drops
+  materially below the roughly 1,000-line guardrail and that no replacement
+  operation-package module approaches the guardrail.
+
+Out of scope:
+
+- New operation package source families or placeholder package kinds.
+- New semantic lowering behavior, broad package-family dispatch, generic
+  operation registries, callback maps, plugin systems, semantic dispatchers,
+  hidden backfeeds, fixpoint machinery, or token-keyed semantic maps.
+- Backend-uninit resolution, backend map reads, backend catalog reads,
+  `tsldata/detail/lang` reads, Stage 9 backend planning, backend translation,
+  renderer-ready IR, rendering, generated C++ or Rust output, generated tests,
+  CLI/report/writer behavior, compiler execution, or Rust.
+- Primitive dependency closure, primitive-call discovery, operation
+  scheduling, backend support filtering, wrapper-shape planning, artifact path
+  planning, or backend operation DAG construction.
+- Generic TSIL parsing, broad expression/body/return/call/store/declaration/
+  array/variable/cast/loop/SVE semantics, generic backend-helper evaluation,
+  broad direct-intrinsic semantics, or source-body repair.
+- Changing accepted M86/M92 source-family narrowing, reparsing accepted values,
+  normalizing M86 and M92 into shared body semantics, or hardwiring semantic
+  outputs from primitive names, selected type tags, extension names, backend
+  ids, helper text, SVE tokens, corpus line numbers, or request ordinals.
+- Growing `boundary.py`, exact-array pipeline modules, `_stage_contracts.py`,
+  or any new private operation-package module into a catch-all owner.
+
+Required input:
+
+- Accepted M93 `LoweringOperationPackageIr` behavior and tests.
+- Accepted M86 mini-TSIL leaf return statements and selected-candidate context.
+- Accepted M92 exact array backend-handoff requests and their accepted
+  M90/M89/M88/M72/M67 provenance chain.
+- Current line-count evidence:
+  - `tslgen/src/tslgen/lowering/boundary.py`: 1,280 physical lines.
+  - `tslgen/src/tslgen/lowering/_operation_package.py`: 1,044 physical lines.
+
+Expected outputs:
+
+- Focused private operation-package modules with one-way imports and explicit
+  ownership.
+- `_operation_package.py` reduced to a small coordinator/re-export surface
+  while preserving accepted public imports and behavior.
+- The same accepted M93 package outputs, diagnostics, keys, identities, stage
+  outputs, and snapshots as before the split.
+- Focused tests proving behavior preservation, diagnostic preservation,
+  public-surface stability, import-boundary discipline, and line-count
+  guardrails.
+
+Tests required:
+
+- Existing M93 positive, diagnostic, identity/provenance, determinism,
+  integration, and snapshot tests must continue to pass unchanged or with only
+  behavior-preserving test ownership updates.
+- New or updated M94 import-boundary tests must cover each new private module,
+  proving they do not import `boundary.py`, the `tslgen.lowering` package
+  facade, backend modules, renderers, `tsldata`, or `frozen`.
+- Contract tests must prove the public facade exports still point at the same
+  operation-package API and that stage name/order/key behavior remains stable.
+- Negative assertions must prove no backend map/catalog reads, backend-uninit
+  resolution, Stage 9 planning, renderer-ready IR, rendering, generated
+  output, source repair, operation registry, semantic dispatcher, generic TSIL
+  parsing, or generic backend-helper evaluation is introduced.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_operation_package.py tslgen/src/tslgen/lowering/_operation_package_*.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_operation_package.py tslgen/src/tslgen/lowering/_operation_package_*.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_pipeline.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m94 or operation_package or provenance or diagnostics"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Treating M94 as cleanup without preserving observable M93 contracts.
+- Creating several new files but leaving `_operation_package.py` responsible
+  for diagnostics, provenance validation, and source narrowing.
+- Creating a second monolith in one of the new private modules.
+- Converting package source narrowing into a generic dispatcher or broad
+  structural protocol for future body families.
+- Allowing exact-array provenance validation to reach into backend planning,
+  backend maps, renderer-ready IR, or source-body semantics.
+- Adding new package families before the M93 maintainability follow-up is
+  resolved.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m93-acceptance-finalization-prompt.md` converts human
+  acceptance of post-M93 planning into the M94 execution-review loop prompt.
