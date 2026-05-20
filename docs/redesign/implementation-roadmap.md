@@ -11514,8 +11514,9 @@ Next concrete prompt:
 
 Status:
 
-Planned. Post-M88 planning selected M89 as the next lowering-focused milestone.
-Human acceptance is required before execution.
+Accepted. The M89 execution-review loop returned `Accept With Follow-Ups` with
+no blocking implementation, validation, boundary, documentation, or evidence
+issues and no focused revision.
 
 Goal:
 
@@ -11621,6 +11622,27 @@ backend-uninit boundary, while rejecting missing, duplicate, malformed,
 mismatched, or provenance-inconsistent inputs with diagnostics. It must not
 resolve backend values, create renderer-ready IR, or produce generated output.
 
+Execution result:
+
+- Added focused `tslgen.lowering._array_body_backend_deferred_requests`
+  ownership for exact array backend-deferred request inventory assembly,
+  source selection, validation, and inventory diagnostics.
+- Added `ExactArrayBackendDeferredRequestInventoryIr` and
+  `ExactArrayBackendDeferredRequestInventoryMemberIr` for the single accepted
+  `value_backend_uninit_array` inventory member.
+- Added deterministic `array_backend_deferred_request_inventory` stage wiring
+  after `array_body_structural_package_assembly`.
+- Preserved object identity/provenance for the accepted M88 package, M73
+  declaration shell, M72 deferred backend-uninit value, and M67 backend-value
+  request record.
+- Added diagnostics and tests for unsupported, missing, duplicate, malformed,
+  context-mismatched, wrong-policy, wrong-request, wrong-source-text,
+  source-location, slot/variable, and provenance-mismatched inputs.
+- M89 remained Stage 8 inventory/provenance validation only; it did not add
+  backend map reads, backend-uninit resolution, backend translation, Stage 9
+  backend planning, renderer-ready IR, rendering, generated output, or generic
+  backend-value evaluation.
+
 Evidence paths:
 
 - `tsldata/primitives/load_store/array.tsl:105-111` for the exact selected
@@ -11700,5 +11722,5 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m88-acceptance-finalization-prompt.md` records human
-  acceptance and creates the M89 execution-review loop prompt.
+- `docs/agent/runs/post-m89-planning-plus-review-prompt.md` runs the next
+  lowering-focused planning pass.

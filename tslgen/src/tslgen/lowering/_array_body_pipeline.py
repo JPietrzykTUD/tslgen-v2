@@ -40,6 +40,10 @@ from tslgen.lowering._array_body_package import (
     ExactArrayBodyStructuralPackageIr,
     lower_exact_array_body_structural_package,
 )
+from tslgen.lowering._array_body_backend_deferred_requests import (
+    ExactArrayBackendDeferredRequestInventoryIr,
+    lower_exact_array_backend_deferred_request_inventory,
+)
 from tslgen.lowering._array_body_sources import (
     ExactArrayBodyLoweredImplementationSource,
     ExactArrayBodyPipelineInput,
@@ -144,6 +148,9 @@ class _ExactArrayInitializationStagePipelineResult:
     array_body_structural_packages: tuple[
         ExactArrayBodyStructuralPackageIr, ...
     ] = ()
+    array_backend_deferred_request_inventories: tuple[
+        ExactArrayBackendDeferredRequestInventoryIr, ...
+    ] = ()
     pipeline_snapshot: _lowering_pipeline.ExactArrayBodyPipelineSnapshot = field(
         default_factory=_lowering_pipeline.ExactArrayBodyPipelineSnapshot.empty,
     )
@@ -215,6 +222,11 @@ class _ExactArrayInitializationStagePipelineResult:
             "array_body_structural_packages",
             tuple(self.array_body_structural_packages),
         )
+        object.__setattr__(
+            self,
+            "array_backend_deferred_request_inventories",
+            tuple(self.array_backend_deferred_request_inventories),
+        )
         object.__setattr__(self, "pipeline_snapshot", self.pipeline_snapshot)
         object.__setattr__(self, "stages", tuple(self.stages))
 
@@ -270,6 +282,10 @@ class _ExactArrayInitializationStagePipelineResult:
             ),
             tuple(
                 package.key for package in self.array_body_structural_packages
+            ),
+            tuple(
+                inventory.key
+                for inventory in self.array_backend_deferred_request_inventories
             ),
             self.pipeline_snapshot.key,
             tuple(stage.key for stage in self.stages),
@@ -390,7 +406,6 @@ def _array_body_structural_package_stage(
         stage="array_body_structural_package_assembly",
         output=output,
     )
-
 
 
 def _array_body_envelope_skeleton_lookup_key(
@@ -726,6 +741,27 @@ def _lower_exact_array_initialization_stage_pipeline(
     structural_package_stage = _array_body_structural_package_stage(
         structural_package,
     )
+    backend_deferred_inventory_result = (
+        lower_exact_array_backend_deferred_request_inventory(
+            structural_package_stage,
+            request.generation_context,
+            selected_candidate_id=item.candidate_id,
+            target_extension=item.candidate.target_extension,
+            source_extension=item.candidate.source_extension,
+            selected_type_tag=(
+                item.candidate.type_tag
+                if request.generation_context.use_candidate_type_tag
+                else None
+            ),
+        )
+    )
+    if not backend_deferred_inventory_result.is_ok:
+        return Result.failure(backend_deferred_inventory_result.diagnostics)
+    backend_deferred_inventory = backend_deferred_inventory_result.unwrap()
+    backend_deferred_inventory_stage = GenerationLoweringStage(
+        stage="array_backend_deferred_request_inventory",
+        output=backend_deferred_inventory,
+    )
     pipeline_stages = (
         array_body_stage,
         array_initialization_slot_form_stage,
@@ -740,6 +776,7 @@ def _lower_exact_array_initialization_stage_pipeline(
         post_branch_call_site_stage,
         return_emission_stage,
         structural_package_stage,
+        backend_deferred_inventory_stage,
     )
     pipeline_snapshot = _lowering_pipeline.ExactArrayBodyPipelineSnapshot(
         steps=(
@@ -864,6 +901,14 @@ def _lower_exact_array_initialization_stage_pipeline(
                     "return_emission_structural_request",
                 ),
             ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="array_backend_deferred_request_inventory",
+                stage=backend_deferred_inventory_stage,
+                artifact_kind="array_backend_deferred_request_inventory",
+                artifact_key=backend_deferred_inventory.key,
+                artifact_value=backend_deferred_inventory,
+                depends_on=("array_body_structural_package",),
+            ),
         ),
     )
 
@@ -898,6 +943,9 @@ def _lower_exact_array_initialization_stage_pipeline(
             ),
             return_emission_structural_requests=(return_emission,),
             array_body_structural_packages=(structural_package,),
+            array_backend_deferred_request_inventories=(
+                backend_deferred_inventory,
+            ),
             pipeline_snapshot=pipeline_snapshot,
             stages=pipeline_stages,
         )

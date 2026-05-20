@@ -1106,18 +1106,24 @@ Recommended first parity checks:
   lowering mypy success across 23 source files, and full tooling validation
   success with corpus probes `3 passed`, unit discovery `633` tests OK,
   compileall OK, ruff OK, mypy OK across 127 source files, and diff-check OK.
-- Planned M89 testing should prove exact array backend-deferred request
-  inventory from the accepted M88 package without backend resolution. Required
-  coverage includes positive inventory assembly from direct package, M88 stage
-  output, and one-package source inputs; identity/provenance preservation for
-  the M88 package, M72 deferred backend-uninit value, and M67 backend-value
-  request record; diagnostics for unsupported, missing, duplicate, malformed,
-  context-mismatched, wrong-policy, and provenance-inconsistent inputs;
+- M89 execution added exact array backend-deferred request inventory coverage
+  from the accepted M88 package without backend resolution. Coverage includes
+  positive inventory assembly from direct package, M88 stage output, and
+  one-package source inputs; identity/provenance preservation for the M88
+  package, M72 deferred backend-uninit value, and M67 backend-value request
+  record; diagnostics for unsupported, missing, duplicate, malformed,
+  context-mismatched, wrong-policy, wrong-request, wrong-source-text,
+  source-location, slot/variable, and provenance-inconsistent inputs;
   deterministic stage order after `array_body_structural_package_assembly`;
   selected-branch-only behavior; pipeline snapshot stability; import-boundary
   checks for the focused inventory module; and negative coverage proving no
   backend map reads, backend-uninit translation, renderer-ready IR, rendering,
   generated output, or generic backend-value evaluation is introduced.
+  Validation returned focused M89 `15 passed, 291 deselected`, full
+  lowering-boundary `306 passed`, focused lowering mypy success across 24
+  source files, and full tooling validation success with corpus probes
+  `3 passed`, unit discovery `640` tests OK, compileall OK, ruff OK, mypy OK
+  across 128 source files, and diff-check OK.
 
 Deferred parity checks:
 

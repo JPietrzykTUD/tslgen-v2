@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 88 is accepted.
+Milestone 89 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -713,40 +713,55 @@ generated output, generic backend-value evaluation, source-body repair, or
 broad body semantics. Human acceptance was recorded, and M89 execution became
 the active workflow action.
 
+The M89 execution-review loop returned `Accept With Follow-Ups` with no
+blocking implementation, validation, boundary, documentation, or evidence
+issues and no focused revision. M89 is accepted as exact array
+backend-deferred request inventory. It adds focused
+`tslgen.lowering._array_body_backend_deferred_requests` ownership, inventories
+the accepted M72/M67 `value<backend>(uninit::array)` deferred backend-value
+boundary from the accepted M88 structural package, appends the deterministic
+`array_backend_deferred_request_inventory` stage after M88, and preserves M88
+package, M72 deferred backend-uninit value, and M67 request-record object
+identity/provenance. M89 remains Stage 8 inventory/provenance validation only;
+it does not add backend-uninit resolution, backend maps/catalog reads, Stage 9
+backend planning, renderer-ready IR, rendering, generated output, generic
+backend-value evaluation, source-body repair, broad protocols, hidden
+backfeeds, or broad body semantics.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 89.
+Run post-M89 planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m89-execution-review-loop-prompt.md
+docs/agent/runs/post-m89-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 89: Exact Array Backend-Deferred Request Inventory Slice
+None. The next active task is read-only post-M89 planning and review.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M88 planning selected M89 and human acceptance was recorded. Internal
-planning/audit returned Recommend With Follow-Ups for the selected exact array
-backend-deferred request inventory slice.
+M89 execution-review returned Accept With Follow-Ups with no blocking issues
+and no focused revision.
 ```
 
 Next expected action:
 
 ```text
-Run the active M89 execution-review loop prompt. Use one write-capable
-executor, then read-only reviewer/auditor subagents. Do not start post-M89
-planning until M89 review returns Accept or Accept With Follow-Ups.
+Run the active post-M89 planning-plus-review prompt. Focus the next task on
+lowering. Use read-only planning/review subagents, do not implement code, and
+create the next concrete prompt before finishing unless the prompt records a
+stop condition.
 ```
 
 Accepted planning prompt:
@@ -1475,10 +1490,16 @@ Completed post-M88 acceptance-finalization prompt:
 docs/agent/runs/post-m88-acceptance-finalization-prompt.md
 ```
 
-Active M89 execution-review loop prompt:
+Completed M89 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m89-execution-review-loop-prompt.md
+```
+
+Active post-M89 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m89-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2315,16 +2336,16 @@ docs/agent/runs/m89-execution-review-loop-prompt.md
 - M88 uses focused private `_array_body_package.py` ownership. Protocol-shaped
   M87 sources are treated as untrusted runtime data and malformed entries must
   diagnose rather than raise or become implicit semantic inputs.
-- Post-M88 planning selected M89 as exact array backend-deferred request
-  inventory. M89 must consume accepted M88 package values and accepted M72/M67
-  backend-uninit typed facts only, preserving object identity/provenance.
-- M89 must remain Stage 8 typed inventory/provenance validation only. It must
-  not resolve `value<backend>(uninit::array)`, read backend maps/catalogs or
+- M89 is accepted as exact array backend-deferred request inventory. It
+  consumes accepted M88 package values and accepted M72/M67 backend-uninit
+  typed facts only, preserving object identity/provenance.
+- M89 remains Stage 8 typed inventory/provenance validation only. It must not
+  resolve `value<backend>(uninit::array)`, read backend maps/catalogs or
   `tsldata/detail/lang`, add backend translation, Stage 9 backend planning,
   renderer-ready IR, rendering, generated output, generic backend-value
   evaluation, declaration/array/store/return/SVE semantics, raw helper
   dispatch, broad protocols, hidden backfeeds, or source-body repair.
-- Future lowering package decomposition must preserve accepted M57-M88
+- Future lowering package decomposition must preserve accepted M57-M89
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -3518,8 +3539,8 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run M89 execution through
-the active M89 execution-review loop prompt.
+No stop condition is active. The workflow is ready to run post-M89 planning
+through the active post-M89 planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -3761,4 +3782,29 @@ returned `299 passed in 44.20s`. The focused lowering mypy check returned
 exit 0 with corpus probes `3 passed in 5.98s`, unit discovery `633` tests OK
 in `111.925s`, compileall OK, ruff `All checks passed!`, mypy `Success: no
 issues found in 127 source files`, and diff-check OK. The standalone final
+`git diff --check` returned exit 0 with no output.
+
+For M89, validation completed with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_package.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_backend_deferred_requests.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_package.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_backend_deferred_requests.py tslgen/src/tslgen/lowering/_pipeline.py tslgen/src/tslgen/lowering/_stage_contracts.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m89 or backend_deferred or structural_package or exact_array_body_pipeline"
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+git diff --check
+```
+
+The M89 line counts were `1205 tslgen/src/tslgen/lowering/boundary.py`,
+`708 tslgen/src/tslgen/lowering/_array_body_package.py`,
+`998 tslgen/src/tslgen/lowering/_array_body_pipeline.py`,
+`735 tslgen/src/tslgen/lowering/_array_body_backend_deferred_requests.py`,
+and `3646 total`. The py-compile command returned exit 0 with no output. The
+focused M89 command returned `15 passed, 291 deselected in 6.07s`. The full
+lowering-boundary suite returned `306 passed in 64.22s`. The focused lowering
+mypy check returned `Success: no issues found in 24 source files`. The
+validation profile returned exit 0 with corpus probes `3 passed`, unit
+discovery `640` tests OK, compileall OK, ruff OK, mypy `Success: no issues
+found in 128 source files`, and diff-check OK. The standalone final
 `git diff --check` returned exit 0 with no output.

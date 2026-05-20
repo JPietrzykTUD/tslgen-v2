@@ -682,15 +682,15 @@ rather than source repair. M88 does not implement declaration, array, store,
 return, pointer, SVE, backend, renderer, generated-output, or broad TSIL body
 semantics.
 
-M89 is planned as the exact array backend-deferred request inventory slice. It
-should consume the accepted M88 structural package and produce one typed
-inventory whose only supported member is the accepted M72/M67
+M89 is accepted as the exact array backend-deferred request inventory slice. It
+consumes the accepted M88 structural package and produces one typed inventory
+whose only supported member is the accepted M72/M67
 `value<backend>(uninit::array)` deferred backend-value boundary. Missing,
 duplicate, malformed, mismatched, wrong-policy, or provenance-inconsistent
-inventory facts should produce diagnostics. M89 must not resolve backend
-uninit, read backend maps, create renderer-ready IR, render output, generate
-artifacts, or implement generic backend-value, declaration, array, store,
-return, pointer, SVE, memory, or broad TSIL body semantics.
+inventory facts produce diagnostics. M89 does not resolve backend uninit, read
+backend maps, create renderer-ready IR, render output, generate artifacts, or
+implement generic backend-value, declaration, array, store, return, pointer,
+SVE, memory, or broad TSIL body semantics.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic

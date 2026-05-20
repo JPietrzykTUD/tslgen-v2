@@ -24,6 +24,7 @@ import tslgen.lowering._array_body_diagnostics as _array_body_diagnostics
 import tslgen.lowering._array_body_lowering as _array_body_lowering
 import tslgen.lowering._array_body_models as _array_body_models
 import tslgen.lowering._array_body_package as _array_body_package
+import tslgen.lowering._array_body_backend_deferred_requests as _array_body_backend_deferred_requests
 import tslgen.lowering._array_body_pipeline as _array_body_pipeline
 import tslgen.lowering._array_body_shapes as _array_body_shapes
 import tslgen.lowering._array_body_sources as _array_body_sources
@@ -110,6 +111,10 @@ from tslgen.lowering._array_body_models import (
 from tslgen.lowering._array_body_package import (
     ExactArrayBodyStructuralPackageIr,
 )
+from tslgen.lowering._array_body_backend_deferred_requests import (
+    ExactArrayBackendDeferredRequestInventoryIr as ExactArrayBackendDeferredRequestInventoryIr,
+    ExactArrayBackendDeferredRequestInventoryMemberIr as ExactArrayBackendDeferredRequestInventoryMemberIr,
+)
 from tslgen.lowering._stage_contracts import (
     GenerationLoweringStage,
     GenerationLoweringStageName,
@@ -128,6 +133,7 @@ _ARRAY_BODY_MODEL_FACADE_EXPORTS = (
     _array_body_diagnostics,
     _array_body_models,
     _array_body_package,
+    _array_body_backend_deferred_requests,
     _array_body_shapes,
     _array_body_validation,
     _return_emission,
@@ -183,6 +189,7 @@ lower_exact_predicate_path_structural_request = _array_body_lowering.lower_exact
 lower_exact_post_branch_intrinsic_call_site_structural_request = _array_body_lowering.lower_exact_post_branch_intrinsic_call_site_structural_request
 lower_exact_return_emission_structural_request = _return_emission.lower_exact_return_emission_structural_request
 lower_exact_array_body_structural_package = _array_body_package.lower_exact_array_body_structural_package
+lower_exact_array_backend_deferred_request_inventory = _array_body_backend_deferred_requests.lower_exact_array_backend_deferred_request_inventory
 _classify_payload = _lowering_inputs._classify_payload
 _unsupported_payload_diagnostic = _lowering_inputs._unsupported_payload_diagnostic
 _mini_return_statement = _mini_tsil_lowering._mini_return_statement
@@ -409,6 +416,9 @@ class LoweredImplementation:
     array_body_structural_packages: tuple[
         ExactArrayBodyStructuralPackageIr, ...
     ] = ()
+    array_backend_deferred_request_inventories: tuple[
+        ExactArrayBackendDeferredRequestInventoryIr, ...
+    ] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -527,6 +537,11 @@ class LoweredImplementation:
         )
         object.__setattr__(
             self,
+            "array_backend_deferred_request_inventories",
+            tuple(self.array_backend_deferred_request_inventories),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -597,6 +612,10 @@ class LoweredImplementation:
             ),
             tuple(
                 package.key for package in self.array_body_structural_packages
+            ),
+            tuple(
+                inventory.key
+                for inventory in self.array_backend_deferred_request_inventories
             ),
             tuple(stage.key for stage in self.generation_stages),
         )
@@ -1052,6 +1071,9 @@ def _lower_input(
                     ),
                     array_body_structural_packages=(
                         array_initialization_pipeline.array_body_structural_packages
+                    ),
+                    array_backend_deferred_request_inventories=(
+                        array_initialization_pipeline.array_backend_deferred_request_inventories
                     ),
                     generation_stages=(
                         _recognition_stage(
