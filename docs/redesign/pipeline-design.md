@@ -687,6 +687,24 @@ and must preserve accepted diagnostics, source locations, stage ordering,
 keys, output identities, selected-branch-only behavior, and deterministic
 pipeline snapshots.
 
+M85 is accepted while keeping Stage 8 outputs and ordering unchanged. The
+private lowering owner is
+`tslgen.lowering._selected_body_lowering`; `boundary.py` continues to own the
+pipeline coordinator and public facade aliases for the selected-body lowerers.
+
+Post-M85 planning selects M86 as candidate payload-intake and mini-TSIL leaf
+return lowering extraction. M86 should keep Stage 8 orchestration unchanged
+while moving accepted payload classification, typed-opaque unsupported-payload
+diagnostics, direct parameter-add return lowering, and `intrin_compose<add>`
+return lowering behind focused private typed modules. `boundary.py` remains the
+public facade for request/result models, `LoweringInputSet`,
+`prepare_lowering_inputs`, `_lower_input`, lower-candidate orchestration,
+generation query/control-flow staging, selected-body lowering, and exact
+array-body pipeline orchestration. The new private modules must not import
+`boundary.py` or the package facade, must not become a broad TSIL parser or
+dispatcher, and must preserve accepted diagnostics, source locations, stage
+ordering, keys, output identities, and deterministic pipeline snapshots.
+
 ## Stage 9: Backend Planning
 
 Inputs:

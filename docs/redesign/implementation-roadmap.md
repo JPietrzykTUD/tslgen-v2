@@ -10571,8 +10571,7 @@ Next concrete prompt:
 
 Status:
 
-Planned. Post-M84 planning selected this milestone, and human acceptance was
-recorded. M85 execution is the next workflow action.
+Accepted. M85 execution-review returned `Accept` after one focused revision.
 
 Goal:
 
@@ -10612,9 +10611,11 @@ Scope:
   deterministic ordering, and pipeline snapshots.
 - Keep private-module imports one-way. The new selected-body lowering module
   must not import `boundary.py` or the `tslgen.lowering` package facade.
-- Record the post-M85 `boundary.py` line count. Line-count reduction is useful,
-  but the success criterion is cohesive ownership extraction and behavior
-  preservation.
+- Record the post-M85 `boundary.py` line count. The M85 executor measured
+  `boundary.py` at 1,417 physical lines and
+  `_selected_body_lowering.py` at 538 physical lines. Line-count reduction is
+  useful, but the success criterion is cohesive ownership extraction and
+  behavior preservation.
 
 Out of scope:
 
@@ -10690,10 +10691,12 @@ duplicating code or adding broad protocols.
 
 Evidence paths:
 
-- `tslgen/src/tslgen/lowering/boundary.py` for the accepted selected-body
-  lowerer implementations, selected-body source adapters, validation helpers,
-  public facade imports, `_lower_input`, stage construction, and
-  lower-candidate orchestration that must remain behavior-preserving.
+- `tslgen/src/tslgen/lowering/_selected_body_lowering.py` for the accepted
+  selected-body lowerer implementations, selected-body source adapters,
+  validation helpers, and selected-body diagnostics.
+- `tslgen/src/tslgen/lowering/boundary.py` for public facade imports,
+  `_lower_input`, stage construction, and lower-candidate orchestration that
+  must remain behavior-preserving.
 - `tslgen/src/tslgen/lowering/_selected_body_models.py` for accepted
   selected-body value-model ownership that must remain model-only.
 - `tslgen/src/tslgen/lowering/_stage_contracts.py` for accepted stage/output
@@ -10776,8 +10779,274 @@ Dependencies on prior milestones:
 
 - Milestones 42 through 84.
 
+Execution result:
+
+- M85 preserves accepted M42-M84 behavior while moving selected-body
+  lowerer/source-helper ownership into
+  `tslgen.lowering._selected_body_lowering`.
+- The new private module owns `handoff_opaque_selected_branch_body`,
+  `recognize_selected_branch_body_assignment_form`,
+  `lower_selected_branch_body_ir`, `lower_selected_body_envelope`, selected-
+  body source coercion helpers, originating branch-chain id construction,
+  selected-body envelope consistency validation, selected-body assignment-form
+  parsing delegation, selected-body diagnostics, and selected-body-local stage
+  output source-location lookup.
+- `boundary.py` remains the public facade/coordinator and re-exports the moved
+  public names through existing public paths. `LoweredImplementation`,
+  `LoweringRequest`, `LoweringInput`, `LoweringInputSet`, `LoweringPlan`,
+  `_lower_input`, `lower_candidates`, payload classification, generation
+  control-flow pruning, exact array-body pipeline/source modules, exact
+  array-body lowerers, and mini-TSIL parsing/lowering remain facade-owned.
+- Private lowering modules, including `_selected_body_lowering.py`, do not
+  import `boundary.py`, `tslgen.lowering`, `_array_body_sources.py`, or
+  `_array_body_lowering.py` as convenience dispatchers.
+- Public imports, diagnostics, source locations, stage names/order, output
+  identities, deterministic keys, selected-branch-only behavior, and pipeline
+  snapshots remain stable.
+- The focused revision restored source-location preservation for unsupported
+  selected-body handoff diagnostics over `PrunedGenerationBranch` stage
+  outputs and added focused regression coverage.
+- `boundary.py` now measures 1,417 physical lines, which is 481 lines below
+  the accepted M84 1,898-line baseline. `_selected_body_lowering.py` measures
+  538 physical lines.
+- No new selected-body semantics, broad TSIL/body/call/store/return semantics,
+  exact return-emission IR, backend translation, rendering, generated output,
+  extension-specific shortcuts, lowering-time file/catalog reads, `tsldata`
+  reads, host CPU queries, backend map reads, or runtime `frozen/` use were
+  added.
+- Review and audit found no blocking implementation, validation, boundary,
+  extensibility, documentation, or evidence issues after one focused revision.
+- Non-blocking follow-ups: none recorded.
+
 Next concrete prompt:
 
-- `docs/agent/runs/post-m84-acceptance-finalization-prompt.md` finalizes the
-  accepted post-M84 planning result after human acceptance and creates the M85
-  execution-review loop prompt.
+- `docs/agent/runs/post-m85-planning-plus-review-prompt.md` runs the next
+  lowering-focused planning pass.
+
+### Milestone 86: Candidate Payload Intake And Mini-TSIL Leaf Lowering Extraction Slice
+
+Status:
+
+Planned. Post-M85 planning selected this milestone, and human acceptance was
+recorded. M86 execution is the next workflow action.
+
+Goal:
+
+Move the accepted candidate payload-intake helpers and accepted mini-TSIL leaf
+return lowering implementation out of `tslgen/src/tslgen/lowering/boundary.py`
+into focused private typed lowering modules while preserving all accepted
+M42-M85 behavior, public imports, diagnostics, source locations, stage
+names/order, output identities, deterministic keys, selected-branch-only
+behavior, pipeline snapshots, and no-external-input boundaries.
+
+M86 is behavior-preserving lowering architecture work. It broadens the next
+`boundary.py` refactor beyond only mini-TSIL regex movement, but it remains one
+cohesive ownership slice: candidate payload intake plus the leaf mini-TSIL
+return lowerer that consumes that intake. It should make `boundary.py` closer
+to a true facade/coordinator without moving the central `_lower_input`
+orchestration or adding new semantic lowering.
+
+Scope:
+
+- Create a focused private payload-intake module such as
+  `tslgen.lowering._lowering_inputs`.
+- Move the accepted payload-intake value/helper cluster out of `boundary.py`:
+  `LoweringStrategy`, `PayloadClassification`, `ClassifiedPayload`,
+  `LoweringInput`, `_classify_payload`, and
+  `_unsupported_payload_diagnostic`.
+- Preserve public facade imports and calls through `tslgen.lowering.boundary`
+  and `tslgen.lowering` by re-exporting or tiny delegating from the facade.
+- Keep `LoweringInputSet`, `LoweringRequest`, `GenerationContext`,
+  `LoweredImplementation`, `LoweringPlan`, `prepare_lowering_inputs`,
+  `lower_candidates`, and `_lower_input` facade-owned.
+- Create a focused private mini-TSIL leaf-lowering module such as
+  `tslgen.lowering._mini_tsil_lowering`.
+- Move the accepted mini-TSIL leaf return-lowering cluster out of
+  `boundary.py`: the direct parameter-add return regex/helper, the
+  `intrin_compose<add>` return regex/helper, mini-TSIL identifier validation,
+  argument splitting, declared-parameter validation, and the accepted
+  mini-TSIL diagnostics.
+- Preserve accepted mini-TSIL behavior exactly:
+  `emit_return(<parameter> + <parameter>);` and
+  `emit_return(intrin_compose<add>(<parameter>, <parameter>));` remain the only
+  semantically lowered mini-TSIL statement shapes.
+- Keep private-module imports one-way. The new private modules must not import
+  `boundary.py` or the `tslgen.lowering` package facade.
+- Preserve the intended import direction:
+  `boundary.py -> _lowering_inputs`,
+  `boundary.py -> _mini_tsil_lowering`,
+  `_mini_tsil_lowering -> _lowering_inputs and _stage_contracts`, and
+  `_lowering_inputs -> candidates, diagnostics, result, values` only.
+- `_lower_input` may only delegate the accepted payload-classification and
+  mini-TSIL leaf return-lowering calls to focused private helpers while
+  preserving the existing call order, diagnostics, and stage construction.
+- Record the post-M86 `boundary.py` line count against the accepted M85
+  1,417-line baseline. Line-count reduction is useful, but the success
+  criterion is cohesive ownership extraction and behavior preservation.
+
+Out of scope:
+
+- Moving `LoweringInputSet`, `LoweringRequest`, `GenerationContext`,
+  `LoweredImplementation`, `LoweringPlan`, `prepare_lowering_inputs`,
+  `lower_candidates`, `_lower_input`, stage construction, `_context_for_candidate`,
+  generation query payload lowering, generation control-flow pruning,
+  selected-body lowering, exact array-body lowering, exact array-body pipeline
+  orchestration, request/result model ownership, or package-level public
+  surface policy beyond stable facade aliases.
+- New lowering semantics, new mini-TSIL syntax, broad TSIL parsing, broad
+  statement/body/call/store/return/declaration/array semantics,
+  exact return-emission IR, `emit_return(tmp)` interpretation, `tmp.data()`
+  semantics, variable scope/lifetime semantics, renderer-ready IR, broad
+  direct-intrinsic semantics, helper-family expansion, or stage output changes.
+- Creating registries, generic dispatchers, plugin systems, callback maps,
+  ordered lowerer tables, generic TSIL statement dispatchers,
+  fixpoint/backfeed engines, raw text rewrite engines, raw helper dispatch,
+  token-keyed semantic maps, broad source-adapter protocols, or a mini-TSIL
+  framework.
+- Treating selected literals, SVE-looking tokens, selected type tags, backend
+  ids, renderer names, corpus line numbers, request ordinals, or raw source
+  text as semantic dispatch keys. Existing exact tokens may remain structural
+  provenance or invariant evidence only.
+- Backend translation, rendering, generated output, golden files, generated
+  tests, CLI/report/writer behavior, Rust behavior, compiler execution,
+  generated-test execution, lowering-time file/catalog reads, `tsldata` reads
+  during lowering evaluation, host CPU queries, backend map reads, or runtime
+  dependency on `frozen/`.
+- Starting M87.
+
+Required input:
+
+- Accepted M42-M85 lowering behavior.
+- The accepted M2/M4 catalog payload shapes already consumed by
+  `ImplementationCandidate.implementation.body`.
+- The accepted M12/M13/M32-M39 mini-TSIL direct parameter-add and
+  intrinsic-compose add return behavior.
+- The accepted M58/M83 stage contract boundary in `_stage_contracts.py`.
+- The accepted post-M85 `boundary.py` baseline of 1,417 physical lines.
+
+Expected outputs:
+
+- A focused private payload-intake module owning the accepted payload
+  classification models/helpers and unsupported-payload diagnostics.
+- A focused private mini-TSIL leaf-lowering module owning the accepted
+  mini-TSIL regexes, return-shape lowerers, parameter validation, and
+  mini-TSIL diagnostics.
+- Stable public imports and stable public facade behavior for accepted payload
+  classification and mini-TSIL lowering paths.
+- The same typed `TsilReturnStatement`, `TsilBinaryExpression`,
+  `TsilIntrinsicComposeExpression`, and `TsilParameterReference` outputs as
+  before M86.
+- The same lowered values, diagnostics, source locations, stage snapshots,
+  stage keys, output identities, selected-branch-only behavior, and
+  deterministic ordering as before M86.
+- `boundary.py` remains the public facade/coordinator and becomes smaller.
+- No new semantic IR output and no generated artifact changes.
+
+Parity criterion:
+
+M86 succeeds when candidate payload intake and mini-TSIL leaf return lowering
+are privately owned behind typed modules, `boundary.py` remains the
+facade/coordinator for request/result models and `_lower_input` orchestration,
+accepted behavior and public imports are unchanged, private lowering modules
+still have one-way imports away from the facade, and the line-count reduction
+is achieved by moving cohesive ownership clusters rather than duplicating code
+or adding broad protocols.
+
+Evidence paths:
+
+- `tslgen/src/tslgen/lowering/boundary.py` for the accepted payload-intake
+  models/helpers, mini-TSIL leaf lowerer, public facade imports,
+  `prepare_lowering_inputs`, `_lower_input`, `lower_candidates`, stage
+  construction, and lower-candidate orchestration that must remain
+  behavior-preserving.
+- `tslgen/src/tslgen/lowering/_stage_contracts.py` for accepted
+  `TsilReturnStatement`, `TsilBinaryExpression`,
+  `TsilIntrinsicComposeExpression`, `TsilParameterReference`, and stage/output
+  contracts.
+- `tslgen/src/tslgen/lowering/_selected_body_lowering.py` and
+  `tslgen/src/tslgen/lowering/_array_body_lowering.py` as import-boundary
+  comparators, not as dependencies for the new private modules.
+- `tslgen/src/tslgen/lowering/__init__.py` for public lowering imports.
+- `tslgen/tests/unit/test_lowering_boundary.py` for accepted payload
+  classification, typed-opaque strategy, mini-TSIL return lowering,
+  diagnostics, public import, import-boundary, pipeline snapshot, and
+  deterministic behavior.
+
+Tests required:
+
+- Full `tslgen/tests/unit/test_lowering_boundary.py` preservation.
+- Focused M86 tests proving public facade imports and calls for payload intake
+  and mini-TSIL lowering still return the accepted values and diagnostics.
+- Focused M86 tests proving the new private payload-intake and mini-TSIL
+  modules do not import `boundary.py`, the package facade, selected-body
+  lowering modules, exact array-body lowering modules, backend modules, or
+  renderers.
+- Focused M86 tests preserving diagnostics for non-text TSIL payloads,
+  typed-opaque TSIL payloads, unsupported payload kinds, unsupported
+  `emit_return` shapes, malformed `intrin_compose`, unsupported intrinsic
+  names, invalid intrinsic arguments, invalid intrinsic arity, and unknown
+  parameter names.
+- Pipeline snapshot/stage identity regression tests proving stage ordering,
+  keys, output object identity, selected-branch-only behavior, and
+  deterministic source locations remain unchanged.
+- A `boundary.py` line-count validation measured against the accepted M85
+  1,417-line baseline.
+- Regression tests or existing tests proving no backend translation,
+  rendering, generated output, broad TSIL/body/call/store/return/declaration/
+  array semantics, raw helper dispatch, catalog reads, `tsldata` reads, host
+  CPU queries, backend map reads, import cycles, duplicate moved code, or
+  runtime `frozen/` use is introduced.
+
+Golden fixtures required:
+
+- None. M86 is behavior-preserving lowering architecture work and must not
+  change generated C++ or Rust output.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_lowering_inputs.py tslgen/src/tslgen/lowering/_mini_tsil_lowering.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_lowering_inputs.py tslgen/src/tslgen/lowering/_mini_tsil_lowering.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_generation_models.py tslgen/src/tslgen/lowering/_generation_queries.py tslgen/src/tslgen/lowering/_generation_control_flow.py tslgen/src/tslgen/lowering/_generation_diagnostics.py tslgen/src/tslgen/lowering/_selected_body_lowering.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_sources.py tslgen/src/tslgen/lowering/_array_body_lowering.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m86 or lowering_input or payload_classification or mini_tsil or typed_opaque"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Accidentally moving `_lower_input`, `lower_candidates`, request/result model
+  ownership, generation query payload lowering, stage construction,
+  selected-body lowering, or exact array-body orchestration under a payload or
+  mini-TSIL ownership label.
+- Creating a circular import by importing `boundary.py` or `tslgen.lowering`
+  from the new private modules.
+- Turning mini-TSIL lowering into a broad TSIL parser, statement dispatcher,
+  raw text rewrite engine, registry, callback map, plugin system, token-keyed
+  semantic table, or fixpoint/backfeed engine.
+- Accidentally changing diagnostics, source locations, stage names, stage
+  ordering, output identities, keys, selected-branch-only behavior, typed
+  opaque behavior, payload classification keys, or pipeline snapshots while
+  moving code.
+- Treating exact return-emission, store-call, selected-body SVE-looking token,
+  backend, renderer, or corpus-line evidence as semantic behavior.
+- Reducing line count by duplicating moved code, creating another catch-all
+  module, or mixing unrelated generation, selected-body, exact array-body,
+  backend, or renderer work into M86.
+
+Dependencies on prior milestones:
+
+- Milestones 42 through 85.
+
+Planning result:
+
+- Post-M85 planning selects M86 as the next lowering-focused milestone because
+  it removes the remaining payload-classification and mini-TSIL parser/lowerer
+  island from `boundary.py` while keeping central lowering orchestration
+  stable. This is broader than a mini-TSIL-only extraction, but it remains one
+  cohesive behavior-preserving ownership slice and prepares the facade for a
+  later exact return-emission structural/request milestone.
+
+Next concrete prompt:
+
+- `docs/agent/runs/m86-execution-review-loop-prompt.md` runs the accepted M86
+  execution-review loop.

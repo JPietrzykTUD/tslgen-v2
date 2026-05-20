@@ -619,6 +619,23 @@ Current roadmap note:
   architecture work before exact return-emission IR; it must not add selected-
   body semantics, broad body parsing, backend/rendering/output hooks,
   registries, dispatchers, or extension-specific shortcuts.
+- M85 is accepted as that extraction in
+  `tslgen.lowering._selected_body_lowering`. `boundary.py` remains the public
+  facade/coordinator and measured 1,417 physical lines after the move; the
+  private module owns only the accepted selected-body lowerers and their
+  direct source/diagnostic/validation helpers.
+- Post-M85 planning selects M86 as candidate payload-intake and mini-TSIL leaf
+  return lowering extraction. M86 should move accepted payload classification,
+  typed-opaque unsupported-payload diagnostics, direct parameter-add return
+  lowering, and `intrin_compose<add>` return lowering into focused private
+  typed modules while keeping `boundary.py` as the public facade for
+  request/result models, `LoweringInputSet`, `prepare_lowering_inputs`,
+  `lower_candidates`, `_lower_input`, generation query/control-flow staging,
+  selected-body lowering, and exact array-body pipeline orchestration. This is
+  behavior-preserving architecture work before exact return-emission IR; it
+  must not add broad TSIL parsing, new return semantics, backend/rendering/
+  output hooks, registries, dispatchers, fixpoint/backfeed machinery, or
+  extension-specific shortcuts.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

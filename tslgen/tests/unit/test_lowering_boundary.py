@@ -25,6 +25,7 @@ import tslgen.lowering._generation_diagnostics as lowering_generation_diagnostic
 import tslgen.lowering._generation_models as lowering_generation_models
 import tslgen.lowering._generation_queries as lowering_generation_queries
 import tslgen.lowering._pipeline as lowering_pipeline
+import tslgen.lowering._selected_body_lowering as lowering_selected_body_lowering
 import tslgen.lowering._selected_body_models as lowering_selected_body_models
 import tslgen.lowering._stage_contracts as lowering_stage_contracts
 import tslgen.lowering.boundary as lowering_boundary
@@ -5491,18 +5492,378 @@ class LoweringBoundaryTests(unittest.TestCase):
             lowering_array_body_sources._stage_output_location,
         )
 
-    def test_m84_selected_body_lowerers_stay_boundary_owned(self) -> None:
-        for name in (
-            "handoff_opaque_selected_branch_body",
-            "recognize_selected_branch_body_assignment_form",
-            "lower_selected_branch_body_ir",
-            "lower_selected_body_envelope",
-        ):
-            self.assertIn(name, lowering_boundary.__dict__)
-            self.assertEqual(getattr(lowering_boundary, name).__module__, "tslgen.lowering.boundary")
-            self.assertNotIn(name, lowering_array_body_sources.__dict__)
-            self.assertNotIn(name, lowering_array_body_lowering.__dict__)
-            self.assertNotIn(name, lowering_array_body_pipeline.__dict__)
+    def test_m85_selected_body_lowerers_move_to_private_owner(self) -> None:
+        public_imports = {
+            "handoff_opaque_selected_branch_body": handoff_opaque_selected_branch_body,
+            "recognize_selected_branch_body_assignment_form": (
+                recognize_selected_branch_body_assignment_form
+            ),
+            "lower_selected_branch_body_ir": lower_selected_branch_body_ir,
+            "lower_selected_body_envelope": lower_selected_body_envelope,
+        }
+        for name, public_function in public_imports.items():
+            with self.subTest(name=name):
+                private_function = getattr(lowering_selected_body_lowering, name)
+                self.assertIs(getattr(lowering_boundary, name), private_function)
+                self.assertIs(public_function, private_function)
+                self.assertEqual(
+                    private_function.__module__,
+                    "tslgen.lowering._selected_body_lowering",
+                )
+                self.assertNotIn(name, lowering_array_body_sources.__dict__)
+                self.assertNotIn(name, lowering_array_body_lowering.__dict__)
+                self.assertNotIn(name, lowering_array_body_pipeline.__dict__)
+
+    def test_m85_private_selected_body_lowering_does_not_import_forbidden_modules(
+        self,
+    ) -> None:
+        forbidden_modules = (
+            "tslgen.lowering.boundary",
+            "tslgen.lowering",
+            "tslgen.lowering._array_body_sources",
+            "tslgen.lowering._array_body_lowering",
+        )
+        imported_forbidden: list[str] = []
+        tree = ast.parse(inspect.getsource(lowering_selected_body_lowering))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported_forbidden.extend(
+                    alias.name for alias in node.names if alias.name in forbidden_modules
+                )
+            elif isinstance(node, ast.ImportFrom):
+                if node.module in forbidden_modules:
+                    imported_forbidden.append(node.module)
+                if node.level and node.module in (
+                    None,
+                    "",
+                    "boundary",
+                    "_array_body_sources",
+                    "_array_body_lowering",
+                ):
+                    imported_forbidden.extend(
+                        alias.name
+                        for alias in node.names
+                        if (
+                            node.module
+                            in ("boundary", "_array_body_sources", "_array_body_lowering")
+                            or alias.name
+                            in ("boundary", "_array_body_sources", "_array_body_lowering")
+                        )
+                    )
+        self.assertEqual(imported_forbidden, [])
+
+    def test_m85_public_selected_body_facade_calls_remain_stable(self) -> None:
+        predicates = tuple(
+            GenerationPredicate(
+                kind="type.size_bytes.equals",
+                literal=literal,
+                value=literal == 2,
+                type_tag="si16",
+            )
+            for literal in (2, 4, 8)
+        )
+        chain = GenerationSizeByteBranchChainPruning(
+            arms=tuple(
+                GenerationSizeByteBranchChainArm(
+                    literal=literal,
+                    predicate=predicate,
+                    statement_text={
+                        2: "pg = intrin<svptrue_b16>();",
+                        4: "pg = intrin<svptrue_b32>();",
+                        8: "pg = intrin<svptrue_b64>();",
+                    }[literal],
+                )
+                for literal, predicate in zip((2, 4, 8), predicates, strict=True)
+            ),
+            type_tag="si16",
+            selected_literal=2,
+            selected_statement_text="pg = intrin<svptrue_b16>();",
+            condition_location=SourceLocation(Path("array.tsl"), 107, 15),
+        )
+        stage = GenerationLoweringStage(
+            stage="generation_control_flow_pruning",
+            output=chain,
+        )
+
+        handoff_result = lowering_boundary.handoff_opaque_selected_branch_body(
+            "candidate-1",
+            stage,
+        )
+        self.assertTrue(handoff_result.is_ok, handoff_result.diagnostics)
+        handoff = handoff_result.unwrap()
+        self.assertEqual(
+            handoff,
+            handoff_opaque_selected_branch_body("candidate-1", stage).unwrap(),
+        )
+        form = lowering_boundary.recognize_selected_branch_body_assignment_form(
+            handoff,
+        ).unwrap()
+        body_ir = lowering_boundary.lower_selected_branch_body_ir(form).unwrap()
+        envelope = lowering_boundary.lower_selected_body_envelope(body_ir).unwrap()
+
+        self.assertEqual(
+            form,
+            recognize_selected_branch_body_assignment_form(handoff).unwrap(),
+        )
+        self.assertEqual(body_ir, lower_selected_branch_body_ir(form).unwrap())
+        self.assertEqual(envelope, lower_selected_body_envelope(body_ir).unwrap())
+        self.assertEqual(
+            tuple(item.__module__ for item in (handoff, form, body_ir, envelope)),
+            (
+                "tslgen.lowering._selected_body_models",
+                "tslgen.lowering._selected_body_models",
+                "tslgen.lowering._selected_body_models",
+                "tslgen.lowering._selected_body_models",
+            ),
+        )
+
+    def test_m85_selected_body_diagnostics_preserve_codes_and_locations(self) -> None:
+        statement = TsilReturnStatement(
+            TsilBinaryExpression(
+                operator="+",
+                left=TsilParameterReference("left"),
+                right=TsilParameterReference("right"),
+            )
+        )
+        unsupported_stage = GenerationLoweringStage(
+            stage="selected_body_lowering",
+            output=statement,
+        )
+        assert_diagnostic(
+            self,
+            handoff_opaque_selected_branch_body(
+                "candidate-1",
+                unsupported_stage,
+            ).diagnostics[0],
+            code="TSL-LOWER-HANDOFF-SOURCE-UNSUPPORTED",
+            severity="error",
+        )
+        unsupported_branch_location = SourceLocation(Path("array.tsl"), 109, 7)
+        unsupported_branch_stage = GenerationLoweringStage(
+            stage="generation_control_flow_pruning",
+            output=PrunedGenerationBranch(
+                condition=TsilPrimitiveAttributeCondition("aligned"),
+                selected_branch="false",
+                statement_text="emit_return(left + right);",
+                condition_location=unsupported_branch_location,
+            ),
+        )
+        assert_diagnostic(
+            self,
+            handoff_opaque_selected_branch_body(
+                "candidate-1",
+                unsupported_branch_stage,
+            ).diagnostics[0],
+            code="TSL-LOWER-HANDOFF-SOURCE-UNSUPPORTED",
+            severity="error",
+            path="array.tsl",
+            line=109,
+            column=7,
+        )
+
+        predicates = tuple(
+            GenerationPredicate(
+                kind="type.size_bytes.equals",
+                literal=literal,
+                value=literal == 2,
+                type_tag="si16",
+            )
+            for literal in (2, 4, 8)
+        )
+        missing_provenance_chain = GenerationSizeByteBranchChainPruning(
+            arms=tuple(
+                GenerationSizeByteBranchChainArm(
+                    literal=literal,
+                    predicate=predicate,
+                    statement_text="pg = intrin<svptrue_b16>();",
+                )
+                for literal, predicate in zip((2, 4, 8), predicates, strict=True)
+            ),
+            type_tag="si16",
+            selected_literal=2,
+            selected_statement_text="pg = intrin<svptrue_b16>();",
+        )
+        assert_diagnostic(
+            self,
+            handoff_opaque_selected_branch_body(
+                "candidate-1",
+                GenerationLoweringStage(
+                    stage="generation_control_flow_pruning",
+                    output=missing_provenance_chain,
+                ),
+            ).diagnostics[0],
+            code="TSL-LOWER-HANDOFF-PROVENANCE-MISSING",
+            severity="error",
+        )
+
+        body_missing_chain = object.__new__(GenerationSizeByteBranchChainPruning)
+        object.__setattr__(body_missing_chain, "arms", missing_provenance_chain.arms)
+        object.__setattr__(body_missing_chain, "type_tag", "si16")
+        object.__setattr__(body_missing_chain, "selected_literal", 2)
+        object.__setattr__(body_missing_chain, "selected_statement_text", "")
+        object.__setattr__(
+            body_missing_chain,
+            "condition_location",
+            SourceLocation(Path("array.tsl"), 107, 15),
+        )
+        assert_diagnostic(
+            self,
+            handoff_opaque_selected_branch_body(
+                "candidate-1",
+                GenerationLoweringStage(
+                    stage="generation_control_flow_pruning",
+                    output=body_missing_chain,
+                ),
+            ).diagnostics[0],
+            code="TSL-LOWER-HANDOFF-BODY-MISSING",
+            severity="error",
+            path="array.tsl",
+            line=107,
+            column=15,
+        )
+
+        form_cases = (
+            (
+                "pg = intrin<svptrue_b16>(); emit_return(tmp);",
+                "TSL-LOWER-SELECTED-BODY-FORM-EXTRA-STATEMENTS",
+            ),
+            (
+                "pg = intrin<svptrue_b16()",
+                "TSL-LOWER-SELECTED-BODY-FORM-MALFORMED",
+            ),
+            (
+                "mask = intrin<svptrue_b16>();",
+                "TSL-LOWER-SELECTED-BODY-FORM-TARGET-UNSUPPORTED",
+            ),
+            (
+                "pg = value<generation>(vector::length);",
+                "TSL-LOWER-SELECTED-BODY-FORM-RHS-UNSUPPORTED",
+            ),
+            (
+                "pg = intrin<svptrue_b8>();",
+                "TSL-LOWER-SELECTED-BODY-FORM-RHS-UNSUPPORTED",
+            ),
+        )
+        for body_text, code in form_cases:
+            with self.subTest(code=code):
+                diagnostic = recognize_selected_branch_body_assignment_form(
+                    self.assignment_handoff(body_text)
+                ).diagnostics[0]
+                assert_diagnostic(
+                    self,
+                    diagnostic,
+                    code=code,
+                    severity="error",
+                    path="array.tsl",
+                    line=107,
+                    column=15,
+                )
+
+        bad_body_ir = object.__new__(SelectedAssignmentDirectIntrinsicBodyIr)
+        object.__setattr__(bad_body_ir, "candidate_id", "candidate-1")
+        object.__setattr__(bad_body_ir, "selected_type_tag", "si16")
+        object.__setattr__(bad_body_ir, "selected_literal", 2)
+        object.__setattr__(bad_body_ir, "originating_branch_chain_id", "")
+        object.__setattr__(
+            bad_body_ir,
+            "original_opaque_body_text",
+            "pg = intrin<svptrue_b16>();",
+        )
+        object.__setattr__(
+            bad_body_ir,
+            "source_location",
+            SourceLocation(Path("array.tsl"), 107, 15),
+        )
+        object.__setattr__(bad_body_ir, "assignment_target_text", "pg")
+        object.__setattr__(bad_body_ir, "opaque_rhs_text", "intrin<svptrue_b16>()")
+        object.__setattr__(bad_body_ir, "direct_intrinsic_token_text", "svptrue_b16")
+        object.__setattr__(bad_body_ir, "direct_intrinsic_argument_texts", ())
+        assert_diagnostic(
+            self,
+            lower_selected_body_envelope(bad_body_ir).diagnostics[0],
+            code="TSL-LOWER-SELECTED-BODY-ENVELOPE-INCONSISTENT",
+            severity="error",
+            path="array.tsl",
+            line=107,
+            column=15,
+        )
+
+    def test_m85_selected_body_pipeline_snapshot_preserves_stage_identity(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+
+        first = lower_candidates(selection)
+        second = lower_candidates(selection)
+
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        first_impl = next(
+            implementation
+            for implementation in first.unwrap().implementations
+            if implementation.generation_branch_chains[0].type_tag == "si16"
+        )
+        second_impl = next(
+            implementation
+            for implementation in second.unwrap().implementations
+            if implementation.generation_branch_chains[0].type_tag == "si16"
+        )
+        self.assertEqual(
+            tuple(stage.stage for stage in first_impl.generation_stages[-4:]),
+            (
+                "selected_body_lowering",
+                "selected_body_form_recognition",
+                "selected_body_ir_lowering",
+                "selected_body_envelope_lowering",
+            ),
+        )
+        self.assertIs(
+            first_impl.generation_stages[-4].output,
+            first_impl.selected_branch_body_handoffs[0],
+        )
+        self.assertIs(
+            first_impl.generation_stages[-3].output,
+            first_impl.selected_branch_body_assignment_forms[0],
+        )
+        self.assertIs(
+            first_impl.generation_stages[-2].output,
+            first_impl.selected_branch_body_irs[0],
+        )
+        self.assertIs(
+            first_impl.generation_stages[-1].output,
+            first_impl.selected_body_envelopes[0],
+        )
+        self.assertEqual(
+            tuple(stage.output.key for stage in first_impl.generation_stages[-4:]),
+            tuple(stage.output.key for stage in second_impl.generation_stages[-4:]),
+        )
+        def selected_body_output_location_key(output: object) -> tuple[object, ...]:
+            if isinstance(output, SelectedBranchBodyAssignmentFormRecognition):
+                return output.selected_statement_location.sort_key()
+            if isinstance(
+                output,
+                (
+                    OpaqueSelectedBranchBodyHandoff,
+                    NoSelectedBranchBodyHandoff,
+                    NoSelectedBranchBodyAssignmentFormRecognition,
+                    SelectedAssignmentDirectIntrinsicBodyIr,
+                    NoSelectedAssignmentDirectIntrinsicBodyIr,
+                    SelectedBodyEnvelopeIr,
+                    NoSelectedBodyEnvelopeIr,
+                ),
+            ):
+                return output.source_location.sort_key()
+            raise AssertionError(f"unexpected selected-body output {output!r}")
+
+        first_locations = tuple(
+            selected_body_output_location_key(stage.output)
+            for stage in first_impl.generation_stages[-4:]
+        )
+        second_locations = tuple(
+            selected_body_output_location_key(stage.output)
+            for stage in second_impl.generation_stages[-4:]
+        )
+        self.assertEqual(first_locations, second_locations)
 
     def test_m84_private_array_body_pipeline_preserves_snapshot_identity(self) -> None:
         result = self.exact_array_initialization_stage_pipeline("si32")

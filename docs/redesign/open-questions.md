@@ -1372,8 +1372,10 @@ M80 exact array-body validation boundary extraction,
 implemented M81 generation-time lowering core ownership extraction,
 implemented M82 selected-body envelope ownership extraction, implemented M83
 stage-contract ownership extraction, implemented M84 exact array-body pipeline
-and source-adapter ownership extraction, and planned M85 selected-body lowering
-ownership extraction, while body-slot semantics beyond those exact
+and source-adapter ownership extraction, implemented M85 selected-body
+lowering ownership extraction, and planned M86 candidate payload-intake and
+mini-TSIL leaf return lowering ownership extraction, while body-slot semantics
+beyond those exact
 structural/request-resolution boundaries, including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
 `algo`, Rust output, generated tests beyond the selected M49 source fixture,

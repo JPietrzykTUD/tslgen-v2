@@ -748,6 +748,22 @@ broaden selected-body parsing, interpret SVE-looking direct-intrinsic tokens,
 interpret `emit_return(tmp)` or store/call semantics, introduce raw-helper
 dispatch, or add backend translation/rendering/output behavior.
 
+M85 is accepted as that move in
+`tslgen.lowering._selected_body_lowering`, with `boundary.py` and
+`tslgen.lowering` preserving the accepted public call surface. The extraction
+does not add selected-body semantics or change the accepted Stage 8 selected-
+body snapshots.
+
+Post-M85 planning selects M86 as candidate payload-intake and mini-TSIL leaf
+return lowering extraction. M86 is also no-new-semantics lowering architecture
+work: it should move accepted payload classification, typed-opaque
+unsupported-payload diagnostics, direct parameter-add return lowering, and
+`intrin_compose<add>` return lowering out of `boundary.py` while preserving
+the same typed mini-TSIL return statements, diagnostics, source locations,
+stage snapshots, and public facade behavior. It must not broaden TSIL parsing,
+interpret `emit_return(tmp)` or return/store/call semantics, introduce raw
+helper dispatch, or add backend translation/rendering/output behavior.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
