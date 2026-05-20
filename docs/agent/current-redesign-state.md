@@ -814,40 +814,51 @@ generate artifacts, infer declaration/array/store/return/SVE/body semantics,
 repair source text, broaden protocols, introduce hidden backfeeds, or add
 fixpoint machinery.
 
+Post-M92 planning selected
+`Milestone 93: Dual-Source Lowering Operation Package Boundary Slice`.
+The selected plan proves the lowering package shape is not array-only while
+remaining narrow: it packages exactly accepted M86 mini-TSIL leaf return
+values and accepted M92 exact array backend-handoff requests as distinct Stage
+8 typed/provenance entries. Planning review returned `Accept With Follow-Ups`
+after the initial cross-primitive wording was tightened from a broad operation
+framework into a dual-source package boundary seed. Human acceptance is
+recorded, and M93 execution is the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M92 planning.
+Execute Milestone 93.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m92-planning-plus-review-prompt.md
+docs/agent/runs/m93-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The active workflow is post-M92 planning.
+Milestone 93: Dual-Source Lowering Operation Package Boundary Slice
 ```
 
 Latest review verdict:
 
 ```text
-M92 execution-review returned Accept With Follow-Ups. The blocking
-documentation mismatch was fixed locally; the remaining wording follow-up was
-also cleaned up during finalization.
+Post-M92 planning is accepted. It selected M93 and returned
+Accept With Follow-Ups after tightening M93 into a dual-source package
+boundary over accepted M86 and M92 facts, not a broad cross-primitive
+operation framework.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M92 planning-plus-review prompt. Use the specified
-read-only planning/review/audit subagents. Do not implement code unless the
-prompt explicitly selects an executor task.
+Run the active M93 execution-review loop prompt. Use exactly one write-capable
+executor followed by read-only review/audit subagents. Do not start post-M93
+planning until M93 review returns Accept or Accept With Follow-Ups.
 ```
 
 Accepted planning prompt:
@@ -1636,10 +1647,22 @@ Completed M92 execution-review loop prompt:
 docs/agent/runs/m92-execution-review-loop-prompt.md
 ```
 
-Active post-M92 planning-plus-review prompt:
+Completed post-M92 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m92-planning-plus-review-prompt.md
+```
+
+Completed post-M92 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m92-acceptance-finalization-prompt.md
+```
+
+Active M93 execution-review loop prompt:
+
+```text
+docs/agent/runs/m93-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2527,6 +2550,16 @@ docs/agent/runs/post-m92-planning-plus-review-prompt.md
   create renderer-ready IR, render output, broaden TSIL parsing, repair source
   bodies, infer declaration/array/store/return/SVE/body semantics, introduce
   broad protocols, hidden backfeeds, fixpoint machinery, or hardwiring.
+- M93 is selected for execution as a dual-source lowering operation package
+  boundary only. It may package accepted M86 mini-TSIL leaf return values and
+  accepted M92 exact array backend-handoff requests as distinct typed Stage 8
+  entries, but it must not become a broad cross-primitive operation framework.
+- M93 must not add backend maps/catalog reads, backend-uninit resolution,
+  Stage 9 backend planning, backend translation, renderer-ready IR, rendering,
+  generated output, primitive dependency closure, operation scheduling,
+  wrapper planning, artifact path planning, broad TSIL parsing, source repair,
+  broad body/call/store/return/declaration/array/SVE semantics, registries,
+  semantic dispatchers, hidden backfeeds, fixpoint machinery, or hardwiring.
 - Future lowering package decomposition must preserve accepted M57-M92
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -3767,11 +3800,16 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M92 documentation re-review follow-up was addressed during finalization:
   wording in `generation-time-semantic-lowering.md` and `pipeline-design.md`
   no longer calls accepted M92 the "next" step.
+- Post-M92 planning follow-up for M93 execution: keep M93 as a dual-source
+  package boundary over exactly accepted M86 and M92 typed facts. Do not
+  broaden it into a generic cross-primitive operation framework, operation
+  registry, semantic dispatcher, dependency solver, backend plan, or renderer
+  input.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready for post-M92 planning
-through the active post-M92 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M93 through the
+active M93 execution-review loop prompt.
 
 ## Validation Expectations
 
@@ -3862,6 +3900,22 @@ Validation results:
   compileall OK, ruff `All checks passed!`, mypy
   `Success: no issues found in 132 source files`, and diff-check OK.
 - Standalone final `git diff --check` returned exit 0 with no output.
+
+For post-M92 planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
+
+For post-M92 acceptance finalization, validation completed with:
+
+```bash
+git diff --check -- docs/agent/current-redesign-state.md docs/agent/runs/post-m92-acceptance-finalization-prompt.md docs/agent/runs/m93-execution-review-loop-prompt.md docs/redesign/implementation-roadmap.md docs/redesign/behavioral-spec.md docs/redesign/generation-time-semantic-lowering.md docs/redesign/pipeline-design.md docs/redesign/target-architecture.md docs/redesign/testing-strategy.md docs/redesign/design-decisions.md docs/redesign/open-questions.md
+```
+
+The command returned exit 0 with no output.
 
 For post-M91 planning, validation completed with:
 

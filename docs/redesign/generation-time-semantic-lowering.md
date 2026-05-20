@@ -822,6 +822,16 @@ translation, renderer-ready IR, rendering, generated output, generic backend
 helper evaluation, source-body repair, broad protocols, hidden backfeeds, or
 fixpoint machinery.
 
+Post-M92 planning selects M93 as a dual-source lowering operation package
+boundary, pending human acceptance. M93 should package exactly two already
+accepted typed source families: M86 mini-TSIL leaf return statements and M92
+exact array backend-handoff requests. This is a Stage 8 typed package boundary
+only, not broad cross-primitive semantics: it must preserve distinct
+source-family identity/provenance and must not introduce primitive-call
+discovery, dependency closure, backend planning, renderer-ready IR, rendering,
+generated output, generic TSIL parsing, source repair, registries,
+dispatchers, hidden backfeeds, or fixpoint machinery.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`
@@ -1233,7 +1243,8 @@ array-body structural package assembly, accepted M89 exact array
 backend-deferred request inventory, accepted M90 exact array lowering
 completion-package handoff, accepted M91 behavior-preserving exact array
 pipeline ownership consolidation, and accepted M92 exact array lowering
-backend-handoff request:
+backend-handoff request, plus selected pending M93 dual-source lowering
+operation package boundary planning:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask

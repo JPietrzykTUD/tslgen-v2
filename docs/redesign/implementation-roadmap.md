@@ -12250,3 +12250,156 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m92-planning-plus-review-prompt.md` runs the next
   lowering-focused planning pass.
+
+### Milestone 93: Dual-Source Lowering Operation Package Boundary Slice
+
+Status:
+
+Selected by accepted post-M92 planning. Human acceptance is recorded. M93 is
+ready for execution through
+`docs/agent/runs/m93-execution-review-loop-prompt.md`. The selected plan is a
+Stage 8 lowering operation package boundary seed over exactly two accepted
+typed source families: accepted M86 mini-TSIL leaf return statements and
+accepted M92 exact array backend-handoff requests. The slice is intended to
+prove that lowering packaging is not array-only without creating a broad
+operation framework, dispatcher, backend plan, renderer input, or semantic
+body normalizer.
+
+Goal:
+
+Create a backend-neutral typed lowering operation package boundary that can
+carry either an accepted mini-TSIL leaf return operation or an accepted exact
+array backend-handoff operation as immutable typed/provenance data. M93 should
+give later lowering/backend-planning work one common package surface while
+preserving source-family identity and without pretending that the two source
+families share broad body semantics.
+
+Scope:
+
+- Add focused private ownership, such as
+  `tslgen.lowering._operation_package`, for one lowering operation package
+  type, two exact package entry variants, deterministic keys, source narrowing,
+  provenance validation, and diagnostics.
+- Consume only accepted M86 `TsilReturnStatement` / `selected_body_lowering`
+  values with explicit candidate context, accepted M92
+  `ExactArrayBackendHandoffRequestIr` / `array_backend_handoff_request`
+  values, or narrowly validated sources carrying exactly one packageable
+  accepted value.
+- Produce a deterministic typed package for `mini_tsil_leaf_return` entries
+  that preserves the accepted M86 return statement object and candidate
+  context.
+- Produce a deterministic typed package for `exact_array_backend_handoff`
+  entries that preserves the accepted M92 request object and its M90/M89/M88/
+  M72/M67 identity/provenance chain.
+- Expose the packages on `LoweredImplementation` and stage snapshots as a
+  Stage 8 `lowering_operation_package` fact, without changing accepted M86 or
+  M92 output identity or earlier stage order.
+- Preserve accepted M57-M92 diagnostics, source locations, public imports,
+  deterministic keys, selected-branch-only behavior, no-external-input
+  boundaries, and pipeline snapshots.
+
+Out of scope:
+
+- Backend-uninit resolution, backend map reads, backend catalog reads,
+  `tsldata/detail/lang` reads, Stage 9 backend planning, backend translation,
+  renderer-ready IR, rendering, generated C++ or Rust output, generated tests,
+  CLI/report/writer behavior, compiler execution, or Rust.
+- Primitive dependency closure, primitive-call discovery, operation
+  scheduling, backend support filtering, wrapper-shape planning, artifact path
+  planning, or backend operation DAG construction.
+- Generic operation registries, plugin systems, callback maps, semantic
+  dispatchers, hidden backfeeds, fixpoint execution, or dispatch tables keyed
+  by primitive name, raw helper text, backend id, extension id, selected type
+  tag, SVE token, renderer name, corpus line number, or request ordinal.
+- Hardwiring semantic outputs from primitive names, selected type tags,
+  extension names, backend ids, helper text, SVE tokens, corpus line numbers,
+  or request ordinals.
+- Generic TSIL parsing, broad expression/body/return/call/store/declaration/
+  array/variable/cast/loop/SVE semantics, broad `emit_return(...)`, broad
+  direct-intrinsic semantics, generic `value<backend>(...)` or
+  `type<backend>(...)` evaluation, or source-body repair.
+- Placeholder operation package kinds for unimplemented primitive families.
+  Future primitive families must be added by later milestones with their own
+  accepted typed source facts, evidence, diagnostics, and tests.
+
+Required input:
+
+- Accepted M86 `TsilReturnStatement` values and the selected-candidate context
+  that produced them.
+- Accepted M92 `ExactArrayBackendHandoffRequestIr` values.
+- Accepted M92 source-chain references to M90/M89/M88/M72/M67 values.
+- Corpus evidence:
+  - `tsldata/primitives/arithmetic/fundamental.tsl:31`
+  - `tsldata/primitives/arithmetic/fundamental.tsl:64`
+  - `tsldata/primitives/load_store/array.tsl:105-111`
+
+Expected outputs:
+
+- A typed lowering operation package with stable identity, source-family tag,
+  candidate id, source location/provenance, source typed value reference, and
+  deterministic key behavior.
+- A mini-TSIL leaf-return operation package entry preserving the accepted M86
+  `TsilReturnStatement` object and candidate context.
+- An exact-array backend-handoff operation package entry preserving the
+  accepted M92 request object and its unresolved dependency request/provenance
+  records.
+- Structured diagnostics for unsupported source, missing packageable value,
+  duplicate packageable values, malformed runtime entries, source-family
+  mismatch, context mismatch, source-location mismatch, dependency/provenance
+  mismatch, and package-source ambiguity.
+
+Tests required:
+
+- Positive M93 tests for direct M86 statement plus explicit candidate context,
+  M86 stage-output/container input, direct M92 handoff request input, M92
+  stage-output/container input, and normal `LoweredImplementation` /
+  `LoweringPlan` integration.
+- Identity/provenance tests proving package entries reference accepted M86 and
+  M92 objects rather than duplicating, reparsing, or re-collecting facts.
+- Negative diagnostics for unsupported source, missing packageable value,
+  duplicate packageable values, malformed runtime entries, source-family
+  mismatch, context mismatch, source-location mismatch, and M92 dependency/
+  provenance mismatch.
+- Determinism tests for package keys, reordered lowered implementations, and
+  pipeline snapshots.
+- Import-boundary tests proving the focused package module does not import
+  `boundary.py`, `tslgen.lowering`, exact-array orchestration modules as
+  dispatchers, backend modules, renderers, `tsldata`, or `frozen`.
+- Negative assertions proving M93 does not read backend maps/catalogs, resolve
+  `uninit::array`, create Stage 9 plans, produce renderer-ready values, render
+  output, infer broad body semantics, repair source text, or widen to generic
+  TSIL/backend-helper evaluation.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_operation_package.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_operation_package.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_pipeline.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m93 or operation_package or mini_tsil or backend_handoff"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Turning the package boundary into Stage 9 backend planning, renderer-ready
+  IR, dependency closure, scheduling, or artifact planning.
+- Hiding array-specific assumptions behind a generic name or, conversely,
+  claiming broad cross-primitive support beyond the accepted M86/M92 source
+  families.
+- Creating a broad source protocol, registry, callback map, plugin system,
+  semantic dispatcher, hidden backfeed, or fixpoint coordinator.
+- Hardwiring semantic outputs from primitive names, selected type tags,
+  extension names, backend ids, helper text, SVE tokens, corpus line numbers,
+  or request ordinals.
+- Normalizing M86 and M92 into a fake common body semantics model instead of
+  preserving distinct typed source-family identity.
+- Adding placeholder operation kinds for unsupported future primitive
+  families.
+- Growing `boundary.py` or `_stage_contracts.py` into catch-all ownership
+  instead of adding focused package ownership with one-way imports.
+
+Next concrete prompt:
+
+- `docs/agent/runs/m93-execution-review-loop-prompt.md` runs the accepted M93
+  execution-review loop.

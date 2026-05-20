@@ -683,6 +683,14 @@ Current roadmap note:
   does not become Stage 9 planning, backend map lookup, backend translation,
   renderer-ready IR, rendering/output, a generic backend-helper evaluator, or
   a broad source protocol.
+- Post-M92 planning selects M93 as dual-source lowering operation package
+  boundary ownership, pending human acceptance. The intended architecture is a
+  focused private module, such as `_operation_package.py`, that packages
+  exactly accepted M86 mini-TSIL leaf return values and accepted M92 exact
+  array backend-handoff requests as distinct Stage 8 typed/provenance entries.
+  It must not become a generic operation registry, semantic dispatcher,
+  backend planning surface, renderer-ready IR, source parser, source-repair
+  mechanism, dependency solver, or fixpoint/backfeed coordinator.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

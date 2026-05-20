@@ -1374,6 +1374,13 @@ still leaving actual backend-uninit resolution, backend maps, Stage 9 backend
 planning, renderer-ready body IR, generated output,
 declaration/array/store/return/SVE semantics, and broad
 `value<backend>(...)` evaluation open.
+Post-M92 planning selects M93 to narrow the package organization side without
+staying array-only. M93 should package exactly the accepted M86 mini-TSIL leaf
+return source family and the accepted M92 exact array backend-handoff source
+family as distinct Stage 8 typed entries, while still leaving semantic
+primitive calls, dependency closure, backend-uninit resolution, backend maps,
+Stage 9 backend planning, renderer-ready body IR, generated output, broad
+body semantics, and broad `value<backend>(...)` evaluation open.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,

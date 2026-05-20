@@ -763,6 +763,16 @@ resolve backend uninit, read backend maps/catalogs, create Stage 9 plans,
 produce renderer-ready IR, render output, infer body semantics, repair source
 text, or broaden source protocols.
 
+Post-M92 planning selects M93, pending human acceptance, as a Stage 8
+dual-source lowering operation package boundary. The planned
+`lowering_operation_package` fact should package only accepted M86 mini-TSIL
+leaf return values and accepted M92 exact array backend-handoff requests. It
+must preserve distinct source-family identity and provenance, not normalize
+the sources into broad body semantics. It must not create Stage 9 backend
+plans, resolve backend values, build operation schedules, read backend maps,
+produce renderer-ready IR, render output, repair source text, or install a
+generic operation dispatcher/registry.
+
 ## Stage 9: Backend Planning
 
 Inputs:
