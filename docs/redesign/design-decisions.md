@@ -1608,6 +1608,15 @@ Consequences:
   with diagnostics. It deliberately remains typed aggregation only, not body
   semantics, source repair, backend translation, rendering, generated output,
   a broad source protocol, or a generic TSIL/body package framework.
+- Post-M88 planning selects M89 as exact array backend-deferred request
+  inventory before any backend-uninit translation or renderer-ready body IR.
+  The decision is to consume the accepted M88 structural package and expose the
+  accepted M72/M67 `value<backend>(uninit::array)` deferred backend-value
+  boundary as one typed inventory member for later backend planning. M89 should
+  preserve object identity/provenance and validate typed request fields and
+  `deferred_backend_value` policy. It deliberately rejects backend map lookup,
+  backend translation, Stage 9 planning, rendering, generated output, generic
+  backend-value evaluation, broad protocols, and source-body repair.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

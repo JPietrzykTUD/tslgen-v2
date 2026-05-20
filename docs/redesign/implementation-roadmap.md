@@ -11506,5 +11506,199 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m88-planning-plus-review-prompt.md` runs the next
-  lowering-focused planning pass.
+- Post-M88 planning selected Milestone 89. The next concrete prompt is
+  `docs/agent/runs/post-m88-acceptance-finalization-prompt.md`, which records
+  human acceptance before creating an M89 execution-review loop prompt.
+
+### Milestone 89: Exact Array Backend-Deferred Request Inventory Slice
+
+Status:
+
+Planned. Post-M88 planning selected M89 as the next lowering-focused milestone.
+Human acceptance is required before execution.
+
+Goal:
+
+Consume the accepted M88 exact array-body structural package and produce one
+typed, source-ordered inventory of backend-deferred requests for the exact
+selected `array.tsl:105-111` body. The first and only supported inventory
+member is the accepted M72/M67 `value<backend>(uninit::array)` deferred
+backend-value boundary.
+
+M89 gives later backend-planning work one stable typed handoff for deferred
+backend-value facts without resolving those facts. It is still Stage 8
+lowering inventory/provenance validation, not backend translation or semantic
+array-body lowering.
+
+Scope:
+
+- Add focused private ownership, such as
+  `tslgen.lowering._array_body_backend_deferred_requests`, for exact array
+  backend-deferred request inventory assembly, source selection, and
+  inventory-specific diagnostics.
+- Consume accepted M88 `ExactArrayBodyStructuralPackageIr` values, the
+  `array_body_structural_package_assembly` stage output, or one narrowly
+  validated package-only source carrying exactly one accepted M88 package.
+- Produce a typed inventory value, such as
+  `ExactArrayBackendDeferredRequestInventoryIr`, containing exactly one typed
+  member for the accepted `value_backend_uninit_array` deferred backend-value
+  fact.
+- Preserve object identity/provenance from M88 package to M73 declaration
+  shell, M72 `ExactArrayInitializationDeferredBackendUninitValue`, and the M67
+  `ExactArrayInitializationHelperRequestRecord`.
+- Validate candidate id, target extension, source extension, selected type
+  tag, branch-chain id, variable token, slot identity, source location, request
+  ordinal, request kind, helper leaf kind, source text provenance, and
+  `deferred_backend_value` policy.
+- Add one deterministic stage after `array_body_structural_package_assembly`,
+  such as `array_backend_deferred_request_inventory`.
+- Treat any protocol-shaped/runtime source entries as untrusted until concrete
+  typed M88 package payloads are validated.
+- Preserve accepted M64-M88 diagnostics, source locations, stage names/order,
+  output identities, deterministic keys, selected-branch-only behavior, public
+  imports, and pipeline snapshots.
+
+Out of scope:
+
+- Resolving, translating, normalizing, rendering, or otherwise interpreting
+  `value<backend>(uninit::array)` beyond preserving the accepted deferred
+  backend-value policy and typed provenance.
+- Backend map reads, backend catalog reads, `tsldata/detail/lang` reads,
+  backend translation, Stage 9 backend planning, renderer-ready IR, rendering,
+  generated C++ or Rust output, generated tests, CLI/report/writer behavior,
+  compiler execution, or Rust.
+- Generic `value<backend>(...)`, `type<backend>(...)`, backend modifier, or
+  backend helper evaluation.
+- Declaration semantics, array semantics, allocation/lifetime, initializer
+  behavior, variable scope, store semantics, return semantics, `tmp.data()`
+  pointer semantics, SVE predicate/vector/register semantics, memory behavior,
+  direct-intrinsic semantics, or broad body semantics.
+- Inventorying generic backend-ish unresolved tokens such as `svst1`,
+  `tmp.data()`, `svptrue_b*`, `emit_return`, or unrelated selected-body facts.
+- Correcting, normalizing, rewriting, completing, reordering, reparsing, or
+  guessing intended meaning for malformed `.tsl` implementation bodies.
+- Broad TSIL parsing, raw helper dispatch, registries, callback maps, plugin
+  systems, dispatch tables keyed by raw helper text/backend id/extension/type
+  tag/corpus line number, reflection over package members, hidden backfeeds, or
+  fixpoint execution.
+- Growing `_array_body_models.py`, `_array_body_package.py`,
+  `_array_body_pipeline.py`, or central facade modules into catch-all
+  ownership.
+
+Required input:
+
+- Accepted M88 `ExactArrayBodyStructuralPackageIr`.
+- Accepted M72 `ExactArrayInitializationHelperSetCompletionIr`, including
+  accepted `ExactArrayInitializationDeferredBackendUninitValue` with policy
+  `deferred_backend_value`.
+- Accepted M67 backend-value request record for
+  `value<backend>(uninit::array)`.
+- Corpus evidence:
+  `tsldata/primitives/load_store/array.tsl:105-111`.
+
+Expected outputs:
+
+- A typed exact array backend-deferred request inventory value carrying stable
+  inventory identity, source location/provenance, candidate id, target
+  extension, source extension, selected type tag, branch-chain id, source
+  package identity, and the accepted M88 package reference.
+- A typed inventory member carrying kind `value_backend_uninit_array`, request
+  kind `backend_value`, policy `deferred_backend_value`, source location, and
+  references to the accepted M72 deferred backend-uninit value and M67 request
+  record.
+- Deterministic key/provenance behavior matching accepted M64-M88 conventions.
+- A pipeline stage snapshot entry for the inventory stage.
+- Structured diagnostics for unsupported source, missing package, duplicate
+  package, malformed package entry, context mismatch, missing/wrong
+  backend-uninit boundary, wrong policy, source/provenance mismatch, and
+  attempted non-exact backend-deferred member inventory.
+
+Parity criterion:
+
+M89 succeeds when the accepted exact array-body lowering path produces one
+typed backend-deferred request inventory over the accepted M88 package and M72
+backend-uninit boundary, while rejecting missing, duplicate, malformed,
+mismatched, or provenance-inconsistent inputs with diagnostics. It must not
+resolve backend values, create renderer-ready IR, or produce generated output.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:105-111` for the exact selected
+  array body and its `value<backend>(uninit::array)` leaf.
+- `tslgen/src/tslgen/lowering/_array_body_models.py` for accepted M67 request
+  records, M72 deferred backend-uninit values, and helper-set completion
+  models.
+- `tslgen/src/tslgen/lowering/_array_body_package.py` for accepted M88 package
+  input ownership and provenance.
+- `tslgen/src/tslgen/lowering/_array_body_pipeline.py` for deterministic stage
+  wiring and pipeline snapshot identity.
+- `tslgen/src/tslgen/lowering/_pipeline.py` and
+  `tslgen/src/tslgen/lowering/_stage_contracts.py` for stage/output contract
+  updates.
+- `tslgen/tests/unit/test_lowering_boundary.py` for accepted exact array-body
+  pipeline behavior, diagnostics, import-boundary tests, and new M89 coverage.
+
+Tests required:
+
+- Focused positive M89 tests for direct M88 package input, M88 stage-output
+  input, and narrowly validated one-package source input.
+- Tests proving the inventory contains exactly one `value_backend_uninit_array`
+  member and preserves object identity for the M88 package, M72 deferred value,
+  and M67 backend-value request record.
+- Negative tests for unsupported source, missing package, duplicate package,
+  malformed protocol-shaped package entries, context mismatch, missing or wrong
+  backend-uninit boundary, wrong request ordinal/kind/leaf/source text, wrong
+  `deferred_backend_value` policy, and provenance mismatch.
+- Pipeline tests proving the new inventory stage appears after
+  `array_body_structural_package_assembly`, preserves stage order, keys,
+  output object identity, source locations, deterministic ordering, selected-
+  branch-only behavior, and pipeline snapshots.
+- Import-boundary tests proving the focused inventory module does not import
+  `boundary.py`, `tslgen.lowering`, backend modules, renderers, `tsldata`,
+  `frozen`, or unrelated private modules as convenience dispatchers.
+- Tests or assertions proving M89 does not read backend maps, translate
+  `uninit::array`, produce renderer-ready values, render output, or widen to
+  generic backend-value evaluation.
+- Full lowering-boundary preservation plus focused mypy and tooling
+  validation.
+
+Golden fixtures required:
+
+- None. M89 must not change generated C++ or Rust output.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_package.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_backend_deferred_requests.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_package.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_backend_deferred_requests.py tslgen/src/tslgen/lowering/_pipeline.py tslgen/src/tslgen/lowering/_stage_contracts.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m89 or backend_deferred or structural_package or exact_array_body_pipeline"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Accidentally turning inventory into backend-uninit resolution, backend
+  translation, Stage 9 backend planning, renderer-ready values, rendering, or
+  generated output.
+- Branching on raw helper text, backend ids, extension names, type tags,
+  request ordinals, SVE tokens, or corpus line numbers directly to semantic
+  outputs rather than validating accepted typed M67/M72/M88 values.
+- Broadening to generic `value<backend>(...)` evaluation or generic backend
+  request registries.
+- Duplicating the M72 deferred backend-uninit value into a semantic node rather
+  than referencing the accepted object identity/provenance.
+- Adding broad runtime protocols or putting later-stage package outputs back
+  into shared protocol-shaped intake.
+- Growing `_array_body_models.py`, `_array_body_package.py`,
+  `_array_body_pipeline.py`, or the lowering facade into catch-all modules.
+
+Dependencies on prior milestones:
+
+- Milestones 67, 72, and 88, plus the accepted exact array-body chain from
+  Milestones 64 through 87.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m88-acceptance-finalization-prompt.md` records human
+  acceptance and creates the M89 execution-review loop prompt.

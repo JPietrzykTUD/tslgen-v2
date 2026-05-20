@@ -700,40 +700,53 @@ does not add source-body repair, semantic body lowering, declaration/store/
 return/SVE/backend semantics, renderer-ready IR, rendering, generated output,
 broad TSIL parsing, broad dispatch, hidden backfeeds, or runtime `frozen/` use.
 
+Post-M88 planning is accepted. It selected
+`Milestone 89: Exact Array Backend-Deferred Request Inventory Slice`, and
+internal planning/audit returned `Recommend With Follow-Ups` for the selected
+slice. The selected plan consumes the accepted M88 exact array-body structural
+package and inventories the accepted M72/M67
+`value<backend>(uninit::array)` deferred backend-value boundary as the only
+supported typed inventory member. It must remain Stage 8 lowering inventory
+and provenance validation only: no backend-uninit resolution, backend maps,
+backend translation, Stage 9 backend planning, renderer-ready IR, rendering,
+generated output, generic backend-value evaluation, source-body repair, or
+broad body semantics. Human acceptance was recorded, and M89 execution became
+the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M88 planning.
+Execute Milestone 89.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m88-planning-plus-review-prompt.md
+docs/agent/runs/m89-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The next active task is read-only post-M88 planning and review.
+Milestone 89: Exact Array Backend-Deferred Request Inventory Slice
 ```
 
 Latest review verdict:
 
 ```text
-M88 execution-review returned Accept With Follow-Ups after one focused
-extensibility revision for malformed protocol-shaped M87 source entries.
+Post-M88 planning selected M89 and human acceptance was recorded. Internal
+planning/audit returned Recommend With Follow-Ups for the selected exact array
+backend-deferred request inventory slice.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M88 planning-plus-review prompt. Focus the next task on
-lowering. Use read-only planning/review subagents, do not implement code, and
-create the next concrete prompt before finishing unless the prompt records a
-stop condition.
+Run the active M89 execution-review loop prompt. Use one write-capable
+executor, then read-only reviewer/auditor subagents. Do not start post-M89
+planning until M89 review returns Accept or Accept With Follow-Ups.
 ```
 
 Accepted planning prompt:
@@ -1450,10 +1463,22 @@ Completed M88 execution-review loop prompt:
 docs/agent/runs/m88-execution-review-loop-prompt.md
 ```
 
-Active post-M88 planning-plus-review prompt:
+Completed post-M88 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m88-planning-plus-review-prompt.md
+```
+
+Completed post-M88 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m88-acceptance-finalization-prompt.md
+```
+
+Active M89 execution-review loop prompt:
+
+```text
+docs/agent/runs/m89-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2290,6 +2315,15 @@ docs/agent/runs/post-m88-planning-plus-review-prompt.md
 - M88 uses focused private `_array_body_package.py` ownership. Protocol-shaped
   M87 sources are treated as untrusted runtime data and malformed entries must
   diagnose rather than raise or become implicit semantic inputs.
+- Post-M88 planning selected M89 as exact array backend-deferred request
+  inventory. M89 must consume accepted M88 package values and accepted M72/M67
+  backend-uninit typed facts only, preserving object identity/provenance.
+- M89 must remain Stage 8 typed inventory/provenance validation only. It must
+  not resolve `value<backend>(uninit::array)`, read backend maps/catalogs or
+  `tsldata/detail/lang`, add backend translation, Stage 9 backend planning,
+  renderer-ready IR, rendering, generated output, generic backend-value
+  evaluation, declaration/array/store/return/SVE semantics, raw helper
+  dispatch, broad protocols, hidden backfeeds, or source-body repair.
 - Future lowering package decomposition must preserve accepted M57-M88
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -3484,8 +3518,8 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run post-M88 planning
-through the active post-M88 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to run M89 execution through
+the active M89 execution-review loop prompt.
 
 ## Validation Expectations
 

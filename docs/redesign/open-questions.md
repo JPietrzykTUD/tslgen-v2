@@ -1350,6 +1350,13 @@ accepted package remains structural/provenance state only; it still leaves
 declaration semantics, array semantics, store semantics, `tmp.data()` pointer
 semantics, SVE meaning, return semantics, backend uninit translation,
 renderer-ready IR, generated output, and broad TSIL/body semantics open.
+Post-M88 planning selects M89 to narrow the backend-uninit handoff question by
+inventorying the accepted M72/M67 `value<backend>(uninit::array)` deferred
+backend-value boundary from the M88 package. That planned inventory is still
+Stage 8 lowering/provenance state only; it leaves actual backend-uninit
+translation, backend maps, renderer-ready IR, generated output, declaration/
+array semantics, store semantics, and broad `value<backend>(...)` evaluation
+open.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1382,9 +1389,10 @@ accepted M84 exact array-body pipeline and source-adapter ownership
 extraction, accepted M85 selected-body lowering ownership extraction, and
 accepted M86 candidate payload-intake and mini-TSIL leaf return lowering
 ownership extraction, accepted M87 exact return-emission structural/request IR,
-and accepted M88 exact array-body structural package assembly, while body-slot
-semantics beyond those exact structural/request-resolution boundaries,
-including nested expressions, direct
+accepted M88 exact array-body structural package assembly, and planned M89
+exact array backend-deferred request inventory, while body-slot semantics
+beyond those exact structural/request/inventory boundaries, including nested
+expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
 `algo`, Rust output, generated tests beyond the selected M49 source fixture,
 CLI/report parity, compiler execution, and broad native rendering.

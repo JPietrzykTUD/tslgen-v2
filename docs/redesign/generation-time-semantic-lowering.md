@@ -783,6 +783,15 @@ The package gives later lowering/backend-planning work one stable typed
 handoff instead of requiring every future stage to understand the separate
 exact array-body facts.
 
+Post-M88 planning selects M89 as exact array backend-deferred request
+inventory. M89 should consume the accepted M88 structural package and inventory
+only the accepted M72/M67 `value<backend>(uninit::array)` deferred
+backend-value boundary as typed lowering data. This is not backend-uninit
+resolution: the inventory must preserve `deferred_backend_value` policy,
+source/provenance identity, and typed request fields without reading backend
+maps, querying backend catalogs, creating renderer-ready IR, rendering output,
+or evaluating generic `value<backend>(...)` helpers.
+
 M61 diagnostics:
 
 - `TSL-LOWER-SELECTED-BODY-FORM-SOURCE-UNSUPPORTED`

@@ -649,6 +649,13 @@ Current roadmap note:
   return-emission stage. It does not grow central exact array-body modules
   into catch-all files, introduce broad protocols, reparse source text, infer
   store/return/backend/SVE semantics, or add backend/rendering/output hooks.
+- Post-M88 planning selects M89 as exact array backend-deferred request
+  inventory. M89 should add focused private lowering ownership for one typed
+  inventory over the accepted M88 package, with the accepted M72/M67
+  `value<backend>(uninit::array)` deferred backend-value boundary as the only
+  supported member. It must not start Stage 9 backend planning, backend map
+  lookup, backend translation, renderer-ready IR, rendering, generated output,
+  broad source protocols, or generic `value<backend>(...)` evaluation.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

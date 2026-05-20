@@ -722,6 +722,15 @@ aggregation and provenance validation only: it does not reparse raw body text,
 repair source bodies, infer declaration/store/return/SVE/backend semantics,
 create renderer-ready IR, or add generated output.
 
+Post-M88 planning selects M89 as the next Stage 8 inventory step. The planned
+`array_backend_deferred_request_inventory` stage should run after
+`array_body_structural_package_assembly` and consume the accepted M88 package
+to inventory the accepted M72/M67 `value<backend>(uninit::array)` deferred
+backend-value boundary as typed lowering data. The stage remains inventory and
+provenance validation only: it must not resolve backend uninit, read backend
+maps/catalogs, create Stage 9 backend plans, render output, or evaluate generic
+backend helpers.
+
 ## Stage 9: Backend Planning
 
 Inputs:
