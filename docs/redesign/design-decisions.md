@@ -1579,11 +1579,12 @@ Consequences:
   become a broad TSIL parser, registry, callback map, plugin system, raw text
   rewrite engine, or fixpoint/backfeed engine, and do not add new return
   semantics or generated-output behavior.
-  Exact return-emission structural/request IR remains the next high-value
-  semantic frontier, but M86 deliberately chooses a broader maintainability
-  slice first because payload classification and mini-TSIL leaf lowering are
-  still facade-owned after M85 and can move behind typed private boundaries
-  without changing behavior.
+  Exact return-emission structural/request IR was identified as the next
+  high-value semantic frontier, but M86 deliberately chose a broader
+  maintainability slice first because payload classification and mini-TSIL leaf
+  lowering were still facade-owned after M85 and could move behind typed
+  private boundaries without changing behavior. M87 later addressed the exact
+  return-emission frontier.
 - M87 is accepted as exact return-emission structural/request IR. This is the
   first semantic step after the M77-M86 cleanup, but it is deliberately still
   structural/request-only: recognize the exact trailing `emit_return(tmp);`
@@ -1596,6 +1597,16 @@ Consequences:
   support, return-value semantics, variable lifetime/scope semantics,
   renderer-ready IR, backend translation, generated output, and generic TSIL
   statement dispatch.
+- Post-M87 planning selects M88 as exact array-body structural package
+  assembly before backend-uninit refinement, store semantics, or renderer-ready
+  body IR. The decision is to turn the accepted M64-M87 exact array-body facts
+  into one typed, source-ordered package that later stages can consume without
+  reaching across many pipeline outputs. M88 should use focused private package
+  ownership, preserve member fact identity/provenance, and reject missing,
+  duplicate, mismatched, or provenance-inconsistent inputs with diagnostics.
+  It deliberately remains typed aggregation only, not body semantics, source
+  repair, backend translation, rendering, generated output, a broad source
+  protocol, or a generic TSIL/body package framework.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

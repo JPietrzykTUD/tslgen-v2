@@ -1092,6 +1092,16 @@ Recommended first parity checks:
   tooling validation success with corpus probes `3 passed`, unit discovery
   `626` tests OK, compileall OK, ruff OK, mypy OK across 126 source files, and
   diff-check OK.
+- Planned M88 testing should prove exact array-body structural package
+  assembly from accepted M64-M87 facts without semantic body lowering. Required
+  coverage includes positive package assembly, source-ordered member identity
+  and provenance preservation, missing/duplicate/mismatched/out-of-order/
+  provenance-inconsistent diagnostics, deterministic package keys, stage order
+  after `return_emission_structural_request_lowering`, selected-branch-only
+  behavior, pipeline snapshot stability, import-boundary checks for the focused
+  package module, and negative coverage proving no source-body repair, broad
+  TSIL parsing, store/return/backend/SVE semantics, rendering, or generated
+  output is introduced.
 
 Deferred parity checks:
 

@@ -675,40 +675,50 @@ translation, rendering, generated output, broad TSIL parsing, or runtime
 `frozen/` use. The focused revision removed M87 output from the shared runtime
 lowered-implementation source protocol to avoid broad protocol/backfeed creep.
 
+Post-M87 planning selected
+`Milestone 88: Exact Array Body Structural Package Assembly Slice`, and
+internal review returned `Accept With Follow-Ups` after a focused workflow
+state wording correction.
+
+Post-M87 planning is accepted. It selected
+`Milestone 88: Exact Array Body Structural Package Assembly Slice`. Human
+acceptance was recorded, and M88 execution became the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Plan the next lowering milestone after M87.
+Execute Milestone 88.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m87-planning-plus-review-prompt.md
+docs/agent/runs/m88-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The next executor milestone has not been selected.
+Milestone 88: Exact Array Body Structural Package Assembly Slice
 ```
 
 Latest review verdict:
 
 ```text
 M87 execution-review returned Accept With Follow-Ups after one focused
-maintainability revision.
+maintainability revision. Post-M87 planning selected M88 and internal planning
+review returned Accept With Follow-Ups after a focused workflow-state wording
+correction.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M87 planning-plus-review prompt. For the next task, focus
-on lowering. Use the specified read-only planning/review subagents. Do not
-implement product code and do not start M88 execution unless a later accepted
-prompt explicitly selects it.
+Run the active M88 execution-review loop prompt. Use one write-capable
+executor, then read-only reviewer/auditor subagents. Do not start post-M88
+planning until M88 review returns Accept or Accept With Follow-Ups.
 ```
 
 Accepted planning prompt:
@@ -1407,10 +1417,22 @@ Completed M87 execution-review loop prompt:
 docs/agent/runs/m87-execution-review-loop-prompt.md
 ```
 
-Active post-M87 planning-plus-review prompt:
+Completed post-M87 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m87-planning-plus-review-prompt.md
+```
+
+Completed post-M87 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m87-acceptance-finalization-prompt.md
+```
+
+Active M88 execution-review loop prompt:
+
+```text
+docs/agent/runs/m88-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2237,6 +2259,17 @@ docs/agent/runs/post-m87-planning-plus-review-prompt.md
   push it materially past the roughly 1,000-line guardrail, prefer a focused
   private return-emission module with one-way imports and import-boundary
   tests, or document why a temporary exception is safer.
+- Post-M87 planning selected M88 as exact array-body structural package
+  assembly, and human acceptance was recorded. M88 must consume accepted
+  M64-M87 typed facts and assemble one source-ordered typed structural package
+  only.
+- M88 must remain typed aggregation/provenance validation. It must not reparse
+  or repair source bodies, infer declaration/store/return/SVE/backend
+  semantics, query catalogs or backend maps, create renderer-ready IR, render
+  output, generate code/tests, or broaden TSIL/body parsing.
+- M88 should use focused private package ownership, such as
+  `_array_body_package.py`, and must not grow central exact array-body modules
+  into catch-all files or add broad source protocols.
 - Future lowering package decomposition must preserve accepted M57-M87
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -3431,8 +3464,8 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run post-M87 planning
-through the active post-M87 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to run M88 execution through
+the active M88 execution-review loop prompt.
 
 ## Validation Expectations
 

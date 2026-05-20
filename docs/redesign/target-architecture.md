@@ -642,6 +642,13 @@ Current roadmap note:
   provenance. It does not repair malformed source bodies, broaden
   `emit_return(...)`, implement return semantics, add renderer-ready IR, or
   add backend/rendering/output hooks.
+- Post-M87 planning selects M88 as exact array-body structural package
+  assembly. M88 should add focused private package ownership, likely a small
+  `tslgen.lowering._array_body_package` module, that aggregates accepted
+  M64-M87 typed facts into one source-ordered structural package. It must not
+  grow central exact array-body modules into catch-all files, introduce broad
+  protocols, reparse source text, infer store/return/backend/SVE semantics, or
+  add backend/rendering/output hooks.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

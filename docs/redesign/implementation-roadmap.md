@@ -10126,11 +10126,12 @@ stage names, stage ordering, output identities, deterministic keys,
 diagnostics, and no-external-input boundaries.
 
 M83 is behavior-preserving lowering architecture work. It prepares the staged
-lowering pipeline for future semantic slices such as exact return-emission
-structural/request IR by taking the growing `GenerationLoweringStage` output
-contract out of the facade-owned validation ladder. It is contract validation,
-not stage execution dispatch, a registry, a plugin system, a fixpoint engine,
-or a new semantic lowering slice.
+lowering pipeline for later semantic slices by taking the growing
+`GenerationLoweringStage` output contract out of the facade-owned validation
+ladder. M87 later used that foundation for exact return-emission
+structural/request IR. M83 is contract validation, not stage execution
+dispatch, a registry, a plugin system, a fixpoint engine, or a new semantic
+lowering slice.
 
 Scope:
 
@@ -11072,8 +11073,9 @@ Execution result:
   added.
 - Review and audit found no blocking implementation, validation, boundary,
   extensibility, documentation, or evidence issues after finalization.
-- Non-blocking follow-ups: exact return-emission structural/request IR remains
-  a high-value semantic frontier after the facade cleanup.
+- Non-blocking follow-ups: exact return-emission structural/request IR was
+  identified as the next high-value semantic frontier after the facade cleanup;
+  M87 addressed that follow-up.
 
 ### Milestone 87: Exact Return-Emission Structural Request IR Slice
 
@@ -11310,3 +11312,179 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m87-planning-plus-review-prompt.md` runs the next
   lowering-focused planning pass.
+
+### Milestone 88: Exact Array Body Structural Package Assembly Slice
+
+Status:
+
+Planned. Post-M87 planning selected M88 as the next lowering-focused
+milestone. Human acceptance is required before execution.
+
+Goal:
+
+Assemble the accepted exact array-body structural/request facts into one typed,
+source-ordered structural package for the selected `array.tsl:105-111` body
+shape. M88 is a lowering package assembly step: it makes the M64-M87 typed
+facts consumable as one coherent Stage 8 handoff while preserving their
+structural-only meaning.
+
+M88 must not claim that the array body is semantically lowered. It proves only
+that the exact accepted body structure has been assembled as typed lowering
+state from already accepted facts.
+
+Scope:
+
+- Add a typed exact array-body structural package value, such as
+  `ExactArrayBodyStructuralPackageIr`, behind a focused private lowering
+  ownership boundary.
+- Prefer a focused private module such as
+  `tslgen.lowering._array_body_package` for package assembly, source
+  selection, and package-specific diagnostics rather than growing central exact
+  array-body modules into catch-all files.
+- Consume accepted typed facts only:
+  M64/M65 exact array-body envelope state, M72 helper-set completion, M73
+  declaration-shell structural IR, M74 source-ordered structural sequence,
+  M75 predicate-path structural request, M76 post-branch intrinsic call-site
+  structural request, and M87 return-emission structural request.
+- Validate that the package members belong to the same candidate, source
+  envelope/sequence, branch path, target extension, source extension, selected
+  type tag, and source-ordered exact body.
+- Preserve object identity/provenance for the packaged member facts instead of
+  copying or normalizing them into semantic body nodes.
+- Add one deterministic package-assembly stage after
+  `return_emission_structural_request_lowering`, such as
+  `array_body_structural_package_assembly`.
+- Preserve public facade imports through `tslgen.lowering.boundary` and
+  `tslgen.lowering` if a new public alias is exposed; otherwise keep the new
+  helper private and test the public pipeline result.
+
+Out of scope:
+
+- Correcting, normalizing, rewriting, completing, reordering, reparsing, or
+  guessing intended meaning for malformed `.tsl` implementation bodies.
+- Broad TSIL parsing, generic body IR, generic statement packages, source-body
+  repair, raw helper dispatch, registries, callback maps, plugin systems,
+  dispatch tables keyed by raw text, or fixpoint/backfeed machinery.
+- Declaration semantics, array semantics, variable lifetime/scope, allocation
+  semantics, initializer behavior, store semantics, return-value semantics,
+  `tmp.data()` pointer semantics, `emit_return` semantics, `assume_aligned`
+  semantics, `intrin<svst1>` semantics, SVE predicate/vector/register
+  semantics, memory behavior, or broad direct-intrinsic semantics.
+- Backend uninit translation, backend map reads, backend translation, renderer-
+  ready IR, rendering, generated C++ or Rust output, generated tests,
+  CLI/report/writer behavior, compiler execution, catalog reads during
+  lowering, `tsldata` reads during lowering evaluation, host CPU queries, or
+  runtime dependency on `frozen/`.
+- Moving unrelated request/result models, `LoweringInputSet`,
+  `prepare_lowering_inputs`, `_lower_input`, `lower_candidates`, selected-body
+  lowering, generation query/control-flow staging, or broad exact array-body
+  orchestration out of `boundary.py`.
+
+Required input:
+
+- Accepted M64/M65 exact array-body envelope and pipeline integration.
+- Accepted M72 array-initialization helper-set completion, including the
+  deferred `value<backend>(uninit::array)` backend-value boundary as data only.
+- Accepted M73 declaration-shell structural IR and declaration variable token.
+- Accepted M74 source-ordered array-body structural sequence.
+- Accepted M75 predicate-path structural request.
+- Accepted M76 post-branch intrinsic call-site structural request.
+- Accepted M87 return-emission structural request.
+- Corpus evidence:
+  `tsldata/primitives/load_store/array.tsl:105-111`.
+
+Expected outputs:
+
+- A typed exact array-body structural package value carrying stable package
+  identity, source location/provenance, candidate id, target extension, source
+  extension, selected type tag, branch-chain id, source sequence identity, and
+  references to the accepted member facts.
+- A source-ordered package member sequence that preserves the accepted exact
+  declaration, predicate path, selected-body/predicate update evidence,
+  post-branch call-site, and return-emission structural/request facts.
+- Deterministic key/provenance behavior matching accepted M64-M87
+  conventions.
+- A pipeline stage snapshot entry for the package-assembly stage.
+- Structured diagnostics for unsupported source, missing member facts,
+  duplicate member facts, source/order mismatch, context mismatch, and
+  provenance mismatch.
+
+Parity criterion:
+
+M88 succeeds when the accepted exact array-body lowering path produces one
+typed structural package over the accepted M64-M87 facts and rejects missing,
+duplicate, mismatched, or provenance-inconsistent inputs with diagnostics. It
+must not produce backend/rendering/output artifacts or semantic body nodes.
+
+Evidence paths:
+
+- `tsldata/primitives/load_store/array.tsl:105-111` for the exact source
+  body shape.
+- `tslgen/src/tslgen/lowering/_array_body_models.py` for accepted M72-M87
+  typed fact ownership and the new package model location or import boundary.
+- `tslgen/src/tslgen/lowering/_array_body_pipeline.py` for deterministic
+  stage wiring and pipeline snapshot identity.
+- `tslgen/src/tslgen/lowering/_return_emission.py` for the focused M87 stage
+  ownership pattern that M88 should follow.
+- `tslgen/src/tslgen/lowering/_pipeline.py` and
+  `_stage_contracts.py` for stage/output contract updates.
+- `tslgen/tests/unit/test_lowering_boundary.py` for accepted exact array-body
+  pipeline behavior, diagnostics, and import-boundary tests.
+
+Tests required:
+
+- Focused positive M88 tests for package assembly from accepted M64-M87 facts.
+- Tests proving source-ordered member identity/provenance is preserved and the
+  package does not clone facts into semantic body nodes.
+- Negative tests for missing, duplicate, mismatched, out-of-order, and
+  provenance-inconsistent member facts.
+- Pipeline tests proving the new package stage appears after
+  `return_emission_structural_request_lowering`, preserves stage order, keys,
+  output object identity, source locations, deterministic ordering, selected-
+  branch-only behavior, and pipeline snapshots.
+- Import-boundary tests proving any focused package module does not import
+  `boundary.py`, `tslgen.lowering`, backend modules, renderers, `tsldata`,
+  `frozen`, or unrelated private modules as convenience dispatchers.
+- Full lowering-boundary preservation plus focused mypy and tooling
+  validation.
+
+Golden fixtures required:
+
+- None. M88 must not change generated C++ or Rust output.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_sources.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_return_emission.py tslgen/src/tslgen/lowering/_array_body_package.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_sources.py tslgen/src/tslgen/lowering/_array_body_validation.py tslgen/src/tslgen/lowering/_array_body_diagnostics.py tslgen/src/tslgen/lowering/_return_emission.py tslgen/src/tslgen/lowering/_array_body_package.py tslgen/src/tslgen/lowering/_pipeline.py tslgen/src/tslgen/lowering/_stage_contracts.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m88 or structural_package or exact_array_body_pipeline"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Accidentally treating package assembly as semantic array-body lowering.
+- Re-parsing raw source text or repairing malformed body shapes instead of
+  consuming accepted typed facts.
+- Inferring declaration, store, return, pointer, memory, SVE, backend, or
+  renderer semantics from structural tokens.
+- Adding a broad body package, generic TSIL parser, raw-helper dispatcher,
+  registry, callback map, plugin system, broad protocol, or fixpoint/backfeed
+  engine.
+- Growing `_array_body_models.py`, `_array_body_sources.py`,
+  `_array_body_validation.py`, `_array_body_diagnostics.py`, or
+  `_array_body_pipeline.py` into catch-all modules instead of adding focused
+  package ownership.
+- Changing accepted diagnostics, source locations, stage names/order, output
+  identities, keys, selected-branch-only behavior, public imports, or pipeline
+  snapshots from M64-M87.
+
+Dependencies on prior milestones:
+
+- Milestones 64 through 87.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m87-acceptance-finalization-prompt.md` records human
+  acceptance and creates the M88 execution-review loop prompt.
