@@ -731,9 +731,9 @@ provenance validation only: it does not resolve backend uninit, read backend
 maps/catalogs, create Stage 9 backend plans, render output, or evaluate generic
 backend helpers.
 
-M90 is selected as the next Stage 8 completion-package step. The planned
-`array_lowering_completion_package` stage will run after
-`array_backend_deferred_request_inventory` and consume the accepted M89
+M90 is accepted as the next Stage 8 completion-package step. The
+`array_lowering_completion_package` stage runs after
+`array_backend_deferred_request_inventory` and consumes the accepted M89
 inventory plus its accepted M88 package identity to produce one typed exact
 array lowering completion package. The stage is a lowering-side handoff
 boundary only: it packages accepted exact facts and explicit unresolved

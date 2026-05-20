@@ -44,6 +44,10 @@ from tslgen.lowering._array_body_backend_deferred_requests import (
     ExactArrayBackendDeferredRequestInventoryIr,
     lower_exact_array_backend_deferred_request_inventory,
 )
+from tslgen.lowering._array_body_completion_package import (
+    ExactArrayLoweringCompletionPackageIr,
+    lower_exact_array_lowering_completion_package,
+)
 from tslgen.lowering._array_body_sources import (
     ExactArrayBodyLoweredImplementationSource,
     ExactArrayBodyPipelineInput,
@@ -151,6 +155,9 @@ class _ExactArrayInitializationStagePipelineResult:
     array_backend_deferred_request_inventories: tuple[
         ExactArrayBackendDeferredRequestInventoryIr, ...
     ] = ()
+    array_lowering_completion_packages: tuple[
+        ExactArrayLoweringCompletionPackageIr, ...
+    ] = ()
     pipeline_snapshot: _lowering_pipeline.ExactArrayBodyPipelineSnapshot = field(
         default_factory=_lowering_pipeline.ExactArrayBodyPipelineSnapshot.empty,
     )
@@ -227,6 +234,11 @@ class _ExactArrayInitializationStagePipelineResult:
             "array_backend_deferred_request_inventories",
             tuple(self.array_backend_deferred_request_inventories),
         )
+        object.__setattr__(
+            self,
+            "array_lowering_completion_packages",
+            tuple(self.array_lowering_completion_packages),
+        )
         object.__setattr__(self, "pipeline_snapshot", self.pipeline_snapshot)
         object.__setattr__(self, "stages", tuple(self.stages))
 
@@ -286,6 +298,10 @@ class _ExactArrayInitializationStagePipelineResult:
             tuple(
                 inventory.key
                 for inventory in self.array_backend_deferred_request_inventories
+            ),
+            tuple(
+                package.key
+                for package in self.array_lowering_completion_packages
             ),
             self.pipeline_snapshot.key,
             tuple(stage.key for stage in self.stages),
@@ -762,6 +778,25 @@ def _lower_exact_array_initialization_stage_pipeline(
         stage="array_backend_deferred_request_inventory",
         output=backend_deferred_inventory,
     )
+    completion_package_result = lower_exact_array_lowering_completion_package(
+        backend_deferred_inventory_stage,
+        request.generation_context,
+        selected_candidate_id=item.candidate_id,
+        target_extension=item.candidate.target_extension,
+        source_extension=item.candidate.source_extension,
+        selected_type_tag=(
+            item.candidate.type_tag
+            if request.generation_context.use_candidate_type_tag
+            else None
+        ),
+    )
+    if not completion_package_result.is_ok:
+        return Result.failure(completion_package_result.diagnostics)
+    completion_package = completion_package_result.unwrap()
+    completion_package_stage = GenerationLoweringStage(
+        stage="array_lowering_completion_package",
+        output=completion_package,
+    )
     pipeline_stages = (
         array_body_stage,
         array_initialization_slot_form_stage,
@@ -777,6 +812,7 @@ def _lower_exact_array_initialization_stage_pipeline(
         return_emission_stage,
         structural_package_stage,
         backend_deferred_inventory_stage,
+        completion_package_stage,
     )
     pipeline_snapshot = _lowering_pipeline.ExactArrayBodyPipelineSnapshot(
         steps=(
@@ -909,6 +945,14 @@ def _lower_exact_array_initialization_stage_pipeline(
                 artifact_value=backend_deferred_inventory,
                 depends_on=("array_body_structural_package",),
             ),
+            _lowering_pipeline.exact_array_body_pipeline_step(
+                stage_name="array_lowering_completion_package",
+                stage=completion_package_stage,
+                artifact_kind="array_lowering_completion_package",
+                artifact_key=completion_package.key,
+                artifact_value=completion_package,
+                depends_on=("array_backend_deferred_request_inventory",),
+            ),
         ),
     )
 
@@ -946,6 +990,7 @@ def _lower_exact_array_initialization_stage_pipeline(
             array_backend_deferred_request_inventories=(
                 backend_deferred_inventory,
             ),
+            array_lowering_completion_packages=(completion_package,),
             pipeline_snapshot=pipeline_snapshot,
             stages=pipeline_stages,
         )

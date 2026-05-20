@@ -1617,7 +1617,7 @@ Consequences:
   `deferred_backend_value` policy. It deliberately rejects backend map lookup,
   backend translation, Stage 9 planning, rendering, generated output, generic
   backend-value evaluation, broad protocols, and source-body repair.
-- M90 is selected as exact array lowering completion package before backend
+- M90 is accepted as exact array lowering completion package before backend
   planning or renderer-ready body IR. The decision packages accepted M88
   structural facts and accepted M89 backend-deferred inventory facts into one
   typed Stage 8 handoff with explicit unresolved dependencies. "Completion" is

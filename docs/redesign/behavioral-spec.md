@@ -692,15 +692,15 @@ backend maps, create renderer-ready IR, render output, generate artifacts, or
 implement generic backend-value, declaration, array, store, return, pointer,
 SVE, memory, or broad TSIL body semantics.
 
-M90 is selected as the exact array lowering completion package slice. It will
-consume the accepted M89 backend-deferred inventory and its accepted M88
+M90 is accepted as the exact array lowering completion package slice. It
+consumes the accepted M89 backend-deferred inventory and its accepted M88
 structural package to produce one typed Stage 8 completion package for the
 selected `array.tsl:105-111` body. "Completion" means completion of the
 current lowering-side handoff only: accepted exact structural facts and
 unresolved backend-deferred dependencies are packaged together for later
-backend planning. M90 must not complete declaration, array, store, return,
+backend planning. M90 does not complete declaration, array, store, return,
 pointer, SVE, backend, renderer, generated-output, generic backend-value, or
-broad TSIL body semantics, and it must not repair source bodies.
+broad TSIL body semantics, and it does not repair source bodies.
 
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic

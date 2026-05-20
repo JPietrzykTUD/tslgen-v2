@@ -1124,21 +1124,27 @@ Recommended first parity checks:
   source files, and full tooling validation success with corpus probes
   `3 passed`, unit discovery `640` tests OK, compileall OK, ruff OK, mypy OK
   across 128 source files, and diff-check OK.
-- M90 planning selects exact array lowering completion package coverage. The
-  execution tests should prove positive completion-package assembly from direct
-  M89 inventory input, M89 stage-output input, and narrowly validated
-  package-plus-inventory source input; identity/provenance preservation for
-  accepted M88/M89/M73/M72/M67 objects; explicit unresolved dependency records
-  for the accepted M89 `value_backend_uninit_array` member; diagnostics for
-  unsupported, missing, duplicate, malformed, package/inventory mismatched,
-  context-mismatched, source-location mismatched, wrong-member-set,
-  wrong-policy, and provenance-inconsistent inputs; deterministic stage order
-  after `array_backend_deferred_request_inventory`; selected-branch-only
-  behavior; pipeline snapshot stability; import-boundary checks for the
-  focused completion module; and negative coverage proving no backend map
-  reads, backend-uninit translation, Stage 9 planning, renderer-ready IR,
-  rendering, generated output, source-body repair, broad TSIL parsing, or
-  generic backend-value evaluation is introduced.
+- M90 execution added exact array lowering completion package coverage from
+  the accepted M89 inventory and M88 package without backend planning or
+  renderer-ready output. Coverage includes positive completion-package assembly
+  from direct M89 inventory input, M89 stage-output input, and narrowly
+  validated package-plus-inventory source input; identity/provenance
+  preservation for accepted M88/M89/M73/M72/M67 objects; explicit unresolved
+  dependency records for the accepted M89 `value_backend_uninit_array` member;
+  diagnostics for unsupported, missing, duplicate, malformed,
+  package/inventory mismatched, context-mismatched, source-location mismatched,
+  wrong-member-set, wrong-policy, malformed request-record, and
+  provenance-inconsistent inputs; deterministic stage order after
+  `array_backend_deferred_request_inventory`; selected-branch-only behavior;
+  pipeline snapshot stability; import-boundary checks for the focused
+  completion module; and negative coverage proving no backend map reads,
+  backend-uninit translation, Stage 9 planning, renderer-ready IR, rendering,
+  generated output, source-body repair, broad TSIL parsing, or generic
+  backend-value evaluation is introduced. Validation returned focused M90
+  `22 passed, 291 deselected`, full lowering-boundary `313 passed`, focused
+  lowering mypy success across 25 source files, and full tooling validation
+  success with corpus probes `3 passed`, unit discovery `647` tests OK,
+  compileall OK, ruff OK, mypy OK across 129 source files, and diff-check OK.
 
 Deferred parity checks:
 

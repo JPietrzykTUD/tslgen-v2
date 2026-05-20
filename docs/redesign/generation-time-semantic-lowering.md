@@ -792,12 +792,12 @@ fields without reading backend maps, querying backend catalogs, creating
 renderer-ready IR, rendering output, or evaluating generic
 `value<backend>(...)` helpers.
 
-M90 is selected as the next exact Stage 8 lowering package boundary. It will
-consume the accepted M89 inventory and validate the accepted M88 package
+M90 is accepted as the next exact Stage 8 lowering package boundary. It
+consumes the accepted M89 inventory and validates the accepted M88 package
 identity to assemble one typed `ExactArrayLoweringCompletionPackageIr`-style
 handoff for the selected `array.tsl:105-111` body. The package records that
 the accepted exact lowering handoff is assembled and still carries explicit
-unresolved backend-deferred dependencies. It must not resolve backend uninit,
+unresolved backend-deferred dependencies. It does not resolve backend uninit,
 read backend maps/catalogs, create Stage 9 backend plans, create renderer-
 ready body IR, render output, evaluate generic backend helpers, infer body
 semantics, or repair source text.
@@ -1127,6 +1127,40 @@ M76 diagnostics:
 - `TSL-LOWER-POST-BRANCH-CALL-SITE-SOURCE-OPERAND-UNSUPPORTED`: argument 2 is
   not the exact structural source operand token `a`.
 
+M90 diagnostics:
+
+- `TSL-LOWER-ARRAY-COMPLETION-SOURCE-UNSUPPORTED`: completion-package lowering
+  was invoked with something other than an accepted M89 inventory, the M89
+  stage output, or a narrow source carrying exactly one accepted M88 package
+  and one matching accepted M89 inventory.
+- `TSL-LOWER-ARRAY-COMPLETION-PACKAGE-MISSING`: the narrow source lacks the
+  required accepted M88 structural package.
+- `TSL-LOWER-ARRAY-COMPLETION-PACKAGE-MULTIPLE`: the narrow source carries
+  more than one M88 structural package where M90 requires exactly one.
+- `TSL-LOWER-ARRAY-COMPLETION-INVENTORY-MISSING`: the narrow source lacks the
+  required accepted M89 backend-deferred request inventory.
+- `TSL-LOWER-ARRAY-COMPLETION-INVENTORY-MULTIPLE`: the narrow source carries
+  more than one M89 backend-deferred request inventory where M90 requires
+  exactly one.
+- `TSL-LOWER-ARRAY-COMPLETION-PACKAGE-INVENTORY-MISMATCH`: the accepted M89
+  inventory and accepted M88 package do not preserve the same package object
+  identity.
+- `TSL-LOWER-ARRAY-COMPLETION-CONTEXT-MISMATCH`: candidate id, extension,
+  selected type, or branch-chain context does not match the accepted M88/M89
+  facts or supplied selected-candidate context.
+- `TSL-LOWER-ARRAY-COMPLETION-SOURCE-LOCATION-MISMATCH`: the accepted M89
+  inventory/member source locations no longer match the accepted package or
+  request provenance expected by M90.
+- `TSL-LOWER-ARRAY-COMPLETION-MEMBER-SET-MISMATCH`: the accepted M89 inventory
+  does not contain exactly the single supported `value_backend_uninit_array`
+  backend-value member.
+- `TSL-LOWER-ARRAY-COMPLETION-POLICY-MISMATCH`: the accepted unresolved
+  dependency no longer preserves the M89 `deferred_backend_value` policy.
+- `TSL-LOWER-ARRAY-COMPLETION-PROVENANCE-MISMATCH`: the accepted M88 package,
+  accepted M89 inventory, M73 shell, M72 deferred backend-uninit value, M67
+  request record, or completion dependency disagree on object identity or
+  required provenance.
+
 ## Explicit Deferrals
 
 Deferred beyond the implemented M43-M76 semantic-lowering, structural
@@ -1144,8 +1178,12 @@ M80 exact array-body validation boundary extraction, accepted M81
 generation-time lowering core ownership extraction, accepted M82 selected-body
 envelope ownership extraction, accepted M83 stage-contract ownership
 extraction, accepted M84 exact array-body pipeline/source-adapter ownership
-extraction, accepted M85 selected-body lowering ownership extraction, and
-accepted M86 payload-intake / mini-TSIL leaf lowering ownership extraction:
+extraction, accepted M85 selected-body lowering ownership extraction,
+accepted M86 payload-intake / mini-TSIL leaf lowering ownership extraction,
+accepted M87 exact return-emission structural/request IR, accepted M88 exact
+array-body structural package assembly, accepted M89 exact array
+backend-deferred request inventory, and accepted M90 exact array lowering
+completion-package handoff:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask

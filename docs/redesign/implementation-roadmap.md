@@ -11729,8 +11729,10 @@ Next concrete prompt:
 
 Status:
 
-Selected by post-M89 planning and accepted for execution by human acceptance.
-M90 is not yet implemented or accepted as a completed milestone.
+Accepted. The M90 execution-review loop returned `Accept With Follow-Ups`
+after one focused diagnostic-boundary revision. Review and audit found no
+blocking implementation, validation, boundary, extensibility, documentation,
+or evidence issues after that revision.
 
 Goal:
 
@@ -11828,6 +11830,35 @@ typed completion package that proves the Stage 8 exact array handoff is
 assembled and dependency-inventoried, while leaving backend-uninit translation,
 renderer-ready IR, generated output, and semantic body lowering unresolved.
 
+Execution result:
+
+- Added focused `tslgen.lowering._array_body_completion_package` ownership for
+  exact array lowering completion-package assembly, source selection,
+  validation, and diagnostics.
+- Added `ExactArrayLoweringCompletionPackageIr` and
+  `ExactArrayLoweringUnresolvedDependencyIr`.
+- Consumes accepted M89 inventory values, the accepted M89 stage output, or a
+  narrowly validated source carrying exactly one accepted M88 package and one
+  matching accepted M89 inventory.
+- Preserves object identity/provenance for the accepted M88 package, accepted
+  M89 inventory, M73 declaration shell, M72 deferred backend-uninit value, and
+  M67 backend-value request record.
+- Records the accepted M89 `value_backend_uninit_array` inventory member as a
+  typed unresolved dependency, preserving `deferred_backend_value` policy by
+  reference only.
+- Added deterministic `array_lowering_completion_package` stage wiring after
+  `array_backend_deferred_request_inventory`.
+- Added diagnostics and tests for unsupported, missing, duplicate, malformed,
+  package/inventory-mismatched, context-mismatched, source-location-mismatched,
+  wrong-member-set, wrong-policy, and provenance-mismatched inputs.
+- A focused diagnostic-boundary revision added a guard for malformed
+  `source_request_record` values before reading request-record source-location
+  data, preserving structured diagnostics instead of raising `AttributeError`.
+- M90 remained Stage 8 lowering-side handoff packaging only; it did not add
+  backend map reads, backend-uninit resolution, backend translation, Stage 9
+  backend planning, renderer-ready IR, rendering, generated output, generic
+  backend-value evaluation, semantic body completion, or source-body repair.
+
 Evidence paths:
 
 - `tsldata/primitives/load_store/array.tsl:105-111` for the exact selected
@@ -11883,6 +11914,22 @@ Validation commands:
 - `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
 - `git diff --check`
 
+Validation result:
+
+- Line counts after the focused revision: `1226 boundary.py`,
+  `1043 _array_body_pipeline.py`, `708 _array_body_package.py`,
+  `735 _array_body_backend_deferred_requests.py`,
+  `829 _array_body_completion_package.py`, `4541 total`.
+- Py-compile returned exit 0 with no output.
+- Focused M90 pytest returned `22 passed, 291 deselected in 9.98s`.
+- Full lowering-boundary pytest returned `313 passed in 65.72s`.
+- Focused lowering mypy returned `Success: no issues found in 25 source files`.
+- Full tooling validation returned exit 0 with corpus probes
+  `3 passed in 6.78s`, unit discovery `647` tests OK in `139.463s`,
+  compileall OK, ruff `All checks passed!`, mypy
+  `Success: no issues found in 129 source files`, and diff-check OK.
+- Standalone final `git diff --check` returned exit 0 with no output.
+
 Review risks:
 
 - Overclaiming the word "completion" as semantic body completion, backend
@@ -11908,5 +11955,5 @@ Dependencies on prior milestones:
 
 Next concrete prompt:
 
-- `docs/agent/runs/m90-execution-review-loop-prompt.md` executes and reviews
-  the accepted M90 plan.
+- `docs/agent/runs/post-m90-planning-plus-review-prompt.md` runs the next
+  lowering-focused planning pass.

@@ -23,6 +23,9 @@ from tslgen.lowering._array_body_package import (
 from tslgen.lowering._array_body_backend_deferred_requests import (
     ExactArrayBackendDeferredRequestInventoryIr,
 )
+from tslgen.lowering._array_body_completion_package import (
+    ExactArrayLoweringCompletionPackageIr,
+)
 from tslgen.lowering._generation_models import (
     GenerationExpressionRecognition,
     GenerationPredicate,
@@ -65,6 +68,7 @@ type GenerationLoweringStageName = Literal[
     "return_emission_structural_request_lowering",
     "array_body_structural_package_assembly",
     "array_backend_deferred_request_inventory",
+    "array_lowering_completion_package",
 ]
 type TsilBinaryOperator = Literal["+"]
 
@@ -160,6 +164,7 @@ type GenerationLoweringStageOutput = (
     | ExactReturnEmissionStructuralRequestIr
     | ExactArrayBodyStructuralPackageIr
     | ExactArrayBackendDeferredRequestInventoryIr
+    | ExactArrayLoweringCompletionPackageIr
     | TsilStatement
 )
 
@@ -280,6 +285,10 @@ _GENERATION_LOWERING_STAGE_OUTPUT_CONTRACTS: tuple[
     GenerationLoweringStageOutputContract(
         "array_backend_deferred_request_inventory",
         (ExactArrayBackendDeferredRequestInventoryIr,),
+    ),
+    GenerationLoweringStageOutputContract(
+        "array_lowering_completion_package",
+        (ExactArrayLoweringCompletionPackageIr,),
     ),
 )
 _GENERATION_LOWERING_STAGE_OUTPUT_CONTRACT_BY_STAGE: dict[

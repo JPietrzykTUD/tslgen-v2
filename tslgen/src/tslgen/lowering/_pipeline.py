@@ -19,6 +19,7 @@ type ExactArrayBodyPipelineArtifactKind = Literal[
     "return_emission_structural_request",
     "array_body_structural_package",
     "array_backend_deferred_request_inventory",
+    "array_lowering_completion_package",
 ]
 type ExactArrayBodyPipelineStageName = Literal[
     "array_body_envelope_slot_assembly",
@@ -35,6 +36,7 @@ type ExactArrayBodyPipelineStageName = Literal[
     "return_emission_structural_request_lowering",
     "array_body_structural_package_assembly",
     "array_backend_deferred_request_inventory",
+    "array_lowering_completion_package",
 ]
 type ExactArrayBodyPipelineBackfeedPolicy = Literal[
     "none",

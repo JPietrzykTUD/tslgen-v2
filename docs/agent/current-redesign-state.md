@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 89 is accepted.
+Milestone 90 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -739,40 +739,58 @@ array, store, return, SVE, backend, renderer, generated-output, broad TSIL, or
 source-repair semantics. Human acceptance is recorded, and M90 execution is
 the active workflow action.
 
+The M90 execution-review loop returned `Accept With Follow-Ups` after one
+focused diagnostic-boundary revision. Review and audit found no blocking
+implementation, validation, boundary, extensibility, documentation, or evidence
+issues after that revision. M90 is accepted as exact array lowering completion
+package handoff. It adds focused
+`tslgen.lowering._array_body_completion_package` ownership, packages accepted
+M88 structural facts and accepted M89 backend-deferred inventory facts into
+one typed Stage 8 completion package, records the accepted
+`value_backend_uninit_array` member as a typed unresolved dependency, appends
+the deterministic `array_lowering_completion_package` stage after M89, and
+preserves M88/M89/M73/M72/M67 object identity/provenance. M90 remains Stage 8
+lowering-side handoff packaging only; it does not add backend-uninit
+resolution, backend maps/catalog reads, Stage 9 backend planning,
+renderer-ready IR, rendering, generated output, generic backend-value
+evaluation, source-body repair, broad protocols, hidden backfeeds, or semantic
+body completion.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 90.
+Run post-M90 planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m90-execution-review-loop-prompt.md
+docs/agent/runs/post-m90-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 90: Exact Array Lowering Completion Package Slice
+None. The next active task is read-only post-M90 planning and review.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M89 planning returned Accept With Follow-Ups and is human-accepted.
-Follow-ups are boundary wording and maintainability guardrails for M90, not
-blockers.
+M90 execution-review returned Accept With Follow-Ups after one focused
+diagnostic-boundary revision. Remaining follow-ups are maintainability
+guardrails, not blockers.
 ```
 
 Next expected action:
 
 ```text
-Run the active M90 execution-review loop prompt. Use exactly one write-capable
-executor followed by read-only review/audit subagents, and do not start
-post-M90 planning until M90 review returns Accept or Accept With Follow-Ups.
+Run the active post-M90 planning-plus-review prompt. Focus the next task on
+lowering. Use read-only planning/review subagents, do not implement code, and
+create the next concrete prompt before finishing unless the prompt records a
+stop condition.
 ```
 
 Accepted planning prompt:
@@ -1519,10 +1537,16 @@ Completed post-M89 acceptance-finalization prompt:
 docs/agent/runs/post-m89-acceptance-finalization-prompt.md
 ```
 
-Active M90 execution-review loop prompt:
+Completed M90 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m90-execution-review-loop-prompt.md
+```
+
+Active post-M90 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m90-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2368,25 +2392,25 @@ docs/agent/runs/m90-execution-review-loop-prompt.md
   renderer-ready IR, rendering, generated output, generic backend-value
   evaluation, declaration/array/store/return/SVE semantics, raw helper
   dispatch, broad protocols, hidden backfeeds, or source-body repair.
-- M90 is selected as Stage 8 exact array lowering completion-package work
-  only. "Completion" means the accepted exact lowering handoff is packaged
-  with explicit unresolved dependencies; it does not mean semantic body
-  completion, backend readiness, renderer readiness, or generated output.
-- M90 must consume accepted typed M88/M89 facts, validate context and
-  identity/provenance, and produce one typed handoff package. It must not
+- M90 is accepted as Stage 8 exact array lowering completion-package handoff
+  work only. "Completion" means the accepted exact lowering handoff is
+  packaged with explicit unresolved dependencies; it does not mean semantic
+  body completion, backend readiness, renderer readiness, or generated output.
+- M90 consumes accepted typed M88/M89 facts, validates context and
+  identity/provenance, and produces one typed handoff package. It does not
   resolve backend values, read backend maps/catalogs, start Stage 9 backend
   planning, render output, infer declaration/store/return/SVE/backend
   semantics, repair source text, broaden TSIL parsing, or introduce generic
   backend-value evaluation.
-- M90 must use focused private ownership for completion-package logic. It must
-  not grow `boundary.py`, `_array_body_pipeline.py`,
-  `_array_body_models.py`, or `_array_body_backend_deferred_requests.py` into
-  broader catch-all modules.
-- Future lowering package decomposition must preserve accepted M57-M89
+- M90 uses focused private `_array_body_completion_package.py` ownership for
+  completion-package logic. Future work must not grow `boundary.py`,
+  `_array_body_pipeline.py`, `_array_body_models.py`,
+  `_array_body_backend_deferred_requests.py`, or
+  `_array_body_completion_package.py` into broader catch-all modules.
+- Future lowering package decomposition must preserve accepted M57-M90
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
-  no-external-input boundaries. The selected M90 boundary expectations become
-  accepted constraints only after human acceptance and M90 execution review.
+  no-external-input boundaries.
 - Future lowering package decomposition must not add new lowering semantics,
   generic body/call/store/return/declaration/array semantics, broad TSIL
   parsing, raw helper dispatch, backend translation, rendering, generated
@@ -3587,11 +3611,22 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   are typed handoff facts only. They must not become backend map keys, resolved
   text, renderer slots, artifact paths, scheduling decisions, broad protocols,
   hidden backfeeds, or fixpoint machinery.
+- M90 execution follow-up: `boundary.py` is 1,226 lines and
+  `_array_body_pipeline.py` is 1,043 lines. Future milestones should avoid
+  adding another stage or aggregate field there without focused extraction or
+  a documented temporary exception.
+- M90 execution follow-up: `_array_body_completion_package.py` is 829 lines
+  after the focused diagnostic-boundary revision. It should not absorb future
+  backend-planning or dependency-expansion responsibilities; split source
+  adaptation, diagnostics, or dependency modeling if it grows.
+- M90 execution follow-up: the runtime source adapter is narrow and validated,
+  but future slices should not broaden it into a shared protocol for arbitrary
+  lowered-implementation facts.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M90 through the
-active M90 execution-review loop prompt.
+No stop condition is active. The workflow is ready to run post-M90 planning
+through the active post-M90 planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -3616,6 +3651,34 @@ git diff --check -- docs/agent/current-redesign-state.md docs/agent/runs/post-m8
 ```
 
 The command returned exit 0 with no output.
+
+For M90, validation completed after one focused diagnostic-boundary revision
+with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_package.py tslgen/src/tslgen/lowering/_array_body_backend_deferred_requests.py tslgen/src/tslgen/lowering/_array_body_completion_package.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_array_body_models.py tslgen/src/tslgen/lowering/_array_body_pipeline.py tslgen/src/tslgen/lowering/_array_body_package.py tslgen/src/tslgen/lowering/_array_body_backend_deferred_requests.py tslgen/src/tslgen/lowering/_array_body_completion_package.py tslgen/src/tslgen/lowering/_pipeline.py tslgen/src/tslgen/lowering/_stage_contracts.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m90 or lowering_completion or backend_deferred or structural_package or exact_array_body_pipeline"
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+git diff --check
+```
+
+The M90 line counts were `1226 tslgen/src/tslgen/lowering/boundary.py`,
+`1043 tslgen/src/tslgen/lowering/_array_body_pipeline.py`,
+`708 tslgen/src/tslgen/lowering/_array_body_package.py`,
+`735 tslgen/src/tslgen/lowering/_array_body_backend_deferred_requests.py`,
+`829 tslgen/src/tslgen/lowering/_array_body_completion_package.py`, and
+`4541 total`. The py-compile command returned exit 0 with no output. The
+focused M90 command returned `22 passed, 291 deselected in 9.98s`. The full
+lowering-boundary suite returned `313 passed in 65.72s`. The focused lowering
+mypy check returned `Success: no issues found in 25 source files`. The
+validation profile returned exit 0 with corpus probes `3 passed in 6.78s`,
+unit discovery `647` tests OK in `139.463s`, compileall OK, ruff
+`All checks passed!`, mypy `Success: no issues found in 129 source files`,
+and diff-check OK. The standalone final `git diff --check` returned exit 0
+with no output.
 
 For implementation milestones, run the milestone-specific targeted tests plus:
 
