@@ -1703,6 +1703,16 @@ Consequences:
   does not create a registry, dispatcher, callback map, hidden backfeed,
   fixpoint engine, backend-planning surface, renderer hook, source parser, or
   source-repair path.
+- Post-M98 planning selects M99 as a Stage 8 backend-translation request
+  inventory/provenance boundary before backend planning. The decision makes
+  accepted backend-scoped request facts visible across operation packages,
+  completion manifests, and gap inventories without resolving or translating
+  them. M99 must consume accepted typed M93-M98 facts only, keep ownership in a
+  focused private module, update `docs/redesign/missing-lowering-inventory.md`,
+  and must not evaluate backend maps, start Stage 9 planning, infer direct-
+  intrinsic/SVE semantics, scan raw source bodies, schedule operations, solve
+  dependencies, render output, or turn inventories into readiness/completion
+  claims.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

@@ -13315,3 +13315,187 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m98-planning-plus-review-prompt.md` runs post-M98
   planning and review with a lowering focus.
+
+### Milestone 99: Operation Package Backend-Translation Request Inventory Slice
+
+Status:
+
+Planned by post-M98 planning. Human acceptance was recorded, and M99 execution
+is the next workflow action. Internal planning review returned
+`Accept With Follow-Ups`.
+
+Goal:
+
+Create one typed, deterministic Stage 8 lowering-owned inventory of accepted
+backend-scoped request facts visible from current operation packages,
+completion manifests, and gap inventories. M99 should make the next backend
+translation/planning handoff explicit without starting backend translation or
+Stage 9 planning.
+
+For M99, "backend-translation request inventory" means inventory/provenance
+over already accepted deferred/backend-scoped request facts. It does not mean
+translation, backend value resolution, backend support decisions, operation
+scheduling, dependency closure, renderer-ready IR, or generated output.
+
+M99 also creates and maintains
+`docs/redesign/missing-lowering-inventory.md` as the redesign-owned list of
+known missing lowering work. That document is a planning aid only, not a
+runtime input, generated artifact, source scanner, dependency-closure plan, or
+completion oracle.
+
+Scope:
+
+- Add focused private lowering ownership, preferably in
+  `_lowering_backend_translation_request_inventory.py`, for typed inventory
+  models, diagnostics, validation, deterministic keys, and assembly.
+- Add one deterministic Stage 8 stage after accepted
+  `lowering_completion_gap_inventory`, such as
+  `lowering_backend_translation_request_inventory`.
+- Consume only accepted typed Stage 8 facts: accepted M93-M95 operation
+  packages, accepted M96 completion manifests, accepted M97 gap inventories,
+  accepted M98 stage assembly outputs, and their preserved object references.
+- Preserve source manifest, package record, package object, gap record,
+  unresolved dependency record, and dependency request object identity.
+- Produce typed deterministic inventory records for currently visible
+  lowering-owned backend-scoped request states:
+  - exact-array `value<backend>(uninit::array)` deferred backend-value request
+    from accepted M92/M96/M97 facts;
+  - selected-body direct-intrinsic package handoff as a later backend-owned
+    body/direct-intrinsic request state, preserving accepted M62/M63/M95
+    provenance without interpreting direct-intrinsic or SVE semantics;
+  - explicit no-accepted-request / no-known-request inventory state for
+    package families with no accepted backend-scoped request facts.
+- Keep `boundary.py` as the public facade and request/result model owner.
+- Keep `_operation_package_sources.py`, `_lowering_completion_manifest.py`,
+  and `_lowering_completion_gap_inventory.py` from receiving request-inventory
+  ownership.
+- Use `_lowering_stage_assembly.py` only for narrow stage construction/result
+  assembly integration if needed; do not broaden it into a coordinator.
+
+Out of scope:
+
+- Backend translation, backend map/catalog/lang reads, backend manifest reads,
+  `tsldata/detail/lang` reads, backend-uninit resolution, backend support
+  decisions, Stage 9 backend planning, operation scheduling, primitive
+  dependency closure, dependency solving, operation DAGs, wrapper planning,
+  artifact planning, renderer-ready IR, rendering, generated C++ or Rust
+  output, generated tests, CLI/report/writer behavior, compiler execution, or
+  host hardware dependency.
+- Generic `value<backend>(...)` or `type<backend>(...)` evaluation, intrinsic
+  suffix/prefix/post/infix/immediate resolution, type spelling, vector/register
+  metadata resolution, direct-intrinsic/SVE semantics, or byte-size-to-token
+  inference.
+- Raw `.tsl` source text parsing, source-body reparsing, source repair,
+  source normalization, broad TSIL/body parsing, or best-effort correction.
+- New operation-package source families, broad source protocols, registries,
+  dispatchers, callback maps, plugin systems, hidden recursive backfeeds,
+  fixpoint machinery, dependency-closure graphs, or lookup tables keyed by raw
+  helper text, backend id, extension id, type tag, primitive name, source
+  location, or direct-intrinsic token text.
+- Treating the new missing-lowering inventory document as evidence by itself,
+  a runtime dependency, or a broad TODO dump disconnected from accepted docs
+  and repository evidence.
+
+Required input:
+
+- Accepted M92 exact-array backend-handoff request behavior and unresolved
+  backend-handoff dependency provenance.
+- Accepted M93/M94 operation-package behavior and source-family distinction.
+- Accepted M95 selected-body direct-intrinsic package behavior and provenance.
+- Accepted M96 completion manifest and M97 gap inventory behavior, diagnostics,
+  deterministic ordering, keys, and object-identity preservation.
+- Accepted M98 stage-assembly behavior, public facade stability, and
+  no-coordinator guardrails.
+- Current pressure points after M98: `boundary.py` 1,241 lines,
+  `_operation_package_sources.py` 819 lines,
+  `_lowering_completion_manifest.py` 776 lines,
+  `_lowering_completion_gap_inventory.py` 564 lines, and
+  `_lowering_stage_assembly.py` 189 lines.
+
+Expected outputs:
+
+- One typed Stage 8 backend-translation request inventory value per selected
+  candidate, or equivalent typed request-inventory value, with deterministic
+  keys and record ordering.
+- Inventory records that distinguish accepted backend-scoped request facts
+  from explicit no-accepted-request states without inferring missing requests.
+- Exact-array request records that preserve accepted M96/M97 unresolved
+  dependency and dependency request object identity.
+- Selected-body direct-intrinsic request/handoff records that preserve accepted
+  M62/M63/M95 provenance without interpreting intrinsic token text.
+- A new living planning document,
+  `docs/redesign/missing-lowering-inventory.md`, recording known missing
+  lowering work, accepted coverage, selected next gap, and guardrails.
+- Import-boundary and line-count guardrails proving the new module is focused
+  and pressure-point modules do not become replacement monoliths.
+
+Tests required:
+
+- Positive tests for exact-array backend-value request inventory records,
+  selected-body direct-intrinsic handoff/request records, mini-TSIL or other
+  no-accepted-request states, and mixed per-candidate inventories.
+- Tests proving request records preserve accepted source manifest, package
+  record, package object, gap record, unresolved dependency record, and
+  dependency request object identity where those references exist.
+- Determinism tests for inventory keys, record ordering, repeated lowering,
+  and reordered accepted inputs.
+- Stage tests proving the new stage follows `lowering_completion_gap_inventory`
+  without changing accepted M57-M98 stage names, ordering, keys, diagnostics,
+  output identities, object identities, selected-branch-only behavior, public
+  imports, or no-external-input boundaries.
+- Negative diagnostics for unsupported source, missing manifest, missing gap
+  inventory, multiple manifests/inventories, manifest/inventory mismatch,
+  wrong stage/order, malformed entries, copied/equal-but-not-identical
+  records, candidate/source-location mismatch, and provenance mismatch.
+- Import-boundary and forbidden-behavior tests proving the new module does not
+  import `boundary.py`, the `tslgen.lowering` package facade, backend modules,
+  renderers, `tsldata`, or `frozen`, and introduces no backend maps/catalog
+  reads, backend translation, Stage 9 planning, renderer-ready IR, rendering,
+  output, source repair, raw body parsing, registries, dispatchers, schedulers,
+  hidden backfeeds, fixpoint behavior, dependency closure, or hardwiring.
+- Line-count tests or source assertions keeping `boundary.py`,
+  `_operation_package_sources.py`, `_lowering_completion_manifest.py`,
+  `_lowering_completion_gap_inventory.py`, `_lowering_stage_assembly.py`, and
+  the new request-inventory module within the module-size guardrails. Prefer a
+  new focused test file if adding all M99 coverage to
+  `test_lowering_boundary.py` would make that file harder to maintain.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_operation_package_sources.py tslgen/src/tslgen/lowering/_lowering_completion_manifest.py tslgen/src/tslgen/lowering/_lowering_completion_gap_inventory.py tslgen/src/tslgen/lowering/_lowering_stage_assembly.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_lowering_stage_assembly.py tslgen/src/tslgen/lowering/_lowering_completion_manifest.py tslgen/src/tslgen/lowering/_lowering_completion_gap_inventory.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m99 or backend_translation_request_inventory or completion_gap_inventory or completion_manifest or operation_package"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Planning review risks:
+
+- Letting "request inventory" become backend readiness, backend translation,
+  Stage 9 planning, operation scheduling, dependency closure, or renderer-ready
+  IR.
+- Inferring selected-body direct-intrinsic, SVE, byte-size, type, backend, or
+  extension semantics from preserved token/source text.
+- Re-entering raw source bodies or reimplementing accepted manifest/gap logic
+  instead of consuming accepted typed facts.
+- Growing `boundary.py`, `_operation_package_sources.py`,
+  `_lowering_completion_manifest.py`, `_lowering_completion_gap_inventory.py`,
+  or `_lowering_stage_assembly.py` into routers or coordinators.
+- Letting `docs/redesign/missing-lowering-inventory.md` become speculative,
+  stale, or disconnected from accepted evidence and milestone boundaries.
+
+Planning follow-ups:
+
+- M99 execution must keep the "translation request inventory" wording anchored
+  to Stage 8 inventory/provenance only and must not implement backend
+  translation, planning, closure, or broad corpus completion.
+- Future lowering milestones should update
+  `docs/redesign/missing-lowering-inventory.md` when they accept, resolve,
+  narrow, or discover lowering gaps.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m98-acceptance-finalization-prompt.md` finalizes
+  accepted post-M98 planning after human acceptance and creates the M99
+  execution-review-loop prompt.

@@ -1417,6 +1417,13 @@ ownership. It does not resolve backend-uninit, backend maps, backend support
 decisions, operation scheduling, dependency closure, Stage 9 planning,
 renderer-ready body IR, generated output, broad body semantics, or broad
 `value<backend>(...)` evaluation.
+Post-M98 planning selects M99 to inventory accepted backend-scoped request
+facts visible from package/manifest/gap state. M99 narrows what later backend
+translation/planning must consume, but it does not resolve backend values,
+evaluate maps, schedule operations, solve dependencies, create Stage 9 plans,
+render output, or prove whole-lowering completeness. The broader known missing
+lowering surface is tracked in
+`docs/redesign/missing-lowering-inventory.md`.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1633,6 +1640,9 @@ Current roadmap direction:
 - Milestone 48 implements the selected return to generation-time semantic lowering for
   signedness branch pruning over typed M43 `base.in` values; it does not add
   native rendering expansion.
+- Post-M98 planning selects M99 to inventory accepted backend-scoped request
+  facts before backend planning. It does not answer the broader data-driven
+  intrinsic composition question and must not evaluate translation maps.
 - Renderer-local intrinsic lookup tables are rejected as an implementation
   strategy for future native expansion.
 
@@ -1701,6 +1711,10 @@ Vector type/value queries, backend prefix/post/infix modifiers, `immediate(n)`,
 primitive calls, loops, direct intrinsics, generalized plain `else` branch
 syntax, backend suffix/type-spelling expansion for non-32-bit tags, and broader
 branch body semantics remain deferred.
+The known deferred lowering surface is tracked in
+`docs/redesign/missing-lowering-inventory.md`; M99 inventories accepted
+backend-scoped request facts only and does not change the generation-before-
+backend ordering decision.
 
 Milestones 44 through 47 preserve this decision. M45 and M46 are backend
 translation slices that consume typed M43 values; they do not parse raw

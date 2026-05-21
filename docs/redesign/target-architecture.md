@@ -729,6 +729,15 @@ Current roadmap note:
   must not become a registry, dispatcher, callback map, hidden backfeed,
   fixpoint coordinator, backend-planning surface, renderer hook, source
   parser, or source-repair mechanism.
+- Post-M98 planning selects M99 as a Stage 8 backend-translation request
+  inventory/provenance slice. The architecture should keep the new inventory
+  in focused lowering ownership, consume only accepted typed
+  package/manifest/gap facts, and maintain
+  `docs/redesign/missing-lowering-inventory.md` as a planning inventory of
+  deferred lowering work. M99 must not evaluate translation maps, read backend
+  maps/catalogs, pass unresolved generation helper text into backend
+  translation, create Stage 9 plans, render output, or infer backend/direct-
+  intrinsic semantics from preserved source text.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

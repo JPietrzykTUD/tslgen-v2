@@ -8,6 +8,11 @@ or accepted planning passes.
 
 Milestone 98 is accepted.
 
+Post-M98 planning is accepted. It selected
+`Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
+and internal planning review returned `Accept With Follow-Ups`. Human
+acceptance was recorded.
+
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
 
@@ -1046,41 +1051,51 @@ lowering-boundary pytest `352 passed`, lowering mypy
 corpus probes `3 passed`, unittest discovery `686` tests OK, compileall OK,
 ruff OK, mypy OK across `142` source files, and diff-check OK.
 
+Post-M98 planning selected
+`Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
+and internal planning review returned `Accept With Follow-Ups`. The selected
+plan is Stage 8 lowering inventory/provenance work only: it inventories
+accepted backend-scoped request facts visible from accepted operation packages,
+completion manifests, and gap inventories without translating backend values,
+evaluating maps, creating Stage 9 plans, rendering output, scheduling
+operations, solving dependencies, scanning raw source bodies, or inferring
+direct-intrinsic/SVE semantics. Planning also added
+`docs/redesign/missing-lowering-inventory.md` as the living inventory of known
+missing lowering work.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M98 planning and review.
+Execute Milestone 99.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m98-planning-plus-review-prompt.md
+docs/agent/runs/m99-execution-review-loop-prompt.md
 ```
 
-Active planning target:
+Active executor milestone:
 
 ```text
-Post-M98 planning with lowering focus.
+Milestone 99: Operation Package Backend-Translation Request Inventory Slice
 ```
 
 Latest review verdict:
 
 ```text
-M98 execution/review returned Accept With Follow-Ups after focused
-public-facade import correction and documentation finalization.
+Post-M98 planning/review returned Accept With Follow-Ups. Human acceptance was
+recorded.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M98 planning-plus-review prompt. Focus on lowering. Do not
-implement code unless the active prompt explicitly selects an executor task.
-Before finishing, update this state file and create the next concrete run
-prompt under `docs/agent/runs/`, unless the active prompt records a stop
-condition.
+Run the active M99 execution-review-loop prompt. Use exactly one write-capable
+executor followed by read-only review/audit subagents. Do not start post-M99
+planning until M99 review returns Accept or Accept With Follow-Ups.
 ```
 
 Accepted planning prompt:
@@ -1977,10 +1992,22 @@ Completed M98 execution-review loop prompt:
 docs/agent/runs/m98-execution-review-loop-prompt.md
 ```
 
-Active post-M98 planning-plus-review prompt:
+Completed post-M98 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m98-planning-plus-review-prompt.md
+```
+
+Completed post-M98 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m98-acceptance-finalization-prompt.md
+```
+
+Active M99 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m99-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2984,7 +3011,31 @@ docs/agent/runs/post-m98-planning-plus-review-prompt.md
 - M98 line-count expectations: `boundary.py <= 1285`,
   `_operation_package_sources.py <= 819`, and the new stage-assembly module
   below the module-size guardrail.
-- Future lowering package decomposition must preserve accepted M57-M97
+- M99 is active as Stage 8 backend-translation request inventory/provenance
+  work only. For M99, "backend-translation request inventory" means typed
+  inventory of already accepted deferred/backend-scoped request facts; it must
+  not translate, resolve, evaluate, plan, schedule, or render those facts.
+- M99 must consume only accepted typed Stage 8 facts from M93-M98 operation
+  packages, manifests, gap inventories, stage assembly, and their preserved
+  object references. It must not parse raw `.tsl` source text, repair source
+  bodies, normalize source bodies, infer package-family requests, or treat
+  source locations, backend ids, extension ids, type tags, primitive names,
+  selected literals, `svptrue_b*`, `pg`, or direct-intrinsic token text as
+  semantic dispatch keys.
+- M99 must not add backend map/catalog/lang reads, backend manifest reads,
+  `tsldata/detail/lang` reads, backend-uninit resolution, generic
+  `value<backend>(...)` / `type<backend>(...)` evaluation, Stage 9 planning,
+  backend support decisions, operation scheduling, dependency solving,
+  dependency closure, operation DAGs, wrapper planning, artifact planning,
+  renderer-ready IR, rendering, generated output, generated tests, Rust,
+  CLI/report/writer behavior, compiler execution, host hardware dependency,
+  registries, dispatchers, callback maps, plugin systems, hidden backfeeds,
+  fixpoint machinery, or hardwiring.
+- `docs/redesign/missing-lowering-inventory.md` is a documentation-only
+  inventory of known missing lowering work. It is not runtime input, a
+  generated artifact, a source scanner, a dependency-closure plan, or a
+  completeness oracle.
+- Future lowering package decomposition must preserve accepted M57-M98
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -4279,11 +4330,19 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   assembly, but must not broaden it into a generic coordinator, registry,
   dispatcher, callback map, hidden backfeed, fixpoint mechanism, or semantic
   lowering milestone.
+- Post-M98 planning follow-up for M99 execution: keep "backend-translation
+  request inventory" wording anchored to Stage 8 inventory/provenance only.
+  M99 must not implement backend translation, Stage 9 planning, dependency
+  closure, operation scheduling, renderer-ready IR, source scanning, source
+  repair, direct-intrinsic/SVE interpretation, or broad corpus completion.
+- Future lowering milestones should update
+  `docs/redesign/missing-lowering-inventory.md` when they accept, resolve,
+  narrow, or discover lowering gaps.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready for post-M98 planning
-through the active post-M98 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M99 through the
+active M99 execution-review-loop prompt.
 
 ## Validation Expectations
 
@@ -4292,6 +4351,22 @@ For docs-only planning tasks:
 ```bash
 git diff --check
 ```
+
+For post-M98 planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
+
+For post-M98 acceptance finalization, validation completed with:
+
+```bash
+git diff --check -- docs/agent/current-redesign-state.md docs/agent/runs/post-m98-acceptance-finalization-prompt.md docs/agent/runs/m99-execution-review-loop-prompt.md docs/redesign/README.md docs/redesign/behavioral-spec.md docs/redesign/design-decisions.md docs/redesign/generation-time-semantic-lowering.md docs/redesign/implementation-roadmap.md docs/redesign/missing-lowering-inventory.md docs/redesign/open-questions.md docs/redesign/pipeline-design.md docs/redesign/target-architecture.md docs/redesign/testing-strategy.md
+```
+
+The command returned exit 0 with no output.
 
 For post-M95 planning, validation completed with:
 

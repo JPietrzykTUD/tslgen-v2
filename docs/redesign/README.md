@@ -15,6 +15,8 @@ Start with:
 - `pipeline-design.md` for stage inputs, outputs, validation points, and side effects.
 - `generation-time-semantic-lowering.md` for the generation-time helper
   contract that must run before backend translation.
+- `missing-lowering-inventory.md` for the current inventory of deferred
+  lowering work and selected next lowering gaps.
 - `implementation-roadmap.md` for the milestone sequence.
 - `testing-strategy.md` for expected tests and fixtures.
 - `stabilization-release-checklist.md` for post-Milestone-34 release-readiness

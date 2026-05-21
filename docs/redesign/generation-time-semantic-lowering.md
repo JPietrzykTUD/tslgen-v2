@@ -1289,35 +1289,13 @@ ambiguous package containers, and unresolved dependency provenance mismatches.
 It does not diagnose backend support, backend translation availability,
 renderer output availability, operation scheduling, or dependency-closure
 completeness.
+The broader known missing lowering surface is tracked in
+`docs/redesign/missing-lowering-inventory.md`.
 
 ## Explicit Deferrals
 
-Deferred beyond the implemented M43-M76 semantic-lowering, structural
-slot-assembly, pipeline-integration, exact array-initialization slot form IR,
-M67 helper-request IR, accepted M68 base-type request resolution, M69 pipeline
-extraction, M70 vector-length request resolution, M71 vector-alignment
-request resolution, M72 helper-set completion, M73 exact declaration-shell
-structural IR, accepted M74 exact structural-sequence classification,
-accepted M75 exact predicate-path structural/request IR, and accepted M76 exact
-post-branch intrinsic call-site structural/request IR slices, plus the
-accepted M77 behavior-preserving composable lowering pipeline/module
-boundary, the accepted M78 behavior-preserving lowering package
-decomposition, accepted M79 exact array-body typed model ownership, accepted
-M80 exact array-body validation boundary extraction, accepted M81
-generation-time lowering core ownership extraction, accepted M82 selected-body
-envelope ownership extraction, accepted M83 stage-contract ownership
-extraction, accepted M84 exact array-body pipeline/source-adapter ownership
-extraction, accepted M85 selected-body lowering ownership extraction,
-accepted M86 payload-intake / mini-TSIL leaf lowering ownership extraction,
-accepted M87 exact return-emission structural/request IR, accepted M88 exact
-array-body structural package assembly, accepted M89 exact array
-backend-deferred request inventory, accepted M90 exact array lowering
-completion-package handoff, accepted M91 behavior-preserving exact array
-pipeline ownership consolidation, accepted M92 exact array lowering
-backend-handoff request, accepted M93 dual-source lowering operation package
-boundary, accepted M94 operation-package ownership split, accepted M95
-selected-body direct-intrinsic operation package, and accepted M96 Stage 8
-lowering completion manifest:
+Deferred beyond the accepted M43-M98 semantic-lowering, structural/request,
+package, manifest, gap-inventory, and stage-assembly slices:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -1397,6 +1375,11 @@ lowering completion manifest:
   identities. It adds no generation-time helper semantics, broad source
   parsing, backend translation, Stage 9 planning, rendering, registries,
   dispatchers, hidden backfeeds, or fixpoint machinery.
+- Post-M98 planning selects M99 as a Stage 8 backend-translation request
+  inventory/provenance slice over accepted package/manifest/gap facts. M99
+  must not translate backend values, evaluate translation maps, create Stage 9
+  plans, produce renderer-ready IR, infer direct-intrinsic/SVE semantics, scan
+  raw source bodies, or treat inventory results as whole-lowering completion.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only
