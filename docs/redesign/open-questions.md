@@ -1409,6 +1409,13 @@ but it still leaves backend-uninit resolution, backend maps, backend support
 decisions, operation scheduling, dependency closure, Stage 9 backend planning,
 renderer-ready body IR, generated output, broad body semantics, and broad
 `value<backend>(...)` evaluation open.
+Post-M97 planning selects M98 as behavior-preserving Stage 8 stage-assembly
+ownership extraction. It addresses the local maintainability pressure around
+`boundary.py` by moving accepted stage construction and accepted per-candidate
+completion-tail assembly into focused private ownership. It does not resolve
+backend-uninit, backend maps, backend support decisions, operation scheduling,
+dependency closure, Stage 9 planning, renderer-ready body IR, generated
+output, broad body semantics, or broad `value<backend>(...)` evaluation.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,

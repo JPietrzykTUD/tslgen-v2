@@ -719,6 +719,16 @@ Current roadmap note:
   It does not become backend planning, dependency closure, operation
   scheduling, renderer-ready IR, source repair, broad body semantics, or a
   registry/dispatcher/backfeed/fixpoint mechanism.
+- Post-M97 planning selects M98 as Stage 8 stage-assembly ownership
+  extraction. The architecture should add focused private ownership for
+  accepted `GenerationLoweringStage` construction and per-candidate
+  operation-package -> completion-manifest -> completion-gap-inventory result
+  assembly, while keeping `boundary.py` as the public facade and request/result
+  model owner. The new module must stay narrow, keep one-way imports where
+  practical, avoid importing `boundary.py` or the package facade, and must not
+  become a registry, dispatcher, callback map, hidden backfeed, fixpoint
+  coordinator, backend-planning surface, renderer hook, source parser, or
+  source-repair mechanism.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

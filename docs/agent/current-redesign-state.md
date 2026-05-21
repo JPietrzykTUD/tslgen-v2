@@ -1003,41 +1003,55 @@ lowering-boundary pytest `348 passed`, lowering mypy
 corpus probes `3 passed`, unittest discovery `682` tests OK, compileall OK,
 ruff OK, mypy OK across `141` source files, and diff-check OK.
 
+Post-M97 planning selected
+`Milestone 98: Stage 8 Lowering Stage-Assembly Ownership Extraction Slice`,
+and internal planner, boundary, extensibility, and documentation review
+returned `Accept With Follow-Ups` after narrowing the proposal from broad
+coordinator extraction to focused stage-assembly/result-assembly ownership.
+The selected plan is behavior-preserving Stage 8 lowering architecture work:
+move accepted stage construction and per-candidate operation-package ->
+completion-manifest -> completion-gap-inventory result assembly out of
+`boundary.py` into focused private ownership while preserving accepted
+M57-M97 semantics, diagnostics, stage names, stage order, keys, object
+identities, and public facade behavior.
+
+Human acceptance for post-M97 planning was recorded, and M98 execution became
+the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M97 planning and review.
+Execute Milestone 98.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m97-planning-plus-review-prompt.md
+docs/agent/runs/m98-execution-review-loop-prompt.md
 ```
 
-Active planning target:
+Active executor milestone:
 
 ```text
-Post-M97 planning with lowering focus.
+Milestone 98: Stage 8 Lowering Stage-Assembly Ownership Extraction Slice.
 ```
 
 Latest review verdict:
 
 ```text
-M97 execution/review returned Accept With Follow-Ups after focused test-only
-coverage revisions.
+Post-M97 planning returned Accept With Follow-Ups after narrowing M98 to
+focused stage-assembly/result-assembly ownership.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M97 planning-plus-review prompt. Focus on lowering. Do not
-implement code unless the active prompt explicitly selects an executor task.
-Before finishing, update this state file and create the next concrete run
-prompt under `docs/agent/runs/`, unless the active prompt records a stop
-condition.
+Run the active M98 execution-review-loop prompt. Use exactly one write-capable
+executor, then read-only review/audit subagents. Before finishing, update this
+state file and create the next concrete prompt under `docs/agent/runs/`,
+unless the active prompt records a stop condition.
 ```
 
 Accepted planning prompt:
@@ -1916,10 +1930,22 @@ Completed M97 execution-review loop prompt:
 docs/agent/runs/m97-execution-review-loop-prompt.md
 ```
 
-Active post-M97 planning-plus-review prompt:
+Completed post-M97 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m97-planning-plus-review-prompt.md
+```
+
+Completed post-M97 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m97-acceptance-finalization-prompt.md
+```
+
+Active M98 execution-review loop prompt:
+
+```text
+docs/agent/runs/m98-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2901,7 +2927,30 @@ docs/agent/runs/post-m97-planning-plus-review-prompt.md
 - M97 execution follow-up: `boundary.py` stayed under the guardrail partly by
   compressing stage-helper coordination. The next lowering slice should
   extract coordination/stage helper ownership before adding more state there.
-- Future lowering package decomposition must preserve accepted M57-M95
+- Post-M97 planning selected M98 as behavior-preserving Stage 8
+  stage-assembly ownership extraction only. M98 should extract accepted
+  `GenerationLoweringStage` construction helpers and accepted per-candidate
+  operation-package -> completion-manifest -> completion-gap-inventory result
+  assembly into a focused private module, preferably
+  `_lowering_stage_assembly.py`.
+- M98 keeps `boundary.py` as the public facade and request/result model owner.
+  `LoweringRequest`, `LoweredImplementation`, `LoweringPlan`, public imports,
+  accepted diagnostics, stage names, stage order, stage keys, output
+  identities, deterministic ordering, selected-branch-only diagnostics, and
+  object identity behavior must remain stable.
+- M98 must not modify `_operation_package_sources.py` or route more
+  coordination through it.
+- M98 must not add new lowering semantics, new operation-package families,
+  source-body parsing, source repair, backend translation, backend map/catalog
+  reads, backend-uninit resolution, Stage 9 backend planning, operation
+  scheduling, dependency closure, renderer-ready IR, rendering, generated
+  output, Rust, CLI/report/writer behavior, compiler execution, registries,
+  dispatchers, callback maps, hidden backfeeds, fixpoint machinery, or
+  hardwiring.
+- M98 line-count expectations: `boundary.py <= 1285`,
+  `_operation_package_sources.py <= 819`, and the new stage-assembly module
+  below the module-size guardrail.
+- Future lowering package decomposition must preserve accepted M57-M97
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -4187,11 +4236,15 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   guardrail. The next lowering slice should avoid adding more coordination to
   `boundary.py` and should prefer extracting stage-helper or result-assembly
   ownership first if more state is needed.
+- Post-M97 planning follow-up: M98 execution must keep the extracted module
+  narrowly owned. It is a behavior-preserving stage-assembly/result-assembly
+  extraction, not a generic coordinator, registry, dispatcher, hidden
+  backfeed, fixpoint mechanism, or semantic lowering milestone.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready for post-M97 planning
-through the active post-M97 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M98 through the
+active M98 execution-review-loop prompt.
 
 ## Validation Expectations
 
@@ -4664,3 +4717,19 @@ validation profile returned exit 0 with corpus probes `3 passed`, unit
 discovery `640` tests OK, compileall OK, ruff OK, mypy `Success: no issues
 found in 128 source files`, and diff-check OK. The standalone final
 `git diff --check` returned exit 0 with no output.
+
+For post-M97 planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
+
+For post-M97 acceptance finalization, validation completed with:
+
+```bash
+git diff --check -- docs/agent/current-redesign-state.md docs/agent/runs/post-m97-acceptance-finalization-prompt.md docs/agent/runs/m98-execution-review-loop-prompt.md docs/redesign/behavioral-spec.md docs/redesign/design-decisions.md docs/redesign/generation-time-semantic-lowering.md docs/redesign/implementation-roadmap.md docs/redesign/open-questions.md docs/redesign/pipeline-design.md docs/redesign/target-architecture.md docs/redesign/testing-strategy.md
+```
+
+The command returned exit 0 with no output.

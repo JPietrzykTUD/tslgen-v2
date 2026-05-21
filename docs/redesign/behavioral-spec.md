@@ -763,6 +763,15 @@ state. It remains lowering inventory/provenance only, not backend planning,
 dependency closure, operation scheduling, renderer-ready IR, rendering,
 source repair, or broad body semantics.
 
+Post-M97 planning selects M98 as behavior-preserving Stage 8 stage-assembly
+ownership extraction. The planned slice should move accepted stage construction
+and accepted per-candidate operation-package -> completion-manifest ->
+completion-gap-inventory result assembly into focused private ownership while
+preserving all accepted M57-M97 behavior. It does not add new source-body
+semantics, backend translation, Stage 9 planning, renderer-ready IR,
+rendering, generated output, registries, dispatchers, hidden backfeeds, or
+fixpoint behavior.
+
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
 suffix request over typed M43 `GenerationTypeRef` inputs. Milestone 46

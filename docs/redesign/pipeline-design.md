@@ -818,6 +818,17 @@ semantic body completion, dependency closure, operation scheduling,
 renderer-ready IR, generated output, a package registry, source dispatcher,
 hidden backfeed, or fixpoint coordinator.
 
+Post-M97 planning selects M98 as behavior-preserving Stage 8 stage-assembly
+ownership extraction before additional lowering semantics. M98 should move
+accepted `GenerationLoweringStage` construction helpers and the accepted
+operation-package -> completion-manifest -> completion-gap-inventory
+per-candidate result assembly into a focused private stage-assembly module,
+while keeping `boundary.py` as the public facade and preserving all accepted
+M57-M97 diagnostics, stage names, stage order, keys, object identities, and
+public imports. It must not become a broad coordinator, source dispatcher,
+registry, callback map, hidden backfeed, fixpoint mechanism, backend planning
+surface, renderer-ready IR, or semantic lowering expansion.
+
 ## Stage 9: Backend Planning
 
 Inputs:

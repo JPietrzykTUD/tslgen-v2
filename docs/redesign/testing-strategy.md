@@ -1253,6 +1253,20 @@ Recommended first parity checks:
   planning, backend map/catalog reads, backend-value resolution,
   renderer-ready IR, rendering, generated output, source repair, registry,
   dispatcher, scheduler, hidden backfeed, or fixpoint behavior.
+- Planned M98 coverage should prove behavior-preserving Stage 8
+  stage-assembly ownership extraction. Tests should cover stage-construction
+  parity for accepted M57-M97 stage facts; mini-TSIL and exact-array
+  per-candidate operation-package -> completion-manifest ->
+  completion-gap-inventory tail parity; preservation of M96 package/manifest
+  and M97 gap-inventory object identities; deterministic stage keys and
+  lowered implementation keys; public import stability; import-boundary tests
+  proving the new stage-assembly module does not import `boundary.py`, the
+  package facade, backend modules, renderers, `tsldata`, or `frozen`;
+  line-count guardrails for `boundary.py`, `_operation_package_sources.py`,
+  and the new module; and negative assertions that M98 introduces no new
+  lowering semantics, backend translation, Stage 9 planning, rendering/output,
+  source repair, raw body parsing, registries, dispatchers, hidden backfeeds,
+  fixpoint behavior, or hardwiring.
 
 Deferred parity checks:
 

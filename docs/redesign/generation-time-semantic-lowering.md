@@ -1389,6 +1389,14 @@ lowering completion manifest:
   produce a no-known-gap inventory state. M97 does not infer semantic body
   completion, backend readiness, renderer readiness, dependency closure,
   operation scheduling, backend value resolution, or output readiness.
+- Post-M97 planning selects M98 as behavior-preserving Stage 8
+  stage-assembly ownership extraction. M98 should move accepted stage
+  construction and accepted per-candidate operation-package ->
+  completion-manifest -> completion-gap-inventory assembly into a focused
+  private module while preserving M57-M97 semantics, diagnostics, stage order,
+  keys, and identities. It must not add generation-time helper semantics,
+  broad source parsing, backend translation, Stage 9 planning, rendering,
+  registries, dispatchers, hidden backfeeds, or fixpoint machinery.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only

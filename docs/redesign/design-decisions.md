@@ -1692,6 +1692,17 @@ Consequences:
   unchanged, integrates one stage after `lowering_completion_manifest`, and
   does not infer backend readiness, semantic body completion, operation
   schedules, dependency closure, renderer readiness, or source repairs.
+- Post-M97 planning selects M98 as behavior-preserving Stage 8
+  stage-assembly ownership extraction before adding more lowering semantics.
+  The decision narrows the next architecture work away from a broad
+  coordinator: M98 should extract accepted `GenerationLoweringStage`
+  construction and accepted per-candidate operation-package ->
+  completion-manifest -> completion-gap-inventory result assembly into focused
+  private ownership, while keeping `boundary.py` as public facade and model
+  owner. M98 must preserve M57-M97 behavior, diagnostics, stage order, keys,
+  and object identities and must not create a registry, dispatcher, callback
+  map, hidden backfeed, fixpoint engine, backend-planning surface, renderer
+  hook, source parser, or source-repair path.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
