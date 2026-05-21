@@ -921,40 +921,52 @@ full tooling validation with corpus probes `3 passed`, unittest discovery
 `668` tests OK, compileall OK, ruff OK, mypy OK across `139` source files,
 and diff-check OK.
 
+Post-M95 planning selected
+`Milestone 96: Stage-8 Lowering Completion Manifest Slice`, and internal
+planner, boundary, extensibility, and documentation review returned
+`Accept With Follow-Ups` after local planning-doc revisions. Human acceptance
+was recorded, and M96 execution became the active workflow action. The selected
+plan creates a deterministic Stage 8 lowering-only completion/readiness
+manifest over accepted
+`LoweringOperationPackageIr` facts and explicit unresolved dependency
+references. "Completion" and "readiness" mean only accepted Stage 8
+package/provenance assembly status; they do not mean semantic body completion,
+backend readiness, renderer readiness, executable readiness, or
+generated-output readiness.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M95 planning and review with a lowering focus.
+Execute Milestone 96.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m95-planning-plus-review-prompt.md
+docs/agent/runs/m96-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Milestone 95 is accepted; the active action is planning.
+Milestone 96: Stage-8 Lowering Completion Manifest Slice
 ```
 
 Latest review verdict:
 
 ```text
-M95 execution-review loop returned Accept With Follow-Ups after focused
-revision.
+Post-M95 planning/review returned Accept With Follow-Ups after local
+planning-doc revisions. Human acceptance was recorded.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M95 planning-plus-review prompt. Use the specified
-read-only planning/review subagents. Do not implement code unless the prompt
-explicitly selects an executor task. Before finishing, update this state file
-and create the next concrete run prompt.
+Run the active M96 execution-review loop prompt. Use exactly one write-capable
+executor followed by read-only review/audit subagents. Do not start post-M96
+planning until M96 review returns Accept or Accept With Follow-Ups.
 ```
 
 Accepted planning prompt:
@@ -1797,10 +1809,22 @@ Completed M95 execution-review loop prompt:
 docs/agent/runs/m95-execution-review-loop-prompt.md
 ```
 
-Active post-M95 planning-plus-review prompt:
+Completed post-M95 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m95-planning-plus-review-prompt.md
+```
+
+Completed post-M95 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m95-acceptance-finalization-prompt.md
+```
+
+Active M96 execution-review loop prompt:
+
+```text
+docs/agent/runs/m96-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2725,6 +2749,35 @@ docs/agent/runs/post-m95-planning-plus-review-prompt.md
   `_operation_package_selected_body.py`. `_operation_package_sources.py`
   received only narrow explicit integration and must not grow into a generic
   source protocol, callback map, registry, or dispatcher.
+- M96 is selected for human acceptance as Stage 8 lowering manifest/provenance
+  work only. It must consume accepted `LoweringOperationPackageIr` values as
+  its primary input.
+- M96 may preserve M86 mini-TSIL leaf-return facts, M92 exact-array
+  backend-handoff facts, and M95 selected-body direct-intrinsic facts only
+  through accepted operation-package entries and already-preserved object
+  references. It must not re-enter raw M86 statements, M92 handoff assembly,
+  M63 envelopes, or the M90/M89/M72/M67 provenance chain except to validate
+  already-preserved object references.
+- M96 may preserve accepted M92/M90 unresolved backend-handoff dependency
+  references but must not resolve them.
+- M96 "completion" and "readiness" mean accepted Stage 8 package/provenance
+  assembly status only. They do not mean semantic body completion, backend
+  readiness, renderer readiness, executable readiness, or generated-output
+  readiness.
+- Any M96 package graph is an identity/provenance graph of accepted
+  operation-package records and explicit unresolved dependency references
+  only. It must not become an operation DAG, operation schedule, dependency
+  closure, backend plan, renderer IR, wrapper plan, artifact plan, package
+  registry, source-family dispatcher, hidden backfeed, or fixpoint mechanism.
+- M96 must avoid adding ownership to `boundary.py` or
+  `_operation_package_sources.py`.
+- M96 must not add backend translation, backend map/catalog reads,
+  backend-uninit resolution, Stage 9 backend planning, operation scheduling,
+  primitive dependency closure, wrapper planning, artifact planning,
+  renderer-ready IR, rendering, generated output, source repair, broad
+  TSIL/body parsing, direct-intrinsic/SVE semantics, byte-size-to-token
+  inference, registries, dispatchers, hidden backfeeds, fixpoint machinery,
+  Rust, CLI/report/writer, compiler execution, or hardwiring.
 - Future lowering package decomposition must preserve accepted M57-M95
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -4000,11 +4053,23 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M95 execution follow-up: `boundary.py` is exactly at the current 1,300-line
   guardrail. Future lowering work should avoid adding ownership there and
   should keep new behavior in focused private modules.
+- Post-M95 planning follow-up for M96 execution: keep "completion" and
+  "readiness" limited to accepted Stage 8 package/provenance assembly status.
+  Do not let the manifest imply semantic body completion, backend readiness,
+  renderer readiness, executable readiness, or generated-output readiness.
+- Post-M95 planning follow-up for M96 execution: M96 must consume accepted
+  `LoweringOperationPackageIr` values as the primary input and must not grow
+  `_operation_package_sources.py` into a manifest router, package-family
+  registry, source dispatcher, callback map, or broad source protocol.
+- Post-M95 planning follow-up for M96 execution: `boundary.py` is already at
+  1,300 lines and `_operation_package_sources.py` is already 819 lines. M96
+  must use focused private manifest ownership and line-count guardrails rather
+  than adding ownership to either pressure point.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run post-M95 planning
-through the active post-M95 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M96 through the
+active M96 execution-review loop prompt.
 
 ## Validation Expectations
 
@@ -4013,6 +4078,22 @@ For docs-only planning tasks:
 ```bash
 git diff --check
 ```
+
+For post-M95 planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
+
+For post-M95 acceptance finalization, validation completed with:
+
+```bash
+git diff --check -- docs/agent/current-redesign-state.md docs/agent/runs/post-m95-acceptance-finalization-prompt.md docs/agent/runs/m96-execution-review-loop-prompt.md docs/redesign/design-decisions.md docs/redesign/generation-time-semantic-lowering.md docs/redesign/implementation-roadmap.md docs/redesign/open-questions.md docs/redesign/pipeline-design.md docs/redesign/testing-strategy.md
+```
+
+The command returned exit 0 with no output.
 
 For post-M90 planning, validation completed with:
 

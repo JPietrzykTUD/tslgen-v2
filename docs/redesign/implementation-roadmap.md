@@ -12824,3 +12824,153 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m95-planning-plus-review-prompt.md` runs post-M95
   planning and review with a lowering focus.
+
+### Milestone 96: Stage-8 Lowering Completion Manifest Slice
+
+Status:
+
+Planned for execution. Post-M95 planning is accepted. It selected this
+milestone, and internal planner, boundary, extensibility, and documentation
+review returned `Accept With Follow-Ups` after local planning-doc revisions.
+
+Goal:
+
+Create one typed, deterministic Stage 8 lowering completion manifest over the
+currently accepted lowering operation-package families. M96 should give later
+backend-planning work a single lowering-owned readiness/provenance contract
+without starting backend planning, translating backend values, or turning the
+operation-package bridge into a package router.
+
+For M96, "completion" and "readiness" mean only that the accepted Stage 8
+package/provenance facts present on the candidate have been assembled and
+validated. They do not mean semantic body completion, backend readiness,
+renderer readiness, executable readiness, or generated-output readiness.
+
+Scope:
+
+- Add focused private lowering ownership, such as
+  `_lowering_completion_manifest.py`, for manifest models, diagnostics, and
+  manifest assembly. Split into another focused module if one file would grow
+  toward the module-size guardrail.
+- Consume accepted `LoweringOperationPackageIr` values as the primary input.
+  Family-specific M86 mini-TSIL leaf-return values, accepted M92 exact array
+  backend-handoff values, and accepted M95 selected-body direct-intrinsic
+  values may be reached only through those accepted package entries and
+  already-preserved object references.
+- Preserve accepted M92/M90 unresolved backend-handoff dependency provenance
+  as unresolved lowering-side manifest records. Do not resolve those
+  dependencies.
+- Produce one deterministic per-candidate typed manifest value, such as
+  `Stage8LoweringCompletionManifestIr`, with candidate identity, package keys,
+  source-family identities, package-entry identities, source locations,
+  unresolved-dependency summaries, and readiness/provenance status.
+- Add one deterministic Stage 8 stage, such as
+  `lowering_completion_manifest`, after accepted `lowering_operation_package`
+  facts without changing accepted M86/M92/M95 package behavior, object
+  identity, diagnostics, selected-branch-only behavior, stage ordering, or
+  pipeline snapshots.
+- Keep `boundary.py` and `_operation_package_sources.py` from absorbing new
+  ownership. Any facade integration must be minimal and import-stable.
+
+Out of scope:
+
+- Backend translation, backend map/catalog reads, backend-uninit resolution,
+  Stage 9 backend planning, operation scheduling, primitive dependency
+  closure, renderer-ready IR, rendering, generated C++ or Rust output,
+  generated tests, CLI/report/writer behavior, compiler execution, or Rust.
+- New operation-package source families, placeholder package kinds, generic
+  operation registries, semantic dispatchers, callback maps, plugin systems,
+  hidden recursive backfeeds, fixpoint machinery, or broad source protocols.
+- Re-entering raw M86 statements, M92 handoff assembly, M63 envelopes, or the
+  M90/M89/M72/M67 provenance chain except to validate object references already
+  preserved by accepted operation-package entries.
+- Direct-intrinsic/SVE semantics, byte-size-to-token inference, vector
+  metadata inference, declaration/array/store/return/body semantics,
+  `value<backend>(...)` evaluation, raw body text parsing, source-body repair,
+  or generic TSIL/body parsing.
+- Treating `svptrue_b*`, `pg`, selected literals, type tags, primitive names,
+  extension ids, backend ids, source locations, or package-family tags as
+  semantic dispatch keys.
+
+Required input:
+
+- Accepted M86 mini-TSIL leaf-return package behavior and diagnostics.
+- Accepted M92 exact array backend-handoff request package behavior and
+  unresolved dependency provenance through M90/M89/M72/M67.
+- Accepted M95 selected-body direct-intrinsic package behavior and provenance.
+- Accepted M93/M94 operation-package facade, source-family distinction,
+  deterministic package keys, diagnostics, and import/module-size guardrails.
+
+Expected outputs:
+
+- A typed Stage 8 lowering completion manifest/readiness value per selected
+  candidate with deterministic keys and package ordering.
+- Manifest records that distinguish complete lowering facts from unresolved
+  backend-handoff dependencies without converting either into backend plans.
+- Diagnostics for unsupported sources, missing packages, duplicate package
+  keys, malformed package entries, mixed candidate context,
+  source-location/provenance mismatches, wrong stage/order, ambiguous
+  containers, and dependency provenance mismatches.
+- Public facade stability if the manifest type is exported; otherwise a
+  narrow private module boundary with tests that prove imports remain one-way.
+
+Tests required:
+
+- Positive tests for manifests over accepted M86 mini-TSIL packages, accepted
+  M92 exact-array backend-handoff packages, accepted M95 selected-body
+  direct-intrinsic packages, and a mixed per-candidate package set.
+- Determinism tests for package ordering, manifest keys, stage output keys,
+  and repeated pipeline runs.
+- Pipeline/stage tests proving the manifest stage appears after accepted
+  operation-package facts and preserves existing M86/M92/M95 package facts,
+  object identities, selected-branch-only behavior, and snapshots.
+- Negative tests for unsupported sources, no packages, duplicate package keys,
+  malformed package entries, candidate/source-location/provenance mismatch,
+  wrong stage inputs, ambiguous containers, and unresolved dependency
+  provenance mismatch.
+- Import-boundary, line-count, and forbidden-behavior tests proving no growth
+  in `boundary.py`, no new `_operation_package_sources.py` package router, no
+  backend maps/catalog reads, no backend planning, no renderer-ready IR, no
+  source repair, no generic registry/dispatcher, and no fixpoint/backfeed
+  machinery.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_operation_package_sources.py tslgen/src/tslgen/lowering/_lowering_completion_manifest*.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_operation_package*.py tslgen/src/tslgen/lowering/_lowering_completion_manifest*.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_pipeline.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m96 or completion_manifest or operation_package"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Letting "completion" mean semantic body completion, backend planning,
+  backend-value resolution, renderer-ready IR, or generated output instead of
+  Stage 8 lowering-readiness/provenance.
+- Creating a second monolith in a manifest module or growing
+  `_operation_package_sources.py` into a central package-family router.
+- Converting package-family tags or hardware-looking tokens into semantic
+  dispatch keys.
+- Introducing operation scheduling, dependency solving, registries,
+  dispatchers, hidden backfeeds, or fixpoint behavior under the name
+  "manifest graph". Any graph-like structure is only an identity/provenance
+  graph of accepted operation-package records and explicit unresolved
+  dependency references; it is not an operation DAG, dependency closure,
+  backend plan, renderer IR, wrapper plan, artifact plan, registry,
+  dispatcher, backfeed, or fixpoint mechanism.
+
+Planning follow-ups:
+
+- Stage 9 backend planning remains deferred after M96. If M96 is accepted and
+  implemented, the next planning pass may decide whether enough lowering-side
+  manifest data exists to select a narrow backend-planning handoff milestone.
+- `_operation_package_sources.py` is already at 819 lines and `boundary.py` at
+  1,300 lines after M95. M96 must add focused manifest ownership instead of
+  increasing either pressure point.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m95-acceptance-finalization-prompt.md` records human
+  acceptance before M96 execution.

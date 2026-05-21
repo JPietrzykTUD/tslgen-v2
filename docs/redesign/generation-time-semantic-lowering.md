@@ -1272,6 +1272,14 @@ M93/M95 operation-package diagnostics:
   carries multiple accepted M86, M92, or M63 packageable values and no
   `source_family` was provided.
 
+Planned M96 manifest diagnostics must stay on the Stage 8 lowering side. The
+planned manifest may diagnose unsupported or empty package sources, duplicate
+package keys, malformed package entries, mixed candidate context, wrong
+stage/order, source-location/provenance mismatches, ambiguous package
+containers, and unresolved dependency provenance mismatches. It must not
+diagnose backend support, backend translation availability, renderer output
+availability, operation scheduling, or dependency-closure completeness.
+
 ## Explicit Deferrals
 
 Deferred beyond the implemented M43-M76 semantic-lowering, structural
@@ -1297,8 +1305,9 @@ backend-deferred request inventory, accepted M90 exact array lowering
 completion-package handoff, accepted M91 behavior-preserving exact array
 pipeline ownership consolidation, accepted M92 exact array lowering
 backend-handoff request, accepted M93 dual-source lowering operation package
-boundary, accepted M94 operation-package ownership split, and accepted M95
-selected-body direct-intrinsic operation package:
+boundary, accepted M94 operation-package ownership split, accepted M95
+selected-body direct-intrinsic operation package, and the planned M96
+Stage 8 lowering completion manifest:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -1357,6 +1366,12 @@ selected-body direct-intrinsic operation package:
   allocation/lifetime, initializer behavior, variable scope, predicate
   semantics, direct-intrinsic/SVE semantics, store/return semantics, aligned
   load/store semantics, rendering, and output remain deferred.
+- Planned M96 may summarize accepted M86/M92/M95 package facts and accepted
+  unresolved backend-handoff dependencies as a deterministic lowering-side
+  manifest only. Backend readiness decisions, backend value resolution,
+  operation scheduling, dependency solving, Stage 9 backend planning,
+  renderer-ready IR, generated output, package-family registries, semantic
+  dispatchers, hidden backfeeds, and fixpoint behavior remain deferred.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only

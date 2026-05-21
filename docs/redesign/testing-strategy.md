@@ -1216,6 +1216,21 @@ Recommended first parity checks:
   lowering mypy success across 35 source files, and full tooling validation
   success with corpus probes `3 passed`, unit discovery `668` tests OK,
   compileall OK, ruff OK, mypy OK across 139 source files, and diff-check OK.
+- Planned M96 coverage must prove a Stage 8 lowering completion manifest over
+  accepted operation-package facts only. Tests should cover manifest
+  construction from accepted M86 mini-TSIL leaf-return packages, accepted M92
+  exact-array backend-handoff packages, accepted M95 selected-body
+  direct-intrinsic packages, and mixed per-candidate package sets; deterministic
+  manifest keys/order; package object identity and source-location/provenance
+  preservation; unresolved backend-dependency reference preservation for exact
+  array packages; diagnostics for missing, duplicate, malformed, family-
+  mismatched, candidate-mismatched, and provenance-mismatched package facts;
+  stage placement after `lowering_operation_package`; import and line-count
+  guardrails for `boundary.py`, `_operation_package_sources.py`, and the new
+  manifest module; and negative assertions that M96 introduces no Stage 9
+  planning, backend map/catalog reads, backend-value resolution, renderer-ready
+  IR, rendering, generated output, source repair, registry, dispatcher,
+  scheduler, hidden backfeed, or fixpoint behavior.
 
 Deferred parity checks:
 
