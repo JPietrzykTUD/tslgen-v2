@@ -34,6 +34,7 @@ import tslgen.lowering._array_body_validation as _array_body_validation  # noqa:
 import tslgen.lowering._lowering_inputs as _lowering_inputs
 import tslgen.lowering._lowering_completion_manifest as _lowering_completion_manifest
 import tslgen.lowering._lowering_completion_gap_inventory as _lowering_completion_gap_inventory
+import tslgen.lowering._lowering_stage_assembly as _stage_assembly
 import tslgen.lowering._mini_tsil_lowering as _mini_tsil_lowering
 import tslgen.lowering._operation_package as _operation_package
 import tslgen.lowering._return_emission as _return_emission
@@ -61,9 +62,8 @@ from tslgen.lowering._selected_body_models import (
     SelectedBranchBodyAssignmentFormRecognition as SelectedBranchBodyAssignmentFormRecognition,
 )
 from tslgen.lowering._generation_models import (
-    GenerationExpressionRecognition,
+    GenerationExpressionRecognition as GenerationExpressionRecognition,  # noqa: F401
     GenerationPredicate,
-    GenerationRecognitionKind,
     GenerationSizeByteBranchChainArm as GenerationSizeByteBranchChainArm,
     GenerationSizeByteBranchChainPruning,
     GenerationTypeRef,
@@ -859,49 +859,6 @@ def _context_for_candidate(
     )
 
 
-def _recognition_stage(
-    kind: GenerationRecognitionKind,
-    source_text: str,
-) -> GenerationLoweringStage:
-    return GenerationLoweringStage(
-        stage="helper_expression_recognition",
-        output=GenerationExpressionRecognition(
-            kind=kind,
-            source_text=source_text.strip(),
-        ),
-    )
-
-
-def _generation_value_stage(value: GenerationValue) -> GenerationLoweringStage:
-    return GenerationLoweringStage(stage="typed_generation_value", output=value)
-
-def _generation_predicate_stage(predicate: GenerationPredicate) -> GenerationLoweringStage:
-    return GenerationLoweringStage(stage="typed_generation_predicate", output=predicate)
-
-def _generation_control_flow_stage(branch: PrunedGenerationBranch | GenerationSizeByteBranchChainPruning) -> GenerationLoweringStage:
-    return GenerationLoweringStage(stage="generation_control_flow_pruning", output=branch)
-
-def _selected_body_stage(output: TsilStatement | GenerationSelectedBranchBodyHandoff) -> GenerationLoweringStage:
-    return GenerationLoweringStage(stage="selected_body_lowering", output=output)
-
-def _lowering_operation_package_stage(output: LoweringOperationPackageIr) -> GenerationLoweringStage:
-    return GenerationLoweringStage(stage="lowering_operation_package", output=output)
-
-def _lowering_completion_manifest_stage(output: _lowering_completion_manifest.Stage8LoweringCompletionManifestIr) -> GenerationLoweringStage:
-    return GenerationLoweringStage(stage="lowering_completion_manifest", output=output)
-
-def _lowering_completion_gap_inventory_stage(output: _lowering_completion_gap_inventory.Stage8LoweringCompletionGapInventoryIr) -> GenerationLoweringStage:
-    return GenerationLoweringStage(stage="lowering_completion_gap_inventory", output=output)
-
-def _selected_body_form_recognition_stage(output: GenerationSelectedBranchBodyAssignmentRecognition) -> GenerationLoweringStage:
-    return GenerationLoweringStage(stage="selected_body_form_recognition", output=output)
-
-def _selected_body_ir_stage(output: GenerationSelectedBranchBodyIr) -> GenerationLoweringStage:
-    return GenerationLoweringStage(stage="selected_body_ir_lowering", output=output)
-
-def _selected_body_envelope_stage(output: GenerationSelectedBodyEnvelopeIr) -> GenerationLoweringStage:
-    return GenerationLoweringStage(stage="selected_body_envelope_lowering", output=output)
-
 def _lower_input(
     item: LoweringInput,
     request: LoweringRequest,
@@ -938,12 +895,17 @@ def _lower_input(
                 status="lowered",
                 generation_predicates=(staged_predicate.predicate,),
                 generation_stages=(
-                    _recognition_stage("generation.predicate", text),
+                    _stage_assembly._recognition_stage(
+                        "generation.predicate",
+                        text,
+                    ),
                     *(
-                        _generation_value_stage(value)
+                        _stage_assembly._generation_value_stage(value)
                         for value in staged_predicate.generation_values
                     ),
-                    _generation_predicate_stage(staged_predicate.predicate),
+                    _stage_assembly._generation_predicate_stage(
+                        staged_predicate.predicate,
+                    ),
                 ),
             )
         )
@@ -959,8 +921,11 @@ def _lower_input(
                 status="lowered",
                 generation_values=(value,),
                 generation_stages=(
-                    _recognition_stage("generation.value", text),
-                    _generation_value_stage(value),
+                    _stage_assembly._recognition_stage(
+                        "generation.value",
+                        text,
+                    ),
+                    _stage_assembly._generation_value_stage(value),
                 ),
             )
         )
@@ -975,7 +940,9 @@ def _lower_input(
             if not branch_chain.is_ok:
                 return Result.failure(branch_chain.diagnostics)
             staged_chain = branch_chain.unwrap()
-            control_flow_stage = _generation_control_flow_stage(staged_chain.pruning)
+            control_flow_stage = _stage_assembly._generation_control_flow_stage(
+                staged_chain.pruning,
+            )
             selected_body_handoff = handoff_opaque_selected_branch_body(
                 item.candidate_id,
                 control_flow_stage,
@@ -997,7 +964,7 @@ def _lower_input(
             if not envelope_result.is_ok:
                 return Result.failure(envelope_result.diagnostics)
             envelope = envelope_result.unwrap()
-            envelope_stage = _selected_body_envelope_stage(envelope)
+            envelope_stage = _stage_assembly._selected_body_envelope_stage(envelope)
             selected_body_operation_packages: tuple[
                 LoweringOperationPackageIr,
                 ...
@@ -1015,7 +982,9 @@ def _lower_input(
                 operation_package = operation_package_result.unwrap()
                 selected_body_operation_packages = (operation_package,)
                 selected_body_operation_package_stages = (
-                    _lowering_operation_package_stage(operation_package),
+                    _stage_assembly._lowering_operation_package_stage(
+                        operation_package,
+                    ),
                 )
             array_initialization_pipeline_result = (
                 _lower_exact_array_initialization_stage_pipeline(
@@ -1036,32 +1005,13 @@ def _lower_input(
                 *selected_body_operation_packages,
                 *array_initialization_pipeline.operation_packages,
             )
-            manifests: tuple[_lowering_completion_manifest.Stage8LoweringCompletionManifestIr, ...] = ()
-            inventories: tuple[_lowering_completion_gap_inventory.Stage8LoweringCompletionGapInventoryIr, ...] = ()
-            if operation_packages:
-                manifest_result = (
-                    _lowering_completion_manifest.lower_stage8_lowering_completion_manifest(
-                        operation_packages,
-                        candidate_id=item.candidate_id,
-                    )
-                )
-                if not manifest_result.is_ok:
-                    return Result.failure(manifest_result.diagnostics)
-                manifests = (manifest_result.unwrap(),)
-                inventory_result = _lowering_completion_gap_inventory.lower_stage8_lowering_completion_gap_inventory(manifests[0])
-                if not inventory_result.is_ok:
-                    return Result.failure(inventory_result.diagnostics)
-                inventories = (inventory_result.unwrap(),)
-            manifest_stages = (
-                (_lowering_completion_manifest_stage(manifests[0]),)
-                if manifests
-                else ()
+            completion_tail = _stage_assembly._assemble_stage8_completion_tail(
+                operation_packages,
+                candidate_id=item.candidate_id,
             )
-            inventory_stages = (
-                (_lowering_completion_gap_inventory_stage(inventories[0]),)
-                if inventories
-                else ()
-            )
+            if not completion_tail.is_ok:
+                return Result.failure(completion_tail.diagnostics)
+            assembled_tail = completion_tail.unwrap()
             return Result.ok(
                 LoweredImplementation(
                     candidate_id=item.candidate_id,
@@ -1123,32 +1073,35 @@ def _lower_input(
                         array_initialization_pipeline.array_backend_handoff_requests
                     ),
                     operation_packages=operation_packages,
-                    lowering_completion_manifests=manifests,
-                    lowering_completion_gap_inventories=inventories,
+                    lowering_completion_manifests=(
+                        assembled_tail.lowering_completion_manifests
+                    ),
+                    lowering_completion_gap_inventories=(
+                        assembled_tail.lowering_completion_gap_inventories
+                    ),
                     generation_stages=(
-                        _recognition_stage(
+                        _stage_assembly._recognition_stage(
                             "generation.control_flow",
                             item.payload.text or text,
                         ),
                         *(
-                            _generation_value_stage(value)
+                            _stage_assembly._generation_value_stage(value)
                             for value in staged_chain.generation_values
                         ),
                         *(
-                            _generation_predicate_stage(predicate)
+                            _stage_assembly._generation_predicate_stage(predicate)
                             for predicate in staged_chain.generation_predicates
                         ),
                         control_flow_stage,
-                        _selected_body_stage(handoff),
-                        _selected_body_form_recognition_stage(
+                        _stage_assembly._selected_body_stage(handoff),
+                        _stage_assembly._selected_body_form_recognition_stage(
                             recognized_assignment_form,
                         ),
-                        _selected_body_ir_stage(body_ir),
+                        _stage_assembly._selected_body_ir_stage(body_ir),
                         envelope_stage,
                         *selected_body_operation_package_stages,
                         *array_initialization_pipeline.stages,
-                        *manifest_stages,
-                        *inventory_stages,
+                        *assembled_tail.stages,
                     ),
                 )
             )
@@ -1159,8 +1112,11 @@ def _lower_input(
         text = branch.statement_text
         generation_branches = (branch,)
         generation_stages = (
-            _recognition_stage("generation.control_flow", item.payload.text or text),
-            _generation_control_flow_stage(branch),
+            _stage_assembly._recognition_stage(
+                "generation.control_flow",
+                item.payload.text or text,
+            ),
+            _stage_assembly._generation_control_flow_stage(branch),
         )
         if _has_generation_helper(text):
             return Result.failure((_generation_diagnostics._unresolved_selected_branch_diagnostic(item, text),))
@@ -1177,19 +1133,14 @@ def _lower_input(
     if not operation_package_result.is_ok:
         return Result.failure(operation_package_result.diagnostics)
     operation_package = operation_package_result.unwrap()
-    manifest_result = (
-        _lowering_completion_manifest.lower_stage8_lowering_completion_manifest(
-            (operation_package,), candidate_id=item.candidate_id,
-            source_location=item.source_location
-        )
+    completion_tail = _stage_assembly._assemble_stage8_completion_tail(
+        (operation_package,),
+        candidate_id=item.candidate_id,
+        source_location=item.source_location,
     )
-    if not manifest_result.is_ok:
-        return Result.failure(manifest_result.diagnostics)
-    manifest = manifest_result.unwrap()
-    inventory_result = _lowering_completion_gap_inventory.lower_stage8_lowering_completion_gap_inventory(manifest)
-    if not inventory_result.is_ok:
-        return Result.failure(inventory_result.diagnostics)
-    inventory = inventory_result.unwrap()
+    if not completion_tail.is_ok:
+        return Result.failure(completion_tail.diagnostics)
+    assembled_tail = completion_tail.unwrap()
 
     return Result.ok(
         LoweredImplementation(
@@ -1198,14 +1149,19 @@ def _lower_input(
             statements=(lowered_statement,),
             generation_branches=generation_branches,
             operation_packages=(operation_package,),
-            lowering_completion_manifests=(manifest,),
-            lowering_completion_gap_inventories=(inventory,),
+            lowering_completion_manifests=(
+                assembled_tail.lowering_completion_manifests
+            ),
+            lowering_completion_gap_inventories=(
+                assembled_tail.lowering_completion_gap_inventories
+            ),
             generation_stages=(
                 *generation_stages,
-                _selected_body_stage(lowered_statement),
-                _lowering_operation_package_stage(operation_package),
-                _lowering_completion_manifest_stage(manifest),
-                _lowering_completion_gap_inventory_stage(inventory),
+                _stage_assembly._selected_body_stage(lowered_statement),
+                _stage_assembly._lowering_operation_package_stage(
+                    operation_package,
+                ),
+                *assembled_tail.stages,
             ),
         )
     )

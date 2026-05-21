@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 97 is accepted.
+Milestone 98 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1018,40 +1018,69 @@ identities, and public facade behavior.
 Human acceptance for post-M97 planning was recorded, and M98 execution became
 the active workflow action.
 
+The M98 execution-review loop returned `Accept With Follow-Ups` after one
+focused public-facade import correction and documentation finalization. M98 is
+accepted as behavior-preserving Stage 8 stage-assembly ownership extraction.
+It added `_lowering_stage_assembly.py` with focused ownership for accepted
+`GenerationLoweringStage` construction helpers and per-candidate
+operation-package -> completion-manifest -> completion-gap-inventory result
+assembly. `boundary.py` remains the public facade and request/result model
+owner; `_operation_package_sources.py` is unchanged. M98 added no new lowering
+semantics, source-body parsing, source repair, backend translation, backend
+map/catalog reads, backend-uninit resolution, Stage 9 planning, operation
+scheduling, dependency closure, renderer-ready IR, rendering, generated
+output, Rust, CLI/report/writer behavior, compiler execution, registries,
+dispatchers, callback maps, hidden backfeeds, fixpoint machinery, or
+hardwiring.
+
+M98 changed `tslgen/src/tslgen/lowering/_lowering_stage_assembly.py`,
+`tslgen/src/tslgen/lowering/boundary.py`, and
+`tslgen/tests/unit/test_lowering_boundary.py`. Final line counts were
+`boundary.py` 1,241, `_lowering_stage_assembly.py` 189,
+`_operation_package_sources.py` 819, `_lowering_completion_manifest.py` 776,
+and `_lowering_completion_gap_inventory.py` 564. Final validation passed:
+required py-compile with no output, focused M98/stage-assembly/package/
+manifest/gap-inventory pytest `27 passed, 325 deselected`, full
+lowering-boundary pytest `352 passed`, lowering mypy
+`Success: no issues found in 38 source files`, full tooling validation with
+corpus probes `3 passed`, unittest discovery `686` tests OK, compileall OK,
+ruff OK, mypy OK across `142` source files, and diff-check OK.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 98.
+Run post-M98 planning and review.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m98-execution-review-loop-prompt.md
+docs/agent/runs/post-m98-planning-plus-review-prompt.md
 ```
 
-Active executor milestone:
+Active planning target:
 
 ```text
-Milestone 98: Stage 8 Lowering Stage-Assembly Ownership Extraction Slice.
+Post-M98 planning with lowering focus.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M97 planning returned Accept With Follow-Ups after narrowing M98 to
-focused stage-assembly/result-assembly ownership.
+M98 execution/review returned Accept With Follow-Ups after focused
+public-facade import correction and documentation finalization.
 ```
 
 Next expected action:
 
 ```text
-Run the active M98 execution-review-loop prompt. Use exactly one write-capable
-executor, then read-only review/audit subagents. Before finishing, update this
-state file and create the next concrete prompt under `docs/agent/runs/`,
-unless the active prompt records a stop condition.
+Run the active post-M98 planning-plus-review prompt. Focus on lowering. Do not
+implement code unless the active prompt explicitly selects an executor task.
+Before finishing, update this state file and create the next concrete run
+prompt under `docs/agent/runs/`, unless the active prompt records a stop
+condition.
 ```
 
 Accepted planning prompt:
@@ -1942,10 +1971,16 @@ Completed post-M97 acceptance-finalization prompt:
 docs/agent/runs/post-m97-acceptance-finalization-prompt.md
 ```
 
-Active M98 execution-review loop prompt:
+Completed M98 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m98-execution-review-loop-prompt.md
+```
+
+Active post-M98 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m98-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2927,12 +2962,11 @@ docs/agent/runs/m98-execution-review-loop-prompt.md
 - M97 execution follow-up: `boundary.py` stayed under the guardrail partly by
   compressing stage-helper coordination. The next lowering slice should
   extract coordination/stage helper ownership before adding more state there.
-- Post-M97 planning selected M98 as behavior-preserving Stage 8
-  stage-assembly ownership extraction only. M98 should extract accepted
-  `GenerationLoweringStage` construction helpers and accepted per-candidate
-  operation-package -> completion-manifest -> completion-gap-inventory result
-  assembly into a focused private module, preferably
-  `_lowering_stage_assembly.py`.
+- M98 is accepted as behavior-preserving Stage 8 stage-assembly ownership
+  extraction only. It extracts accepted `GenerationLoweringStage` construction
+  helpers and accepted per-candidate operation-package ->
+  completion-manifest -> completion-gap-inventory result assembly into focused
+  private `_lowering_stage_assembly.py` ownership.
 - M98 keeps `boundary.py` as the public facade and request/result model owner.
   `LoweringRequest`, `LoweredImplementation`, `LoweringPlan`, public imports,
   accepted diagnostics, stage names, stage order, stage keys, output
@@ -4240,11 +4274,16 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   narrowly owned. It is a behavior-preserving stage-assembly/result-assembly
   extraction, not a generic coordinator, registry, dispatcher, hidden
   backfeed, fixpoint mechanism, or semantic lowering milestone.
+- M98 execution follow-up: future lowering additions may reuse
+  `_lowering_stage_assembly.py` for accepted stage construction/result
+  assembly, but must not broaden it into a generic coordinator, registry,
+  dispatcher, callback map, hidden backfeed, fixpoint mechanism, or semantic
+  lowering milestone.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M98 through the
-active M98 execution-review-loop prompt.
+No stop condition is active. The workflow is ready for post-M98 planning
+through the active post-M98 planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -4733,3 +4772,30 @@ git diff --check -- docs/agent/current-redesign-state.md docs/agent/runs/post-m9
 ```
 
 The command returned exit 0 with no output.
+
+For M98 execution and review, validation completed with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_lowering_stage_assembly.py tslgen/src/tslgen/lowering/_operation_package_sources.py tslgen/src/tslgen/lowering/_lowering_completion_manifest.py tslgen/src/tslgen/lowering/_lowering_completion_gap_inventory.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_lowering_stage_assembly.py tslgen/src/tslgen/lowering/_lowering_completion_manifest.py tslgen/src/tslgen/lowering/_lowering_completion_gap_inventory.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m98 or stage_assembly or completion_manifest or completion_gap_inventory or operation_package"
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+git diff --check
+```
+
+The M98 line counts were `1241 tslgen/src/tslgen/lowering/boundary.py`,
+`189 tslgen/src/tslgen/lowering/_lowering_stage_assembly.py`,
+`819 tslgen/src/tslgen/lowering/_operation_package_sources.py`,
+`776 tslgen/src/tslgen/lowering/_lowering_completion_manifest.py`,
+`564 tslgen/src/tslgen/lowering/_lowering_completion_gap_inventory.py`, and
+`3589 total`. The py-compile command returned exit 0 with no output. The
+focused M98 command returned `27 passed, 325 deselected in 30.39s`. The full
+lowering-boundary suite returned `352 passed in 210.49s (0:03:30)`. The
+focused lowering mypy check returned
+`Success: no issues found in 38 source files`. The validation profile returned
+exit 0 with corpus probes `3 passed in 6.19s`, unit discovery `686` tests OK
+in `272.384s`, compileall OK, ruff `All checks passed!`, mypy `Success: no
+issues found in 142 source files`, and diff-check OK. The standalone final
+`git diff --check` returned exit 0 with no output.

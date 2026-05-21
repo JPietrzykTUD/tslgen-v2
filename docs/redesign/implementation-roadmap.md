@@ -13160,47 +13160,45 @@ Next concrete prompt:
 
 Status:
 
-Selected by accepted post-M97 planning. Human acceptance was recorded, and M98
-execution is active through
-`docs/agent/runs/m98-execution-review-loop-prompt.md`. Internal planner,
-boundary, extensibility, and documentation review returned
-`Accept With Follow-Ups` after narrowing the proposal from broad coordinator
-extraction to focused stage-assembly/result-assembly ownership.
+Accepted. The M98 execution-review loop returned `Accept With Follow-Ups`
+after one focused public-facade import correction and documentation
+finalization. It implemented the selected behavior-preserving Stage 8
+stage-assembly ownership extraction and kept the extracted module narrow.
 
 Goal:
 
 Keep the Stage 8 lowering pipeline maintainable before adding more lowering
-semantics. M98 is behavior-preserving architecture work: extract accepted
+semantics. M98 is behavior-preserving architecture work: it extracts accepted
 stage construction and per-candidate Stage 8 result assembly from `boundary.py`
 into a focused private stage-assembly module while preserving all accepted
 M57-M97 behavior.
 
-The extraction should reduce `boundary.py` pressure without creating a
-replacement monolith. The new module owns accepted stage construction and the
-accepted operation-package -> completion-manifest -> completion-gap-inventory
-tail assembly only.
+The extraction reduces `boundary.py` pressure without creating a replacement
+monolith. The new module owns accepted stage construction and the accepted
+operation-package -> completion-manifest -> completion-gap-inventory tail
+assembly only.
 
 Scope:
 
-- Add focused private ownership, preferably
-  `tslgen.lowering._lowering_stage_assembly`, for accepted
+- Added focused private ownership in
+  `tslgen.lowering._lowering_stage_assembly` for accepted
   `GenerationLoweringStage` construction helpers and per-candidate Stage 8
   result assembly.
-- Move accepted stage helper construction out of `boundary.py` for existing
+- Moved accepted stage helper construction out of `boundary.py` for existing
   stages such as recognition, typed generation values/predicates,
   generation-control-flow pruning, selected-body lowering, selected-body form/
   IR/envelope lowering, lowering operation packages, completion manifests, and
   completion gap inventories.
-- Extract the repeated accepted operation-package -> completion-manifest ->
+- Extracted the repeated accepted operation-package -> completion-manifest ->
   completion-gap-inventory tail assembly into a narrow typed helper/result.
-- Preserve `LoweringRequest`, `LoweredImplementation`, `LoweringPlan`, public
+- Preserved `LoweringRequest`, `LoweredImplementation`, `LoweringPlan`, public
   imports, accepted diagnostics, accepted stage names, stage ordering, stage
   keys, deterministic ordering, output identities, source locations, and
   object identity behavior.
-- Keep `boundary.py` as the public facade and owner for request/result models,
+- Kept `boundary.py` as the public facade and owner for request/result models,
   `lower_candidates`, and `_lower_input` unless a tiny helper move is
   explicitly necessary for the stage-assembly extraction.
-- Keep `_operation_package_sources.py` unchanged.
+- Kept `_operation_package_sources.py` unchanged.
 
 Out of scope:
 
@@ -13231,11 +13229,11 @@ Required input:
 
 Expected outputs:
 
-- A focused private stage-assembly module, preferably
+- A focused private stage-assembly module,
   `_lowering_stage_assembly.py`, below the module-size guardrail.
-- `boundary.py` reduced or at minimum kept at or below its M97 line count while
-  continuing to act as the public facade.
-- `_operation_package_sources.py` unchanged.
+- `boundary.py` reduced to 1,241 physical lines while continuing to act as the
+  public facade.
+- `_operation_package_sources.py` unchanged at 819 physical lines.
 - Behavior-preserving stage construction for all accepted M57-M97 stage facts.
 - Behavior-preserving per-candidate completion-tail assembly for accepted
   operation packages, completion manifests, and completion gap inventories.
@@ -13276,6 +13274,22 @@ Validation commands:
 - `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
 - `git diff --check`
 
+Validation result:
+
+- Line counts: `boundary.py` 1,241, `_lowering_stage_assembly.py` 189,
+  `_operation_package_sources.py` 819, `_lowering_completion_manifest.py` 776,
+  and `_lowering_completion_gap_inventory.py` 564.
+- Required py-compile returned exit 0 with no output.
+- Focused M98/stage-assembly/package/manifest/gap-inventory pytest returned
+  `27 passed, 325 deselected`.
+- Full lowering-boundary pytest returned `352 passed`.
+- Focused lowering mypy returned
+  `Success: no issues found in 38 source files`.
+- Full tooling validation returned exit 0 with corpus probes `3 passed`,
+  unit discovery `686` tests OK, compileall OK, ruff OK, mypy
+  `Success: no issues found in 142 source files`, and diff-check OK.
+- Standalone final `git diff --check` returned exit 0 with no output.
+
 Review risks:
 
 - Letting the extracted module become a generic coordinator, registry,
@@ -13290,13 +13304,14 @@ Review risks:
   renderer-ready IR, rendering/output, source repair, raw body parsing, or new
   semantics under the name "coordinator".
 
-Planning follow-ups:
+Execution follow-ups:
 
-- M98 execution must keep the module narrowly named and narrowly owned. It is
-  a behavior-preserving stage-assembly extraction, not a semantic lowering
-  milestone and not a general coordinator.
+- Future lowering additions may reuse `_lowering_stage_assembly.py` for
+  accepted stage construction/result assembly, but must not broaden it into a
+  generic coordinator, registry, dispatcher, callback map, hidden backfeed,
+  fixpoint mechanism, or semantic lowering milestone.
 
 Next concrete prompt:
 
-- `docs/agent/runs/m98-execution-review-loop-prompt.md` executes and reviews
-  M98.
+- `docs/agent/runs/post-m98-planning-plus-review-prompt.md` runs post-M98
+  planning and review with a lowering focus.

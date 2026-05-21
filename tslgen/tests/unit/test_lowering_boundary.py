@@ -33,6 +33,7 @@ import tslgen.lowering._generation_queries as lowering_generation_queries
 import tslgen.lowering._lowering_inputs as lowering_inputs
 import tslgen.lowering._lowering_completion_manifest as lowering_completion_manifest
 import tslgen.lowering._lowering_completion_gap_inventory as lowering_completion_gap_inventory
+import tslgen.lowering._lowering_stage_assembly as lowering_stage_assembly
 import tslgen.lowering._mini_tsil_lowering as lowering_mini_tsil_lowering
 import tslgen.lowering._operation_package as lowering_operation_package
 import tslgen.lowering._operation_package_diagnostics as lowering_operation_package_diagnostics
@@ -15525,6 +15526,362 @@ class LoweringBoundaryTests(unittest.TestCase):
             )
         }
         self.assertLessEqual(line_counts["boundary.py"], 1300)
+        self.assertLessEqual(line_counts["_operation_package_sources.py"], 819)
+        self.assertLess(line_counts["_lowering_completion_manifest.py"], 1000)
+        self.assertLess(line_counts["_lowering_completion_gap_inventory.py"], 1000)
+
+    def test_m98_stage_assembly_constructs_boundary_stages_by_parity(
+        self,
+    ) -> None:
+        statement = TsilReturnStatement(
+            TsilBinaryExpression(
+                operator="+",
+                left=TsilParameterReference("left"),
+                right=TsilParameterReference("right"),
+            )
+        )
+        value = GenerationValue(kind="type.size_bytes", value=2, type_tag="si16")
+        predicate = GenerationPredicate(
+            kind="type.size_bytes.equals",
+            literal=2,
+            value=True,
+            type_tag="si16",
+        )
+        branch = PrunedGenerationBranch(
+            condition=TsilTypeSignednessCondition(
+                GenerationTypeRef(kind="base.in", type_tag="si16"),
+            ),
+            selected_branch="true",
+            statement_text="emit_return(left + right);",
+        )
+        handoff = self.assignment_handoff("pg = intrin<svptrue_b16>();")
+        form = recognize_selected_branch_body_assignment_form(handoff).unwrap()
+        body_ir = lower_selected_branch_body_ir(form).unwrap()
+        envelope = lower_selected_body_envelope(body_ir).unwrap()
+        package = lower_lowering_operation_package(
+            statement,
+            candidate_id="candidate-1",
+            source_location=SourceLocation(Path("operation.tsl"), 7, 11),
+        ).unwrap()
+        manifest = lowering_completion_manifest.lower_stage8_lowering_completion_manifest(
+            package,
+        ).unwrap()
+        inventory = lowering_completion_gap_inventory.lower_stage8_lowering_completion_gap_inventory(
+            manifest,
+        ).unwrap()
+
+        recognition = lowering_stage_assembly._recognition_stage(
+            "generation.value",
+            " value<generation>(type::size_byte) ",
+        )
+        self.assertEqual(
+            recognition,
+            GenerationLoweringStage(
+                stage="helper_expression_recognition",
+                output=GenerationExpressionRecognition(
+                    kind="generation.value",
+                    source_text="value<generation>(type::size_byte)",
+                ),
+            ),
+        )
+        cases = (
+            (
+                "_generation_value_stage",
+                lowering_stage_assembly._generation_value_stage(value),
+                "typed_generation_value",
+                value,
+            ),
+            (
+                "_generation_predicate_stage",
+                lowering_stage_assembly._generation_predicate_stage(predicate),
+                "typed_generation_predicate",
+                predicate,
+            ),
+            (
+                "_generation_control_flow_stage",
+                lowering_stage_assembly._generation_control_flow_stage(branch),
+                "generation_control_flow_pruning",
+                branch,
+            ),
+            (
+                "_selected_body_stage",
+                lowering_stage_assembly._selected_body_stage(statement),
+                "selected_body_lowering",
+                statement,
+            ),
+            (
+                "_selected_body_form_recognition_stage",
+                lowering_stage_assembly._selected_body_form_recognition_stage(form),
+                "selected_body_form_recognition",
+                form,
+            ),
+            (
+                "_selected_body_ir_stage",
+                lowering_stage_assembly._selected_body_ir_stage(body_ir),
+                "selected_body_ir_lowering",
+                body_ir,
+            ),
+            (
+                "_selected_body_envelope_stage",
+                lowering_stage_assembly._selected_body_envelope_stage(envelope),
+                "selected_body_envelope_lowering",
+                envelope,
+            ),
+            (
+                "_lowering_operation_package_stage",
+                lowering_stage_assembly._lowering_operation_package_stage(package),
+                "lowering_operation_package",
+                package,
+            ),
+            (
+                "_lowering_completion_manifest_stage",
+                lowering_stage_assembly._lowering_completion_manifest_stage(manifest),
+                "lowering_completion_manifest",
+                manifest,
+            ),
+            (
+                "_lowering_completion_gap_inventory_stage",
+                lowering_stage_assembly._lowering_completion_gap_inventory_stage(
+                    inventory,
+                ),
+                "lowering_completion_gap_inventory",
+                inventory,
+            ),
+        )
+
+        for helper_name, actual, stage_name, output in cases:
+            with self.subTest(helper_name=helper_name):
+                self.assertEqual(
+                    actual,
+                    GenerationLoweringStage(
+                        stage=cast(
+                            lowering_stage_contracts.GenerationLoweringStageName,
+                            stage_name,
+                        ),
+                        output=output,
+                    ),
+                )
+                self.assertIs(actual.output, output)
+                self.assertIn(helper_name, lowering_stage_assembly.__dict__)
+                self.assertNotIn(helper_name, lowering_boundary.__dict__)
+
+    def test_m98_completion_tail_assembly_preserves_mini_tsil_identity(
+        self,
+    ) -> None:
+        result = lower_candidates(self.selection_for("lower_intrin_add"))
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation = result.unwrap().implementations[0]
+        package = implementation.operation_packages[0]
+
+        tail = lowering_stage_assembly._assemble_stage8_completion_tail(
+            implementation.operation_packages,
+            candidate_id=implementation.candidate_id,
+            source_location=package.source_location,
+        )
+
+        self.assertTrue(tail.is_ok, tail.diagnostics)
+        assembled = tail.unwrap()
+        self.assertEqual(
+            tuple(stage.stage for stage in assembled.stages),
+            (
+                "lowering_completion_manifest",
+                "lowering_completion_gap_inventory",
+            ),
+        )
+        self.assertEqual(
+            assembled.lowering_completion_manifests[0].key,
+            implementation.lowering_completion_manifests[0].key,
+        )
+        self.assertEqual(
+            assembled.lowering_completion_gap_inventories[0].key,
+            implementation.lowering_completion_gap_inventories[0].key,
+        )
+        self.assertIs(
+            assembled.lowering_completion_manifests[0].source_packages[0],
+            package,
+        )
+        self.assertIs(
+            assembled.lowering_completion_gap_inventories[0].source_manifest,
+            assembled.lowering_completion_manifests[0],
+        )
+        self.assertIs(
+            assembled.stages[0].output,
+            assembled.lowering_completion_manifests[0],
+        )
+        self.assertIs(
+            assembled.stages[1].output,
+            assembled.lowering_completion_gap_inventories[0],
+        )
+        self.assertIs(implementation.generation_stages[-3].output, package)
+        self.assertIs(
+            implementation.generation_stages[-2].output,
+            implementation.lowering_completion_manifests[0],
+        )
+        self.assertIs(
+            implementation.generation_stages[-1].output,
+            implementation.lowering_completion_gap_inventories[0],
+        )
+
+    def test_m98_completion_tail_assembly_preserves_exact_array_parity(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+        item, envelope = self.size_byte_branch_chain_item_and_envelope("si32")
+        skeleton = self.exact_array_body_skeleton_for_envelope(envelope)
+        result = lower_candidates(
+            selection,
+            LoweringRequest(
+                array_body_envelope_skeletons=(skeleton,),
+                generation_context=GenerationContext(
+                    array_initialization_vector_length_metadata=(
+                        self.vector_length_metadata_for_item(item),
+                    ),
+                    array_initialization_vector_alignment_metadata=(
+                        self.vector_alignment_metadata_for_item(item),
+                    ),
+                ),
+            ),
+        )
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation = result.unwrap().implementations_by_candidate_id[
+            item.candidate_id
+        ]
+
+        tail = lowering_stage_assembly._assemble_stage8_completion_tail(
+            implementation.operation_packages,
+            candidate_id=implementation.candidate_id,
+        )
+
+        self.assertTrue(tail.is_ok, tail.diagnostics)
+        assembled = tail.unwrap()
+        self.assertEqual(
+            assembled.lowering_completion_manifests[0].key,
+            implementation.lowering_completion_manifests[0].key,
+        )
+        self.assertEqual(
+            assembled.lowering_completion_gap_inventories[0].key,
+            implementation.lowering_completion_gap_inventories[0].key,
+        )
+        expected_packages = tuple(
+            sorted(implementation.operation_packages, key=lambda package: package.key)
+        )
+        self.assertEqual(
+            tuple(id(package) for package in assembled.lowering_completion_manifests[0].source_packages),
+            tuple(id(package) for package in expected_packages),
+        )
+        self.assertEqual(
+            assembled.lowering_completion_manifests[0].package_families,
+            (
+                "exact_array_backend_handoff",
+                "selected_body_direct_intrinsic",
+            ),
+        )
+        self.assertEqual(
+            assembled.lowering_completion_gap_inventories[0].inventory_state,
+            "has_unresolved_backend_handoff_dependencies",
+        )
+        self.assertIs(
+            assembled.lowering_completion_gap_inventories[0].gap_records[
+                0
+            ].source_manifest,
+            assembled.lowering_completion_manifests[0],
+        )
+        self.assertEqual(
+            tuple(stage.stage for stage in implementation.generation_stages[-4:]),
+            (
+                "array_backend_handoff_request",
+                "lowering_operation_package",
+                "lowering_completion_manifest",
+                "lowering_completion_gap_inventory",
+            ),
+        )
+
+    def test_m98_stage_assembly_determinism_import_boundary_and_line_counts(
+        self,
+    ) -> None:
+        import tslgen.lowering as lowering_facade
+
+        first = lower_candidates(self.selection_for("lower_intrin_add"))
+        second = lower_candidates(self.selection_for("lower_intrin_add"))
+        self.assertTrue(first.is_ok, first.diagnostics)
+        self.assertTrue(second.is_ok, second.diagnostics)
+        first_impl = first.unwrap().implementations[0]
+        second_impl = second.unwrap().implementations[0]
+        self.assertEqual(first_impl.key, second_impl.key)
+        self.assertEqual(
+            tuple(stage.key for stage in first_impl.generation_stages),
+            tuple(stage.key for stage in second_impl.generation_stages),
+        )
+        self.assertIs(lowering_facade.lower_candidates, lowering_boundary.lower_candidates)
+        self.assertIs(
+            lowering_boundary.GenerationLoweringStage,
+            lowering_stage_contracts.GenerationLoweringStage,
+        )
+
+        tree = ast.parse(inspect.getsource(lowering_stage_assembly))
+        forbidden_exact_modules = {
+            "tslgen.lowering.boundary",
+            "tslgen.lowering",
+        }
+        forbidden_prefixes = (
+            "tslgen.backends",
+            "tslgen.rendering",
+            "tsldata",
+            "frozen",
+        )
+        imported_forbidden: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if (
+                        alias.name in forbidden_exact_modules
+                        or alias.name.startswith(forbidden_prefixes)
+                    ):
+                        imported_forbidden.append(alias.name)
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if module in forbidden_exact_modules or module.startswith(
+                    forbidden_prefixes,
+                ):
+                    imported_forbidden.append(module)
+
+        self.assertEqual(imported_forbidden, [])
+        source = inspect.getsource(lowering_stage_assembly)
+        for forbidden in (
+            "backend_map",
+            "backend_catalog",
+            "value<backend>",
+            "type<backend>",
+            "uninit::array",
+            "Stage9",
+            "renderer",
+            "rendering",
+            "generated output",
+            "registry",
+            "dispatcher",
+            "callback",
+            "fixpoint",
+            "backfeed",
+            "repair",
+            "parse_",
+            "scheduler",
+            "open(",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, source)
+
+        line_counts = {
+            path.name: len(path.read_text(encoding="utf-8").splitlines())
+            for path in (
+                Path(cast(str, lowering_boundary.__file__)),
+                Path(cast(str, lowering_stage_assembly.__file__)),
+                Path(cast(str, lowering_operation_package_sources.__file__)),
+                Path(cast(str, lowering_completion_manifest.__file__)),
+                Path(cast(str, lowering_completion_gap_inventory.__file__)),
+            )
+        }
+        self.assertLessEqual(line_counts["boundary.py"], 1285)
+        self.assertLess(line_counts["_lowering_stage_assembly.py"], 1000)
         self.assertLessEqual(line_counts["_operation_package_sources.py"], 819)
         self.assertLess(line_counts["_lowering_completion_manifest.py"], 1000)
         self.assertLess(line_counts["_lowering_completion_gap_inventory.py"], 1000)
