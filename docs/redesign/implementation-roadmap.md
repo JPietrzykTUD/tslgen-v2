@@ -12996,3 +12996,150 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m96-planning-plus-review-prompt.md` runs post-M96
   planning and review with a lowering focus.
+
+### Milestone 97: Lowering Completion Gap Inventory Slice
+
+Status:
+
+Planned for execution after human acceptance. Post-M96 planning is accepted.
+It selected this milestone, and planner, boundary, extensibility, and
+documentation review returned `Accept With Follow-Ups` after documentation-only
+planning updates.
+
+Goal:
+
+Create one typed Stage 8 lowering-owned gap inventory over accepted M96
+completion manifests. M97 should turn "what is still unresolved for lowering?"
+into an explicit typed artifact without starting backend planning, resolving
+backend values, repairing source bodies, or inferring broad body semantics.
+
+For M97, a "gap" means only a lowering-observed deferred or unsupported fact
+visible from accepted M96 manifest facts. The initial supported gap is the
+accepted unresolved backend-handoff dependency record preserved by M96. A
+manifest without such records produces a deterministic no-known-gap inventory.
+
+Scope:
+
+- Add focused private lowering ownership, such as
+  `_lowering_completion_gap_inventory.py`, for gap-inventory models,
+  diagnostics, validation, and assembly.
+- Consume accepted `Stage8LoweringCompletionManifestIr` values,
+  `lowering_completion_manifest` stages, or a narrow one-manifest container.
+- Preserve source manifest, package record, package object, unresolved
+  dependency record, and source dependency request object identity.
+- Produce a deterministic typed inventory value, such as
+  `Stage8LoweringCompletionGapInventoryIr`, with candidate identity,
+  source-location provenance, inventory state, stable keys, and explicit
+  gap records.
+- Add one deterministic Stage 8 stage, such as
+  `lowering_completion_gap_inventory`, after accepted
+  `lowering_completion_manifest` facts if the implementation can preserve
+  `boundary.py` at or below the 1,300-line guardrail. If integration would
+  force growth, perform a behavior-preserving extraction first or keep M97
+  module-only and record the stage integration as a follow-up.
+- Keep `_operation_package_sources.py` unchanged. M97 consumes M96 manifests;
+  it must not add another operation-package source family or source router
+  branch.
+
+Out of scope:
+
+- Backend translation, backend map/catalog reads, backend-uninit resolution,
+  backend support decisions, Stage 9 backend planning, operation scheduling,
+  primitive dependency closure, dependency solving, renderer-ready IR,
+  rendering, generated output, generated tests, CLI/report/writer behavior,
+  compiler execution, or Rust.
+- New operation-package source families, package-family registries, semantic
+  dispatchers, callback maps, plugin systems, hidden recursive backfeeds,
+  fixpoint machinery, dependency-closure graphs, or operation DAGs.
+- Re-entering raw M86 statements, M92 handoff assembly, M63 envelopes, M90/M89/
+  M72/M67 provenance chains, raw body text, source-body repair, broad TSIL/body
+  parsing, direct-intrinsic/SVE semantics, byte-size-to-token inference,
+  declaration/array/store/return/body semantics, or broad
+  `value<backend>(...)` evaluation.
+
+Required input:
+
+- Accepted M96 `Stage8LoweringCompletionManifestIr` behavior, diagnostics,
+  object-identity preservation, deterministic keys, and private-module import
+  boundary.
+- Accepted M96 unresolved dependency manifest records for M92/M90 backend
+  handoff provenance.
+- Current line-count pressure points: `boundary.py` at 1,300 lines and
+  `_operation_package_sources.py` at 819 lines.
+
+Expected outputs:
+
+- A typed Stage 8 lowering completion gap inventory per accepted manifest.
+- A no-known-gap inventory state for manifests without explicit unresolved
+  dependency records.
+- Gap records for accepted unresolved backend-handoff dependencies that
+  preserve M96 object references without resolving them.
+- Diagnostics for unsupported sources, missing manifests, multiple manifests,
+  wrong stage/order, malformed manifests, candidate/source-location mismatch,
+  and copied/equal-but-not-identical manifest/package/dependency records.
+- Import-boundary and line-count guardrails proving the new private module does
+  not become a replacement monolith and the pressure-point modules do not grow.
+
+Tests required:
+
+- Positive tests for gap inventories over accepted M96 manifests produced from
+  mini-TSIL, selected-body direct-intrinsic, exact-array backend-handoff, and
+  mixed package sets.
+- Tests proving exact-array inventory records preserve unresolved dependency
+  record and dependency request object identity from M96.
+- Tests for no-known-gap inventories where a manifest has no unresolved
+  dependencies.
+- Determinism tests for repeated inventory construction, inventory keys, and
+  reordered inputs.
+- Pipeline/stage tests proving `lowering_completion_gap_inventory` follows
+  `lowering_completion_manifest` when stage integration is implemented.
+- Negative diagnostics for unsupported source, empty/missing manifests,
+  multiple manifests, wrong stage, malformed manifest, candidate/source-location
+  mismatch, and copied/equal-but-not-identical records.
+- Import-boundary and forbidden-behavior tests proving no imports of
+  `boundary.py`, the `tslgen.lowering` package facade, backend modules,
+  renderers, `tsldata`, or `frozen`, and no backend maps/catalog reads,
+  rendering/output, source repair, raw body parsing, registries, dispatchers,
+  schedulers, hidden backfeeds, or fixpoint behavior.
+- Line-count tests requiring `boundary.py <= 1300`,
+  `_operation_package_sources.py <= 819`, and the new gap-inventory module
+  below the module-size guardrail.
+
+Validation commands:
+
+- `wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_operation_package_sources.py tslgen/src/tslgen/lowering/_lowering_completion_manifest.py tslgen/src/tslgen/lowering/_lowering_completion_gap_inventory.py`
+- `PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_lowering_completion_manifest.py tslgen/src/tslgen/lowering/_lowering_completion_gap_inventory.py`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m97 or completion_gap_inventory or completion_manifest"`
+- `PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py`
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
+- `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
+- `git diff --check`
+
+Review risks:
+
+- Treating a gap inventory as backend readiness, renderer readiness,
+  dependency closure, operation scheduling, or semantic body completion.
+- Letting "other accepted lowering facts" become a broad source protocol
+  instead of an explicit allowlist reachable through M96 manifest object
+  references.
+- Growing `boundary.py`, `_operation_package_sources.py`, or
+  `_lowering_completion_manifest.py` instead of using focused gap-inventory
+  ownership.
+- Introducing backend maps/catalog reads, source repair, raw body parsing,
+  registries, dispatchers, backfeeds, fixpoint behavior, or hardwiring under
+  the name "inventory".
+
+Planning follow-ups:
+
+- The M97 execution prompt must explicitly require the `boundary.py <= 1300`
+  and `_operation_package_sources.py <= 819` guardrails.
+- The executor should keep M97 source narrowing limited to an explicit M96
+  manifest allowlist and must not add `_operation_package_sources.py` behavior.
+- If stage integration cannot preserve the guardrails, the executor must
+  perform a behavior-preserving extraction first or keep M97 module-only and
+  report stage integration as a follow-up.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m96-acceptance-finalization-prompt.md` records human
+  acceptance before M97 execution.

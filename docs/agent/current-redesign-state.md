@@ -960,39 +960,54 @@ full lowering-boundary pytest `343 passed`, lowering mypy
 corpus probes `3 passed`, unittest discovery `677` tests OK, compileall OK,
 ruff OK, mypy OK across `140` source files, and diff-check OK.
 
+Post-M96 planning is accepted. It selected
+`Milestone 97: Lowering Completion Gap Inventory Slice`, and internal planner,
+boundary, extensibility, and documentation review returned
+`Accept With Follow-Ups` after documentation-only planning updates. The
+selected plan creates a typed Stage 8 lowering-owned gap inventory over
+accepted M96 completion manifests. M97 records only lowering-observed gaps
+visible from accepted manifest facts: initially accepted unresolved
+backend-handoff dependency records, plus a deterministic no-known-gap state for
+manifests without unresolved dependencies. It must not infer semantic body
+completion, backend readiness, renderer readiness, operation scheduling,
+dependency closure, or output readiness.
+
+Human acceptance for post-M96 planning was recorded, and M97 execution became
+the active workflow action.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M96 planning and review.
+Execute Milestone 97.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m96-planning-plus-review-prompt.md
+docs/agent/runs/m97-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. Planning only.
+Milestone 97: Lowering Completion Gap Inventory Slice
 ```
 
 Latest review verdict:
 
 ```text
-M96 execution-review returned Accept With Follow-Ups after one focused
-identity/provenance revision.
+Post-M96 planning/review returned Accept With Follow-Ups after
+documentation-only planning updates. Human acceptance was recorded.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M96 planning-plus-review prompt. Use read-only planning
-and audit subagents. Do not implement code unless the active prompt explicitly
-selects an executor task.
+Run the active M97 execution-review loop prompt. Use exactly one write-capable
+executor followed by read-only review/audit subagents. Do not start post-M97
+planning until M97 review returns Accept or Accept With Follow-Ups.
 ```
 
 Accepted planning prompt:
@@ -1853,10 +1868,22 @@ Completed M96 execution-review loop prompt:
 docs/agent/runs/m96-execution-review-loop-prompt.md
 ```
 
-Active post-M96 planning-plus-review prompt:
+Completed post-M96 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m96-planning-plus-review-prompt.md
+```
+
+Completed post-M96 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m96-acceptance-finalization-prompt.md
+```
+
+Active M97 execution-review loop prompt:
+
+```text
+docs/agent/runs/m97-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2810,6 +2837,30 @@ docs/agent/runs/post-m96-planning-plus-review-prompt.md
   TSIL/body parsing, direct-intrinsic/SVE semantics, byte-size-to-token
   inference, registries, dispatchers, hidden backfeeds, fixpoint machinery,
   Rust, CLI/report/writer, compiler execution, or hardwiring.
+- M97 is selected for execution as Stage 8 lowering gap-inventory work only.
+  It must consume accepted M96 `Stage8LoweringCompletionManifestIr`
+  values, `lowering_completion_manifest` stages, or a narrow one-manifest
+  container.
+- M97 "gap" means a lowering-observed deferred or unsupported fact visible
+  from accepted M96 manifest facts only. The first supported gap category is
+  accepted unresolved backend-handoff dependency records; manifests without
+  such records produce a deterministic no-known-gap state.
+- M97 must preserve source manifest, package record, package object,
+  unresolved dependency record, and source dependency request object identity.
+- M97 must keep ownership in a focused private gap-inventory module and must
+  not grow `_operation_package_sources.py`. If stage integration would grow
+  `boundary.py` beyond 1,300 lines, the executor must first extract existing
+  coordination or keep M97 module-only and record stage integration as a
+  follow-up.
+- M97 must not infer semantic body completion, backend readiness, renderer
+  readiness, dependency closure, operation scheduling, backend support,
+  backend value resolution, or output readiness.
+- M97 must not add backend translation, backend map/catalog reads,
+  backend-uninit resolution, Stage 9 backend planning, operation scheduling,
+  primitive dependency closure, dependency solving, renderer-ready IR,
+  rendering, generated output, source repair, raw body parsing, registries,
+  dispatchers, hidden backfeeds, fixpoint machinery, Rust, CLI/report/writer,
+  compiler execution, or hardwiring.
 - Future lowering package decomposition must preserve accepted M57-M95
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -4092,11 +4143,21 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M96 execution follow-up: if the Stage 8 manifest becomes public API later,
   add explicit facade/export stability tests. It is currently a private
   lowering module with stage-contract integration.
+- Post-M96 planning follow-up for M97 execution: explicitly require
+  `boundary.py <= 1300`, `_operation_package_sources.py <= 819`, and no
+  `_operation_package_sources.py` edits.
+- Post-M96 planning follow-up for M97 execution: source narrowing must be an
+  explicit M96 manifest allowlist, not a broad source protocol.
+- Post-M96 planning follow-up for M97 execution: if
+  `lowering_completion_gap_inventory` stage integration cannot preserve the
+  line-count guardrails, the executor must perform a behavior-preserving
+  extraction first or keep M97 module-only and report stage integration as a
+  follow-up.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run post-M96 planning
-through the active post-M96 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M97 through the
+active M97 execution-review loop prompt.
 
 ## Validation Expectations
 
@@ -4144,6 +4205,14 @@ corpus probes `3 passed`, unittest discovery `Ran 677 tests ... OK`,
 compileall OK, ruff `All checks passed!`, mypy
 `Success: no issues found in 140 source files`, and diff-check OK. Standalone
 `git diff --check` returned exit 0 with no output.
+
+For post-M96 planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
 
 For post-M90 planning, validation completed with:
 

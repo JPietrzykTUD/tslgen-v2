@@ -1383,6 +1383,12 @@ lowering completion manifest:
   scheduling, dependency solving, Stage 9 backend planning, renderer-ready IR,
   generated output, package-family registries, semantic dispatchers, hidden
   backfeeds, and fixpoint behavior remain deferred.
+- Planned M97 may summarize accepted M96 manifest facts as a deterministic
+  lowering-side gap inventory only. The first supported gap category is
+  accepted unresolved backend-handoff dependency records, and manifests without
+  such records produce a no-known-gap inventory state. M97 must not infer
+  semantic body completion, backend readiness, renderer readiness, dependency
+  closure, operation scheduling, backend value resolution, or output readiness.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only

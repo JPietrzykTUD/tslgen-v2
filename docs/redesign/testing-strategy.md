@@ -1237,6 +1237,21 @@ Recommended first parity checks:
   validation success with corpus probes `3 passed`, unit discovery `677` tests
   OK, compileall OK, ruff OK, mypy OK across 140 source files, and diff-check
   OK.
+- Planned M97 coverage must prove a Stage 8 lowering completion gap inventory
+  over accepted M96 manifest facts only. Tests should cover inventories for
+  mini-TSIL, selected-body, exact-array, and mixed M96 manifests;
+  no-known-gap state for manifests without unresolved dependencies; exact-array
+  unresolved dependency gap records that preserve M96 object identity;
+  deterministic keys/order; stage placement after `lowering_completion_manifest`
+  if stage integration is implemented; diagnostics for unsupported source,
+  missing/multiple manifests, wrong stage, malformed manifest,
+  candidate/source-location mismatch, and copied/equal-but-not-identical
+  records; import and line-count guardrails for `boundary.py`,
+  `_operation_package_sources.py`, and the new gap-inventory module; and
+  negative assertions that M97 introduces no Stage 9 planning, backend
+  map/catalog reads, backend-value resolution, renderer-ready IR, rendering,
+  generated output, source repair, registry, dispatcher, scheduler, hidden
+  backfeed, or fixpoint behavior.
 
 Deferred parity checks:
 

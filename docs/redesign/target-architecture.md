@@ -698,14 +698,27 @@ Current roadmap note:
   keep one-way imports, preserve the accepted M93 public facade, and avoid
   becoming broad source protocols, registries, dispatchers, backend-planning
   hooks, renderer hooks, or replacement monoliths.
-- Post-M94 planning selects M95 as a focused package-family growth test over
-  accepted M63/M62 selected-body direct-intrinsic facts. The architecture
-  should add selected-body package ownership in a family-specific private
-  module rather than expanding `_operation_package_sources.py` into a generic
-  source protocol, registry, dispatcher, or callback map. The package records
-  typed provenance only and must not infer SVE/direct-intrinsic semantics,
+- M95 is accepted as a focused package-family growth test over accepted
+  M63/M62 selected-body direct-intrinsic facts. The architecture adds
+  selected-body package ownership in a family-specific private module rather
+  than expanding `_operation_package_sources.py` into a generic source
+  protocol, registry, dispatcher, or callback map. The package records typed
+  provenance only and must not infer SVE/direct-intrinsic semantics,
   byte-size-to-token mappings, backend support, renderer-ready IR, source
   repairs, hidden backfeeds, or fixpoint behavior.
+- M96 is accepted as a Stage 8 lowering completion manifest over accepted
+  operation packages and unresolved backend-handoff dependency references.
+  The architecture keeps manifest ownership in a focused private module and
+  treats completion/readiness as lowering package/provenance assembly only, not
+  backend readiness, semantic body completion, renderer readiness, or output
+  readiness.
+- Post-M96 planning selects M97 as a Stage 8 lowering completion gap inventory.
+  The architecture should keep gap-inventory ownership in a focused private
+  module over accepted M96 manifests, preserve object identity, and record only
+  lowering-observed gaps such as unresolved backend-handoff dependency records.
+  It must not become backend planning, dependency closure, operation
+  scheduling, renderer-ready IR, source repair, broad body semantics, or a
+  registry/dispatcher/backfeed/fixpoint mechanism.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

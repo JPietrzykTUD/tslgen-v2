@@ -807,6 +807,17 @@ backend maps/catalogs, create Stage 9 plans, produce renderer-ready IR, render
 output, infer body/SVE/direct-intrinsic semantics, repair source text, or add
 new package families.
 
+Post-M96 planning selects M97 as a Stage 8 lowering completion gap inventory
+slice. The planned inventory consumes accepted M96 manifests and records only
+lowering-observed gaps visible from those manifest facts: initially accepted
+unresolved backend-handoff dependency records, plus a deterministic
+no-known-gap inventory state for manifests without unresolved dependencies.
+If implemented as a stage, `lowering_completion_gap_inventory` follows
+`lowering_completion_manifest`. It is still lowering-owned provenance/
+inventory data, not backend readiness, semantic body completion, dependency
+closure, operation scheduling, renderer-ready IR, generated output, a package
+registry, source dispatcher, hidden backfeed, or fixpoint coordinator.
+
 ## Stage 9: Backend Planning
 
 Inputs:

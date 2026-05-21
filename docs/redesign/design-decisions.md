@@ -1682,6 +1682,16 @@ Consequences:
   backend plan, operation schedule, dependency closure, renderer IR, wrapper
   plan, artifact plan, package registry, source-family dispatcher, hidden
   backfeed, fixpoint mechanism, source repair path, or semantic unifier.
+- Post-M96 planning selects M97 as a Stage 8 lowering completion gap inventory
+  boundary. The decision is to make unresolved lowering-side gaps explicit
+  from accepted M96 manifest facts before attempting backend planning or
+  output work. The first supported gap category is accepted unresolved
+  backend-handoff dependency records; manifests without those records produce
+  a deterministic no-known-gap inventory. M97 must preserve M96 object
+  identity, keep ownership in a focused private gap-inventory module, avoid
+  growing `boundary.py` or `_operation_package_sources.py`, and must not infer
+  backend readiness, semantic body completion, operation schedules, dependency
+  closure, renderer readiness, or source repairs.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.
