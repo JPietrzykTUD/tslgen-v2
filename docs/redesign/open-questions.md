@@ -1402,13 +1402,13 @@ still leaves semantic body completion, backend-uninit resolution, backend
 maps, backend support decisions, operation scheduling, dependency closure,
 Stage 9 backend planning, renderer-ready body IR, generated output, broad body
 semantics, and broad `value<backend>(...)` evaluation open.
-Post-M96 planning selects M97 to make the remaining lowering-observed gap
-surface explicit without resolving those open questions. The planned inventory
-may record accepted unresolved backend-handoff dependency records from M96 and
-no-known-gap states, but it still leaves backend-uninit resolution, backend
-maps, backend support decisions, operation scheduling, dependency closure,
-Stage 9 backend planning, renderer-ready body IR, generated output, broad body
-semantics, and broad `value<backend>(...)` evaluation open.
+M97 makes the remaining lowering-observed gap surface explicit without
+resolving those open questions. The accepted inventory records accepted
+unresolved backend-handoff dependency records from M96 and no-known-gap states,
+but it still leaves backend-uninit resolution, backend maps, backend support
+decisions, operation scheduling, dependency closure, Stage 9 backend planning,
+renderer-ready body IR, generated output, broad body semantics, and broad
+`value<backend>(...)` evaluation open.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1447,9 +1447,9 @@ lowering completion-package handoff, plus accepted M91 exact array pipeline
 ownership consolidation, accepted M92 exact array backend-handoff request,
 accepted M93 lowering operation-package boundary, accepted M94
 operation-package ownership split, accepted M95 selected-body
-direct-intrinsic operation package, and accepted M96 lowering completion
-manifest, plus planned M97 lowering completion gap inventory, while body-slot
-semantics beyond those exact structural/request/inventory/package/manifest/gap
+direct-intrinsic operation package, accepted M96 lowering completion manifest,
+and accepted M97 lowering completion gap inventory, while body-slot semantics
+beyond those exact structural/request/inventory/package/manifest/gap
 boundaries, including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
 `algo`, Rust output, generated tests beyond the selected M49 source fixture,

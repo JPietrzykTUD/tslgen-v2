@@ -33,6 +33,9 @@ from tslgen.lowering._operation_package import LoweringOperationPackageIr
 from tslgen.lowering._lowering_completion_manifest import (
     Stage8LoweringCompletionManifestIr,
 )
+from tslgen.lowering._lowering_completion_gap_inventory import (
+    Stage8LoweringCompletionGapInventoryIr,
+)
 from tslgen.lowering._generation_models import (
     GenerationExpressionRecognition,
     GenerationPredicate,
@@ -79,6 +82,7 @@ type GenerationLoweringStageName = Literal[
     "array_backend_handoff_request",
     "lowering_operation_package",
     "lowering_completion_manifest",
+    "lowering_completion_gap_inventory",
 ]
 type TsilBinaryOperator = Literal["+"]
 
@@ -178,6 +182,7 @@ type GenerationLoweringStageOutput = (
     | ExactArrayBackendHandoffRequestIr
     | LoweringOperationPackageIr
     | Stage8LoweringCompletionManifestIr
+    | Stage8LoweringCompletionGapInventoryIr
     | TsilStatement
 )
 
@@ -314,6 +319,10 @@ _GENERATION_LOWERING_STAGE_OUTPUT_CONTRACTS: tuple[
     GenerationLoweringStageOutputContract(
         "lowering_completion_manifest",
         (Stage8LoweringCompletionManifestIr,),
+    ),
+    GenerationLoweringStageOutputContract(
+        "lowering_completion_gap_inventory",
+        (Stage8LoweringCompletionGapInventoryIr,),
     ),
 )
 _GENERATION_LOWERING_STAGE_OUTPUT_CONTRACT_BY_STAGE: dict[

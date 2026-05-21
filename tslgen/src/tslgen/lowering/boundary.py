@@ -33,6 +33,7 @@ import tslgen.lowering._array_body_sources as _array_body_sources
 import tslgen.lowering._array_body_validation as _array_body_validation  # noqa: F401
 import tslgen.lowering._lowering_inputs as _lowering_inputs
 import tslgen.lowering._lowering_completion_manifest as _lowering_completion_manifest
+import tslgen.lowering._lowering_completion_gap_inventory as _lowering_completion_gap_inventory
 import tslgen.lowering._mini_tsil_lowering as _mini_tsil_lowering
 import tslgen.lowering._operation_package as _operation_package
 import tslgen.lowering._return_emission as _return_emission
@@ -414,6 +415,7 @@ class LoweredImplementation:
     ] = ()
     operation_packages: tuple[LoweringOperationPackageIr, ...] = ()
     lowering_completion_manifests: tuple[_lowering_completion_manifest.Stage8LoweringCompletionManifestIr, ...] = ()
+    lowering_completion_gap_inventories: tuple[_lowering_completion_gap_inventory.Stage8LoweringCompletionGapInventoryIr, ...] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -547,6 +549,7 @@ class LoweredImplementation:
         )
         object.__setattr__(self, "operation_packages", tuple(self.operation_packages))
         object.__setattr__(self, "lowering_completion_manifests", tuple(self.lowering_completion_manifests))
+        object.__setattr__(self, "lowering_completion_gap_inventories", tuple(self.lowering_completion_gap_inventories))
         object.__setattr__(
             self,
             "generation_stages",
@@ -630,6 +633,7 @@ class LoweredImplementation:
             tuple(request.key for request in self.array_backend_handoff_requests),
             tuple(package.key for package in self.operation_packages),
             tuple(manifest.key for manifest in self.lowering_completion_manifests),
+            tuple(inventory.key for inventory in self.lowering_completion_gap_inventories),
             tuple(stage.key for stage in self.generation_stages),
         )
 
@@ -871,69 +875,32 @@ def _recognition_stage(
 def _generation_value_stage(value: GenerationValue) -> GenerationLoweringStage:
     return GenerationLoweringStage(stage="typed_generation_value", output=value)
 
+def _generation_predicate_stage(predicate: GenerationPredicate) -> GenerationLoweringStage:
+    return GenerationLoweringStage(stage="typed_generation_predicate", output=predicate)
 
-def _generation_predicate_stage(
-    predicate: GenerationPredicate,
-) -> GenerationLoweringStage:
-    return GenerationLoweringStage(
-        stage="typed_generation_predicate",
-        output=predicate,
-    )
+def _generation_control_flow_stage(branch: PrunedGenerationBranch | GenerationSizeByteBranchChainPruning) -> GenerationLoweringStage:
+    return GenerationLoweringStage(stage="generation_control_flow_pruning", output=branch)
 
-
-def _generation_control_flow_stage(
-    branch: PrunedGenerationBranch | GenerationSizeByteBranchChainPruning,
-) -> GenerationLoweringStage:
-    return GenerationLoweringStage(
-        stage="generation_control_flow_pruning",
-        output=branch,
-    )
-
-
-def _selected_body_stage(
-    output: TsilStatement | GenerationSelectedBranchBodyHandoff,
-) -> GenerationLoweringStage:
+def _selected_body_stage(output: TsilStatement | GenerationSelectedBranchBodyHandoff) -> GenerationLoweringStage:
     return GenerationLoweringStage(stage="selected_body_lowering", output=output)
 
-
-def _lowering_operation_package_stage(
-    output: LoweringOperationPackageIr,
-) -> GenerationLoweringStage:
+def _lowering_operation_package_stage(output: LoweringOperationPackageIr) -> GenerationLoweringStage:
     return GenerationLoweringStage(stage="lowering_operation_package", output=output)
 
-
-def _lowering_completion_manifest_stage(
-    output: _lowering_completion_manifest.Stage8LoweringCompletionManifestIr,
-) -> GenerationLoweringStage:
+def _lowering_completion_manifest_stage(output: _lowering_completion_manifest.Stage8LoweringCompletionManifestIr) -> GenerationLoweringStage:
     return GenerationLoweringStage(stage="lowering_completion_manifest", output=output)
 
+def _lowering_completion_gap_inventory_stage(output: _lowering_completion_gap_inventory.Stage8LoweringCompletionGapInventoryIr) -> GenerationLoweringStage:
+    return GenerationLoweringStage(stage="lowering_completion_gap_inventory", output=output)
 
-def _selected_body_form_recognition_stage(
-    output: GenerationSelectedBranchBodyAssignmentRecognition,
-) -> GenerationLoweringStage:
-    return GenerationLoweringStage(
-        stage="selected_body_form_recognition",
-        output=output,
-    )
+def _selected_body_form_recognition_stage(output: GenerationSelectedBranchBodyAssignmentRecognition) -> GenerationLoweringStage:
+    return GenerationLoweringStage(stage="selected_body_form_recognition", output=output)
 
+def _selected_body_ir_stage(output: GenerationSelectedBranchBodyIr) -> GenerationLoweringStage:
+    return GenerationLoweringStage(stage="selected_body_ir_lowering", output=output)
 
-def _selected_body_ir_stage(
-    output: GenerationSelectedBranchBodyIr,
-) -> GenerationLoweringStage:
-    return GenerationLoweringStage(
-        stage="selected_body_ir_lowering",
-        output=output,
-    )
-
-
-def _selected_body_envelope_stage(
-    output: GenerationSelectedBodyEnvelopeIr,
-) -> GenerationLoweringStage:
-    return GenerationLoweringStage(
-        stage="selected_body_envelope_lowering",
-        output=output,
-    )
-
+def _selected_body_envelope_stage(output: GenerationSelectedBodyEnvelopeIr) -> GenerationLoweringStage:
+    return GenerationLoweringStage(stage="selected_body_envelope_lowering", output=output)
 
 def _lower_input(
     item: LoweringInput,
@@ -1070,6 +1037,7 @@ def _lower_input(
                 *array_initialization_pipeline.operation_packages,
             )
             manifests: tuple[_lowering_completion_manifest.Stage8LoweringCompletionManifestIr, ...] = ()
+            inventories: tuple[_lowering_completion_gap_inventory.Stage8LoweringCompletionGapInventoryIr, ...] = ()
             if operation_packages:
                 manifest_result = (
                     _lowering_completion_manifest.lower_stage8_lowering_completion_manifest(
@@ -1080,9 +1048,18 @@ def _lower_input(
                 if not manifest_result.is_ok:
                     return Result.failure(manifest_result.diagnostics)
                 manifests = (manifest_result.unwrap(),)
+                inventory_result = _lowering_completion_gap_inventory.lower_stage8_lowering_completion_gap_inventory(manifests[0])
+                if not inventory_result.is_ok:
+                    return Result.failure(inventory_result.diagnostics)
+                inventories = (inventory_result.unwrap(),)
             manifest_stages = (
                 (_lowering_completion_manifest_stage(manifests[0]),)
                 if manifests
+                else ()
+            )
+            inventory_stages = (
+                (_lowering_completion_gap_inventory_stage(inventories[0]),)
+                if inventories
                 else ()
             )
             return Result.ok(
@@ -1147,6 +1124,7 @@ def _lower_input(
                     ),
                     operation_packages=operation_packages,
                     lowering_completion_manifests=manifests,
+                    lowering_completion_gap_inventories=inventories,
                     generation_stages=(
                         _recognition_stage(
                             "generation.control_flow",
@@ -1170,6 +1148,7 @@ def _lower_input(
                         *selected_body_operation_package_stages,
                         *array_initialization_pipeline.stages,
                         *manifest_stages,
+                        *inventory_stages,
                     ),
                 )
             )
@@ -1207,6 +1186,10 @@ def _lower_input(
     if not manifest_result.is_ok:
         return Result.failure(manifest_result.diagnostics)
     manifest = manifest_result.unwrap()
+    inventory_result = _lowering_completion_gap_inventory.lower_stage8_lowering_completion_gap_inventory(manifest)
+    if not inventory_result.is_ok:
+        return Result.failure(inventory_result.diagnostics)
+    inventory = inventory_result.unwrap()
 
     return Result.ok(
         LoweredImplementation(
@@ -1216,11 +1199,13 @@ def _lower_input(
             generation_branches=generation_branches,
             operation_packages=(operation_package,),
             lowering_completion_manifests=(manifest,),
+            lowering_completion_gap_inventories=(inventory,),
             generation_stages=(
                 *generation_stages,
                 _selected_body_stage(lowered_statement),
                 _lowering_operation_package_stage(operation_package),
                 _lowering_completion_manifest_stage(manifest),
+                _lowering_completion_gap_inventory_stage(inventory),
             ),
         )
     )

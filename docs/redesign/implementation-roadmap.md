@@ -13001,10 +13001,11 @@ Next concrete prompt:
 
 Status:
 
-Planned for execution after human acceptance. Post-M96 planning is accepted.
-It selected this milestone, and planner, boundary, extensibility, and
-documentation review returned `Accept With Follow-Ups` after documentation-only
-planning updates.
+Accepted. The M97 execution-review loop returned `Accept With Follow-Ups`
+after focused test-only revisions. It implemented the selected Stage 8
+lowering completion gap inventory and integrated the
+`lowering_completion_gap_inventory` stage after
+`lowering_completion_manifest` while preserving the line-count guardrails.
 
 Goal:
 
@@ -13020,8 +13021,8 @@ manifest without such records produces a deterministic no-known-gap inventory.
 
 Scope:
 
-- Add focused private lowering ownership, such as
-  `_lowering_completion_gap_inventory.py`, for gap-inventory models,
+- Add focused private lowering ownership in
+  `_lowering_completion_gap_inventory.py` for gap-inventory models,
   diagnostics, validation, and assembly.
 - Consume accepted `Stage8LoweringCompletionManifestIr` values,
   `lowering_completion_manifest` stages, or a narrow one-manifest container.
@@ -13031,12 +13032,10 @@ Scope:
   `Stage8LoweringCompletionGapInventoryIr`, with candidate identity,
   source-location provenance, inventory state, stable keys, and explicit
   gap records.
-- Add one deterministic Stage 8 stage, such as
+- Add one deterministic Stage 8 stage,
   `lowering_completion_gap_inventory`, after accepted
-  `lowering_completion_manifest` facts if the implementation can preserve
-  `boundary.py` at or below the 1,300-line guardrail. If integration would
-  force growth, perform a behavior-preserving extraction first or keep M97
-  module-only and record the stage integration as a follow-up.
+  `lowering_completion_manifest` facts while preserving `boundary.py` at or
+  below the 1,300-line guardrail.
 - Keep `_operation_package_sources.py` unchanged. M97 consumes M96 manifests;
   it must not add another operation-package source family or source router
   branch.
@@ -13064,8 +13063,8 @@ Required input:
   boundary.
 - Accepted M96 unresolved dependency manifest records for M92/M90 backend
   handoff provenance.
-- Current line-count pressure points: `boundary.py` at 1,300 lines and
-  `_operation_package_sources.py` at 819 lines.
+- Current line-count pressure points before M97: `boundary.py` at 1,300 lines
+  and `_operation_package_sources.py` at 819 lines.
 
 Expected outputs:
 
@@ -13115,6 +13114,22 @@ Validation commands:
 - `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
 - `git diff --check`
 
+Validation result:
+
+- Line counts: `boundary.py` 1,285, `_operation_package_sources.py` 819,
+  `_lowering_completion_manifest.py` 776, and
+  `_lowering_completion_gap_inventory.py` 564.
+- Required py-compile returned exit 0 with no output.
+- Focused M97/manifest/gap-inventory pytest returned
+  `14 passed, 334 deselected`.
+- Full lowering-boundary pytest returned `348 passed`.
+- Focused lowering mypy returned
+  `Success: no issues found in 37 source files`.
+- Full tooling validation returned exit 0 with corpus probes `3 passed`,
+  unit discovery `682` tests OK, compileall OK, ruff OK, mypy
+  `Success: no issues found in 141 source files`, and diff-check OK.
+- Standalone final `git diff --check` returned exit 0 with no output.
+
 Review risks:
 
 - Treating a gap inventory as backend readiness, renderer readiness,
@@ -13129,17 +13144,14 @@ Review risks:
   registries, dispatchers, backfeeds, fixpoint behavior, or hardwiring under
   the name "inventory".
 
-Planning follow-ups:
+Execution follow-ups:
 
-- The M97 execution prompt must explicitly require the `boundary.py <= 1300`
-  and `_operation_package_sources.py <= 819` guardrails.
-- The executor should keep M97 source narrowing limited to an explicit M96
-  manifest allowlist and must not add `_operation_package_sources.py` behavior.
-- If stage integration cannot preserve the guardrails, the executor must
-  perform a behavior-preserving extraction first or keep M97 module-only and
-  report stage integration as a follow-up.
+- `boundary.py` remains near the 1,300-line guardrail and stayed below it
+  partly through compressed stage-helper coordination. The next lowering slice
+  should extract coordination/stage helper ownership before adding more state
+  there.
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m96-acceptance-finalization-prompt.md` records human
-  acceptance before M97 execution.
+- `docs/agent/runs/post-m97-planning-plus-review-prompt.md` runs post-M97
+  planning and review with a lowering focus.

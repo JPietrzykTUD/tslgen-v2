@@ -712,11 +712,11 @@ Current roadmap note:
   treats completion/readiness as lowering package/provenance assembly only, not
   backend readiness, semantic body completion, renderer readiness, or output
   readiness.
-- Post-M96 planning selects M97 as a Stage 8 lowering completion gap inventory.
-  The architecture should keep gap-inventory ownership in a focused private
-  module over accepted M96 manifests, preserve object identity, and record only
+- M97 is accepted as a Stage 8 lowering completion gap inventory. The
+  architecture keeps gap-inventory ownership in a focused private module over
+  accepted M96 manifests, preserves object identity, and records only
   lowering-observed gaps such as unresolved backend-handoff dependency records.
-  It must not become backend planning, dependency closure, operation
+  It does not become backend planning, dependency closure, operation
   scheduling, renderer-ready IR, source repair, broad body semantics, or a
   registry/dispatcher/backfeed/fixpoint mechanism.
 - Milestone 49 is accepted as the test-source rendering slice. It
