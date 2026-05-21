@@ -131,6 +131,7 @@ from tslgen.lowering._operation_package import (
     LoweringOperationPackageIr as LoweringOperationPackageIr,
     LoweringOperationPackageSourceFamily as LoweringOperationPackageSourceFamily,
     MiniTsilLeafReturnOperationPackageEntryIr as MiniTsilLeafReturnOperationPackageEntryIr,
+    SelectedBodyDirectIntrinsicOperationPackageEntryIr as SelectedBodyDirectIntrinsicOperationPackageEntryIr,
 )
 from tslgen.lowering._stage_contracts import (
     GenerationLoweringStage,
@@ -179,8 +180,6 @@ _STAGE_CONTRACT_FACADE_EXPORTS = (
     TsilReturnStatement,
     TsilStatement,
 )
-
-
 
 _ArrayBodyEnvelopeSkeletonLookup = _array_body_pipeline._ArrayBodyEnvelopeSkeletonLookup
 _ExactArrayInitializationStagePipelineResult = _array_body_pipeline._ExactArrayInitializationStagePipelineResult
@@ -1062,6 +1061,25 @@ def _lower_input(
                 return Result.failure(envelope_result.diagnostics)
             envelope = envelope_result.unwrap()
             envelope_stage = _selected_body_envelope_stage(envelope)
+            selected_body_operation_packages: tuple[
+                LoweringOperationPackageIr,
+                ...
+            ] = ()
+            selected_body_operation_package_stages: tuple[
+                GenerationLoweringStage,
+                ...
+            ] = ()
+            if isinstance(envelope, SelectedBodyEnvelopeIr):
+                operation_package_result = lower_lowering_operation_package(
+                    envelope_stage,
+                )
+                if not operation_package_result.is_ok:
+                    return Result.failure(operation_package_result.diagnostics)
+                operation_package = operation_package_result.unwrap()
+                selected_body_operation_packages = (operation_package,)
+                selected_body_operation_package_stages = (
+                    _lowering_operation_package_stage(operation_package),
+                )
             array_initialization_pipeline_result = (
                 _lower_exact_array_initialization_stage_pipeline(
                     item,
@@ -1138,7 +1156,8 @@ def _lower_input(
                         array_initialization_pipeline.array_backend_handoff_requests
                     ),
                     operation_packages=(
-                        array_initialization_pipeline.operation_packages
+                        *selected_body_operation_packages,
+                        *array_initialization_pipeline.operation_packages,
                     ),
                     generation_stages=(
                         _recognition_stage(
@@ -1160,6 +1179,7 @@ def _lower_input(
                         ),
                         _selected_body_ir_stage(body_ir),
                         envelope_stage,
+                        *selected_body_operation_package_stages,
                         *array_initialization_pipeline.stages,
                     ),
                 )

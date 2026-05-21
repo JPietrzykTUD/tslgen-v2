@@ -1201,16 +1201,21 @@ Recommended first parity checks:
   lowering mypy success across 34 source files, and full tooling validation
   success with corpus probes `3 passed`, unit discovery `665` tests OK,
   compileall OK, ruff OK, mypy OK across 138 source files, and diff-check OK.
-- Planned M95 coverage must prove one selected-body direct-intrinsic
-  operation-package family over accepted M63/M62 typed facts only. Tests should
-  cover direct envelope, stage, and narrow container input; diagnostics for
-  no selected body, unsupported stages, malformed/non-singleton envelopes,
+- Accepted M95 coverage proves one selected-body direct-intrinsic
+  operation-package family over accepted M63/M62 typed facts only. Tests cover
+  direct envelope, stage, and narrow container input; diagnostics for no
+  selected body, wrong stages, malformed/non-singleton envelopes,
   source-family mismatch, context/source-location mismatch, and provenance
-  mismatch; deterministic package keys and pipeline snapshots; and import/
-  line-count guardrails proving no generic source dispatcher, registry,
-  source repair, SVE/direct-intrinsic interpretation, backend planning,
-  renderer-ready IR, rendering, generated output, hidden backfeed, or fixpoint
-  machinery is introduced.
+  mismatch; deterministic package keys and pipeline snapshots; public facade
+  stability; and import/line-count/forbidden-term guardrails proving no
+  generic source dispatcher, registry, source repair,
+  SVE/direct-intrinsic interpretation, backend planning, renderer-ready IR,
+  rendering, generated output, hidden backfeed, or fixpoint machinery is
+  introduced. M95 validation returned focused package tests
+  `26 passed, 308 deselected`, full lowering-boundary `334 passed`, focused
+  lowering mypy success across 35 source files, and full tooling validation
+  success with corpus probes `3 passed`, unit discovery `668` tests OK,
+  compileall OK, ruff OK, mypy OK across 139 source files, and diff-check OK.
 
 Deferred parity checks:
 

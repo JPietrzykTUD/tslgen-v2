@@ -1659,14 +1659,15 @@ Consequences:
   modules with one-way imports; it adds no new semantics, package registry,
   semantic dispatcher, backend-planning hook, renderer-ready IR, or source-body
   repair path.
-- Post-M94 planning selects M95 as the first post-split package-family
-  expansion because accepted M63/M62 selected-body direct-intrinsic facts are
-  already typed and diagnostic-covered. The decision deliberately packages
-  those facts as provenance only: `svptrue_b*`, `pg`, selected literals, type
-  tags, branch ids, and source locations must not become semantic dispatch
-  keys. The implementation should use focused selected-body package ownership
-  and must not turn `_operation_package_sources.py` into a generic source
-  protocol, package registry, callback map, or dispatcher.
+- M95 is accepted as the first post-split package-family expansion because
+  accepted M63/M62 selected-body direct-intrinsic facts are already typed and
+  diagnostic-covered. The decision deliberately packages those facts as
+  provenance only: `svptrue_b*`, `pg`, selected literals, type tags, branch
+  ids, and source locations must not become semantic dispatch keys. The
+  implementation owns selected-body package validation and entry construction
+  in `_operation_package_selected_body.py`, while `_operation_package_sources.py`
+  remains a narrow explicit source/stage/container bridge rather than a
+  generic source protocol, package registry, callback map, or dispatcher.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

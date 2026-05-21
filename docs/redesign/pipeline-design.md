@@ -782,15 +782,16 @@ into focused private modules. It adds no new Stage 8 semantic fact, Stage 9
 planning, backend map reads, renderer-ready IR, broad source dispatch, hidden
 backfeeds, or fixpoint machinery.
 
-Post-M94 planning selects M95 as one new Stage 8 package-family slice over
-accepted selected-body facts. The planned selected-body direct-intrinsic
-operation package consumes only accepted M63 selected-body envelopes and the
-enclosed accepted M62 body IR, preserves `pg`, `svptrue_b*`, selected literals,
-type tags, branch identity, and source locations as provenance, and must keep
-family-specific validation out of generic registries or dispatchers. It must
-not start Stage 9 backend planning, render output, parse raw body text, repair
-source input, infer SVE/direct-intrinsic semantics, add byte-size-to-token
-dispatch, or create hidden backfeeds/fixpoint machinery.
+M95 is accepted as one new Stage 8 package-family slice over accepted
+selected-body facts. The selected-body direct-intrinsic operation package
+consumes only accepted M63 selected-body envelopes and the enclosed accepted
+M62 body IR, preserves `pg`, `svptrue_b*`, selected literals, type tags,
+branch identity, and source locations as provenance, and keeps
+family-specific validation and entry ownership in
+`_operation_package_selected_body.py` rather than generic registries or
+dispatchers. It does not start Stage 9 backend planning, render output, parse
+raw body text, repair source input, infer SVE/direct-intrinsic semantics, add
+byte-size-to-token dispatch, or create hidden backfeeds/fixpoint machinery.
 
 ## Stage 9: Backend Planning
 

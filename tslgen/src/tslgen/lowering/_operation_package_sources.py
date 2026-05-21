@@ -32,6 +32,15 @@ from tslgen.lowering._operation_package_models import (
     LoweringOperationPackageSourceFamily,
     MiniTsilLeafReturnOperationPackageEntryIr,
 )
+from tslgen.lowering._operation_package_selected_body import (
+    SelectedBodyDirectIntrinsicOperationPackageEntryIr,
+    is_generation_selected_body_envelope,
+    validate_selected_body_direct_intrinsic_envelope,
+)
+from tslgen.lowering._selected_body_models import (
+    NoSelectedBodyEnvelopeIr,
+    SelectedBodyEnvelopeIr,
+)
 
 if TYPE_CHECKING:
     from tslgen.lowering._stage_contracts import TsilReturnStatement
@@ -65,6 +74,13 @@ def lower_lowering_operation_package(
             source_location=source_location,
             source_family=source_family,
         )
+    if is_generation_selected_body_envelope(source):
+        return _selected_body_direct_intrinsic_package(
+            source,
+            candidate_id=candidate_id,
+            source_location=source_location,
+            source_family=source_family,
+        )
     if is_tsil_return_statement(source):
         return _mini_tsil_leaf_return_package(
             source,
@@ -92,8 +108,9 @@ def lower_lowering_operation_package(
                 "lowering operation package consumes only accepted M86 "
                 "TsilReturnStatement values, selected_body_lowering stages, "
                 "accepted M92 ExactArrayBackendHandoffRequestIr values, "
-                "array_backend_handoff_request stages, or containers carrying "
-                "exactly one such accepted value",
+                "array_backend_handoff_request stages, accepted M63 "
+                "SelectedBodyEnvelopeIr values, selected_body_envelope_lowering "
+                "stages, or containers carrying exactly one such accepted value",
                 None,
             ),
         )
@@ -126,13 +143,24 @@ def _operation_package_from_stage(
             source_location=source_location,
             source_family=source_family,
         )
+    if stage == "selected_body_envelope_lowering" and (
+        is_generation_selected_body_envelope(output)
+    ):
+        return _selected_body_direct_intrinsic_package(
+            output,
+            candidate_id=candidate_id,
+            source_location=source_location,
+            source_family=source_family,
+        )
     return Result.failure(
         (
             operation_package_source_unsupported_diagnostic(
                 "lowering operation package consumes only selected_body_lowering "
                 "stages carrying accepted M86 TsilReturnStatement values or "
                 "array_backend_handoff_request stages carrying accepted M92 "
-                "ExactArrayBackendHandoffRequestIr values",
+                "ExactArrayBackendHandoffRequestIr values or "
+                "selected_body_envelope_lowering stages carrying accepted M63 "
+                "SelectedBodyEnvelopeIr values",
                 source_location_from_object(output),
             ),
         )
@@ -217,19 +245,43 @@ def _operation_package_from_value_container(
     handoffs_result = _container_exact_array_backend_handoffs(source)
     if not handoffs_result.is_ok:
         return Result.failure(handoffs_result.diagnostics)
+    generation_selected_body_result = _container_selected_body_envelopes(source)
+    if not generation_selected_body_result.is_ok:
+        return Result.failure(generation_selected_body_result.diagnostics)
     statements = statements_result.unwrap()
     handoffs = handoffs_result.unwrap()
+    generation_selected_body_envelopes = generation_selected_body_result.unwrap()
+    selected_body_envelopes = tuple(
+        envelope
+        for envelope in generation_selected_body_envelopes
+        if isinstance(envelope, SelectedBodyEnvelopeIr)
+    )
 
     container_location = source_location or source_location_from_object(source)
-    if source_family is None and statements and handoffs:
+    active_families = tuple(
+        family
+        for family, values in (
+            ("mini_tsil_leaf_return", statements),
+            ("exact_array_backend_handoff", handoffs),
+            ("selected_body_direct_intrinsic", selected_body_envelopes),
+        )
+        if values
+    )
+    if source_family is None and len(active_families) > 1:
         return Result.failure(
             (
                 operation_package_source_ambiguous_diagnostic(
-                    "lowering operation package source carries both accepted "
-                    "M86 mini-TSIL return values and accepted M92 exact-array "
-                    "handoff values; pass source_family to choose one",
+                    "lowering operation package source carries multiple "
+                    "accepted packageable value families "
+                    f"{active_families!r}; pass source_family to choose one",
                     container_location
-                    or source_location_from_entries((*statements, *handoffs)),
+                    or source_location_from_entries(
+                        (
+                            *statements,
+                            *handoffs,
+                            *selected_body_envelopes,
+                        ),
+                    ),
                 ),
             )
         )
@@ -308,12 +360,58 @@ def _operation_package_from_value_container(
             source_location=container_location,
             source_family=source_family,
         )
+    if source_family == "selected_body_direct_intrinsic" or (
+        source_family is None and selected_body_envelopes
+    ):
+        if not selected_body_envelopes:
+            if generation_selected_body_envelopes:
+                return _selected_body_direct_intrinsic_package(
+                    generation_selected_body_envelopes[0],
+                    candidate_id=candidate_id,
+                    source_location=source_location,
+                    source_family=source_family,
+                )
+            return Result.failure(
+                (
+                    operation_package_missing_value_diagnostic(
+                        "lowering operation package requires one accepted M63 "
+                        "SelectedBodyEnvelopeIr selected-body entry",
+                        container_location,
+                    ),
+                )
+            )
+        if len(selected_body_envelopes) > 1:
+            return Result.failure(
+                (
+                    operation_package_duplicate_value_diagnostic(
+                        "lowering operation package requires exactly one "
+                        "accepted M63 SelectedBodyEnvelopeIr; got "
+                        f"{len(selected_body_envelopes)}",
+                        source_location_from_entries(selected_body_envelopes)
+                        or container_location,
+                    ),
+                )
+            )
+        context_result = _merged_candidate_context(
+            explicit_candidate_id=candidate_id,
+            container_candidate_id=_candidate_id_from_object(source),
+            location=container_location or selected_body_envelopes[0].source_location,
+        )
+        if not context_result.is_ok:
+            return Result.failure(context_result.diagnostics)
+        return _selected_body_direct_intrinsic_package(
+            selected_body_envelopes[0],
+            candidate_id=context_result.unwrap(),
+            source_location=container_location,
+            source_family=source_family,
+        )
     return Result.failure(
         (
             operation_package_missing_value_diagnostic(
                 "lowering operation package source does not carry an accepted "
                 "M86 TsilReturnStatement or accepted M92 "
-                "ExactArrayBackendHandoffRequestIr",
+                "ExactArrayBackendHandoffRequestIr or accepted M63 "
+                "SelectedBodyEnvelopeIr",
                 container_location,
             ),
         )
@@ -420,6 +518,75 @@ def _exact_array_backend_handoff_package(
     )
 
 
+def _selected_body_direct_intrinsic_package(
+    envelope: object,
+    *,
+    candidate_id: str | None,
+    source_location: SourceLocation | None,
+    source_family: LoweringOperationPackageSourceFamily | None,
+) -> Result[LoweringOperationPackageIr]:
+    if isinstance(envelope, NoSelectedBodyEnvelopeIr):
+        return Result.failure(
+            (
+                operation_package_missing_value_diagnostic(
+                    "selected-body direct-intrinsic operation package requires "
+                    "an accepted M63 SelectedBodyEnvelopeIr selected case; "
+                    "got a no-selected-body envelope",
+                    envelope.source_location,
+                ),
+            )
+        )
+    family_result = _validate_source_family(
+        "selected_body_direct_intrinsic",
+        source_family,
+        source_location_from_object(envelope),
+    )
+    if not family_result.is_ok:
+        return Result.failure(family_result.diagnostics)
+    if not isinstance(envelope, SelectedBodyEnvelopeIr):
+        return Result.failure(
+            (
+                operation_package_malformed_diagnostic(
+                    "selected-body direct-intrinsic operation package requires "
+                    "an accepted M63 SelectedBodyEnvelopeIr",
+                    source_location_from_object(envelope),
+                ),
+            )
+        )
+    if candidate_id is not None and candidate_id != envelope.candidate_id:
+        return Result.failure(
+            (
+                operation_package_context_mismatch_diagnostic(
+                    "selected-body direct-intrinsic operation package candidate "
+                    "context must match the accepted M63 envelope",
+                    envelope.source_location,
+                ),
+            )
+        )
+    if source_location is not None and source_location != envelope.source_location:
+        return Result.failure(
+            (
+                operation_package_source_location_mismatch_diagnostic(
+                    "selected-body direct-intrinsic operation package source "
+                    "location must match the accepted M63 envelope",
+                    envelope.source_location,
+                ),
+            )
+        )
+    diagnostics = validate_selected_body_direct_intrinsic_envelope(envelope)
+    if diagnostics:
+        return Result.failure(diagnostics)
+    entry = SelectedBodyDirectIntrinsicOperationPackageEntryIr(envelope)
+    return Result.ok(
+        LoweringOperationPackageIr(
+            source_family="selected_body_direct_intrinsic",
+            candidate_id=envelope.candidate_id,
+            source_location=envelope.source_location,
+            selected_body_direct_intrinsic=entry,
+        )
+    )
+
+
 def _validate_existing_package(
     package: LoweringOperationPackageIr,
     *,
@@ -457,6 +624,12 @@ def _validate_existing_package(
     if package.exact_array_backend_handoff is not None:
         diagnostics = validate_exact_array_backend_handoff_request(
             package.exact_array_backend_handoff.source_request,
+        )
+        if diagnostics:
+            return Result.failure(diagnostics)
+    if package.selected_body_direct_intrinsic is not None:
+        diagnostics = validate_selected_body_direct_intrinsic_envelope(
+            package.selected_body_direct_intrinsic.source_envelope,
         )
         if diagnostics:
             return Result.failure(diagnostics)
@@ -559,6 +732,45 @@ def _container_exact_array_backend_handoffs(
     return Result.ok(tuple(handoffs))
 
 
+def _container_selected_body_envelopes(
+    source: object,
+) -> Result[tuple[SelectedBodyEnvelopeIr | NoSelectedBodyEnvelopeIr, ...]]:
+    if not hasattr(source, "selected_body_envelopes"):
+        return Result.ok(())
+    raw_envelopes = getattr(source, "selected_body_envelopes")
+    if not isinstance(raw_envelopes, tuple):
+        return Result.failure(
+            (
+                operation_package_malformed_diagnostic(
+                    "lowering operation package source requires "
+                    "selected_body_envelopes to be a tuple",
+                    source_location_from_object(raw_envelopes),
+                ),
+            )
+        )
+    selected_body_envelopes: list[
+        SelectedBodyEnvelopeIr | NoSelectedBodyEnvelopeIr
+    ] = []
+    for entry in raw_envelopes:
+        if isinstance(entry, SelectedBodyEnvelopeIr):
+            selected_body_envelopes.append(entry)
+            continue
+        if isinstance(entry, NoSelectedBodyEnvelopeIr):
+            selected_body_envelopes.append(entry)
+            continue
+        return Result.failure(
+            (
+                operation_package_malformed_diagnostic(
+                    "lowering operation package source requires every "
+                    "selected_body_envelopes entry to be an accepted M63 "
+                    "selected/no-selected body envelope",
+                    source_location_from_object(entry),
+                ),
+            )
+        )
+    return Result.ok(tuple(selected_body_envelopes))
+
+
 def _is_generation_stage_like(source: object) -> bool:
     return hasattr(source, "stage") and hasattr(source, "output")
 
@@ -571,6 +783,9 @@ def _is_packageable_value_container(source: object) -> bool:
     return hasattr(source, "statements") or hasattr(
         source,
         "array_backend_handoff_requests",
+    ) or hasattr(
+        source,
+        "selected_body_envelopes",
     )
 
 

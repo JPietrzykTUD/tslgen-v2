@@ -842,15 +842,14 @@ package families, broad source protocols, backend planning, renderer-ready IR,
 source repair, registries, dispatchers, hidden backfeeds, or fixpoint
 machinery.
 
-Post-M94 planning selects M95 as a focused selected-body direct-intrinsic
-operation-package family over already accepted M63 `SelectedBodyEnvelopeIr`
-values and the enclosed accepted M62 `SelectedAssignmentDirectIntrinsicBodyIr`.
-With human acceptance recorded, M95 may package the exact singleton
-selected-body envelope as typed Stage 8 provenance only. It must not parse raw
-selected-body text, validate or interpret `svptrue_b*`/`pg` as SVE semantics,
-infer byte size or backend support from tokens, repair source bodies, create
-renderer-ready IR, or introduce backend planning, registries, dispatchers,
-hidden backfeeds, or fixpoint machinery.
+M95 is accepted as a focused selected-body direct-intrinsic operation-package
+family over already accepted M63 `SelectedBodyEnvelopeIr` values and the
+enclosed accepted M62 `SelectedAssignmentDirectIntrinsicBodyIr`. It packages
+the exact singleton selected-body envelope as typed Stage 8 provenance only.
+It does not parse raw selected-body text, validate or interpret
+`svptrue_b*`/`pg` as SVE semantics, infer byte size or backend support from
+tokens, repair source bodies, create renderer-ready IR, or introduce backend
+planning, registries, dispatchers, hidden backfeeds, or fixpoint machinery.
 
 M61 diagnostics:
 
@@ -1239,34 +1238,38 @@ M92 diagnostics:
   deferred backend-uninit value, or M67 backend-value request record disagree
   on required object identity or provenance.
 
-M93 diagnostics:
+M93/M95 operation-package diagnostics:
 
 - `TSL-LOWER-OPERATION-PACKAGE-SOURCE-UNSUPPORTED`: the source is not an
   accepted M86 `TsilReturnStatement`, accepted M86 `selected_body_lowering`
   stage, accepted M92 `ExactArrayBackendHandoffRequestIr`, accepted M92
-  `array_backend_handoff_request` stage, or narrow container carrying exactly
-  one such accepted typed value.
+  `array_backend_handoff_request` stage, accepted M63
+  `SelectedBodyEnvelopeIr`, accepted M63 `selected_body_envelope_lowering`
+  stage, or narrow container carrying exactly one such accepted typed value.
 - `TSL-LOWER-OPERATION-PACKAGE-VALUE-MISSING`: a narrow source/container does
-  not carry the selected packageable accepted M86 or M92 value.
+  not carry the selected packageable accepted M86, M92, or M63 value.
 - `TSL-LOWER-OPERATION-PACKAGE-VALUE-MULTIPLE`: a narrow source/container
   carries more than one packageable accepted value.
 - `TSL-LOWER-OPERATION-PACKAGE-MALFORMED`: a runtime container entry is not
-  the expected typed value, or a mini-TSIL return statement does not match the
-  accepted M86 leaf-return shapes.
+  the expected typed value, a mini-TSIL return statement does not match the
+  accepted M86 leaf-return shapes, or a selected-body envelope does not
+  preserve exactly one accepted M63/M62 selected-body direct-intrinsic entry.
 - `TSL-LOWER-OPERATION-PACKAGE-SOURCE-FAMILY-MISMATCH`: a requested package
   source family does not match the accepted typed source value.
 - `TSL-LOWER-OPERATION-PACKAGE-CONTEXT-MISMATCH`: candidate context on an
   explicit argument or narrow container does not match the accepted package
   source value.
 - `TSL-LOWER-OPERATION-PACKAGE-SOURCE-LOCATION-MISMATCH`: explicit source
-  location context disagrees with the accepted M92 request or existing package.
+  location context disagrees with the accepted M92 request, accepted M63
+  selected-body envelope, or existing package.
 - `TSL-LOWER-OPERATION-PACKAGE-PROVENANCE-MISMATCH`: the accepted M92 request
-  no longer preserves its M90/M89/M88 identity chain.
+  no longer preserves its M90/M89/M88 identity chain, or the accepted M63
+  selected-body entry no longer preserves its M62 selected-body IR provenance.
 - `TSL-LOWER-OPERATION-PACKAGE-DEPENDENCY-PROVENANCE-MISMATCH`: the accepted
   M92 dependency request no longer preserves its M90/M89/M72/M67 identity
   chain.
 - `TSL-LOWER-OPERATION-PACKAGE-SOURCE-AMBIGUOUS`: a narrow source/container
-  carries both accepted M86 and accepted M92 packageable values and no
+  carries multiple accepted M86, M92, or M63 packageable values and no
   `source_family` was provided.
 
 ## Explicit Deferrals
@@ -1293,8 +1296,9 @@ array-body structural package assembly, accepted M89 exact array
 backend-deferred request inventory, accepted M90 exact array lowering
 completion-package handoff, accepted M91 behavior-preserving exact array
 pipeline ownership consolidation, accepted M92 exact array lowering
-backend-handoff request, and accepted M93 dual-source lowering operation
-package boundary:
+backend-handoff request, accepted M93 dual-source lowering operation package
+boundary, accepted M94 operation-package ownership split, and accepted M95
+selected-body direct-intrinsic operation package:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask

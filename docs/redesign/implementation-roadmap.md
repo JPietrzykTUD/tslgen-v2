@@ -12638,10 +12638,8 @@ Next concrete prompt:
 
 Status:
 
-Planned. Post-M94 planning selected this milestone and internal planning,
-boundary, extensibility, and documentation review returned
-`Accept With Follow-Ups`. Human acceptance was recorded before M95 execution
-became the active workflow action.
+Accepted. The M95 execution-review loop returned `Accept With Follow-Ups`
+after focused revision.
 
 Goal:
 
@@ -12649,6 +12647,50 @@ Add one focused Stage 8 lowering operation-package family for already accepted
 selected-body direct-intrinsic facts. M95 proves the post-M94 package design
 can grow by family-specific typed ownership without turning
 `_operation_package_sources.py` into a generic source protocol or dispatcher.
+
+Accepted result:
+
+- Added the `selected_body_direct_intrinsic` operation-package source family
+  over accepted M63 `SelectedBodyEnvelopeIr` values and their enclosed
+  accepted M62 `SelectedAssignmentDirectIntrinsicBodyIr` provenance.
+- Moved selected-body package validation and entry ownership into
+  `_operation_package_selected_body.py`; `_operation_package.py` remains a
+  narrow facade and `_operation_package_sources.py` only performs explicit
+  source/stage/container integration.
+- Appended selected-body operation-package facts immediately after
+  `selected_body_envelope_lowering` for selected envelopes. No selected-body
+  package is produced for `NoSelectedBodyEnvelopeIr`; explicit selected-body
+  package requests diagnose the no-selected envelope at its source location.
+- Preserved accepted M86 mini-TSIL leaf-return and accepted M92 exact-array
+  backend-handoff package behavior, keys, object identity, stage ordering,
+  snapshots, diagnostics, deterministic ordering, public imports, and
+  selected-branch-only behavior.
+- Added focused coverage for direct/stage/container package creation,
+  malformed/non-singleton selected envelopes, wrong stage, no-selected body,
+  candidate/source-location/provenance mismatch, deterministic package keys,
+  pipeline integration, public facade stability, import boundaries, forbidden
+  semantic/boundary terms, and line-count guardrails.
+
+Files changed:
+
+- `tslgen/src/tslgen/lowering/__init__.py`
+- `tslgen/src/tslgen/lowering/_operation_package.py`
+- `tslgen/src/tslgen/lowering/_operation_package_models.py`
+- `tslgen/src/tslgen/lowering/_operation_package_selected_body.py`
+- `tslgen/src/tslgen/lowering/_operation_package_sources.py`
+- `tslgen/src/tslgen/lowering/boundary.py`
+- `tslgen/tests/unit/test_lowering_boundary.py`
+
+Final line counts:
+
+- `tslgen/src/tslgen/lowering/boundary.py`: 1,300
+- `tslgen/src/tslgen/lowering/_operation_package.py`: 23
+- `tslgen/src/tslgen/lowering/_operation_package_diagnostics.py`: 136
+- `tslgen/src/tslgen/lowering/_operation_package_exact_array.py`: 174
+- `tslgen/src/tslgen/lowering/_operation_package_mini_tsil.py`: 36
+- `tslgen/src/tslgen/lowering/_operation_package_models.py`: 171
+- `tslgen/src/tslgen/lowering/_operation_package_selected_body.py`: 186
+- `tslgen/src/tslgen/lowering/_operation_package_sources.py`: 819
 
 Scope:
 
@@ -12744,6 +12786,15 @@ Validation commands:
 - `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
 - `git diff --check`
 
+Final validation results:
+
+- Focused M95 pytest returned `26 passed, 308 deselected`.
+- Full lowering-boundary pytest returned `334 passed`.
+- Focused lowering mypy returned `Success: no issues found in 35 source files`.
+- Full tooling validation returned exit 0 with corpus probes `3 passed`, unit
+  discovery `668` tests OK, compileall OK, ruff OK, mypy
+  `Success: no issues found in 139 source files`, and diff-check OK.
+
 Review risks:
 
 - Growing `_operation_package_sources.py` from a narrow accepted-source bridge
@@ -12758,15 +12809,18 @@ Review risks:
 - Creating a new private operation-package module that becomes a replacement
   monolith despite the M94 split.
 
-Planning follow-ups:
+Execution follow-ups:
 
-- The M95 executor prompt must explicitly prevent
-  `_operation_package_sources.py` from becoming a generic source protocol or
-  dispatcher while adding this third package family.
-- A future maintainability pass may tighten the current operation-package
-  private-module line-count ceiling below 1,000 lines.
+- `_operation_package_sources.py` remains below the guardrail at 819 lines,
+  but it is now the operation-package pressure point. Before adding another
+  operation-package source family, split more source narrowing/package
+  construction out of it rather than letting it grow into a central package
+  router.
+- `boundary.py` is exactly at the current 1,300-line guardrail. Future
+  lowering work should avoid adding ownership there and should keep new
+  behavior in focused private modules.
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m94-acceptance-finalization-prompt.md` converts human
-  acceptance of this post-M94 plan into the M95 execution-review-loop prompt.
+- `docs/agent/runs/post-m95-planning-plus-review-prompt.md` runs post-M95
+  planning and review with a lowering focus.

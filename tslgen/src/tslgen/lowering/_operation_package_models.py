@@ -10,12 +10,16 @@ from tslgen.lowering._array_body_backend_handoff import (
 from tslgen.lowering._operation_package_diagnostics import source_location_key
 
 if TYPE_CHECKING:
+    from tslgen.lowering._operation_package_selected_body import (
+        SelectedBodyDirectIntrinsicOperationPackageEntryIr,
+    )
     from tslgen.lowering._stage_contracts import TsilReturnStatement
 
 
 type LoweringOperationPackageSourceFamily = Literal[
     "mini_tsil_leaf_return",
     "exact_array_backend_handoff",
+    "selected_body_direct_intrinsic",
 ]
 
 
@@ -87,6 +91,9 @@ class LoweringOperationPackageIr:
     exact_array_backend_handoff: (
         ExactArrayBackendHandoffOperationPackageEntryIr | None
     ) = None
+    selected_body_direct_intrinsic: (
+        SelectedBodyDirectIntrinsicOperationPackageEntryIr | None
+    ) = None
 
     def __post_init__(self) -> None:
         if not self.candidate_id:
@@ -96,6 +103,7 @@ class LoweringOperationPackageIr:
             for entry in (
                 self.mini_tsil_leaf_return,
                 self.exact_array_backend_handoff,
+                self.selected_body_direct_intrinsic,
             )
             if entry is not None
         )
@@ -117,6 +125,13 @@ class LoweringOperationPackageIr:
             raise ValueError(
                 "exact_array_backend_handoff package requires an exact-array entry"
             )
+        if (
+            self.source_family == "selected_body_direct_intrinsic"
+            and self.selected_body_direct_intrinsic is None
+        ):
+            raise ValueError(
+                "selected_body_direct_intrinsic package requires a selected-body entry"
+            )
         entry = entries[0]
         entry_candidate_id = getattr(entry, "candidate_id")
         if self.candidate_id != entry_candidate_id:
@@ -135,11 +150,14 @@ class LoweringOperationPackageIr:
     ) -> (
         MiniTsilLeafReturnOperationPackageEntryIr
         | ExactArrayBackendHandoffOperationPackageEntryIr
+        | SelectedBodyDirectIntrinsicOperationPackageEntryIr
     ):
         if self.mini_tsil_leaf_return is not None:
             return self.mini_tsil_leaf_return
         if self.exact_array_backend_handoff is not None:
             return self.exact_array_backend_handoff
+        if self.selected_body_direct_intrinsic is not None:
+            return self.selected_body_direct_intrinsic
         raise AssertionError("validated operation package lost its source entry")
 
     @property

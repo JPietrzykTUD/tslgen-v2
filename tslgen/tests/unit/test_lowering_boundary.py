@@ -37,6 +37,7 @@ import tslgen.lowering._operation_package_diagnostics as lowering_operation_pack
 import tslgen.lowering._operation_package_exact_array as lowering_operation_package_exact_array
 import tslgen.lowering._operation_package_mini_tsil as lowering_operation_package_mini_tsil
 import tslgen.lowering._operation_package_models as lowering_operation_package_models
+import tslgen.lowering._operation_package_selected_body as lowering_operation_package_selected_body
 import tslgen.lowering._operation_package_sources as lowering_operation_package_sources
 import tslgen.lowering._pipeline as lowering_pipeline
 import tslgen.lowering._return_emission as lowering_return_emission
@@ -108,6 +109,7 @@ from tslgen.lowering import (
     LoweringRequest,
     PrunedGenerationBranch,
     SelectedAssignmentDirectIntrinsicBodyIr,
+    SelectedBodyDirectIntrinsicOperationPackageEntryIr,
     SelectedBodyEnvelopeEntry,
     SelectedBodyEnvelopeIr,
     SelectedBranchBodyAssignmentFormRecognition,
@@ -3178,29 +3180,47 @@ class LoweringBoundaryTests(unittest.TestCase):
                     tuple(predicate.value for predicate in implementation.generation_predicates),
                     tuple(literal == size_bytes for literal in (2, 4, 8)),
                 )
+                expected_stages: tuple[str, ...] = (
+                    "helper_expression_recognition",
+                    "typed_generation_value",
+                    "typed_generation_predicate",
+                    "typed_generation_predicate",
+                    "typed_generation_predicate",
+                    "generation_control_flow_pruning",
+                    "selected_body_lowering",
+                    "selected_body_form_recognition",
+                    "selected_body_ir_lowering",
+                    "selected_body_envelope_lowering",
+                )
+                if expected_literal is not None:
+                    expected_stages = (
+                        *expected_stages,
+                        "lowering_operation_package",
+                    )
+                    self.assertEqual(len(implementation.operation_packages), 1)
+                    self.assertIs(
+                        implementation.generation_stages[-1].output,
+                        implementation.operation_packages[0],
+                    )
+                else:
+                    self.assertEqual(implementation.operation_packages, ())
                 self.assertEqual(
                     tuple(stage.stage for stage in implementation.generation_stages),
-                    (
-                        "helper_expression_recognition",
-                        "typed_generation_value",
-                        "typed_generation_predicate",
-                        "typed_generation_predicate",
-                        "typed_generation_predicate",
-                        "generation_control_flow_pruning",
-                        "selected_body_lowering",
-                        "selected_body_form_recognition",
-                        "selected_body_ir_lowering",
-                        "selected_body_envelope_lowering",
-                    ),
+                    expected_stages,
                 )
-                self.assertEqual(implementation.generation_stages[-5].output, chain)
-                self.assertEqual(implementation.generation_stages[-4].output, handoff)
+                self.assertEqual(implementation.generation_stages[5].output, chain)
+                selected_body_stages = implementation.generation_stages[
+                    -5 if expected_literal is not None else -4:
+                ]
+                if expected_literal is not None:
+                    selected_body_stages = selected_body_stages[:-1]
+                self.assertEqual(selected_body_stages[0].output, handoff)
                 self.assertEqual(
-                    implementation.generation_stages[-3].output,
+                    selected_body_stages[1].output,
                     assignment_form,
                 )
-                self.assertEqual(implementation.generation_stages[-2].output, body_ir)
-                self.assertEqual(implementation.generation_stages[-1].output, envelope)
+                self.assertEqual(selected_body_stages[2].output, body_ir)
+                self.assertEqual(selected_body_stages[3].output, envelope)
 
     def test_size_byte_branch_chain_records_no_match_without_final_else(
         self,
@@ -3303,10 +3323,10 @@ class LoweringBoundaryTests(unittest.TestCase):
         )
         self.assertEqual(implementation.generation_predicates, predicates)
         self.assertEqual(
-            tuple(stage.output for stage in implementation.generation_stages[1:-4]),
+            tuple(stage.output for stage in implementation.generation_stages[1:6]),
             (value, *predicates, chain),
         )
-        handoff = implementation.generation_stages[-4].output
+        handoff = implementation.generation_stages[-5].output
         assert isinstance(handoff, OpaqueSelectedBranchBodyHandoff)
         self.assertEqual(handoff.candidate_id, implementation.candidate_id)
         self.assertEqual(handoff.selected_type_tag, "ui16")
@@ -3314,13 +3334,13 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(handoff.opaque_body_text, "pg = intrin<svptrue_b16>();")
         self.assertEqual(handoff.source_location, chain.condition_location)
         self.assertIn(implementation.candidate_id, handoff.originating_branch_chain_id)
-        form = implementation.generation_stages[-3].output
+        form = implementation.generation_stages[-4].output
         assert isinstance(form, SelectedBranchBodyAssignmentFormRecognition)
         self.assertEqual(form.candidate_id, implementation.candidate_id)
         self.assertEqual(form.assignment_target_text, "pg")
         self.assertEqual(form.opaque_rhs_text, "intrin<svptrue_b16>()")
         self.assertEqual(form.direct_intrinsic_token_text, "svptrue_b16")
-        body_ir = implementation.generation_stages[-2].output
+        body_ir = implementation.generation_stages[-3].output
         assert isinstance(body_ir, SelectedAssignmentDirectIntrinsicBodyIr)
         self.assertEqual(body_ir.candidate_id, implementation.candidate_id)
         self.assertEqual(body_ir.assignment_target_text, "pg")
@@ -3405,7 +3425,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 self.assertEqual(form.opaque_rhs_text, rhs_text)
                 self.assertEqual(form.direct_intrinsic_token_text, token_text)
                 self.assertEqual(
-                    implementation.generation_stages[-3],
+                    implementation.generation_stages[-4],
                     GenerationLoweringStage(
                         stage="selected_body_form_recognition",
                         output=form,
@@ -3414,7 +3434,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 body_ir = implementation.selected_branch_body_irs[0]
                 assert isinstance(body_ir, SelectedAssignmentDirectIntrinsicBodyIr)
                 self.assertEqual(
-                    implementation.generation_stages[-2],
+                    implementation.generation_stages[-3],
                     GenerationLoweringStage(
                         stage="selected_body_ir_lowering",
                         output=body_ir,
@@ -4248,22 +4268,58 @@ class LoweringBoundaryTests(unittest.TestCase):
                     implementation.generation_stages[-2].output,
                     implementation.array_backend_handoff_requests[0],
                 )
-                self.assertEqual(len(implementation.operation_packages), 1)
-                self.assertIs(
-                    implementation.generation_stages[-1].output,
-                    implementation.operation_packages[0],
+                exact_package = implementation.operation_packages[-1]
+                has_selected_body_package = isinstance(
+                    implementation.selected_body_envelopes[0],
+                    SelectedBodyEnvelopeIr,
                 )
                 self.assertEqual(
-                    tuple(stage.stage for stage in implementation.generation_stages[:-17]),
+                    len(implementation.operation_packages),
+                    2 if has_selected_body_package else 1,
+                )
+                if has_selected_body_package:
+                    self.assertEqual(
+                        implementation.operation_packages[0].source_family,
+                        "selected_body_direct_intrinsic",
+                    )
+                    self.assertEqual(
+                        implementation.generation_stages[-18].stage,
+                        "lowering_operation_package",
+                    )
+                    self.assertIs(
+                        implementation.generation_stages[-18].output,
+                        implementation.operation_packages[0],
+                    )
+                    self.assertEqual(
+                        implementation.generation_stages[-19].stage,
+                        "selected_body_envelope_lowering",
+                    )
+                else:
+                    self.assertEqual(
+                        implementation.generation_stages[-18].stage,
+                        "selected_body_envelope_lowering",
+                    )
+                self.assertEqual(
+                    exact_package.source_family,
+                    "exact_array_backend_handoff",
+                )
+                self.assertIs(
+                    implementation.generation_stages[-1].output,
+                    exact_package,
+                )
+                self.assertEqual(
+                    tuple(
+                        stage.stage
+                        for stage in implementation.generation_stages[:-17]
+                    ),
                     tuple(stage.stage for stage in baseline_impl.generation_stages),
                 )
                 self.assertEqual(
-                    tuple(stage.output for stage in implementation.generation_stages[:-17]),
+                    tuple(
+                        stage.output
+                        for stage in implementation.generation_stages[:-17]
+                    ),
                     tuple(stage.output for stage in baseline_impl.generation_stages),
-                )
-                self.assertEqual(
-                    implementation.generation_stages[-18].stage,
-                    "selected_body_envelope_lowering",
                 )
                 self.assertEqual(slot_form.slot_ordinal, 0)
                 self.assertEqual(
@@ -4353,6 +4409,14 @@ class LoweringBoundaryTests(unittest.TestCase):
                         "selected_body_form_recognition",
                         "selected_body_ir_lowering",
                         "selected_body_envelope_lowering",
+                        *(
+                            ("lowering_operation_package",)
+                            if isinstance(
+                                implementation.selected_body_envelopes[0],
+                                SelectedBodyEnvelopeIr,
+                            )
+                            else ()
+                        ),
                     ),
                 )
 
@@ -4983,11 +5047,15 @@ class LoweringBoundaryTests(unittest.TestCase):
             pipeline_result.array_backend_handoff_requests,
         )
         self.assertEqual(
-            implementation.operation_packages,
+            implementation.operation_packages[-len(pipeline_result.operation_packages):],
             pipeline_result.operation_packages,
         )
         self.assertEqual(implementation.generation_stages[-17:], pipeline_result.stages)
-        self.assertEqual(implementation.generation_stages[-18], envelope_stage)
+        self.assertEqual(implementation.generation_stages[-19], envelope_stage)
+        self.assertEqual(
+            implementation.generation_stages[-18].stage,
+            "lowering_operation_package",
+        )
 
     def test_m77_exact_array_pipeline_snapshot_records_stage_facts(self) -> None:
         result = self.exact_array_initialization_stage_pipeline("si32")
@@ -6340,8 +6408,10 @@ class LoweringBoundaryTests(unittest.TestCase):
             for implementation in second.unwrap().implementations
             if implementation.generation_branch_chains[0].type_tag == "si16"
         )
+        first_selected_body_stages = first_impl.generation_stages[-5:-1]
+        second_selected_body_stages = second_impl.generation_stages[-5:-1]
         self.assertEqual(
-            tuple(stage.stage for stage in first_impl.generation_stages[-4:]),
+            tuple(stage.stage for stage in first_selected_body_stages),
             (
                 "selected_body_lowering",
                 "selected_body_form_recognition",
@@ -6350,24 +6420,24 @@ class LoweringBoundaryTests(unittest.TestCase):
             ),
         )
         self.assertIs(
-            first_impl.generation_stages[-4].output,
+            first_selected_body_stages[0].output,
             first_impl.selected_branch_body_handoffs[0],
         )
         self.assertIs(
-            first_impl.generation_stages[-3].output,
+            first_selected_body_stages[1].output,
             first_impl.selected_branch_body_assignment_forms[0],
         )
         self.assertIs(
-            first_impl.generation_stages[-2].output,
+            first_selected_body_stages[2].output,
             first_impl.selected_branch_body_irs[0],
         )
         self.assertIs(
-            first_impl.generation_stages[-1].output,
+            first_selected_body_stages[3].output,
             first_impl.selected_body_envelopes[0],
         )
         self.assertEqual(
-            tuple(stage.output.key for stage in first_impl.generation_stages[-4:]),
-            tuple(stage.output.key for stage in second_impl.generation_stages[-4:]),
+            tuple(stage.output.key for stage in first_selected_body_stages),
+            tuple(stage.output.key for stage in second_selected_body_stages),
         )
         def selected_body_output_location_key(output: object) -> tuple[object, ...]:
             if isinstance(output, SelectedBranchBodyAssignmentFormRecognition):
@@ -6389,11 +6459,11 @@ class LoweringBoundaryTests(unittest.TestCase):
 
         first_locations = tuple(
             selected_body_output_location_key(stage.output)
-            for stage in first_impl.generation_stages[-4:]
+            for stage in first_selected_body_stages
         )
         second_locations = tuple(
             selected_body_output_location_key(stage.output)
-            for stage in second_impl.generation_stages[-4:]
+            for stage in second_selected_body_stages
         )
         self.assertEqual(first_locations, second_locations)
 
@@ -6487,7 +6557,7 @@ class LoweringBoundaryTests(unittest.TestCase):
         backend_inventory = implementation.array_backend_deferred_request_inventories[0]
         completion = implementation.array_lowering_completion_packages[0]
         backend_handoff = implementation.array_backend_handoff_requests[0]
-        operation_package = implementation.operation_packages[0]
+        operation_package = implementation.operation_packages[1]
         self.assertIs(implementation.generation_stages[-11].output, helper_set_completion)
         self.assertIs(implementation.generation_stages[-10].output, declaration_shell)
         self.assertIs(implementation.generation_stages[-9].output, structural_sequence)
@@ -6501,6 +6571,10 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertIs(implementation.generation_stages[-4].output, backend_inventory)
         self.assertIs(implementation.generation_stages[-3].output, completion)
         self.assertIs(implementation.generation_stages[-2].output, backend_handoff)
+        self.assertEqual(
+            implementation.operation_packages[0].source_family,
+            "selected_body_direct_intrinsic",
+        )
         self.assertIs(implementation.generation_stages[-1].output, operation_package)
         self.assertIs(
             declaration_shell.source_helper_set_completion,
@@ -11610,7 +11684,9 @@ class LoweringBoundaryTests(unittest.TestCase):
         )
         forbidden_prefixes = (
             "tslgen.backends",
+            "tslgen.domain.catalog",
             "tslgen.rendering",
+            "tslgen.syntax",
             "tsldata",
             "frozen",
         )
@@ -13585,6 +13661,49 @@ class LoweringBoundaryTests(unittest.TestCase):
             self.assertEqual(package.mini_tsil_leaf_return, None)
             self.assertEqual(package.key, direct.unwrap().key)
 
+    def test_m95_selected_body_direct_intrinsic_package_sources_preserve_identity(
+        self,
+    ) -> None:
+        envelope = self.selected_body_envelope(selected_type_tag="si32")
+        stage = GenerationLoweringStage(
+            stage="selected_body_envelope_lowering",
+            output=envelope,
+        )
+        container = LoweredImplementation(
+            candidate_id=envelope.candidate_id,
+            status="lowered",
+            selected_body_envelopes=(envelope,),
+        )
+
+        direct = lower_lowering_operation_package(envelope)
+        staged = lower_lowering_operation_package(stage)
+        from_container = lower_lowering_operation_package(container)
+
+        self.assertTrue(direct.is_ok, direct.diagnostics)
+        self.assertTrue(staged.is_ok, staged.diagnostics)
+        self.assertTrue(from_container.is_ok, from_container.diagnostics)
+        for result in (direct, staged, from_container):
+            package = result.unwrap()
+            self.assertEqual(package.source_family, "selected_body_direct_intrinsic")
+            self.assertEqual(package.candidate_id, envelope.candidate_id)
+            self.assertEqual(package.source_location, envelope.source_location)
+            self.assertIsNone(package.mini_tsil_leaf_return)
+            self.assertIsNone(package.exact_array_backend_handoff)
+            self.assertIsInstance(
+                package.selected_body_direct_intrinsic,
+                SelectedBodyDirectIntrinsicOperationPackageEntryIr,
+            )
+            assert package.selected_body_direct_intrinsic is not None
+            self.assertIs(
+                package.selected_body_direct_intrinsic.source_envelope,
+                envelope,
+            )
+            self.assertIs(
+                package.selected_body_direct_intrinsic.source_body_ir,
+                envelope.entries[0].source_body_ir,
+            )
+            self.assertEqual(package.key, direct.unwrap().key)
+
     def test_m93_lower_candidates_exposes_operation_package_stages(
         self,
     ) -> None:
@@ -13625,8 +13744,15 @@ class LoweringBoundaryTests(unittest.TestCase):
 
         self.assertTrue(exact.is_ok, exact.diagnostics)
         exact_impl = exact.unwrap().implementations_by_candidate_id[item.candidate_id]
-        self.assertEqual(len(exact_impl.operation_packages), 1)
-        exact_package = exact_impl.operation_packages[0]
+        self.assertEqual(len(exact_impl.operation_packages), 2)
+        selected_package = exact_impl.operation_packages[0]
+        exact_package = exact_impl.operation_packages[1]
+        self.assertEqual(selected_package.source_family, "selected_body_direct_intrinsic")
+        assert selected_package.selected_body_direct_intrinsic is not None
+        self.assertIs(
+            selected_package.selected_body_direct_intrinsic.source_envelope,
+            exact_impl.selected_body_envelopes[0],
+        )
         self.assertEqual(exact_package.source_family, "exact_array_backend_handoff")
         assert exact_package.exact_array_backend_handoff is not None
         self.assertIs(
@@ -13638,6 +13764,59 @@ class LoweringBoundaryTests(unittest.TestCase):
             ("array_backend_handoff_request", "lowering_operation_package"),
         )
         self.assertIs(exact_impl.generation_stages[-1].output, exact_package)
+        envelope_index = next(
+            index
+            for index, stage in enumerate(exact_impl.generation_stages)
+            if stage.output is exact_impl.selected_body_envelopes[0]
+        )
+        self.assertEqual(
+            exact_impl.generation_stages[envelope_index + 1].stage,
+            "lowering_operation_package",
+        )
+        self.assertIs(
+            exact_impl.generation_stages[envelope_index + 1].output,
+            selected_package,
+        )
+
+    def test_m95_lower_candidates_exposes_selected_body_operation_package(
+        self,
+    ) -> None:
+        selection = self.selection_for("lower_generation_size_byte_branch_chain")
+
+        result = lower_candidates(selection)
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation = next(
+            implementation
+            for implementation in result.unwrap().implementations
+            if implementation.selected_body_envelopes
+            and implementation.selected_body_envelopes[0].selected_type_tag == "si16"
+        )
+        self.assertEqual(len(implementation.operation_packages), 1)
+        operation_package = implementation.operation_packages[0]
+        self.assertEqual(
+            operation_package.source_family,
+            "selected_body_direct_intrinsic",
+        )
+        assert operation_package.selected_body_direct_intrinsic is not None
+        self.assertIs(
+            operation_package.selected_body_direct_intrinsic.source_envelope,
+            implementation.selected_body_envelopes[0],
+        )
+        self.assertEqual(
+            tuple(stage.stage for stage in implementation.generation_stages[-5:]),
+            (
+                "selected_body_lowering",
+                "selected_body_form_recognition",
+                "selected_body_ir_lowering",
+                "selected_body_envelope_lowering",
+                "lowering_operation_package",
+            ),
+        )
+        self.assertIs(
+            implementation.generation_stages[-1].output,
+            operation_package,
+        )
 
     def test_m93_exact_array_pipeline_snapshot_carries_operation_package(
         self,
@@ -13840,6 +14019,137 @@ class LoweringBoundaryTests(unittest.TestCase):
                     code=code,
                     severity="error",
                 )
+            self.assertEqual(result.diagnostics[0].location, expected_location)
+
+    def test_m95_operation_package_reports_selected_body_diagnostics(self) -> None:
+        location = SourceLocation(Path("selected.tsl"), 7, 11)
+        other_location = SourceLocation(Path("selected.tsl"), 8, 3)
+        envelope = self.selected_body_envelope(selected_type_tag="si32")
+        no_body = self.no_selected_body_envelope("si8")
+        malformed = object.__new__(SelectedBodyEnvelopeIr)
+        object.__setattr__(malformed, "candidate_id", envelope.candidate_id)
+        object.__setattr__(malformed, "selected_type_tag", envelope.selected_type_tag)
+        object.__setattr__(malformed, "source_location", envelope.source_location)
+        object.__setattr__(
+            malformed,
+            "originating_branch_chain_id",
+            envelope.originating_branch_chain_id,
+        )
+        object.__setattr__(malformed, "entries", ())
+        mismatched = self.selected_body_envelope(selected_type_tag="si32")
+        object.__setattr__(
+            mismatched.entries[0],
+            "direct_intrinsic_token_text",
+            "svptrue_b64",
+        )
+        body_ir = envelope.entries[0].source_body_ir
+
+        cases: tuple[
+            tuple[str, object, dict[str, Any], str, SourceLocation | None],
+            ...
+        ] = (
+            (
+                "no_selected_body",
+                no_body,
+                {"source_family": "selected_body_direct_intrinsic"},
+                "TSL-LOWER-OPERATION-PACKAGE-VALUE-MISSING",
+                no_body.source_location,
+            ),
+            (
+                "malformed",
+                malformed,
+                {},
+                "TSL-LOWER-OPERATION-PACKAGE-MALFORMED",
+                malformed.source_location,
+            ),
+            (
+                "family",
+                envelope,
+                {"source_family": "mini_tsil_leaf_return"},
+                "TSL-LOWER-OPERATION-PACKAGE-SOURCE-FAMILY-MISMATCH",
+                envelope.source_location,
+            ),
+            (
+                "wrong_stage",
+                GenerationLoweringStage(
+                    stage="selected_body_ir_lowering",
+                    output=body_ir,
+                ),
+                {},
+                "TSL-LOWER-OPERATION-PACKAGE-SOURCE-UNSUPPORTED",
+                body_ir.source_location,
+            ),
+            (
+                "context",
+                envelope,
+                {"candidate_id": "other-candidate"},
+                "TSL-LOWER-OPERATION-PACKAGE-CONTEXT-MISMATCH",
+                envelope.source_location,
+            ),
+            (
+                "location",
+                envelope,
+                {"source_location": other_location},
+                "TSL-LOWER-OPERATION-PACKAGE-SOURCE-LOCATION-MISMATCH",
+                envelope.source_location,
+            ),
+            (
+                "provenance",
+                mismatched,
+                {},
+                "TSL-LOWER-OPERATION-PACKAGE-PROVENANCE-MISMATCH",
+                mismatched.source_location,
+            ),
+            (
+                "missing_container",
+                LoweredImplementation(
+                    candidate_id="candidate-1",
+                    status="lowered",
+                    selected_body_envelopes=(no_body,),
+                ),
+                {"source_family": "selected_body_direct_intrinsic"},
+                "TSL-LOWER-OPERATION-PACKAGE-VALUE-MISSING",
+                no_body.source_location,
+            ),
+            (
+                "duplicate_container",
+                LoweredImplementation(
+                    candidate_id=envelope.candidate_id,
+                    status="lowered",
+                    selected_body_envelopes=(envelope, self.selected_body_envelope()),
+                ),
+                {},
+                "TSL-LOWER-OPERATION-PACKAGE-VALUE-MULTIPLE",
+                envelope.source_location,
+            ),
+            (
+                "malformed_container",
+                type(
+                    "MalformedM95Source",
+                    (),
+                    {
+                        "candidate_id": "candidate-1",
+                        "source_location": location,
+                        "selected_body_envelopes": [envelope],
+                    },
+                )(),
+                {},
+                "TSL-LOWER-OPERATION-PACKAGE-MALFORMED",
+                None,
+            ),
+        )
+
+        for name, source, kwargs, code, expected_location in cases:
+            with self.subTest(name=name):
+                result = lower_lowering_operation_package(source, **kwargs)
+
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
                 self.assertEqual(result.diagnostics[0].location, expected_location)
 
     def test_m93_operation_package_reports_handoff_provenance_mismatches(
@@ -13973,6 +14283,7 @@ class LoweringBoundaryTests(unittest.TestCase):
             lowering_operation_package_exact_array,
             lowering_operation_package_mini_tsil,
             lowering_operation_package_models,
+            lowering_operation_package_selected_body,
             lowering_operation_package_sources,
         )
         forbidden_exact_modules = (
@@ -14022,6 +14333,23 @@ class LoweringBoundaryTests(unittest.TestCase):
             self.assertNotIn("type<backend>", source)
             self.assertNotIn("Stage9", source)
             self.assertNotIn("registry", source.lower())
+            self.assertNotIn("pg", source)
+            self.assertNotIn("svptrue_b", source)
+            self.assertNotIn("byte_size", source)
+            self.assertNotIn("size_bytes", source)
+            self.assertNotIn("catalog", source.lower())
+            self.assertNotIn("renderer", source.lower())
+            self.assertNotIn("rendering", source.lower())
+            self.assertNotIn("generated", source.lower())
+            self.assertNotIn("artifact", source.lower())
+            self.assertNotIn("dispatcher", source.lower())
+            self.assertNotIn("callback", source.lower())
+            self.assertNotIn("fixpoint", source.lower())
+            self.assertNotIn("backfeed", source.lower())
+            self.assertNotIn("repair", source.lower())
+            self.assertNotIn("parser", source.lower())
+            self.assertNotIn("parse_", source.lower())
+            self.assertNotIn("syntax", source.lower())
 
         module_paths = tuple(
             Path(cast(str, operation_package_module.__file__))
@@ -14076,6 +14404,18 @@ class LoweringBoundaryTests(unittest.TestCase):
             lowering_operation_package.ExactArrayBackendHandoffOperationPackageEntryIr,
             lowering_operation_package_models.ExactArrayBackendHandoffOperationPackageEntryIr,
         )
+        self.assertIs(
+            lowering_boundary.SelectedBodyDirectIntrinsicOperationPackageEntryIr,
+            lowering_operation_package.SelectedBodyDirectIntrinsicOperationPackageEntryIr,
+        )
+        self.assertIs(
+            lowering_operation_package.SelectedBodyDirectIntrinsicOperationPackageEntryIr,
+            lowering_operation_package_selected_body.SelectedBodyDirectIntrinsicOperationPackageEntryIr,
+        )
+        self.assertIs(
+            SelectedBodyDirectIntrinsicOperationPackageEntryIr,
+            lowering_operation_package.SelectedBodyDirectIntrinsicOperationPackageEntryIr,
+        )
         self.assertIn(
             "lowering_operation_package",
             get_args(lowering_stage_contracts.GenerationLoweringStageName.__value__),
@@ -14087,6 +14427,13 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(
             cast(str, "mini_tsil_leaf_return"),
             cast(LoweringOperationPackageSourceFamily, "mini_tsil_leaf_return"),
+        )
+        self.assertEqual(
+            cast(str, "selected_body_direct_intrinsic"),
+            cast(
+                LoweringOperationPackageSourceFamily,
+                "selected_body_direct_intrinsic",
+            ),
         )
 
     def test_exact_array_initialization_slot_form_api_uses_envelope_slot_only(

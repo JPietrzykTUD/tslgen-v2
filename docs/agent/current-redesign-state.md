@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 94 is accepted.
+Milestone 95 is accepted.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -888,39 +888,73 @@ semantics, byte-size-to-token mappings, backend support, renderer-ready IR,
 source repairs, registries, dispatchers, hidden backfeeds, or fixpoint
 behavior.
 
+The M95 execution-review loop returned `Accept With Follow-Ups` after focused
+revision. M95 is accepted as a Stage 8 selected-body direct-intrinsic
+operation-package family over accepted M63 selected-body envelopes and the
+enclosed accepted M62 selected assignment/direct-intrinsic body IR. The
+revision moved selected-body package entry ownership into
+`_operation_package_selected_body.py`, preserved no-selected envelope source
+locations for explicit-family container diagnostics, and added wrong-stage and
+boundary guardrail coverage. M95 preserves `pg`, `svptrue_b*`, selected
+literals, type tags, branch ids, and source locations as provenance only; it
+adds no SVE/direct-intrinsic semantics, byte-size-to-token inference, backend
+planning, renderer-ready IR, rendering, generated output, source repair,
+registries, dispatchers, hidden backfeeds, or fixpoint machinery.
+
+M95 changed `tslgen/src/tslgen/lowering/__init__.py`,
+`tslgen/src/tslgen/lowering/_operation_package.py`,
+`tslgen/src/tslgen/lowering/_operation_package_models.py`,
+`tslgen/src/tslgen/lowering/_operation_package_selected_body.py`,
+`tslgen/src/tslgen/lowering/_operation_package_sources.py`,
+`tslgen/src/tslgen/lowering/boundary.py`, and
+`tslgen/tests/unit/test_lowering_boundary.py`. Final line counts were
+`boundary.py` 1,300, `_operation_package.py` 23,
+`_operation_package_diagnostics.py` 136,
+`_operation_package_exact_array.py` 174,
+`_operation_package_mini_tsil.py` 36,
+`_operation_package_models.py` 171,
+`_operation_package_selected_body.py` 186, and
+`_operation_package_sources.py` 819. Final validation passed: focused M95
+pytest `26 passed, 308 deselected`, full lowering-boundary pytest
+`334 passed`, lowering mypy `Success: no issues found in 35 source files`,
+full tooling validation with corpus probes `3 passed`, unittest discovery
+`668` tests OK, compileall OK, ruff OK, mypy OK across `139` source files,
+and diff-check OK.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 95 through the active execution-review-loop prompt.
+Run post-M95 planning and review with a lowering focus.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m95-execution-review-loop-prompt.md
+docs/agent/runs/post-m95-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 95: Selected-Body Direct-Intrinsic Operation Package Slice
+None. Milestone 95 is accepted; the active action is planning.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M94 planning/review returned Accept With Follow-Ups with no blocking
-issues, and human acceptance was recorded.
+M95 execution-review loop returned Accept With Follow-Ups after focused
+revision.
 ```
 
 Next expected action:
 
 ```text
-Run the active M95 execution-review-loop prompt. Use exactly one write-capable
-executor followed by read-only review/audit subagents. Before finishing,
-update this state file and create the next concrete run prompt.
+Run the active post-M95 planning-plus-review prompt. Use the specified
+read-only planning/review subagents. Do not implement code unless the prompt
+explicitly selects an executor task. Before finishing, update this state file
+and create the next concrete run prompt.
 ```
 
 Accepted planning prompt:
@@ -1757,10 +1791,16 @@ Completed post-M94 acceptance-finalization prompt:
 docs/agent/runs/post-m94-acceptance-finalization-prompt.md
 ```
 
-Active M95 execution-review loop prompt:
+Completed M95 execution-review loop prompt:
 
 ```text
 docs/agent/runs/m95-execution-review-loop-prompt.md
+```
+
+Active post-M95 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m95-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2668,26 +2708,24 @@ docs/agent/runs/m95-execution-review-loop-prompt.md
   backend translation, renderer-ready IR, rendering, generated output, broad
   source protocols, registries, semantic dispatchers, hidden backfeeds,
   fixpoint machinery, source repair, or hardwiring.
-- Post-M94 planning selected M95 as a Stage 8 operation-package family slice
-  over accepted M63 `SelectedBodyEnvelopeIr` values and enclosed accepted M62
-  `SelectedAssignmentDirectIntrinsicBodyIr` values. Human acceptance was
-  recorded, and M95 is active for execution.
-- M95 must preserve selected-body direct-intrinsic facts as typed provenance
+- M95 is accepted as a Stage 8 operation-package family slice over accepted
+  M63 `SelectedBodyEnvelopeIr` values and enclosed accepted M62
+  `SelectedAssignmentDirectIntrinsicBodyIr` values.
+- M95 preserves selected-body direct-intrinsic facts as typed provenance
   only. `svptrue_b16`, `svptrue_b32`, `svptrue_b64`, `pg`, selected literals,
   selected type tags, branch ids, extension ids, primitive names, backend ids,
   and source locations must not become semantic dispatch keys.
-- M95 must not infer byte size, vector width, predicate meaning, backend
+- M95 does not infer byte size, vector width, predicate meaning, backend
   support, or SVE/direct-intrinsic semantics from direct-intrinsic tokens. It
-  must not parse raw selected-body text, repair source bodies, add backend
+  does not parse raw selected-body text, repair source bodies, add backend
   translation, Stage 9 planning, renderer-ready IR, rendering, generated
   output, broad TSIL/body semantics, registries, dispatchers, hidden
   backfeeds, fixpoint machinery, or hardwiring.
-- M95 must isolate selected-body package validation and entry ownership in a
-  focused module such as `_operation_package_selected_body.py`.
-  `_operation_package_sources.py` may receive only narrow explicit integration
-  and must not become a generic source protocol, callback map, registry, or
-  dispatcher.
-- Future lowering package decomposition must preserve accepted M57-M94
+- M95 isolates selected-body package validation and entry ownership in
+  `_operation_package_selected_body.py`. `_operation_package_sources.py`
+  received only narrow explicit integration and must not grow into a generic
+  source protocol, callback map, registry, or dispatcher.
+- Future lowering package decomposition must preserve accepted M57-M95
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -3954,11 +3992,19 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   callback map, registry, or dispatcher while adding the selected-body
   direct-intrinsic package family. Use focused selected-body package ownership
   and keep `svptrue_b*`/`pg` fields as provenance only.
+- M95 execution follow-up: `_operation_package_sources.py` is still below the
+  1,000-line guardrail at 819 lines, but it is now the operation-package
+  pressure point. Before adding another operation-package source family, split
+  more source narrowing/package construction out of it rather than letting it
+  grow into a central package router.
+- M95 execution follow-up: `boundary.py` is exactly at the current 1,300-line
+  guardrail. Future lowering work should avoid adding ownership there and
+  should keep new behavior in focused private modules.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M95 through the
-active M95 execution-review-loop prompt.
+No stop condition is active. The workflow is ready to run post-M95 planning
+through the active post-M95 planning-plus-review prompt.
 
 ## Validation Expectations
 

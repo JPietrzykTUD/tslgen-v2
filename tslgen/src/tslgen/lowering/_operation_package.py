@@ -6,6 +6,9 @@ from tslgen.lowering._operation_package_models import (
     LoweringOperationPackageSourceFamily,
     MiniTsilLeafReturnOperationPackageEntryIr,
 )
+from tslgen.lowering._operation_package_selected_body import (
+    SelectedBodyDirectIntrinsicOperationPackageEntryIr,
+)
 from tslgen.lowering._operation_package_sources import (
     lower_lowering_operation_package,
 )
@@ -15,5 +18,6 @@ __all__ = (
     "LoweringOperationPackageIr",
     "LoweringOperationPackageSourceFamily",
     "MiniTsilLeafReturnOperationPackageEntryIr",
+    "SelectedBodyDirectIntrinsicOperationPackageEntryIr",
     "lower_lowering_operation_package",
 )

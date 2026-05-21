@@ -1389,8 +1389,8 @@ intentionally leaves new package families, semantic primitive calls, dependency
 closure, backend-uninit resolution, Stage 9 planning, renderer-ready body IR,
 generated output, broad body semantics, and broad `value<backend>(...)`
 evaluation open.
-Post-M94 planning selects one new package family for M95, but only over
-accepted M63/M62 selected-body direct-intrinsic facts. This does not resolve
+M95 is accepted as one new package family, but only over accepted M63/M62
+selected-body direct-intrinsic facts. This does not resolve
 SVE/direct-intrinsic semantics, byte-size-to-token inference, backend support,
 primitive dependencies, Stage 9 planning, renderer-ready body IR, generated
 output, broad body semantics, or broad `value<backend>(...)` evaluation.
@@ -1429,8 +1429,10 @@ ownership extraction, accepted M87 exact return-emission structural/request IR,
 accepted M88 exact array-body structural package assembly, accepted M89 exact
 array backend-deferred request inventory, and accepted M90 exact array
 lowering completion-package handoff, plus accepted M91 exact array pipeline
-ownership consolidation and accepted M92 exact array backend-handoff request,
-while body-slot semantics beyond those
+ownership consolidation, accepted M92 exact array backend-handoff request,
+accepted M93 lowering operation-package boundary, accepted M94
+operation-package ownership split, and accepted M95 selected-body
+direct-intrinsic operation package, while body-slot semantics beyond those
 exact structural/request/inventory/package boundaries, including nested
 expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
