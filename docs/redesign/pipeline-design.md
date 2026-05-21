@@ -793,18 +793,19 @@ dispatchers. It does not start Stage 9 backend planning, render output, parse
 raw body text, repair source input, infer SVE/direct-intrinsic semantics, add
 byte-size-to-token dispatch, or create hidden backfeeds/fixpoint machinery.
 
-Post-M95 planning selects M96 as a Stage 8 lowering completion manifest
-slice. The planned `lowering_completion_manifest` stage runs after accepted
+M96 is accepted as a Stage 8 lowering completion manifest slice. The
+`lowering_completion_manifest` stage runs after accepted
 `lowering_operation_package` facts and summarizes current accepted package
 families, package identities, source locations, and unresolved backend-handoff
 dependencies as one deterministic per-candidate lowering-side readiness/
-provenance contract. Any graph-like structure is an identity/provenance graph
-only, not an operation DAG, backend readiness engine, scheduler, dependency
-solver, package registry, source dispatcher, hidden backfeed, or fixpoint
-coordinator. It must not resolve backend values, read backend maps/catalogs,
-create Stage 9 plans, produce renderer-ready IR, render output, infer
-body/SVE/direct-intrinsic semantics, repair source text, or add new package
-families.
+provenance contract. It preserves accepted package and unresolved dependency
+references by object identity. Any graph-like structure is an
+identity/provenance graph only, not an operation DAG, backend readiness engine,
+scheduler, dependency solver, package registry, source dispatcher, hidden
+backfeed, or fixpoint coordinator. It does not resolve backend values, read
+backend maps/catalogs, create Stage 9 plans, produce renderer-ready IR, render
+output, infer body/SVE/direct-intrinsic semantics, repair source text, or add
+new package families.
 
 ## Stage 9: Backend Planning
 

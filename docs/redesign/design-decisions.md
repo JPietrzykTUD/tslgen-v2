@@ -1668,18 +1668,20 @@ Consequences:
   in `_operation_package_selected_body.py`, while `_operation_package_sources.py`
   remains a narrow explicit source/stage/container bridge rather than a
   generic source protocol, package registry, callback map, or dispatcher.
-- Post-M95 planning selects M96 as a Stage 8 lowering completion manifest
-  boundary. The decision is to create a deterministic per-candidate manifest
-  over accepted `LoweringOperationPackageIr` facts and explicit unresolved
-  dependency references, not to start backend planning. "Completion" and
-  "readiness" mean accepted Stage 8 package/provenance assembly status only;
-  they do not mean semantic body completion, backend readiness, renderer
-  readiness, executable readiness, or generated-output readiness. M96 must
-  avoid growing `boundary.py` or `_operation_package_sources.py`, must use
-  focused private manifest ownership, and must not introduce a backend plan,
-  operation schedule, dependency closure, renderer IR, wrapper plan, artifact
-  plan, package registry, source-family dispatcher, hidden backfeed, fixpoint
-  mechanism, source repair path, or semantic unifier.
+- M96 is accepted as a Stage 8 lowering completion manifest boundary. The
+  implementation creates a deterministic per-candidate
+  `Stage8LoweringCompletionManifestIr` over accepted
+  `LoweringOperationPackageIr` facts and explicit unresolved dependency
+  references, not backend planning. "Completion" and "readiness" mean
+  accepted Stage 8 package/provenance assembly status only; they do not mean
+  semantic body completion, backend readiness, renderer readiness, executable
+  readiness, or generated-output readiness. M96 preserves accepted package
+  and unresolved dependency references by object identity, keeps manifest
+  ownership in `_lowering_completion_manifest.py`, avoids growing
+  `boundary.py` or `_operation_package_sources.py`, and does not introduce a
+  backend plan, operation schedule, dependency closure, renderer IR, wrapper
+  plan, artifact plan, package registry, source-family dispatcher, hidden
+  backfeed, fixpoint mechanism, source repair path, or semantic unifier.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

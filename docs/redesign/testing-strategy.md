@@ -1216,21 +1216,27 @@ Recommended first parity checks:
   lowering mypy success across 35 source files, and full tooling validation
   success with corpus probes `3 passed`, unit discovery `668` tests OK,
   compileall OK, ruff OK, mypy OK across 139 source files, and diff-check OK.
-- Planned M96 coverage must prove a Stage 8 lowering completion manifest over
-  accepted operation-package facts only. Tests should cover manifest
-  construction from accepted M86 mini-TSIL leaf-return packages, accepted M92
-  exact-array backend-handoff packages, accepted M95 selected-body
-  direct-intrinsic packages, and mixed per-candidate package sets; deterministic
-  manifest keys/order; package object identity and source-location/provenance
-  preservation; unresolved backend-dependency reference preservation for exact
-  array packages; diagnostics for missing, duplicate, malformed, family-
-  mismatched, candidate-mismatched, and provenance-mismatched package facts;
+- Accepted M96 coverage proves a Stage 8 lowering completion manifest over
+  accepted operation-package facts only. Tests cover manifest construction from
+  accepted M86 mini-TSIL leaf-return packages, accepted M92 exact-array
+  backend-handoff packages, accepted M95 selected-body direct-intrinsic
+  packages, and mixed per-candidate package sets; deterministic manifest
+  keys/order; package object identity and source-location/provenance
+  preservation; unresolved backend-dependency reference preservation by object
+  identity for exact-array packages; copied/equal dependency rejection; mixed
+  candidate-package diagnostics; diagnostic source locations and message text;
   stage placement after `lowering_operation_package`; import and line-count
-  guardrails for `boundary.py`, `_operation_package_sources.py`, and the new
-  manifest module; and negative assertions that M96 introduces no Stage 9
-  planning, backend map/catalog reads, backend-value resolution, renderer-ready
-  IR, rendering, generated output, source repair, registry, dispatcher,
-  scheduler, hidden backfeed, or fixpoint behavior.
+  guardrails for `boundary.py`, `_operation_package_sources.py`, and
+  `_lowering_completion_manifest.py`; and negative assertions that M96
+  introduces no Stage 9 planning, backend map/catalog reads, backend-value
+  resolution, renderer-ready IR, rendering, generated output, source repair,
+  registry, dispatcher, scheduler, hidden backfeed, or fixpoint behavior. M96
+  validation returned line counts `1300 / 819 / 776`, focused pytest
+  `17 passed, 326 deselected`, full lowering-boundary pytest `343 passed`,
+  focused lowering mypy success across 36 source files, and full tooling
+  validation success with corpus probes `3 passed`, unit discovery `677` tests
+  OK, compileall OK, ruff OK, mypy OK across 140 source files, and diff-check
+  OK.
 
 Deferred parity checks:
 

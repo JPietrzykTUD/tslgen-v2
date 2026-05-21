@@ -20,23 +20,24 @@ from tslgen.domain.values import CatalogValue
 import tslgen.lowering._generation_control_flow as _generation_control_flow
 import tslgen.lowering._generation_diagnostics as _generation_diagnostics
 import tslgen.lowering._generation_queries as _generation_queries
-import tslgen.lowering._array_body_diagnostics as _array_body_diagnostics
+import tslgen.lowering._array_body_diagnostics as _array_body_diagnostics  # noqa: F401
 import tslgen.lowering._array_body_lowering as _array_body_lowering
-import tslgen.lowering._array_body_models as _array_body_models
+import tslgen.lowering._array_body_models as _array_body_models  # noqa: F401
 import tslgen.lowering._array_body_package as _array_body_package
 import tslgen.lowering._array_body_backend_deferred_requests as _array_body_backend_deferred_requests
 import tslgen.lowering._array_body_completion_package as _array_body_completion_package
 import tslgen.lowering._array_body_backend_handoff as _array_body_backend_handoff
 import tslgen.lowering._array_body_pipeline as _array_body_pipeline
-import tslgen.lowering._array_body_shapes as _array_body_shapes
+import tslgen.lowering._array_body_shapes as _array_body_shapes  # noqa: F401
 import tslgen.lowering._array_body_sources as _array_body_sources
-import tslgen.lowering._array_body_validation as _array_body_validation
+import tslgen.lowering._array_body_validation as _array_body_validation  # noqa: F401
 import tslgen.lowering._lowering_inputs as _lowering_inputs
+import tslgen.lowering._lowering_completion_manifest as _lowering_completion_manifest
 import tslgen.lowering._mini_tsil_lowering as _mini_tsil_lowering
 import tslgen.lowering._operation_package as _operation_package
 import tslgen.lowering._return_emission as _return_emission
 import tslgen.lowering._selected_body_lowering as _selected_body_lowering
-import tslgen.lowering._stage_contracts as _stage_contracts
+import tslgen.lowering._stage_contracts as _stage_contracts  # noqa: F401
 from tslgen.lowering._lowering_inputs import (
     ClassifiedPayload as ClassifiedPayload,
     LoweringInput as LoweringInput,
@@ -82,30 +83,30 @@ from tslgen.lowering._array_body_models import (
     ExactArrayBodyEnvelopeSkeleton,
     ExactArrayBodyEnvelopeSkeletonKey as ExactArrayBodyEnvelopeSkeletonKey,
     ExactArrayBodyEnvelopeSkeletonRequirement,
-    ExactArrayBodyEnvelopeSkeletonSlot,
+    ExactArrayBodyEnvelopeSkeletonSlot,  # noqa: F401
     ExactArrayBodyEnvelopeSlot as ExactArrayBodyEnvelopeSlot,
     ExactArrayBodyEnvelopeSlotLabel as ExactArrayBodyEnvelopeSlotLabel,
-    ExactArrayBodyStructuralRoleLabel,
+    ExactArrayBodyStructuralRoleLabel,  # noqa: F401
     ExactArrayBodyStructuralSequenceIr,
     ExactArrayInitializationBaseTypeResolutionIr,
     ExactArrayInitializationDeclarationShellIr,
     ExactArrayInitializationDeferredBackendUninitValue as ExactArrayInitializationDeferredBackendUninitValue,
-    ExactArrayInitializationHelperLeafFieldName,
+    ExactArrayInitializationHelperLeafFieldName,  # noqa: F401
     ExactArrayInitializationHelperLeafKind as ExactArrayInitializationHelperLeafKind,
     ExactArrayInitializationHelperRequestIr,
-    ExactArrayInitializationHelperRequestKind,
+    ExactArrayInitializationHelperRequestKind,  # noqa: F401
     ExactArrayInitializationHelperRequestRecord as ExactArrayInitializationHelperRequestRecord,
     ExactArrayInitializationHelperSetCompletionIr,
     ExactArrayInitializationSlotFormIr,
     ExactArrayInitializationUnresolvedLeaf as ExactArrayInitializationUnresolvedLeaf,
-    ExactArrayInitializationVectorAlignmentKind,
+    ExactArrayInitializationVectorAlignmentKind,  # noqa: F401
     ExactArrayInitializationVectorAlignmentMetadata,
     ExactArrayInitializationVectorAlignmentResolutionIr,
-    ExactArrayInitializationVectorAlignmentValue,
-    ExactArrayInitializationVectorLengthKind,
+    ExactArrayInitializationVectorAlignmentValue,  # noqa: F401
+    ExactArrayInitializationVectorLengthKind,  # noqa: F401
     ExactArrayInitializationVectorLengthMetadata,
     ExactArrayInitializationVectorLengthResolutionIr,
-    ExactArrayInitializationVectorLengthValue,
+    ExactArrayInitializationVectorLengthValue,  # noqa: F401
     ExactPostBranchIntrinsicCallSiteStructuralRequestIr,
     ExactPredicatePathSelectedUpdateState as ExactPredicatePathSelectedUpdateState,
     ExactPredicatePathStructuralRequestIr,
@@ -135,51 +136,15 @@ from tslgen.lowering._operation_package import (
 )
 from tslgen.lowering._stage_contracts import (
     GenerationLoweringStage,
-    GenerationLoweringStageName,
-    GenerationLoweringStageOutput,
-    TsilBinaryExpression,
-    TsilBinaryOperator,
-    TsilExpression,
-    TsilIntrinsicComposeExpression,
-    TsilParameterReference,
-    TsilReturnStatement,
+    GenerationLoweringStageName,  # noqa: F401
+    GenerationLoweringStageOutput,  # noqa: F401
+    TsilBinaryExpression,  # noqa: F401
+    TsilIntrinsicComposeExpression,  # noqa: F401
+    TsilParameterReference,  # noqa: F401
+    TsilReturnStatement,  # noqa: F401
     TsilStatement,
 )
 
-
-_ARRAY_BODY_MODEL_FACADE_EXPORTS = (
-    _array_body_diagnostics,
-    _array_body_models,
-    _array_body_package,
-    _array_body_backend_deferred_requests,
-    _array_body_completion_package,
-    _array_body_backend_handoff,
-    _operation_package,
-    _array_body_shapes,
-    _array_body_validation,
-    _return_emission,
-    ExactArrayBodyEnvelopeSkeletonSlot,
-    ExactArrayBodyStructuralRoleLabel,
-    ExactArrayInitializationHelperLeafFieldName,
-    ExactArrayInitializationHelperRequestKind,
-    ExactArrayInitializationVectorAlignmentValue,
-    ExactArrayInitializationVectorAlignmentKind,
-    ExactArrayInitializationVectorLengthValue,
-    ExactArrayInitializationVectorLengthKind,
-)
-_STAGE_CONTRACT_FACADE_EXPORTS = (
-    _stage_contracts,
-    GenerationLoweringStage,
-    GenerationLoweringStageName,
-    GenerationLoweringStageOutput,
-    TsilBinaryExpression,
-    TsilBinaryOperator,
-    TsilExpression,
-    TsilIntrinsicComposeExpression,
-    TsilParameterReference,
-    TsilReturnStatement,
-    TsilStatement,
-)
 
 _ArrayBodyEnvelopeSkeletonLookup = _array_body_pipeline._ArrayBodyEnvelopeSkeletonLookup
 _ExactArrayInitializationStagePipelineResult = _array_body_pipeline._ExactArrayInitializationStagePipelineResult
@@ -448,6 +413,7 @@ class LoweredImplementation:
         ExactArrayBackendHandoffRequestIr, ...
     ] = ()
     operation_packages: tuple[LoweringOperationPackageIr, ...] = ()
+    lowering_completion_manifests: tuple[_lowering_completion_manifest.Stage8LoweringCompletionManifestIr, ...] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -579,11 +545,8 @@ class LoweredImplementation:
             "array_backend_handoff_requests",
             tuple(self.array_backend_handoff_requests),
         )
-        object.__setattr__(
-            self,
-            "operation_packages",
-            tuple(self.operation_packages),
-        )
+        object.__setattr__(self, "operation_packages", tuple(self.operation_packages))
+        object.__setattr__(self, "lowering_completion_manifests", tuple(self.lowering_completion_manifests))
         object.__setattr__(
             self,
             "generation_stages",
@@ -666,6 +629,7 @@ class LoweredImplementation:
             ),
             tuple(request.key for request in self.array_backend_handoff_requests),
             tuple(package.key for package in self.operation_packages),
+            tuple(manifest.key for manifest in self.lowering_completion_manifests),
             tuple(stage.key for stage in self.generation_stages),
         )
 
@@ -938,6 +902,12 @@ def _lowering_operation_package_stage(
     return GenerationLoweringStage(stage="lowering_operation_package", output=output)
 
 
+def _lowering_completion_manifest_stage(
+    output: _lowering_completion_manifest.Stage8LoweringCompletionManifestIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(stage="lowering_completion_manifest", output=output)
+
+
 def _selected_body_form_recognition_stage(
     output: GenerationSelectedBranchBodyAssignmentRecognition,
 ) -> GenerationLoweringStage:
@@ -1095,6 +1065,26 @@ def _lower_input(
             array_initialization_pipeline = (
                 array_initialization_pipeline_result.unwrap()
             )
+            operation_packages = (
+                *selected_body_operation_packages,
+                *array_initialization_pipeline.operation_packages,
+            )
+            manifests: tuple[_lowering_completion_manifest.Stage8LoweringCompletionManifestIr, ...] = ()
+            if operation_packages:
+                manifest_result = (
+                    _lowering_completion_manifest.lower_stage8_lowering_completion_manifest(
+                        operation_packages,
+                        candidate_id=item.candidate_id,
+                    )
+                )
+                if not manifest_result.is_ok:
+                    return Result.failure(manifest_result.diagnostics)
+                manifests = (manifest_result.unwrap(),)
+            manifest_stages = (
+                (_lowering_completion_manifest_stage(manifests[0]),)
+                if manifests
+                else ()
+            )
             return Result.ok(
                 LoweredImplementation(
                     candidate_id=item.candidate_id,
@@ -1155,10 +1145,8 @@ def _lower_input(
                     array_backend_handoff_requests=(
                         array_initialization_pipeline.array_backend_handoff_requests
                     ),
-                    operation_packages=(
-                        *selected_body_operation_packages,
-                        *array_initialization_pipeline.operation_packages,
-                    ),
+                    operation_packages=operation_packages,
+                    lowering_completion_manifests=manifests,
                     generation_stages=(
                         _recognition_stage(
                             "generation.control_flow",
@@ -1181,6 +1169,7 @@ def _lower_input(
                         envelope_stage,
                         *selected_body_operation_package_stages,
                         *array_initialization_pipeline.stages,
+                        *manifest_stages,
                     ),
                 )
             )
@@ -1209,6 +1198,15 @@ def _lower_input(
     if not operation_package_result.is_ok:
         return Result.failure(operation_package_result.diagnostics)
     operation_package = operation_package_result.unwrap()
+    manifest_result = (
+        _lowering_completion_manifest.lower_stage8_lowering_completion_manifest(
+            (operation_package,), candidate_id=item.candidate_id,
+            source_location=item.source_location
+        )
+    )
+    if not manifest_result.is_ok:
+        return Result.failure(manifest_result.diagnostics)
+    manifest = manifest_result.unwrap()
 
     return Result.ok(
         LoweredImplementation(
@@ -1217,10 +1215,12 @@ def _lower_input(
             statements=(lowered_statement,),
             generation_branches=generation_branches,
             operation_packages=(operation_package,),
+            lowering_completion_manifests=(manifest,),
             generation_stages=(
                 *generation_stages,
                 _selected_body_stage(lowered_statement),
                 _lowering_operation_package_stage(operation_package),
+                _lowering_completion_manifest_stage(manifest),
             ),
         )
     )

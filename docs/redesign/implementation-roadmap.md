@@ -12829,9 +12829,10 @@ Next concrete prompt:
 
 Status:
 
-Planned for execution. Post-M95 planning is accepted. It selected this
-milestone, and internal planner, boundary, extensibility, and documentation
-review returned `Accept With Follow-Ups` after local planning-doc revisions.
+Accepted. The M96 execution-review loop returned `Accept With Follow-Ups`
+after one focused identity/provenance revision. Review found no remaining
+blocking implementation, validation, boundary, extensibility, or documentation
+issues after that revision.
 
 Goal:
 
@@ -12848,29 +12849,29 @@ renderer readiness, executable readiness, or generated-output readiness.
 
 Scope:
 
-- Add focused private lowering ownership, such as
-  `_lowering_completion_manifest.py`, for manifest models, diagnostics, and
-  manifest assembly. Split into another focused module if one file would grow
-  toward the module-size guardrail.
-- Consume accepted `LoweringOperationPackageIr` values as the primary input.
+- Added focused private lowering ownership in
+  `_lowering_completion_manifest.py` for manifest models, diagnostics,
+  validation, and assembly.
+- Consumes accepted `LoweringOperationPackageIr` values as the primary input.
   Family-specific M86 mini-TSIL leaf-return values, accepted M92 exact array
   backend-handoff values, and accepted M95 selected-body direct-intrinsic
-  values may be reached only through those accepted package entries and
+  values are reached only through those accepted package entries and
   already-preserved object references.
-- Preserve accepted M92/M90 unresolved backend-handoff dependency provenance
-  as unresolved lowering-side manifest records. Do not resolve those
+- Preserves accepted M92/M90 unresolved backend-handoff dependency provenance
+  as unresolved lowering-side manifest records. It does not resolve those
   dependencies.
-- Produce one deterministic per-candidate typed manifest value, such as
+- Produces one deterministic per-candidate typed manifest value,
   `Stage8LoweringCompletionManifestIr`, with candidate identity, package keys,
   source-family identities, package-entry identities, source locations,
   unresolved-dependency summaries, and readiness/provenance status.
-- Add one deterministic Stage 8 stage, such as
-  `lowering_completion_manifest`, after accepted `lowering_operation_package`
+- Adds one deterministic Stage 8 stage, `lowering_completion_manifest`, after
+  accepted `lowering_operation_package`
   facts without changing accepted M86/M92/M95 package behavior, object
   identity, diagnostics, selected-branch-only behavior, stage ordering, or
   pipeline snapshots.
-- Keep `boundary.py` and `_operation_package_sources.py` from absorbing new
-  ownership. Any facade integration must be minimal and import-stable.
+- Keeps `boundary.py` and `_operation_package_sources.py` from absorbing new
+  ownership. `boundary.py` coordinates the stage only, and
+  `_operation_package_sources.py` is unchanged.
 
 Out of scope:
 
@@ -12911,8 +12912,8 @@ Expected outputs:
   keys, malformed package entries, mixed candidate context,
   source-location/provenance mismatches, wrong stage/order, ambiguous
   containers, and dependency provenance mismatches.
-- Public facade stability if the manifest type is exported; otherwise a
-  narrow private module boundary with tests that prove imports remain one-way.
+- A narrow private module boundary with tests that prove imports remain
+  one-way. The manifest is not exported as public API in M96.
 
 Tests required:
 
@@ -12927,7 +12928,8 @@ Tests required:
 - Negative tests for unsupported sources, no packages, duplicate package keys,
   malformed package entries, candidate/source-location/provenance mismatch,
   wrong stage inputs, ambiguous containers, and unresolved dependency
-  provenance mismatch.
+  provenance mismatch, including equal-but-copied unresolved dependency
+  requests.
 - Import-boundary, line-count, and forbidden-behavior tests proving no growth
   in `boundary.py`, no new `_operation_package_sources.py` package router, no
   backend maps/catalog reads, no backend planning, no renderer-ready IR, no
@@ -12943,6 +12945,22 @@ Validation commands:
 - `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering`
 - `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`
 - `git diff --check`
+
+Validation result:
+
+- Line-count validation returned `boundary.py` 1,300,
+  `_operation_package_sources.py` 819, `_lowering_completion_manifest.py` 776,
+  and `2,895 total`.
+- Py-compile returned exit 0 with no output.
+- Focused M96/manifest/operation-package pytest returned
+  `17 passed, 326 deselected in 18.10s`.
+- Full lowering-boundary pytest returned `343 passed in 148.42s`.
+- Lowering mypy returned `Success: no issues found in 36 source files`.
+- Full tooling validation returned corpus probes `3 passed`, unittest
+  discovery `Ran 677 tests ... OK`, compileall OK, ruff
+  `All checks passed!`, mypy `Success: no issues found in 140 source files`,
+  and diff-check OK.
+- Standalone `git diff --check` returned exit 0 with no output.
 
 Review risks:
 
@@ -12963,14 +12981,18 @@ Review risks:
 
 Planning follow-ups:
 
-- Stage 9 backend planning remains deferred after M96. If M96 is accepted and
-  implemented, the next planning pass may decide whether enough lowering-side
-  manifest data exists to select a narrow backend-planning handoff milestone.
-- `_operation_package_sources.py` is already at 819 lines and `boundary.py` at
-  1,300 lines after M95. M96 must add focused manifest ownership instead of
-  increasing either pressure point.
+- Stage 9 backend planning remains deferred after M96. The next planning pass
+  should focus on lowering unless it explicitly selects a narrow,
+  boundary-reviewed handoff.
+- `boundary.py` remains exactly at the 1,300-line guardrail and
+  `_operation_package_sources.py` remains exactly at 819 lines. The next
+  lowering slice should extract before adding ownership to either pressure
+  point.
+- If the Stage 8 manifest becomes public API later, add explicit
+  facade/export stability tests. It is currently a private lowering module
+  with stage-contract integration.
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m95-acceptance-finalization-prompt.md` records human
-  acceptance before M96 execution.
+- `docs/agent/runs/post-m96-planning-plus-review-prompt.md` runs post-M96
+  planning and review with a lowering focus.

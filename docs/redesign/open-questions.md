@@ -1394,14 +1394,14 @@ selected-body direct-intrinsic facts. This does not resolve
 SVE/direct-intrinsic semantics, byte-size-to-token inference, backend support,
 primitive dependencies, Stage 9 planning, renderer-ready body IR, generated
 output, broad body semantics, or broad `value<backend>(...)` evaluation.
-Post-M95 planning selects M96 to narrow the cross-family Stage 8 organization
-question by creating a deterministic lowering completion manifest over
-accepted operation-package facts and explicit unresolved dependency references.
-That planned manifest still leaves semantic body completion, backend-uninit
-resolution, backend maps, backend support decisions, operation scheduling,
-dependency closure, Stage 9 backend planning, renderer-ready body IR,
-generated output, broad body semantics, and broad `value<backend>(...)`
-evaluation open.
+M96 narrows the cross-family Stage 8 organization question by creating a
+deterministic lowering completion manifest over accepted operation-package
+facts and explicit unresolved dependency references. The accepted manifest
+preserves package and unresolved dependency references by object identity, but
+still leaves semantic body completion, backend-uninit resolution, backend
+maps, backend support decisions, operation scheduling, dependency closure,
+Stage 9 backend planning, renderer-ready body IR, generated output, broad body
+semantics, and broad `value<backend>(...)` evaluation open.
 
 Remaining deferred work includes broad TSIL grammar, full translation-map
 evaluation, prefix/post/infix/immediate modifiers beyond the selected suffix,
@@ -1439,8 +1439,8 @@ array backend-deferred request inventory, and accepted M90 exact array
 lowering completion-package handoff, plus accepted M91 exact array pipeline
 ownership consolidation, accepted M92 exact array backend-handoff request,
 accepted M93 lowering operation-package boundary, accepted M94
-operation-package ownership split, and accepted M95 selected-body
-direct-intrinsic operation package, plus planned M96 lowering completion
+operation-package ownership split, accepted M95 selected-body
+direct-intrinsic operation package, and accepted M96 lowering completion
 manifest, while body-slot semantics beyond those exact structural/request/
 inventory/package/manifest boundaries, including nested expressions, direct
 `intrin<...>` calls, helper families such as `io`, `mem`, `seq`, `pack`, and
