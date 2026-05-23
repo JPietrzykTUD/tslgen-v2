@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 99 is accepted.
+Milestone 100 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -17,6 +17,16 @@ Post-M99 planning selected
 `Milestone 100: Exact Array Backend-Uninit Translation Result Boundary Slice`,
 and internal planning review returned `Accept With Follow-Ups`. Human
 acceptance was recorded.
+
+The M100 execution-review loop returned `Accept With Follow-Ups` after focused
+rule-validation, source/container diagnostic, determinism, and documentation
+revisions. M100 added the typed
+`exact_array_backend_uninit_translation_result` stage after the accepted M99
+request-inventory stage when explicit typed C++ `value_array_uninit` rules are
+supplied. It preserved accepted M99/M97/M96/M92/M72/M67 provenance identities
+and kept rendering, output, Stage 9 planning, Rust translation, generic backend
+helper evaluation, backend map/catalog/manifest reads, raw helper parsing,
+source repair, and direct-intrinsic/SVE semantics out of scope.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1090,33 +1100,32 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 100.
+Run post-M100 planning and review.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m100-execution-review-loop-prompt.md
+docs/agent/runs/post-m100-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 100: Exact Array Backend-Uninit Translation Result Boundary Slice
+None. M100 is accepted; the next action is planning.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M99 planning returned Accept With Follow-Ups after planner, boundary,
-extensibility, and documentation review.
+M100 execution-review returned Accept With Follow-Ups after focused revision.
 ```
 
 Next expected action:
 
 ```text
-Run the active M100 execution-review-loop prompt. Use one write-capable
-executor followed by read-only review/audit subagents.
+Run the active post-M100 planning-plus-review prompt. Focus on lowering and do
+not implement code unless that prompt explicitly selects an executor task.
 ```
 
 Accepted planning prompt:
@@ -2043,10 +2052,16 @@ Completed post-M99 acceptance-finalization prompt:
 docs/agent/runs/post-m99-acceptance-finalization-prompt.md
 ```
 
-Active M100 execution-review-loop prompt:
+Completed M100 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m100-execution-review-loop-prompt.md
+```
+
+Active post-M100 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m100-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -4407,11 +4422,14 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - Post-M99 planning follow-up for M100 execution: use focused module ownership
   and avoid growing `boundary.py`, M99 request-inventory modules, or existing
   near-guardrail backend translation modules into replacement monoliths.
+- M100 execution follow-up: future milestones should avoid adding more
+  orchestration to `boundary.py` without extracting boundary request/result
+  assembly, because `boundary.py` remains close to the module-size guardrail.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M100 through the
-active M100 execution-review-loop prompt.
+No stop condition is active. The workflow is ready for post-M100 planning
+through the active post-M100 planning-plus-review prompt.
 
 ## Validation Expectations
 

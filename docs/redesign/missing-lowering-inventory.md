@@ -12,7 +12,7 @@ typed redesign contracts, explicit evidence, diagnostics, and tests.
 
 ## Current Baseline
 
-Accepted through M99:
+Accepted through M100:
 
 - Generation-time lowering handles only the accepted typed helper/predicate
   forms from M38, M41-M43, M48, M51-M59, and M67-M72.
@@ -21,11 +21,12 @@ Accepted through M99:
 - Exact array-body lowering handles only the accepted M64-M76 structural and
   request forms plus M87-M92 return/package/backend-handoff slices.
 - Stage 8 operation packages, completion manifests, gap inventories, stage
-  assembly, and backend-translation request inventories are accepted through
-  M93-M99.
-- Backend translation, Stage 9 planning, renderer-ready IR, rendering,
-  generated output, dependency closure, and broad TSIL semantics remain
-  deferred unless a milestone explicitly selects a narrow slice.
+  assembly, backend-translation request inventories, and the exact C++
+  backend-uninit translation-result boundary are accepted through M93-M100.
+- Broad backend translation, Stage 9 planning, renderer-ready IR, rendering,
+  generated output, dependency closure, Rust uninit translation, and broad TSIL
+  semantics remain deferred unless a milestone explicitly selects a narrow
+  slice.
 
 M99 is accepted:
 
@@ -41,13 +42,13 @@ The accepted M99 inventory records exact-array
 `selected_body_direct_intrinsic_handoff`, and
 `no_accepted_backend_scoped_request` states.
 
-Post-M99 planning selected:
+Post-M99 planning selected and M100 execution accepted:
 
 ```text
 Milestone 100: Exact Array Backend-Uninit Translation Result Boundary Slice
 ```
 
-M100 is planned as the first request-to-translation-result boundary. It narrows
+M100 is the first accepted request-to-translation-result boundary. It narrows
 only the exact-array `exact_array_backend_value_uninit_array` request to typed
 C++ backend-uninit translation-result state from explicit typed rule/metadata
 input. It does not render C++ or Rust code, start Stage 9 backend planning,
@@ -64,8 +65,8 @@ tracks the broader known missing lowering surface.
 
 | Area | Evidence paths | Current accepted boundary | Required typed fact/request | Candidate milestone | Boundary notes |
 | --- | --- | --- | --- | --- | --- |
-| Stage 8 to backend handoff | `tsldata/primitives/load_store/array.tsl`, accepted M92/M96/M97/M99 records | M99 accepts the first cross-package backend-scoped request inventory over accepted package/manifest/gap facts. | Additional typed request families as they are accepted; later backend resolution/translation consumes the inventory. | Accepted M99 plus planned M100 for one exact C++ backend-uninit result | M100 is translation-result only: no Stage 9 planning, rendering, output, scheduling, dependency closure, or inferred requests. |
-| Backend value/type requests | `tsldata/detail/lang/types/types_cpp.tsl`, `tsldata/detail/lang/translate_cpp.tsl`, array/uninit evidence | M72 preserves exact `value<backend>(uninit::array)` as deferred state; M92 carries it as handoff; M99 inventories it as `exact_array_backend_value_uninit_array`. | Typed backend value/type request records over already resolved semantic values; planned M100 adds one typed C++ exact-array uninit translation result from explicit typed rule input. | Planned M100 for exact C++ uninit; later backend-request slices for Rust and broader values/types | Do not parse raw helper text, read backend maps/catalogs/manifests during lowering, or evaluate backend maps in renderers. Rust remains deferred because its `value_array_uninit` spelling needs typed `{type}` context not accepted for this request. |
+| Stage 8 to backend handoff | `tsldata/primitives/load_store/array.tsl`, accepted M92/M96/M97/M99 records | M99 accepts the first cross-package backend-scoped request inventory over accepted package/manifest/gap facts; M100 accepts one exact C++ backend-uninit translation-result boundary after that inventory. | Additional typed request families as they are accepted; later backend resolution/translation consumes the inventory. | Accepted M99 plus accepted M100 for one exact C++ backend-uninit result | M100 is translation-result only: no Stage 9 planning, rendering, output, scheduling, dependency closure, or inferred requests. |
+| Backend value/type requests | `tsldata/detail/lang/types/types_cpp.tsl`, `tsldata/detail/lang/translate_cpp.tsl`, array/uninit evidence | M72 preserves exact `value<backend>(uninit::array)` as deferred state; M92 carries it as handoff; M99 inventories it as `exact_array_backend_value_uninit_array`; M100 resolves that exact C++ request to a typed translation-result value from explicit typed rule input. | Typed backend value/type request records over already resolved semantic values; additional exact/broad value/type results remain missing. | Accepted M100 for exact C++ uninit; later backend-request slices for Rust and broader values/types | Do not parse raw helper text, read backend maps/catalogs/manifests during lowering, or evaluate backend maps in renderers. Rust remains deferred because its `value_array_uninit` spelling needs typed `{type}` context not accepted for this request. |
 | Direct intrinsics | `tsldata/primitives/load_store/array.tsl`, `load_store/store.tsl`, accepted M62/M63/M76/M95 facts | M62/M63/M95 preserve only selected assignment direct-intrinsic facts; M76 preserves one exact post-branch call-site structural request. | Typed direct-intrinsic call/body request records and diagnostics. | Later direct-intrinsic slice | No SVE hardwiring, byte-size-to-token inference, or intrinsic-text dispatch. |
 | Intrinsic modifiers | `tsldata/primitives/bitwise/shifts.tsl`, `conversion/repr_change.tsl`, `frozen/tsl-gen/tsl_gen/tsil.lark` | M38 and M45 cover selected compose/suffix behavior for narrow add output paths. | Typed modifier records for prefix, suffix, infix, post, and immediate fields. | Later modifier slice | Translation consumes typed records; renderers do not infer modifiers. |
 | Primitive calls and dependencies | `frozen/tsl-gen/tsl_gen/tsil_engine/dependencies.py`, `tsldata/primitives/**.tsl` | Candidate fallback visibility exists; semantic TSIL call AST and dependency closure remain deferred. | Typed primitive-call IR, dependency request records, and closure policy. | Later call/dependency slice | No dependency closure hidden inside lowering inventories. |
@@ -88,7 +89,7 @@ tracks the broader known missing lowering surface.
 - Keep inventories as inventories: no backend planning, operation scheduling,
   dependency closure, renderer-ready IR, rendering, output, hidden backfeeds,
   or fixpoint behavior.
-- Keep planned M100 translation results as typed backend value state only: no
+- Keep M100 translation results as typed backend value state only: no
   renderer-ready IR, generated source, artifact plans, Stage 9 planning, Rust,
   direct-intrinsic/SVE semantics, or generic backend helper evaluation.
 - Keep new ownership in focused private modules and keep public facade changes

@@ -839,8 +839,7 @@ backend maps, create Stage 9 plans, schedule operations, solve dependencies,
 produce renderer-ready IR, render output, scan raw source bodies, or infer
 direct-intrinsic/SVE semantics.
 
-Post-M99 planning selects M100 as a narrow Stage 8 typed
-translation-result boundary after
+M100 accepts a narrow Stage 8 typed translation-result boundary after
 `lowering_backend_translation_request_inventory`. M100 consumes only accepted
 M99 exact-array `exact_array_backend_value_uninit_array` records plus explicit
 typed C++ `value_array_uninit` rule values supplied to the stage, then produces

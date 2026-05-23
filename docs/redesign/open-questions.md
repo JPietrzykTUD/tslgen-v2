@@ -8,7 +8,7 @@ Status: Narrowed by post-M99 planning; broad support remains open.
 
 Why it matters:
 
-M100 is selected to resolve only the accepted exact-array C++
+M100 is accepted for resolving only the accepted exact-array C++
 `value<backend>(uninit::array)` request into typed translation-result state.
 The broader backend-value/type surface still includes Rust uninit values,
 scalar and vector backend type spellings, modifier values, direct-intrinsic

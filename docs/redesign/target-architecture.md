@@ -739,7 +739,7 @@ Current roadmap note:
   maps/catalogs, pass unresolved generation helper text into backend
   translation, create Stage 9 plans, render output, or infer backend/direct-
   intrinsic semantics from preserved source text.
-- M100 is selected as a Stage 8 typed translation-result boundary for the
+- M100 is accepted as a Stage 8 typed translation-result boundary for the
   exact-array C++ backend-uninit request. The architecture should keep M100
   ownership in focused private lowering modules over accepted M99 request
   records and explicit typed C++ rule values. It must not grow the M99

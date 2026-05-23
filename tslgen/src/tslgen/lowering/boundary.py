@@ -35,6 +35,7 @@ import tslgen.lowering._lowering_inputs as _lowering_inputs
 import tslgen.lowering._lowering_completion_manifest as _lowering_completion_manifest
 import tslgen.lowering._lowering_completion_gap_inventory as _lowering_completion_gap_inventory
 import tslgen.lowering._lowering_backend_translation_request_inventory as _lowering_backend_translation_request_inventory
+import tslgen.lowering._lowering_backend_translation_result as _lowering_backend_translation_result
 import tslgen.lowering._lowering_stage_assembly as _stage_assembly
 import tslgen.lowering._mini_tsil_lowering as _mini_tsil_lowering
 import tslgen.lowering._operation_package as _operation_package
@@ -179,9 +180,14 @@ lower_exact_array_backend_deferred_request_inventory = _array_body_backend_defer
 lower_exact_array_lowering_completion_package = _array_body_completion_package.lower_exact_array_lowering_completion_package
 lower_exact_array_backend_handoff_request = _array_body_backend_handoff.lower_exact_array_backend_handoff_request
 lower_lowering_operation_package = _operation_package.lower_lowering_operation_package
+lower_exact_array_backend_uninit_translation_result = _lowering_backend_translation_result.lower_exact_array_backend_uninit_translation_result
 _classify_payload = _lowering_inputs._classify_payload
 _unsupported_payload_diagnostic = _lowering_inputs._unsupported_payload_diagnostic
 _mini_return_statement = _mini_tsil_lowering._mini_return_statement
+
+ExactArrayBackendUninitTranslationRule = _lowering_backend_translation_result.ExactArrayBackendUninitTranslationRule
+ExactArrayBackendUninitTranslationRecordIr = _lowering_backend_translation_result.ExactArrayBackendUninitTranslationRecordIr
+ExactArrayBackendUninitTranslationResultIr = _lowering_backend_translation_result.ExactArrayBackendUninitTranslationResultIr
 
 type LoweringStatus = Literal["lowered", "unsupported"]
 
@@ -267,6 +273,7 @@ class LoweringRequest:
     required_array_body_envelope_skeletons: tuple[
         ExactArrayBodyEnvelopeSkeletonRequirement, ...
     ] = ()
+    exact_array_backend_uninit_translation_rules: tuple[ExactArrayBackendUninitTranslationRule, ...] = ()
 
     def __post_init__(self) -> None:
         if self.strategy not in ("mini_tsil", "typed_opaque"):
@@ -296,6 +303,7 @@ class LoweringRequest:
                 )
             ),
         )
+        object.__setattr__(self, "exact_array_backend_uninit_translation_rules", tuple(sorted(self.exact_array_backend_uninit_translation_rules, key=lambda rule: rule.key)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -418,6 +426,7 @@ class LoweredImplementation:
     lowering_completion_manifests: tuple[_lowering_completion_manifest.Stage8LoweringCompletionManifestIr, ...] = ()
     lowering_completion_gap_inventories: tuple[_lowering_completion_gap_inventory.Stage8LoweringCompletionGapInventoryIr, ...] = ()
     lowering_backend_translation_request_inventories: tuple[_lowering_backend_translation_request_inventory.Stage8BackendTranslationRequestInventoryIr, ...] = ()
+    exact_array_backend_uninit_translation_results: tuple[ExactArrayBackendUninitTranslationResultIr, ...] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -555,6 +564,11 @@ class LoweredImplementation:
         object.__setattr__(self, "lowering_backend_translation_request_inventories", tuple(self.lowering_backend_translation_request_inventories))
         object.__setattr__(
             self,
+            "exact_array_backend_uninit_translation_results",
+            tuple(self.exact_array_backend_uninit_translation_results),
+        )
+        object.__setattr__(
+            self,
             "generation_stages",
             tuple(self.generation_stages),
         )
@@ -640,6 +654,10 @@ class LoweredImplementation:
             tuple(
                 inventory.key
                 for inventory in self.lowering_backend_translation_request_inventories
+            ),
+            tuple(
+                result.key
+                for result in self.exact_array_backend_uninit_translation_results
             ),
             tuple(stage.key for stage in self.generation_stages),
         )
@@ -1015,6 +1033,9 @@ def _lower_input(
             completion_tail = _stage_assembly._assemble_stage8_completion_tail(
                 operation_packages,
                 candidate_id=item.candidate_id,
+                exact_array_backend_uninit_translation_rules=(
+                    request.exact_array_backend_uninit_translation_rules
+                ),
             )
             if not completion_tail.is_ok:
                 return Result.failure(completion_tail.diagnostics)
@@ -1089,6 +1110,9 @@ def _lower_input(
                     lowering_backend_translation_request_inventories=(
                         assembled_tail.lowering_backend_translation_request_inventories
                     ),
+                    exact_array_backend_uninit_translation_results=(
+                        assembled_tail.exact_array_backend_uninit_translation_results
+                    ),
                     generation_stages=(
                         _stage_assembly._recognition_stage(
                             "generation.control_flow",
@@ -1147,6 +1171,9 @@ def _lower_input(
         (operation_package,),
         candidate_id=item.candidate_id,
         source_location=item.source_location,
+        exact_array_backend_uninit_translation_rules=(
+            request.exact_array_backend_uninit_translation_rules
+        ),
     )
     if not completion_tail.is_ok:
         return Result.failure(completion_tail.diagnostics)
@@ -1167,6 +1194,9 @@ def _lower_input(
             ),
             lowering_backend_translation_request_inventories=(
                 assembled_tail.lowering_backend_translation_request_inventories
+            ),
+            exact_array_backend_uninit_translation_results=(
+                assembled_tail.exact_array_backend_uninit_translation_results
             ),
             generation_stages=(
                 *generation_stages,

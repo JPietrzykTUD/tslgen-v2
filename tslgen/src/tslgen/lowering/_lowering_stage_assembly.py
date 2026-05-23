@@ -7,6 +7,7 @@ from tslgen.core.result import Result
 import tslgen.lowering._lowering_completion_gap_inventory as _completion_gap_inventory
 import tslgen.lowering._lowering_completion_manifest as _completion_manifest
 import tslgen.lowering._lowering_backend_translation_request_inventory as _backend_request_inventory
+import tslgen.lowering._lowering_backend_translation_result as _translation_result
 from tslgen.lowering._generation_models import (
     GenerationExpressionRecognition,
     GenerationPredicate,
@@ -43,6 +44,10 @@ class _Stage8CompletionTailAssembly:
         _backend_request_inventory.Stage8BackendTranslationRequestInventoryIr,
         ...,
     ] = ()
+    exact_array_backend_uninit_translation_results: tuple[
+        _translation_result.ExactArrayBackendUninitTranslationResultIr,
+        ...,
+    ] = ()
     stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -65,6 +70,11 @@ class _Stage8CompletionTailAssembly:
             self,
             "lowering_backend_translation_request_inventories",
             tuple(self.lowering_backend_translation_request_inventories),
+        )
+        object.__setattr__(
+            self,
+            "exact_array_backend_uninit_translation_results",
+            tuple(self.exact_array_backend_uninit_translation_results),
         )
         object.__setattr__(self, "stages", tuple(self.stages))
 
@@ -167,11 +177,24 @@ def _lowering_backend_translation_request_inventory_stage(
     )
 
 
+def _exact_array_backend_uninit_translation_result_stage(
+    output: _translation_result.ExactArrayBackendUninitTranslationResultIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="exact_array_backend_uninit_translation_result",
+        output=output,
+    )
+
+
 def _assemble_stage8_completion_tail(
     operation_packages: tuple[LoweringOperationPackageIr, ...],
     *,
     candidate_id: str,
     source_location: SourceLocation | None = None,
+    exact_array_backend_uninit_translation_rules: tuple[
+        _translation_result.ExactArrayBackendUninitTranslationRule,
+        ...,
+    ] = (),
 ) -> Result[_Stage8CompletionTailAssembly]:
     packages = tuple(operation_packages)
     if not packages:
@@ -203,6 +226,30 @@ def _assemble_stage8_completion_tail(
     if not request_inventory_result.is_ok:
         return Result.failure(request_inventory_result.diagnostics)
     request_inventory = request_inventory_result.unwrap()
+    exact_array_backend_uninit_translation_results: tuple[
+        _translation_result.ExactArrayBackendUninitTranslationResultIr,
+        ...,
+    ] = ()
+    exact_array_backend_uninit_translation_stages: tuple[
+        GenerationLoweringStage,
+        ...,
+    ] = ()
+    if exact_array_backend_uninit_translation_rules:
+        translation_result = (
+            _translation_result.lower_exact_array_backend_uninit_translation_result(
+                request_inventory,
+                cpp_value_array_uninit_rules=(
+                    exact_array_backend_uninit_translation_rules
+                ),
+            )
+        )
+        if not translation_result.is_ok:
+            return Result.failure(translation_result.diagnostics)
+        uninit_result = translation_result.unwrap()
+        exact_array_backend_uninit_translation_results = (uninit_result,)
+        exact_array_backend_uninit_translation_stages = (
+            _exact_array_backend_uninit_translation_result_stage(uninit_result),
+        )
 
     return Result.ok(
         _Stage8CompletionTailAssembly(
@@ -212,12 +259,16 @@ def _assemble_stage8_completion_tail(
             lowering_backend_translation_request_inventories=(
                 request_inventory,
             ),
+            exact_array_backend_uninit_translation_results=(
+                exact_array_backend_uninit_translation_results
+            ),
             stages=(
                 _lowering_completion_manifest_stage(manifest),
                 _lowering_completion_gap_inventory_stage(inventory),
                 _lowering_backend_translation_request_inventory_stage(
                     request_inventory,
                 ),
+                *exact_array_backend_uninit_translation_stages,
             ),
         )
     )

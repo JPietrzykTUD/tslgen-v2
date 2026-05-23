@@ -1291,7 +1291,7 @@ Recommended first parity checks:
   validation success with corpus probes `3 passed`, unit discovery `691` tests
   OK, compileall OK, ruff OK, mypy OK across 145 source files, and diff-check
   OK.
-- Planned M100 coverage must prove the first typed request-to-translation-
+- M100 coverage proves the first typed request-to-translation-
   result boundary without rendering or Stage 9 planning. Tests should cover a
   positive C++ exact-array `value_array_uninit` result from accepted M99
   `exact_array_backend_value_uninit_array` records; object-identity

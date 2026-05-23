@@ -1713,7 +1713,7 @@ Consequences:
   maps, start Stage 9 planning, infer direct-intrinsic/SVE semantics, scan raw
   source bodies, schedule operations, solve dependencies, render output, or
   turn inventories into readiness/completion claims.
-- M100 is selected as the first request-to-translation-result boundary after
+- M100 is accepted as the first request-to-translation-result boundary after
   M99. The decision deliberately resolves only accepted M99 exact-array
   `exact_array_backend_value_uninit_array` records to typed C++ backend-uninit
   translation-result state from explicit typed rule input. This is the first
