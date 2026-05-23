@@ -739,6 +739,16 @@ Current roadmap note:
   maps/catalogs, pass unresolved generation helper text into backend
   translation, create Stage 9 plans, render output, or infer backend/direct-
   intrinsic semantics from preserved source text.
+- M100 is selected as a Stage 8 typed translation-result boundary for the
+  exact-array C++ backend-uninit request. The architecture should keep M100
+  ownership in focused private lowering modules over accepted M99 request
+  records and explicit typed C++ rule values. It must not grow the M99
+  inventory modules, `boundary.py`, or existing near-guardrail backend
+  translation modules into replacement monoliths, and it must not read backend
+  maps/catalogs/manifests or `tsldata/detail/lang` during lowering. The result
+  remains typed backend value state only, not Stage 9 planning, renderer-ready
+  IR, rendering, generated output, Rust translation, direct-intrinsic/SVE
+  semantics, or generic backend helper evaluation.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

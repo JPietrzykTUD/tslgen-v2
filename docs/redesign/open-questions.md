@@ -2,6 +2,38 @@
 
 This file tracks unresolved questions. Do not guess answers that materially affect architecture.
 
+## OQ-POST-M99: How Broad Should Backend-Value Translation Become After M100?
+
+Status: Narrowed by post-M99 planning; broad support remains open.
+
+Why it matters:
+
+M100 is selected to resolve only the accepted exact-array C++
+`value<backend>(uninit::array)` request into typed translation-result state.
+The broader backend-value/type surface still includes Rust uninit values,
+scalar and vector backend type spellings, modifier values, direct-intrinsic
+requests, and body-level renderer-ready IR.
+
+Current decision:
+
+Do not broaden M100. M100 consumes explicit typed C++ rule input for the exact
+array-uninit request and produces typed backend value state only. It must not
+read backend maps/catalogs/manifests or `tsldata/detail/lang` during lowering,
+render generated output, create Stage 9 backend plans, or infer Rust/type
+context/direct-intrinsic semantics.
+
+Open follow-up:
+
+Future planning must decide which typed backend request family comes next:
+Rust exact-array uninit after typed `{type}` context exists, scalar/vector
+backend type spelling, backend modifier values, direct-intrinsic request
+resolution, or renderer-ready exact-array body IR.
+
+Implementation blocked:
+
+No for M100. Yes for broad backend-value/type translation and Rust uninit
+rendering until typed context and rule boundaries are selected.
+
 ## OQ-001: What Exact Python Version Should The Redesign Target?
 
 Status: Answered

@@ -13,6 +13,11 @@ Post-M98 planning is accepted. It selected
 and internal planning review returned `Accept With Follow-Ups`. Human
 acceptance was recorded.
 
+Post-M99 planning selected
+`Milestone 100: Exact Array Backend-Uninit Translation Result Boundary Slice`,
+and internal planning review returned `Accept With Follow-Ups`. Human
+acceptance was recorded.
+
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
 
@@ -1071,38 +1076,47 @@ the new `lowering_backend_translation_request_inventory` stage after
 object identity, and kept backend translation, Stage 9 planning, rendering,
 source repair, and raw body parsing out of scope.
 
+Post-M99 planning selected
+`Milestone 100: Exact Array Backend-Uninit Translation Result Boundary Slice`,
+and internal planning review returned `Accept With Follow-Ups`. The selected
+plan resolves only the accepted M99 exact-array
+`exact_array_backend_value_uninit_array` request into typed C++ backend
+translation-result state. It does not render C++ or Rust code, start Stage 9
+backend planning, evaluate generic backend helpers, parse raw source text,
+repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run post-M99 planning and review with a lowering focus.
+Execute Milestone 100.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m99-planning-plus-review-prompt.md
+docs/agent/runs/m100-execution-review-loop-prompt.md
 ```
 
-Active planning target:
+Active executor milestone:
 
 ```text
-Select the next lowering-focused milestone after accepted Milestone 99.
+Milestone 100: Exact Array Backend-Uninit Translation Result Boundary Slice
 ```
 
 Latest review verdict:
 
 ```text
-The M99 execution-review loop returned Accept after focused extensibility and
-validation revisions.
+Post-M99 planning returned Accept With Follow-Ups after planner, boundary,
+extensibility, and documentation review.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M99 planning-plus-review prompt. Do not implement code
-unless that prompt explicitly selects an executor task.
+Run the active M100 execution-review-loop prompt. Use one write-capable
+executor followed by read-only review/audit subagents.
 ```
 
 Accepted planning prompt:
@@ -2017,10 +2031,22 @@ Completed M99 execution-review-loop prompt:
 docs/agent/runs/m99-execution-review-loop-prompt.md
 ```
 
-Active post-M99 planning-plus-review prompt:
+Completed post-M99 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m99-planning-plus-review-prompt.md
+```
+
+Completed post-M99 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m99-acceptance-finalization-prompt.md
+```
+
+Active M100 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m100-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -3048,6 +3074,20 @@ docs/agent/runs/post-m99-planning-plus-review-prompt.md
   inventory of known missing lowering work. It is not runtime input, a
   generated artifact, a source scanner, a dependency-closure plan, or a
   completeness oracle.
+- M100 is a narrow typed translation-result boundary for accepted M99
+  exact-array `exact_array_backend_value_uninit_array` records only.
+- M100 may consume explicit typed C++ translation rule/metadata values
+  supplied to the stage, but must not read `tsldata/detail/lang`, backend
+  maps, catalogs, or manifests during lowering.
+- M100 produces typed backend translation-result state only. It must
+  not produce declaration/body IR, renderer-ready IR, render C++ or Rust code,
+  create artifact plans, write output, start Stage 9 backend planning, schedule
+  operations, solve dependencies, or perform dependency closure.
+- M100 must reject or defer non-exact-array request records, including
+  `selected_body_direct_intrinsic_handoff`, and must not infer
+  direct-intrinsic/SVE semantics.
+- Rust `value_array_uninit` translation remains deferred until the required
+  typed type context and rules are accepted.
 - Future lowering package decomposition must preserve accepted M57-M99
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -4357,11 +4397,21 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M99 validation follow-up resolved during review: add missing manifest
   container diagnostic tests and the required mypy annotation for the diagnostic
   case table.
+- Post-M99 planning follow-up for M100 execution: keep translation metadata as
+  explicit typed input and do not read backend maps/catalogs/manifests or
+  `tsldata/detail/lang` during lowering.
+- Post-M99 planning follow-up for M100 execution: keep C++ exact-array uninit
+  translation-result state separate from renderer-ready IR, Stage 9 planning,
+  generated output, Rust, generic backend helper evaluation, and
+  direct-intrinsic/SVE semantics.
+- Post-M99 planning follow-up for M100 execution: use focused module ownership
+  and avoid growing `boundary.py`, M99 request-inventory modules, or existing
+  near-guardrail backend translation modules into replacement monoliths.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run post-M99 planning
-through the active post-M99 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M100 through the
+active M100 execution-review-loop prompt.
 
 ## Validation Expectations
 
@@ -4370,6 +4420,22 @@ For docs-only planning tasks:
 ```bash
 git diff --check
 ```
+
+For post-M99 planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
+
+For post-M99 acceptance finalization, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
 
 For post-M98 planning, validation completed with:
 

@@ -1713,6 +1713,16 @@ Consequences:
   maps, start Stage 9 planning, infer direct-intrinsic/SVE semantics, scan raw
   source bodies, schedule operations, solve dependencies, render output, or
   turn inventories into readiness/completion claims.
+- M100 is selected as the first request-to-translation-result boundary after
+  M99. The decision deliberately resolves only accepted M99 exact-array
+  `exact_array_backend_value_uninit_array` records to typed C++ backend-uninit
+  translation-result state from explicit typed rule input. This is the first
+  small proof that request inventories can feed backend translation results
+  without pushing semantics into renderers. M100 must not read backend
+  maps/catalogs/manifests or `tsldata/detail/lang` during lowering, must not
+  render C++ or Rust output, must not create Stage 9 backend plans, and must
+  not generalize to Rust, generic backend helper evaluation, or selected-body
+  direct-intrinsic/SVE semantics.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

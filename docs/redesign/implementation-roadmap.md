@@ -13513,3 +13513,175 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m99-planning-plus-review-prompt.md` runs post-M99
   planning and review with a lowering focus.
+
+### Milestone 100: Exact Array Backend-Uninit Translation Result Boundary Slice
+
+Status:
+
+Planned. Post-M99 planning selected this milestone and internal planning review
+returned `Accept With Follow-Ups`. Human acceptance was recorded.
+
+Goal:
+
+Resolve the accepted M99 exact-array
+`exact_array_backend_value_uninit_array` request into typed C++ backend
+translation-result state without rendering code or starting Stage 9 backend
+planning. M100 proves the first concrete handoff from accepted Stage 8 request
+inventory facts to a backend translation-result boundary.
+
+For M100, "translation result" means a typed value record produced from
+accepted request/provenance facts and explicit typed C++ translation
+rule/metadata input. It does not mean C++ or Rust source rendering, declaration
+or body IR completion, artifact planning, backend support decisions, scheduling,
+dependency closure, or generic backend helper evaluation.
+
+Scope:
+
+- Add focused private lowering ownership for typed backend translation-result
+  models, C++ exact-array uninit rule values, diagnostics, validation,
+  deterministic keys, source/request narrowing, and optional stage assembly.
+- Consume only accepted M99 `Stage8BackendTranslationRequestInventoryIr`
+  records and their preserved accepted M97/M96/M92/M72/M67 object references.
+- Select only request records with kind
+  `exact_array_backend_value_uninit_array`.
+- Support only the exact C++ array-uninit backend value rule evidenced by the
+  `value_array_uninit` metadata shape; the stage receives typed rule values and
+  does not read `tsldata/detail/lang/translate_cpp.tsl` at runtime.
+- Produce one typed translation-result value per accepted exact-array request,
+  preserving request record, unresolved dependency, dependency request,
+  completion manifest, gap inventory, and source package identity where those
+  references exist.
+- Add a deterministic result/no-result state after
+  `lowering_backend_translation_request_inventory`, with a stage name such as
+  `exact_array_backend_uninit_translation_result`.
+- Keep `boundary.py` as a narrow facade only. Prefer new focused private
+  modules and a focused new test file instead of adding large M100 coverage to
+  `test_lowering_boundary.py`.
+
+Out of scope:
+
+- Rust translation. Rust `value_array_uninit` requires typed `{type}` context
+  that is not accepted for this exact M99 request yet.
+- Generic `value<backend>(...)` or `type<backend>(...)` evaluation, broad
+  backend translation maps, language-map evaluation, backend manifest reads,
+  backend support decisions, Stage 9 backend planning, operation scheduling,
+  primitive dependency closure, dependency solving, operation DAGs, wrapper
+  planning, artifact planning, renderer-ready IR, rendering, generated C++ or
+  Rust output, generated tests, CLI/report/writer behavior, compiler execution,
+  or host hardware dependency.
+- Selected-body direct-intrinsic handoff resolution, direct-intrinsic/SVE
+  semantics, byte-size-to-token inference, intrinsic suffix/prefix/post/infix/
+  immediate resolution, vector/register metadata expansion, or broad body
+  semantics.
+- Raw `.tsl` source text parsing, source-body reparsing, source repair, source
+  normalization, broad TSIL/body parsing, best-effort correction, registries,
+  semantic dispatchers, hidden recursive backfeeds, fixpoint machinery, or
+  lookup tables keyed by raw helper text, source location, backend id,
+  extension id, primitive name, type tag, or direct-intrinsic token text.
+
+Required input:
+
+- Accepted M99 backend-translation request inventory behavior and request
+  record identity/provenance.
+- Accepted M97 gap-inventory and M96 completion-manifest unresolved dependency
+  identity behavior.
+- Accepted M92 exact array backend-handoff request behavior.
+- Accepted M72/M67 exact array deferred backend-uninit request behavior.
+- Explicit typed C++ translation rule/metadata input for exact
+  `value_array_uninit`, supplied by the caller/test fixture rather than read
+  from `tsldata` during lowering.
+- Current pressure points after M99: `boundary.py` 1,254 lines,
+  `_lowering_backend_translation_request_inventory.py` 770 lines,
+  `_lowering_stage_assembly.py` 223 lines, `cpp/translation.py` near the
+  module-size guardrail, and `test_lowering_boundary.py` already too large for
+  major new coverage.
+
+Expected outputs:
+
+- One typed C++ exact-array backend-uninit translation-result value for each
+  accepted exact-array M99 request record.
+- Deterministic result keys and ordering.
+- Result records that preserve accepted M99 request record identity and the
+  relevant M97/M96/M92/M72/M67 provenance/object identities.
+- Explicit unsupported/no-result diagnostics for non-exact-array request kinds,
+  unsupported backend ids including Rust, missing/duplicate/conflicting typed
+  C++ uninit rules, malformed request records, provenance mismatches, and
+  copied/equal-but-not-identical records.
+- Import-boundary and line-count guardrails proving M100 does not grow
+  `boundary.py`, M99 inventory modules, `cpp/translation.py`, or a new private
+  module into a replacement monolith.
+
+Tests required:
+
+- Positive C++ exact-array uninit translation-result tests from accepted M99
+  inventory records.
+- Tests proving object identity is preserved from the M100 result back through
+  M99 request inventory, M97 gap inventory, M96 completion manifest, M92
+  backend handoff, M72 deferred backend-uninit boundary, and M67 request
+  record where those values are present.
+- Determinism tests for result keys, ordering, repeated lowering, and reordered
+  accepted inputs.
+- Stage tests proving the new result stage follows
+  `lowering_backend_translation_request_inventory` without changing accepted
+  M57-M99 stage names, ordering, keys, diagnostics, output identities, object
+  identities, selected-branch-only behavior, public imports, or no-external-
+  input boundaries.
+- Negative diagnostics for missing typed C++ rule, duplicate/conflicting typed
+  rules, unsupported backend/Rust, wrong request kind, selected-body
+  direct-intrinsic handoff, malformed request record, copied/equal-but-not-
+  identical provenance, candidate/source-location mismatch, and unsupported
+  source/container inputs.
+- Forbidden-behavior tests proving M100 does not read `tsldata`, backend
+  maps/catalogs/manifests, or `frozen`; does not import renderers or backend
+  planners; and does not introduce Stage 9 planning, renderer-ready IR,
+  rendering/output, source repair, raw body parsing, registries, dispatchers,
+  schedulers, dependency closure, hidden backfeeds, fixpoint behavior, or
+  hardwiring.
+- Prefer a focused new test file for M100 unit coverage, with only minimal
+  public facade/stage integration tests in existing broad lowering tests if
+  needed.
+
+Validation required:
+
+- `wc -l` for `boundary.py`, M99 request-inventory modules, the new M100
+  module or modules, `_lowering_stage_assembly.py`, and any touched backend
+  module.
+- `PYTHONPATH=tslgen/src python -m py_compile` for touched lowering/backend
+  modules and the new M100 test module.
+- Focused pytest for M100 backend-uninit translation-result behavior.
+- Focused pytest covering M99 request inventory plus M100 result integration.
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases` for
+  touched packages or modules.
+- `git diff --check`.
+
+Planning review notes:
+
+- Planner selected M100 as more valuable than another Stage 8 inventory-only
+  slice because M99 already exposes a concrete request that should prove the
+  typed request-to-translation-result handoff.
+- Boundary review accepted the plan with follow-ups requiring typed metadata
+  input, no backend map/catalog/manifest reads, no renderer-ready IR, no Stage
+  9 planning, and explicit rejection/deferment of selected-body direct-
+  intrinsic handoffs.
+- Extensibility review accepted the plan with follow-ups to keep ownership in
+  new focused modules, avoid near-guardrail backend translation modules, keep
+  `boundary.py` narrow, and put most tests in a focused new test file.
+- Documentation review required roadmap/state/design docs and
+  `docs/redesign/missing-lowering-inventory.md` to record that M100 narrows
+  only exact C++ backend-uninit translation-result work.
+
+Accepted follow-ups:
+
+- M100 execution must keep translation metadata as explicit typed input and
+  must not read backend maps/catalogs/manifests or `tsldata/detail/lang`
+  during lowering.
+- M100 execution must keep the result as typed backend value state only, not
+  renderer-ready IR, declaration/body IR, Stage 9 planning, generated output,
+  Rust, or generic backend helper evaluation.
+- M100 execution must avoid growing pressure-point modules into replacement
+  monoliths.
+
+Next concrete prompt:
+
+- `docs/agent/runs/m100-execution-review-loop-prompt.md` executes and reviews
+  M100.

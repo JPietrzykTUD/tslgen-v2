@@ -41,6 +41,20 @@ The accepted M99 inventory records exact-array
 `selected_body_direct_intrinsic_handoff`, and
 `no_accepted_backend_scoped_request` states.
 
+Post-M99 planning selected:
+
+```text
+Milestone 100: Exact Array Backend-Uninit Translation Result Boundary Slice
+```
+
+M100 is planned as the first request-to-translation-result boundary. It narrows
+only the exact-array `exact_array_backend_value_uninit_array` request to typed
+C++ backend-uninit translation-result state from explicit typed rule/metadata
+input. It does not render C++ or Rust code, start Stage 9 backend planning,
+resolve Rust `value_array_uninit`, evaluate generic backend helpers, resolve
+selected-body direct intrinsics, read backend maps/catalogs/manifests, or treat
+this inventory as a runtime input.
+
 M97's no-known-gap state is not a statement that no lowering work is missing.
 It only means the accepted M96 manifest has no currently supported
 manifest-visible unresolved backend-handoff dependency records. This document
@@ -50,8 +64,8 @@ tracks the broader known missing lowering surface.
 
 | Area | Evidence paths | Current accepted boundary | Required typed fact/request | Candidate milestone | Boundary notes |
 | --- | --- | --- | --- | --- | --- |
-| Stage 8 to backend handoff | `tsldata/primitives/load_store/array.tsl`, accepted M92/M96/M97/M99 records | M99 accepts the first cross-package backend-scoped request inventory over accepted package/manifest/gap facts. | Additional typed request families as they are accepted; later backend resolution/translation consumes the inventory. | Accepted M99 plus later backend-request slices | Inventory only: no backend maps, Stage 9 planning, rendering, or inferred requests. |
-| Backend value/type requests | `tsldata/detail/lang/types/types_cpp.tsl`, `tsldata/detail/lang/translate_cpp.tsl`, array/uninit evidence | M72 preserves exact `value<backend>(uninit::array)` as deferred state; M92 carries it as handoff. | Typed backend value/type request records over already resolved semantic values. | Later backend-request slices | Do not parse raw helper text or evaluate backend maps in renderers. |
+| Stage 8 to backend handoff | `tsldata/primitives/load_store/array.tsl`, accepted M92/M96/M97/M99 records | M99 accepts the first cross-package backend-scoped request inventory over accepted package/manifest/gap facts. | Additional typed request families as they are accepted; later backend resolution/translation consumes the inventory. | Accepted M99 plus planned M100 for one exact C++ backend-uninit result | M100 is translation-result only: no Stage 9 planning, rendering, output, scheduling, dependency closure, or inferred requests. |
+| Backend value/type requests | `tsldata/detail/lang/types/types_cpp.tsl`, `tsldata/detail/lang/translate_cpp.tsl`, array/uninit evidence | M72 preserves exact `value<backend>(uninit::array)` as deferred state; M92 carries it as handoff; M99 inventories it as `exact_array_backend_value_uninit_array`. | Typed backend value/type request records over already resolved semantic values; planned M100 adds one typed C++ exact-array uninit translation result from explicit typed rule input. | Planned M100 for exact C++ uninit; later backend-request slices for Rust and broader values/types | Do not parse raw helper text, read backend maps/catalogs/manifests during lowering, or evaluate backend maps in renderers. Rust remains deferred because its `value_array_uninit` spelling needs typed `{type}` context not accepted for this request. |
 | Direct intrinsics | `tsldata/primitives/load_store/array.tsl`, `load_store/store.tsl`, accepted M62/M63/M76/M95 facts | M62/M63/M95 preserve only selected assignment direct-intrinsic facts; M76 preserves one exact post-branch call-site structural request. | Typed direct-intrinsic call/body request records and diagnostics. | Later direct-intrinsic slice | No SVE hardwiring, byte-size-to-token inference, or intrinsic-text dispatch. |
 | Intrinsic modifiers | `tsldata/primitives/bitwise/shifts.tsl`, `conversion/repr_change.tsl`, `frozen/tsl-gen/tsl_gen/tsil.lark` | M38 and M45 cover selected compose/suffix behavior for narrow add output paths. | Typed modifier records for prefix, suffix, infix, post, and immediate fields. | Later modifier slice | Translation consumes typed records; renderers do not infer modifiers. |
 | Primitive calls and dependencies | `frozen/tsl-gen/tsl_gen/tsil_engine/dependencies.py`, `tsldata/primitives/**.tsl` | Candidate fallback visibility exists; semantic TSIL call AST and dependency closure remain deferred. | Typed primitive-call IR, dependency request records, and closure policy. | Later call/dependency slice | No dependency closure hidden inside lowering inventories. |
@@ -74,6 +88,9 @@ tracks the broader known missing lowering surface.
 - Keep inventories as inventories: no backend planning, operation scheduling,
   dependency closure, renderer-ready IR, rendering, output, hidden backfeeds,
   or fixpoint behavior.
+- Keep planned M100 translation results as typed backend value state only: no
+  renderer-ready IR, generated source, artifact plans, Stage 9 planning, Rust,
+  direct-intrinsic/SVE semantics, or generic backend helper evaluation.
 - Keep new ownership in focused private modules and keep public facade changes
   narrow and tested.
 

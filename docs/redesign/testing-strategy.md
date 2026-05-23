@@ -1291,6 +1291,21 @@ Recommended first parity checks:
   validation success with corpus probes `3 passed`, unit discovery `691` tests
   OK, compileall OK, ruff OK, mypy OK across 145 source files, and diff-check
   OK.
+- Planned M100 coverage must prove the first typed request-to-translation-
+  result boundary without rendering or Stage 9 planning. Tests should cover a
+  positive C++ exact-array `value_array_uninit` result from accepted M99
+  `exact_array_backend_value_uninit_array` records; object-identity
+  preservation through M99, M97, M96, M92, M72, and M67 facts; deterministic
+  result keys/order; diagnostics for missing, duplicate, or conflicting typed
+  C++ rules; unsupported backend/Rust diagnostics; wrong request-kind and
+  selected-body direct-intrinsic handoff rejection; malformed/copy-equal
+  provenance diagnostics; and negative assertions proving no backend map,
+  catalog, manifest, `tsldata`, or `frozen` reads, no raw source parsing or
+  source repair, no renderer-ready IR, no rendering/output, no Stage 9
+  planning, no dependency closure/scheduling, no direct-intrinsic/SVE
+  semantics, and no hardwired `{}` fallback outside typed rule input. Most M100
+  coverage should live in a focused new test file rather than expanding the
+  already-large lowering boundary test file.
 
 Deferred parity checks:
 
