@@ -729,12 +729,13 @@ Current roadmap note:
   must not become a registry, dispatcher, callback map, hidden backfeed,
   fixpoint coordinator, backend-planning surface, renderer hook, source
   parser, or source-repair mechanism.
-- Post-M98 planning selects M99 as a Stage 8 backend-translation request
-  inventory/provenance slice. The architecture should keep the new inventory
-  in focused lowering ownership, consume only accepted typed
-  package/manifest/gap facts, and maintain
+- M99 is accepted as a Stage 8 backend-translation request
+  inventory/provenance slice. The architecture keeps the inventory in focused
+  lowering ownership split across inventory, source-adapter, and diagnostics
+  modules, consumes only accepted typed package/manifest/gap facts, and
+  maintains
   `docs/redesign/missing-lowering-inventory.md` as a planning inventory of
-  deferred lowering work. M99 must not evaluate translation maps, read backend
+  deferred lowering work. M99 does not evaluate translation maps, read backend
   maps/catalogs, pass unresolved generation helper text into backend
   translation, create Stage 9 plans, render output, or infer backend/direct-
   intrinsic semantics from preserved source text.

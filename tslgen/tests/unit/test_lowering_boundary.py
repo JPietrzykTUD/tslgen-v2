@@ -33,6 +33,9 @@ import tslgen.lowering._generation_queries as lowering_generation_queries
 import tslgen.lowering._lowering_inputs as lowering_inputs
 import tslgen.lowering._lowering_completion_manifest as lowering_completion_manifest
 import tslgen.lowering._lowering_completion_gap_inventory as lowering_completion_gap_inventory
+import tslgen.lowering._lowering_backend_translation_request_diagnostics as lowering_backend_translation_request_diagnostics
+import tslgen.lowering._lowering_backend_translation_request_inventory as lowering_backend_translation_request_inventory
+import tslgen.lowering._lowering_backend_translation_request_sources as lowering_backend_translation_request_sources
 import tslgen.lowering._lowering_stage_assembly as lowering_stage_assembly
 import tslgen.lowering._mini_tsil_lowering as lowering_mini_tsil_lowering
 import tslgen.lowering._operation_package as lowering_operation_package
@@ -3201,36 +3204,51 @@ class LoweringBoundaryTests(unittest.TestCase):
                         "lowering_operation_package",
                         "lowering_completion_manifest",
                         "lowering_completion_gap_inventory",
+                        "lowering_backend_translation_request_inventory",
                     )
                     self.assertEqual(len(implementation.operation_packages), 1)
                     self.assertEqual(len(implementation.lowering_completion_manifests), 1)
                     self.assertEqual(len(implementation.lowering_completion_gap_inventories), 1)
+                    self.assertEqual(
+                        len(
+                            implementation.lowering_backend_translation_request_inventories
+                        ),
+                        1,
+                    )
                     self.assertIs(
-                        implementation.generation_stages[-3].output,
+                        implementation.generation_stages[-4].output,
                         implementation.operation_packages[0],
                     )
                     self.assertIs(
-                        implementation.generation_stages[-2].output,
+                        implementation.generation_stages[-3].output,
                         implementation.lowering_completion_manifests[0],
                     )
                     self.assertIs(
-                        implementation.generation_stages[-1].output,
+                        implementation.generation_stages[-2].output,
                         implementation.lowering_completion_gap_inventories[0],
+                    )
+                    self.assertIs(
+                        implementation.generation_stages[-1].output,
+                        implementation.lowering_backend_translation_request_inventories[0],
                     )
                 else:
                     self.assertEqual(implementation.operation_packages, ())
                     self.assertEqual(implementation.lowering_completion_manifests, ())
                     self.assertEqual(implementation.lowering_completion_gap_inventories, ())
+                    self.assertEqual(
+                        implementation.lowering_backend_translation_request_inventories,
+                        (),
+                    )
                 self.assertEqual(
                     tuple(stage.stage for stage in implementation.generation_stages),
                     expected_stages,
                 )
                 self.assertEqual(implementation.generation_stages[5].output, chain)
                 selected_body_stages = implementation.generation_stages[
-                    -7 if expected_literal is not None else -4:
+                    -8 if expected_literal is not None else -4:
                 ]
                 if expected_literal is not None:
-                    selected_body_stages = selected_body_stages[:-3]
+                    selected_body_stages = selected_body_stages[:-4]
                 self.assertEqual(selected_body_stages[0].output, handoff)
                 self.assertEqual(
                     selected_body_stages[1].output,
@@ -3343,7 +3361,7 @@ class LoweringBoundaryTests(unittest.TestCase):
             tuple(stage.output for stage in implementation.generation_stages[1:6]),
             (value, *predicates, chain),
         )
-        handoff = implementation.generation_stages[-7].output
+        handoff = implementation.generation_stages[-8].output
         assert isinstance(handoff, OpaqueSelectedBranchBodyHandoff)
         self.assertEqual(handoff.candidate_id, implementation.candidate_id)
         self.assertEqual(handoff.selected_type_tag, "ui16")
@@ -3351,13 +3369,13 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(handoff.opaque_body_text, "pg = intrin<svptrue_b16>();")
         self.assertEqual(handoff.source_location, chain.condition_location)
         self.assertIn(implementation.candidate_id, handoff.originating_branch_chain_id)
-        form = implementation.generation_stages[-6].output
+        form = implementation.generation_stages[-7].output
         assert isinstance(form, SelectedBranchBodyAssignmentFormRecognition)
         self.assertEqual(form.candidate_id, implementation.candidate_id)
         self.assertEqual(form.assignment_target_text, "pg")
         self.assertEqual(form.opaque_rhs_text, "intrin<svptrue_b16>()")
         self.assertEqual(form.direct_intrinsic_token_text, "svptrue_b16")
-        body_ir = implementation.generation_stages[-5].output
+        body_ir = implementation.generation_stages[-6].output
         assert isinstance(body_ir, SelectedAssignmentDirectIntrinsicBodyIr)
         self.assertEqual(body_ir.candidate_id, implementation.candidate_id)
         self.assertEqual(body_ir.assignment_target_text, "pg")
@@ -3442,7 +3460,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 self.assertEqual(form.opaque_rhs_text, rhs_text)
                 self.assertEqual(form.direct_intrinsic_token_text, token_text)
                 self.assertEqual(
-                    implementation.generation_stages[-6],
+                    implementation.generation_stages[-7],
                     GenerationLoweringStage(
                         stage="selected_body_form_recognition",
                         output=form,
@@ -3451,7 +3469,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 body_ir = implementation.selected_branch_body_irs[0]
                 assert isinstance(body_ir, SelectedAssignmentDirectIntrinsicBodyIr)
                 self.assertEqual(
-                    implementation.generation_stages[-5],
+                    implementation.generation_stages[-6],
                     GenerationLoweringStage(
                         stage="selected_body_ir_lowering",
                         output=body_ir,
@@ -4143,125 +4161,129 @@ class LoweringBoundaryTests(unittest.TestCase):
                     structural_sequence,
                 )
                 self.assertIs(
-                    implementation.generation_stages[-19].output,
+                    implementation.generation_stages[-20].output,
                     array_envelope,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-19].stage,
+                    implementation.generation_stages[-20].stage,
                     "array_body_envelope_slot_assembly",
                 )
-                self.assertIs(implementation.generation_stages[-18].output, slot_form)
+                self.assertIs(implementation.generation_stages[-19].output, slot_form)
                 self.assertEqual(
-                    implementation.generation_stages[-18].stage,
+                    implementation.generation_stages[-19].stage,
                     "array_initialization_slot_form_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-17].output,
+                    implementation.generation_stages[-18].output,
                     helper_request,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-17].stage,
+                    implementation.generation_stages[-18].stage,
                     "array_initialization_helper_request_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-16].output,
+                    implementation.generation_stages[-17].output,
                     base_type_resolution,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-16].stage,
+                    implementation.generation_stages[-17].stage,
                     "array_initialization_base_type_request_resolution",
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-15].stage,
+                    implementation.generation_stages[-16].stage,
                     "array_initialization_vector_length_request_resolution",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-15].output,
+                    implementation.generation_stages[-16].output,
                     vector_length_resolution,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-14].stage,
+                    implementation.generation_stages[-15].stage,
                     "array_initialization_vector_alignment_request_resolution",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-14].output,
+                    implementation.generation_stages[-15].output,
                     vector_alignment_resolution,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-13].stage,
+                    implementation.generation_stages[-14].stage,
                     "array_initialization_helper_set_completion",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-13].output,
+                    implementation.generation_stages[-14].output,
                     helper_set_completion,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-12].stage,
+                    implementation.generation_stages[-13].stage,
                     "array_initialization_declaration_shell_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-12].output,
+                    implementation.generation_stages[-13].output,
                     declaration_shell,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-11].stage,
+                    implementation.generation_stages[-12].stage,
                     "array_body_structural_sequence_classification",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-11].output,
+                    implementation.generation_stages[-12].output,
                     structural_sequence,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-10].stage,
+                    implementation.generation_stages[-11].stage,
                     "predicate_path_structural_request_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-10].output,
+                    implementation.generation_stages[-11].output,
                     predicate_path,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-9].stage,
+                    implementation.generation_stages[-10].stage,
                     "post_branch_intrinsic_call_site_structural_request_lowering",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-9].output,
+                    implementation.generation_stages[-10].output,
                     post_branch_call_site,
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-8].stage,
+                    implementation.generation_stages[-9].stage,
                     "return_emission_structural_request_lowering",
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-7].stage,
+                    implementation.generation_stages[-8].stage,
                     "array_body_structural_package_assembly",
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-6].stage,
+                    implementation.generation_stages[-7].stage,
                     "array_backend_deferred_request_inventory",
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-5].stage,
+                    implementation.generation_stages[-6].stage,
                     "array_lowering_completion_package",
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-4].stage,
+                    implementation.generation_stages[-5].stage,
                     "array_backend_handoff_request",
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-3].stage,
+                    implementation.generation_stages[-4].stage,
                     "lowering_operation_package",
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-2].stage,
+                    implementation.generation_stages[-3].stage,
                     "lowering_completion_manifest",
                 )
                 self.assertEqual(
-                    implementation.generation_stages[-1].stage,
+                    implementation.generation_stages[-2].stage,
                     "lowering_completion_gap_inventory",
+                )
+                self.assertEqual(
+                    implementation.generation_stages[-1].stage,
+                    "lowering_backend_translation_request_inventory",
                 )
                 self.assertEqual(len(implementation.array_body_structural_packages), 1)
                 structural_package = implementation.array_body_structural_packages[0]
-                self.assertIs(implementation.generation_stages[-7].output, structural_package)
+                self.assertIs(implementation.generation_stages[-8].output, structural_package)
                 self.assertIs(structural_package.source_envelope, array_envelope)
                 self.assertIs(structural_package.helper_set_completion, helper_set_completion)
                 self.assertIs(structural_package.declaration_shell, declaration_shell)
@@ -4277,7 +4299,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 )
                 self.assertIs(backend_inventory.source_package, structural_package)
                 self.assertIs(
-                    implementation.generation_stages[-6].output,
+                    implementation.generation_stages[-7].output,
                     backend_inventory,
                 )
                 self.assertEqual(
@@ -4285,12 +4307,12 @@ class LoweringBoundaryTests(unittest.TestCase):
                     1,
                 )
                 self.assertIs(
-                    implementation.generation_stages[-5].output,
+                    implementation.generation_stages[-6].output,
                     implementation.array_lowering_completion_packages[0],
                 )
                 self.assertEqual(len(implementation.array_backend_handoff_requests), 1)
                 self.assertIs(
-                    implementation.generation_stages[-4].output,
+                    implementation.generation_stages[-5].output,
                     implementation.array_backend_handoff_requests[0],
                 )
                 exact_package = implementation.operation_packages[-1]
@@ -4308,20 +4330,20 @@ class LoweringBoundaryTests(unittest.TestCase):
                         "selected_body_direct_intrinsic",
                     )
                     self.assertEqual(
-                        implementation.generation_stages[-20].stage,
+                        implementation.generation_stages[-21].stage,
                         "lowering_operation_package",
                     )
                     self.assertIs(
-                        implementation.generation_stages[-20].output,
+                        implementation.generation_stages[-21].output,
                         implementation.operation_packages[0],
                     )
                     self.assertEqual(
-                        implementation.generation_stages[-21].stage,
+                        implementation.generation_stages[-22].stage,
                         "selected_body_envelope_lowering",
                     )
                 else:
                     self.assertEqual(
-                        implementation.generation_stages[-20].stage,
+                        implementation.generation_stages[-21].stage,
                         "selected_body_envelope_lowering",
                     )
                 self.assertEqual(
@@ -4329,12 +4351,12 @@ class LoweringBoundaryTests(unittest.TestCase):
                     "exact_array_backend_handoff",
                 )
                 self.assertIs(
-                    implementation.generation_stages[-3].output,
+                    implementation.generation_stages[-4].output,
                     exact_package,
                 )
                 self.assertEqual(len(implementation.lowering_completion_manifests), 1)
                 self.assertIs(
-                    implementation.generation_stages[-2].output,
+                    implementation.generation_stages[-3].output,
                     implementation.lowering_completion_manifests[0],
                 )
                 self.assertEqual(
@@ -4342,25 +4364,33 @@ class LoweringBoundaryTests(unittest.TestCase):
                     1,
                 )
                 self.assertIs(
-                    implementation.generation_stages[-1].output,
+                    implementation.generation_stages[-2].output,
                     implementation.lowering_completion_gap_inventories[0],
                 )
+                self.assertEqual(
+                    len(implementation.lowering_backend_translation_request_inventories),
+                    1,
+                )
+                self.assertIs(
+                    implementation.generation_stages[-1].output,
+                    implementation.lowering_backend_translation_request_inventories[0],
+                )
                 baseline_prefix = (
-                    baseline_impl.generation_stages[:-2]
+                    baseline_impl.generation_stages[:-3]
                     if baseline_impl.lowering_completion_manifests
                     else baseline_impl.generation_stages
                 )
                 self.assertEqual(
                     tuple(
                         stage.stage
-                        for stage in implementation.generation_stages[:-19]
+                        for stage in implementation.generation_stages[:-20]
                     ),
                     tuple(stage.stage for stage in baseline_prefix),
                 )
                 self.assertEqual(
                     tuple(
                         stage.key
-                        for stage in implementation.generation_stages[:-19]
+                        for stage in implementation.generation_stages[:-20]
                     ),
                     tuple(stage.key for stage in baseline_prefix),
                 )
@@ -4457,6 +4487,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                                 "lowering_operation_package",
                                 "lowering_completion_manifest",
                                 "lowering_completion_gap_inventory",
+                                "lowering_backend_translation_request_inventory",
                             )
                             if isinstance(
                                 implementation.selected_body_envelopes[0],
@@ -5098,12 +5129,12 @@ class LoweringBoundaryTests(unittest.TestCase):
             pipeline_result.operation_packages,
         )
         self.assertEqual(
-            tuple(stage.key for stage in implementation.generation_stages[-19:-2]),
+            tuple(stage.key for stage in implementation.generation_stages[-20:-3]),
             tuple(stage.key for stage in pipeline_result.stages),
         )
-        self.assertEqual(implementation.generation_stages[-21].key, envelope_stage.key)
+        self.assertEqual(implementation.generation_stages[-22].key, envelope_stage.key)
         self.assertEqual(
-            implementation.generation_stages[-20].stage,
+            implementation.generation_stages[-21].stage,
             "lowering_operation_package",
         )
 
@@ -6396,6 +6427,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
         self.assertIs(first_impl.generation_stages[0].output, first_impl.statements[0])
@@ -6410,6 +6442,10 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertIs(
             first_impl.generation_stages[3].output,
             first_impl.lowering_completion_gap_inventories[0],
+        )
+        self.assertIs(
+            first_impl.generation_stages[4].output,
+            first_impl.lowering_backend_translation_request_inventories[0],
         )
         self.assertEqual(
             tuple(stage.key for stage in first_impl.generation_stages),
@@ -6454,23 +6490,28 @@ class LoweringBoundaryTests(unittest.TestCase):
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
         self.assertIs(
-            implementation.generation_stages[-4].output,
+            implementation.generation_stages[-5].output,
             implementation.statements[0],
         )
         self.assertIs(
-            implementation.generation_stages[-3].output,
+            implementation.generation_stages[-4].output,
             implementation.operation_packages[0],
         )
         self.assertIs(
-            implementation.generation_stages[-2].output,
+            implementation.generation_stages[-3].output,
             implementation.lowering_completion_manifests[0],
         )
         self.assertIs(
-            implementation.generation_stages[-1].output,
+            implementation.generation_stages[-2].output,
             implementation.lowering_completion_gap_inventories[0],
+        )
+        self.assertIs(
+            implementation.generation_stages[-1].output,
+            implementation.lowering_backend_translation_request_inventories[0],
         )
 
     def test_m85_selected_body_pipeline_snapshot_preserves_stage_identity(
@@ -6493,8 +6534,8 @@ class LoweringBoundaryTests(unittest.TestCase):
             for implementation in second.unwrap().implementations
             if implementation.generation_branch_chains[0].type_tag == "si16"
         )
-        first_selected_body_stages = first_impl.generation_stages[-7:-3]
-        second_selected_body_stages = second_impl.generation_stages[-7:-3]
+        first_selected_body_stages = first_impl.generation_stages[-8:-4]
+        second_selected_body_stages = second_impl.generation_stages[-8:-4]
         self.assertEqual(
             tuple(stage.stage for stage in first_selected_body_stages),
             (
@@ -6593,48 +6634,52 @@ class LoweringBoundaryTests(unittest.TestCase):
             item.candidate_id
         ]
         self.assertEqual(
-            implementation.generation_stages[-11].stage,
+            implementation.generation_stages[-12].stage,
             "array_body_structural_sequence_classification",
         )
         self.assertEqual(
-            implementation.generation_stages[-10].stage,
+            implementation.generation_stages[-11].stage,
             "predicate_path_structural_request_lowering",
         )
         self.assertEqual(
-            implementation.generation_stages[-9].stage,
+            implementation.generation_stages[-10].stage,
             "post_branch_intrinsic_call_site_structural_request_lowering",
         )
         self.assertEqual(
-            implementation.generation_stages[-8].stage,
+            implementation.generation_stages[-9].stage,
             "return_emission_structural_request_lowering",
         )
         self.assertEqual(
-            implementation.generation_stages[-7].stage,
+            implementation.generation_stages[-8].stage,
             "array_body_structural_package_assembly",
         )
         self.assertEqual(
-            implementation.generation_stages[-6].stage,
+            implementation.generation_stages[-7].stage,
             "array_backend_deferred_request_inventory",
         )
         self.assertEqual(
-            implementation.generation_stages[-5].stage,
+            implementation.generation_stages[-6].stage,
             "array_lowering_completion_package",
         )
         self.assertEqual(
-            implementation.generation_stages[-4].stage,
+            implementation.generation_stages[-5].stage,
             "array_backend_handoff_request",
         )
         self.assertEqual(
-            implementation.generation_stages[-3].stage,
+            implementation.generation_stages[-4].stage,
             "lowering_operation_package",
         )
         self.assertEqual(
-            implementation.generation_stages[-2].stage,
+            implementation.generation_stages[-3].stage,
             "lowering_completion_manifest",
         )
         self.assertEqual(
-            implementation.generation_stages[-1].stage,
+            implementation.generation_stages[-2].stage,
             "lowering_completion_gap_inventory",
+        )
+        self.assertEqual(
+            implementation.generation_stages[-1].stage,
+            "lowering_backend_translation_request_inventory",
         )
         helper_set_completion = implementation.array_initialization_helper_set_completions[
             0
@@ -6651,31 +6696,35 @@ class LoweringBoundaryTests(unittest.TestCase):
         completion = implementation.array_lowering_completion_packages[0]
         backend_handoff = implementation.array_backend_handoff_requests[0]
         operation_package = implementation.operation_packages[1]
-        self.assertIs(implementation.generation_stages[-13].output, helper_set_completion)
-        self.assertIs(implementation.generation_stages[-12].output, declaration_shell)
-        self.assertIs(implementation.generation_stages[-11].output, structural_sequence)
-        self.assertIs(implementation.generation_stages[-10].output, predicate_path)
+        self.assertIs(implementation.generation_stages[-14].output, helper_set_completion)
+        self.assertIs(implementation.generation_stages[-13].output, declaration_shell)
+        self.assertIs(implementation.generation_stages[-12].output, structural_sequence)
+        self.assertIs(implementation.generation_stages[-11].output, predicate_path)
         self.assertIs(
-            implementation.generation_stages[-9].output,
+            implementation.generation_stages[-10].output,
             post_branch_call_site,
         )
-        self.assertIs(implementation.generation_stages[-8].output, return_emission)
-        self.assertIs(implementation.generation_stages[-7].output, structural_package)
-        self.assertIs(implementation.generation_stages[-6].output, backend_inventory)
-        self.assertIs(implementation.generation_stages[-5].output, completion)
-        self.assertIs(implementation.generation_stages[-4].output, backend_handoff)
+        self.assertIs(implementation.generation_stages[-9].output, return_emission)
+        self.assertIs(implementation.generation_stages[-8].output, structural_package)
+        self.assertIs(implementation.generation_stages[-7].output, backend_inventory)
+        self.assertIs(implementation.generation_stages[-6].output, completion)
+        self.assertIs(implementation.generation_stages[-5].output, backend_handoff)
         self.assertEqual(
             implementation.operation_packages[0].source_family,
             "selected_body_direct_intrinsic",
         )
-        self.assertIs(implementation.generation_stages[-3].output, operation_package)
+        self.assertIs(implementation.generation_stages[-4].output, operation_package)
         self.assertIs(
-            implementation.generation_stages[-2].output,
+            implementation.generation_stages[-3].output,
             implementation.lowering_completion_manifests[0],
         )
         self.assertIs(
-            implementation.generation_stages[-1].output,
+            implementation.generation_stages[-2].output,
             implementation.lowering_completion_gap_inventories[0],
+        )
+        self.assertIs(
+            implementation.generation_stages[-1].output,
+            implementation.lowering_backend_translation_request_inventories[0],
         )
         self.assertIs(
             declaration_shell.source_helper_set_completion,
@@ -10063,7 +10112,7 @@ class LoweringBoundaryTests(unittest.TestCase):
         )
         self.assertIs(predicate_path.source_sequence, structural_sequence)
         self.assertEqual(
-            tuple(stage.stage for stage in implementation.generation_stages[-11:]),
+            tuple(stage.stage for stage in implementation.generation_stages[-12:]),
             (
                 "array_body_structural_sequence_classification",
                 "predicate_path_structural_request_lowering",
@@ -10076,16 +10125,17 @@ class LoweringBoundaryTests(unittest.TestCase):
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
-        self.assertIs(implementation.generation_stages[-11].output, structural_sequence)
-        self.assertIs(implementation.generation_stages[-10].output, predicate_path)
+        self.assertIs(implementation.generation_stages[-12].output, structural_sequence)
+        self.assertIs(implementation.generation_stages[-11].output, predicate_path)
         self.assertIs(
-            implementation.generation_stages[-9].output,
+            implementation.generation_stages[-10].output,
             post_branch_call_site,
         )
         self.assertEqual(
-            implementation.generation_stages[-12].stage,
+            implementation.generation_stages[-13].stage,
             "array_initialization_declaration_shell_lowering",
         )
 
@@ -10649,7 +10699,7 @@ class LoweringBoundaryTests(unittest.TestCase):
         )
         self.assertIs(call_site.source_predicate_path, predicate_path)
         self.assertEqual(
-            tuple(stage.stage for stage in implementation.generation_stages[-11:]),
+            tuple(stage.stage for stage in implementation.generation_stages[-12:]),
             (
                 "array_body_structural_sequence_classification",
                 "predicate_path_structural_request_lowering",
@@ -10662,10 +10712,11 @@ class LoweringBoundaryTests(unittest.TestCase):
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
-        self.assertIs(implementation.generation_stages[-10].output, predicate_path)
-        self.assertIs(implementation.generation_stages[-9].output, call_site)
+        self.assertIs(implementation.generation_stages[-11].output, predicate_path)
+        self.assertIs(implementation.generation_stages[-10].output, call_site)
         self.assertEqual(call_site.predicate_argument_token_text, "pg")
         self.assertEqual(call_site.member_access_argument_text, "tmp.data()")
         self.assertEqual(call_site.source_operand_argument_token_text, "a")
@@ -11288,7 +11339,7 @@ class LoweringBoundaryTests(unittest.TestCase):
         return_emission = implementation.return_emission_structural_requests[0]
         self.assertIs(return_emission.source_post_branch_call_site, call_site)
         self.assertEqual(
-            tuple(stage.stage for stage in implementation.generation_stages[-11:]),
+            tuple(stage.stage for stage in implementation.generation_stages[-12:]),
             (
                 "array_body_structural_sequence_classification",
                 "predicate_path_structural_request_lowering",
@@ -11301,10 +11352,11 @@ class LoweringBoundaryTests(unittest.TestCase):
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
-        self.assertIs(implementation.generation_stages[-9].output, call_site)
-        self.assertIs(implementation.generation_stages[-8].output, return_emission)
+        self.assertIs(implementation.generation_stages[-10].output, call_site)
+        self.assertIs(implementation.generation_stages[-9].output, return_emission)
         implementations_with_return = tuple(
             lowered.candidate_id
             for lowered in plan.implementations
@@ -11638,7 +11690,7 @@ class LoweringBoundaryTests(unittest.TestCase):
         package = implementation.array_body_structural_packages[0]
         self.assertIs(package.return_emission, return_emission)
         self.assertEqual(
-            tuple(stage.stage for stage in implementation.generation_stages[-8:]),
+            tuple(stage.stage for stage in implementation.generation_stages[-9:]),
             (
                 "return_emission_structural_request_lowering",
                 "array_body_structural_package_assembly",
@@ -11648,10 +11700,11 @@ class LoweringBoundaryTests(unittest.TestCase):
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
-        self.assertIs(implementation.generation_stages[-8].output, return_emission)
-        self.assertIs(implementation.generation_stages[-7].output, package)
+        self.assertIs(implementation.generation_stages[-9].output, return_emission)
+        self.assertIs(implementation.generation_stages[-8].output, package)
         implementations_with_package = tuple(
             lowered.candidate_id
             for lowered in plan.implementations
@@ -12237,7 +12290,7 @@ class LoweringBoundaryTests(unittest.TestCase):
             package.helper_set_completion.source_backend_uninit_request,
         )
         self.assertEqual(
-            tuple(stage.stage for stage in implementation.generation_stages[-7:]),
+            tuple(stage.stage for stage in implementation.generation_stages[-8:]),
             (
                 "array_body_structural_package_assembly",
                 "array_backend_deferred_request_inventory",
@@ -12246,10 +12299,11 @@ class LoweringBoundaryTests(unittest.TestCase):
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
-        self.assertIs(implementation.generation_stages[-7].output, package)
-        self.assertIs(implementation.generation_stages[-6].output, inventory)
+        self.assertIs(implementation.generation_stages[-8].output, package)
+        self.assertIs(implementation.generation_stages[-7].output, inventory)
         implementations_with_inventory = tuple(
             lowered.candidate_id
             for lowered in plan.implementations
@@ -12804,7 +12858,7 @@ class LoweringBoundaryTests(unittest.TestCase):
             inventory.value_backend_uninit_array,
         )
         self.assertEqual(
-            tuple(stage.stage for stage in implementation.generation_stages[-7:]),
+            tuple(stage.stage for stage in implementation.generation_stages[-8:]),
             (
                 "array_body_structural_package_assembly",
                 "array_backend_deferred_request_inventory",
@@ -12813,11 +12867,12 @@ class LoweringBoundaryTests(unittest.TestCase):
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
-        self.assertIs(implementation.generation_stages[-7].output, package)
-        self.assertIs(implementation.generation_stages[-6].output, inventory)
-        self.assertIs(implementation.generation_stages[-5].output, completion)
+        self.assertIs(implementation.generation_stages[-8].output, package)
+        self.assertIs(implementation.generation_stages[-7].output, inventory)
+        self.assertIs(implementation.generation_stages[-6].output, completion)
         implementations_with_completion = tuple(
             lowered.candidate_id
             for lowered in plan.implementations
@@ -13484,7 +13539,7 @@ class LoweringBoundaryTests(unittest.TestCase):
             inventory.value_backend_uninit_array,
         )
         self.assertEqual(
-            tuple(stage.stage for stage in implementation.generation_stages[-7:]),
+            tuple(stage.stage for stage in implementation.generation_stages[-8:]),
             (
                 "array_body_structural_package_assembly",
                 "array_backend_deferred_request_inventory",
@@ -13493,12 +13548,13 @@ class LoweringBoundaryTests(unittest.TestCase):
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
-        self.assertIs(implementation.generation_stages[-7].output, package)
-        self.assertIs(implementation.generation_stages[-6].output, inventory)
-        self.assertIs(implementation.generation_stages[-5].output, completion)
-        self.assertIs(implementation.generation_stages[-4].output, handoff)
+        self.assertIs(implementation.generation_stages[-8].output, package)
+        self.assertIs(implementation.generation_stages[-7].output, inventory)
+        self.assertIs(implementation.generation_stages[-6].output, completion)
+        self.assertIs(implementation.generation_stages[-5].output, handoff)
         implementations_with_handoff = tuple(
             lowered.candidate_id
             for lowered in plan.implementations
@@ -13840,16 +13896,21 @@ class LoweringBoundaryTests(unittest.TestCase):
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
-        self.assertIs(mini_impl.generation_stages[-3].output, mini_package)
+        self.assertIs(mini_impl.generation_stages[-4].output, mini_package)
         self.assertIs(
-            mini_impl.generation_stages[-2].output,
+            mini_impl.generation_stages[-3].output,
             mini_impl.lowering_completion_manifests[0],
         )
         self.assertIs(
-            mini_impl.generation_stages[-1].output,
+            mini_impl.generation_stages[-2].output,
             mini_impl.lowering_completion_gap_inventories[0],
+        )
+        self.assertIs(
+            mini_impl.generation_stages[-1].output,
+            mini_impl.lowering_backend_translation_request_inventories[0],
         )
 
         selection = self.selection_for("lower_generation_size_byte_branch_chain")
@@ -13888,22 +13949,27 @@ class LoweringBoundaryTests(unittest.TestCase):
             exact_impl.array_backend_handoff_requests[0],
         )
         self.assertEqual(
-            tuple(stage.stage for stage in exact_impl.generation_stages[-4:]),
+            tuple(stage.stage for stage in exact_impl.generation_stages[-5:]),
             (
                 "array_backend_handoff_request",
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
-        self.assertIs(exact_impl.generation_stages[-3].output, exact_package)
+        self.assertIs(exact_impl.generation_stages[-4].output, exact_package)
         self.assertIs(
-            exact_impl.generation_stages[-2].output,
+            exact_impl.generation_stages[-3].output,
             exact_impl.lowering_completion_manifests[0],
         )
         self.assertIs(
-            exact_impl.generation_stages[-1].output,
+            exact_impl.generation_stages[-2].output,
             exact_impl.lowering_completion_gap_inventories[0],
+        )
+        self.assertIs(
+            exact_impl.generation_stages[-1].output,
+            exact_impl.lowering_backend_translation_request_inventories[0],
         )
         envelope_index = next(
             index
@@ -13945,7 +14011,7 @@ class LoweringBoundaryTests(unittest.TestCase):
             implementation.selected_body_envelopes[0],
         )
         self.assertEqual(
-            tuple(stage.stage for stage in implementation.generation_stages[-7:]),
+            tuple(stage.stage for stage in implementation.generation_stages[-8:]),
             (
                 "selected_body_lowering",
                 "selected_body_form_recognition",
@@ -13954,19 +14020,24 @@ class LoweringBoundaryTests(unittest.TestCase):
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
         self.assertIs(
-            implementation.generation_stages[-3].output,
+            implementation.generation_stages[-4].output,
             operation_package,
         )
         self.assertIs(
-            implementation.generation_stages[-2].output,
+            implementation.generation_stages[-3].output,
             implementation.lowering_completion_manifests[0],
         )
         self.assertIs(
-            implementation.generation_stages[-1].output,
+            implementation.generation_stages[-2].output,
             implementation.lowering_completion_gap_inventories[0],
+        )
+        self.assertIs(
+            implementation.generation_stages[-1].output,
+            implementation.lowering_backend_translation_request_inventories[0],
         )
 
     def test_m93_exact_array_pipeline_snapshot_carries_operation_package(
@@ -15017,20 +15088,29 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(len(mini_impl.lowering_completion_manifests), 1)
         self.assertEqual(len(mini_impl.lowering_completion_gap_inventories), 1)
         self.assertEqual(
-            tuple(stage.stage for stage in mini_impl.generation_stages[-3:]),
+            len(mini_impl.lowering_backend_translation_request_inventories),
+            1,
+        )
+        self.assertEqual(
+            tuple(stage.stage for stage in mini_impl.generation_stages[-4:]),
             (
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
         self.assertIs(
-            mini_impl.generation_stages[-2].output,
+            mini_impl.generation_stages[-3].output,
             mini_impl.lowering_completion_manifests[0],
         )
         self.assertIs(
-            mini_impl.generation_stages[-1].output,
+            mini_impl.generation_stages[-2].output,
             mini_impl.lowering_completion_gap_inventories[0],
+        )
+        self.assertIs(
+            mini_impl.generation_stages[-1].output,
+            mini_impl.lowering_backend_translation_request_inventories[0],
         )
 
         pipeline = self.exact_array_initialization_stage_pipeline("si32").unwrap()
@@ -15222,16 +15302,21 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertTrue(mini.is_ok, mini.diagnostics)
         mini_impl = mini.unwrap().implementations[0]
         self.assertEqual(
-            tuple(stage.stage for stage in mini_impl.generation_stages[-3:]),
+            tuple(stage.stage for stage in mini_impl.generation_stages[-4:]),
             (
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
         self.assertIs(
-            mini_impl.generation_stages[-1].output,
+            mini_impl.generation_stages[-2].output,
             mini_impl.lowering_completion_gap_inventories[0],
+        )
+        self.assertIs(
+            mini_impl.generation_stages[-1].output,
+            mini_impl.lowering_backend_translation_request_inventories[0],
         )
         self.assertIn(
             "lowering_completion_gap_inventory",
@@ -15569,6 +15654,9 @@ class LoweringBoundaryTests(unittest.TestCase):
         inventory = lowering_completion_gap_inventory.lower_stage8_lowering_completion_gap_inventory(
             manifest,
         ).unwrap()
+        request_inventory = lowering_backend_translation_request_inventory.lower_stage8_backend_translation_request_inventory(
+            inventory,
+        ).unwrap()
 
         recognition = lowering_stage_assembly._recognition_stage(
             "generation.value",
@@ -15647,6 +15735,14 @@ class LoweringBoundaryTests(unittest.TestCase):
                 "lowering_completion_gap_inventory",
                 inventory,
             ),
+            (
+                "_lowering_backend_translation_request_inventory_stage",
+                lowering_stage_assembly._lowering_backend_translation_request_inventory_stage(
+                    request_inventory,
+                ),
+                "lowering_backend_translation_request_inventory",
+                request_inventory,
+            ),
         )
 
         for helper_name, actual, stage_name, output in cases:
@@ -15686,6 +15782,7 @@ class LoweringBoundaryTests(unittest.TestCase):
             (
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
         self.assertEqual(
@@ -15695,6 +15792,10 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(
             assembled.lowering_completion_gap_inventories[0].key,
             implementation.lowering_completion_gap_inventories[0].key,
+        )
+        self.assertEqual(
+            assembled.lowering_backend_translation_request_inventories[0].key,
+            implementation.lowering_backend_translation_request_inventories[0].key,
         )
         self.assertIs(
             assembled.lowering_completion_manifests[0].source_packages[0],
@@ -15712,14 +15813,22 @@ class LoweringBoundaryTests(unittest.TestCase):
             assembled.stages[1].output,
             assembled.lowering_completion_gap_inventories[0],
         )
-        self.assertIs(implementation.generation_stages[-3].output, package)
         self.assertIs(
-            implementation.generation_stages[-2].output,
+            assembled.stages[2].output,
+            assembled.lowering_backend_translation_request_inventories[0],
+        )
+        self.assertIs(implementation.generation_stages[-4].output, package)
+        self.assertIs(
+            implementation.generation_stages[-3].output,
             implementation.lowering_completion_manifests[0],
         )
         self.assertIs(
-            implementation.generation_stages[-1].output,
+            implementation.generation_stages[-2].output,
             implementation.lowering_completion_gap_inventories[0],
+        )
+        self.assertIs(
+            implementation.generation_stages[-1].output,
+            implementation.lowering_backend_translation_request_inventories[0],
         )
 
     def test_m98_completion_tail_assembly_preserves_exact_array_parity(
@@ -15762,6 +15871,10 @@ class LoweringBoundaryTests(unittest.TestCase):
             assembled.lowering_completion_gap_inventories[0].key,
             implementation.lowering_completion_gap_inventories[0].key,
         )
+        self.assertEqual(
+            assembled.lowering_backend_translation_request_inventories[0].key,
+            implementation.lowering_backend_translation_request_inventories[0].key,
+        )
         expected_packages = tuple(
             sorted(implementation.operation_packages, key=lambda package: package.key)
         )
@@ -15787,12 +15900,13 @@ class LoweringBoundaryTests(unittest.TestCase):
             assembled.lowering_completion_manifests[0],
         )
         self.assertEqual(
-            tuple(stage.stage for stage in implementation.generation_stages[-4:]),
+            tuple(stage.stage for stage in implementation.generation_stages[-5:]),
             (
                 "array_backend_handoff_request",
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
 
@@ -15885,6 +15999,468 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertLessEqual(line_counts["_operation_package_sources.py"], 819)
         self.assertLess(line_counts["_lowering_completion_manifest.py"], 1000)
         self.assertLess(line_counts["_lowering_completion_gap_inventory.py"], 1000)
+
+    def test_m99_backend_translation_request_inventory_constructs_supported_records(
+        self,
+    ) -> None:
+        mini_package = lower_lowering_operation_package(
+            TsilReturnStatement(
+                TsilBinaryExpression(
+                    operator="+",
+                    left=TsilParameterReference("left"),
+                    right=TsilParameterReference("right"),
+                )
+            ),
+            candidate_id="candidate-1",
+            source_location=SourceLocation(Path("mini.tsl"), 3, 5),
+        ).unwrap()
+        exact_package = lower_lowering_operation_package(
+            self.exact_array_backend_handoff_request()
+        ).unwrap()
+        selected_package = lower_lowering_operation_package(
+            self.selected_body_envelope(selected_type_tag="si32")
+        ).unwrap()
+        manifest = lowering_completion_manifest.lower_stage8_lowering_completion_manifest(
+            (selected_package, mini_package, exact_package),
+            candidate_id="candidate-1",
+        ).unwrap()
+        gap_inventory = (
+            lowering_completion_gap_inventory.lower_stage8_lowering_completion_gap_inventory(
+                manifest,
+            ).unwrap()
+        )
+
+        result = lowering_backend_translation_request_inventory.lower_stage8_backend_translation_request_inventory(
+            gap_inventory,
+        )
+
+        self.assertTrue(result.is_ok, result.diagnostics)
+        inventory = result.unwrap()
+        self.assertEqual(
+            inventory.inventory_state,
+            "has_accepted_backend_scoped_requests",
+        )
+        self.assertIs(inventory.source_manifest, manifest)
+        self.assertIs(inventory.source_gap_inventory, gap_inventory)
+        self.assertEqual(
+            tuple(record.kind for record in inventory.request_records),
+            (
+                "exact_array_backend_value_uninit_array",
+                "selected_body_direct_intrinsic_handoff",
+            ),
+        )
+        exact_record = inventory.request_records[0]
+        selected_record = inventory.request_records[1]
+        no_request_record = inventory.no_request_records[0]
+        self.assertIs(exact_record.source_manifest, manifest)
+        self.assertIs(exact_record.source_package, exact_package)
+        self.assertIs(exact_record.source_gap_inventory, gap_inventory)
+        self.assertIs(exact_record.source_gap_record, gap_inventory.gap_records[0])
+        self.assertIs(
+            exact_record.source_unresolved_dependency_record,
+            gap_inventory.gap_records[0].source_unresolved_dependency_record,
+        )
+        self.assertIs(
+            exact_record.source_dependency_request,
+            gap_inventory.gap_records[0].source_dependency_request,
+        )
+        self.assertIs(selected_record.source_package, selected_package)
+        self.assertIs(
+            selected_record.source_selected_body_entry,
+            selected_package.selected_body_direct_intrinsic,
+        )
+        self.assertIsNone(selected_record.source_gap_record)
+        self.assertIs(no_request_record.source_package, mini_package)
+        self.assertEqual(
+            no_request_record.reason,
+            "no_accepted_backend_scoped_request",
+        )
+        self.assertEqual(
+            inventory.key,
+            lowering_backend_translation_request_inventory.lower_stage8_backend_translation_request_inventory(
+                gap_inventory,
+            )
+            .unwrap()
+            .key,
+        )
+
+    def test_m99_backend_translation_request_inventory_no_request_state(
+        self,
+    ) -> None:
+        package = lower_lowering_operation_package(
+            TsilReturnStatement(
+                TsilBinaryExpression(
+                    operator="+",
+                    left=TsilParameterReference("left"),
+                    right=TsilParameterReference("right"),
+                )
+            ),
+            candidate_id="candidate-1",
+            source_location=SourceLocation(Path("mini.tsl"), 7, 11),
+        ).unwrap()
+        manifest = lowering_completion_manifest.lower_stage8_lowering_completion_manifest(
+            package,
+        ).unwrap()
+        gap_inventory = (
+            lowering_completion_gap_inventory.lower_stage8_lowering_completion_gap_inventory(
+                manifest,
+            ).unwrap()
+        )
+
+        inventory = lowering_backend_translation_request_inventory.lower_stage8_backend_translation_request_inventory(
+            gap_inventory,
+        ).unwrap()
+
+        self.assertEqual(
+            inventory.inventory_state,
+            "no_accepted_backend_scoped_requests",
+        )
+        self.assertEqual(inventory.request_records, ())
+        self.assertEqual(len(inventory.no_request_records), 1)
+        self.assertIs(inventory.no_request_records[0].source_manifest, manifest)
+        self.assertIs(inventory.no_request_records[0].source_package, package)
+
+    def test_m99_backend_translation_request_inventory_stage_integration(
+        self,
+    ) -> None:
+        result = lower_candidates(self.selection_for("lower_intrin_add"))
+        self.assertTrue(result.is_ok, result.diagnostics)
+        implementation = result.unwrap().implementations[0]
+        inventory = implementation.lowering_backend_translation_request_inventories[0]
+
+        self.assertEqual(
+            tuple(stage.stage for stage in implementation.generation_stages[-4:]),
+            (
+                "lowering_operation_package",
+                "lowering_completion_manifest",
+                "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
+            ),
+        )
+        self.assertIs(
+            implementation.generation_stages[-1].output,
+            inventory,
+        )
+        self.assertIs(
+            inventory.source_manifest,
+            implementation.lowering_completion_manifests[0],
+        )
+        self.assertIs(
+            inventory.source_gap_inventory,
+            implementation.lowering_completion_gap_inventories[0],
+        )
+        self.assertIn(
+            "lowering_backend_translation_request_inventory",
+            get_args(lowering_stage_contracts.GenerationLoweringStageName.__value__),
+        )
+
+        assembled = lowering_stage_assembly._assemble_stage8_completion_tail(
+            implementation.operation_packages,
+            candidate_id=implementation.candidate_id,
+            source_location=implementation.operation_packages[0].source_location,
+        ).unwrap()
+        self.assertIs(
+            assembled.stages[-1].output,
+            assembled.lowering_backend_translation_request_inventories[0],
+        )
+
+    def test_m99_backend_translation_request_inventory_reports_diagnostics(
+        self,
+    ) -> None:
+        package = lower_lowering_operation_package(
+            self.exact_array_backend_handoff_request()
+        ).unwrap()
+        manifest = lowering_completion_manifest.lower_stage8_lowering_completion_manifest(
+            package,
+        ).unwrap()
+        gap_inventory = (
+            lowering_completion_gap_inventory.lower_stage8_lowering_completion_gap_inventory(
+                manifest,
+            ).unwrap()
+        )
+        other_manifest = lowering_completion_manifest.lower_stage8_lowering_completion_manifest(
+            lower_lowering_operation_package(
+                self.exact_array_backend_handoff_request(selected_type_tag="si64")
+            ).unwrap(),
+            candidate_id="candidate-1",
+        ).unwrap()
+        other_gap_inventory = (
+            lowering_completion_gap_inventory.lower_stage8_lowering_completion_gap_inventory(
+                other_manifest,
+            ).unwrap()
+        )
+        copied_package_record = replace(manifest.package_records[0])
+        with self.assertRaisesRegex(ValueError, "object identity"):
+            lowering_backend_translation_request_inventory.Stage8BackendTranslationRequestRecordIr(
+                source_manifest=manifest,
+                source_package_record=copied_package_record,
+                source_package=package,
+                kind="exact_array_backend_value_uninit_array",
+                source_gap_inventory=gap_inventory,
+                source_gap_record=gap_inventory.gap_records[0],
+                source_unresolved_dependency_record=(
+                    gap_inventory.gap_records[0].source_unresolved_dependency_record
+                ),
+                source_dependency_request=(
+                    gap_inventory.gap_records[0].source_dependency_request
+                ),
+            )
+
+        inventory = lowering_backend_translation_request_inventory.lower_stage8_backend_translation_request_inventory(
+            gap_inventory,
+        ).unwrap()
+        broken_record = replace(inventory.request_records[0])
+        object.__setattr__(broken_record, "source_package_record", copied_package_record)
+        object.__setattr__(inventory, "request_records", (broken_record,))
+
+        cases: tuple[tuple[str, object, dict[str, Any], str], ...] = (
+            (
+                "unsupported",
+                object(),
+                {},
+                "TSL-LOWER-BACKEND-REQUEST-INVENTORY-SOURCE-UNSUPPORTED",
+            ),
+            (
+                "wrong_stage",
+                GenerationLoweringStage(
+                    stage="lowering_completion_manifest",
+                    output=manifest,
+                ),
+                {},
+                "TSL-LOWER-BACKEND-REQUEST-INVENTORY-SOURCE-UNSUPPORTED",
+            ),
+            (
+                "malformed_stage_output",
+                type(
+                    "BadM99Stage",
+                    (),
+                    {"stage": "lowering_completion_gap_inventory", "output": object()},
+                )(),
+                {},
+                "TSL-LOWER-BACKEND-REQUEST-INVENTORY-MALFORMED",
+            ),
+            (
+                "missing_inventory",
+                type("EmptyM99Source", (), {"lowering_completion_gap_inventories": ()})(),
+                {},
+                "TSL-LOWER-BACKEND-REQUEST-INVENTORY-VALUE-MISSING",
+            ),
+            (
+                "multiple_inventories",
+                type(
+                    "DuplicateM99Source",
+                    (),
+                    {
+                        "lowering_completion_gap_inventories": (
+                            gap_inventory,
+                            other_gap_inventory,
+                        )
+                    },
+                )(),
+                {},
+                "TSL-LOWER-BACKEND-REQUEST-INVENTORY-VALUE-MULTIPLE",
+            ),
+            (
+                "malformed_manifest_entries",
+                type(
+                    "MalformedM99ManifestEntries",
+                    (),
+                    {
+                        "lowering_completion_manifests": (object(),),
+                        "lowering_completion_gap_inventories": (gap_inventory,),
+                    },
+                )(),
+                {},
+                "TSL-LOWER-BACKEND-REQUEST-INVENTORY-MALFORMED",
+            ),
+            (
+                "missing_manifest",
+                type(
+                    "MissingM99Manifest",
+                    (),
+                    {
+                        "lowering_completion_manifests": (),
+                        "lowering_completion_gap_inventories": (gap_inventory,),
+                    },
+                )(),
+                {},
+                "TSL-LOWER-BACKEND-REQUEST-INVENTORY-VALUE-MISSING",
+            ),
+            (
+                "multiple_manifests",
+                type(
+                    "DuplicateM99Manifests",
+                    (),
+                    {
+                        "lowering_completion_manifests": (
+                            manifest,
+                            other_manifest,
+                        ),
+                        "lowering_completion_gap_inventories": (gap_inventory,),
+                    },
+                )(),
+                {},
+                "TSL-LOWER-BACKEND-REQUEST-INVENTORY-VALUE-MULTIPLE",
+            ),
+            (
+                "manifest_inventory_mismatch",
+                type(
+                    "MismatchM99Source",
+                    (),
+                    {
+                        "lowering_completion_manifests": (other_manifest,),
+                        "lowering_completion_gap_inventories": (gap_inventory,),
+                    },
+                )(),
+                {},
+                "TSL-LOWER-BACKEND-REQUEST-INVENTORY-PROVENANCE-MISMATCH",
+            ),
+            (
+                "candidate_mismatch",
+                gap_inventory,
+                {"candidate_id": "candidate-other"},
+                "TSL-LOWER-BACKEND-REQUEST-INVENTORY-CONTEXT-MISMATCH",
+            ),
+            (
+                "source_location_mismatch",
+                gap_inventory,
+                {"source_location": SourceLocation(Path("other.tsl"), 1, 1)},
+                "TSL-LOWER-BACKEND-REQUEST-INVENTORY-SOURCE-LOCATION-MISMATCH",
+            ),
+            (
+                "copied_package_record",
+                inventory,
+                {},
+                "TSL-LOWER-BACKEND-REQUEST-INVENTORY-PROVENANCE-MISMATCH",
+            ),
+        )
+
+        for name, source, kwargs, code in cases:
+            with self.subTest(name=name):
+                result = lowering_backend_translation_request_inventory.lower_stage8_backend_translation_request_inventory(
+                    source,
+                    **kwargs,
+                )
+                self.assertFalse(result.is_ok)
+                assert_diagnostic(
+                    self,
+                    result.diagnostics[0],
+                    code=code,
+                    severity="error",
+                )
+
+    def test_m99_backend_translation_request_inventory_import_boundary_and_line_counts(
+        self,
+    ) -> None:
+        request_inventory_modules = (
+            lowering_backend_translation_request_diagnostics,
+            lowering_backend_translation_request_inventory,
+            lowering_backend_translation_request_sources,
+        )
+        forbidden_exact_modules = {
+            "tslgen.lowering.boundary",
+            "tslgen.lowering",
+        }
+        forbidden_prefixes = (
+            "tslgen.backends",
+            "tslgen.rendering",
+            "tsldata",
+            "frozen",
+        )
+        imported_forbidden: list[str] = []
+        for request_inventory_module in request_inventory_modules:
+            tree = ast.parse(inspect.getsource(request_inventory_module))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if (
+                            alias.name in forbidden_exact_modules
+                            or alias.name.startswith(forbidden_prefixes)
+                        ):
+                            imported_forbidden.append(alias.name)
+                elif isinstance(node, ast.ImportFrom):
+                    module = node.module or ""
+                    if module in forbidden_exact_modules or module.startswith(
+                        forbidden_prefixes,
+                    ):
+                        imported_forbidden.append(module)
+
+        self.assertEqual(imported_forbidden, [])
+        for forbidden in (
+            "backend_map",
+            "backend_catalog",
+            "tsldata/detail/lang",
+            "value<backend>",
+            "type<backend>",
+            "Stage9",
+            "renderer",
+            "rendering",
+            "generated output",
+            "registry",
+            "dispatcher",
+            "callback",
+            "fixpoint",
+            "backfeed",
+            "repair",
+            "parse_",
+            "scheduler",
+            "open(",
+            "svptrue",
+            "sve",
+        ):
+            for request_inventory_module in request_inventory_modules:
+                source = inspect.getsource(request_inventory_module)
+                with self.subTest(
+                    module=request_inventory_module.__name__,
+                    forbidden=forbidden,
+                ):
+                    self.assertNotIn(forbidden, source)
+
+        line_counts = {
+            path.name: len(path.read_text(encoding="utf-8").splitlines())
+            for path in (
+                Path(cast(str, lowering_boundary.__file__)),
+                Path(cast(str, lowering_operation_package_sources.__file__)),
+                Path(cast(str, lowering_completion_manifest.__file__)),
+                Path(cast(str, lowering_completion_gap_inventory.__file__)),
+                Path(
+                    cast(
+                        str,
+                        lowering_backend_translation_request_inventory.__file__,
+                    )
+                ),
+                Path(
+                    cast(
+                        str,
+                        lowering_backend_translation_request_diagnostics.__file__,
+                    )
+                ),
+                Path(
+                    cast(
+                        str,
+                        lowering_backend_translation_request_sources.__file__,
+                    )
+                ),
+                Path(cast(str, lowering_stage_assembly.__file__)),
+            )
+        }
+        self.assertLessEqual(line_counts["boundary.py"], 1300)
+        self.assertLessEqual(line_counts["_operation_package_sources.py"], 819)
+        self.assertLess(line_counts["_lowering_completion_manifest.py"], 1000)
+        self.assertLess(line_counts["_lowering_completion_gap_inventory.py"], 1000)
+        self.assertLess(
+            line_counts["_lowering_backend_translation_request_inventory.py"],
+            1000,
+        )
+        self.assertLess(
+            line_counts["_lowering_backend_translation_request_diagnostics.py"],
+            200,
+        )
+        self.assertLess(
+            line_counts["_lowering_backend_translation_request_sources.py"],
+            400,
+        )
+        self.assertLess(line_counts["_lowering_stage_assembly.py"], 1000)
 
     def test_exact_array_initialization_slot_form_api_uses_envelope_slot_only(
         self,
@@ -16796,6 +17372,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                         "lowering_operation_package",
                         "lowering_completion_manifest",
                         "lowering_completion_gap_inventory",
+                        "lowering_backend_translation_request_inventory",
                     ),
                 )
                 self.assertEqual(implementation.generation_stages[1].output, branch)
@@ -16814,6 +17391,10 @@ class LoweringBoundaryTests(unittest.TestCase):
                 self.assertEqual(
                     implementation.generation_stages[5].output,
                     implementation.lowering_completion_gap_inventories[0],
+                )
+                self.assertEqual(
+                    implementation.generation_stages[6].output,
+                    implementation.lowering_backend_translation_request_inventories[0],
                 )
 
     def test_plain_else_signedness_branch_pruning_is_deterministic(self) -> None:
@@ -17046,6 +17627,7 @@ class LoweringBoundaryTests(unittest.TestCase):
                 "lowering_operation_package",
                 "lowering_completion_manifest",
                 "lowering_completion_gap_inventory",
+                "lowering_backend_translation_request_inventory",
             ),
         )
         self.assertEqual(
@@ -17067,6 +17649,10 @@ class LoweringBoundaryTests(unittest.TestCase):
         self.assertEqual(
             implementation.generation_stages[5].output,
             implementation.lowering_completion_gap_inventories[0],
+        )
+        self.assertEqual(
+            implementation.generation_stages[6].output,
+            implementation.lowering_backend_translation_request_inventories[0],
         )
 
     def test_generation_branch_pruning_is_deterministic(self) -> None:

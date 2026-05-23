@@ -1272,18 +1272,25 @@ Recommended first parity checks:
   tooling validation success with corpus probes `3 passed`, unit discovery
   `686` tests OK, compileall OK, ruff OK, mypy OK across 142 source files, and
   diff-check OK.
-- Planned M99 coverage should prove a Stage 8 backend-translation request
+- M99 coverage proves a Stage 8 backend-translation request
   inventory/provenance slice over accepted package/manifest/gap facts only.
-  Tests should cover exact-array backend-value request records, selected-body
+  Tests cover exact-array backend-value request records, selected-body
   direct-intrinsic handoff/request records without direct-intrinsic/SVE
   interpretation, explicit no-accepted-request states, mixed inventories,
   object-identity preservation from accepted M93-M98 facts, deterministic keys
   and ordering, stage placement after `lowering_completion_gap_inventory`,
-  diagnostics for unsupported or mismatched sources, import and line-count
-  guardrails, and negative assertions proving no backend maps/catalog reads,
-  backend translation, Stage 9 planning, dependency closure, operation
-  scheduling, renderer-ready IR, rendering/output, source repair, raw body
-  parsing, hidden backfeeds, fixpoint behavior, or hardwiring.
+  diagnostics for unsupported or mismatched sources including manifest and gap
+  inventory container cases, import and line-count guardrails for the split
+  inventory/source-adapter/diagnostics modules, and negative assertions proving
+  no backend maps/catalog reads, backend translation, Stage 9 planning,
+  dependency closure, operation scheduling, renderer-ready IR,
+  rendering/output, source repair, raw body parsing, hidden backfeeds, fixpoint
+  behavior, or hardwiring. M99 validation returned focused pytest
+  `27 passed, 330 deselected`, full lowering-boundary pytest `357 passed`,
+  focused lowering mypy success across 41 source files, and full tooling
+  validation success with corpus probes `3 passed`, unit discovery `691` tests
+  OK, compileall OK, ruff OK, mypy OK across 145 source files, and diff-check
+  OK.
 
 Deferred parity checks:
 

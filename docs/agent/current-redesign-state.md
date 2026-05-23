@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 98 is accepted.
+Milestone 99 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -1063,39 +1063,46 @@ direct-intrinsic/SVE semantics. Planning also added
 `docs/redesign/missing-lowering-inventory.md` as the living inventory of known
 missing lowering work.
 
+The M99 execution-review loop returned `Accept` after focused extensibility and
+validation revisions. M99 added typed Stage 8 backend-translation request
+inventory/provenance ownership split across focused private modules, integrated
+the new `lowering_backend_translation_request_inventory` stage after
+`lowering_completion_gap_inventory`, preserved accepted package/manifest/gap
+object identity, and kept backend translation, Stage 9 planning, rendering,
+source repair, and raw body parsing out of scope.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Execute Milestone 99.
+Run post-M99 planning and review with a lowering focus.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m99-execution-review-loop-prompt.md
+docs/agent/runs/post-m99-planning-plus-review-prompt.md
 ```
 
-Active executor milestone:
+Active planning target:
 
 ```text
-Milestone 99: Operation Package Backend-Translation Request Inventory Slice
+Select the next lowering-focused milestone after accepted Milestone 99.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M98 planning/review returned Accept With Follow-Ups. Human acceptance was
-recorded.
+The M99 execution-review loop returned Accept after focused extensibility and
+validation revisions.
 ```
 
 Next expected action:
 
 ```text
-Run the active M99 execution-review-loop prompt. Use exactly one write-capable
-executor followed by read-only review/audit subagents. Do not start post-M99
-planning until M99 review returns Accept or Accept With Follow-Ups.
+Run the active post-M99 planning-plus-review prompt. Do not implement code
+unless that prompt explicitly selects an executor task.
 ```
 
 Accepted planning prompt:
@@ -2004,10 +2011,16 @@ Completed post-M98 acceptance-finalization prompt:
 docs/agent/runs/post-m98-acceptance-finalization-prompt.md
 ```
 
-Active M99 execution-review-loop prompt:
+Completed M99 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m99-execution-review-loop-prompt.md
+```
+
+Active post-M99 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m99-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -3011,18 +3024,18 @@ docs/agent/runs/m99-execution-review-loop-prompt.md
 - M98 line-count expectations: `boundary.py <= 1285`,
   `_operation_package_sources.py <= 819`, and the new stage-assembly module
   below the module-size guardrail.
-- M99 is active as Stage 8 backend-translation request inventory/provenance
+- M99 is accepted as Stage 8 backend-translation request inventory/provenance
   work only. For M99, "backend-translation request inventory" means typed
-  inventory of already accepted deferred/backend-scoped request facts; it must
+  inventory of already accepted deferred/backend-scoped request facts; it does
   not translate, resolve, evaluate, plan, schedule, or render those facts.
-- M99 must consume only accepted typed Stage 8 facts from M93-M98 operation
+- M99 consumes only accepted typed Stage 8 facts from M93-M98 operation
   packages, manifests, gap inventories, stage assembly, and their preserved
   object references. It must not parse raw `.tsl` source text, repair source
   bodies, normalize source bodies, infer package-family requests, or treat
   source locations, backend ids, extension ids, type tags, primitive names,
   selected literals, `svptrue_b*`, `pg`, or direct-intrinsic token text as
   semantic dispatch keys.
-- M99 must not add backend map/catalog/lang reads, backend manifest reads,
+- M99 does not add backend map/catalog/lang reads, backend manifest reads,
   `tsldata/detail/lang` reads, backend-uninit resolution, generic
   `value<backend>(...)` / `type<backend>(...)` evaluation, Stage 9 planning,
   backend support decisions, operation scheduling, dependency solving,
@@ -3035,7 +3048,7 @@ docs/agent/runs/m99-execution-review-loop-prompt.md
   inventory of known missing lowering work. It is not runtime input, a
   generated artifact, a source scanner, a dependency-closure plan, or a
   completeness oracle.
-- Future lowering package decomposition must preserve accepted M57-M98
+- Future lowering package decomposition must preserve accepted M57-M99
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
   no-external-input boundaries.
@@ -4338,11 +4351,17 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - Future lowering milestones should update
   `docs/redesign/missing-lowering-inventory.md` when they accept, resolve,
   narrow, or discover lowering gaps.
+- M99 implementation follow-up resolved during review: split request-inventory
+  ownership into focused inventory, source-adapter, and diagnostics modules
+  rather than leaving a near-guardrail private monolith.
+- M99 validation follow-up resolved during review: add missing manifest
+  container diagnostic tests and the required mypy annotation for the diagnostic
+  case table.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M99 through the
-active M99 execution-review-loop prompt.
+No stop condition is active. The workflow is ready to run post-M99 planning
+through the active post-M99 planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -4367,6 +4386,36 @@ git diff --check -- docs/agent/current-redesign-state.md docs/agent/runs/post-m9
 ```
 
 The command returned exit 0 with no output.
+
+For M99 execution and review, validation completed with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_operation_package_sources.py tslgen/src/tslgen/lowering/_lowering_completion_manifest.py tslgen/src/tslgen/lowering/_lowering_completion_gap_inventory.py tslgen/src/tslgen/lowering/_lowering_stage_assembly.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_diagnostics.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_lowering_stage_assembly.py tslgen/src/tslgen/lowering/_lowering_completion_manifest.py tslgen/src/tslgen/lowering/_lowering_completion_gap_inventory.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_diagnostics.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m99 or backend_translation_request_inventory or completion_gap_inventory or completion_manifest or operation_package"
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering
+PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+git diff --check
+```
+
+The M99 line counts were `1254 tslgen/src/tslgen/lowering/boundary.py`,
+`819 tslgen/src/tslgen/lowering/_operation_package_sources.py`,
+`776 tslgen/src/tslgen/lowering/_lowering_completion_manifest.py`,
+`564 tslgen/src/tslgen/lowering/_lowering_completion_gap_inventory.py`,
+`223 tslgen/src/tslgen/lowering/_lowering_stage_assembly.py`,
+`770 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py`,
+`207 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_sources.py`,
+`64 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_diagnostics.py`,
+and `4677 total`. The py-compile command returned exit 0 with no output. The
+focused M99/package/manifest/gap-inventory command returned
+`27 passed, 330 deselected in 87.81s`. The full lowering-boundary suite
+returned `357 passed in 741.11s (0:12:21)`. The focused lowering mypy check
+returned `Success: no issues found in 41 source files`. The validation profile
+returned exit 0 with corpus probes `3 passed in 19.42s`, unit discovery `691`
+tests OK in `765.631s`, compileall OK, ruff `All checks passed!`, mypy
+`Success: no issues found in 145 source files`, and diff-check OK. The
+standalone final `git diff --check` returned exit 0 with no output.
 
 For post-M95 planning, validation completed with:
 

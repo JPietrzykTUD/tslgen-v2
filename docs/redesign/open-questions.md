@@ -1417,8 +1417,8 @@ ownership. It does not resolve backend-uninit, backend maps, backend support
 decisions, operation scheduling, dependency closure, Stage 9 planning,
 renderer-ready body IR, generated output, broad body semantics, or broad
 `value<backend>(...)` evaluation.
-Post-M98 planning selects M99 to inventory accepted backend-scoped request
-facts visible from package/manifest/gap state. M99 narrows what later backend
+M99 is accepted as the inventory of accepted backend-scoped request facts
+visible from package/manifest/gap state. M99 narrows what later backend
 translation/planning must consume, but it does not resolve backend values,
 evaluate maps, schedule operations, solve dependencies, create Stage 9 plans,
 render output, or prove whole-lowering completeness. The broader known missing
@@ -1640,9 +1640,9 @@ Current roadmap direction:
 - Milestone 48 implements the selected return to generation-time semantic lowering for
   signedness branch pruning over typed M43 `base.in` values; it does not add
   native rendering expansion.
-- Post-M98 planning selects M99 to inventory accepted backend-scoped request
-  facts before backend planning. It does not answer the broader data-driven
-  intrinsic composition question and must not evaluate translation maps.
+- M99 inventories accepted backend-scoped request facts before backend
+  planning. It does not answer the broader data-driven intrinsic composition
+  question and does not evaluate translation maps.
 - Renderer-local intrinsic lookup tables are rejected as an implementation
   strategy for future native expansion.
 

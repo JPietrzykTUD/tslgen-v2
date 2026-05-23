@@ -34,6 +34,7 @@ import tslgen.lowering._array_body_validation as _array_body_validation  # noqa:
 import tslgen.lowering._lowering_inputs as _lowering_inputs
 import tslgen.lowering._lowering_completion_manifest as _lowering_completion_manifest
 import tslgen.lowering._lowering_completion_gap_inventory as _lowering_completion_gap_inventory
+import tslgen.lowering._lowering_backend_translation_request_inventory as _lowering_backend_translation_request_inventory
 import tslgen.lowering._lowering_stage_assembly as _stage_assembly
 import tslgen.lowering._mini_tsil_lowering as _mini_tsil_lowering
 import tslgen.lowering._operation_package as _operation_package
@@ -416,6 +417,7 @@ class LoweredImplementation:
     operation_packages: tuple[LoweringOperationPackageIr, ...] = ()
     lowering_completion_manifests: tuple[_lowering_completion_manifest.Stage8LoweringCompletionManifestIr, ...] = ()
     lowering_completion_gap_inventories: tuple[_lowering_completion_gap_inventory.Stage8LoweringCompletionGapInventoryIr, ...] = ()
+    lowering_backend_translation_request_inventories: tuple[_lowering_backend_translation_request_inventory.Stage8BackendTranslationRequestInventoryIr, ...] = ()
     generation_stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -550,6 +552,7 @@ class LoweredImplementation:
         object.__setattr__(self, "operation_packages", tuple(self.operation_packages))
         object.__setattr__(self, "lowering_completion_manifests", tuple(self.lowering_completion_manifests))
         object.__setattr__(self, "lowering_completion_gap_inventories", tuple(self.lowering_completion_gap_inventories))
+        object.__setattr__(self, "lowering_backend_translation_request_inventories", tuple(self.lowering_backend_translation_request_inventories))
         object.__setattr__(
             self,
             "generation_stages",
@@ -634,6 +637,10 @@ class LoweredImplementation:
             tuple(package.key for package in self.operation_packages),
             tuple(manifest.key for manifest in self.lowering_completion_manifests),
             tuple(inventory.key for inventory in self.lowering_completion_gap_inventories),
+            tuple(
+                inventory.key
+                for inventory in self.lowering_backend_translation_request_inventories
+            ),
             tuple(stage.key for stage in self.generation_stages),
         )
 
@@ -1079,6 +1086,9 @@ def _lower_input(
                     lowering_completion_gap_inventories=(
                         assembled_tail.lowering_completion_gap_inventories
                     ),
+                    lowering_backend_translation_request_inventories=(
+                        assembled_tail.lowering_backend_translation_request_inventories
+                    ),
                     generation_stages=(
                         _stage_assembly._recognition_stage(
                             "generation.control_flow",
@@ -1154,6 +1164,9 @@ def _lower_input(
             ),
             lowering_completion_gap_inventories=(
                 assembled_tail.lowering_completion_gap_inventories
+            ),
+            lowering_backend_translation_request_inventories=(
+                assembled_tail.lowering_backend_translation_request_inventories
             ),
             generation_stages=(
                 *generation_stages,

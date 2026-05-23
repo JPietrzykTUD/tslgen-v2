@@ -6,6 +6,7 @@ from tslgen.core.diagnostics import SourceLocation
 from tslgen.core.result import Result
 import tslgen.lowering._lowering_completion_gap_inventory as _completion_gap_inventory
 import tslgen.lowering._lowering_completion_manifest as _completion_manifest
+import tslgen.lowering._lowering_backend_translation_request_inventory as _backend_request_inventory
 from tslgen.lowering._generation_models import (
     GenerationExpressionRecognition,
     GenerationPredicate,
@@ -38,6 +39,10 @@ class _Stage8CompletionTailAssembly:
         _completion_gap_inventory.Stage8LoweringCompletionGapInventoryIr,
         ...,
     ] = ()
+    lowering_backend_translation_request_inventories: tuple[
+        _backend_request_inventory.Stage8BackendTranslationRequestInventoryIr,
+        ...,
+    ] = ()
     stages: tuple[GenerationLoweringStage, ...] = ()
 
     def __post_init__(self) -> None:
@@ -55,6 +60,11 @@ class _Stage8CompletionTailAssembly:
             self,
             "lowering_completion_gap_inventories",
             tuple(self.lowering_completion_gap_inventories),
+        )
+        object.__setattr__(
+            self,
+            "lowering_backend_translation_request_inventories",
+            tuple(self.lowering_backend_translation_request_inventories),
         )
         object.__setattr__(self, "stages", tuple(self.stages))
 
@@ -148,6 +158,15 @@ def _lowering_completion_gap_inventory_stage(
     )
 
 
+def _lowering_backend_translation_request_inventory_stage(
+    output: _backend_request_inventory.Stage8BackendTranslationRequestInventoryIr,
+) -> GenerationLoweringStage:
+    return GenerationLoweringStage(
+        stage="lowering_backend_translation_request_inventory",
+        output=output,
+    )
+
+
 def _assemble_stage8_completion_tail(
     operation_packages: tuple[LoweringOperationPackageIr, ...],
     *,
@@ -176,14 +195,29 @@ def _assemble_stage8_completion_tail(
         return Result.failure(inventory_result.diagnostics)
     inventory = inventory_result.unwrap()
 
+    request_inventory_result = (
+        _backend_request_inventory.lower_stage8_backend_translation_request_inventory(
+            inventory,
+        )
+    )
+    if not request_inventory_result.is_ok:
+        return Result.failure(request_inventory_result.diagnostics)
+    request_inventory = request_inventory_result.unwrap()
+
     return Result.ok(
         _Stage8CompletionTailAssembly(
             operation_packages=packages,
             lowering_completion_manifests=(manifest,),
             lowering_completion_gap_inventories=(inventory,),
+            lowering_backend_translation_request_inventories=(
+                request_inventory,
+            ),
             stages=(
                 _lowering_completion_manifest_stage(manifest),
                 _lowering_completion_gap_inventory_stage(inventory),
+                _lowering_backend_translation_request_inventory_stage(
+                    request_inventory,
+                ),
             ),
         )
     )

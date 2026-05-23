@@ -830,8 +830,8 @@ broad coordinator, source dispatcher, registry, callback map, hidden backfeed,
 fixpoint mechanism, backend planning surface, renderer-ready IR, or semantic
 lowering expansion.
 
-Post-M98 planning selects M99 as the next Stage 8 lowering inventory slice.
-The new inventory follows `lowering_completion_gap_inventory` and records
+M99 is accepted as the next Stage 8 lowering inventory slice. The accepted
+inventory follows `lowering_completion_gap_inventory` and records
 accepted backend-scoped request facts visible from operation packages,
 completion manifests, and gap inventories. It is still Stage 8
 inventory/provenance data. It does not translate backend values, evaluate

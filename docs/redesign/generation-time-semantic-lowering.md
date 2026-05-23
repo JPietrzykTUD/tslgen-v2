@@ -1294,8 +1294,9 @@ The broader known missing lowering surface is tracked in
 
 ## Explicit Deferrals
 
-Deferred beyond the accepted M43-M98 semantic-lowering, structural/request,
-package, manifest, gap-inventory, and stage-assembly slices:
+Deferred beyond the accepted M43-M99 semantic-lowering, structural/request,
+package, manifest, gap-inventory, stage-assembly, and request-inventory
+slices:
 
 - Full TSIL grammar and general expression evaluation.
 - Generation-time type queries for vector registers, extension transforms, mask
@@ -1375,11 +1376,12 @@ package, manifest, gap-inventory, and stage-assembly slices:
   identities. It adds no generation-time helper semantics, broad source
   parsing, backend translation, Stage 9 planning, rendering, registries,
   dispatchers, hidden backfeeds, or fixpoint machinery.
-- Post-M98 planning selects M99 as a Stage 8 backend-translation request
+- M99 is accepted as a Stage 8 backend-translation request
   inventory/provenance slice over accepted package/manifest/gap facts. M99
-  must not translate backend values, evaluate translation maps, create Stage 9
-  plans, produce renderer-ready IR, infer direct-intrinsic/SVE semantics, scan
-  raw source bodies, or treat inventory results as whole-lowering completion.
+  records typed request/no-request facts without translating backend values,
+  evaluating translation maps, creating Stage 9 plans, producing
+  renderer-ready IR, inferring direct-intrinsic/SVE semantics, scanning raw
+  source bodies, or treating inventory results as whole-lowering completion.
 - Signedness branch pruning is accepted for the exact M48 slice:
   `if<generation>(value<generation>(type::is_signed(type<generation>(base::in))))`
   plus `else<generation>` form over typed M43 `base.in` values. M51 adds only
