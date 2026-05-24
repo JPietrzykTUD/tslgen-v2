@@ -19,6 +19,10 @@ from tslgen.lowering import (
     LoweredParameter,
     LoweredParameterRef,
     Lowerer,
+    SUPPORTED_SCALAR_TYPE_DESCRIPTORS,
+    ScalarTypeDescriptor,
+    lookup_scalar_type_descriptor,
+    supported_scalar_type_tags,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "tsl"
@@ -43,6 +47,60 @@ RUST_CONTENT = """pub fn add_scalar_si32(left: i32, right: i32) -> i32 {
 }
 """
 
+UI32_CPP_CONTENT = """#pragma once
+
+#include <cstdint>
+
+namespace tsl {
+
+inline std::uint32_t add_scalar_ui32(std::uint32_t left, std::uint32_t right) {
+  return left + right;
+}
+
+}  // namespace tsl
+"""
+
+UI32_RUST_CONTENT = """pub fn add_scalar_ui32(left: u32, right: u32) -> u32 {
+    left + right
+}
+"""
+
+
+def test_m110_scalar_descriptor_lookup_table() -> None:
+    assert supported_scalar_type_tags() == ("si32", "ui32", "f32", "f64")
+    assert SUPPORTED_SCALAR_TYPE_DESCRIPTORS == (
+        ScalarTypeDescriptor(
+            tag="si32",
+            kind="scalar",
+            family="integer",
+            bit_width=32,
+            signedness="signed",
+        ),
+        ScalarTypeDescriptor(
+            tag="ui32",
+            kind="scalar",
+            family="integer",
+            bit_width=32,
+            signedness="unsigned",
+        ),
+        ScalarTypeDescriptor(
+            tag="f32",
+            kind="scalar",
+            family="floating",
+            bit_width=32,
+            signedness="not_applicable",
+        ),
+        ScalarTypeDescriptor(
+            tag="f64",
+            kind="scalar",
+            family="floating",
+            bit_width=64,
+            signedness="not_applicable",
+        ),
+    )
+    assert _descriptor("f32").is_floating
+    assert lookup_scalar_type_descriptor("si64") is None
+
 
 def test_m108_lowerer_produces_backend_neutral_function_value() -> None:
     result = Lowerer().lower(_selected_implementation())
@@ -52,13 +110,23 @@ def test_m108_lowerer_produces_backend_neutral_function_value() -> None:
         name="add_scalar_si32",
         primitive_name="add",
         parameters=(LoweredParameter("left"), LoweredParameter("right")),
-        scalar_type_tag="si32",
+        scalar_type=_descriptor("si32"),
         expression=LoweredBinaryAddExpression(
             left=LoweredParameterRef("left"),
             right=LoweredParameterRef("right"),
         ),
         source=_location(2, 3),
     )
+
+
+def test_m110_lowerer_accepts_supported_scalar_descriptors() -> None:
+    for type_tag in supported_scalar_type_tags():
+        result = Lowerer().lower(_selected_implementation(type_tag=type_tag))
+
+        assert result.diagnostics == ()
+        assert result.function is not None
+        assert result.function.name == f"add_scalar_{type_tag}"
+        assert result.function.scalar_type == _descriptor(type_tag)
 
 
 def test_m108_backends_emit_from_lowered_function_value() -> None:
@@ -79,6 +147,35 @@ def test_m108_backends_emit_from_lowered_function_value() -> None:
     assert rust_result.artifact.content == RUST_CONTENT
 
 
+def test_m110_backends_emit_supported_scalar_spellings() -> None:
+    expected_spellings = (
+        ("si32", "std::int32_t", "i32"),
+        ("ui32", "std::uint32_t", "u32"),
+        ("f32", "float", "f32"),
+        ("f64", "double", "f64"),
+    )
+
+    for type_tag, cpp_spelling, rust_spelling in expected_spellings:
+        function = _lowered_function(type_tag)
+
+        cpp_result = CppBackend().emit(function)
+        rust_result = RustBackend().emit(function)
+
+        assert cpp_result.diagnostics == ()
+        assert rust_result.diagnostics == ()
+        assert cpp_result.artifact is not None
+        assert rust_result.artifact is not None
+        assert (
+            f"inline {cpp_spelling} add_scalar_{type_tag}"
+            f"({cpp_spelling} left, {cpp_spelling} right)"
+        ) in cpp_result.artifact.content
+        assert (
+            f"pub fn add_scalar_{type_tag}"
+            f"(left: {rust_spelling}, right: {rust_spelling})"
+            f" -> {rust_spelling}"
+        ) in rust_result.artifact.content
+
+
 def test_m108_lowerer_reports_unsupported_body_boundary() -> None:
     result = Lowerer().lower(
         _selected_implementation(
@@ -97,6 +194,19 @@ def test_m108_lowerer_reports_unsupported_body_boundary() -> None:
     assert diagnostic.severity == "error"
     assert diagnostic.location == _location(3, 5)
     assert "add(left, right)" in diagnostic.message
+
+
+def test_m110_lowerer_reports_unsupported_scalar_type() -> None:
+    result = Lowerer().lower(_selected_implementation(type_tag="si64"))
+
+    assert result.function is None
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-TYPE"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == _location(2, 3)
+    assert "si64" in diagnostic.message
+    assert "si32, ui32, f32, f64" in diagnostic.message
 
 
 def test_tiny_fixture_generates_cpp_and_rust_artifact_values() -> None:
@@ -121,6 +231,103 @@ def test_tiny_fixture_generates_cpp_and_rust_artifact_values() -> None:
             "9086cbbf44026eab3e4ad05490ac50879a9af3ac9d6f3ee5f7f0e28f91eb9870",
         ),
     )
+
+
+def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_add_source(tmp_path, "ui32")
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="ui32",
+            ),
+            Target(
+                backend="rust",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="ui32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/add_scalar_ui32.hpp",
+        "src/add_scalar_ui32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        UI32_CPP_CONTENT,
+        UI32_RUST_CONTENT,
+    ]
+
+
+def test_m110_unsupported_source_type_reports_lowering_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_add_source(tmp_path, "si64")
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si64",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-TYPE"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 2
+    assert diagnostic.location.column == 3
+    assert "si64" in diagnostic.message
+
+
+def test_m110_malformed_source_type_tag_is_parse_boundary(tmp_path: Path) -> None:
+    source = tmp_path / "tiny_add_bad_type.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si-32:",
+                "    body add(left, right)",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si-32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-PARSE-UNSUPPORTED-FORM"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 2
+    assert diagnostic.location.column == 3
 
 
 def test_tiny_fixture_pipeline_is_deterministic() -> None:
@@ -273,6 +480,7 @@ def _selected_implementation(
     *,
     body: BinaryAddBody | None = None,
     backend: str = "cpp",
+    type_tag: str = "si32",
 ) -> SelectedImplementation:
     selected_body = body or BinaryAddBody(
         left_parameter="left",
@@ -281,7 +489,7 @@ def _selected_implementation(
     )
     implementation = Implementation(
         extension="scalar",
-        type_tag="si32",
+        type_tag=type_tag,
         body=selected_body,
         source=_location(2, 3),
     )
@@ -297,13 +505,48 @@ def _selected_implementation(
         backend=backend,
         primitive_name="add",
         extension="scalar",
-        type_tag="si32",
+        type_tag=type_tag,
     )
     return SelectedImplementation(
         target=target,
         primitive=primitive,
         implementation=implementation,
     )
+
+
+def _descriptor(type_tag: str) -> ScalarTypeDescriptor:
+    descriptor = lookup_scalar_type_descriptor(type_tag)
+    assert descriptor is not None
+    return descriptor
+
+
+def _lowered_function(type_tag: str) -> LoweredFunction:
+    return LoweredFunction(
+        name=f"add_scalar_{type_tag}",
+        primitive_name="add",
+        parameters=(LoweredParameter("left"), LoweredParameter("right")),
+        scalar_type=_descriptor(type_tag),
+        expression=LoweredBinaryAddExpression(
+            left=LoweredParameterRef("left"),
+            right=LoweredParameterRef("right"),
+        ),
+        source=_location(2, 3),
+    )
+
+
+def _write_tiny_add_source(tmp_path: Path, type_tag: str) -> Path:
+    source = tmp_path / f"tiny_add_{type_tag}.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                f"  implementation scalar {type_tag}:",
+                "    body add(left, right)",
+            )
+        ),
+        encoding="utf-8",
+    )
+    return source
 
 
 def _location(line: int, column: int) -> SourceLocation:

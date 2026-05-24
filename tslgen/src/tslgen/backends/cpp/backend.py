@@ -1,16 +1,34 @@
 """Typed C++ artifact emitter for the tiny lowered add function."""
 
+from dataclasses import dataclass
+
 from tslgen.backends.base import BackendEmitResult
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.io.artifacts import Artifact, ArtifactMetadata
 from tslgen.lowering import LoweredFunction
+from tslgen.lowering.scalar_types import ScalarTypeDescriptor
+
+
+@dataclass(frozen=True, slots=True)
+class _ScalarTypeSpelling:
+    tag: str
+    spelling: str
+
+
+_SCALAR_TYPE_SPELLINGS: tuple[_ScalarTypeSpelling, ...] = (
+    _ScalarTypeSpelling(tag="si32", spelling="std::int32_t"),
+    _ScalarTypeSpelling(tag="ui32", spelling="std::uint32_t"),
+    _ScalarTypeSpelling(tag="f32", spelling="float"),
+    _ScalarTypeSpelling(tag="f64", spelling="double"),
+)
 
 
 class CppBackend:
     backend_id = "cpp"
 
     def emit(self, function: LoweredFunction) -> BackendEmitResult:
-        if function.scalar_type_tag != "si32":
+        scalar_spelling = _scalar_type_spelling(function.scalar_type)
+        if scalar_spelling is None:
             return BackendEmitResult(
                 artifact=None,
                 diagnostics=(
@@ -18,15 +36,15 @@ class CppBackend:
                         severity="error",
                         code="TSL-BACKEND-UNSUPPORTED-TYPE",
                         message=(
-                            f"C++ emitter supports only type 'si32' in M107; "
-                            f"got {function.scalar_type_tag!r}"
+                            "C++ emitter has no spelling for scalar type "
+                            f"{function.scalar_type.tag!r}"
                         ),
                         location=function.source,
                     ),
                 ),
             )
 
-        content = self._render_add_function(function)
+        content = self._render_add_function(function, scalar_spelling)
         return BackendEmitResult(
             artifact=Artifact(
                 logical_path=f"include/tsl/{function.name}.hpp",
@@ -40,7 +58,11 @@ class CppBackend:
             diagnostics=(),
         )
 
-    def _render_add_function(self, function: LoweredFunction) -> str:
+    def _render_add_function(
+        self,
+        function: LoweredFunction,
+        scalar_spelling: str,
+    ) -> str:
         left = function.expression.left.parameter_name
         right = function.expression.right.parameter_name
         return (
@@ -50,10 +72,17 @@ class CppBackend:
             "\n"
             "namespace tsl {\n"
             "\n"
-            f"inline std::int32_t {function.name}"
-            f"(std::int32_t {left}, std::int32_t {right}) {{\n"
+            f"inline {scalar_spelling} {function.name}"
+            f"({scalar_spelling} {left}, {scalar_spelling} {right}) {{\n"
             f"  return {left} + {right};\n"
             "}\n"
             "\n"
             "}  // namespace tsl\n"
         )
+
+
+def _scalar_type_spelling(descriptor: ScalarTypeDescriptor) -> str | None:
+    for spelling in _SCALAR_TYPE_SPELLINGS:
+        if spelling.tag == descriptor.tag:
+            return spelling.spelling
+    return None

@@ -1,4 +1,4 @@
-"""Selected-implementation lowering for the exact M107 add body."""
+"""Selected-implementation lowering for the exact tiny clean add body."""
 
 from dataclasses import dataclass
 
@@ -10,11 +10,15 @@ from tslgen.lowering.model import (
     LoweredParameter,
     LoweredParameterRef,
 )
+from tslgen.lowering.scalar_types import (
+    ScalarTypeDescriptor,
+    lookup_scalar_type_descriptor,
+    supported_scalar_type_tags,
+)
 
 _SUPPORTED_PRIMITIVE = "add"
 _SUPPORTED_TEMPLATE = "binary"
 _SUPPORTED_EXTENSION = "scalar"
-_SUPPORTED_TYPE_TAG = "si32"
 _SUPPORTED_PARAMETERS = ("left", "right")
 
 
@@ -25,11 +29,12 @@ class LoweringResult:
 
 
 class Lowerer:
-    """Lower only the selected M107 scalar si32 add implementation."""
+    """Lower only the selected scalar add implementation shape."""
 
     def lower(self, selected: SelectedImplementation) -> LoweringResult:
-        diagnostics = tuple(_unsupported_diagnostics(selected))
-        if diagnostics:
+        scalar_type = lookup_scalar_type_descriptor(selected.implementation.type_tag)
+        diagnostics = tuple(_unsupported_diagnostics(selected, scalar_type))
+        if diagnostics or scalar_type is None:
             return LoweringResult(function=None, diagnostics=diagnostics)
 
         body = selected.implementation.body
@@ -39,7 +44,7 @@ class Lowerer:
             parameters=tuple(
                 LoweredParameter(name=name) for name in selected.primitive.parameters
             ),
-            scalar_type_tag=selected.implementation.type_tag,
+            scalar_type=scalar_type,
             expression=LoweredBinaryAddExpression(
                 left=LoweredParameterRef(body.left_parameter),
                 right=LoweredParameterRef(body.right_parameter),
@@ -51,6 +56,7 @@ class Lowerer:
 
 def _unsupported_diagnostics(
     selected: SelectedImplementation,
+    scalar_type: ScalarTypeDescriptor | None,
 ) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
     body = selected.implementation.body
@@ -62,7 +68,7 @@ def _unsupported_diagnostics(
                 code="TSL-LOWER-UNSUPPORTED-PRIMITIVE",
                 message=(
                     f"primitive {selected.primitive.name!r} cannot be lowered by "
-                    f"M108; expected {_SUPPORTED_PRIMITIVE!r}"
+                    f"the tiny clean lowerer; expected {_SUPPORTED_PRIMITIVE!r}"
                 ),
                 location=selected.primitive.source,
             )
@@ -104,21 +110,21 @@ def _unsupported_diagnostics(
                 message=(
                     f"implementation extension "
                     f"{selected.implementation.extension!r} cannot be lowered by "
-                    f"M108; expected {_SUPPORTED_EXTENSION!r}"
+                    f"the tiny clean lowerer; expected {_SUPPORTED_EXTENSION!r}"
                 ),
                 location=selected.implementation.source,
             )
         )
 
-    if selected.implementation.type_tag != _SUPPORTED_TYPE_TAG:
+    if scalar_type is None:
         diagnostics.append(
             Diagnostic(
                 severity="error",
                 code="TSL-LOWER-UNSUPPORTED-TYPE",
                 message=(
                     f"implementation type {selected.implementation.type_tag!r} "
-                    f"cannot be lowered by M108; expected "
-                    f"{_SUPPORTED_TYPE_TAG!r}"
+                    "cannot be lowered; expected one of: "
+                    f"{', '.join(supported_scalar_type_tags())}"
                 ),
                 location=selected.implementation.source,
             )
@@ -133,8 +139,8 @@ def _unsupported_diagnostics(
                 severity="error",
                 code="TSL-LOWER-UNSUPPORTED-BODY",
                 message=(
-                    "implementation body cannot be lowered by M108; expected "
-                    "exactly 'add(left, right)'"
+                    "implementation body cannot be lowered; expected exactly "
+                    "'add(left, right)'"
                 ),
                 location=body.source,
             )

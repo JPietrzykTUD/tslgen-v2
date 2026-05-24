@@ -1,8 +1,9 @@
-"""Backend-neutral lowered function values for the tiny M108 slice."""
+"""Backend-neutral lowered function values for the tiny clean slice."""
 
 from dataclasses import dataclass
 
 from tslgen.core.diagnostics import SourceLocation
+from tslgen.lowering.scalar_types import ScalarTypeDescriptor
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +27,6 @@ class LoweredFunction:
     name: str
     primitive_name: str
     parameters: tuple[LoweredParameter, ...]
-    scalar_type_tag: str
+    scalar_type: ScalarTypeDescriptor
     expression: LoweredBinaryAddExpression
     source: SourceLocation

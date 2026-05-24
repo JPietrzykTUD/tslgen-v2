@@ -1,4 +1,4 @@
-"""Parser-to-domain catalog promotion for the M107 source form."""
+"""Parser-to-domain catalog promotion for the tiny clean source form."""
 
 from dataclasses import dataclass
 
@@ -16,7 +16,6 @@ M107_SIGNATURE = "v:=(v,v)"
 M107_PARAMETERS = ("left", "right")
 M107_TEMPLATE = "binary"
 M107_EXTENSION = "scalar"
-M107_TYPE_TAG = "si32"
 M107_OPERATION = "add"
 
 
@@ -27,7 +26,7 @@ class CatalogBuildResult:
 
 
 class CatalogBuilder:
-    """Promote parsed M107 syntax into validated domain values."""
+    """Promote parsed tiny clean syntax into validated domain values."""
 
     def build(self, documents: tuple[ParsedDocument, ...]) -> CatalogBuildResult:
         parsed_primitives = tuple(
@@ -146,19 +145,6 @@ class CatalogBuilder:
                     message=(
                         f"implementation extension {parsed.extension!r} is "
                         f"unsupported; expected {M107_EXTENSION!r}"
-                    ),
-                    location=parsed.source,
-                )
-            )
-
-        if parsed.type_tag != M107_TYPE_TAG:
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    code="TSL-CATALOG-UNSUPPORTED-TYPE",
-                    message=(
-                        f"implementation type {parsed.type_tag!r} is "
-                        f"unsupported; expected {M107_TYPE_TAG!r}"
                     ),
                     location=parsed.source,
                 )

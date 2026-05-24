@@ -103,6 +103,23 @@ UTF-8 text, and return deterministic written records sorted by logical path.
 Each record includes the logical path, resolved written path, content digest,
 UTF-8 byte count, and `written` status.
 
+### M110 Tiny Scalar Type Lowering Table
+
+Milestone 110 broadens only the tiny clean scalar type path. The same exact
+three-line `scalar` / `add(left, right)` source form may now declare the
+supported clean restart scalar tags `si32`, `ui32`, `f32`, and `f64`.
+
+Catalog construction preserves the parsed scalar type tag without deciding
+backend spellings. The lowerer owns the typed scalar descriptor table. A
+lowered function carries a backend-neutral descriptor containing tag,
+`scalar` kind, integer or floating family, bit width, and signedness. C++ and
+Rust emitters consume that descriptor through backend-owned spelling tables.
+
+The existing `si32` C++ and Rust artifact bytes, logical paths, and digests
+remain stable. Syntactically malformed type tags are parser diagnostics.
+Syntactically valid but unsupported selected scalar tags are lowering
+diagnostics with code `TSL-LOWER-UNSUPPORTED-TYPE`.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

@@ -1,4 +1,4 @@
-"""Narrow parser for the M107 fixture source form."""
+"""Narrow parser for the tiny clean source form."""
 
 import re
 
@@ -20,7 +20,7 @@ _HEADER_PATTERN = re.compile(
 _IMPLEMENTATION_PATTERN = re.compile(
     r"^  implementation "
     r"(?P<extension>scalar) "
-    r"(?P<type_tag>si32):$"
+    r"(?P<type_tag>[A-Za-z_][A-Za-z0-9_]*):$"
 )
 _BODY_PATTERN = re.compile(
     r"^    body "
@@ -31,7 +31,7 @@ _NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class TslParser:
-    """Parse only the exact M107 primitive/implementation/body shape."""
+    """Parse only the exact primitive/implementation/body shape."""
 
     def parse(self, documents: tuple[SourceDocument, ...]) -> ParseResult:
         parsed_documents: list[ParsedDocument] = []
@@ -58,7 +58,8 @@ class TslParser:
                     severity="error",
                     code="TSL-PARSE-UNSUPPORTED-FORM",
                     message=(
-                        "M107 supports exactly three non-comment lines: "
+                        "the clean restart parser supports exactly three "
+                        "non-comment lines: "
                         "primitive header, implementation header, and body line"
                     ),
                     location=SourceLocation(document.path, line, column),
@@ -168,7 +169,7 @@ def _unsupported_line(
     return Diagnostic(
         severity="error",
         code="TSL-PARSE-UNSUPPORTED-FORM",
-        message=f"unsupported M107 source line: {text!r}",
+        message=f"unsupported clean restart source line: {text!r}",
         location=SourceLocation(document.path, line, column),
     )
 

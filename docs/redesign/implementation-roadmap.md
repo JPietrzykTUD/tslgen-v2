@@ -14808,9 +14808,19 @@ Review notes:
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M109.
-This milestone intentionally follows the user's lowering focus instead of
-opening CLI work.
+Accepted. M110 broadened the tiny clean lowering path from a one-off `si32`
+check into a small lowering-owned scalar type descriptor table for `si32`,
+`ui32`, `f32`, and `f64`. `LoweredFunction` now carries a backend-neutral
+descriptor with tag, scalar kind, integer/floating family, bit width, and
+signedness. C++ and Rust spellings remain backend-owned in their emitters. The
+parser/catalog still preserve the exact tiny scalar `add(left, right)` source
+shape while allowing identifier-like type tags, and syntactically valid but
+unsupported tags fail in lowering with `TSL-LOWER-UNSUPPORTED-TYPE`. Existing
+`si32` artifact bytes, logical paths, and digests remain stable. M110 did not
+add CLI work, writer changes, vector/SIMD semantics, broad TSIL parsing,
+backend-manifest/type-map reads, old imports, old type/lowering migration,
+dependency closure, registries, dispatchers, plugin systems, hidden backfeeds,
+fixpoint mechanisms, or a broad type-system framework.
 
 Goal:
 
@@ -14888,4 +14898,91 @@ Review notes:
 - Reviewers should reject broad parser/type-system/framework growth beyond the
   exact scalar-add source form.
 - Reviewers should require deterministic descriptor ordering, diagnostics, and
+  byte-stable existing artifacts.
+
+### Milestone 111: Tiny Clean Binary Operation Lowering Table Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M110.
+This milestone keeps the next action focused on lowering.
+
+Goal:
+
+Broaden the tiny clean lowering path from one hard-coded binary operation to a
+small typed binary-operation descriptor table:
+
+```text
+selected scalar binary implementation -> lowered function with scalar type and binary operation descriptors
+```
+
+Scope:
+
+- Add a small lowering-owned binary operation descriptor model and typed
+  descriptor table for the clean restart operation set selected for this
+  slice: `add`, `sub`, and `mul`.
+- Keep operation descriptors backend-neutral: operation id, arity/category,
+  expected source body operation name, and stable semantic name are lowering
+  facts; C++ and Rust operator spellings remain backend-owned.
+- Replace the lowerer's one-off `add` primitive/body check with lookup through
+  this typed operation descriptor table, while preserving exact binary
+  `left, right` parameter handling.
+- Allow the exact tiny scalar source form to use the supported operation names
+  as primitive name and body operation, for example `sub(left, right)` in a
+  `sub` primitive. Nearby shapes remain diagnostic boundaries.
+- Update C++ and Rust backends only as consumers of the lowered operation
+  descriptor, with small backend-owned operator spelling maps.
+- Preserve existing `add`/`si32` artifact bytes, logical paths, and digests.
+- Add focused tests for operation descriptor lookup, successful lowering for
+  supported operations across at least one non-`add` source, unsupported
+  operation diagnostics, operation/body mismatch diagnostics, backend-owned
+  operator spelling, and byte-stable existing `add` output.
+
+Out of scope:
+
+- CLI integration or legacy CLI compatibility.
+- Writer changes beyond preserving M109 behavior.
+- New arities, parameter names, templates beyond the exact binary scalar form,
+  extensions beyond `scalar`, vector/SIMD shapes, hardware feature selection,
+  branch pruning, generation-time helper evaluation, broad TSIL parsing, or
+  division/modulo semantics.
+- Type metadata or operation metadata loaded from `tsldata`, backend manifests,
+  or old generator maps.
+- Runtime imports from `frozen/` or `tslgenold/`.
+- Porting, adapting, compatibility-wrapping, or migrating old operation,
+  parser, backend, or lowering modules.
+- Dependency closure, registries, dispatchers, plugin systems, hidden
+  backfeeds, fixpoint mechanisms, or a broad expression/type framework.
+
+Accepted outputs:
+
+- The clean lowerer has an obvious typed binary-operation descriptor boundary
+  instead of a one-off `add` check.
+- Supported operation ids lower deterministically into backend-neutral
+  operation descriptor values alongside the M110 scalar type descriptor.
+- C++ and Rust emitters consume the operation descriptor through backend-owned
+  operator spelling maps and keep existing `add`/`si32` output byte-stable.
+- Unsupported operations and primitive/body mismatches produce structured
+  diagnostics rather than source repair, fallback, or renderer-side inference.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+```
+
+Run the smallest compile/import checks needed for the revised clean package
+surface. Do not run the old `tslgenold` validation profile as proof of the
+clean product slice.
+
+Review notes:
+
+- Reviewers should reject moving backend operator spelling into lowering.
+- Reviewers should reject broad expression parsing or a general operation
+  registry/dispatcher.
+- Reviewers should require source-body integrity: mismatched or malformed
+  bodies are diagnostics, never corrected.
+- Reviewers should require deterministic operation ordering, diagnostics, and
   byte-stable existing artifacts.

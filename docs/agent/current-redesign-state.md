@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 109 is accepted.
+Milestone 110 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -200,6 +200,22 @@ CMake/Cargo scaffolding, broad output tree parity, output-root cleaning,
 formatting or compiling generated C++/Rust, old writer migration, new lowering
 semantics, backend manifests, dependency closure, registries, dispatchers,
 plugin systems, hidden backfeeds, or fixpoint mechanisms.
+
+The M110 execution-review loop returned `Accept With Follow-Ups`. M110
+broadened the tiny clean lowering path from a one-off `si32` check into a
+small lowering-owned scalar type descriptor table for `si32`, `ui32`, `f32`,
+and `f64`. `LoweredFunction` now carries a backend-neutral descriptor with
+tag, scalar kind, integer/floating family, bit width, and signedness. C++ and
+Rust spellings remain backend-owned in their emitters. The parser/catalog
+still preserve the exact tiny scalar `add(left, right)` source shape while
+allowing identifier-like type tags, and syntactically valid but unsupported
+tags fail in lowering with `TSL-LOWER-UNSUPPORTED-TYPE`. Existing `si32`
+artifact bytes, logical paths, and digests remain stable. M110 did not import
+from `tslgenold/` or `frozen/`, add CLI work, writer changes, vector/SIMD
+semantics, broad TSIL parsing, backend-manifest/type-map reads, old
+type/lowering migration, dependency closure, registries, dispatchers, plugin
+systems, hidden backfeeds, fixpoint mechanisms, or a broad type-system
+framework.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1273,35 +1289,35 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 110.
+Execute Milestone 111.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m110-execution-review-loop-prompt.md
+docs/agent/runs/m111-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 110: Tiny Clean Scalar Type Lowering Table Slice
+Milestone 111: Tiny Clean Binary Operation Lowering Table Slice
 ```
 
 Latest review verdict:
 
 ```text
-M109 execution-review loop returned Accept With Follow-Ups after layout,
+M110 execution-review loop returned Accept With Follow-Ups after layout,
 architecture, documentation, and validation audits.
 ```
 
 Next expected action:
 
 ```text
-Run the active M110 execution-review-loop prompt. M110 should broaden the tiny
-clean lowering path from a one-off `si32` check to a small typed scalar type
-descriptor table, keep backend spelling policy backend-owned, and avoid CLI
-work.
+Run the active M111 execution-review-loop prompt. M111 should broaden the tiny
+clean lowering path from a one-off `add` operation check to a small typed
+binary-operation descriptor table, keep backend operator spellings
+backend-owned, and avoid CLI work or broad expression parsing.
 ```
 
 Accepted planning prompt:
@@ -2348,10 +2364,16 @@ Completed M109 execution-review-loop prompt:
 docs/agent/runs/m109-execution-review-loop-prompt.md
 ```
 
-Active M110 execution-review-loop prompt:
+Completed M110 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m110-execution-review-loop-prompt.md
+```
+
+Active M111 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m111-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2370,6 +2392,11 @@ docs/agent/runs/m110-execution-review-loop-prompt.md
   scalar `add(left, right)` path; it must not add CLI work, broad TSIL parsing,
   vector/SIMD semantics, backend-manifest reads, old type/lowering module
   migration, or a broad type-system framework.
+- M111 is limited to a tiny clean binary-operation lowering table over the
+  accepted scalar binary source form; it must not add CLI work, broad
+  expression parsing, division/modulo semantics, vector/SIMD semantics,
+  backend-manifest reads, old operation/lowering migration, or a broad
+  expression/type framework.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and
@@ -3877,6 +3904,13 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   describes dry-run/skip/failed statuses and `TSL-ARTIFACT-WRITE-*` codes, with
   the clean restart M109 writer contract or mark that older behavior as
   deferred/future.
+- M110 documentation follow-up: consider adding the exact backend spelling
+  table for the M110 supported scalar tags to `docs/redesign/behavioral-spec.md`
+  for discoverability.
+- M110 documentation follow-up: consider adding a small cross-reference from
+  the historical M107/M108 `si32` sections to the M110 scalar-type broadening
+  so quick readers do not confuse historical baseline text with the current
+  accepted surface.
 - M106 architecture follow-up: before any release/stabilization work resumes,
   retire or rewrite `docs/redesign/stabilization-release-checklist.md` for the
   post-M106 clean restart; it still reads like the old `tslgen` package is an
@@ -4885,7 +4919,7 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M110
+No stop condition is active. The workflow is ready to run the active M111
 execution-review-loop prompt.
 
 ## Validation Expectations
@@ -4911,6 +4945,21 @@ test command returned exit 0 with `9 passed`. The public API import command
 returned exit 0 with no output. The writer import command returned exit 0 with
 no output. The no-write compile check returned exit 0 and printed
 `compiled 29 clean tslgen Python files`.
+
+For M110 clean scalar type lowering table slice, validation completed with:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -c "from tslgen.lowering import ScalarTypeDescriptor, lookup_scalar_type_descriptor, supported_scalar_type_tags"
+python -B -m py_compile tslgen/src/tslgen/backends/cpp/backend.py tslgen/src/tslgen/backends/rust/backend.py tslgen/src/tslgen/lowering/__init__.py tslgen/src/tslgen/lowering/lowerer.py tslgen/src/tslgen/lowering/model.py tslgen/src/tslgen/lowering/scalar_types.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/syntax/parser.py tslgen/tests/test_m107_tiny_pipeline.py
+```
+
+`git diff --check` returned exit 0 with no output. The targeted clean-package
+test command returned exit 0 with `16 passed`. The public API import command
+returned exit 0 with no output. The scalar lowering import command returned
+exit 0 with no output. The py_compile command returned exit 0 with no output.
 
 For M108 clean lowering boundary slice, validation completed with:
 

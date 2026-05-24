@@ -1,16 +1,34 @@
 """Typed Rust artifact emitter for the tiny lowered add function."""
 
+from dataclasses import dataclass
+
 from tslgen.backends.base import BackendEmitResult
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.io.artifacts import Artifact, ArtifactMetadata
 from tslgen.lowering import LoweredFunction
+from tslgen.lowering.scalar_types import ScalarTypeDescriptor
+
+
+@dataclass(frozen=True, slots=True)
+class _ScalarTypeSpelling:
+    tag: str
+    spelling: str
+
+
+_SCALAR_TYPE_SPELLINGS: tuple[_ScalarTypeSpelling, ...] = (
+    _ScalarTypeSpelling(tag="si32", spelling="i32"),
+    _ScalarTypeSpelling(tag="ui32", spelling="u32"),
+    _ScalarTypeSpelling(tag="f32", spelling="f32"),
+    _ScalarTypeSpelling(tag="f64", spelling="f64"),
+)
 
 
 class RustBackend:
     backend_id = "rust"
 
     def emit(self, function: LoweredFunction) -> BackendEmitResult:
-        if function.scalar_type_tag != "si32":
+        scalar_spelling = _scalar_type_spelling(function.scalar_type)
+        if scalar_spelling is None:
             return BackendEmitResult(
                 artifact=None,
                 diagnostics=(
@@ -18,15 +36,15 @@ class RustBackend:
                         severity="error",
                         code="TSL-BACKEND-UNSUPPORTED-TYPE",
                         message=(
-                            f"Rust emitter supports only type 'si32' in M107; "
-                            f"got {function.scalar_type_tag!r}"
+                            "Rust emitter has no spelling for scalar type "
+                            f"{function.scalar_type.tag!r}"
                         ),
                         location=function.source,
                     ),
                 ),
             )
 
-        content = self._render_add_function(function)
+        content = self._render_add_function(function, scalar_spelling)
         return BackendEmitResult(
             artifact=Artifact(
                 logical_path=f"src/{function.name}.rs",
@@ -40,11 +58,24 @@ class RustBackend:
             diagnostics=(),
         )
 
-    def _render_add_function(self, function: LoweredFunction) -> str:
+    def _render_add_function(
+        self,
+        function: LoweredFunction,
+        scalar_spelling: str,
+    ) -> str:
         left = function.expression.left.parameter_name
         right = function.expression.right.parameter_name
         return (
-            f"pub fn {function.name}({left}: i32, {right}: i32) -> i32 {{\n"
+            f"pub fn {function.name}"
+            f"({left}: {scalar_spelling}, {right}: {scalar_spelling})"
+            f" -> {scalar_spelling} {{\n"
             f"    {left} + {right}\n"
             "}\n"
         )
+
+
+def _scalar_type_spelling(descriptor: ScalarTypeDescriptor) -> str | None:
+    for spelling in _SCALAR_TYPE_SPELLINGS:
+        if spelling.tag == descriptor.tag:
+            return spelling.spelling
+    return None
