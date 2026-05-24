@@ -12,11 +12,17 @@ from tslgen.syntax.ast import (
     ParseResult,
 )
 
-_HEADER_PATTERN = re.compile(
+_BINARY_HEADER_PATTERN = re.compile(
     r"^prim<(?P<signature>v:=\(v,v\))> "
     r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
     r"\((?P<params>left, right)\):$"
 )
+_UNARY_HEADER_PATTERN = re.compile(
+    r"^prim<(?P<signature>v:=\(v\))> "
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+    r"\((?P<params>value)\):$"
+)
+_HEADER_PATTERNS = (_BINARY_HEADER_PATTERN, _UNARY_HEADER_PATTERN)
 _IMPLEMENTATION_PATTERN = re.compile(
     r"^  implementation "
     r"(?P<extension>scalar) "
@@ -71,7 +77,7 @@ class TslParser:
         implementation_line_no, implementation_line = meaningful_lines[1]
         body_line_no, body_line = meaningful_lines[2]
 
-        header = _HEADER_PATTERN.match(header_line)
+        header = _match_header(header_line)
         if header is None:
             diagnostics.append(_unsupported_line(document, header_line_no, 1, header_line))
             return None
@@ -148,6 +154,14 @@ def _meaningful_lines(text: str) -> tuple[tuple[int, str], ...]:
             continue
         lines.append((line_number, line))
     return tuple(lines)
+
+
+def _match_header(line: str) -> re.Match[str] | None:
+    for pattern in _HEADER_PATTERNS:
+        match = pattern.match(line)
+        if match is not None:
+            return match
+    return None
 
 
 def _diagnostic_position(lines: tuple[tuple[int, str], ...]) -> tuple[int, int]:

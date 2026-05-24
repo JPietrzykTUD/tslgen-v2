@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from tslgen.core.diagnostics import SourceLocation
 from tslgen.lowering.binary_operations import BinaryOperationDescriptor
 from tslgen.lowering.scalar_types import ScalarTypeDescriptor
+from tslgen.lowering.unary_operations import UnaryOperationDescriptor
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,8 +26,17 @@ class LoweredBinaryOperationExpression:
 
 
 @dataclass(frozen=True, slots=True)
+class LoweredUnaryOperationExpression:
+    operation: UnaryOperationDescriptor
+    value: LoweredParameterRef
+
+
+LoweredExpression = LoweredBinaryOperationExpression | LoweredUnaryOperationExpression
+
+
+@dataclass(frozen=True, slots=True)
 class LoweredReturnStatement:
-    expression: LoweredBinaryOperationExpression
+    expression: LoweredExpression
     source: SourceLocation
 
 

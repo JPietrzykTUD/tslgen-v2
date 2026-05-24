@@ -1,13 +1,18 @@
-"""Typed Rust artifact emitter for tiny lowered binary functions."""
+"""Typed Rust artifact emitter for tiny lowered functions."""
 
 from dataclasses import dataclass
 
 from tslgen.backends.base import BackendEmitResult
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.io.artifacts import Artifact, ArtifactMetadata
-from tslgen.lowering import LoweredFunction
+from tslgen.lowering import (
+    LoweredBinaryOperationExpression,
+    LoweredFunction,
+    LoweredUnaryOperationExpression,
+)
 from tslgen.lowering.binary_operations import BinaryOperationDescriptor
 from tslgen.lowering.scalar_types import ScalarTypeDescriptor
+from tslgen.lowering.unary_operations import UnaryOperationDescriptor
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +23,12 @@ class _ScalarTypeSpelling:
 
 @dataclass(frozen=True, slots=True)
 class _BinaryOperatorSpelling:
+    operation_id: str
+    spelling: str
+
+
+@dataclass(frozen=True, slots=True)
+class _UnaryOperatorSpelling:
     operation_id: str
     spelling: str
 
@@ -38,6 +49,10 @@ _BINARY_OPERATOR_SPELLINGS: tuple[_BinaryOperatorSpelling, ...] = (
     _BinaryOperatorSpelling(operation_id="bit_and", spelling="&"),
     _BinaryOperatorSpelling(operation_id="bit_or", spelling="|"),
     _BinaryOperatorSpelling(operation_id="bit_xor", spelling="^"),
+)
+
+_UNARY_OPERATOR_SPELLINGS: tuple[_UnaryOperatorSpelling, ...] = (
+    _UnaryOperatorSpelling(operation_id="bit_not", spelling="!"),
 )
 
 
@@ -63,29 +78,17 @@ class RustBackend:
                 ),
             )
 
-        return_statement = function.body.return_statement
-        expression = return_statement.expression
-        operator_spelling = _binary_operator_spelling(expression.operation)
-        if operator_spelling is None:
+        return_expression = self._render_return_expression(function)
+        if isinstance(return_expression, Diagnostic):
             return BackendEmitResult(
                 artifact=None,
-                diagnostics=(
-                    Diagnostic(
-                        severity="error",
-                        code="TSL-BACKEND-UNSUPPORTED-OPERATION",
-                        message=(
-                            "Rust emitter has no operator spelling for operation "
-                            f"{expression.operation.operation_id!r}"
-                        ),
-                        location=function.source,
-                    ),
-                ),
+                diagnostics=(return_expression,),
             )
 
-        content = self._render_binary_function(
+        content = self._render_function(
             function,
             scalar_spelling,
-            operator_spelling,
+            return_expression,
         )
         return BackendEmitResult(
             artifact=Artifact(
@@ -100,16 +103,57 @@ class RustBackend:
             diagnostics=(),
         )
 
-    def _render_binary_function(
+    def _render_return_expression(
+        self,
+        function: LoweredFunction,
+    ) -> str | Diagnostic:
+        expression = function.body.return_statement.expression
+        if isinstance(expression, LoweredBinaryOperationExpression):
+            operator_spelling = _binary_operator_spelling(expression.operation)
+            if operator_spelling is None:
+                return Diagnostic(
+                    severity="error",
+                    code="TSL-BACKEND-UNSUPPORTED-OPERATION",
+                    message=(
+                        "Rust emitter has no operator spelling for operation "
+                        f"{expression.operation.operation_id!r}"
+                    ),
+                    location=function.source,
+                )
+            return (
+                f"{expression.left.parameter_name} "
+                f"{operator_spelling} "
+                f"{expression.right.parameter_name}"
+            )
+
+        if not isinstance(expression, LoweredUnaryOperationExpression):
+            return Diagnostic(
+                severity="error",
+                code="TSL-BACKEND-UNSUPPORTED-EXPRESSION",
+                message="Rust emitter supports only lowered binary and unary expressions",
+                location=function.source,
+            )
+
+        operator_spelling = _unary_operator_spelling(expression.operation)
+        if operator_spelling is None:
+            return Diagnostic(
+                severity="error",
+                code="TSL-BACKEND-UNSUPPORTED-OPERATION",
+                message=(
+                    "Rust emitter has no operator spelling for operation "
+                    f"{expression.operation.operation_id!r}"
+                ),
+                location=function.source,
+            )
+        return f"{operator_spelling}{expression.value.parameter_name}"
+
+    def _render_function(
         self,
         function: LoweredFunction,
         scalar_spelling: str,
-        operator_spelling: str,
+        return_expression: str,
     ) -> str:
         signature = function.signature
-        expression = function.body.return_statement.expression
-        left = expression.left.parameter_name
-        right = expression.right.parameter_name
         parameters = ", ".join(
             f"{parameter.name}: {scalar_spelling}" for parameter in signature.parameters
         )
@@ -117,7 +161,7 @@ class RustBackend:
             f"pub fn {signature.name}"
             f"({parameters})"
             f" -> {scalar_spelling} {{\n"
-            f"    {left} {operator_spelling} {right}\n"
+            f"    {return_expression}\n"
             "}\n"
         )
 
@@ -133,6 +177,15 @@ def _binary_operator_spelling(
     descriptor: BinaryOperationDescriptor,
 ) -> str | None:
     for spelling in _BINARY_OPERATOR_SPELLINGS:
+        if spelling.operation_id == descriptor.operation_id:
+            return spelling.spelling
+    return None
+
+
+def _unary_operator_spelling(
+    descriptor: UnaryOperationDescriptor,
+) -> str | None:
+    for spelling in _UNARY_OPERATOR_SPELLINGS:
         if spelling.operation_id == descriptor.operation_id:
             return spelling.spelling
     return None

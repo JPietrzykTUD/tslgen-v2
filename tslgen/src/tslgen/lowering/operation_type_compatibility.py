@@ -8,10 +8,17 @@ from tslgen.lowering.scalar_types import (
     ScalarTypeDescriptor,
     ScalarTypeFamily,
 )
+from tslgen.lowering.unary_operations import UnaryOperationDescriptor
 
 
 @dataclass(frozen=True, slots=True)
 class BinaryOperationScalarTypeCompatibilityRule:
+    operation_id: str
+    accepted_scalar_families: tuple[ScalarTypeFamily, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class UnaryOperationScalarTypeCompatibilityRule:
     operation_id: str
     accepted_scalar_families: tuple[ScalarTypeFamily, ...]
 
@@ -33,6 +40,15 @@ _BINARY_OPERATION_SCALAR_TYPE_RULES: tuple[
     ),
     BinaryOperationScalarTypeCompatibilityRule(
         operation_id="bit_xor",
+        accepted_scalar_families=("integer",),
+    ),
+)
+
+_UNARY_OPERATION_SCALAR_TYPE_RULES: tuple[
+    UnaryOperationScalarTypeCompatibilityRule, ...
+] = (
+    UnaryOperationScalarTypeCompatibilityRule(
+        operation_id="bit_not",
         accepted_scalar_families=("integer",),
     ),
 )
@@ -61,10 +77,42 @@ def supported_scalar_type_tags_for_binary_operation(
     )
 
 
+def unary_operation_supports_scalar_type(
+    operation: UnaryOperationDescriptor,
+    scalar_type: ScalarTypeDescriptor,
+) -> bool:
+    rule = _rule_for_unary_operation(operation)
+    if rule is None:
+        return True
+    return scalar_type.family in rule.accepted_scalar_families
+
+
+def supported_scalar_type_tags_for_unary_operation(
+    operation: UnaryOperationDescriptor,
+) -> tuple[str, ...]:
+    rule = _rule_for_unary_operation(operation)
+    if rule is None:
+        return tuple(descriptor.tag for descriptor in SUPPORTED_SCALAR_TYPE_DESCRIPTORS)
+    return tuple(
+        descriptor.tag
+        for descriptor in SUPPORTED_SCALAR_TYPE_DESCRIPTORS
+        if descriptor.family in rule.accepted_scalar_families
+    )
+
+
 def _rule_for_operation(
     operation: BinaryOperationDescriptor,
 ) -> BinaryOperationScalarTypeCompatibilityRule | None:
     for rule in _BINARY_OPERATION_SCALAR_TYPE_RULES:
+        if rule.operation_id == operation.operation_id:
+            return rule
+    return None
+
+
+def _rule_for_unary_operation(
+    operation: UnaryOperationDescriptor,
+) -> UnaryOperationScalarTypeCompatibilityRule | None:
+    for rule in _UNARY_OPERATION_SCALAR_TYPE_RULES:
         if rule.operation_id == operation.operation_id:
             return rule
     return None

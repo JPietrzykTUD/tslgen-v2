@@ -265,6 +265,31 @@ the `&`, `|`, and `^` spellings for accepted lowered bitwise functions.
 Unsupported operation ids now report `add, sub, mul, div, mod, bit_and,
 bit_or, bit_xor` as the supported tiny clean operation set.
 
+### M118 Tiny Unary Bitwise-Not Shape
+
+Milestone 118 adds the first exact unary source and lowering shape:
+
+```text
+prim<v:=(v)> bit_not(value):
+  implementation scalar si32:
+    body bit_not(value)
+```
+
+Catalog construction preserves this as a typed unary operation body with the
+exact `value` body argument rather than adapting it to the binary body model.
+Nearby unary body forms such as missing, renamed, or extra body arguments are
+diagnostic boundaries and are not repaired.
+
+The lowerer owns the backend-neutral `bit_not` unary descriptor and lowers it
+only for the currently supported integer scalar descriptors `si32` and
+`ui32`. Floating scalar descriptors such as `f32` and `f64` reach lowering and
+fail with `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` at the implementation source
+location. The descriptor does not define C++ or Rust spelling,
+logical-boolean behavior, mask behavior, signedness runtime behavior, overflow
+policy, constant folding, or source repair. C++ and Rust emitters own their
+accepted unary bitwise-not spellings while existing binary operations remain
+byte-stable.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

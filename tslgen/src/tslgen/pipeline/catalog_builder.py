@@ -8,13 +8,38 @@ from tslgen.domain.catalog import (
     Catalog,
     Implementation,
     Primitive,
+    UnaryOperationBody,
 )
 from tslgen.syntax.ast import ParsedDocument, ParsedImplementation, ParsedPrimitive
 
 M107_SIGNATURE = "v:=(v,v)"
 M107_PARAMETERS = ("left", "right")
 M107_TEMPLATE = "binary"
-M107_EXTENSION = "scalar"
+M118_SIGNATURE = "v:=(v)"
+M118_PARAMETERS = ("value",)
+M118_TEMPLATE = "unary"
+SUPPORTED_EXTENSION = "scalar"
+
+
+@dataclass(frozen=True, slots=True)
+class _SourceShape:
+    signature: str
+    parameters: tuple[str, ...]
+    template: str
+
+
+_SUPPORTED_SOURCE_SHAPES: tuple[_SourceShape, ...] = (
+    _SourceShape(
+        signature=M107_SIGNATURE,
+        parameters=M107_PARAMETERS,
+        template=M107_TEMPLATE,
+    ),
+    _SourceShape(
+        signature=M118_SIGNATURE,
+        parameters=M118_PARAMETERS,
+        template=M118_TEMPLATE,
+    ),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,21 +86,23 @@ class CatalogBuilder:
         parsed: ParsedPrimitive,
         diagnostics: list[Diagnostic],
     ) -> Primitive:
-        if parsed.signature != M107_SIGNATURE:
+        signature_shape = _shape_for_signature(parsed.signature)
+        if signature_shape is None:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
                     code="TSL-CATALOG-UNSUPPORTED-SIGNATURE",
                     message=(
                         f"primitive {parsed.name!r} uses signature "
-                        f"{parsed.signature!r}; M107 supports only "
-                        f"{M107_SIGNATURE!r}"
+                        f"{parsed.signature!r}; expected one of: "
+                        f"{_supported_signatures_text()}"
                     ),
                     location=parsed.source,
                 )
             )
 
-        if parsed.parameters != M107_PARAMETERS:
+        shape = signature_shape or _SUPPORTED_SOURCE_SHAPES[0]
+        if parsed.parameters != shape.parameters:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
@@ -83,7 +110,7 @@ class CatalogBuilder:
                     message=(
                         f"primitive {parsed.name!r} uses parameters "
                         f"{parsed.parameters!r}; expected exactly "
-                        f"{M107_PARAMETERS!r}"
+                        f"{shape.parameters!r}"
                     ),
                     location=parsed.source,
                 )
@@ -104,14 +131,14 @@ class CatalogBuilder:
             )
 
         implementations = tuple(
-            self._build_implementation(parsed, implementation, diagnostics)
+            self._build_implementation(parsed, implementation, shape, diagnostics)
             for implementation in parsed.implementations
         )
         return Primitive(
             name=parsed.name,
             signature=parsed.signature,
             parameters=parsed.parameters,
-            template=M107_TEMPLATE,
+            template=shape.template,
             implementations=implementations,
             source=parsed.source,
         )
@@ -120,24 +147,25 @@ class CatalogBuilder:
         self,
         primitive: ParsedPrimitive,
         parsed: ParsedImplementation,
+        shape: _SourceShape,
         diagnostics: list[Diagnostic],
     ) -> Implementation:
-        if parsed.extension != M107_EXTENSION:
+        if parsed.extension != SUPPORTED_EXTENSION:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
                     code="TSL-CATALOG-UNSUPPORTED-EXTENSION",
                     message=(
                         f"implementation extension {parsed.extension!r} is "
-                        f"unsupported; expected {M107_EXTENSION!r}"
+                        f"unsupported; expected {SUPPORTED_EXTENSION!r}"
                     ),
                     location=parsed.source,
                 )
             )
 
         body_text = _body_text(parsed)
-        expected_body = f"{parsed.body.operation}({', '.join(M107_PARAMETERS)})"
-        if parsed.body.arguments != M107_PARAMETERS:
+        expected_body = f"{parsed.body.operation}({', '.join(shape.parameters)})"
+        if parsed.body.arguments != shape.parameters:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
@@ -153,19 +181,45 @@ class CatalogBuilder:
         return Implementation(
             extension=parsed.extension,
             type_tag=parsed.type_tag,
-            body=BinaryOperationBody(
-                operation=parsed.body.operation,
-                left_parameter=parsed.body.arguments[0]
-                if len(parsed.body.arguments) > 0
-                else "",
-                right_parameter=parsed.body.arguments[1]
-                if len(parsed.body.arguments) > 1
-                else "",
-                source=parsed.body.source,
-            ),
+            body=_build_body(parsed, shape),
             source=parsed.source,
         )
 
 
 def _body_text(parsed: ParsedImplementation) -> str:
     return f"{parsed.body.operation}({', '.join(parsed.body.arguments)})"
+
+
+def _build_body(
+    parsed: ParsedImplementation,
+    shape: _SourceShape,
+) -> BinaryOperationBody | UnaryOperationBody:
+    if shape.template == M118_TEMPLATE:
+        return UnaryOperationBody(
+            operation=parsed.body.operation,
+            value_parameter=parsed.body.arguments[0]
+            if len(parsed.body.arguments) > 0
+            else "",
+            source=parsed.body.source,
+        )
+    return BinaryOperationBody(
+        operation=parsed.body.operation,
+        left_parameter=parsed.body.arguments[0]
+        if len(parsed.body.arguments) > 0
+        else "",
+        right_parameter=parsed.body.arguments[1]
+        if len(parsed.body.arguments) > 1
+        else "",
+        source=parsed.body.source,
+    )
+
+
+def _shape_for_signature(signature: str) -> _SourceShape | None:
+    for shape in _SUPPORTED_SOURCE_SHAPES:
+        if shape.signature == signature:
+            return shape
+    return None
+
+
+def _supported_signatures_text() -> str:
+    return ", ".join(shape.signature for shape in _SUPPORTED_SOURCE_SHAPES)

@@ -14,10 +14,20 @@ class BinaryOperationBody:
 
 
 @dataclass(frozen=True, slots=True)
+class UnaryOperationBody:
+    operation: str
+    value_parameter: str
+    source: SourceLocation
+
+
+OperationBody = BinaryOperationBody | UnaryOperationBody
+
+
+@dataclass(frozen=True, slots=True)
 class Implementation:
     extension: str
     type_tag: str
-    body: BinaryOperationBody
+    body: OperationBody
     source: SourceLocation
 
 
