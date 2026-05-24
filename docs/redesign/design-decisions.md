@@ -1742,6 +1742,13 @@ Consequences:
   provenance, rule inputs, stage outputs, and diagnostic boundaries, applies
   them first to the M99/M100 path, and keeps the existing public
   `LoweringRequest` input bundle distinct from taxonomy-level request IR.
+- Post-M102 planning selects M103 as a Stage 8 backend-translation boundary
+  worklist inventory before adding another backend-result or direct-intrinsic
+  semantic family. The decision is to make the backend-facing frontier visible
+  as a static typed inventory/provenance view over accepted concrete M99/M100
+  facts, not to introduce a queue, scheduler, readiness oracle, Stage 9
+  planner, renderer-ready IR, backend-map evaluator, registry, dispatcher,
+  hidden backfeed, or fixpoint mechanism.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

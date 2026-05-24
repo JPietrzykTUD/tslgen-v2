@@ -4,7 +4,8 @@ This file tracks unresolved questions. Do not guess answers that materially affe
 
 ## OQ-POST-M99: How Broad Should Backend-Value Translation Become After M100?
 
-Status: Narrowed by post-M99 planning; broad support remains open.
+Status: Narrowed by post-M99 and post-M102 planning; broad support remains
+open.
 
 Why it matters:
 
@@ -22,17 +23,23 @@ read backend maps/catalogs/manifests or `tsldata/detail/lang` during lowering,
 render generated output, create Stage 9 backend plans, or infer Rust/type
 context/direct-intrinsic semantics.
 
-Open follow-up:
+Current follow-up:
 
-Future planning must decide which typed backend request family comes next:
-Rust exact-array uninit after typed `{type}` context exists, scalar/vector
-backend type spelling, backend modifier values, direct-intrinsic request
-resolution, or renderer-ready exact-array body IR.
+Post-M102 planning selects M103 to create a static Stage 8 backend-translation
+boundary worklist inventory over accepted concrete M99/M100 facts. That
+narrows visibility of the backend-facing frontier but does not choose the next
+semantic resolver. Future planning after M103 must still decide which row or
+typed backend request family comes next: Rust exact-array uninit after typed
+`{type}` context exists, scalar/vector backend type spelling, backend modifier
+values, direct-intrinsic request resolution, or renderer-ready exact-array
+body IR.
 
 Implementation blocked:
 
-No for M100. Yes for broad backend-value/type translation and Rust uninit
-rendering until typed context and rule boundaries are selected.
+No for M100 or the planned M103 inventory/provenance slice. Yes for broad
+backend-value/type translation, direct-intrinsic resolution, renderer-ready IR,
+and Rust uninit rendering until typed context, rule, and resolver boundaries
+are selected.
 
 ## OQ-001: What Exact Python Version Should The Redesign Target?
 

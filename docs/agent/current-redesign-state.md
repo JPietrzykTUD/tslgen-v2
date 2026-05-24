@@ -72,6 +72,12 @@ dependency closure, broad inheritance, registries, dispatchers, callback
 systems, plugin mechanisms, hidden backfeeds, fixpoint mechanisms, and
 category-based semantic dispatch out of scope.
 
+Post-M102 planning selected
+`Milestone 103: Stage 8 Backend-Translation Boundary Worklist Inventory Slice`.
+Internal planning review returned `Accept With Follow-Ups` after narrowing the
+initial broad worklist idea into a static typed Stage 8 inventory/provenance
+view over accepted concrete M99/M100 facts. Human acceptance was recorded.
+
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
 
@@ -1144,33 +1150,33 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Run post-M102 planning and review.
+Execute Milestone 103.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m102-planning-plus-review-prompt.md
+docs/agent/runs/m103-execution-review-loop-prompt.md
 ```
 
-Active planning target:
+Active executor milestone:
 
 ```text
-Select the next lowering milestone after accepted M102.
+Milestone 103: Stage 8 Backend-Translation Boundary Worklist Inventory Slice
 ```
 
 Latest review verdict:
 
 ```text
-M102 execution-review loop returned Accept With Follow-Ups.
+Post-M102 planning selected M103 and returned Accept With Follow-Ups; human
+acceptance was recorded.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M102 planning-plus-review prompt with read-only planning,
-boundary, extensibility, and documentation subagents. Do not implement code
-unless the prompt explicitly selects an executor task.
+Run the active M103 execution-review-loop prompt with one write-capable
+executor followed by read-only review/audit subagents.
 ```
 
 Accepted planning prompt:
@@ -2139,10 +2145,22 @@ Completed M102 execution-review-loop prompt:
 docs/agent/runs/m102-execution-review-loop-prompt.md
 ```
 
-Active post-M102 planning-plus-review prompt:
+Completed post-M102 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m102-planning-plus-review-prompt.md
+```
+
+Completed post-M102 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m102-acceptance-finalization-prompt.md
+```
+
+Active M103 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m103-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -3208,6 +3226,26 @@ docs/agent/runs/post-m102-planning-plus-review-prompt.md
   selected-body direct-intrinsic resolution, SVE semantics, scheduling,
   dependency closure, broad inheritance, registry, dispatcher, callback system,
   plugin mechanism, hidden backfeed, or fixpoint mechanism.
+- M103 is selected as a Stage 8 backend-translation boundary worklist inventory
+  slice. "Worklist" means a static typed inventory/provenance view over
+  accepted concrete M99/M100 facts, not an executable queue, scheduler,
+  readiness oracle, dependency-closure plan, Stage 9 backend plan,
+  renderer-ready IR, completeness oracle, source scanner, backend-map
+  evaluator, registry, dispatcher, hidden backfeed, or fixpoint mechanism.
+- M103 must consume only accepted concrete M99
+  `Stage8BackendTranslationRequestInventoryIr` values and optional accepted
+  concrete M100 `ExactArrayBackendUninitTranslationResultIr` values. It must
+  preserve object identity to accepted request/no-request/result/deferred
+  records and reject arbitrary fake objects that merely satisfy M102
+  protocols.
+- M103 must keep ownership in a focused private module, avoid `boundary.py`,
+  `LoweredImplementation`, public facade, `_lower_input`, M99/M100 module, and
+  `_lowering_ir_contracts.py` growth, and must not call translation lowerers
+  to complete missing work.
+- M103 must not add new `GenerationLoweringStageName` values or
+  `_stage_contracts.py` integration, and any worklist-specific contract
+  constants must stay in the new focused module rather than
+  `_lowering_ir_contracts.py`.
 - Future lowering package decomposition must preserve accepted M57-M99
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -4540,11 +4578,22 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   negative protocol-conformance tests, import-boundary/forbidden-behavior
   tests, and keeping the category surface private without growing
   `boundary.py`.
+- Post-M102 planning follow-up for M103 execution: preserve the narrowed
+  definition of "worklist" as a static Stage 8 inventory/provenance view, not a
+  queue, scheduler, readiness oracle, Stage 9 plan, renderer-ready IR, source
+  scanner, backend-map evaluator, registry, dispatcher, hidden backfeed, or
+  fixpoint mechanism.
+- Post-M102 planning follow-up for M103 execution: after accepted M103
+  execution, select exactly one worklist row/classification as the next
+  focused implementation milestone.
+- Post-M102 planning follow-up for M103 execution: include explicit line-count
+  ceilings, prove `boundary.py` remains unchanged, and include negative tests
+  for arbitrary M102-conformant fake objects.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run post-M102 planning
-through the active post-M102 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M103 through the
+active M103 execution-review-loop prompt.
 
 ## Validation Expectations
 
@@ -4614,6 +4663,22 @@ focused M99/M100/M101/M102 lowering-boundary command returned
 `5 passed, 352 deselected in 4.36s`. The focused lowering mypy check returned
 `Success: no issues found in 46 source files`. The standalone final
 `git diff --check` returned exit 0 with no output.
+
+For post-M102 planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
+
+For post-M102 acceptance finalization, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
 
 For post-M99 planning, validation completed with:
 

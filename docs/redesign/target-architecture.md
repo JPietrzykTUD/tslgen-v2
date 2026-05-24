@@ -766,6 +766,14 @@ Current roadmap note:
   API, impose a broad inheritance hierarchy, or introduce backend planning,
   rendering, source repair, registries, dispatchers, hidden backfeeds, or
   fixpoint machinery.
+- Post-M102 planning selects M103 as a focused Stage 8 backend-translation
+  boundary worklist inventory. The planned ownership belongs in a new private
+  lowering module rather than `boundary.py`, `_lowering_ir_contracts.py`, or
+  the existing M99/M100 modules. The aggregate is an inventory/provenance view
+  over accepted concrete M99 request inventories and optional accepted concrete
+  M100 results. It is not a queue, scheduler, Stage 9 planner, readiness
+  oracle, backend-map evaluator, renderer-ready IR, registry, dispatcher,
+  hidden backfeed, or fixpoint mechanism.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

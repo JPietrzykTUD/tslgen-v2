@@ -850,6 +850,20 @@ SVE semantics, and does not create Stage 9 backend plans, renderer-ready IR,
 rendered code, artifact plans, generated output, schedules, or dependency
 closure.
 
+Post-M102 planning selects M103 as a Stage 8 backend-translation boundary
+worklist inventory. The planned stage consumes only accepted concrete M99
+backend-translation request inventories and optional accepted concrete M100
+exact-array backend-uninit translation results. Its output is a static typed
+inventory/provenance view over accepted request, result, deferred, and
+no-accepted-backend-boundary facts. "Worklist" does not mean executable queue,
+scheduler, readiness oracle, dependency-closure plan, Stage 9 backend plan,
+renderer-ready IR, completeness oracle, source scanner, backend-map evaluator,
+registry, dispatcher, hidden backfeed, or fixpoint mechanism. M103 must not
+call translation lowerers to complete missing work, infer new requests, accept
+arbitrary fake M102-protocol objects, read backend maps/catalogs/manifests,
+repair source text, resolve direct-intrinsic/SVE semantics, or grow
+`boundary.py`/`LoweredImplementation` orchestration.
+
 ## Stage 9: Backend Planning
 
 Inputs:

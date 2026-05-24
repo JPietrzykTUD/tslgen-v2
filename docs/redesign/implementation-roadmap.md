@@ -13985,3 +13985,167 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m102-planning-plus-review-prompt.md` selects the next
   lowering milestone after accepted M102.
+
+### Milestone 103: Stage 8 Backend-Translation Boundary Worklist Inventory Slice
+
+Status:
+
+Planned. Post-M102 planning selected M103 as the next lowering milestone.
+Internal planning review returned `Accept With Follow-Ups` after narrowing the
+initial broad "worklist" idea into a static typed inventory/provenance view.
+Human acceptance was recorded, and M103 is ready for execution through the
+active execution-review-loop prompt.
+
+Goal:
+
+Create a typed, deterministic Stage 8 backend-translation boundary worklist
+inventory over already accepted backend-boundary facts. For M103, "worklist"
+means a static lowering-owned inventory/provenance view, not an executable
+queue, scheduler, dependency-closure plan, readiness oracle, Stage 9 backend
+plan, renderer-ready IR, completeness oracle, source scanner, backend-map
+evaluator, registry, dispatcher, hidden backfeed, or fixpoint mechanism.
+
+The milestone should make the Stage 8-to-backend frontier visible in one
+maintainable typed shape before adding another feature-specific backend-result
+or direct-intrinsic semantic slice.
+
+M102 taxonomy fit:
+
+- the aggregate worklist is a lowering inventory;
+- entries preserve provenance and object identity for accepted concrete M99
+  `TranslationRequestIr` records and accepted concrete M100
+  `TranslationResultIr` records;
+- M103 must not introduce a new `work_item` taxonomy category;
+- M102 protocol conformance may validate shape, but must not route semantics
+  or accept arbitrary fake objects that merely satisfy a protocol.
+
+Scope:
+
+- Add a focused private lowering module such as
+  `tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist.py`, with
+  optional focused source/diagnostic siblings only if the implementation
+  justifies the split.
+- Consume only accepted typed M99
+  `Stage8BackendTranslationRequestInventoryIr` values and optional accepted
+  typed M100 `ExactArrayBackendUninitTranslationResultIr` values.
+- Produce a deterministic per-candidate backend-boundary worklist inventory
+  that preserves object identity to M99 request/no-request records and M100
+  result/deferred records.
+- Classify only accepted concrete states, such as accepted exact-array
+  backend-uninit translation results, accepted exact-array translation
+  requests that are still unresolved, accepted selected-body direct-intrinsic
+  handoff requests that remain deferred, and explicit no-accepted-backend-
+  boundary-fact records.
+- Validate candidate id, source location, source inventory identity, M100
+  result/inventory consistency, duplicate/conflicting entries, deterministic
+  ordering, and malformed source containers with explicit diagnostics.
+- Keep new worklist-specific contracts local to the new focused module unless
+  a separate consolidation milestone later accepts shared ownership.
+- Add focused tests in a new test file rather than expanding the already-large
+  `test_lowering_boundary.py`.
+
+Out of scope:
+
+- Calling existing translation/result lowerers to complete missing work.
+- Inferring new requests, duplicating request records by key, or resolving
+  direct-intrinsic/SVE meaning.
+- Pipeline integration through `LoweredImplementation`, public facade exports,
+  `_lower_input` orchestration, new `GenerationLoweringStageName` /
+  `_stage_contracts.py` integration, or `boundary.py` growth.
+- Growing `_lowering_ir_contracts.py` into a registry of feature-specific
+  contracts.
+- New lowering semantics, new request/result families, backend translation
+  semantics, Rust translation, generic backend helper evaluation, backend
+  map/catalog/manifest reads during lowering, `tsldata/detail/lang` reads,
+  runtime `frozen/` use, Stage 9 backend planning, renderer-ready IR,
+  rendering, generated output, operation scheduling, dependency closure,
+  wrapper planning, artifact planning, CLI/report/writer behavior, compiler
+  execution, or host hardware dependency.
+- Raw `.tsl` source parsing, source-body reparsing, source repair, source
+  normalization, best-effort correction, broad TSIL/body parsing, token-to-
+  intrinsic inference, byte-size-to-token inference, vector/register metadata
+  expansion, category-based semantic dispatch, registries, dispatchers,
+  callback maps, plugin mechanisms, hidden backfeeds, or fixpoint machinery.
+
+Expected outputs:
+
+- A new private typed Stage 8 backend-boundary worklist inventory module.
+- Worklist records that preserve accepted M99/M100 object identity and expose
+  stable keys, source locations, candidate ids, source inventory/result keys,
+  and classification states.
+- Diagnostics for mismatched context/source/provenance, malformed containers,
+  mismatched optional M100 result, duplicate/conflicting entries, and
+  unsupported source shapes.
+- Tests proving deterministic ordering, protocol/category fit, object-identity
+  preservation, import boundaries, line-count guardrails, and the absence of
+  backend planning/rendering/source-repair/category-dispatch behavior.
+
+Tests required:
+
+- Positive tests over M99 request inventories with exact-array request,
+  selected-body direct-intrinsic request, and no-request records.
+- Positive tests over an M99 inventory plus matching M100 exact-array
+  translation result, preserving source object identities.
+- Negative tests for arbitrary M102-conformant fake objects, mismatched M100
+  result inventory/candidate/source location, duplicate/conflicting worklist
+  entries, missing source inventory, unsupported source containers, and
+  malformed keys.
+- Import-boundary/source assertions proving no `boundary.py`, public
+  `tslgen.lowering` facade, backend modules, renderers, backend planners,
+  `tsldata`, `frozen`, backend maps/catalogs/manifests, raw parsing helpers,
+  source repair, registry/dispatcher/callback/plugin/backfeed/fixpoint, or
+  category-based semantic dispatch.
+- Line-count tests or source assertions proving M103 does not grow
+  `boundary.py`, `_lowering_ir_contracts.py`, M99/M100 modules, or the new
+  worklist module into a replacement monolith. The tests should prove
+  `boundary.py` remains unchanged and below its current guardrail,
+  `_lowering_ir_contracts.py` remains below its current guardrail, and the new
+  worklist module stays below a focused ceiling such as 400 lines unless a
+  reviewed split justifies a different limit.
+
+Validation required:
+
+- `wc -l` for `boundary.py`, `_lowering_ir_contracts.py`, M99/M100 backend-
+  translation modules, the new worklist module, and any new focused
+  source/diagnostic/test modules.
+- `PYTHONPATH=tslgen/src python -m py_compile` for touched lowering modules
+  and touched tests.
+- Focused pytest for the new backend-boundary worklist tests.
+- Focused pytest for M99/M100 backend-translation request/result regression
+  behavior.
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases` for
+  touched lowering modules and tests where practical.
+- `git diff --check`.
+
+Review notes:
+
+- M103 is intentionally broad at the boundary level, but narrow in semantics:
+  it inventories accepted Stage 8 backend-boundary facts instead of translating
+  or planning backend work.
+- The worklist name must not invite scheduler/readiness behavior. Reviewers
+  should reject any queue, Stage 9 planner, dependency closure, resolver
+  choice, renderer-ready IR, or category-based semantic dispatcher.
+- Because `boundary.py` and `_lowering_ir_contracts.py` are near line-count
+  pressure points, M103 must keep ownership in a focused private module and
+  avoid facade/pipeline integration unless a separate extraction milestone
+  accepts that ownership first.
+- After M103 is accepted, a future planning pass should select exactly one
+  row/classification from the worklist as the next implementation milestone.
+- M103 must not add `GenerationLoweringStageName` values or `_stage_contracts.py`
+  integration; it should expose a direct private lowering function over
+  accepted M99/M100 values first.
+
+Selected follow-ups:
+
+- The M103 execution prompt must preserve the narrowed definition of
+  "worklist" as a static inventory/provenance view.
+- The M103 execution prompt must keep worklist-specific contract constants in
+  the new focused module, require arbitrary M102-protocol fake-object negative
+  tests, and include explicit line-count ceilings.
+- After accepted M103 execution, select one worklist row/classification as a
+  focused implementation milestone.
+
+Next concrete prompt:
+
+- `docs/agent/runs/m103-execution-review-loop-prompt.md` executes and reviews
+  accepted M103.
