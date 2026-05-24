@@ -30,7 +30,7 @@ Use `AGENTS.md` and `PLANS.md` for repository-level execution rules.
 Repository evidence is cited by path throughout the docs. Important sources include:
 
 - `tsldata/` for the current TSL corpus.
-- `tslgen/` for exploratory ideas and risks.
+- `tslgenold/` for quarantined pre-restart implementation evidence.
 - `frozen/` for legacy-observed behavior, output workflows, templates, and compatibility constraints.
 
 Evidence should be translated into requirements. Do not preserve a legacy mechanism just because it exists.

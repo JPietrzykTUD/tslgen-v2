@@ -2,7 +2,7 @@
 
 ## Repository Purpose
 
-This repository is being redesigned as a maintainable Python generator for TSL data and SIMD-oriented code artifacts. The legacy implementation in `frozen/` is evidence, not architecture. The exploratory sketch in `tslgen/` and the TSL data in `tsldata/` are useful context, but future implementation work must be driven by the redesign documents under `docs/redesign/`.
+This repository is being redesigned as a maintainable Python generator for TSL data and SIMD-oriented code artifacts. The legacy implementation in `frozen/` is evidence, not architecture. The quarantined pre-restart implementation in `tslgenold/` and the TSL data in `tsldata/` are useful context, but future implementation work must be driven by the redesign documents under `docs/redesign/`.
 
 The system domain includes:
 
@@ -62,15 +62,13 @@ broad lowering machinery.
 
 ## Old Implementation Quarantine And Repository Layout Policy
 
-The current top-level `tslgen/` tree is the old accepted/exploratory
-implementation state. It should be moved wholesale to `tslgenold/` as
-quarantined evidence before new restart product code is added. The new clean
-implementation must own the top-level `tslgen/` path.
+The pre-restart top-level `tslgen/` tree has been moved wholesale to
+`tslgenold/` as quarantined evidence. The new clean implementation must own
+the top-level `tslgen/` path.
 
-After that move, `tslgenold/` is evidence only, like `frozen/`, and must not
-become a runtime dependency of the new generator. Future milestones must not
-mix clean restart code and old implementation state under the same package
-path.
+`tslgenold/` is evidence only, like `frozen/`, and must not become a runtime
+dependency of the new generator. Future milestones must not mix clean restart
+code and old implementation state under the same package path.
 
 ## Legacy-Code Policy
 
@@ -98,10 +96,10 @@ Useful legacy evidence includes:
 - `docs/redesign/`: source of truth for requirements, behavior, architecture, pipeline, testing, and roadmap.
 - `docs/agent/`: reusable prompts and review checklists for future agents.
 - `tsldata/`: current TSL data corpus and likely source fixture set for the redesign.
-- `tslgen/`: reserved for the clean implementation after the layout reset;
-  until then, the current tree is old-state evidence to be quarantined.
-- `tslgenold/`: planned quarantine location for the current `tslgen/` tree
-  once the layout reset is executed.
+- `tslgen/`: reserved for the clean implementation. It currently contains only
+  a placeholder until a later accepted product milestone adds code.
+- `tslgenold/`: quarantined old implementation evidence moved from the former
+  top-level `tslgen/` tree.
 - `frozen/`: legacy evidence only. Do not extend it for the redesigned implementation.
 - `.agents/skills/`: optional repo-scoped workflows for redesign planning, execution, and review.
 

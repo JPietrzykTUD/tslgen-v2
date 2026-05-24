@@ -9,7 +9,7 @@ Repository rules:
 - This is a clean redesign, not a legacy rewrite.
 - Do not organize work around `frozen/` modules.
 - Use `frozen/` only as evidence for required behavior.
-- Treat `tslgen/` and `tsldata/` as exploratory/current data, not binding architecture.
+- Treat `tslgenold/` and `tsldata/` as evidence/current data, not binding architecture.
 - Do not modify implementation code outside the selected milestone scope.
 
 Milestone:

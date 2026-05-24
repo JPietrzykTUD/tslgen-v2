@@ -1023,9 +1023,9 @@ The default restart vocabulary is intentionally small:
 The accepted M57-M104 lowering modules are evidence for semantic requirements
 and mistakes to avoid. They are not the object model the restart must extend.
 
-The restart also gets a fresh package path. M106 should move the current
+The restart also gets a fresh package path. M106 moved the pre-restart
 top-level `tslgen/` tree to `tslgenold/` as quarantined old-state evidence and
-reserve a fresh top-level `tslgen/` path for the clean implementation. This
+reserved a fresh top-level `tslgen/` path for the clean implementation. This
 keeps imports, tests, and future contributor expectations honest: old evidence
 is visibly separate from the clean generator.
 
@@ -1059,37 +1059,40 @@ production validation baseline until it is accepted by a milestone. Quarantined
 code may be read as design evidence, but production entry points, public API
 functions, and tests for accepted milestones must not import it accidentally.
 
-Milestone 21 defines the validation profile in `tslgen.tooling.validation`.
-The accepted production validation surface currently includes the public API and
-CLI adapters, accepted `analysis`, `backends`, `config`, `domain`, `io`,
-`lowering`, `rendering`, `reporting`, `syntax`, `testgen`, `validation`, and
-accepted core foundation files.
+Milestone 21 defined the pre-restart validation profile in
+`tslgen.tooling.validation`, now quarantined under `tslgenold/`. The accepted
+pre-restart validation surface included the public API and CLI adapters,
+accepted `analysis`, `backends`, `config`, `domain`, `io`, `lowering`,
+`rendering`, `reporting`, `syntax`, `testgen`, `validation`, and accepted core
+foundation files.
 
-The following paths are explicitly quarantined from the production validation
-baseline:
+The former in-package quarantine paths are now part of the evidence-only
+`tslgenold/` tree:
 
-- `tslgen/src/tslgen/frontend`: pre-redesign parser sketch; the accepted parser
+- `tslgenold/src/tslgen/frontend`: pre-redesign parser sketch; the accepted parser
   boundary is `tslgen.syntax`.
-- `tslgen/src/tslgen/ir`: early primitive/signature sketch not used by the
+- `tslgenold/src/tslgen/ir`: early primitive/signature sketch not used by the
   accepted domain, candidate, and lowering models.
-- `tslgen/src/tslgen/middle_end`: legacy-shaped rewrite/filter sketch with
+- `tslgenold/src/tslgen/middle_end`: legacy-shaped rewrite/filter sketch with
   unstable imports and incomplete TSIL semantics.
-- `tslgen/src/tslgen/utils`: helpers used by quarantined sketches.
-- `tslgen/src/tslgen/core/context.py`, `core/passes.py`, and `core/types.py`:
+- `tslgenold/src/tslgen/utils`: helpers used by quarantined sketches.
+- `tslgenold/src/tslgen/core/context.py`, `core/passes.py`, and
+  `core/types.py`:
   early sketches outside the accepted Milestone 1 core foundation.
-- `tslgen/tests/backend` and `tslgen/tests/test_timing.py`: pre-redesign sketch
+- `tslgenold/tests/backend` and `tslgenold/tests/test_timing.py`: pre-redesign sketch
   tests outside the accepted unit baseline.
 - `frozen/`: legacy evidence only.
 - `tsldata/`: read-only corpus fixtures exercised by tests, not Python tooling
   targets.
 
-Milestone 33 records the retirement plan in
+Milestone 33 recorded the pre-restart retirement plan in
 `docs/redesign/exploratory-code-retirement-plan.md`. The plan classifies
 `frontend`, `ir`, early core context/pass/type sketches, and empty backend
 sketch tests as delete candidates; `middle_end` and `frozen` as evidence-only;
-and `utils`, `tslgen/tests/test_timing.py`, and `tsldata` as keep-quarantined
-until their blockers are resolved. No quarantined path is approved for direct
-code migration.
+and `utils`, old `tests/test_timing.py`, and `tsldata` as keep-quarantined
+until their blockers are resolved. After M106, those implementation/test paths
+live under `tslgenold/`. No quarantined path is approved for direct code
+migration.
 
 Future cleanup may promote or remove quarantined paths, but doing so requires a
 focused milestone with tests and documentation. Any deletion or migration must
@@ -1114,17 +1117,17 @@ policies rather than as corpus data.
 
 ## Sketch Assessment
 
-Promising ideas in `tslgen/`:
+Promising ideas in `tslgenold/`:
 
-- `tslgen/src/tslgen/middle_end/README.md` records dependency, filtering, and
+- `tslgenold/src/tslgen/middle_end/README.md` records dependency, filtering, and
   generation-time rewrite concerns that can inform future semantic lowering.
-- `tslgen/src/tslgen/utils/timing.py` sketches performance instrumentation,
+- `tslgenold/src/tslgen/utils/timing.py` sketches performance instrumentation,
   but no accepted performance/tooling boundary currently requires it.
-- `tslgen/src/tslgen/cli.py` has explicit hardware mode validation.
+- `tslgenold/src/tslgen/cli.py` has explicit hardware mode validation.
 
-Design risks in `tslgen/`:
+Design risks in `tslgenold/`:
 
-- Python `>=3.14` in `tslgen/pyproject.toml` is accepted for this redesign because the dev container has Python 3.14.4 installed; agents should still keep implementation style straightforward.
+- Python `>=3.14` in `tslgenold/pyproject.toml` was accepted for this redesign because the dev container has Python 3.14.4 installed; agents should still keep implementation style straightforward.
 - Imports such as `tslgen.src.tslgen...` in middle-end files indicate unstable package boundaries.
 - Many pass classes are placeholders or rely on string rewrites.
 - `networkx` appears in context but is not declared in dependencies.

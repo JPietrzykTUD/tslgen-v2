@@ -103,9 +103,9 @@ it is not a mandate to keep extending the accepted M57-M104 request/result/
 worklist chain. Restart milestones should first prove the simple product path
 from `.tsl` source data to deterministic C++ and Rust library artifacts, then
 reintroduce lowering concepts only where two concrete stages need a shared
-typed boundary. M106 is the required structural layout reset before that
-product path starts: move old `tslgen/` state to `tslgenold/` and reserve a
-fresh `tslgen/` for clean implementation.
+typed boundary. M106 performed the structural layout reset before that product
+path starts: old `tslgen/` state now lives under `tslgenold/`, and fresh
+`tslgen/` is reserved for clean implementation.
 
 ## Missing Work
 

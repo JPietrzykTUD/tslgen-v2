@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 105 is accepted.
+Milestone 106 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -150,6 +150,14 @@ source-to-artifact product path, made M57-M104 evidence rather than default
 architecture, and drafted M106 as the structural layout reset that must move
 the current `tslgen/` tree to `tslgenold/` before clean restart product code
 is added under a fresh `tslgen/`.
+
+The M106 execution-review loop returned `Accept With Follow-Ups` after a
+focused documentation cleanup. M106 moved the pre-restart top-level `tslgen/`
+tree wholesale to `tslgenold/` as evidence-only old implementation state,
+reserved a fresh top-level `tslgen/` path with only a README placeholder, and
+updated layout/workflow docs. It kept `frozen/` unchanged and did not add
+parser, catalog, generator, backend, renderer, writer, CLI, fixture, test, or
+generated-output product code.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1223,34 +1231,34 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 106.
+Execute Milestone 107.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m106-execution-review-loop-prompt.md
+docs/agent/runs/m107-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 106: Old Implementation Quarantine Layout Reset Slice
+Milestone 107: Tiny Clean Restart Source-To-Artifact Vertical Slice
 ```
 
 Latest review verdict:
 
 ```text
-M105 execution-review loop returned Accept With Follow-Ups after architecture,
-layout/boundary, documentation, and simplicity audits.
+M106 execution-review loop returned Accept With Follow-Ups after layout,
+architecture, validation, and focused documentation re-review audits.
 ```
 
 Next expected action:
 
 ```text
-Run the active M106 execution-review-loop prompt. M106 must move the current
-`tslgen/` tree to `tslgenold/`, reserve a fresh `tslgen/` path, and still
-avoid product code.
+Run the active M107 execution-review-loop prompt. M107 may start the first
+clean product slice under the fresh `tslgen/` path, but must keep
+`tslgenold/` and `frozen/` evidence-only.
 ```
 
 Accepted planning prompt:
@@ -2273,10 +2281,16 @@ Completed M105 execution-review-loop prompt:
 docs/agent/runs/m105-execution-review-loop-prompt.md
 ```
 
-Active M106 execution-review-loop prompt:
+Completed M106 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m106-execution-review-loop-prompt.md
+```
+
+Active M107 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m107-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -3391,11 +3405,11 @@ docs/agent/runs/m106-execution-review-loop-prompt.md
 - M105 treats accepted M57-M104 lowering/request/result/worklist artifacts as
   evidence for requirements and regression risks, not as the architecture to
   keep extending by default.
-- Before clean restart product code is added, the current top-level `tslgen/`
-  tree should move wholesale to `tslgenold/` as quarantined old-state evidence,
-  and the new clean implementation should own the top-level `tslgen/` path.
-- M106 is the expected structural layout reset for that move. It must not start
-  the first restart product-code slice.
+- The pre-restart top-level `tslgen/` tree has moved wholesale to
+  `tslgenold/` as quarantined old-state evidence, and the new clean
+  implementation owns the top-level `tslgen/` path.
+- M106 completed the structural layout reset. Future restart product-code
+  slices must keep `tslgenold/` and `frozen/` evidence-only.
 - The restart product path is `.tsl` source data to validated catalog to
   selected implementations to deterministic C++ and Rust library artifacts.
 - Restart milestones should prefer small object-oriented concepts with clear
@@ -3775,9 +3789,16 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M105 execution follow-up addressed by documentation execution: the KISS
   restart charter was created as documentation/architecture work only, and no
   product code was added.
-- M105 execution follow-up addressed by documentation execution: M106 is the
-  first structural restart step and must move current `tslgen/` state to
-  `tslgenold/` before clean product code is added under a fresh `tslgen/`.
+- M105 execution follow-up addressed by M106: old `tslgen/` state was moved to
+  `tslgenold/` before clean product code starts under fresh `tslgen/`.
+- M106 follow-up for the first clean product slice: M107 must establish its own
+  targeted clean-package validation surface under fresh `tslgen/`; the old
+  `tslgenold` validation profile may remain evidence but must not be used as
+  proof of the new product path.
+- M106 architecture follow-up: before any release/stabilization work resumes,
+  retire or rewrite `docs/redesign/stabilization-release-checklist.md` for the
+  post-M106 clean restart; it still reads like the old `tslgen` package is an
+  active release candidate and references `PYTHONPATH=tslgen/src`.
 - M105 execution follow-up addressed by documentation execution: accepted
   M57-M104 tests are regression evidence for diagnostics, determinism,
   source-body integrity, and semantic-boundary risks, not constraints on the
@@ -4782,7 +4803,7 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M106
+No stop condition is active. The workflow is ready to run the active M107
 execution-review-loop prompt.
 
 ## Validation Expectations
@@ -4792,6 +4813,18 @@ For docs-only planning tasks:
 ```bash
 git diff --check
 ```
+
+For M106 layout reset, validation completed with:
+
+```bash
+git diff --check
+find tslgen -mindepth 1 -type f -print
+git diff --name-only -- frozen
+```
+
+`git diff --check` returned exit 0 with no output. The fresh `tslgen/` file
+check returned only `tslgen/README.md`. The frozen diff check returned exit 0
+with no output.
 
 For post-M101 acceptance finalization, validation completed with:
 

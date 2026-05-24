@@ -61,7 +61,8 @@ tslgen/
       test_extension_selection_legacy_observed.py
 ```
 
-Existing `tslgen/tests` can be reshaped as milestones land.
+Pre-restart tests now live under `tslgenold/tests` as evidence. Future clean
+tests should be added under `tslgen/` only by accepted product milestones.
 
 ## Unit Tests
 
@@ -305,22 +306,23 @@ generation:
 
 ## Validation Baseline Profile
 
-Milestone 21 establishes the local redesigned-code validation profile at
-`tslgen.tooling.validation`. Future milestone review should run:
+Milestone 21 established the pre-restart redesigned-code validation profile at
+`tslgen.tooling.validation`, now quarantined under `tslgenold/`. Historical
+pre-restart review used:
 
 ```sh
-PYTHONPATH=tslgen/src python -m tslgen.tooling.validation
+PYTHONPATH=tslgenold/src python -m tslgen.tooling.validation
 ```
 
 The profile includes:
 
 - current-corpus probes for accepted parser behavior and selector-aware
   implementation-spec promotion, including scalar-only `blend`;
-- `python -m unittest discover tslgen/tests/unit`;
+- `python -m unittest discover tslgenold/tests/unit`;
 - targeted `compileall` for accepted redesigned modules and unit tests;
 - `ruff check` for accepted redesigned modules and unit tests;
 - targeted `mypy --explicit-package-bases` with
-  `MYPYPATH=tslgen/src:tslgen/tests/unit`;
+  `MYPYPATH=tslgenold/src:tslgenold/tests/unit`;
 - `git diff --check`.
 
 The profile deliberately checks accepted redesigned code and tests rather than
@@ -481,8 +483,8 @@ full release-readiness gate is recorded in
 
 Required stabilization checks:
 
-- Run the Milestone 21 validation profile:
-  `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`.
+- Run the Milestone 21 pre-restart validation profile:
+  `PYTHONPATH=tslgenold/src python -m tslgen.tooling.validation`.
 - Run the unit, integration, and golden tests that cover accepted API/CLI,
   artifact writer, reporting, dependency reporting, lowering, C++ rendering,
   Rust rendering, backend metadata, test generation, validation quarantine, and
@@ -1350,10 +1352,10 @@ deterministic ordering, source-body integrity, and semantic-boundary mistakes
 to avoid; they do not force the restart to preserve the old internal class
 chain.
 
-M106 should validate the layout reset without starting product implementation.
-At minimum it should run `git diff --check` and any lightweight import/path
-checks needed to prove `tslgenold/` is evidence-only and the fresh `tslgen/`
-path does not mix old and clean code.
+M106 validated the layout reset without starting product implementation. The
+minimum validation is `git diff --check` plus lightweight import/path checks
+that prove `tslgenold/` is evidence-only and the fresh `tslgen/` path does not
+mix old and clean code.
 
 The first restart product slice after M106 should use a tiny fixture and prove
 the full source-to-artifact path in memory before broadening the system:

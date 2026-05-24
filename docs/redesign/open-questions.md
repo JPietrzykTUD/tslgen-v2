@@ -50,11 +50,14 @@ Status: Answered
 
 Why it matters:
 
-`tslgen/pyproject.toml` currently requires Python `>=3.14`, which is restrictive and may not match deployment expectations.
+The quarantined packaging sketch at `tslgenold/pyproject.toml` requires Python
+`>=3.14`, which is restrictive and may not match deployment expectations.
 
 Decision:
 
-Target Python `>=3.14` for the redesign. The dev container has Python 3.14.4 installed, and the existing `tslgen/pyproject.toml` already declares `requires-python = ">=3.14"`.
+Target Python `>=3.14` for the redesign. The dev container has Python 3.14.4
+installed, and the quarantined `tslgenold/pyproject.toml` declares
+`requires-python = ">=3.14"`.
 
 Considered answers:
 
@@ -65,7 +68,7 @@ Considered answers:
 Required evidence:
 
 - Dev-container runtime: Python 3.14.4 is installed.
-- Existing packaging sketch: `tslgen/pyproject.toml` declares `>=3.14`.
+- Existing packaging sketch: `tslgenold/pyproject.toml` declares `>=3.14`.
 - Language features actually required should still be kept conservative and documented as implementation proceeds.
 
 Implementation blocked:
@@ -1822,27 +1825,27 @@ generation-time semantic lowering behavior.
 
 ## OQ-037: Where Should Clean Restart Code Live?
 
-Status: Answered by M105 charter; execution is assigned to M106.
+Status: Answered by M105 charter and implemented by M106.
 
 Why it matters:
 
-The current top-level `tslgen/` tree contains old accepted/exploratory state.
-Adding clean restart code beside it would blur runtime imports, tests, and
-review expectations.
+The pre-M106 top-level `tslgen/` tree contained old accepted/exploratory
+state. Adding clean restart code beside it would have blurred runtime imports,
+tests, and review expectations.
 
 Decision:
 
-Before new clean restart product code is added, move the current top-level
+Before new clean restart product code is added, move the pre-restart top-level
 `tslgen/` tree wholesale to `tslgenold/` as quarantined old-state evidence.
 Reserve a fresh top-level `tslgen/` path for the clean implementation.
 `tslgenold/` has the same evidence-only status as `frozen/` and must not
-become a runtime dependency of the clean generator.
+become a runtime dependency of the clean generator. M106 completed this layout
+reset.
 
 Implementation blocked:
 
-Yes for clean restart product-code milestones until M106 or an explicitly
-accepted equivalent layout reset creates the same separation. No for M105
-documentation work.
+No. The M106 layout reset removed the blocker. Future product-code milestones
+must keep clean runtime imports independent from `frozen/` and `tslgenold/`.
 
 ## Follow-ups from Milestone 2 review
 

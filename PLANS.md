@@ -194,11 +194,11 @@ milestones should not extend them by default.
 
 ## Clean Implementation Layout
 
-Repository layout is part of the architecture contract. Before new restart
-product code is added, the current top-level `tslgen/` tree should be moved to
-`tslgenold/` as quarantined old-state evidence, and a fresh top-level
-`tslgen/` should contain the new implementation. Future milestones must not
-mix clean implementation code with the old tree under the same package path.
+Repository layout is part of the architecture contract. The pre-restart
+top-level `tslgen/` tree has been moved to `tslgenold/` as quarantined
+old-state evidence, and the fresh top-level `tslgen/` is reserved for the new
+implementation. Future milestones must not mix clean implementation code with
+the old tree under the same package path.
 
 Do not include:
 

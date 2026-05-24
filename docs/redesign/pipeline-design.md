@@ -1106,9 +1106,9 @@ slice should demonstrate deterministic C++ and Rust library artifact generation
 from a tiny `.tsl` fixture before the design grows new generalized lowering
 infrastructure.
 
-Before that first product slice, M106 should separate old state from restart
-code: move the current top-level `tslgen/` tree to `tslgenold/`, then reserve
-the new clean implementation path under `tslgen/`.
+M106 separated old state from restart code by moving the pre-restart
+top-level `tslgen/` tree to `tslgenold/` and reserving the new clean
+implementation path under a fresh `tslgen/` directory.
 
 ## Pipeline Result Shape
 

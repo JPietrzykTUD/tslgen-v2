@@ -14,10 +14,10 @@ before adding broad lowering machinery.
 ## Standing Rules
 
 - Treat `docs/redesign/` as the product contract.
-- Treat `frozen/` and, after the layout reset, `tslgenold/` as evidence only.
+- Treat `frozen/` and `tslgenold/` as evidence only.
 - Treat `tsldata/` as source corpus and fixture evidence, not generated output.
-- Do not add clean restart product code under the current top-level `tslgen/`
-  tree until that old tree is quarantined under `tslgenold/`.
+- Do not add clean restart product code outside an accepted product milestone;
+  the old top-level `tslgen/` tree is quarantined under `tslgenold/`.
 - Prefer small objects with obvious ownership over chains of milestone-shaped
   request/result wrappers.
 - Add a new IR category, request/result family, inventory, worklist,
@@ -76,11 +76,11 @@ and metadata. The artifact writer is the explicit filesystem-write boundary.
 
 ## First Restart Slices
 
-Milestone 106 is structural, not product implementation: move the current
-top-level `tslgen/` tree to `tslgenold/` as old-state evidence and reserve a
-fresh top-level `tslgen/` path for the clean implementation. It must not add
-parser, catalog, generator, backend, renderer, CLI, fixture, or generated
-output code.
+Milestone 106 was structural, not product implementation: it moved the
+pre-restart top-level `tslgen/` tree to `tslgenold/` as old-state evidence and
+reserved a fresh top-level `tslgen/` path for the clean implementation. It did
+not add parser, catalog, generator, backend, renderer, CLI, fixture, or
+generated output code.
 
 The first product slice after that layout reset should prove an end-to-end
 path on a tiny `.tsl` fixture:

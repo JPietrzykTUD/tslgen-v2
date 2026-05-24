@@ -36,7 +36,9 @@ Status: Accepted
 
 Context:
 
-The exploratory package at `tslgen/pyproject.toml` declares `requires-python = ">=3.14"`. The dev container has Python 3.14.4 installed, so the repository runtime currently matches that baseline.
+The quarantined exploratory package at `tslgenold/pyproject.toml` declares
+`requires-python = ">=3.14"`. The dev container has Python 3.14.4 installed,
+so the repository runtime currently matches that baseline.
 
 Considered alternatives:
 
@@ -55,7 +57,7 @@ The active development environment already provides Python 3.14.4, and matching 
 Consequences:
 
 - New implementation work may rely on Python 3.14 as the minimum supported runtime.
-- `tslgen/pyproject.toml` can keep `requires-python = ">=3.14"`.
+- Future clean `tslgen/` packaging can keep `requires-python = ">=3.14"`.
 - Agents should still write plain, maintainable typed Python and avoid version-specific features unless they materially improve the implementation.
 
 ## ADR-003: Typed Domain Catalog After Parsing
@@ -513,8 +515,8 @@ unsupported code visible and prevents accidental broad-validation claims.
 
 Consequences:
 
-- Future review packets can run
-  `PYTHONPATH=tslgen/src python -m tslgen.tooling.validation`.
+- Historical pre-restart review packets can run
+  `PYTHONPATH=tslgenold/src python -m tslgen.tooling.validation`.
 - Quarantined paths must not be imported by public API, CLI, or accepted
   pipeline tests.
 - Quarantine cannot be used to exclude accepted redesigned modules merely
@@ -1763,8 +1765,8 @@ Consequences:
   selected implementations, and deterministic C++ and Rust library artifacts.
   New abstractions must earn their place by simplifying that path or by
   serving at least two concrete accepted stages. The restart also requires a
-  package-layout reset: the current top-level `tslgen/` tree is old-state
-  evidence that should move to `tslgenold/`, while the clean restart
+  package-layout reset: the pre-restart top-level `tslgen/` tree is old-state
+  evidence that M106 moved to `tslgenold/`, while the clean restart
   implementation owns the top-level `tslgen/` path. The standing contract is
   `docs/redesign/kiss-generator-restart.md`.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must

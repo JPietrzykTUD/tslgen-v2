@@ -14497,7 +14497,8 @@ Next concrete prompt:
 
 Status:
 
-Planned as the next structural restart milestone after accepted M105.
+Accepted. M106 completed the structural restart layout reset after accepted
+M105.
 
 Goal:
 
@@ -14548,9 +14549,88 @@ git diff --check
 If the move changes lightweight repository checks or import-path docs, run the
 smallest additional validation that proves the layout reset is coherent.
 
+Accepted result:
+
+- The pre-restart top-level implementation tree exists under `tslgenold/`.
+- The fresh top-level `tslgen/` path contains only a README placeholder and is
+  reserved for later clean restart product code.
+- `frozen/` remained unchanged.
+- No parser, catalog, generator, backend, renderer, writer, CLI, fixture,
+  test, or generated-output product code was added.
+- Layout/workflow docs record `tslgenold/` as evidence-only.
+
 Review notes:
 
 - Reviewers should reject any M106 execution that starts the first product
   implementation slice or mixes old and clean code under the same package path.
 - Reviewers should require the move to be explicit and reviewable, not an
   opportunistic cleanup or compatibility migration.
+
+### Milestone 107: Tiny Clean Restart Source-To-Artifact Vertical Slice
+
+Status:
+
+Planned as the first clean restart product-code milestone after accepted M106.
+
+Goal:
+
+Prove the clean restart path on a tiny fixture:
+
+```text
+.tsl source document -> parse result -> minimal catalog -> selected implementation -> deterministic C++ and Rust artifact values
+```
+
+Scope:
+
+- Add the minimal clean package/test structure under fresh `tslgen/`.
+- Load one explicit tiny `.tsl` source fixture through an explicit source
+  loading boundary.
+- Parse only the documented source form needed by the fixture.
+- Build and validate a minimal typed catalog with one primitive and one
+  implementation.
+- Select one implementation for explicit C++ and Rust target requests.
+- Emit one deterministic C++ artifact value and one deterministic Rust artifact
+  value through typed backend emitters.
+- Exercise the artifact writer only as the explicit filesystem-write boundary,
+  if the slice writes files at all.
+- Prove repeated runs produce stable diagnostics and artifacts.
+
+Out of scope:
+
+- Broad `tsldata/` corpus parsing.
+- Broad TSIL/body semantics, dependency closure, backend manifests, hardware
+  autodetection, CLI compatibility, generated tests, and generated-output
+  parity.
+- Runtime imports from `frozen/` or `tslgenold/`.
+- Porting, adapting, compatibility-wrapping, or migrating old `tslgenold/`
+  modules.
+- New lowering IR taxonomies, worklists, registries, dispatchers, hidden
+  backfeeds, or fixpoint mechanisms.
+
+Accepted outputs:
+
+- A tiny clean product path exists under `tslgen/` without importing
+  `tslgenold/` or `frozen/`.
+- Tests prove the tiny C++ and Rust artifact outputs are deterministic.
+- Diagnostics remain structured and source-aware for the supported invalid
+  fixture boundary.
+- Documentation records any narrowed source form, validation decision, or open
+  question discovered by the slice.
+
+Validation:
+
+```bash
+git diff --check
+```
+
+Run the targeted clean-package tests added by M107 and any smallest supporting
+compile/import checks needed for the new package surface. Do not run the old
+`tslgenold` validation profile as proof of the clean product slice.
+
+Review notes:
+
+- Reviewers should reject runtime imports from `tslgenold/` or `frozen/`.
+- Reviewers should reject broad parser/catalog/backend work beyond the tiny
+  end-to-end fixture.
+- Reviewers should require the C++ and Rust artifact outputs to come from typed
+  clean restart values, not renderer-side inference over raw source text.
