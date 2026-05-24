@@ -1748,13 +1748,13 @@ Consequences:
   inventory/provenance view over accepted concrete M99/M100 facts, not a queue,
   scheduler, readiness oracle, Stage 9 planner, renderer-ready IR, backend-map
   evaluator, registry, dispatcher, hidden backfeed, or fixpoint mechanism.
-- Post-M103 planning selects M104 as a broadened but single-boundary backend
-  translation result expansion. The decision is to resolve more of the M103
-  worklist frontier through typed resolved/deferred/unsupported result records,
-  while keeping semantics tied to explicit typed rule inputs and concrete typed
-  request/result facts. It is not a generic backend dispatcher and must not
-  infer direct-intrinsic/SVE semantics from tokens, extension ids, type tags,
-  byte sizes, primitive names, raw source text, or hardware-looking strings.
+- M104 accepts a broadened but single-boundary backend translation result
+  expansion. The decision resolves more of the M103 worklist frontier through
+  typed resolved/deferred/unsupported result records, while keeping semantics
+  tied to explicit typed rule inputs and concrete typed request/result facts.
+  It is not a generic backend dispatcher and does not infer
+  direct-intrinsic/SVE semantics from tokens, extension ids, type tags, byte
+  sizes, primitive names, raw source text, or hardware-looking strings.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

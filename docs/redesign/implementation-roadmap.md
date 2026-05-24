@@ -14172,13 +14172,12 @@ Next concrete prompt:
 
 Status:
 
-Planned. Post-M103 planning selected M104 as the next lowering milestone after
+Accepted. Post-M103 planning selected M104 as the next lowering milestone after
 user-requested broadening. Internal planning review returned
 `Accept With Follow-Ups` after local planning-doc revisions clarified that the
 scope is one documented lowering gap: expanding M103 worklist entries into
 typed backend translation expansion results. Human acceptance was recorded,
-and M104 is ready for execution through the active execution-review-loop
-prompt.
+and the M104 execution-review loop returned `Accept With Follow-Ups`.
 
 Goal:
 
@@ -14265,10 +14264,15 @@ Out of scope:
 - Growing `_lowering_ir_contracts.py`, M99/M100 modules, or M103 worklist
   modules for M104 ownership.
 
-Expected outputs:
+Accepted outputs:
 
-- New private typed backend translation expansion modules.
-- Typed expansion result inventory/result values with resolved, deferred, and
+- New private typed backend translation expansion modules:
+  `_lowering_backend_translation_expansion.py`,
+  `_lowering_backend_translation_expansion_models.py`,
+  `_lowering_backend_translation_expansion_sources.py`,
+  `_lowering_backend_translation_expansion_validation.py`, and
+  `_lowering_backend_translation_expansion_diagnostics.py`.
+- Typed expansion result values with resolved, deferred, and
   unsupported records.
 - Explicit typed rule input values for the accepted exact-array and
   selected-body direct-intrinsic result families.
@@ -14279,8 +14283,12 @@ Expected outputs:
   concrete-type rejection of fake protocol-shaped objects, import boundaries,
   line-count guardrails, and absence of scheduler/readiness/backend-rendering/
   hardwired-token/category-dispatch behavior.
+- Malformed fake inputs and malformed containers fail at the boundary; accepted
+  entries with missing rules become deferred records, and accepted entries with
+  mismatched, duplicate, or conflicting explicit rules become unsupported
+  records.
 
-Tests required:
+Accepted tests:
 
 - Positive exact-array unresolved entry resolved by explicit typed rule input.
 - Positive selected-body direct-intrinsic deferred entry resolved by explicit
@@ -14303,7 +14311,7 @@ Tests required:
   `boundary.py`, `_lowering_ir_contracts.py`, M99/M100 modules, M103 worklist
   modules, or new M104 modules into replacement monoliths.
 
-Validation required:
+Validation completed:
 
 - `wc -l` for `boundary.py`, `_lowering_ir_contracts.py`, M99/M100 backend-
   translation modules, M103 worklist modules, new M104 modules, and the new
@@ -14316,6 +14324,14 @@ Validation required:
 - `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases` for
   touched/new lowering modules and tests where practical.
 - `git diff --check`.
+
+Results: line count total `6689`; py-compile returned exit 0 with no output;
+focused backend translation expansion pytest returned `10 passed in 27.10s`;
+focused M103 backend-boundary worklist pytest returned `7 passed in 18.04s`;
+focused M100 backend-translation result pytest returned
+`12 passed in 23.65s`; focused lowering mypy returned
+`Success: no issues found in 59 source files`; final `git diff --check`
+returned exit 0 with no output.
 
 Review notes:
 
@@ -14331,13 +14347,20 @@ Review notes:
   typed context not accepted by M100, produce deferred/unsupported result state,
   or bridge unresolved M103 worklist entries to a typed result boundary.
 
-Selected follow-ups:
+Accepted follow-ups:
 
-- The M104 execution prompt must state the single-boundary justification for
-  the broadened scope.
-- The M104 execution prompt must include explicit typed rule-input guardrails,
-  no-hardwiring tests, fake-object negative tests, and line-count/import-
-  boundary tests.
+- M104 execution follow-ups were addressed during M104: the prompt stated the
+  single-boundary justification, and tests cover explicit typed rule inputs,
+  no-hardwiring, fake-object negatives, line counts, and import boundaries.
+- Consider tightening `Stage8BackendTranslationExpansionRule.rule_kind` from
+  `str` to the existing `Stage8BackendTranslationExpansionRuleKind` alias in a
+  later cleanup.
+- Consider trimming M103 worklist contract constant re-exports from the
+  private M104 facade module if ownership clarity becomes important.
+- Future diagnostic-sensitive slices should assert exact source path, line,
+  column, and message snippets in addition to code/severity.
+- Future Rust/type-context work should introduce explicit typed context instead
+  of relying on M104's already-translated rule value.
 - Future post-M104 planning should choose between renderer-ready body IR,
   additional backend value/type result families, direct-intrinsic result
   broadening, primitive calls/dependencies, or output integration based on the
@@ -14345,5 +14368,5 @@ Selected follow-ups:
 
 Next concrete prompt:
 
-- `docs/agent/runs/m104-execution-review-loop-prompt.md` executes and reviews
-  accepted M104.
+- `docs/agent/runs/post-m104-planning-plus-review-prompt.md` selects the next
+  lowering milestone after accepted M104.

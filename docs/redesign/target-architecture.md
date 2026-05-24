@@ -774,14 +774,13 @@ Current roadmap note:
   queue, scheduler, Stage 9 planner, readiness oracle, backend-map evaluator,
   renderer-ready IR, registry, dispatcher, hidden backfeed, or fixpoint
   mechanism.
-- Post-M103 planning selects M104 as a Stage 8 lowering-owned backend
-  translation result expansion over the accepted M103 worklist. The broadened
-  scope is one boundary, M103 worklist entry to typed translation expansion
-  result, not a generic backend dispatcher. M104 result resolution must be
-  driven by explicit typed rule inputs over concrete typed request/result
-  facts and must not infer semantics from SVE tokens, extension ids, type tags,
-  byte sizes, primitive names, raw direct-intrinsic text, source locations, or
-  hardware-looking tokens.
+- M104 accepts a Stage 8 lowering-owned backend translation result expansion
+  over the accepted M103 worklist. The broadened scope is one boundary, M103
+  worklist entry to typed translation expansion result, not a generic backend
+  dispatcher. M104 result resolution is driven by explicit typed rule inputs
+  over concrete typed request/result facts and does not infer semantics from
+  SVE tokens, extension ids, type tags, byte sizes, primitive names, raw
+  direct-intrinsic text, source locations, or hardware-looking tokens.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

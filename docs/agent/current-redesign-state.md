@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 103 is accepted.
+Milestone 104 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -107,6 +107,28 @@ semantics must come only from explicit typed rule inputs over concrete typed
 request/result objects. It must not turn the M103 worklist into a scheduler,
 readiness oracle, Stage 9 plan, renderer-ready IR, backend-map evaluator,
 source scanner, registry, dispatcher, hidden backfeed, or fixpoint mechanism.
+
+The M104 execution-review loop returned `Accept With Follow-Ups`. M104 added
+focused private backend translation expansion modules that consume only
+accepted concrete M103 `Stage8BackendBoundaryWorklistInventoryIr` values and
+produce typed resolved/deferred/unsupported translation expansion result
+records. It accepts only the `exact_array_backend_uninit_unresolved` and
+`selected_body_direct_intrinsic_deferred` M103 classifications. Missing rules
+produce typed deferred records; mismatched, duplicate, or conflicting rules for
+accepted entries produce typed unsupported records; malformed fake inputs and
+malformed containers fail at the boundary with diagnostics. M104 preserves
+M103/M99/M100 provenance and object identity, uses explicit
+`Stage8BackendTranslationExpansionRule` inputs only, and does not infer from
+SVE-looking tokens, extension ids, type tags, byte sizes, primitive names, raw
+direct-intrinsic token text, source-location text, or hardware-looking tokens.
+It kept rendering, renderer-ready IR, generated output, Stage 9 backend
+planning, backend-map/catalog/manifest reads, source repair/reparse, Rust
+rendering, scheduler/readiness behavior, dependency closure, registries,
+dispatchers, callbacks, plugins, hidden backfeeds, fixpoint machinery,
+category-based semantic dispatch, public facade integration,
+`GenerationLoweringStageName`, `_stage_contracts.py`, `boundary.py`,
+`_lowering_ir_contracts.py`, M99/M100 modules, and M103 worklist modules out of
+scope.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1180,33 +1202,33 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 104.
+Run post-M104 planning and review.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m104-execution-review-loop-prompt.md
+docs/agent/runs/post-m104-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 104: Worklist-Driven Backend Translation Result Expansion Slice
+None. M104 is accepted; the active prompt is planning-only.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M103 planning selected M104 and returned Accept With Follow-Ups after
-local planning-doc revisions; human acceptance was recorded.
+M104 execution-review loop returned Accept With Follow-Ups.
 ```
 
 Next expected action:
 
 ```text
-Run the active M104 execution-review-loop prompt with one write-capable
-executor followed by read-only review/audit subagents.
+Run the active post-M104 planning-plus-review prompt. The next task should
+focus on lowering and select one next high-value milestone based on the
+accepted M104 translation expansion result surface.
 ```
 
 Accepted planning prompt:
@@ -2205,10 +2227,16 @@ Completed post-M103 acceptance-finalization prompt:
 docs/agent/runs/post-m103-acceptance-finalization-prompt.md
 ```
 
-Active M104 execution-review-loop prompt:
+Completed M104 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m104-execution-review-loop-prompt.md
+```
+
+Active post-M104 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m104-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -3294,26 +3322,26 @@ docs/agent/runs/m104-execution-review-loop-prompt.md
   `_stage_contracts.py` integration, and any worklist-specific contract
   constants stay in the new focused module rather than
   `_lowering_ir_contracts.py`.
-- M104 is selected by post-M103 planning as a worklist-driven backend
-  translation result expansion slice. The broadening is accepted only as one
-  documented lowering gap: translating M103 worklist entries into typed
-  resolved/deferred/unsupported translation expansion result records.
-- M104 may consume only accepted concrete M103
+- M104 is accepted as a worklist-driven backend translation result expansion
+  slice. The broadening is accepted only as one documented lowering gap:
+  translating M103 worklist entries into typed resolved/deferred/unsupported
+  translation expansion result records.
+- M104 consumes only accepted concrete M103
   `Stage8BackendBoundaryWorklistInventoryIr` values and only the
   `exact_array_backend_uninit_unresolved` and
   `selected_body_direct_intrinsic_deferred` classifications. M103
   classifications may filter entries, but semantic behavior must come from
   concrete typed request/result objects plus explicit typed rule inputs.
-- M104 must not dispatch by `svptrue_b*`, extension id, type tag, byte size,
+- M104 does not dispatch by `svptrue_b*`, extension id, type tag, byte size,
   primitive name, raw direct-intrinsic token text, hardware-looking tokens, or
   source-location strings.
-- M104 must not add backend-map/catalog/manifest reads during lowering,
+- M104 does not add backend-map/catalog/manifest reads during lowering,
   rendering, renderer-ready IR, generated output, Stage 9 backend planning,
   Rust rendering, source repair, raw source reparsing, operation scheduling,
   dependency closure, queues, scheduler/readiness behavior, registries,
   dispatchers, callbacks, plugins, hidden backfeeds, fixpoint machinery, or
   category-based semantic dispatch.
-- M104 must keep ownership in new focused private result-expansion modules and
+- M104 keeps ownership in new focused private result-expansion modules and
   avoid growth in `boundary.py`, `_lowering_ir_contracts.py`, M99/M100 modules,
   and M103 worklist modules.
 - Future lowering package decomposition must preserve accepted M57-M99
@@ -4659,23 +4687,28 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M103 validation follow-up: future diagnostic-sensitive slices should keep
   tightening exact location and message-snippet assertions around malformed
   source/container diagnostics.
-- Post-M103 planning follow-up for M104 execution: keep the selected broadening
-  constrained to explicit typed rule inputs and typed resolved/deferred/
-  unsupported translation expansion result records.
-- Post-M103 planning follow-up for M104 execution: add line-count/import-boundary
-  tests proving no growth in `boundary.py`, `_lowering_ir_contracts.py`,
-  M99/M100 modules, or M103 worklist modules.
-- Post-M103 planning follow-up for M104 execution: add fake-object and
-  concrete-type negative tests, following the M103 review lesson.
-- Post-M103 planning follow-up for M104 execution: state and test that direct
-  intrinsic behavior is not hardwired by SVE tokens, extension ids, type tags,
-  byte sizes, primitive names, raw direct-intrinsic text, or hardware-looking
-  tokens.
+- Post-M103 planning follow-ups for M104 execution were addressed during M104:
+  the broadening stayed constrained to explicit typed rule inputs and typed
+  resolved/deferred/unsupported records; line-count/import-boundary tests
+  prove no protected-module growth; fake-object/concrete-type negatives were
+  added; and direct-intrinsic no-hardwiring behavior is tested.
+- M104 implementation follow-up: consider tightening
+  `Stage8BackendTranslationExpansionRule.rule_kind` from `str` to the existing
+  `Stage8BackendTranslationExpansionRuleKind` alias in a later cleanup.
+- M104 implementation follow-up: consider trimming M103 worklist contract
+  constant re-exports from the private M104 facade module if ownership clarity
+  becomes important.
+- M104 validation follow-up: future diagnostic-sensitive slices should assert
+  exact source path, line, column, and message snippets in addition to
+  code/severity.
+- M104 design follow-up: future Rust/type-context work should introduce
+  explicit typed context instead of relying on M104's already-translated rule
+  value.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M104 through the
-active M104 execution-review-loop prompt.
+No stop condition is active. The workflow is ready to run the active
+post-M104 planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -4810,6 +4843,46 @@ git diff --check
 ```
 
 The command returned exit 0 with no output.
+
+For M104 execution and review, validation completed with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_lowering_ir_contracts.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_entries.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_models.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_sources.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_validation.py tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion.py tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion_models.py tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion_validation.py tslgen/tests/unit/test_lowering_backend_translation_expansion.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_lowering_ir_contracts.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_models.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_entries.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_sources.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_validation.py tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion.py tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion_models.py tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion_validation.py tslgen/tests/unit/test_lowering_backend_translation_expansion.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_backend_translation_expansion.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_backend_boundary_worklist.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_backend_translation_result.py
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering tslgen/tests/unit/test_lowering_backend_translation_expansion.py tslgen/tests/unit/test_lowering_backend_boundary_worklist.py tslgen/tests/unit/test_lowering_backend_translation_result.py
+git diff --check
+```
+
+The M104 line counts were `1284 tslgen/src/tslgen/lowering/boundary.py`,
+`278 tslgen/src/tslgen/lowering/_lowering_ir_contracts.py`,
+`792 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py`,
+`207 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_sources.py`,
+`64 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_diagnostics.py`,
+`614 tslgen/src/tslgen/lowering/_lowering_backend_translation_result.py`,
+`275 tslgen/src/tslgen/lowering/_lowering_backend_translation_result_sources.py`,
+`85 tslgen/src/tslgen/lowering/_lowering_backend_translation_result_diagnostics.py`,
+`82 tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist.py`,
+`71 tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_diagnostics.py`,
+`324 tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_entries.py`,
+`145 tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_models.py`,
+`195 tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_sources.py`,
+`188 tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_validation.py`,
+`394 tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion.py`,
+`96 tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion_diagnostics.py`,
+`225 tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion_models.py`,
+`89 tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion_sources.py`,
+`494 tslgen/src/tslgen/lowering/_lowering_backend_translation_expansion_validation.py`,
+`787 tslgen/tests/unit/test_lowering_backend_translation_expansion.py`, and
+`6689 total`. The py-compile command returned exit 0 with no output. The
+focused backend translation expansion test returned `10 passed in 27.10s`.
+The focused backend-boundary worklist regression test returned
+`7 passed in 18.04s`. The focused backend-translation result regression test
+returned `12 passed in 23.65s`. The focused lowering mypy check returned
+`Success: no issues found in 59 source files`. The standalone final
+`git diff --check` returned exit 0 with no output.
 
 For post-M99 planning, validation completed with:
 

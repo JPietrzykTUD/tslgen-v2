@@ -26,9 +26,9 @@ context/direct-intrinsic semantics.
 Current follow-up:
 
 M103 created a static Stage 8 backend-translation boundary worklist inventory
-over accepted concrete M99/M100 facts. Post-M103 planning selects M104 as a
-broadened worklist-driven backend translation result expansion, covering the
-single documented lowering gap from M103 worklist entry to typed translation
+over accepted concrete M99/M100 facts. M104 accepts a broadened
+worklist-driven backend translation result expansion, covering the single
+documented lowering gap from M103 worklist entry to typed translation
 expansion result. M104 narrows exact-array backend-uninit unresolved and
 selected-body direct-intrinsic deferred entries only through explicit typed
 rule inputs. Broad backend-value/type translation, Rust rendering,
@@ -38,7 +38,7 @@ primitive calls/dependencies, and output integration remain open.
 
 Implementation blocked:
 
-No for M100, the accepted M103 inventory/provenance slice, or the planned M104
+No for M100, the accepted M103 inventory/provenance slice, or the accepted M104
 explicit-rule translation expansion boundary. Yes for broad backend-value/type
 translation, broad direct-intrinsic resolution, renderer-ready IR, and Rust
 uninit rendering until typed context, rule, resolver, and rendering boundaries
