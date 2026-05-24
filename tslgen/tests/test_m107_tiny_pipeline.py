@@ -17,8 +17,10 @@ from tslgen.lowering import (
     BinaryOperationDescriptor,
     LoweredBinaryOperationExpression,
     LoweredFunction,
+    LoweredFunctionBody,
     LoweredParameter,
     LoweredParameterRef,
+    LoweredReturnStatement,
     Lowerer,
     SUPPORTED_BINARY_OPERATION_DESCRIPTORS,
     SUPPORTED_SCALAR_TYPE_DESCRIPTORS,
@@ -84,6 +86,24 @@ inline std::int32_t sub_scalar_si32(std::int32_t left, std::int32_t right) {
 
 SUB_RUST_CONTENT = """pub fn sub_scalar_si32(left: i32, right: i32) -> i32 {
     left - right
+}
+"""
+
+MUL_F64_CPP_CONTENT = """#pragma once
+
+#include <cstdint>
+
+namespace tsl {
+
+inline double mul_scalar_f64(double left, double right) {
+  return left * right;
+}
+
+}  // namespace tsl
+"""
+
+MUL_F64_RUST_CONTENT = """pub fn mul_scalar_f64(left: f64, right: f64) -> f64 {
+    left * right
 }
 """
 
@@ -162,10 +182,15 @@ def test_m108_lowerer_produces_backend_neutral_function_value() -> None:
         primitive_name="add",
         parameters=(LoweredParameter("left"), LoweredParameter("right")),
         scalar_type=_descriptor("si32"),
-        expression=LoweredBinaryOperationExpression(
-            operation=_operation("add"),
-            left=LoweredParameterRef("left"),
-            right=LoweredParameterRef("right"),
+        body=LoweredFunctionBody(
+            return_statement=LoweredReturnStatement(
+                expression=LoweredBinaryOperationExpression(
+                    operation=_operation("add"),
+                    left=LoweredParameterRef("left"),
+                    right=LoweredParameterRef("right"),
+                ),
+                source=_location(3, 5),
+            ),
         ),
         source=_location(2, 3),
     )
@@ -181,6 +206,23 @@ def test_m110_lowerer_accepts_supported_scalar_descriptors() -> None:
         assert result.function.scalar_type == _descriptor(type_tag)
 
 
+def test_m112_lowerer_wraps_binary_expression_in_return_statement_body() -> None:
+    result = Lowerer().lower(_selected_implementation())
+
+    assert result.diagnostics == ()
+    assert result.function is not None
+    assert result.function.body == LoweredFunctionBody(
+        return_statement=LoweredReturnStatement(
+            expression=LoweredBinaryOperationExpression(
+                operation=_operation("add"),
+                left=LoweredParameterRef("left"),
+                right=LoweredParameterRef("right"),
+            ),
+            source=_location(3, 5),
+        )
+    )
+
+
 def test_m111_lowerer_accepts_supported_binary_operations() -> None:
     for operation_id in supported_binary_operation_ids():
         result = Lowerer().lower(_selected_implementation(operation_id=operation_id))
@@ -189,10 +231,11 @@ def test_m111_lowerer_accepts_supported_binary_operations() -> None:
         assert result.function is not None
         assert result.function.name == f"{operation_id}_scalar_si32"
         assert result.function.primitive_name == operation_id
-        assert result.function.expression.operation == _operation(operation_id)
+        return_statement = result.function.body.return_statement
+        assert return_statement.expression.operation == _operation(operation_id)
 
 
-def test_m108_backends_emit_from_lowered_function_value() -> None:
+def test_m112_backends_emit_from_explicit_return_statement_body() -> None:
     lowering_result = Lowerer().lower(_selected_implementation())
     function = lowering_result.function
     assert function is not None
@@ -409,6 +452,50 @@ def test_m111_non_add_source_generates_cpp_and_rust_artifacts(
     assert [artifact.content for artifact in result.artifacts.artifacts] == [
         SUB_CPP_CONTENT,
         SUB_RUST_CONTENT,
+    ]
+
+
+def test_m112_non_add_non_si32_output_uses_explicit_return_body(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_source(tmp_path, "mul", "f64")
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="mul",
+                extension="scalar",
+                type_tag="f64",
+            ),
+            Target(
+                backend="rust",
+                primitive_name="mul",
+                extension="scalar",
+                type_tag="f64",
+            ),
+        ),
+    )
+
+    lowering_result = Lowerer().lower(
+        _selected_implementation(operation_id="mul", type_tag="f64")
+    )
+
+    assert lowering_result.diagnostics == ()
+    assert lowering_result.function is not None
+    assert (
+        lowering_result.function.body.return_statement.expression.operation
+        == _operation("mul")
+    )
+    assert lowering_result.function.scalar_type == _descriptor("f64")
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/mul_scalar_f64.hpp",
+        "src/mul_scalar_f64.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        MUL_F64_CPP_CONTENT,
+        MUL_F64_RUST_CONTENT,
     ]
 
 
@@ -744,10 +831,15 @@ def _lowered_function(
         primitive_name=operation_id,
         parameters=(LoweredParameter("left"), LoweredParameter("right")),
         scalar_type=_descriptor(type_tag),
-        expression=LoweredBinaryOperationExpression(
-            operation=_operation(operation_id),
-            left=LoweredParameterRef("left"),
-            right=LoweredParameterRef("right"),
+        body=LoweredFunctionBody(
+            return_statement=LoweredReturnStatement(
+                expression=LoweredBinaryOperationExpression(
+                    operation=_operation(operation_id),
+                    left=LoweredParameterRef("left"),
+                    right=LoweredParameterRef("right"),
+                ),
+                source=_location(3, 5),
+            ),
         ),
         source=_location(2, 3),
     )

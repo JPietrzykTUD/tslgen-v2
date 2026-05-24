@@ -57,7 +57,9 @@ class CppBackend:
                 ),
             )
 
-        operator_spelling = _binary_operator_spelling(function.expression.operation)
+        return_statement = function.body.return_statement
+        expression = return_statement.expression
+        operator_spelling = _binary_operator_spelling(expression.operation)
         if operator_spelling is None:
             return BackendEmitResult(
                 artifact=None,
@@ -67,7 +69,7 @@ class CppBackend:
                         code="TSL-BACKEND-UNSUPPORTED-OPERATION",
                         message=(
                             "C++ emitter has no operator spelling for operation "
-                            f"{function.expression.operation.operation_id!r}"
+                            f"{expression.operation.operation_id!r}"
                         ),
                         location=function.source,
                     ),
@@ -98,8 +100,9 @@ class CppBackend:
         scalar_spelling: str,
         operator_spelling: str,
     ) -> str:
-        left = function.expression.left.parameter_name
-        right = function.expression.right.parameter_name
+        expression = function.body.return_statement.expression
+        left = expression.left.parameter_name
+        right = expression.right.parameter_name
         return (
             "#pragma once\n"
             "\n"

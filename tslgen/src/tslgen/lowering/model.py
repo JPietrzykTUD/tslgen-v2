@@ -25,10 +25,21 @@ class LoweredBinaryOperationExpression:
 
 
 @dataclass(frozen=True, slots=True)
+class LoweredReturnStatement:
+    expression: LoweredBinaryOperationExpression
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredFunctionBody:
+    return_statement: LoweredReturnStatement
+
+
+@dataclass(frozen=True, slots=True)
 class LoweredFunction:
     name: str
     primitive_name: str
     parameters: tuple[LoweredParameter, ...]
     scalar_type: ScalarTypeDescriptor
-    expression: LoweredBinaryOperationExpression
+    body: LoweredFunctionBody
     source: SourceLocation

@@ -12,8 +12,10 @@ from tslgen.lowering.binary_operations import (
 from tslgen.lowering.model import (
     LoweredBinaryOperationExpression,
     LoweredFunction,
+    LoweredFunctionBody,
     LoweredParameter,
     LoweredParameterRef,
+    LoweredReturnStatement,
 )
 from tslgen.lowering.scalar_types import (
     ScalarTypeDescriptor,
@@ -50,10 +52,15 @@ class Lowerer:
                 LoweredParameter(name=name) for name in selected.primitive.parameters
             ),
             scalar_type=scalar_type,
-            expression=LoweredBinaryOperationExpression(
-                operation=operation,
-                left=LoweredParameterRef(body.left_parameter),
-                right=LoweredParameterRef(body.right_parameter),
+            body=LoweredFunctionBody(
+                return_statement=LoweredReturnStatement(
+                    expression=LoweredBinaryOperationExpression(
+                        operation=operation,
+                        left=LoweredParameterRef(body.left_parameter),
+                        right=LoweredParameterRef(body.right_parameter),
+                    ),
+                    source=body.source,
+                ),
             ),
             source=selected.implementation.source,
         )

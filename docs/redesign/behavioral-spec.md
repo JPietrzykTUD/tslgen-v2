@@ -149,6 +149,20 @@ whose body uses a different operation is a lowering diagnostic with code
 `TSL-LOWER-OPERATION-MISMATCH`. Body arguments other than exactly
 `left, right` remain diagnostic boundaries and are not repaired.
 
+### M112 Tiny Return Statement Body Model
+
+Milestone 112 keeps the M111 source form unchanged but makes the lowered
+function body explicit. A lowered function now carries one backend-neutral
+function body containing exactly one return statement over the accepted binary
+operation expression. The return statement preserves the source body location
+for traceability; it does not contain C++ or Rust text, backend operator
+spelling, or source-body repair policy.
+
+C++ and Rust emitters consume the explicit return statement body and still own
+language syntax and operator spellings. Existing accepted tiny artifact bytes,
+logical paths, ordering, descriptor tables, and lowering diagnostics remain
+stable.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:
