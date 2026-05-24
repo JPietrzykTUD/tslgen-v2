@@ -15402,9 +15402,21 @@ Review notes:
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M115.
-This milestone keeps the next action focused on lowering while adding the
-first tiny operation/type compatibility boundary.
+Accepted. M116 added integer-only `mod` to the tiny clean lowering-owned
+binary operation descriptor table, added a focused lowering-owned
+operation/type compatibility rule boundary, and added backend-owned C++/Rust
+`%` spellings for accepted lowered `mod` functions. Floating `mod` over
+accepted `f32`/`f64` scalar descriptors fails in lowering with
+`TSL-LOWER-UNSUPPORTED-OPERATION-TYPE`. M116 preserved accepted
+`add`/`sub`/`mul`/`div` behavior, M110 scalar descriptors, M112 body values,
+M113 signatures, M114 lowering stage-output behavior, diagnostics, logical
+paths, artifact ordering, and existing artifact bytes and digests. M116 did
+not add parser/source syntax changes, source repair, floating modulo
+semantics, runtime remainder policy, divide-by-zero diagnostics, integer
+overflow policy, constant folding, algebraic simplification, vector/SIMD
+semantics, backend manifests, old operation migration, registries,
+dispatchers, plugin systems, hidden backfeeds, fixpoint mechanisms, or a broad
+operation/type framework.
 
 Goal:
 
@@ -15494,3 +15506,103 @@ Review notes:
 - Reviewers should require current `add`/`sub`/`mul`/`div` output bytes,
   diagnostics, M112 body values, M113 signature values, and M114 stage-output
   behavior to remain stable.
+
+### Milestone 117: Tiny Clean Integer Bitwise Binary Operations Type-Gated Lowering Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M116.
+This milestone keeps the next action focused on lowering while broadening the
+tiny operation surface by one coherent integer-only family.
+
+Goal:
+
+Add integer-only bitwise binary operations to the existing tiny clean
+binary-operation lowering path:
+
+```text
+bit_and(left, right) / bit_or(left, right) / bit_xor(left, right)
+over integer scalar descriptors
+-> LoweredBinaryOperationExpression(operation="bit_*")
+```
+
+Scope:
+
+- Add `bit_and`, `bit_or`, and `bit_xor` to the existing lowering-owned binary
+  operation descriptor table, preserving deterministic descriptor ordering
+  after `mod`.
+- Reuse and minimally extend the M116 lowering-owned operation/type
+  compatibility boundary so the bitwise operations lower only for the
+  currently supported integer scalar descriptors.
+- Reject floating scalar descriptors for these operations with the accepted
+  M116 `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` diagnostic shape.
+- Keep descriptors backend-neutral. They must not contain C++ or Rust
+  spelling, logical-boolean policy, mask policy, signedness runtime policy,
+  overflow policy, or source repair policy.
+- Update C++ and Rust backends to spell only the accepted bitwise descriptors
+  via backend-owned operator spelling tables.
+- Preserve accepted `add`/`sub`/`mul`/`div`/`mod` behavior, M110 scalar
+  descriptors, M112 body values, M113 signatures, M114 lowering stage-output
+  behavior, M116 compatibility behavior, diagnostics, logical paths, artifact
+  ordering, and existing artifact bytes and digests.
+- Add focused tests for descriptor lookup/order, integer lowerer acceptance,
+  floating-type rejection with the M116 diagnostic, backend spelling ownership,
+  generator output for at least one integer bitwise source, M114 stage-output
+  pass-through, and the unsupported-operation diagnostic boundary.
+
+Out of scope:
+
+- New `.tsl` source syntax, parser/catalog source-form changes, source-body
+  repair, broad TSIL parsing, additional arities/parameter names, or additional
+  body shapes.
+- Logical boolean semantics, boolean scalar types, masks, shifts, rotates,
+  bit-width promotion, signedness runtime policy, constant folding, algebraic
+  simplification, or broad bitwise/arithmetic semantics.
+- New scalar types, vector/SIMD shapes, hardware feature selection, branch
+  pruning, generation-time helper evaluation, backend manifests, dependency
+  closure, or old generator maps.
+- Module/package planning, function overloading policy, include planning,
+  artifact layout changes, artifact-plan values, renderer-ready IR, or backend
+  emission inside lowering.
+- CLI integration, writer changes, generated test execution, CMake/Cargo
+  scaffolding, runtime imports from `frozen/` or `tslgenold/`, or porting old
+  operation/lowering modules.
+- Registries, dispatchers, plugin systems, hidden backfeeds, fixpoint
+  mechanisms, or a broad operation/type framework.
+
+Accepted outputs:
+
+- `bit_and(left, right)`, `bit_or(left, right)`, and `bit_xor(left, right)`
+  lower only for accepted integer scalar descriptors.
+- Floating bitwise operation inputs reach lowering and fail with the accepted
+  operation/type compatibility diagnostic rather than source repair, fallback,
+  or renderer-side inference.
+- C++ and Rust emitters render accepted bitwise operations through
+  backend-owned operator spelling maps while existing operations remain
+  byte-stable.
+- The M114 lowering stage-output boundary continues to carry the accepted
+  operations without adding scheduler, package, artifact-plan, or broad IR
+  machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+```
+
+Run the smallest compile/import checks needed for the revised clean package
+surface. Do not run the old `tslgenold` validation profile as proof of the
+clean product slice.
+
+Review notes:
+
+- Reviewers should reject parser/source syntax broadening or source repair.
+- Reviewers should reject putting C++/Rust spelling or runtime bitwise policy
+  into lowering descriptors.
+- Reviewers should reject logical boolean semantics, shifts/rotates, broad
+  arithmetic frameworks, registries, or dispatchers.
+- Reviewers should require current `add`/`sub`/`mul`/`div`/`mod` output bytes,
+  diagnostics, M112 body values, M113 signature values, M114 stage-output
+  behavior, and M116 compatibility behavior to remain stable.

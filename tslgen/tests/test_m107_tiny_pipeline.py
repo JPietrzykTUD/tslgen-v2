@@ -35,6 +35,10 @@ from tslgen.lowering import (
     supported_binary_operation_ids,
     supported_scalar_type_tags,
 )
+from tslgen.lowering.operation_type_compatibility import (
+    binary_operation_supports_scalar_type,
+    supported_scalar_type_tags_for_binary_operation,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures" / "tsl"
 VALID_TINY_ADD = FIXTURES / "valid" / "tiny_add.tsl"
@@ -130,6 +134,24 @@ DIV_RUST_CONTENT = """pub fn div_scalar_si32(left: i32, right: i32) -> i32 {
 }
 """
 
+MOD_CPP_CONTENT = """#pragma once
+
+#include <cstdint>
+
+namespace tsl {
+
+inline std::int32_t mod_scalar_si32(std::int32_t left, std::int32_t right) {
+  return left % right;
+}
+
+}  // namespace tsl
+"""
+
+MOD_RUST_CONTENT = """pub fn mod_scalar_si32(left: i32, right: i32) -> i32 {
+    left % right
+}
+"""
+
 
 def test_m110_scalar_descriptor_lookup_table() -> None:
     assert supported_scalar_type_tags() == ("si32", "ui32", "f32", "f64")
@@ -167,8 +189,14 @@ def test_m110_scalar_descriptor_lookup_table() -> None:
     assert lookup_scalar_type_descriptor("si64") is None
 
 
-def test_m115_binary_operation_descriptor_lookup_table_includes_div() -> None:
-    assert supported_binary_operation_ids() == ("add", "sub", "mul", "div")
+def test_m116_binary_operation_descriptor_lookup_table_includes_mod() -> None:
+    assert supported_binary_operation_ids() == (
+        "add",
+        "sub",
+        "mul",
+        "div",
+        "mod",
+    )
     assert SUPPORTED_BINARY_OPERATION_DESCRIPTORS == (
         BinaryOperationDescriptor(
             operation_id="add",
@@ -198,10 +226,49 @@ def test_m115_binary_operation_descriptor_lookup_table_includes_div() -> None:
             source_body_operation="div",
             semantic_name="binary.div",
         ),
+        BinaryOperationDescriptor(
+            operation_id="mod",
+            arity=2,
+            category="binary",
+            source_body_operation="mod",
+            semantic_name="binary.mod",
+        ),
     )
     assert lookup_binary_operation_descriptor("mul") == _operation("mul")
     assert lookup_binary_operation_descriptor("div") == _operation("div")
-    assert lookup_binary_operation_descriptor("mod") is None
+    assert lookup_binary_operation_descriptor("mod") == _operation("mod")
+    assert lookup_binary_operation_descriptor("pow") is None
+
+
+def test_m116_operation_type_compatibility_accepts_integer_mod_only() -> None:
+    mod_operation = _operation("mod")
+
+    assert supported_scalar_type_tags_for_binary_operation(mod_operation) == (
+        "si32",
+        "ui32",
+    )
+    for type_tag in ("si32", "ui32"):
+        assert binary_operation_supports_scalar_type(
+            mod_operation,
+            _descriptor(type_tag),
+        )
+    for type_tag in ("f32", "f64"):
+        assert not binary_operation_supports_scalar_type(
+            mod_operation,
+            _descriptor(type_tag),
+        )
+
+    for operation_id in ("add", "sub", "mul", "div"):
+        operation = _operation(operation_id)
+        assert (
+            supported_scalar_type_tags_for_binary_operation(operation)
+            == supported_scalar_type_tags()
+        )
+        for type_tag in supported_scalar_type_tags():
+            assert binary_operation_supports_scalar_type(
+                operation,
+                _descriptor(type_tag),
+            )
 
 
 def test_m108_lowerer_produces_backend_neutral_function_value() -> None:
@@ -263,7 +330,7 @@ def test_m114_lowerer_stage_output_accumulates_diagnostics() -> None:
     result = Lowerer().lower_all(
         (
             _selected_implementation(type_tag="si64"),
-            _selected_implementation(operation_id="mod"),
+            _selected_implementation(operation_id="pow"),
         )
     )
 
@@ -322,6 +389,36 @@ def test_m115_lowerer_accepts_div_binary_operation() -> None:
 
     assert result.diagnostics == ()
     assert result.function == _lowered_function(operation_id="div")
+
+
+def test_m116_lowerer_accepts_mod_integer_scalar_descriptors() -> None:
+    for type_tag in ("si32", "ui32"):
+        result = Lowerer().lower(
+            _selected_implementation(operation_id="mod", type_tag=type_tag)
+        )
+
+        assert result.diagnostics == ()
+        assert result.function == _lowered_function(
+            type_tag=type_tag,
+            operation_id="mod",
+        )
+
+
+def test_m116_lowerer_rejects_mod_floating_scalar_descriptors() -> None:
+    for type_tag in ("f32", "f64"):
+        result = Lowerer().lower(
+            _selected_implementation(operation_id="mod", type_tag=type_tag)
+        )
+
+        assert result.function is None
+        assert len(result.diagnostics) == 1
+        diagnostic = result.diagnostics[0]
+        assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-OPERATION-TYPE"
+        assert diagnostic.severity == "error"
+        assert diagnostic.location == _location(2, 3)
+        assert "mod" in diagnostic.message
+        assert type_tag in diagnostic.message
+        assert "si32, ui32" in diagnostic.message
 
 
 def test_m113_backends_emit_from_explicit_signature_and_body() -> None:
@@ -450,6 +547,7 @@ def test_m111_backends_emit_backend_owned_operator_spellings() -> None:
         ("sub", "-"),
         ("mul", "*"),
         ("div", "/"),
+        ("mod", "%"),
     )
 
     for operation_id, operator in expected_operators:
@@ -501,7 +599,7 @@ def test_m110_lowerer_reports_unsupported_scalar_type() -> None:
 
 
 def test_m111_lowerer_reports_unsupported_binary_operation() -> None:
-    result = Lowerer().lower(_selected_implementation(operation_id="mod"))
+    result = Lowerer().lower(_selected_implementation(operation_id="pow"))
 
     assert result.function is None
     assert len(result.diagnostics) == 1
@@ -509,8 +607,8 @@ def test_m111_lowerer_reports_unsupported_binary_operation() -> None:
     assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-OPERATION"
     assert diagnostic.severity == "error"
     assert diagnostic.location == _location(1, 1)
-    assert "mod" in diagnostic.message
-    assert "add, sub, mul, div" in diagnostic.message
+    assert "pow" in diagnostic.message
+    assert "add, sub, mul, div, mod" in diagnostic.message
 
 
 def test_m111_lowerer_reports_primitive_body_operation_mismatch() -> None:
@@ -602,6 +700,17 @@ def test_m115_div_passes_through_stage_output() -> None:
     assert lowering_result.diagnostics == ()
     assert lowering_result.lowered_functions == LoweredFunctionSet(
         (_lowered_function(operation_id="div"),)
+    )
+
+
+def test_m116_mod_passes_through_stage_output() -> None:
+    lowering_result = Lowerer().lower_all(
+        (_selected_implementation(operation_id="mod", type_tag="ui32"),)
+    )
+
+    assert lowering_result.diagnostics == ()
+    assert lowering_result.lowered_functions == LoweredFunctionSet(
+        (_lowered_function(type_tag="ui32", operation_id="mod"),)
     )
 
 
@@ -704,6 +813,39 @@ def test_m115_div_source_generates_cpp_and_rust_artifacts(
     ]
 
 
+def test_m116_integer_mod_source_generates_cpp_and_rust_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_source(tmp_path, "mod", "si32")
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="mod",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="rust",
+                primitive_name="mod",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/mod_scalar_si32.hpp",
+        "src/mod_scalar_si32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        MOD_CPP_CONTENT,
+        MOD_RUST_CONTENT,
+    ]
+
+
 def test_m112_non_add_non_si32_output_uses_explicit_return_body(
     tmp_path: Path,
 ) -> None:
@@ -781,16 +923,16 @@ def test_m110_unsupported_source_type_reports_lowering_diagnostic(
     assert "si64" in diagnostic.message
 
 
-def test_m115_unsupported_source_operation_reports_lowering_diagnostic(
+def test_m116_unsupported_source_operation_reports_lowering_diagnostic(
     tmp_path: Path,
 ) -> None:
-    source = _write_tiny_source(tmp_path, "mod", "si32")
+    source = _write_tiny_source(tmp_path, "pow", "si32")
     result = generate_from_paths(
         (source,),
         (
             Target(
                 backend="cpp",
-                primitive_name="mod",
+                primitive_name="pow",
                 extension="scalar",
                 type_tag="si32",
             ),
@@ -806,8 +948,38 @@ def test_m115_unsupported_source_operation_reports_lowering_diagnostic(
     assert diagnostic.location.path == source.resolve()
     assert diagnostic.location.line == 1
     assert diagnostic.location.column == 1
+    assert "pow" in diagnostic.message
+    assert "add, sub, mul, div, mod" in diagnostic.message
+
+
+def test_m116_floating_mod_source_reports_operation_type_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_source(tmp_path, "mod", "f32")
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="mod",
+                extension="scalar",
+                type_tag="f32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-OPERATION-TYPE"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 2
+    assert diagnostic.location.column == 3
     assert "mod" in diagnostic.message
-    assert "add, sub, mul, div" in diagnostic.message
+    assert "f32" in diagnostic.message
+    assert "si32, ui32" in diagnostic.message
 
 
 def test_m111_source_operation_body_mismatch_reports_lowering_diagnostic(

@@ -20,6 +20,10 @@ from tslgen.lowering.model import (
     LoweredParameterRef,
     LoweredReturnStatement,
 )
+from tslgen.lowering.operation_type_compatibility import (
+    binary_operation_supports_scalar_type,
+    supported_scalar_type_tags_for_binary_operation,
+)
 from tslgen.lowering.scalar_types import (
     ScalarTypeDescriptor,
     lookup_scalar_type_descriptor,
@@ -169,6 +173,25 @@ def _unsupported_diagnostics(
                     f"implementation type {selected.implementation.type_tag!r} "
                     "cannot be lowered; expected one of: "
                     f"{', '.join(supported_scalar_type_tags())}"
+                ),
+                location=selected.implementation.source,
+            )
+        )
+
+    if (
+        operation is not None
+        and scalar_type is not None
+        and not binary_operation_supports_scalar_type(operation, scalar_type)
+    ):
+        supported_type_tags = supported_scalar_type_tags_for_binary_operation(operation)
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-LOWER-UNSUPPORTED-OPERATION-TYPE",
+                message=(
+                    f"operation {operation.operation_id!r} cannot be lowered for "
+                    f"scalar type {scalar_type.tag!r}; expected one of: "
+                    f"{', '.join(supported_type_tags)}"
                 ),
                 location=selected.implementation.source,
             )

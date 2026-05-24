@@ -212,6 +212,32 @@ or source repair. Unsupported operation ids still fail in lowering with
 `TSL-LOWER-UNSUPPORTED-OPERATION`, now reporting `add, sub, mul, div` as the
 supported tiny clean operation set.
 
+### M116 Tiny Integer Remainder Operation Type Gate
+
+Milestone 116 extends the tiny clean binary operation descriptor table to
+accept `mod` after `div` in deterministic descriptor order:
+
+```text
+prim<v:=(v,v)> mod(left, right):
+  implementation scalar si32:
+    body mod(left, right)
+```
+
+Catalog construction still only preserves the parsed operation name, scalar
+type tag, and exact `left, right` body arguments. The lowerer owns a small
+operation/type compatibility boundary over the existing scalar and binary
+operation descriptors: `mod` lowers only for the currently supported integer
+scalar descriptors `si32` and `ui32`. Floating scalar descriptors such as
+`f32` and `f64` reach lowering and fail with
+`TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` at the implementation source location.
+
+The `mod` descriptor remains backend-neutral and does not define C++ or Rust
+spelling, divide-by-zero behavior, signed-remainder runtime behavior, overflow
+policy, floating special-value policy, constant folding, or source repair.
+C++ and Rust emitters own the `%` spelling for accepted lowered `mod`
+functions. Unsupported operation ids now report `add, sub, mul, div, mod` as
+the supported tiny clean operation set.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:
