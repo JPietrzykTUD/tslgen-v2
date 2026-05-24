@@ -342,6 +342,37 @@ constant folding, or source repair. C++ and Rust emitters own the `<<` and
 operation ids now report `add, sub, mul, div, mod, bit_and, bit_or, bit_xor,
 shift_left, shift_right` as the supported tiny clean operation set.
 
+### M121 Tiny Scalar Equality Compare Result Shape
+
+Milestone 121 adds the exact scalar comparison source and lowering shape:
+
+```text
+prim<m:=(v,v)> equal(left, right):
+  implementation scalar si32:
+    body equal(left, right)
+```
+
+Catalog construction preserves this as a typed `ComparisonOperationBody` with
+the exact `left, right` body arguments rather than adapting it to the binary
+arithmetic/bitwise body model. Nearby compare body forms with missing,
+renamed, reordered, or extra body arguments are diagnostic boundaries and are
+not repaired.
+
+The lowerer owns the backend-neutral comparison descriptor table and accepts
+only `equal`. It lowers accepted `equal(left, right)` bodies for the currently
+supported scalar input descriptors `si32`, `ui32`, `f32`, and `f64` into a
+lowered comparison expression paired with the existing single return-statement
+function body. The lowered signature records an explicit scalar-comparison
+result boundary; it does not contain C++ or Rust result spelling.
+
+C++ and Rust emitters own both the comparison operator spelling and result
+type spelling for accepted lowered comparison functions. For M121, both
+backends render the equality operator as `==` and the scalar-comparison result
+as `bool`. This slice does not define compare operations beyond `equal`, mask
+modeling, vector/SIMD compare results, boolean scalar inputs, floating
+NaN/special-value policy, constant folding, source repair, backend manifests,
+or broad comparison semantics.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

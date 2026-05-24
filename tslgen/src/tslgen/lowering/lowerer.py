@@ -5,14 +5,26 @@ from dataclasses import dataclass
 
 from tslgen.analysis.selection import SelectedImplementation
 from tslgen.core.diagnostics import Diagnostic
-from tslgen.domain.catalog import BinaryOperationBody, UnaryOperationBody
+from tslgen.domain.catalog import (
+    BinaryOperationBody,
+    ComparisonOperationBody,
+    UnaryOperationBody,
+)
 from tslgen.lowering.binary_operations import (
     BinaryOperationDescriptor,
     lookup_binary_operation_descriptor,
     supported_binary_operation_ids,
 )
+from tslgen.lowering.comparison_operations import (
+    ComparisonOperationDescriptor,
+    lookup_comparison_operation_descriptor,
+    supported_comparison_operation_ids,
+)
 from tslgen.lowering.model import (
+    INPUT_SCALAR_RESULT_TYPE,
+    SCALAR_COMPARISON_RESULT_TYPE,
     LoweredBinaryOperationExpression,
+    LoweredComparisonOperationExpression,
     LoweredFunction,
     LoweredFunctionBody,
     LoweredFunctionSet,
@@ -20,6 +32,7 @@ from tslgen.lowering.model import (
     LoweredParameter,
     LoweredParameterRef,
     LoweredReturnStatement,
+    LoweredResultType,
     LoweredUnaryOperationExpression,
 )
 from tslgen.lowering.operation_type_compatibility import (
@@ -41,9 +54,11 @@ from tslgen.lowering.unary_operations import (
 
 _SUPPORTED_BINARY_TEMPLATE = "binary"
 _SUPPORTED_UNARY_TEMPLATE = "unary"
+_SUPPORTED_COMPARISON_TEMPLATE = "compare"
 _SUPPORTED_EXTENSION = "scalar"
 _SUPPORTED_BINARY_PARAMETERS = ("left", "right")
 _SUPPORTED_UNARY_PARAMETERS = ("value",)
+_SUPPORTED_COMPARISON_PARAMETERS = ("left", "right")
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +111,28 @@ class Lowerer:
                 return LoweringResult(function=None, diagnostics=diagnostics)
             return LoweringResult(
                 function=_lower_binary_function(selected, body, scalar_type, operation),
+                diagnostics=(),
+            )
+
+        if isinstance(body, ComparisonOperationBody):
+            operation = lookup_comparison_operation_descriptor(selected.primitive.name)
+            diagnostics = tuple(
+                _unsupported_comparison_diagnostics(
+                    selected,
+                    body,
+                    scalar_type,
+                    operation,
+                )
+            )
+            if diagnostics or scalar_type is None or operation is None:
+                return LoweringResult(function=None, diagnostics=diagnostics)
+            return LoweringResult(
+                function=_lower_comparison_function(
+                    selected,
+                    body,
+                    scalar_type,
+                    operation,
+                ),
                 diagnostics=(),
             )
 
@@ -231,6 +268,117 @@ def _unsupported_binary_diagnostics(
     if (
         body.left_parameter != _SUPPORTED_BINARY_PARAMETERS[0]
         or body.right_parameter != _SUPPORTED_BINARY_PARAMETERS[1]
+    ):
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-LOWER-UNSUPPORTED-BODY",
+                message=(
+                    "implementation body cannot be lowered; expected exactly "
+                    f"'{body.operation}(left, right)'"
+                ),
+                location=body.source,
+            )
+        )
+
+    return tuple(diagnostics)
+
+
+def _unsupported_comparison_diagnostics(
+    selected: SelectedImplementation,
+    body: ComparisonOperationBody,
+    scalar_type: ScalarTypeDescriptor | None,
+    operation: ComparisonOperationDescriptor | None,
+) -> tuple[Diagnostic, ...]:
+    diagnostics: list[Diagnostic] = []
+
+    if operation is None:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-LOWER-UNSUPPORTED-OPERATION",
+                message=(
+                    f"operation {selected.primitive.name!r} cannot be lowered; "
+                    "expected one of: "
+                    f"{', '.join(supported_comparison_operation_ids())}"
+                ),
+                location=selected.primitive.source,
+            )
+        )
+
+    if selected.primitive.template != _SUPPORTED_COMPARISON_TEMPLATE:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-LOWER-UNSUPPORTED-TEMPLATE",
+                message=(
+                    f"primitive {selected.primitive.name!r} uses template "
+                    f"{selected.primitive.template!r}; expected "
+                    f"{_SUPPORTED_COMPARISON_TEMPLATE!r}"
+                ),
+                location=selected.primitive.source,
+            )
+        )
+
+    if selected.primitive.parameters != _SUPPORTED_COMPARISON_PARAMETERS:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-LOWER-UNSUPPORTED-PARAMETERS",
+                message=(
+                    f"primitive {selected.primitive.name!r} uses parameters "
+                    f"{selected.primitive.parameters!r}; expected exactly "
+                    f"{_SUPPORTED_COMPARISON_PARAMETERS!r}"
+                ),
+                location=selected.primitive.source,
+            )
+        )
+
+    if selected.implementation.extension != _SUPPORTED_EXTENSION:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-LOWER-UNSUPPORTED-EXTENSION",
+                message=(
+                    f"implementation extension "
+                    f"{selected.implementation.extension!r} cannot be lowered by "
+                    f"the tiny clean lowerer; expected {_SUPPORTED_EXTENSION!r}"
+                ),
+                location=selected.implementation.source,
+            )
+        )
+
+    if scalar_type is None:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-LOWER-UNSUPPORTED-TYPE",
+                message=(
+                    f"implementation type {selected.implementation.type_tag!r} "
+                    "cannot be lowered; expected one of: "
+                    f"{', '.join(supported_scalar_type_tags())}"
+                ),
+                location=selected.implementation.source,
+            )
+        )
+
+    if operation is not None and body.operation != operation.source_body_operation:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-LOWER-OPERATION-MISMATCH",
+                message=(
+                    f"primitive operation {selected.primitive.name!r} expects "
+                    f"body operation {operation.source_body_operation!r}; got "
+                    f"{body.operation!r}"
+                ),
+                location=body.source,
+            )
+        )
+
+    if (
+        body.left_parameter != _SUPPORTED_COMPARISON_PARAMETERS[0]
+        or body.right_parameter != _SUPPORTED_COMPARISON_PARAMETERS[1]
     ):
         diagnostics.append(
             Diagnostic(
@@ -396,6 +544,32 @@ def _lower_binary_function(
     )
 
 
+def _lower_comparison_function(
+    selected: SelectedImplementation,
+    body: ComparisonOperationBody,
+    scalar_type: ScalarTypeDescriptor,
+    operation: ComparisonOperationDescriptor,
+) -> LoweredFunction:
+    return LoweredFunction(
+        signature=_signature(
+            selected,
+            scalar_type,
+            result_type=SCALAR_COMPARISON_RESULT_TYPE,
+        ),
+        body=LoweredFunctionBody(
+            return_statement=LoweredReturnStatement(
+                expression=LoweredComparisonOperationExpression(
+                    operation=operation,
+                    left=LoweredParameterRef(body.left_parameter),
+                    right=LoweredParameterRef(body.right_parameter),
+                ),
+                source=body.source,
+            ),
+        ),
+        source=selected.implementation.source,
+    )
+
+
 def _lower_unary_function(
     selected: SelectedImplementation,
     body: UnaryOperationBody,
@@ -420,6 +594,8 @@ def _lower_unary_function(
 def _signature(
     selected: SelectedImplementation,
     scalar_type: ScalarTypeDescriptor,
+    *,
+    result_type: LoweredResultType = INPUT_SCALAR_RESULT_TYPE,
 ) -> LoweredFunctionSignature:
     return LoweredFunctionSignature(
         name=_function_name(selected),
@@ -428,6 +604,7 @@ def _signature(
             LoweredParameter(name=name) for name in selected.primitive.parameters
         ),
         scalar_type=scalar_type,
+        result_type=result_type,
     )
 
 

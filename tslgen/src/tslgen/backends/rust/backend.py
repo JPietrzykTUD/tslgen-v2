@@ -6,11 +6,15 @@ from tslgen.backends.base import BackendEmitResult
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.io.artifacts import Artifact, ArtifactMetadata
 from tslgen.lowering import (
+    INPUT_SCALAR_RESULT_TYPE,
     LoweredBinaryOperationExpression,
+    LoweredComparisonOperationExpression,
     LoweredFunction,
+    LoweredResultType,
     LoweredUnaryOperationExpression,
 )
 from tslgen.lowering.binary_operations import BinaryOperationDescriptor
+from tslgen.lowering.comparison_operations import ComparisonOperationDescriptor
 from tslgen.lowering.scalar_types import ScalarTypeDescriptor
 from tslgen.lowering.unary_operations import UnaryOperationDescriptor
 
@@ -18,6 +22,12 @@ from tslgen.lowering.unary_operations import UnaryOperationDescriptor
 @dataclass(frozen=True, slots=True)
 class _ScalarTypeSpelling:
     tag: str
+    spelling: str
+
+
+@dataclass(frozen=True, slots=True)
+class _ResultTypeSpelling:
+    result_id: str
     spelling: str
 
 
@@ -33,11 +43,21 @@ class _UnaryOperatorSpelling:
     spelling: str
 
 
+@dataclass(frozen=True, slots=True)
+class _ComparisonOperatorSpelling:
+    operation_id: str
+    spelling: str
+
+
 _SCALAR_TYPE_SPELLINGS: tuple[_ScalarTypeSpelling, ...] = (
     _ScalarTypeSpelling(tag="si32", spelling="i32"),
     _ScalarTypeSpelling(tag="ui32", spelling="u32"),
     _ScalarTypeSpelling(tag="f32", spelling="f32"),
     _ScalarTypeSpelling(tag="f64", spelling="f64"),
+)
+
+_RESULT_TYPE_SPELLINGS: tuple[_ResultTypeSpelling, ...] = (
+    _ResultTypeSpelling(result_id="scalar_comparison", spelling="bool"),
 )
 
 _BINARY_OPERATOR_SPELLINGS: tuple[_BinaryOperatorSpelling, ...] = (
@@ -58,14 +78,18 @@ _UNARY_OPERATOR_SPELLINGS: tuple[_UnaryOperatorSpelling, ...] = (
     _UnaryOperatorSpelling(operation_id="neg", spelling="-"),
 )
 
+_COMPARISON_OPERATOR_SPELLINGS: tuple[_ComparisonOperatorSpelling, ...] = (
+    _ComparisonOperatorSpelling(operation_id="equal", spelling="=="),
+)
+
 
 class RustBackend:
     backend_id = "rust"
 
     def emit(self, function: LoweredFunction) -> BackendEmitResult:
         signature = function.signature
-        scalar_spelling = _scalar_type_spelling(signature.scalar_type)
-        if scalar_spelling is None:
+        parameter_spelling = _scalar_type_spelling(signature.scalar_type)
+        if parameter_spelling is None:
             return BackendEmitResult(
                 artifact=None,
                 diagnostics=(
@@ -81,6 +105,26 @@ class RustBackend:
                 ),
             )
 
+        return_type_spelling = _result_type_spelling(
+            signature.result_type,
+            parameter_spelling,
+        )
+        if return_type_spelling is None:
+            return BackendEmitResult(
+                artifact=None,
+                diagnostics=(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-BACKEND-UNSUPPORTED-RESULT-TYPE",
+                        message=(
+                            "Rust emitter has no spelling for result type "
+                            f"{signature.result_type.result_id!r}"
+                        ),
+                        location=function.source,
+                    ),
+                ),
+            )
+
         return_expression = self._render_return_expression(function)
         if isinstance(return_expression, Diagnostic):
             return BackendEmitResult(
@@ -90,7 +134,8 @@ class RustBackend:
 
         content = self._render_function(
             function,
-            scalar_spelling,
+            parameter_spelling,
+            return_type_spelling,
             return_expression,
         )
         return BackendEmitResult(
@@ -129,11 +174,32 @@ class RustBackend:
                 f"{expression.right.parameter_name}"
             )
 
+        if isinstance(expression, LoweredComparisonOperationExpression):
+            operator_spelling = _comparison_operator_spelling(expression.operation)
+            if operator_spelling is None:
+                return Diagnostic(
+                    severity="error",
+                    code="TSL-BACKEND-UNSUPPORTED-OPERATION",
+                    message=(
+                        "Rust emitter has no operator spelling for operation "
+                        f"{expression.operation.operation_id!r}"
+                    ),
+                    location=function.source,
+                )
+            return (
+                f"{expression.left.parameter_name} "
+                f"{operator_spelling} "
+                f"{expression.right.parameter_name}"
+            )
+
         if not isinstance(expression, LoweredUnaryOperationExpression):
             return Diagnostic(
                 severity="error",
                 code="TSL-BACKEND-UNSUPPORTED-EXPRESSION",
-                message="Rust emitter supports only lowered binary and unary expressions",
+                message=(
+                    "Rust emitter supports only lowered binary, unary, and "
+                    "comparison expressions"
+                ),
                 location=function.source,
             )
 
@@ -153,17 +219,19 @@ class RustBackend:
     def _render_function(
         self,
         function: LoweredFunction,
-        scalar_spelling: str,
+        parameter_spelling: str,
+        return_type_spelling: str,
         return_expression: str,
     ) -> str:
         signature = function.signature
         parameters = ", ".join(
-            f"{parameter.name}: {scalar_spelling}" for parameter in signature.parameters
+            f"{parameter.name}: {parameter_spelling}"
+            for parameter in signature.parameters
         )
         return (
             f"pub fn {signature.name}"
             f"({parameters})"
-            f" -> {scalar_spelling} {{\n"
+            f" -> {return_type_spelling} {{\n"
             f"    {return_expression}\n"
             "}\n"
         )
@@ -172,6 +240,18 @@ class RustBackend:
 def _scalar_type_spelling(descriptor: ScalarTypeDescriptor) -> str | None:
     for spelling in _SCALAR_TYPE_SPELLINGS:
         if spelling.tag == descriptor.tag:
+            return spelling.spelling
+    return None
+
+
+def _result_type_spelling(
+    descriptor: LoweredResultType,
+    scalar_spelling: str,
+) -> str | None:
+    if descriptor.result_id == INPUT_SCALAR_RESULT_TYPE.result_id:
+        return scalar_spelling
+    for spelling in _RESULT_TYPE_SPELLINGS:
+        if spelling.result_id == descriptor.result_id:
             return spelling.spelling
     return None
 
@@ -189,6 +269,15 @@ def _unary_operator_spelling(
     descriptor: UnaryOperationDescriptor,
 ) -> str | None:
     for spelling in _UNARY_OPERATOR_SPELLINGS:
+        if spelling.operation_id == descriptor.operation_id:
+            return spelling.spelling
+    return None
+
+
+def _comparison_operator_spelling(
+    descriptor: ComparisonOperationDescriptor,
+) -> str | None:
+    for spelling in _COMPARISON_OPERATOR_SPELLINGS:
         if spelling.operation_id == descriptor.operation_id:
             return spelling.spelling
     return None

@@ -17,12 +17,21 @@ _BINARY_HEADER_PATTERN = re.compile(
     r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
     r"\((?P<params>left, right)\):$"
 )
+_COMPARE_HEADER_PATTERN = re.compile(
+    r"^prim<(?P<signature>m:=\(v,v\))> "
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+    r"\((?P<params>left, right)\):$"
+)
 _UNARY_HEADER_PATTERN = re.compile(
     r"^prim<(?P<signature>v:=\(v\))> "
     r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
     r"\((?P<params>value)\):$"
 )
-_HEADER_PATTERNS = (_BINARY_HEADER_PATTERN, _UNARY_HEADER_PATTERN)
+_HEADER_PATTERNS = (
+    _BINARY_HEADER_PATTERN,
+    _COMPARE_HEADER_PATTERN,
+    _UNARY_HEADER_PATTERN,
+)
 _IMPLEMENTATION_PATTERN = re.compile(
     r"^  implementation "
     r"(?P<extension>scalar) "

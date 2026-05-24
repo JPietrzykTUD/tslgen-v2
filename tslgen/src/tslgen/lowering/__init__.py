@@ -2,7 +2,10 @@
 
 from tslgen.lowering.lowerer import Lowerer, LoweringResult, LoweringStageResult
 from tslgen.lowering.model import (
+    INPUT_SCALAR_RESULT_TYPE,
+    SCALAR_COMPARISON_RESULT_TYPE,
     LoweredBinaryOperationExpression,
+    LoweredComparisonOperationExpression,
     LoweredExpression,
     LoweredFunction,
     LoweredFunctionBody,
@@ -11,6 +14,7 @@ from tslgen.lowering.model import (
     LoweredParameter,
     LoweredParameterRef,
     LoweredReturnStatement,
+    LoweredResultType,
     LoweredUnaryOperationExpression,
 )
 from tslgen.lowering.binary_operations import (
@@ -25,6 +29,12 @@ from tslgen.lowering.unary_operations import (
     lookup_unary_operation_descriptor,
     supported_unary_operation_ids,
 )
+from tslgen.lowering.comparison_operations import (
+    SUPPORTED_COMPARISON_OPERATION_DESCRIPTORS,
+    ComparisonOperationDescriptor,
+    lookup_comparison_operation_descriptor,
+    supported_comparison_operation_ids,
+)
 from tslgen.lowering.scalar_types import (
     SUPPORTED_SCALAR_TYPE_DESCRIPTORS,
     ScalarTypeDescriptor,
@@ -33,7 +43,9 @@ from tslgen.lowering.scalar_types import (
 )
 
 __all__ = [
+    "INPUT_SCALAR_RESULT_TYPE",
     "LoweredBinaryOperationExpression",
+    "LoweredComparisonOperationExpression",
     "LoweredExpression",
     "LoweredFunction",
     "LoweredFunctionBody",
@@ -42,10 +54,12 @@ __all__ = [
     "LoweredParameter",
     "LoweredParameterRef",
     "LoweredReturnStatement",
+    "LoweredResultType",
     "LoweredUnaryOperationExpression",
     "Lowerer",
     "LoweringResult",
     "LoweringStageResult",
+    "SCALAR_COMPARISON_RESULT_TYPE",
     "SUPPORTED_BINARY_OPERATION_DESCRIPTORS",
     "BinaryOperationDescriptor",
     "lookup_binary_operation_descriptor",
@@ -54,6 +68,10 @@ __all__ = [
     "UnaryOperationDescriptor",
     "lookup_unary_operation_descriptor",
     "supported_unary_operation_ids",
+    "SUPPORTED_COMPARISON_OPERATION_DESCRIPTORS",
+    "ComparisonOperationDescriptor",
+    "lookup_comparison_operation_descriptor",
+    "supported_comparison_operation_ids",
     "SUPPORTED_SCALAR_TYPE_DESCRIPTORS",
     "ScalarTypeDescriptor",
     "lookup_scalar_type_descriptor",

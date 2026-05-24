@@ -1,4 +1,4 @@
-"""Parser-owned values for the M107 TSL source form."""
+"""Parser-owned values for the tiny clean TSL source forms."""
 
 from dataclasses import dataclass
 

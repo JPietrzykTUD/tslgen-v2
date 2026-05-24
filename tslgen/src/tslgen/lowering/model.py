@@ -1,11 +1,31 @@
 """Backend-neutral lowered function values for the tiny clean slice."""
 
 from dataclasses import dataclass
+from typing import Literal
 
 from tslgen.core.diagnostics import SourceLocation
 from tslgen.lowering.binary_operations import BinaryOperationDescriptor
+from tslgen.lowering.comparison_operations import ComparisonOperationDescriptor
 from tslgen.lowering.scalar_types import ScalarTypeDescriptor
 from tslgen.lowering.unary_operations import UnaryOperationDescriptor
+
+LoweredResultTypeKind = Literal["input_scalar", "scalar_comparison"]
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredResultType:
+    result_id: str
+    kind: LoweredResultTypeKind
+
+
+INPUT_SCALAR_RESULT_TYPE = LoweredResultType(
+    result_id="input_scalar",
+    kind="input_scalar",
+)
+SCALAR_COMPARISON_RESULT_TYPE = LoweredResultType(
+    result_id="scalar_comparison",
+    kind="scalar_comparison",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,7 +51,18 @@ class LoweredUnaryOperationExpression:
     value: LoweredParameterRef
 
 
-LoweredExpression = LoweredBinaryOperationExpression | LoweredUnaryOperationExpression
+@dataclass(frozen=True, slots=True)
+class LoweredComparisonOperationExpression:
+    operation: ComparisonOperationDescriptor
+    left: LoweredParameterRef
+    right: LoweredParameterRef
+
+
+LoweredExpression = (
+    LoweredBinaryOperationExpression
+    | LoweredUnaryOperationExpression
+    | LoweredComparisonOperationExpression
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +82,7 @@ class LoweredFunctionSignature:
     primitive_name: str
     parameters: tuple[LoweredParameter, ...]
     scalar_type: ScalarTypeDescriptor
+    result_type: LoweredResultType = INPUT_SCALAR_RESULT_TYPE
 
 
 @dataclass(frozen=True, slots=True)

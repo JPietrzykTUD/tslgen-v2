@@ -6,6 +6,7 @@ from tslgen.core.diagnostics import Diagnostic
 from tslgen.domain.catalog import (
     BinaryOperationBody,
     Catalog,
+    ComparisonOperationBody,
     Implementation,
     Primitive,
     UnaryOperationBody,
@@ -15,6 +16,9 @@ from tslgen.syntax.ast import ParsedDocument, ParsedImplementation, ParsedPrimit
 M107_SIGNATURE = "v:=(v,v)"
 M107_PARAMETERS = ("left", "right")
 M107_TEMPLATE = "binary"
+M121_SIGNATURE = "m:=(v,v)"
+M121_PARAMETERS = ("left", "right")
+M121_TEMPLATE = "compare"
 M118_SIGNATURE = "v:=(v)"
 M118_PARAMETERS = ("value",)
 M118_TEMPLATE = "unary"
@@ -33,6 +37,11 @@ _SUPPORTED_SOURCE_SHAPES: tuple[_SourceShape, ...] = (
         signature=M107_SIGNATURE,
         parameters=M107_PARAMETERS,
         template=M107_TEMPLATE,
+    ),
+    _SourceShape(
+        signature=M121_SIGNATURE,
+        parameters=M121_PARAMETERS,
+        template=M121_TEMPLATE,
     ),
     _SourceShape(
         signature=M118_SIGNATURE,
@@ -193,12 +202,23 @@ def _body_text(parsed: ParsedImplementation) -> str:
 def _build_body(
     parsed: ParsedImplementation,
     shape: _SourceShape,
-) -> BinaryOperationBody | UnaryOperationBody:
+) -> BinaryOperationBody | ComparisonOperationBody | UnaryOperationBody:
     if shape.template == M118_TEMPLATE:
         return UnaryOperationBody(
             operation=parsed.body.operation,
             value_parameter=parsed.body.arguments[0]
             if len(parsed.body.arguments) > 0
+            else "",
+            source=parsed.body.source,
+        )
+    if shape.template == M121_TEMPLATE:
+        return ComparisonOperationBody(
+            operation=parsed.body.operation,
+            left_parameter=parsed.body.arguments[0]
+            if len(parsed.body.arguments) > 0
+            else "",
+            right_parameter=parsed.body.arguments[1]
+            if len(parsed.body.arguments) > 1
             else "",
             source=parsed.body.source,
         )

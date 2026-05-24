@@ -20,7 +20,15 @@ class UnaryOperationBody:
     source: SourceLocation
 
 
-OperationBody = BinaryOperationBody | UnaryOperationBody
+@dataclass(frozen=True, slots=True)
+class ComparisonOperationBody:
+    operation: str
+    left_parameter: str
+    right_parameter: str
+    source: SourceLocation
+
+
+OperationBody = BinaryOperationBody | UnaryOperationBody | ComparisonOperationBody
 
 
 @dataclass(frozen=True, slots=True)
