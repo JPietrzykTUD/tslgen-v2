@@ -1820,6 +1820,30 @@ beyond selected branch pruning, vector/generic metadata queries, and broad
 translation-map evaluation until later numbered slices implement the selected
 generation-time semantic lowering behavior.
 
+## OQ-037: Where Should Clean Restart Code Live?
+
+Status: Answered by M105 charter; execution is assigned to M106.
+
+Why it matters:
+
+The current top-level `tslgen/` tree contains old accepted/exploratory state.
+Adding clean restart code beside it would blur runtime imports, tests, and
+review expectations.
+
+Decision:
+
+Before new clean restart product code is added, move the current top-level
+`tslgen/` tree wholesale to `tslgenold/` as quarantined old-state evidence.
+Reserve a fresh top-level `tslgen/` path for the clean implementation.
+`tslgenold/` has the same evidence-only status as `frozen/` and must not
+become a runtime dependency of the clean generator.
+
+Implementation blocked:
+
+Yes for clean restart product-code milestones until M106 or an explicitly
+accepted equivalent layout reset creates the same separation. No for M105
+documentation work.
+
 ## Follow-ups from Milestone 2 review
 
 - Add focused tests for invalid UTF-8 and read failure diagnostics where practical.

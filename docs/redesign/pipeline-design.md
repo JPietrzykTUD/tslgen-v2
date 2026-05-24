@@ -1091,23 +1091,24 @@ semantic unresolved needs.
 
 ## KISS Restart Pipeline Note
 
-Post-M104 planning pauses extension of the accumulated lowering micro-pipeline
-and asks M105 to define a simpler restart path. The restart pipeline should be
-described first in product terms:
+M105 pauses extension of the accumulated lowering micro-pipeline and records
+the simpler restart path in `docs/redesign/kiss-generator-restart.md`. The
+restart pipeline should be described first in product terms:
 
 ```text
 SourceDocument -> ParseResult -> Catalog -> SelectionResult -> GeneratedArtifacts
 ```
 
 Only introduce intermediate lowering, translation, request/result, inventory,
-or provenance stages when they simplify an accepted end-to-end slice. The first
-restart implementation slice should demonstrate deterministic C++ and Rust
-library artifact generation from a tiny `.tsl` fixture before the design grows
-new generalized lowering infrastructure.
+or provenance stages when they simplify an accepted end-to-end slice or are
+shared by at least two concrete accepted stages. The first restart product
+slice should demonstrate deterministic C++ and Rust library artifact generation
+from a tiny `.tsl` fixture before the design grows new generalized lowering
+infrastructure.
 
-Before that first implementation slice, the repository layout should separate
-old state from restart code: move the current top-level `tslgen/` tree to
-`tslgenold/`, then create the new clean implementation under `tslgen/`.
+Before that first product slice, M106 should separate old state from restart
+code: move the current top-level `tslgen/` tree to `tslgenold/`, then reserve
+the new clean implementation path under `tslgen/`.
 
 ## Pipeline Result Shape
 

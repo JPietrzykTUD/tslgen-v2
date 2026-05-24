@@ -97,13 +97,15 @@ It only means the accepted M96 manifest has no currently supported
 manifest-visible unresolved backend-handoff dependency records. This document
 tracks the broader known missing lowering surface.
 
-Post-M104 planning selected M105 as a KISS generator restart charter rather
-than another lowering micro-layer. The missing lowering surface below remains
-useful evidence, but it is not a mandate to keep extending the accepted
-M57-M104 request/result/worklist chain. Restart milestones should first prove
-the simple product path from `.tsl` source data to deterministic C++ and Rust
-library artifacts, then reintroduce lowering concepts only where two concrete
-stages need a shared typed boundary.
+M105 records the KISS generator restart charter rather than another lowering
+micro-layer. The missing lowering surface below remains useful evidence, but
+it is not a mandate to keep extending the accepted M57-M104 request/result/
+worklist chain. Restart milestones should first prove the simple product path
+from `.tsl` source data to deterministic C++ and Rust library artifacts, then
+reintroduce lowering concepts only where two concrete stages need a shared
+typed boundary. M106 is the required structural layout reset before that
+product path starts: move old `tslgen/` state to `tslgenold/` and reserve a
+fresh `tslgen/` for clean implementation.
 
 ## Missing Work
 
@@ -141,6 +143,9 @@ stages need a shared typed boundary.
   narrow and tested.
 - Before adding another feature-specific lowering request/result family, check
   whether a taxonomy/provenance consolidation slice is needed instead.
+- For restart work, do not treat this inventory as a product roadmap. Use it
+  as evidence for requirements, diagnostics, and traps to avoid while proving
+  source-to-artifact slices through the KISS restart charter.
 
 ## Maintenance Rule
 

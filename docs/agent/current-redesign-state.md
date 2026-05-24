@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 104 is accepted.
+Milestone 105 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -142,6 +142,14 @@ restart layout to move the current top-level `tslgen/` tree to `tslgenold/`
 as old-state evidence while reserving `tslgen/` for the new clean
 implementation. Local planning review returned `Accept With Follow-Ups`;
 human acceptance was recorded.
+
+The M105 documentation execution-review loop returned
+`Accept With Follow-Ups`. M105 created
+`docs/redesign/kiss-generator-restart.md`, recorded the restart as a
+source-to-artifact product path, made M57-M104 evidence rather than default
+architecture, and drafted M106 as the structural layout reset that must move
+the current `tslgen/` tree to `tslgenold/` before clean restart product code
+is added under a fresh `tslgen/`.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1215,36 +1223,34 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 105.
+Execute Milestone 106.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m105-execution-review-loop-prompt.md
+docs/agent/runs/m106-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 105: Clean KISS Generator Restart Charter Slice
+Milestone 106: Old Implementation Quarantine Layout Reset Slice
 ```
 
 Latest review verdict:
 
 ```text
-Post-M104 planning returned Accept With Follow-Ups after local generalized
-simplicity and layout guardrail documentation updates. Human acceptance was
-recorded.
+M105 execution-review loop returned Accept With Follow-Ups after architecture,
+layout/boundary, documentation, and simplicity audits.
 ```
 
 Next expected action:
 
 ```text
-Run the active M105 execution-review-loop prompt. M105 is docs/architecture
-work only: create the KISS restart charter, define the `tslgen/` to
-`tslgenold/` quarantine move as the required next structural step, and do not
-implement product code.
+Run the active M106 execution-review-loop prompt. M106 must move the current
+`tslgen/` tree to `tslgenold/`, reserve a fresh `tslgen/` path, and still
+avoid product code.
 ```
 
 Accepted planning prompt:
@@ -2261,10 +2267,16 @@ Completed post-M104 acceptance-finalization prompt:
 docs/agent/runs/post-m104-acceptance-finalization-prompt.md
 ```
 
-Active M105 execution-review-loop prompt:
+Completed M105 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m105-execution-review-loop-prompt.md
+```
+
+Active M106 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m106-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -3372,16 +3384,18 @@ docs/agent/runs/m105-execution-review-loop-prompt.md
 - M104 keeps ownership in new focused private result-expansion modules and
   avoids growth in `boundary.py`, `_lowering_ir_contracts.py`, M99/M100 modules,
   and M103 worklist modules.
-- M105 is selected as documentation/architecture work only. It must create a
-  KISS restart charter and must not implement product code, tests, parser
-  changes, generator changes, rendering, artifact writing, CLI behavior, or
-  generated output.
+- M105 is documentation/architecture work only. It created
+  `docs/redesign/kiss-generator-restart.md` and must not implement product
+  code, tests, parser changes, generator changes, rendering, artifact writing,
+  CLI behavior, or generated output.
 - M105 treats accepted M57-M104 lowering/request/result/worklist artifacts as
   evidence for requirements and regression risks, not as the architecture to
   keep extending by default.
 - Before clean restart product code is added, the current top-level `tslgen/`
   tree should move wholesale to `tslgenold/` as quarantined old-state evidence,
   and the new clean implementation should own the top-level `tslgen/` path.
+- M106 is the expected structural layout reset for that move. It must not start
+  the first restart product-code slice.
 - The restart product path is `.tsl` source data to validated catalog to
   selected implementations to deterministic C++ and Rust library artifacts.
 - Restart milestones should prefer small object-oriented concepts with clear
@@ -3758,14 +3772,22 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
   later. This is non-blocking for current planning.
-- Post-M104 planning follow-up: M105 execution must remain
-  documentation/architecture work, create the KISS restart charter, and avoid
-  product-code implementation until the first restart slice is accepted.
-- Post-M104 planning follow-up: M105 should plan the first structural restart
-  step that moves the current `tslgen/` tree to `tslgenold/` and reserves a
-  fresh `tslgen/` tree for clean restart code.
-- Post-M104 planning follow-up: M105 should identify which accepted tests
-  remain regression evidence rather than internal-architecture constraints.
+- M105 execution follow-up addressed by documentation execution: the KISS
+  restart charter was created as documentation/architecture work only, and no
+  product code was added.
+- M105 execution follow-up addressed by documentation execution: M106 is the
+  first structural restart step and must move current `tslgen/` state to
+  `tslgenold/` before clean product code is added under a fresh `tslgen/`.
+- M105 execution follow-up addressed by documentation execution: accepted
+  M57-M104 tests are regression evidence for diagnostics, determinism,
+  source-body integrity, and semantic-boundary risks, not constraints on the
+  restart internals.
+- M105 review follow-up: before the first clean product-code slice, reconcile
+  older target-architecture references to `backends/registry.py` and
+  "register manifest/capabilities" with the M105 no-registry-default charter.
+- M105 review follow-up: when drafting the first clean product-code slice, keep
+  backend selection as explicit configuration/simple ownership rather than a
+  revived renderer registry or dispatcher.
 - The retried evidence audit confirmed additional exact shift evidence ranges:
   `tsldata/primitives/bitwise/shifts.tsl:535-547`, `:625-635`, `:842-887`,
   `:933-943`, `:1222-1244`, `:1268-1280`, `:1465-1481`, and `:1507-1518`.
@@ -4760,8 +4782,8 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active
-M105 execution-review-loop prompt.
+No stop condition is active. The workflow is ready to run the active M106
+execution-review-loop prompt.
 
 ## Validation Expectations
 

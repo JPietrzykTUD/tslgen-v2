@@ -1342,6 +1342,25 @@ Recommended first parity checks:
   dispatch by `svptrue_b*`, extension id, type tag, byte size, primitive name,
   raw token text, source-location text, or hardware-looking tokens.
 
+## KISS Restart Testing Note
+
+M105 is documentation-only and requires `git diff --check`, not product-code
+tests. The accepted M57-M104 tests remain regression evidence for diagnostics,
+deterministic ordering, source-body integrity, and semantic-boundary mistakes
+to avoid; they do not force the restart to preserve the old internal class
+chain.
+
+M106 should validate the layout reset without starting product implementation.
+At minimum it should run `git diff --check` and any lightweight import/path
+checks needed to prove `tslgenold/` is evidence-only and the fresh `tslgen/`
+path does not mix old and clean code.
+
+The first restart product slice after M106 should use a tiny fixture and prove
+the full source-to-artifact path in memory before broadening the system:
+source loading, parsing, catalog validation, explicit C++ and Rust target
+selection, deterministic C++ and Rust artifacts, artifact-writer boundary
+coverage, structured diagnostics, and repeat-run determinism.
+
 Deferred parity checks:
 
 - Generated C++ test-source parity beyond the selected M49 `add_i32_basic`

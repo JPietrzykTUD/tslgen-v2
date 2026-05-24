@@ -14375,10 +14375,11 @@ Next concrete prompt:
 
 Status:
 
-Planned. Post-M104 planning selected M105 after the project owner and
+Accepted. Post-M104 planning selected M105 after the project owner and
 orchestrator agreed that the accepted M57-M104 lowering path captured useful
 requirements but had become too complex for the intended research prototype.
-Human acceptance was recorded.
+Human acceptance of the plan was recorded, and the M105 execution-review loop
+returned `Accept With Follow-Ups`.
 
 Planning verdict:
 
@@ -14426,7 +14427,8 @@ Scope:
   and which existing implementation modules should be treated as quarantined
   evidence for the restart path.
 - Update roadmap/state/design docs so the next concrete prompt is an M105
-  documentation/architecture execution-review loop.
+  documentation/architecture execution-review loop or, after accepted M105
+  review, the M106 layout-quarantine prompt.
 
 Out of scope:
 
@@ -14452,7 +14454,8 @@ Accepted outputs:
   and reserves `tslgen/` for the clean restart implementation.
 - Roadmap/state/design-doc updates that mark M57-M104 as evidence for the
   restart, not the implementation path to keep extending.
-- A concrete next-run prompt for M105 execution/review after human acceptance.
+- A concrete next-run prompt for the structural M106 layout quarantine after
+  accepted M105 review.
 
 Validation:
 
@@ -14473,14 +14476,81 @@ Review notes:
 
 Accepted follow-ups:
 
-- M105 execution must decide whether the first restart code slice should live
-  after a dedicated `tslgen/` -> `tslgenold/` quarantine move, or whether that
-  move should be folded into the first restart structural milestone.
-- M105 execution must record which currently accepted tests remain regression
-  evidence and which should not constrain the restart internals.
+- M105 execution addressed the layout-order follow-up: M106 is the dedicated
+  `tslgen/` -> `tslgenold/` quarantine move before clean product code starts.
+- M105 execution addressed the test-evidence follow-up: accepted M57-M104 tests
+  are regression evidence for diagnostics, determinism, source-body integrity,
+  and semantic-boundary risks, not constraints on restart internals.
+- Before the first clean product-code slice, reconcile older target-architecture
+  references to `backends/registry.py` and "register manifest/capabilities"
+  with the M105 no-registry-default charter.
+- When drafting the first clean product-code slice, keep backend selection as
+  explicit configuration/simple ownership rather than a revived renderer
+  registry or dispatcher.
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m104-acceptance-finalization-prompt.md` finalizes
-  human acceptance of this planning result and creates/activates the M105
-  execution-review-loop prompt.
+- `docs/agent/runs/m106-execution-review-loop-prompt.md` executes the
+  structural layout quarantine after accepted M105.
+
+### Milestone 106: Old Implementation Quarantine Layout Reset Slice
+
+Status:
+
+Planned as the next structural restart milestone after accepted M105.
+
+Goal:
+
+Separate old accepted/exploratory implementation state from the clean restart
+package path before any new product code is added:
+
+```text
+old state: tslgen/ -> tslgenold/
+clean restart path: fresh tslgen/
+```
+
+Scope:
+
+- Move the current top-level `tslgen/` tree wholesale to `tslgenold/`.
+- Reserve or create a fresh top-level `tslgen/` path for the clean generator
+  without adding parser, catalog, generator, backend, renderer, CLI, fixture,
+  test, or generated-output implementation.
+- Update documentation and workflow state so `tslgenold/` is evidence-only,
+  like `frozen/`, and is not a runtime dependency for the clean generator.
+- Update validation/import-path documentation or lightweight checks needed to
+  keep the repository coherent after the move.
+- Preserve dirty-worktree safety: do not revert edits made by others, and
+  inspect overlapping changes before moving files.
+
+Out of scope:
+
+- New product-code implementation under the fresh `tslgen/` path.
+- Porting, adapting, or compatibility-wrapping old `tslgen/` modules.
+- Changing `frozen/` or treating `tslgenold/` as a runtime package for the new
+  generator.
+- Parser, catalog, selection, backend, rendering, artifact writer, CLI, test
+  fixture, generated output, or broad validation-profile implementation.
+
+Accepted outputs:
+
+- The old top-level implementation tree exists under `tslgenold/`.
+- The clean top-level `tslgen/` path is available for later restart product
+  slices and does not contain new product implementation code.
+- Docs and workflow state record the evidence-only status of `tslgenold/`.
+- No clean runtime import path depends on `frozen/` or `tslgenold/`.
+
+Validation:
+
+```bash
+git diff --check
+```
+
+If the move changes lightweight repository checks or import-path docs, run the
+smallest additional validation that proves the layout reset is coherent.
+
+Review notes:
+
+- Reviewers should reject any M106 execution that starts the first product
+  implementation slice or mixes old and clean code under the same package path.
+- Reviewers should require the move to be explicit and reviewable, not an
+  opportunistic cleanup or compatibility migration.

@@ -1001,12 +1001,13 @@ The following should remain private or replaceable:
 
 ## KISS Restart Architecture Note
 
-Post-M104 planning selects a clean restart charter before more lowering
-feature work. For the restart path, object orientation is a maintainability
-tool: classes should own real state, invariants, or behavior, and protocols
-should mark true extension boundaries. The initial architecture should stay
-small enough that contributors can answer where to add a primitive, extension,
-concept, backend translation, renderer rule, diagnostic, or output artifact.
+M105 records the clean restart charter in
+`docs/redesign/kiss-generator-restart.md` before more lowering feature work.
+For the restart path, object orientation is a maintainability tool: classes
+should own real state, invariants, or behavior, and protocols should mark true
+extension boundaries. The initial architecture should stay small enough that
+contributors can answer where to add a primitive, extension, concept, backend
+translation, renderer rule, diagnostic, or output artifact.
 
 The default restart vocabulary is intentionally small:
 
@@ -1022,11 +1023,11 @@ The default restart vocabulary is intentionally small:
 The accepted M57-M104 lowering modules are evidence for semantic requirements
 and mistakes to avoid. They are not the object model the restart must extend.
 
-The restart also gets a fresh package path. The current top-level `tslgen/`
-tree should move to `tslgenold/` as quarantined old-state evidence, and the
-new implementation should live under a new top-level `tslgen/`. This keeps
-imports, tests, and future contributor expectations honest: old evidence is
-visibly separate from the clean generator.
+The restart also gets a fresh package path. M106 should move the current
+top-level `tslgen/` tree to `tslgenold/` as quarantined old-state evidence and
+reserve a fresh top-level `tslgen/` path for the clean implementation. This
+keeps imports, tests, and future contributor expectations honest: old evidence
+is visibly separate from the clean generator.
 
 ## Pure Computation And Side Effects
 
