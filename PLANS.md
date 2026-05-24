@@ -142,6 +142,20 @@ A milestone scope should be small enough that a reviewer can answer:
 - Which public API, if any, was introduced?
 - Which future extension point, if any, was enabled?
 
+Every lowering milestone must also pass an IR taxonomy pressure check:
+
+- Is this adding a durable semantic fact, request, result, inventory,
+  provenance value, rule input, or stage envelope?
+- Could repeated `source_*` object chains be replaced by a smaller typed
+  provenance contract without losing diagnostics or object identity?
+- Is the proposed class name describing a domain boundary rather than a trail
+  of previous milestones?
+- Would this make future lowering stages simpler to extend, or only add another
+  one-off layer?
+
+If the honest answer is "another one-off layer", plan a consolidation slice
+before adding more feature-specific IR.
+
 Do not include:
 
 - unrelated cleanup

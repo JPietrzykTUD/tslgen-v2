@@ -749,6 +749,14 @@ Current roadmap note:
   remains typed backend value state only, not Stage 9 planning, renderer-ready
   IR, rendering, generated output, Rust translation, direct-intrinsic/SVE
   semantics, or generic backend helper evaluation.
+- M101 is selected to prevent lowering IR taxonomy drift before adding more
+  backend-result or body semantics. The architecture should distinguish
+  semantic facts, requests, results, inventories, provenance values, rule
+  inputs, and stage envelopes, and should consolidate repeated provenance
+  chains where that can preserve accepted diagnostics and object identity. This
+  is a behavior-preserving M99/M100 consolidation only, not a broad hierarchy,
+  registry, dispatcher, semantic evaluator, or rendering/backend-planning
+  surface.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

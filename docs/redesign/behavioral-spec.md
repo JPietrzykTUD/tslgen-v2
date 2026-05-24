@@ -783,6 +783,14 @@ Stage 9 plans, read backend maps/catalogs/manifests or `tsldata/detail/lang`
 during lowering, resolve Rust uninit, evaluate generic backend helpers, or
 infer selected-body direct-intrinsic/SVE semantics.
 
+Post-M100 planning selects M101 as a behavior-preserving lowering IR taxonomy
+and provenance consolidation over the M99/M100 backend-translation path. It
+should reduce one-off request/result/provenance layering by clarifying the
+stable categories of semantic facts, requests, results, inventories,
+provenance values, rule inputs, and stage envelopes. It must not add new
+lowering semantics, backend evaluation, rendering, Stage 9 planning, source
+repair, raw helper parsing, or a registry/dispatcher hierarchy.
+
 The accepted post-M43 phase is explicit and numbered. Milestone 44 selects the
 backend modifier value boundary. Milestone 45 translates the selected intrinsic
 suffix request over typed M43 `GenerationTypeRef` inputs. Milestone 46

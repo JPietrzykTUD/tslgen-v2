@@ -84,6 +84,41 @@ A lookup table is acceptable only when its entries are typed rule values with do
 
 Do not implement semantic behavior through raw text rewriting. String templates or rendered text may appear only after lowering/translation has produced typed values for the selected slice.
 
+## Lowering IR Taxonomy And Complexity Guardrails
+
+Typed IR exists to make semantic boundaries explicit, not to encode every
+milestone's history as a new object family. Before adding a new lowering IR
+class, request record, result record, inventory, package, or handoff type, the
+plan must state which stable category it belongs to:
+
+- semantic fact: an accepted domain value produced by lowering;
+- request: a typed unresolved need for a later stage;
+- result: a typed fulfillment of a request from explicit facts/rules;
+- inventory: a deterministic collection of accepted facts, not readiness;
+- provenance: source/object identity needed for diagnostics and traceability;
+- rule input: explicit typed metadata supplied before evaluation;
+- stage envelope: the named pipeline boundary carrying one of the above.
+
+New IR should have a durable semantic reason to exist. Do not add a class whose
+only purpose is to preserve a long chain of previous objects when a shared,
+typed provenance value or narrower reference would express the same contract
+more clearly. Object identity may be required for diagnostics and traceability,
+but it should be encapsulated behind a named provenance contract instead of
+repeated as ad hoc `source_*` fields through every result layer.
+
+Names should describe the domain boundary, not the milestone trail. Exact or
+narrow source forms may appear in source adapters and validation boundaries, but
+the downstream IR taxonomy should remain small enough that future stages can
+answer: what fact was produced, what request is unresolved, what result fulfills
+it, and what provenance explains it?
+
+When a planned milestone would introduce another narrow request/result family,
+the planner must first check whether the right next slice is a taxonomy or
+provenance consolidation. Consolidation milestones must preserve accepted
+diagnostics, deterministic keys, object identity where required, public
+imports, and boundary behavior; they must not use the cleanup as cover for new
+backend semantics, rendering, source repair, or broad abstractions.
+
 ## Source Body Integrity
 
 TSL implementation bodies are source inputs, not repair targets. The generator

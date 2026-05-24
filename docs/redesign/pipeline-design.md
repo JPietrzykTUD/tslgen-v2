@@ -1029,6 +1029,31 @@ Generated files are produced only after rendering:
 
 No stage before rendering writes generated files.
 
+## Lowering IR Taxonomy Pressure Check
+
+After M100, lowering stages must avoid treating every accepted narrow form as a
+reason to create a new bespoke object family. New lowering IR should fit one of
+these stable pipeline roles:
+
+- semantic fact;
+- request;
+- result;
+- inventory;
+- provenance value;
+- rule input;
+- stage envelope.
+
+Provenance is required for diagnostics, determinism, and source traceability,
+but repeated object-identity chains should be consolidated behind typed
+provenance contracts when that can preserve accepted behavior. Inventories
+remain deterministic collections, not readiness claims. Results fulfill typed
+requests from explicit facts and rules; they do not render output or infer
+semantics from raw text.
+
+M101 is planned to apply this pressure check narrowly to the accepted M99/M100
+backend-translation request/result path before more lowering features are
+added.
+
 ## Pipeline Result Shape
 
 ```python

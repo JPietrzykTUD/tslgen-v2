@@ -13708,3 +13708,121 @@ Accepted follow-ups:
 - Future milestones should avoid adding more orchestration to `boundary.py`
   without extracting boundary request/result assembly, because it remains close
   to the module-size guardrail after M100.
+
+### Milestone 101: Lowering IR Taxonomy Contract and Backend-Translation Provenance Consolidation Slice
+
+Status:
+
+Planned. Post-M100 planning selected this milestone in response to the
+architecture concern that the lowering IR is becoming too complex and too
+milestone-specific.
+
+Goal:
+
+Define and enforce a smaller lowering IR taxonomy contract, then apply it only
+to the accepted M99/M100 backend-translation request/result path. M101 should
+reduce repeated provenance and one-off request/result layering without changing
+observable lowering behavior or adding new backend semantics.
+
+For M101, "IR taxonomy contract" means a narrow set of stable categories:
+semantic facts, requests, results, inventories, provenance values, rule inputs,
+and stage envelopes. It does not mean a broad inheritance hierarchy, a generic
+semantic dispatcher, a registry, a callback system, a plugin mechanism, or a
+rewrite of every existing lowering IR class.
+
+Scope:
+
+- Add or update redesign documentation that states the lowering IR taxonomy
+  contract and the rules for adding future IR types.
+- Add focused private lowering ownership if implementation needs a small shared
+  contract module, such as a provenance/reference helper or protocol module,
+  but keep it behavior-neutral and narrowly applied.
+- Apply the contract only to the accepted M99/M100 backend-translation
+  request/result path, especially repeated candidate/source-location/provenance
+  and object-identity validation patterns.
+- Preserve all accepted M99/M100 public imports, stage names, stage ordering,
+  keys, diagnostics, source locations, object identities where required, and
+  deterministic ordering.
+- Keep `boundary.py` as a narrow facade; do not add more orchestration there.
+- Prefer focused tests in a new or existing M99/M100-specific test module
+  rather than adding large coverage to `test_lowering_boundary.py`.
+
+Out of scope:
+
+- New lowering semantics, new request families, new translation result
+  families, C++ declaration/body assembly, Rust translation, generic
+  `value<backend>(...)` or `type<backend>(...)` evaluation, backend
+  map/catalog/manifest reads during lowering, backend support decisions,
+  Stage 9 backend planning, rendering, generated output, operation scheduling,
+  dependency closure, wrapper planning, artifact planning, CLI/report/writer
+  behavior, compiler execution, or host hardware dependency.
+- Raw `.tsl` source parsing, source-body reparsing, source repair,
+  source normalization, best-effort correction, broad TSIL/body parsing,
+  selected-body direct-intrinsic resolution, SVE/direct-intrinsic semantics,
+  byte-size-to-token inference, or vector/register metadata expansion.
+- A broad base-class hierarchy imposed across M57-M100 IR, a new registry,
+  dispatcher, callback map, plugin mechanism, hidden backfeed, or fixpoint
+  machinery.
+
+Expected outputs:
+
+- A documented lowering IR taxonomy contract that future milestones must use
+  before adding new IR classes.
+- A narrow behavior-preserving consolidation of M99/M100 backend-translation
+  provenance/request/result structure, or a documented reason why a smaller
+  shared contract cannot safely replace the repeated shape yet.
+- Tests proving accepted M99/M100 behavior, diagnostics, deterministic keys,
+  object identity, source locations, import boundaries, and line-count
+  guardrails are preserved.
+- A clearer boundary for when future milestones should add a new typed IR
+  object versus reusing a semantic fact/request/result/provenance contract.
+
+Tests required:
+
+- Focused regression tests for M99 backend-translation request inventory and
+  M100 exact-array C++ backend-uninit translation-result behavior.
+- Determinism tests proving result keys and ordering remain stable before and
+  after the consolidation.
+- Diagnostic tests proving source/container, provenance mismatch, context
+  mismatch, missing/duplicate/conflicting rule, unsupported backend, and wrong
+  request-kind diagnostics remain stable.
+- Import-boundary tests proving any new contract module does not import
+  `boundary.py`, the `tslgen.lowering` facade, backend modules, renderers,
+  backend planners, `tsldata`, or `frozen`.
+- Line-count tests or source assertions proving the consolidation does not grow
+  `boundary.py`, M99/M100 modules, or `_lowering_stage_assembly.py` into a new
+  monolith.
+
+Validation required:
+
+- `wc -l` for `boundary.py`, `_lowering_stage_assembly.py`, M99/M100
+  backend-translation modules, and any new contract module.
+- `PYTHONPATH=tslgen/src python -m py_compile` for touched lowering modules
+  and touched tests.
+- Focused pytest for M99/M100 backend-translation request/result behavior.
+- Focused pytest for any new IR-taxonomy/provenance contract tests.
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases` for
+  touched lowering modules and tests where practical.
+- `git diff --check`.
+
+Planning review notes:
+
+- The selected milestone deliberately pauses feature expansion after M100
+  because the exact-array path now has many narrow package/request/inventory/
+  result layers. The next highest-value work is to prevent that shape from
+  becoming the default pattern for all remaining lowering work.
+- M101 should be behavior-preserving and should make future C++ declaration,
+  direct-intrinsic, Rust, or Stage 9 milestones easier by giving them a smaller
+  vocabulary for facts, requests, results, provenance, and rule inputs.
+
+Accepted follow-ups:
+
+- If M101 discovers that M99/M100 cannot be consolidated without semantic risk,
+  record the blocker in `docs/redesign/open-questions.md` and stop before
+  speculative abstraction.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m100-acceptance-finalization-prompt.md` finalizes
+  human acceptance of the M101 plan and creates the M101 execution-review-loop
+  prompt.

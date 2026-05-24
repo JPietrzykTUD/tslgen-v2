@@ -28,6 +28,12 @@ and kept rendering, output, Stage 9 planning, Rust translation, generic backend
 helper evaluation, backend map/catalog/manifest reads, raw helper parsing,
 source repair, and direct-intrinsic/SVE semantics out of scope.
 
+Post-M100 planning selected
+`Milestone 101: Lowering IR Taxonomy Contract and Backend-Translation Provenance Consolidation Slice`.
+The selected plan responds to the IR-complexity concern by defining a smaller
+lowering IR taxonomy/provenance contract and applying it only to the accepted
+M99/M100 backend-translation request/result path. Human acceptance was recorded.
+
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
 
@@ -1100,32 +1106,33 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Run post-M100 planning and review.
+Execute Milestone 101.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m100-planning-plus-review-prompt.md
+docs/agent/runs/m101-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. M100 is accepted; the next action is planning.
+Milestone 101: Lowering IR Taxonomy Contract and Backend-Translation Provenance Consolidation Slice
 ```
 
 Latest review verdict:
 
 ```text
-M100 execution-review returned Accept With Follow-Ups after focused revision.
+Post-M100 planning accepted M101 after adding the lowering IR taxonomy
+contract guardrail.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M100 planning-plus-review prompt. Focus on lowering and do
-not implement code unless that prompt explicitly selects an executor task.
+Run the active M101 execution-review-loop prompt with one write-capable
+executor followed by read-only review/audit subagents.
 ```
 
 Accepted planning prompt:
@@ -2058,10 +2065,22 @@ Completed M100 execution-review-loop prompt:
 docs/agent/runs/m100-execution-review-loop-prompt.md
 ```
 
-Active post-M100 planning-plus-review prompt:
+Completed post-M100 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m100-planning-plus-review-prompt.md
+```
+
+Completed post-M100 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m100-acceptance-finalization-prompt.md
+```
+
+Active M101 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m101-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -3103,6 +3122,14 @@ docs/agent/runs/post-m100-planning-plus-review-prompt.md
   direct-intrinsic/SVE semantics.
 - Rust `value_array_uninit` translation remains deferred until the required
   typed type context and rules are accepted.
+- M101 is a behavior-preserving lowering IR taxonomy and provenance
+  consolidation plan over the accepted M99/M100 backend-translation
+  request/result path only.
+- M101 must distinguish semantic facts, requests, results, inventories,
+  provenance values, rule inputs, and stage envelopes, and must not create a
+  broad inheritance hierarchy, registry, dispatcher, callback system, hidden
+  backfeed, fixpoint mechanism, backend-planning surface, rendering/output
+  path, source-repair path, or new lowering semantics.
 - Future lowering package decomposition must preserve accepted M57-M99
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -4428,8 +4455,8 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready for post-M100 planning
-through the active post-M100 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M101 through the
+active M101 execution-review-loop prompt.
 
 ## Validation Expectations
 
