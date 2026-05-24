@@ -48,6 +48,12 @@ resolution, SVE semantics, scheduling, dependency closure, broad hierarchies,
 registries, dispatchers, hidden backfeeds, and fixpoint mechanisms out of
 scope.
 
+Post-M101 planning selected
+`Milestone 102: Lowering IR Category Protocol Surface Slice`.
+The selected plan responds to the concern that M101 added stable category
+labels and contract attachments, but not yet a stable reusable typed protocol
+surface for future lowering IR. Human acceptance was recorded.
+
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
 
@@ -1120,33 +1126,32 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Run post-M101 planning and review.
+Execute Milestone 102.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m101-planning-plus-review-prompt.md
+docs/agent/runs/m102-execution-review-loop-prompt.md
 ```
 
-Active planning target:
+Active executor milestone:
 
 ```text
-Select the next lowering milestone after accepted M101.
+Milestone 102: Lowering IR Category Protocol Surface Slice
 ```
 
 Latest review verdict:
 
 ```text
-M101 execution-review loop returned Accept With Follow-Ups.
+Post-M101 planning selected M102 and returned Accept With Follow-Ups.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M101 planning-plus-review prompt with read-only planning,
-boundary, extensibility, and documentation subagents. Do not implement code
-unless the prompt explicitly selects an executor task.
+Run the active M102 execution-review-loop prompt with one write-capable
+executor followed by read-only review/audit subagents.
 ```
 
 Accepted planning prompt:
@@ -2097,10 +2102,22 @@ Completed M101 execution-review-loop prompt:
 docs/agent/runs/m101-execution-review-loop-prompt.md
 ```
 
-Active post-M101 planning-plus-review prompt:
+Completed post-M101 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m101-planning-plus-review-prompt.md
+```
+
+Completed post-M101 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m101-acceptance-finalization-prompt.md
+```
+
+Active M102 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m102-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -3150,6 +3167,19 @@ docs/agent/runs/post-m101-planning-plus-review-prompt.md
   broad inheritance hierarchy, registry, dispatcher, callback system, hidden
   backfeed, fixpoint mechanism, backend-planning surface, rendering/output
   path, source-repair path, or new lowering semantics.
+- M102 is planned as a behavior-preserving lowering IR category protocol
+  surface over the accepted M101 taxonomy and M99/M100 backend-translation
+  request/result path only.
+- M102 must keep the existing public `LoweringRequest` lowering-input bundle
+  distinct from taxonomy-level request IR such as `LoweringRequestIr` or
+  `TranslationRequestIr`.
+- M102 must not add new lowering semantics, new request/result families,
+  backend translation semantics, rendering, generated output, Stage 9 planning,
+  Rust translation, generic backend helper evaluation, backend map/catalog/
+  manifest reads during lowering, raw source parsing, source repair,
+  selected-body direct-intrinsic resolution, SVE semantics, scheduling,
+  dependency closure, broad inheritance, registry, dispatcher, callback system,
+  plugin mechanism, hidden backfeed, or fixpoint mechanism.
 - Future lowering package decomposition must preserve accepted M57-M99
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -4478,11 +4508,19 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M101 validation follow-up: `boundary.py` remains close to the 1300-line
   guardrail, so future orchestration should be extracted rather than added
   there.
+- Post-M101 planning follow-up for M102 execution: include negative tests for
+  wrong, missing, or mismatched category/protocol conformance.
+- Post-M101 planning follow-up for M102 execution: include import-boundary and
+  forbidden-behavior tests proving no backend/rendering imports, no
+  `tsldata`/`frozen` dependency, no raw parsing helpers, and no category-based
+  semantic dispatch.
+- Post-M101 planning follow-up for M102 execution: keep `boundary.py` out of
+  scope and keep the category surface in the private lowering contract area.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready for post-M101 planning
-through the active post-M101 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M102 through the
+active M102 execution-review-loop prompt.
 
 ## Validation Expectations
 
@@ -4491,6 +4529,14 @@ For docs-only planning tasks:
 ```bash
 git diff --check
 ```
+
+For post-M101 acceptance finalization, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
 
 For M101, validation completed with:
 

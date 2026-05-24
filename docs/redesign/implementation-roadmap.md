@@ -13835,3 +13835,152 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m101-planning-plus-review-prompt.md` selects the next
   lowering milestone after accepted M101.
+
+### Milestone 102: Lowering IR Category Protocol Surface Slice
+
+Status:
+
+Planned. Post-M101 planning selected this milestone after identifying that
+M101 created stable taxonomy labels and M99/M100 contract attachments, but did
+not yet provide a reusable typed protocol surface for future lowering IR.
+
+Goal:
+
+Turn the M101 taxonomy from string/category labels into a small, explicit,
+private lowering IR category surface that future milestones can target before
+adding more feature-specific request/result/inventory families. M102 should
+make the architecture easier to extend without introducing new lowering
+semantics.
+
+For M102, "IR category protocol surface" means typed, maintainable contracts
+such as:
+
+- `LoweringFact`: an accepted domain/semantic fact produced by lowering;
+- `LoweringRequestIr`: a typed unresolved need for a later lowering/backend
+  stage;
+- `TranslationRequestIr`: a backend-translation-specific request category;
+- `TranslationResultIr`: a typed fulfillment of a translation request from
+  explicit facts/rules;
+- `LoweringInventory`: a deterministic collection of accepted facts, not a
+  readiness claim;
+- `LoweringProvenance`: source/object identity needed for diagnostics,
+  determinism, and traceability;
+- `LoweringRuleInput`: explicit typed metadata supplied before evaluation;
+- `LoweringStageOutput`: the typed output carried by a named stage envelope;
+- `DiagnosticBoundary`: a typed boundary for malformed, unsupported, context,
+  source-location, and provenance diagnostics.
+
+The existing public `LoweringRequest` input/configuration bundle is not the
+same concept as the taxonomy category "request". M102 must avoid renaming or
+breaking that public API unless a focused compatibility plan is separately
+accepted.
+
+Scope:
+
+- Add or refine private lowering contracts/protocols in the M101-owned
+  contract area, likely `tslgen/src/tslgen/lowering/_lowering_ir_contracts.py`
+  or a focused sibling module.
+- Keep the surface structural and typed, using small protocols, value objects,
+  or helper predicates where useful. Do not impose a broad inheritance
+  hierarchy on M57-M101 classes.
+- Apply the protocol surface only to the accepted M99/M100 backend-translation
+  request/result path as the first proof point.
+- Preserve accepted M99/M100 keys, diagnostics, source locations, object
+  identities, stage names, stage ordering, public imports, and deterministic
+  behavior.
+- Clarify in docs and tests that future feature-specific IR additions must
+  first choose one of the stable category protocols.
+- Keep `boundary.py` as a facade; do not add orchestration there.
+
+Out of scope:
+
+- New lowering semantics, new request families, new translation result
+  families, C++ declaration/body assembly, Rust translation, generic
+  `value<backend>(...)` or `type<backend>(...)` evaluation, backend
+  map/catalog/manifest reads during lowering, backend support decisions,
+  Stage 9 backend planning, rendering, generated output, operation scheduling,
+  dependency closure, wrapper planning, artifact planning, CLI/report/writer
+  behavior, compiler execution, or host hardware dependency.
+- Raw `.tsl` source parsing, source-body reparsing, source repair,
+  source normalization, best-effort correction, broad TSIL/body parsing,
+  selected-body direct-intrinsic resolution, SVE/direct-intrinsic semantics,
+  byte-size-to-token inference, or vector/register metadata expansion.
+- Renaming the existing public `LoweringRequest`, rewriting all accepted
+  M57-M101 IR to inherit from new base classes, introducing registries,
+  dispatchers, callback maps, plugin mechanisms, hidden backfeeds, fixpoint
+  machinery, or turning protocols into renderer/backend-planning APIs.
+
+Expected outputs:
+
+- A small private lowering IR protocol/category surface that directly answers
+  the M101 taxonomy categories with stable typed names.
+- M99/M100 request/result/rule/provenance/inventory classes classified against
+  that surface without changing observable behavior.
+- Focused helpers may validate or assert category/protocol shape, but they must
+  not choose semantic behavior, route requests, translate backend values, or
+  act as a registry/dispatcher.
+- Focused tests proving category classification, import boundaries, line-count
+  guardrails, deterministic keys, object identity, diagnostics, source
+  locations, and public imports remain stable.
+- Documentation clarifying the distinction between the existing public
+  `LoweringRequest` input bundle and taxonomy-level request protocols.
+
+Tests required:
+
+- Focused contract/protocol tests for the new category surface.
+- Negative tests proving wrong, missing, or mismatched category/protocol
+  conformance is caught as a structural contract failure.
+- Regression tests proving M99 backend-translation request inventory and M100
+  exact-array backend-uninit translation result behavior remain unchanged.
+- Diagnostic tests covering the existing malformed/source/container,
+  provenance mismatch, context mismatch, source-location mismatch,
+  missing/duplicate/conflicting rule, unsupported backend, and wrong
+  request-kind cases.
+- Import-boundary tests proving the category/protocol module does not import
+  `boundary.py`, the `tslgen.lowering` facade, backend modules, renderers,
+  backend planners, `tsldata`, or `frozen`.
+- Line-count tests or source assertions proving the protocol surface does not
+  grow `boundary.py`, `_lowering_stage_assembly.py`, M99/M100 modules, or the
+  contract module into a new monolith.
+
+Validation required:
+
+- `wc -l` for `boundary.py`, `_lowering_stage_assembly.py`, M99/M100
+  backend-translation modules, `_lowering_ir_contracts.py`, and any new
+  category/protocol module.
+- `PYTHONPATH=tslgen/src python -m py_compile` for touched lowering modules
+  and touched tests.
+- Focused pytest for the new IR category/protocol tests.
+- Focused pytest for M99/M100 backend-translation request/result behavior.
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases` for
+  touched lowering modules and tests where practical.
+- `git diff --check`.
+
+Planning review notes:
+
+- M102 deliberately pauses feature expansion again because adding the next
+  direct-intrinsic or backend-result family before a real category surface
+  would likely recreate the one-off layering M101 was meant to contain.
+- The milestone should produce a category surface, not a semantic dispatcher.
+  Future milestones still own concrete request/result semantics in focused
+  modules.
+- M102 should make a later selected-body direct-intrinsic translation-result
+  slice safer by forcing it to fit `TranslationRequestIr`,
+  `TranslationResultIr`, `LoweringProvenance`, `LoweringRuleInput`, and
+  `DiagnosticBoundary` contracts first.
+
+Accepted follow-ups:
+
+- M102 execution must include negative conformance tests for wrong/missing
+  category protocols.
+- M102 execution must include import-boundary and forbidden-behavior tests,
+  including no backend/rendering imports, no `tsldata`/`frozen` dependency, no
+  raw parsing helpers, and no category-based semantic dispatch.
+- M102 execution must keep `boundary.py` out of scope and avoid growing it.
+  The category surface belongs in the private lowering contract area.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m101-acceptance-finalization-prompt.md` finalizes
+  human acceptance of the M102 plan and creates the M102 execution-review-loop
+  prompt.
