@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 101 is accepted.
+Milestone 102 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -53,6 +53,24 @@ Post-M101 planning selected
 The selected plan responds to the concern that M101 added stable category
 labels and contract attachments, but not yet a stable reusable typed protocol
 surface for future lowering IR. Human acceptance was recorded.
+
+The M102 execution-review loop returned `Accept With Follow-Ups` after a
+focused protocol-conformance revision. M102 added a small private typed
+category/protocol surface in `_lowering_ir_contracts.py` for lowering facts,
+request IR, translation requests, translation results, inventories,
+provenance, rule inputs, stage outputs, and diagnostic boundaries. The surface
+is applied first to the accepted M99/M100 backend-translation request/result
+path and requires typed contracts plus non-empty tuple keys for structural
+conformance. It preserved accepted M99/M100 behavior, keys, diagnostics,
+source locations, object identities, stage names, stage ordering, public
+imports, and deterministic behavior. It kept new lowering semantics, new
+request/result families, backend translation semantics, rendering/output,
+Stage 9 planning, Rust translation, generic backend helper evaluation, backend
+map/catalog/manifest reads, raw source parsing, source repair,
+selected-body direct-intrinsic resolution, SVE semantics, scheduling,
+dependency closure, broad inheritance, registries, dispatchers, callback
+systems, plugin mechanisms, hidden backfeeds, fixpoint mechanisms, and
+category-based semantic dispatch out of scope.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1126,32 +1144,33 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 102.
+Run post-M102 planning and review.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m102-execution-review-loop-prompt.md
+docs/agent/runs/post-m102-planning-plus-review-prompt.md
 ```
 
-Active executor milestone:
+Active planning target:
 
 ```text
-Milestone 102: Lowering IR Category Protocol Surface Slice
+Select the next lowering milestone after accepted M102.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M101 planning selected M102 and returned Accept With Follow-Ups.
+M102 execution-review loop returned Accept With Follow-Ups.
 ```
 
 Next expected action:
 
 ```text
-Run the active M102 execution-review-loop prompt with one write-capable
-executor followed by read-only review/audit subagents.
+Run the active post-M102 planning-plus-review prompt with read-only planning,
+boundary, extensibility, and documentation subagents. Do not implement code
+unless the prompt explicitly selects an executor task.
 ```
 
 Accepted planning prompt:
@@ -2114,10 +2133,16 @@ Completed post-M101 acceptance-finalization prompt:
 docs/agent/runs/post-m101-acceptance-finalization-prompt.md
 ```
 
-Active M102 execution-review-loop prompt:
+Completed M102 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m102-execution-review-loop-prompt.md
+```
+
+Active post-M102 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m102-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -3167,12 +3192,15 @@ docs/agent/runs/m102-execution-review-loop-prompt.md
   broad inheritance hierarchy, registry, dispatcher, callback system, hidden
   backfeed, fixpoint mechanism, backend-planning surface, rendering/output
   path, source-repair path, or new lowering semantics.
-- M102 is planned as a behavior-preserving lowering IR category protocol
+- M102 is accepted as a behavior-preserving lowering IR category protocol
   surface over the accepted M101 taxonomy and M99/M100 backend-translation
   request/result path only.
 - M102 must keep the existing public `LoweringRequest` lowering-input bundle
   distinct from taxonomy-level request IR such as `LoweringRequestIr` or
   `TranslationRequestIr`.
+- M102 structural conformance requires typed lowering IR contracts plus
+  non-empty tuple keys, exact backend-translation owner namespace matching,
+  and explicit `stage_envelope` contracts for stage-output recognition.
 - M102 must not add new lowering semantics, new request/result families,
   backend translation semantics, rendering, generated output, Stage 9 planning,
   Rust translation, generic backend helper evaluation, backend map/catalog/
@@ -4508,19 +4536,15 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M101 validation follow-up: `boundary.py` remains close to the 1300-line
   guardrail, so future orchestration should be extracted rather than added
   there.
-- Post-M101 planning follow-up for M102 execution: include negative tests for
-  wrong, missing, or mismatched category/protocol conformance.
-- Post-M101 planning follow-up for M102 execution: include import-boundary and
-  forbidden-behavior tests proving no backend/rendering imports, no
-  `tsldata`/`frozen` dependency, no raw parsing helpers, and no category-based
-  semantic dispatch.
-- Post-M101 planning follow-up for M102 execution: keep `boundary.py` out of
-  scope and keep the category surface in the private lowering contract area.
+- Post-M101 planning follow-ups for M102 execution were addressed during M102:
+  negative protocol-conformance tests, import-boundary/forbidden-behavior
+  tests, and keeping the category surface private without growing
+  `boundary.py`.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M102 through the
-active M102 execution-review-loop prompt.
+No stop condition is active. The workflow is ready to run post-M102 planning
+through the active post-M102 planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -4563,6 +4587,33 @@ focused M100/M101 result test returned `9 passed`. The focused M99/M100/M101
 lowering-boundary command returned `5 passed, 352 deselected`. The focused
 lowering mypy check returned `Success: no issues found in 46 source files`.
 The standalone final `git diff --check` returned exit 0 with no output.
+
+For M102, validation completed with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_lowering_stage_assembly.py tslgen/src/tslgen/lowering/_lowering_ir_contracts.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result_diagnostics.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_lowering_stage_assembly.py tslgen/src/tslgen/lowering/_lowering_ir_contracts.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result_diagnostics.py tslgen/tests/unit/test_lowering_backend_translation_result.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_backend_translation_result.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m99 or backend_translation_request_inventory or exact_array_backend_uninit_translation_result or m100 or m101 or m102"
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering tslgen/tests/unit/test_lowering_backend_translation_result.py
+git diff --check
+```
+
+The M102 line counts were `1284 tslgen/src/tslgen/lowering/boundary.py`,
+`274 tslgen/src/tslgen/lowering/_lowering_stage_assembly.py`,
+`278 tslgen/src/tslgen/lowering/_lowering_ir_contracts.py`,
+`792 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py`,
+`207 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_sources.py`,
+`64 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_diagnostics.py`,
+`614 tslgen/src/tslgen/lowering/_lowering_backend_translation_result.py`,
+`275 tslgen/src/tslgen/lowering/_lowering_backend_translation_result_sources.py`,
+`85 tslgen/src/tslgen/lowering/_lowering_backend_translation_result_diagnostics.py`,
+and `3873 total`. The py-compile command returned exit 0 with no output. The
+focused backend-translation result test returned `12 passed in 14.57s`. The
+focused M99/M100/M101/M102 lowering-boundary command returned
+`5 passed, 352 deselected in 4.36s`. The focused lowering mypy check returned
+`Success: no issues found in 46 source files`. The standalone final
+`git diff --check` returned exit 0 with no output.
 
 For post-M99 planning, validation completed with:
 

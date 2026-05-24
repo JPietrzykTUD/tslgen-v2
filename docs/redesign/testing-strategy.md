@@ -1312,15 +1312,15 @@ Recommended first parity checks:
   counts after the shared contract extraction. M101 tests do not require new
   backend semantics, rendering, Stage 9 planning, Rust translation, source
   repair, raw helper parsing, registries, dispatchers, or broad inheritance.
-- Planned M102 coverage should prove the new lowering IR category/protocol
-  surface is structural, behavior-preserving, and narrowly applied. Tests
-  should assert M99/M100 classes classify as the intended fact/request/result/
-  inventory/provenance/rule/stage/diagnostic categories without changing keys,
-  diagnostics, source locations, object identity, public imports, stage
-  ordering, or deterministic behavior. M102 tests must also guard against
-  facade/backend/rendering/`tsldata`/`frozen` imports and against turning the
-  protocol surface into a registry, dispatcher, broad hierarchy, hidden
-  backfeed, or fixpoint mechanism.
+- M102 coverage proves the new lowering IR category/protocol surface is
+  structural, behavior-preserving, and narrowly applied. Tests assert M99/M100
+  classes classify as the intended fact/request/result/inventory/provenance/
+  rule/stage/diagnostic categories without changing keys, diagnostics, source
+  locations, object identity, public imports, stage ordering, or deterministic
+  behavior. M102 tests also guard against missing, non-tuple, or empty keys,
+  misleading backend-translation owner prefixes, facade/backend/rendering/
+  `tsldata`/`frozen` imports, and turning the protocol surface into a registry,
+  dispatcher, broad hierarchy, hidden backfeed, or fixpoint mechanism.
 
 Deferred parity checks:
 

@@ -571,6 +571,235 @@ class LoweringBackendTranslationResultTests(unittest.TestCase):
             "mismatched object identity",
         )
 
+    def test_m102_ir_category_protocol_surface_classifies_m99_m100_path(
+        self,
+    ) -> None:
+        _manifest, _gap_inventory, inventory = _request_inventory()
+        rule = _cpp_rule()
+        result = lower_exact_array_backend_uninit_translation_result(
+            inventory,
+            cpp_value_array_uninit_rules=(rule,),
+        ).unwrap()
+        request_record = inventory.request_records[0]
+        no_request_record = inventory.no_request_records[0]
+        result_record = result.result_records[0]
+
+        self.assertTrue(
+            lowering_ir_contracts.is_lowering_request_ir(request_record)
+        )
+        self.assertTrue(
+            lowering_ir_contracts.is_translation_request_ir(request_record)
+        )
+        self.assertTrue(lowering_ir_contracts.is_lowering_provenance(no_request_record))
+        self.assertTrue(lowering_ir_contracts.is_lowering_inventory(inventory))
+        self.assertTrue(lowering_ir_contracts.is_lowering_rule_input(rule))
+        self.assertTrue(lowering_ir_contracts.is_translation_result_ir(result_record))
+        self.assertTrue(lowering_ir_contracts.is_translation_result_ir(result))
+        for value in (
+            request_record,
+            no_request_record,
+            inventory,
+            rule,
+            result_record,
+            result,
+        ):
+            with self.subTest(value=type(value).__name__):
+                self.assertFalse(lowering_ir_contracts.is_lowering_stage_output(value))
+                self.assertIsNotNone(lowering_ir_contracts.lowering_ir_contract(value))
+                self.assertIsInstance(lowering_ir_contracts.lowering_ir_key(value), tuple)
+
+        class StageEnvelope:
+            ir_contract = lowering_ir_contracts.LoweringIrContract(
+                name="stage_envelope_fixture",
+                category="stage_envelope",
+                owner="lowering.stage",
+            )
+
+            @property
+            def key(self) -> tuple[object, ...]:
+                return ("stage-envelope",)
+
+        self.assertTrue(lowering_ir_contracts.is_lowering_stage_output(StageEnvelope()))
+
+        self.assertFalse(lowering_ir_contracts.is_lowering_fact(request_record))
+        self.assertFalse(lowering_ir_contracts.is_translation_request_ir(rule))
+        self.assertIs(
+            lowering_ir_contracts.require_translation_request_ir(
+                request_record,
+                label="request record",
+            ),
+            request_record.ir_contract,
+        )
+        self.assertIs(
+            lowering_ir_contracts.require_translation_result_ir(
+                result,
+                label="result",
+            ),
+            result.ir_contract,
+        )
+
+    def test_m102_ir_category_protocol_surface_rejects_bad_shapes(self) -> None:
+        class MissingContract:
+            @property
+            def key(self) -> tuple[object, ...]:
+                return ("missing",)
+
+        class UntypedContract:
+            ir_contract = object()
+
+            @property
+            def key(self) -> tuple[object, ...]:
+                return ("untyped",)
+
+        class MissingKey:
+            ir_contract = lowering_ir_contracts.LoweringIrContract(
+                name="missing_key_request",
+                category="request",
+                owner="lowering.backend_translation.request_inventory",
+            )
+
+        class NonTupleKey:
+            ir_contract = lowering_ir_contracts.LoweringIrContract(
+                name="non_tuple_key_request",
+                category="request",
+                owner="lowering.backend_translation.request_inventory",
+            )
+
+            @property
+            def key(self) -> str:
+                return "not-a-tuple"
+
+        class EmptyTupleKey:
+            ir_contract = lowering_ir_contracts.LoweringIrContract(
+                name="empty_tuple_key_request",
+                category="request",
+                owner="lowering.backend_translation.request_inventory",
+            )
+
+            @property
+            def key(self) -> tuple[object, ...]:
+                return ()
+
+        class NonTranslationRequest:
+            ir_contract = lowering_ir_contracts.LoweringIrContract(
+                name="non_translation_request",
+                category="request",
+                owner="lowering.other",
+            )
+
+            @property
+            def key(self) -> tuple[object, ...]:
+                return ("non-translation",)
+
+        class FakeBackendTranslationNamespace:
+            ir_contract = lowering_ir_contracts.LoweringIrContract(
+                name="fake_backend_translation_request",
+                category="request",
+                owner="lowering.backend_translation_fake",
+            )
+
+            @property
+            def key(self) -> tuple[object, ...]:
+                return ("fake-backend-translation",)
+
+        rule = _cpp_rule()
+
+        bad_cases: tuple[tuple[str, object, str, str], ...] = (
+            (
+                "missing_contract",
+                MissingContract(),
+                "request",
+                "typed LoweringIrContract",
+            ),
+            (
+                "untyped_contract",
+                UntypedContract(),
+                "request",
+                "typed LoweringIrContract",
+            ),
+            (
+                "missing_key",
+                MissingKey(),
+                "request",
+                "non-empty tuple key",
+            ),
+            (
+                "non_tuple_key",
+                NonTupleKey(),
+                "request",
+                "non-empty tuple key",
+            ),
+            (
+                "empty_tuple_key",
+                EmptyTupleKey(),
+                "request",
+                "non-empty tuple key",
+            ),
+            (
+                "wrong_category",
+                rule,
+                "request",
+                "got 'rule_input'",
+            ),
+        )
+        for name, value, category, message in bad_cases:
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(ValueError, message):
+                    lowering_ir_contracts.require_lowering_ir_category(
+                        value,
+                        category,  # type: ignore[arg-type]
+                        label=name,
+                    )
+
+        with self.assertRaisesRegex(ValueError, "backend-translation lowering"):
+            lowering_ir_contracts.require_translation_request_ir(
+                NonTranslationRequest(),
+                label="non-translation request",
+            )
+
+        self.assertFalse(
+            lowering_ir_contracts.is_translation_request_ir(
+                FakeBackendTranslationNamespace()
+            )
+        )
+        with self.assertRaisesRegex(ValueError, "backend-translation lowering"):
+            lowering_ir_contracts.require_translation_request_ir(
+                FakeBackendTranslationNamespace(),
+                label="fake backend translation request",
+            )
+
+        with self.assertRaisesRegex(ValueError, "got 'rule_input'"):
+            lowering_ir_contracts.require_translation_result_ir(
+                rule,
+                label="rule",
+            )
+        for value in (MissingKey(), NonTupleKey(), EmptyTupleKey()):
+            with self.subTest(value=type(value).__name__):
+                self.assertFalse(lowering_ir_contracts.is_lowering_request_ir(value))
+                self.assertFalse(lowering_ir_contracts.is_translation_request_ir(value))
+                self.assertIsNone(lowering_ir_contracts.lowering_ir_key(value))
+
+    def test_m102_diagnostic_boundary_requires_stable_identity(self) -> None:
+        boundary = lowering_ir_contracts.DiagnosticBoundary(
+            name="backend_translation_result",
+            code_prefix="TSL-LOWER-BACKEND-TRANSLATION-RESULT",
+        )
+
+        self.assertEqual(
+            boundary.key,
+            (
+                "backend_translation_result",
+                "TSL-LOWER-BACKEND-TRANSLATION-RESULT",
+            ),
+        )
+        for kwargs in (
+            {"name": "", "code_prefix": "TSL"},
+            {"name": "boundary", "code_prefix": ""},
+        ):
+            with self.subTest(kwargs=kwargs):
+                with self.assertRaisesRegex(ValueError, "must be non-empty"):
+                    lowering_ir_contracts.DiagnosticBoundary(**kwargs)
+
     def test_m100_existing_result_rejects_copied_request_record(
         self,
     ) -> None:
@@ -714,7 +943,7 @@ class LoweringBackendTranslationResultTests(unittest.TestCase):
         }
         self.assertLessEqual(line_counts["boundary.py"], 1300)
         self.assertLess(line_counts["_lowering_stage_assembly.py"], 1000)
-        self.assertLess(line_counts["_lowering_ir_contracts.py"], 200)
+        self.assertLess(line_counts["_lowering_ir_contracts.py"], 300)
         self.assertLess(
             line_counts["_lowering_backend_translation_request_inventory.py"],
             1000,

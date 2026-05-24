@@ -1735,14 +1735,13 @@ Consequences:
   consolidation as a vehicle for new backend semantics, rendering, Stage 9
   planning, source repair, broad inheritance, registries, dispatchers, hidden
   backfeeds, or fixpoint machinery.
-- Post-M101 planning selects M102 as the next architecture-stabilization slice
-  because M101's category labels are useful but not yet the stable typed IR
-  surface needed by future lowering milestones. M102 should add private
-  category/protocol contracts for facts, requests, translation requests,
-  translation results, inventories, provenance, rule inputs, stage outputs, and
-  diagnostic boundaries, apply them first to the M99/M100 path, and keep the
-  existing public `LoweringRequest` input bundle distinct from taxonomy-level
-  request IR.
+- M102 is accepted as the next architecture-stabilization slice because M101's
+  category labels were useful but not yet the stable typed IR surface needed by
+  future lowering milestones. M102 adds private category/protocol contracts for
+  facts, requests, translation requests, translation results, inventories,
+  provenance, rule inputs, stage outputs, and diagnostic boundaries, applies
+  them first to the M99/M100 path, and keeps the existing public
+  `LoweringRequest` input bundle distinct from taxonomy-level request IR.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

@@ -758,14 +758,14 @@ Current roadmap note:
   request/result path through a small private contract/provenance helper, not a
   broad hierarchy, registry, dispatcher, semantic evaluator, or
   rendering/backend-planning surface.
-- Post-M101 planning selects M102 to make the taxonomy surface explicit as
-  private category/protocol contracts before adding the next feature-specific
-  backend-result or body semantic slice. M102 should distinguish the existing
-  public `LoweringRequest` lowering-input bundle from taxonomy-level request
-  protocols such as `LoweringRequestIr` and `TranslationRequestIr`; it must not
-  rename the public API, impose a broad inheritance hierarchy, or introduce
-  backend planning, rendering, source repair, registries, dispatchers, hidden
-  backfeeds, or fixpoint machinery.
+- M102 makes the taxonomy surface explicit as private category/protocol
+  contracts before adding the next feature-specific backend-result or body
+  semantic slice. M102 distinguishes the existing public `LoweringRequest`
+  lowering-input bundle from taxonomy-level request protocols such as
+  `LoweringRequestIr` and `TranslationRequestIr`; it does not rename the public
+  API, impose a broad inheritance hierarchy, or introduce backend planning,
+  rendering, source repair, registries, dispatchers, hidden backfeeds, or
+  fixpoint machinery.
 - Milestone 49 is accepted as the test-source rendering slice. It
   consumes typed `TestSourcePlan` / `PlannedTestCase` values and explicit typed C++
   type-spelling input for one C++ `add_i32_basic` source fixture. It must not

@@ -12,7 +12,7 @@ typed redesign contracts, explicit evidence, diagnostics, and tests.
 
 ## Current Baseline
 
-Accepted through M101:
+Accepted through M102:
 
 - Generation-time lowering handles only the accepted typed helper/predicate
   forms from M38, M41-M43, M48, M51-M59, and M67-M72.
@@ -22,8 +22,9 @@ Accepted through M101:
   request forms plus M87-M92 return/package/backend-handoff slices.
 - Stage 8 operation packages, completion manifests, gap inventories, stage
   assembly, backend-translation request inventories, the exact C++
-  backend-uninit translation-result boundary, and the first lowering IR
-  taxonomy/provenance contract are accepted through M93-M101.
+  backend-uninit translation-result boundary, the first lowering IR
+  taxonomy/provenance contract, and the first typed category/protocol surface
+  are accepted through M93-M102.
 - Broad backend translation, Stage 9 planning, renderer-ready IR, rendering,
   generated output, dependency closure, Rust uninit translation, and broad TSIL
   semantics remain deferred unless a milestone explicitly selects a narrow
@@ -84,7 +85,7 @@ tracks the broader known missing lowering surface.
 | --- | --- | --- | --- | --- | --- |
 | Stage 8 to backend handoff | `tsldata/primitives/load_store/array.tsl`, accepted M92/M96/M97/M99 records | M99 accepts the first cross-package backend-scoped request inventory over accepted package/manifest/gap facts; M100 accepts one exact C++ backend-uninit translation-result boundary after that inventory. | Additional typed request families as they are accepted; later backend resolution/translation consumes the inventory. | Accepted M99 plus accepted M100 for one exact C++ backend-uninit result | M100 is translation-result only: no Stage 9 planning, rendering, output, scheduling, dependency closure, or inferred requests. |
 | Backend value/type requests | `tsldata/detail/lang/types/types_cpp.tsl`, `tsldata/detail/lang/translate_cpp.tsl`, array/uninit evidence | M72 preserves exact `value<backend>(uninit::array)` as deferred state; M92 carries it as handoff; M99 inventories it as `exact_array_backend_value_uninit_array`; M100 resolves that exact C++ request to a typed translation-result value from explicit typed rule input. | Typed backend value/type request records over already resolved semantic values; additional exact/broad value/type results remain missing. | Accepted M100 for exact C++ uninit; later backend-request slices for Rust and broader values/types | Do not parse raw helper text, read backend maps/catalogs/manifests during lowering, or evaluate backend maps in renderers. Rust remains deferred because its `value_array_uninit` spelling needs typed `{type}` context not accepted for this request. |
-| Lowering IR taxonomy and provenance | Accepted M57-M101 lowering stage/result modules; M99/M100 backend-translation request/result path | M101 adds the first private taxonomy/provenance contract and applies it only to M99/M100 backend-translation request/result classes, but the stable categories are still labels rather than a reusable typed protocol surface. | A small private category/protocol surface for `LoweringFact`, `LoweringRequestIr`, `TranslationRequestIr`, `TranslationResultIr`, `LoweringInventory`, `LoweringProvenance`, `LoweringRuleInput`, `LoweringStageOutput`, and `DiagnosticBoundary`, applied first to M99/M100. | Planned M102 over M99/M100 only | Behavior-preserving consolidation only: no new lowering semantics, no broad hierarchy, no registry/dispatcher, no public `LoweringRequest` rename, and no weakening of diagnostics or object-identity guarantees. |
+| Lowering IR taxonomy and provenance | Accepted M57-M102 lowering stage/result modules; M99/M100 backend-translation request/result path | M101 adds the first private taxonomy/provenance contract and M102 adds the first typed category/protocol surface, applied only to M99/M100 backend-translation request/result classes. | Future feature-specific IR should conform to the accepted category/protocol surface before adding one-off request/result layers. | Accepted M101/M102 over M99/M100 only | Behavior-preserving consolidation only: no new lowering semantics, no broad hierarchy, no registry/dispatcher, no public `LoweringRequest` rename, and no weakening of diagnostics or object-identity guarantees. |
 | Direct intrinsics | `tsldata/primitives/load_store/array.tsl`, `load_store/store.tsl`, accepted M62/M63/M76/M95 facts | M62/M63/M95 preserve only selected assignment direct-intrinsic facts; M76 preserves one exact post-branch call-site structural request. | Typed direct-intrinsic call/body request records and diagnostics. | Later direct-intrinsic slice | No SVE hardwiring, byte-size-to-token inference, or intrinsic-text dispatch. |
 | Intrinsic modifiers | `tsldata/primitives/bitwise/shifts.tsl`, `conversion/repr_change.tsl`, `frozen/tsl-gen/tsl_gen/tsil.lark` | M38 and M45 cover selected compose/suffix behavior for narrow add output paths. | Typed modifier records for prefix, suffix, infix, post, and immediate fields. | Later modifier slice | Translation consumes typed records; renderers do not infer modifiers. |
 | Primitive calls and dependencies | `frozen/tsl-gen/tsl_gen/tsil_engine/dependencies.py`, `tsldata/primitives/**.tsl` | Candidate fallback visibility exists; semantic TSIL call AST and dependency closure remain deferred. | Typed primitive-call IR, dependency request records, and closure policy. | Later call/dependency slice | No dependency closure hidden inside lowering inventories. |

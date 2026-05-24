@@ -13840,9 +13840,11 @@ Next concrete prompt:
 
 Status:
 
-Planned. Post-M101 planning selected this milestone after identifying that
-M101 created stable taxonomy labels and M99/M100 contract attachments, but did
-not yet provide a reusable typed protocol surface for future lowering IR.
+Accepted. M102 added the first private typed lowering IR category/protocol
+surface over the accepted M101 taxonomy and applied it only to the accepted
+M99/M100 backend-translation request/result path. The slice preserved accepted
+M99/M100 behavior, keys, diagnostics, source locations, object identities,
+stage names, stage ordering, public imports, and deterministic behavior.
 
 Goal:
 
@@ -13912,14 +13914,15 @@ Out of scope:
 
 Expected outputs:
 
-- A small private lowering IR protocol/category surface that directly answers
-  the M101 taxonomy categories with stable typed names.
-- M99/M100 request/result/rule/provenance/inventory classes classified against
+- A small private lowering IR protocol/category surface now directly answers
+  the M101 taxonomy categories with stable typed names in
+  `tslgen/src/tslgen/lowering/_lowering_ir_contracts.py`.
+- M99/M100 request/result/rule/provenance/inventory classes classify against
   that surface without changing observable behavior.
 - Focused helpers may validate or assert category/protocol shape, but they must
   not choose semantic behavior, route requests, translate backend values, or
   act as a registry/dispatcher.
-- Focused tests proving category classification, import boundaries, line-count
+- Focused tests prove category classification, import boundaries, line-count
   guardrails, deterministic keys, object identity, diagnostics, source
   locations, and public imports remain stable.
 - Documentation clarifying the distinction between the existing public
@@ -13956,7 +13959,7 @@ Validation required:
   touched lowering modules and tests where practical.
 - `git diff --check`.
 
-Planning review notes:
+Review notes:
 
 - M102 deliberately pauses feature expansion again because adding the next
   direct-intrinsic or backend-result family before a real category surface
@@ -13964,23 +13967,21 @@ Planning review notes:
 - The milestone should produce a category surface, not a semantic dispatcher.
   Future milestones still own concrete request/result semantics in focused
   modules.
-- M102 should make a later selected-body direct-intrinsic translation-result
+- M102 makes a later selected-body direct-intrinsic translation-result
   slice safer by forcing it to fit `TranslationRequestIr`,
   `TranslationResultIr`, `LoweringProvenance`, `LoweringRuleInput`, and
   `DiagnosticBoundary` contracts first.
+- M102 review initially found that the type guards were checking category
+  labels without validating keyed structural conformance. A focused revision
+  made guards require typed contracts plus non-empty tuple keys, tightened
+  backend-translation owner namespace matching, and narrowed stage-output
+  recognition to explicit `stage_envelope` contracts.
 
 Accepted follow-ups:
 
-- M102 execution must include negative conformance tests for wrong/missing
-  category protocols.
-- M102 execution must include import-boundary and forbidden-behavior tests,
-  including no backend/rendering imports, no `tsldata`/`frozen` dependency, no
-  raw parsing helpers, and no category-based semantic dispatch.
-- M102 execution must keep `boundary.py` out of scope and avoid growing it.
-  The category surface belongs in the private lowering contract area.
+- None recorded for the accepted M102 implementation.
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m101-acceptance-finalization-prompt.md` finalizes
-  human acceptance of the M102 plan and creates the M102 execution-review-loop
-  prompt.
+- `docs/agent/runs/post-m102-planning-plus-review-prompt.md` selects the next
+  lowering milestone after accepted M102.

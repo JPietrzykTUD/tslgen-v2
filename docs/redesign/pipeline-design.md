@@ -1056,12 +1056,12 @@ added. Its private contract/provenance helper records the small category
 vocabulary in code and consolidates key comparison plus object-identity
 mismatch checks without changing accepted pipeline behavior.
 
-Post-M101 planning selects M102 to turn that vocabulary into a real typed
-category/protocol surface before adding another feature-specific request/result
-family. The existing public `LoweringRequest` remains a lowering input bundle;
-taxonomy-level request concepts should use distinct private names such as
-`LoweringRequestIr` or `TranslationRequestIr` to avoid conflating pipeline
-configuration with semantic unresolved needs.
+M102 turns that vocabulary into a real typed category/protocol surface before
+adding another feature-specific request/result family. The existing public
+`LoweringRequest` remains a lowering input bundle; taxonomy-level request
+concepts use distinct private names such as `LoweringRequestIr` and
+`TranslationRequestIr` to avoid conflating pipeline configuration with
+semantic unresolved needs.
 
 ## Pipeline Result Shape
 
