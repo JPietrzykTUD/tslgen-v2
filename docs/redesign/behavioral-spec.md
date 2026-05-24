@@ -70,6 +70,20 @@ Nearby body forms are diagnostic boundaries, not repair targets. For example,
 `body add(left)` parses as the narrow body-line syntax but fails catalog
 validation with `TSL-CATALOG-UNSUPPORTED-BODY` at the body source location.
 
+### M108 Minimal Lowering Boundary
+
+Milestone 108 inserts a pure lowering boundary after selection for the same
+tiny fixture form. The selected `add` / `scalar` / `si32` implementation lowers
+to one backend-neutral function value named `add_scalar_si32`, with ordered
+parameters `left` and `right`, scalar type tag `si32`, and a binary-add
+expression referencing those parameters. C++ and Rust emitters consume that
+lowered value; they no longer inspect the catalog body directly.
+
+The M108 lowerer accepts only the exact selected M107 body shape. Unsupported
+selected body values produce a structured `TSL-LOWER-UNSUPPORTED-BODY`
+diagnostic at the body source location. The M107 source-level catalog
+diagnostic for nearby parsed fixture bodies remains unchanged.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

@@ -3,9 +3,9 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-from tslgen.analysis.selection import SelectedImplementation
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.io.artifacts import Artifact
+from tslgen.lowering import LoweredFunction
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,5 +17,5 @@ class BackendEmitResult:
 class Backend(Protocol):
     backend_id: str
 
-    def emit(self, selected: SelectedImplementation) -> BackendEmitResult:
-        """Emit an artifact for a selected implementation."""
+    def emit(self, function: LoweredFunction) -> BackendEmitResult:
+        """Emit an artifact for a lowered function."""

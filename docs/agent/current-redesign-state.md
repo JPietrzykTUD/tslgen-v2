@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 107 is accepted.
+Milestone 108 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -171,6 +171,20 @@ evidence-only, did not port old modules, and did not add broad TSIL/body
 semantics, dependency closure, backend manifests, CLI compatibility, artifact
 writing, generated-output parity, lowering IR taxonomies, worklists,
 registries, dispatchers, hidden backfeeds, or fixpoint mechanisms.
+
+The M108 execution-review loop returned `Accept`. M108 added the first tiny
+clean lowering boundary under fresh `tslgen/`: selected M107 `add` / `binary`
+/ `scalar` / `si32` implementations lower into backend-neutral
+`LoweredFunction` values with deterministic name, parameters, scalar type tag,
+and binary-add expression. The generator now lowers after selection and before
+backend emission, and C++/Rust emitters consume `LoweredFunction` values
+instead of catalog bodies. M108 preserved M107 artifact contents, logical
+paths, digests, diagnostics, and deterministic ordering. It did not import
+from `tslgenold/` or `frozen/`, write generated files, port old lowering
+modules, add broad TSIL/body semantics, expression parsing beyond the exact
+fixture, branch pruning, dependency closure, backend manifests, type maps
+beyond `si32`, lowering IR taxonomies, worklists, registries, dispatchers,
+plugin systems, hidden backfeeds, or fixpoint mechanisms.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1244,35 +1258,34 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 108.
+Execute Milestone 109.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m108-execution-review-loop-prompt.md
+docs/agent/runs/m109-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 108: Minimal Clean Body Lowering Boundary Slice
+Milestone 109: Tiny Clean Artifact Writer Boundary Slice
 ```
 
 Latest review verdict:
 
 ```text
-M107 execution-review loop returned Accept after layout, architecture,
-documentation, and validation audits plus focused revisions.
+M108 execution-review loop returned Accept after layout, architecture,
+documentation, and validation audits.
 ```
 
 Next expected action:
 
 ```text
-Run the active M108 execution-review-loop prompt. M108 may introduce the first
-tiny clean lowering boundary after M107, but must keep the KISS restart
-guardrails: no old-runtime imports, no broad lowering framework, and no
-renderer-side semantic inference.
+Run the active M109 execution-review-loop prompt. M109 may add the first
+explicit filesystem-write boundary for clean artifact values, but must keep
+pure stages write-free and avoid broad CLI/output-layout parity work.
 ```
 
 Accepted planning prompt:
@@ -2307,10 +2320,16 @@ Completed M107 execution-review-loop prompt:
 docs/agent/runs/m107-execution-review-loop-prompt.md
 ```
 
-Active M108 execution-review-loop prompt:
+Completed M108 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m108-execution-review-loop-prompt.md
+```
+
+Active M109 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m109-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2322,6 +2341,9 @@ docs/agent/runs/m108-execution-review-loop-prompt.md
   `tslgen/`.
 - M108 is limited to the exact M107 `add(left, right)` / `scalar` / `si32`
   body lowering boundary.
+- M109 is limited to an explicit writer boundary for existing in-memory
+  artifact values; parsing, catalog, selection, lowering, and backend emission
+  must remain write-free.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and
@@ -3821,6 +3843,9 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   clean-package validation surface under fresh `tslgen/`; the old `tslgenold`
   validation profile remains evidence and must not be used as proof of the new
   product path.
+- M108 documentation audit follow-up: if exported lowerer guard diagnostics
+  become public contract, document the additional `TSL-LOWER-UNSUPPORTED-*`
+  codes beyond `TSL-LOWER-UNSUPPORTED-BODY`.
 - M106 architecture follow-up: before any release/stabilization work resumes,
   retire or rewrite `docs/redesign/stabilization-release-checklist.md` for the
   post-M106 clean restart; it still reads like the old `tslgen` package is an
@@ -4829,7 +4854,7 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M108
+No stop condition is active. The workflow is ready to run the active M109
 execution-review-loop prompt.
 
 ## Validation Expectations
@@ -4839,6 +4864,22 @@ For docs-only planning tasks:
 ```bash
 git diff --check
 ```
+
+For M108 clean lowering boundary slice, validation completed with:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -c "from tslgen.lowering import Lowerer, LoweredFunction, LoweredBinaryAddExpression"
+python -B -c "from pathlib import Path; files = [Path('tslgen/__init__.py'), *sorted(Path('tslgen/src/tslgen').rglob('*.py')), *sorted(Path('tslgen/tests').rglob('*.py'))]; [compile(path.read_text(), str(path), 'exec') for path in files]; print(f'compiled {len(files)} clean tslgen Python files')"
+```
+
+`git diff --check` returned exit 0 with no output. The targeted clean-package
+test command returned exit 0 with `7 passed`. The public API import command
+returned exit 0 with no output. The lowering import command returned exit 0
+with no output. The no-write compile check returned exit 0 and printed
+`compiled 28 clean tslgen Python files`.
 
 For M107 clean restart vertical slice, validation completed with:
 

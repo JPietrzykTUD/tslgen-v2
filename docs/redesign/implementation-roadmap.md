@@ -14646,7 +14646,18 @@ Review notes:
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M107.
+Accepted. M108 completed the first deliberately small clean lowering boundary
+after accepted M107. It added a tiny `tslgen/src/tslgen/lowering/` module for
+the exact M107 `add(left, right)` / `scalar` / `si32` selected body, lowered
+selected implementations into backend-neutral `LoweredFunction` values, and
+made C++ and Rust emitters consume those lowered values. It preserved M107
+artifact content, logical paths, digests, diagnostics, and deterministic
+ordering. It did not import from `tslgenold/` or `frozen/`, port old lowering
+modules, add broad TSIL/body semantics, expression parsing beyond the exact
+fixture, branch pruning, dependency closure, backend manifests, type maps
+beyond `si32`, CLI compatibility, artifact writing, generated-output parity,
+lowering IR taxonomies, worklists, inventories, registries, dispatchers,
+plugin systems, hidden backfeeds, or fixpoint mechanisms.
 
 Goal:
 
@@ -14712,3 +14723,73 @@ Review notes:
   simpler, not add milestone-shaped wrappers for their own sake.
 - Reviewers should require diagnostics for unsupported lowering inputs and
   byte-stable artifact outputs for the accepted fixture.
+
+### Milestone 109: Tiny Clean Artifact Writer Boundary Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M108.
+
+Goal:
+
+Add the first explicit filesystem-write boundary for the clean restart path:
+
+```text
+artifact values -> deterministic checked write report
+```
+
+Scope:
+
+- Add a focused clean artifact writer under `tslgen/src/tslgen/io/`.
+- Write only existing in-memory `ArtifactSet` values to an explicit output
+  root supplied by the caller.
+- Keep path handling deterministic and safe: reject absolute logical paths,
+  parent-directory escapes, duplicate logical paths, and directory/file
+  collisions with structured diagnostics.
+- Return a typed write report with stable written-path and digest data.
+- Add tests that generate the M108 artifact set, write it to a temporary
+  output root, assert file contents/digests/report ordering, and cover at
+  least one unsafe-path diagnostic boundary.
+- Keep the existing pure source-to-artifact API usable without writing files.
+
+Out of scope:
+
+- CLI integration.
+- Generated test execution.
+- CMake/Cargo/project scaffolding.
+- Broad output tree parity.
+- Cleaning output roots.
+- Watch/incremental behavior.
+- Formatting or compiling generated C++/Rust.
+- Runtime imports from `frozen/` or `tslgenold/`.
+- Porting, adapting, compatibility-wrapping, or migrating old writer modules.
+- New lowering semantics, backend manifests, dependency closure, registries,
+  dispatchers, plugin systems, hidden backfeeds, or fixpoint mechanisms.
+
+Accepted outputs:
+
+- A small writer boundary exists and is the only filesystem-write owner for
+  generated artifact values in the clean package.
+- Existing M108 in-memory artifacts remain byte-stable.
+- Writer tests prove deterministic writes and structured diagnostics for unsafe
+  paths.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+```
+
+Run the smallest compile/import checks needed for the revised clean package
+surface. Do not run the old `tslgenold` validation profile as proof of the
+clean product slice.
+
+Review notes:
+
+- Reviewers should reject hidden writes in parsing, catalog construction,
+  selection, lowering, or backend emission.
+- Reviewers should require path-safety diagnostics and deterministic report
+  ordering.
+- Reviewers should reject broad CLI/output-layout parity work in M109.

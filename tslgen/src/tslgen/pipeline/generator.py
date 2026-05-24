@@ -10,6 +10,7 @@ from tslgen.backends.rust import RustBackend
 from tslgen.core.diagnostics import Diagnostic, has_errors
 from tslgen.io.artifacts import Artifact, ArtifactSet
 from tslgen.io.sources import SourceLoader
+from tslgen.lowering import Lowerer
 from tslgen.pipeline.catalog_builder import CatalogBuilder
 from tslgen.syntax.parser import TslParser
 
@@ -36,12 +37,14 @@ class Generator:
         parser: TslParser | None = None,
         catalog_builder: CatalogBuilder | None = None,
         selector: Selector | None = None,
+        lowerer: Lowerer | None = None,
         backends: tuple[Backend, ...] | None = None,
     ) -> None:
         self._source_loader = source_loader or SourceLoader()
         self._parser = parser or TslParser()
         self._catalog_builder = catalog_builder or CatalogBuilder()
         self._selector = selector or Selector()
+        self._lowerer = lowerer or Lowerer()
         self._backends = backends or (CppBackend(), RustBackend())
 
     def generate(self, project: TslProject) -> GenerationResult:
@@ -81,7 +84,15 @@ class Generator:
                 continue
 
             for selected in selection_result.selected:
-                emit_result = emitter.emit(selected)
+                lowering_result = self._lowerer.lower(selected)
+                diagnostics.extend(lowering_result.diagnostics)
+                if (
+                    has_errors(lowering_result.diagnostics)
+                    or lowering_result.function is None
+                ):
+                    continue
+
+                emit_result = emitter.emit(lowering_result.function)
                 diagnostics.extend(emit_result.diagnostics)
                 if emit_result.artifact is not None:
                     artifacts.append(emit_result.artifact)

@@ -1,33 +1,16 @@
-"""Typed Rust artifact emitter for the M107 fixture shape."""
+"""Typed Rust artifact emitter for the tiny lowered add function."""
 
-from tslgen.analysis.selection import SelectedImplementation
 from tslgen.backends.base import BackendEmitResult
 from tslgen.core.diagnostics import Diagnostic
-from tslgen.domain.catalog import BinaryAddBody
 from tslgen.io.artifacts import Artifact, ArtifactMetadata
+from tslgen.lowering import LoweredFunction
 
 
 class RustBackend:
     backend_id = "rust"
 
-    def emit(self, selected: SelectedImplementation) -> BackendEmitResult:
-        if selected.target.backend != self.backend_id:
-            return BackendEmitResult(
-                artifact=None,
-                diagnostics=(
-                    Diagnostic(
-                        severity="error",
-                        code="TSL-BACKEND-MISMATCH",
-                        message=(
-                            f"Rust emitter received target backend "
-                            f"{selected.target.backend!r}"
-                        ),
-                        location=selected.implementation.source,
-                    ),
-                ),
-            )
-
-        if selected.target.type_tag != "si32":
+    def emit(self, function: LoweredFunction) -> BackendEmitResult:
+        if function.scalar_type_tag != "si32":
             return BackendEmitResult(
                 artifact=None,
                 diagnostics=(
@@ -36,47 +19,32 @@ class RustBackend:
                         code="TSL-BACKEND-UNSUPPORTED-TYPE",
                         message=(
                             f"Rust emitter supports only type 'si32' in M107; "
-                            f"got {selected.target.type_tag!r}"
+                            f"got {function.scalar_type_tag!r}"
                         ),
-                        location=selected.implementation.source,
+                        location=function.source,
                     ),
                 ),
             )
 
-        body = selected.implementation.body
-        content = self._render_add_function(selected, body)
-        function_name = _function_name(selected)
+        content = self._render_add_function(function)
         return BackendEmitResult(
             artifact=Artifact(
-                logical_path=f"src/{function_name}.rs",
+                logical_path=f"src/{function.name}.rs",
                 content=content,
                 media_type="text/x-rust",
                 metadata=(
                     ArtifactMetadata("backend", "rust"),
-                    ArtifactMetadata("primitive", selected.primitive.name),
+                    ArtifactMetadata("primitive", function.primitive_name),
                 ),
             ),
             diagnostics=(),
         )
 
-    def _render_add_function(
-        self,
-        selected: SelectedImplementation,
-        body: BinaryAddBody,
-    ) -> str:
-        function_name = _function_name(selected)
-        left = body.left_parameter
-        right = body.right_parameter
+    def _render_add_function(self, function: LoweredFunction) -> str:
+        left = function.expression.left.parameter_name
+        right = function.expression.right.parameter_name
         return (
-            f"pub fn {function_name}({left}: i32, {right}: i32) -> i32 {{\n"
+            f"pub fn {function.name}({left}: i32, {right}: i32) -> i32 {{\n"
             f"    {left} + {right}\n"
             "}\n"
         )
-
-
-def _function_name(selected: SelectedImplementation) -> str:
-    return (
-        f"{selected.primitive.name}_"
-        f"{selected.target.extension}_"
-        f"{selected.target.type_tag}"
-    )
