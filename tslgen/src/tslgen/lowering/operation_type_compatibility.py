@@ -23,6 +23,18 @@ _BINARY_OPERATION_SCALAR_TYPE_RULES: tuple[
         operation_id="mod",
         accepted_scalar_families=("integer",),
     ),
+    BinaryOperationScalarTypeCompatibilityRule(
+        operation_id="bit_and",
+        accepted_scalar_families=("integer",),
+    ),
+    BinaryOperationScalarTypeCompatibilityRule(
+        operation_id="bit_or",
+        accepted_scalar_families=("integer",),
+    ),
+    BinaryOperationScalarTypeCompatibilityRule(
+        operation_id="bit_xor",
+        accepted_scalar_families=("integer",),
+    ),
 )
 
 

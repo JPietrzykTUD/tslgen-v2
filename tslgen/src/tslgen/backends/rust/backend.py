@@ -35,6 +35,9 @@ _BINARY_OPERATOR_SPELLINGS: tuple[_BinaryOperatorSpelling, ...] = (
     _BinaryOperatorSpelling(operation_id="mul", spelling="*"),
     _BinaryOperatorSpelling(operation_id="div", spelling="/"),
     _BinaryOperatorSpelling(operation_id="mod", spelling="%"),
+    _BinaryOperatorSpelling(operation_id="bit_and", spelling="&"),
+    _BinaryOperatorSpelling(operation_id="bit_or", spelling="|"),
+    _BinaryOperatorSpelling(operation_id="bit_xor", spelling="^"),
 )
 
 

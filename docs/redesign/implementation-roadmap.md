@@ -15511,9 +15511,22 @@ Review notes:
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M116.
-This milestone keeps the next action focused on lowering while broadening the
-tiny operation surface by one coherent integer-only family.
+Accepted. M117 added integer-only `bit_and`, `bit_or`, and `bit_xor` to the
+tiny clean lowering-owned binary operation descriptor table, reused the M116
+operation/type compatibility rule boundary for integer-only gating, and added
+backend-owned C++/Rust `&`, `|`, and `^` spellings for accepted lowered
+bitwise functions. Floating bitwise operations over accepted `f32`/`f64`
+scalar descriptors fail in lowering with
+`TSL-LOWER-UNSUPPORTED-OPERATION-TYPE`. M117 preserved accepted
+`add`/`sub`/`mul`/`div`/`mod` behavior, M110 scalar descriptors, M112 body
+values, M113 signatures, M114 lowering stage-output behavior, M116
+compatibility behavior, diagnostics, logical paths, artifact ordering, and
+existing artifact bytes and digests. M117 did not add parser/source syntax
+changes, source repair, logical boolean semantics, boolean scalar types,
+masks, shifts, rotates, bit-width promotion, signedness runtime policy,
+constant folding, algebraic simplification, vector/SIMD semantics, backend
+manifests, old operation migration, registries, dispatchers, plugin systems,
+hidden backfeeds, fixpoint mechanisms, or a broad operation/type framework.
 
 Goal:
 
@@ -15606,3 +15619,109 @@ Review notes:
 - Reviewers should require current `add`/`sub`/`mul`/`div`/`mod` output bytes,
   diagnostics, M112 body values, M113 signature values, M114 stage-output
   behavior, and M116 compatibility behavior to remain stable.
+
+### Milestone 118: Tiny Clean Unary Bitwise Not Lowering Shape Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M117.
+This milestone keeps the next action focused on lowering while adding the
+first exact unary expression/body shape.
+
+Goal:
+
+Add integer-only unary bitwise-not lowering for the exact one-parameter clean
+source form:
+
+```text
+prim<v:=(v)> bit_not(value):
+  implementation scalar si32:
+    body bit_not(value)
+```
+
+Scope:
+
+- Add the exact one-parameter source shape needed for `bit_not(value)`:
+  signature `v:=(v)`, parameter tuple `("value",)`, and body argument tuple
+  `("value",)`.
+- Model the accepted unary source body as typed catalog data rather than
+  forcing it through the binary body model.
+- Add a small backend-neutral unary operation descriptor for `bit_not`.
+- Add a small lowered unary operation expression/body path paired with the
+  existing lowered function signature/return statement structure.
+- Gate `bit_not` to the currently supported integer scalar descriptors and
+  reject floating scalar descriptors with a structured lowering diagnostic.
+- Keep unary descriptors backend-neutral. They must not contain C++ or Rust
+  spelling, logical-boolean policy, mask policy, signedness runtime policy,
+  overflow policy, or source repair policy.
+- Update C++ and Rust backends to render accepted unary lowered expressions
+  through backend-owned spellings. C++ and Rust may spell this differently, but
+  spelling must stay in the backend layer.
+- Preserve accepted binary `add`/`sub`/`mul`/`div`/`mod`/`bit_*` behavior,
+  M110 scalar descriptors, M112 body values, M113 signatures, M114
+  stage-output behavior, M116/M117 compatibility behavior, diagnostics,
+  logical paths, artifact ordering, and existing artifact bytes and digests.
+- Add focused tests for parsing/cataloging the exact unary form, rejecting
+  nearby malformed unary forms, unary descriptor lookup/order, integer lowerer
+  acceptance, floating-type rejection, backend spelling ownership, generator
+  output for one integer `bit_not` source, M114 stage-output pass-through, and
+  preservation of existing binary behavior.
+
+Out of scope:
+
+- Broad TSIL parsing, arbitrary arity support, multiple statements, nested
+  expressions, calls, variables, source repair, or generalized expression
+  trees beyond the accepted binary and exact unary shapes.
+- Logical boolean semantics, boolean scalar types, masks, shifts, rotates,
+  bit-width promotion, signedness runtime policy, constant folding, algebraic
+  simplification, or broad bitwise/arithmetic semantics.
+- New scalar types, vector/SIMD shapes, hardware feature selection, branch
+  pruning, generation-time helper evaluation, backend manifests, dependency
+  closure, or old generator maps.
+- Module/package planning, function overloading policy, include planning,
+  artifact layout changes, artifact-plan values, renderer-ready IR, or backend
+  emission inside lowering.
+- CLI integration, writer changes, generated test execution, CMake/Cargo
+  scaffolding, runtime imports from `frozen/` or `tslgenold/`, or porting old
+  operation/lowering modules.
+- Registries, dispatchers, plugin systems, hidden backfeeds, fixpoint
+  mechanisms, or a broad expression/type framework.
+
+Accepted outputs:
+
+- The clean source-to-lowering path accepts the exact unary `bit_not(value)`
+  shape and rejects unsupported nearby unary forms with structured diagnostics.
+- `bit_not(value)` lowers only for accepted integer scalar descriptors.
+- Floating `bit_not(value)` reaches lowering and fails with a structured
+  operation/type compatibility diagnostic rather than source repair, fallback,
+  or renderer-side inference.
+- C++ and Rust emitters render accepted unary bitwise-not through
+  backend-owned spelling rules while existing binary operations remain
+  byte-stable.
+- The M114 lowering stage-output boundary carries the accepted unary lowered
+  function without adding scheduler, package, artifact-plan, or broad IR
+  machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+```
+
+Run the smallest compile/import checks needed for the revised clean package
+surface. Do not run the old `tslgenold` validation profile as proof of the
+clean product slice.
+
+Review notes:
+
+- Reviewers should reject broad parser/source syntax broadening or source
+  repair.
+- Reviewers should reject putting C++/Rust spelling or runtime unary bitwise
+  policy into lowering descriptors.
+- Reviewers should reject logical boolean semantics, shifts/rotates, broad
+  expression frameworks, registries, or dispatchers.
+- Reviewers should require current binary output bytes, diagnostics, M112 body
+  values, M113 signature values, M114 stage-output behavior, and M116/M117
+  compatibility behavior to remain stable.

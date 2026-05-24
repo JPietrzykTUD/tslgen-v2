@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 116 is accepted.
+Milestone 117 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -324,6 +324,26 @@ runtime remainder policy, divide-by-zero diagnostics, integer overflow policy,
 constant folding, algebraic simplification, vector/SIMD semantics, backend
 manifests, dependency closure, old operation/lowering migration, registries,
 dispatchers, plugin systems, hidden backfeeds, fixpoint mechanisms, or a broad
+operation/type framework.
+
+The M117 execution-review loop returned `Accept` after read-only
+layout/boundary, architecture, documentation, and validation audits. M117
+added integer-only `bit_and`, `bit_or`, and `bit_xor` to the tiny clean
+lowering-owned binary operation descriptor table, reused the M116
+operation/type compatibility rule boundary for integer-only gating, and added
+backend-owned C++/Rust `&`, `|`, and `^` spellings for accepted lowered
+bitwise functions. Floating bitwise operations over accepted `f32`/`f64`
+scalar descriptors fail in lowering with
+`TSL-LOWER-UNSUPPORTED-OPERATION-TYPE`. M117 preserved accepted
+`add`/`sub`/`mul`/`div`/`mod` behavior, M110 scalar descriptors, M112 explicit
+return body, M113 explicit signature, M114 stage-output behavior, M116
+compatibility behavior, diagnostics, logical paths, ordering, and existing
+artifact bytes/digests. M117 did not add parser/source syntax changes, source
+repair, logical boolean semantics, boolean scalar types, masks, shifts,
+rotates, bit-width promotion, signedness runtime policy, constant folding,
+algebraic simplification, vector/SIMD semantics, backend manifests,
+dependency closure, old operation/lowering migration, registries, dispatchers,
+plugin systems, hidden backfeeds, fixpoint mechanisms, or a broad
 operation/type framework.
 
 Post-M47 planning is accepted. The accepted planning result selected
@@ -1398,37 +1418,38 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 117.
+Execute Milestone 118.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m117-execution-review-loop-prompt.md
+docs/agent/runs/m118-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 117: Tiny Clean Integer Bitwise Binary Operations Type-Gated Lowering Slice
+Milestone 118: Tiny Clean Unary Bitwise Not Lowering Shape Slice
 ```
 
 Latest review verdict:
 
 ```text
-M116 execution-review loop returned Accept after read-only layout/boundary,
+M117 execution-review loop returned Accept after read-only layout/boundary,
 architecture, documentation, and validation audits.
 ```
 
 Next expected action:
 
 ```text
-Run the active M117 execution-review-loop prompt. M117 should add the tiny
-clean integer-only bitwise binary operations `bit_and`, `bit_or`, and
-`bit_xor` through the existing binary operation descriptor, M116 operation/type
-compatibility, and M114 stage-output paths. Parser/source syntax broadening,
-logical boolean semantics, shifts, runtime arithmetic policy, backend manifest
-reads, and broad operation/type frameworks stay out of scope.
+Run the active M118 execution-review-loop prompt. M118 should add the first
+exact unary lowering shape for integer-only `bit_not(value)`, introducing a
+small backend-neutral unary expression/body boundary while keeping source
+syntax broadening limited to the documented one-parameter form. Broad TSIL
+parsing, logical boolean semantics, shifts/rotates, source repair, runtime
+bitwise policy, backend manifest reads, and broad expression frameworks stay
+out of scope.
 ```
 
 Accepted planning prompt:
@@ -2517,10 +2538,16 @@ Completed M116 execution-review-loop prompt:
 docs/agent/runs/m116-execution-review-loop-prompt.md
 ```
 
-Active M117 execution-review-loop prompt:
+Completed M117 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m117-execution-review-loop-prompt.md
+```
+
+Active M118 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m118-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2580,6 +2607,14 @@ docs/agent/runs/m117-execution-review-loop-prompt.md
   shifts, rotates, masks, vector/SIMD semantics, runtime arithmetic policy,
   backend manifests, old operation migration, registries, dispatchers, hidden
   backfeeds, fixpoint behavior, or a broad operation/type framework.
+- M118 is limited to adding the exact unary `bit_not(value)` lowering shape
+  for currently supported integer scalar descriptors; it may broaden the tiny
+  clean parser/catalog only to the documented one-parameter `v:=(v)` source
+  form needed for that lowering shape. It must not add broad TSIL parsing,
+  source repair, logical boolean semantics, shifts, rotates, masks, runtime
+  bitwise policy, vector/SIMD semantics, backend manifests, old operation
+  migration, registries, dispatchers, hidden backfeeds, fixpoint behavior, or
+  a broad expression framework.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and
@@ -5110,7 +5145,7 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M117
+No stop condition is active. The workflow is ready to run the active M118
 execution-review-loop prompt.
 
 ## Validation Expectations
@@ -5254,6 +5289,25 @@ find tslgen -type d -name __pycache__ -print
 
 `git diff --check` returned exit 0 with no output. The targeted clean-package
 test command returned exit 0 with `42 passed in 4.75s`. The public API import
+command returned exit 0 with no output. The binary-operation descriptor import
+command returned exit 0 with no output. The py_compile command returned exit 0
+with no output. Validation-created `__pycache__` directories were removed, and
+the final cache check returned exit 0 with no output.
+
+For M117 clean integer bitwise binary operations type-gated lowering slice,
+validation completed with:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -c "from tslgen.lowering import lookup_binary_operation_descriptor, supported_binary_operation_ids; assert supported_binary_operation_ids() == ('add', 'sub', 'mul', 'div', 'mod', 'bit_and', 'bit_or', 'bit_xor'); assert lookup_binary_operation_descriptor('bit_and') is not None; assert lookup_binary_operation_descriptor('bit_or') is not None; assert lookup_binary_operation_descriptor('bit_xor') is not None"
+python -B -m py_compile tslgen/src/tslgen/lowering/binary_operations.py tslgen/src/tslgen/lowering/operation_type_compatibility.py tslgen/src/tslgen/backends/cpp/backend.py tslgen/src/tslgen/backends/rust/backend.py tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The targeted clean-package
+test command returned exit 0 with `48 passed in 7.13s`. The public API import
 command returned exit 0 with no output. The binary-operation descriptor import
 command returned exit 0 with no output. The py_compile command returned exit 0
 with no output. Validation-created `__pycache__` directories were removed, and

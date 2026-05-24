@@ -51,6 +51,27 @@ SUPPORTED_BINARY_OPERATION_DESCRIPTORS: tuple[BinaryOperationDescriptor, ...] = 
         source_body_operation="mod",
         semantic_name="binary.mod",
     ),
+    BinaryOperationDescriptor(
+        operation_id="bit_and",
+        arity=2,
+        category="binary",
+        source_body_operation="bit_and",
+        semantic_name="binary.bit_and",
+    ),
+    BinaryOperationDescriptor(
+        operation_id="bit_or",
+        arity=2,
+        category="binary",
+        source_body_operation="bit_or",
+        semantic_name="binary.bit_or",
+    ),
+    BinaryOperationDescriptor(
+        operation_id="bit_xor",
+        arity=2,
+        category="binary",
+        source_body_operation="bit_xor",
+        semantic_name="binary.bit_xor",
+    ),
 )
 
 

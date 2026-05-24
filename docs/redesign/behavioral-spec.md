@@ -238,6 +238,33 @@ C++ and Rust emitters own the `%` spelling for accepted lowered `mod`
 functions. Unsupported operation ids now report `add, sub, mul, div, mod` as
 the supported tiny clean operation set.
 
+### M117 Tiny Integer Bitwise Binary Operation Type Gate
+
+Milestone 117 extends the tiny clean binary operation descriptor table to
+accept `bit_and`, `bit_or`, and `bit_xor` after `mod` in deterministic
+descriptor order:
+
+```text
+prim<v:=(v,v)> bit_and(left, right):
+  implementation scalar si32:
+    body bit_and(left, right)
+```
+
+Catalog construction still only preserves the parsed operation name, scalar
+type tag, and exact `left, right` body arguments. The lowerer reuses the
+operation/type compatibility boundary: `bit_and`, `bit_or`, and `bit_xor`
+lower only for the currently supported integer scalar descriptors `si32` and
+`ui32`. Floating scalar descriptors such as `f32` and `f64` reach lowering and
+fail with `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` at the implementation source
+location.
+
+The bitwise descriptors remain backend-neutral and do not define C++ or Rust
+spelling, logical-boolean behavior, mask behavior, signedness runtime behavior,
+overflow policy, constant folding, or source repair. C++ and Rust emitters own
+the `&`, `|`, and `^` spellings for accepted lowered bitwise functions.
+Unsupported operation ids now report `add, sub, mul, div, mod, bit_and,
+bit_or, bit_xor` as the supported tiny clean operation set.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:
