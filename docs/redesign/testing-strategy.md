@@ -1321,17 +1321,16 @@ Recommended first parity checks:
   misleading backend-translation owner prefixes, facade/backend/rendering/
   `tsldata`/`frozen` imports, and turning the protocol surface into a registry,
   dispatcher, broad hierarchy, hidden backfeed, or fixpoint mechanism.
-- Planned M103 coverage should prove the Stage 8 backend-translation boundary
-  worklist is a static inventory/provenance view. Tests should live in a
-  focused new test file and cover deterministic ordering, stable keys, M102
-  protocol fit, preservation of M99 request/no-request object identity,
-  preservation of optional M100 result/deferred object identity, source
-  location/candidate/source-inventory mismatch diagnostics, rejection of
-  arbitrary M102-conformant fake objects, import boundaries, line counts, and
-  absence of queue/scheduler/readiness, Stage 9 planning, renderer-ready IR,
-  backend-map/catalog/manifest reads, source repair, registry/dispatcher/
-  callback/plugin/backfeed/fixpoint behavior, and category-based semantic
-  dispatch.
+- M103 coverage proves the Stage 8 backend-translation boundary worklist is a
+  static inventory/provenance view. Tests live in a focused test file and cover
+  deterministic ordering, stable keys, M102 protocol fit, preservation of M99
+  request/no-request object identity, preservation of optional M100
+  result/deferred object identity, source location/candidate/source-inventory
+  mismatch diagnostics, rejection of arbitrary M102-conformant fake objects,
+  import boundaries, line counts, and absence of queue/scheduler/readiness,
+  Stage 9 planning, renderer-ready IR, backend-map/catalog/manifest reads,
+  source repair, registry/dispatcher/callback/plugin/backfeed/fixpoint
+  behavior, and category-based semantic dispatch.
 
 Deferred parity checks:
 

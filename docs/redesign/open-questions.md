@@ -25,18 +25,17 @@ context/direct-intrinsic semantics.
 
 Current follow-up:
 
-Post-M102 planning selects M103 to create a static Stage 8 backend-translation
-boundary worklist inventory over accepted concrete M99/M100 facts. That
-narrows visibility of the backend-facing frontier but does not choose the next
-semantic resolver. Future planning after M103 must still decide which row or
-typed backend request family comes next: Rust exact-array uninit after typed
-`{type}` context exists, scalar/vector backend type spelling, backend modifier
-values, direct-intrinsic request resolution, or renderer-ready exact-array
-body IR.
+M103 created a static Stage 8 backend-translation boundary worklist inventory
+over accepted concrete M99/M100 facts. That narrows visibility of the
+backend-facing frontier but does not choose the next semantic resolver. Future
+planning after M103 must still decide which row or typed backend request family
+comes next: Rust exact-array uninit after typed `{type}` context exists,
+scalar/vector backend type spelling, backend modifier values,
+direct-intrinsic request resolution, or renderer-ready exact-array body IR.
 
 Implementation blocked:
 
-No for M100 or the planned M103 inventory/provenance slice. Yes for broad
+No for M100 or the accepted M103 inventory/provenance slice. Yes for broad
 backend-value/type translation, direct-intrinsic resolution, renderer-ready IR,
 and Rust uninit rendering until typed context, rule, and resolver boundaries
 are selected.

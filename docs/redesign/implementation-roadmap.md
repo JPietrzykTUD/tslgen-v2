@@ -13990,11 +13990,12 @@ Next concrete prompt:
 
 Status:
 
-Planned. Post-M102 planning selected M103 as the next lowering milestone.
+Accepted. Post-M102 planning selected M103 as the next lowering milestone.
 Internal planning review returned `Accept With Follow-Ups` after narrowing the
 initial broad "worklist" idea into a static typed inventory/provenance view.
-Human acceptance was recorded, and M103 is ready for execution through the
-active execution-review-loop prompt.
+Human acceptance was recorded. The M103 execution-review loop returned
+`Accept With Follow-Ups` after a focused fake-object validation revision and
+focused re-review.
 
 Goal:
 
@@ -14067,20 +14068,26 @@ Out of scope:
   expansion, category-based semantic dispatch, registries, dispatchers,
   callback maps, plugin mechanisms, hidden backfeeds, or fixpoint machinery.
 
-Expected outputs:
+Accepted outputs:
 
-- A new private typed Stage 8 backend-boundary worklist inventory module.
-- Worklist records that preserve accepted M99/M100 object identity and expose
+- New private typed Stage 8 backend-boundary worklist inventory modules:
+  `_lowering_backend_boundary_worklist.py`,
+  `_lowering_backend_boundary_worklist_models.py`,
+  `_lowering_backend_boundary_worklist_entries.py`,
+  `_lowering_backend_boundary_worklist_sources.py`,
+  `_lowering_backend_boundary_worklist_validation.py`, and
+  `_lowering_backend_boundary_worklist_diagnostics.py`.
+- Worklist records preserve accepted M99/M100 object identity and expose
   stable keys, source locations, candidate ids, source inventory/result keys,
   and classification states.
 - Diagnostics for mismatched context/source/provenance, malformed containers,
   mismatched optional M100 result, duplicate/conflicting entries, and
   unsupported source shapes.
-- Tests proving deterministic ordering, protocol/category fit, object-identity
+- Tests prove deterministic ordering, protocol/category fit, object-identity
   preservation, import boundaries, line-count guardrails, and the absence of
   backend planning/rendering/source-repair/category-dispatch behavior.
 
-Tests required:
+Accepted tests:
 
 - Positive tests over M99 request inventories with exact-array request,
   selected-body direct-intrinsic request, and no-request records.
@@ -14103,7 +14110,7 @@ Tests required:
   worklist module stays below a focused ceiling such as 400 lines unless a
   reviewed split justifies a different limit.
 
-Validation required:
+Validation completed:
 
 - `wc -l` for `boundary.py`, `_lowering_ir_contracts.py`, M99/M100 backend-
   translation modules, the new worklist module, and any new focused
@@ -14116,6 +14123,12 @@ Validation required:
 - `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases` for
   touched lowering modules and tests where practical.
 - `git diff --check`.
+
+Results: line count total `5248`; py-compile returned exit 0 with no output;
+focused worklist pytest returned `7 passed in 13.79s`; focused M100
+backend-translation result pytest returned `12 passed in 18.57s`; focused
+lowering mypy returned `Success: no issues found in 53 source files`; final
+`git diff --check` returned exit 0 with no output.
 
 Review notes:
 
@@ -14135,17 +14148,19 @@ Review notes:
   integration; it should expose a direct private lowering function over
   accepted M99/M100 values first.
 
-Selected follow-ups:
+Accepted follow-ups:
 
-- The M103 execution prompt must preserve the narrowed definition of
-  "worklist" as a static inventory/provenance view.
-- The M103 execution prompt must keep worklist-specific contract constants in
-  the new focused module, require arbitrary M102-protocol fake-object negative
-  tests, and include explicit line-count ceilings.
-- After accepted M103 execution, select one worklist row/classification as a
-  focused implementation milestone.
+- Post-M102 execution follow-ups were addressed during M103: the worklist
+  remained a static inventory/provenance view, worklist-specific contract
+  constants stayed in the focused module set, line-count ceilings/source
+  assertions were added, and arbitrary protocol-shaped fake-object negative
+  tests were tightened after focused review.
+- Future diagnostic-sensitive slices should keep tightening exact location and
+  message-snippet assertions around malformed source/container diagnostics.
+- After accepted M103, select one worklist row/classification or documented
+  lowering gap as a focused implementation milestone.
 
 Next concrete prompt:
 
-- `docs/agent/runs/m103-execution-review-loop-prompt.md` executes and reviews
-  accepted M103.
+- `docs/agent/runs/post-m103-planning-plus-review-prompt.md` selects the next
+  lowering milestone after accepted M103.

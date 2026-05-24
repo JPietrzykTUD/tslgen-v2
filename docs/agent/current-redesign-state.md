@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 102 is accepted.
+Milestone 103 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -77,6 +77,22 @@ Post-M102 planning selected
 Internal planning review returned `Accept With Follow-Ups` after narrowing the
 initial broad worklist idea into a static typed Stage 8 inventory/provenance
 view over accepted concrete M99/M100 facts. Human acceptance was recorded.
+
+The M103 execution-review loop returned `Accept With Follow-Ups` after a
+focused fake-object validation revision. M103 added a private typed Stage 8
+backend-boundary worklist inventory over accepted concrete M99 request
+inventories and optional concrete M100 exact-array backend-uninit translation
+results. It classifies accepted exact-array backend-uninit translated records,
+exact-array backend-uninit unresolved requests, selected-body direct-intrinsic
+deferred requests, and explicit no-accepted-backend-boundary-fact records while
+preserving source object identity and deterministic ordering. It rejects
+arbitrary protocol-shaped fake objects and malformed source containers with
+diagnostics. It kept the worklist as a static inventory/provenance view only,
+with no queue, scheduler, readiness oracle, Stage 9 backend plan,
+renderer-ready IR, backend-map/catalog/manifest reads, source scanning,
+translation lowerer calls, direct-intrinsic/SVE resolution, source repair,
+category-based semantic dispatch, facade integration, stage-contract
+integration, or `boundary.py`/`_lowering_ir_contracts.py` growth.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1150,33 +1166,34 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 103.
+Run post-M103 planning and review.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m103-execution-review-loop-prompt.md
+docs/agent/runs/post-m103-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 103: Stage 8 Backend-Translation Boundary Worklist Inventory Slice
+None. M103 is accepted; the active prompt is planning-only.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M102 planning selected M103 and returned Accept With Follow-Ups; human
-acceptance was recorded.
+M103 execution-review loop returned Accept With Follow-Ups after focused
+fake-object validation revision and re-review.
 ```
 
 Next expected action:
 
 ```text
-Run the active M103 execution-review-loop prompt with one write-capable
-executor followed by read-only review/audit subagents.
+Run the active post-M103 planning-plus-review prompt. The next task should
+focus on lowering and select exactly one M103 worklist row/classification or
+documented lowering gap as the next milestone.
 ```
 
 Accepted planning prompt:
@@ -2157,10 +2174,16 @@ Completed post-M102 acceptance-finalization prompt:
 docs/agent/runs/post-m102-acceptance-finalization-prompt.md
 ```
 
-Active M103 execution-review-loop prompt:
+Completed M103 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m103-execution-review-loop-prompt.md
+```
+
+Active post-M103 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m103-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -3226,25 +3249,25 @@ docs/agent/runs/m103-execution-review-loop-prompt.md
   selected-body direct-intrinsic resolution, SVE semantics, scheduling,
   dependency closure, broad inheritance, registry, dispatcher, callback system,
   plugin mechanism, hidden backfeed, or fixpoint mechanism.
-- M103 is selected as a Stage 8 backend-translation boundary worklist inventory
+- M103 is accepted as a Stage 8 backend-translation boundary worklist inventory
   slice. "Worklist" means a static typed inventory/provenance view over
   accepted concrete M99/M100 facts, not an executable queue, scheduler,
   readiness oracle, dependency-closure plan, Stage 9 backend plan,
   renderer-ready IR, completeness oracle, source scanner, backend-map
   evaluator, registry, dispatcher, hidden backfeed, or fixpoint mechanism.
-- M103 must consume only accepted concrete M99
+- M103 consumes only accepted concrete M99
   `Stage8BackendTranslationRequestInventoryIr` values and optional accepted
   concrete M100 `ExactArrayBackendUninitTranslationResultIr` values. It must
   preserve object identity to accepted request/no-request/result/deferred
   records and reject arbitrary fake objects that merely satisfy M102
   protocols.
-- M103 must keep ownership in a focused private module, avoid `boundary.py`,
+- M103 keeps ownership in focused private modules, avoids `boundary.py`,
   `LoweredImplementation`, public facade, `_lower_input`, M99/M100 module, and
   `_lowering_ir_contracts.py` growth, and must not call translation lowerers
   to complete missing work.
-- M103 must not add new `GenerationLoweringStageName` values or
+- M103 did not add new `GenerationLoweringStageName` values or
   `_stage_contracts.py` integration, and any worklist-specific contract
-  constants must stay in the new focused module rather than
+  constants stay in the new focused module rather than
   `_lowering_ir_contracts.py`.
 - Future lowering package decomposition must preserve accepted M57-M99
   diagnostics, stage names, stage ordering, output identities, keys,
@@ -4578,22 +4601,21 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   negative protocol-conformance tests, import-boundary/forbidden-behavior
   tests, and keeping the category surface private without growing
   `boundary.py`.
-- Post-M102 planning follow-up for M103 execution: preserve the narrowed
-  definition of "worklist" as a static Stage 8 inventory/provenance view, not a
-  queue, scheduler, readiness oracle, Stage 9 plan, renderer-ready IR, source
-  scanner, backend-map evaluator, registry, dispatcher, hidden backfeed, or
-  fixpoint mechanism.
-- Post-M102 planning follow-up for M103 execution: after accepted M103
-  execution, select exactly one worklist row/classification as the next
-  focused implementation milestone.
-- Post-M102 planning follow-up for M103 execution: include explicit line-count
-  ceilings, prove `boundary.py` remains unchanged, and include negative tests
-  for arbitrary M102-conformant fake objects.
+- Post-M102 planning follow-ups for M103 execution were addressed during M103:
+  the worklist remained a static inventory/provenance view, line-count
+  guardrails/source assertions were added, and protocol-shaped fake-object
+  negative tests were tightened after focused review.
+- M103 follow-up for post-M103 planning: select exactly one worklist
+  row/classification or documented lowering gap as the next focused
+  implementation milestone.
+- M103 validation follow-up: future diagnostic-sensitive slices should keep
+  tightening exact location and message-snippet assertions around malformed
+  source/container diagnostics.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M103 through the
-active M103 execution-review-loop prompt.
+No stop condition is active. The workflow is ready to run the active
+post-M103 planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -4679,6 +4701,39 @@ git diff --check
 ```
 
 The command returned exit 0 with no output.
+
+For M103 execution and review, validation completed with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_lowering_ir_contracts.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_entries.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_models.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_sources.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_validation.py tslgen/tests/unit/test_lowering_backend_boundary_worklist.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_lowering_ir_contracts.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_entries.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_models.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_sources.py tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_validation.py tslgen/tests/unit/test_lowering_backend_boundary_worklist.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_backend_boundary_worklist.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_backend_translation_result.py
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering tslgen/tests/unit/test_lowering_backend_boundary_worklist.py tslgen/tests/unit/test_lowering_backend_translation_result.py
+git diff --check
+```
+
+The M103 line counts were `1284 tslgen/src/tslgen/lowering/boundary.py`,
+`278 tslgen/src/tslgen/lowering/_lowering_ir_contracts.py`,
+`792 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py`,
+`207 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_sources.py`,
+`64 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_diagnostics.py`,
+`614 tslgen/src/tslgen/lowering/_lowering_backend_translation_result.py`,
+`275 tslgen/src/tslgen/lowering/_lowering_backend_translation_result_sources.py`,
+`85 tslgen/src/tslgen/lowering/_lowering_backend_translation_result_diagnostics.py`,
+`82 tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist.py`,
+`71 tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_diagnostics.py`,
+`324 tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_entries.py`,
+`145 tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_models.py`,
+`195 tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_sources.py`,
+`188 tslgen/src/tslgen/lowering/_lowering_backend_boundary_worklist_validation.py`,
+`644 tslgen/tests/unit/test_lowering_backend_boundary_worklist.py`, and
+`5248 total`. The py-compile command returned exit 0 with no output. The
+focused backend-boundary worklist test returned `7 passed in 13.79s`. The
+focused backend-translation result regression test returned
+`12 passed in 18.57s`. The focused lowering mypy check returned
+`Success: no issues found in 53 source files`. The standalone final
+`git diff --check` returned exit 0 with no output.
 
 For post-M99 planning, validation completed with:
 
