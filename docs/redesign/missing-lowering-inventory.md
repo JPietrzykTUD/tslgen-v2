@@ -97,6 +97,14 @@ It only means the accepted M96 manifest has no currently supported
 manifest-visible unresolved backend-handoff dependency records. This document
 tracks the broader known missing lowering surface.
 
+Post-M104 planning selected M105 as a KISS generator restart charter rather
+than another lowering micro-layer. The missing lowering surface below remains
+useful evidence, but it is not a mandate to keep extending the accepted
+M57-M104 request/result/worklist chain. Restart milestones should first prove
+the simple product path from `.tsl` source data to deterministic C++ and Rust
+library artifacts, then reintroduce lowering concepts only where two concrete
+stages need a shared typed boundary.
+
 ## Missing Work
 
 | Area | Evidence paths | Current accepted boundary | Required typed fact/request | Candidate milestone | Boundary notes |

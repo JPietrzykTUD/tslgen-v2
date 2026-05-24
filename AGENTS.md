@@ -31,6 +31,47 @@ Agents must not:
 - Treat dictionaries as domain objects past the parser boundary.
 - Hide file I/O inside parsing, validation, lowering, rendering, or selection logic.
 
+## Generator Architecture Simplicity Policy
+
+Future implementation work must optimize for a small, functional research
+prototype instead of architectural ceremony. Treat the accepted M57-M104
+lowering/request/result/worklist objects as evidence for requirements,
+diagnostics, and pitfalls, not as the default architecture for future product
+code.
+
+The generator goal is deliberately direct:
+
+- read `.tsl` source data;
+- build a validated catalog;
+- select implementations for explicit targets;
+- generate deterministic C++ and Rust library artifacts;
+- keep diagnostics and extension points clear enough for future `.tsl` edits.
+
+New work must prefer simple object-oriented concepts with obvious
+ownership, such as `TslProject`, `Catalog`, `Primitive`, `Implementation`,
+`Target`, `Generator`, `Backend`, `DiagnosticReporter`, and `ArtifactWriter`.
+Pure functions are still preferred for simple stateless transformations, but
+concepts that own state, invariants, or behavior should be encapsulated behind
+small classes or protocols.
+
+Do not add a new IR category, request/result family, inventory, worklist,
+provenance wrapper, dispatcher, registry, or pipeline stage unless two concrete
+accepted stages need to share that concept. The first restart implementation
+slice should prove an end-to-end path on a tiny fixture before reintroducing
+broad lowering machinery.
+
+## Old Implementation Quarantine And Repository Layout Policy
+
+The current top-level `tslgen/` tree is the old accepted/exploratory
+implementation state. It should be moved wholesale to `tslgenold/` as
+quarantined evidence before new restart product code is added. The new clean
+implementation must own the top-level `tslgen/` path.
+
+After that move, `tslgenold/` is evidence only, like `frozen/`, and must not
+become a runtime dependency of the new generator. Future milestones must not
+mix clean restart code and old implementation state under the same package
+path.
+
 ## Legacy-Code Policy
 
 `frozen/` may be inspected only as evidence for:
@@ -57,7 +98,10 @@ Useful legacy evidence includes:
 - `docs/redesign/`: source of truth for requirements, behavior, architecture, pipeline, testing, and roadmap.
 - `docs/agent/`: reusable prompts and review checklists for future agents.
 - `tsldata/`: current TSL data corpus and likely source fixture set for the redesign.
-- `tslgen/`: exploratory implementation sketch. Treat as non-binding.
+- `tslgen/`: reserved for the clean implementation after the layout reset;
+  until then, the current tree is old-state evidence to be quarantined.
+- `tslgenold/`: planned quarantine location for the current `tslgen/` tree
+  once the layout reset is executed.
 - `frozen/`: legacy evidence only. Do not extend it for the redesigned implementation.
 - `.agents/skills/`: optional repo-scoped workflows for redesign planning, execution, and review.
 

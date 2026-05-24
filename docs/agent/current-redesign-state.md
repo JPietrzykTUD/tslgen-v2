@@ -130,6 +130,19 @@ category-based semantic dispatch, public facade integration,
 `_lowering_ir_contracts.py`, M99/M100 modules, and M103 worklist modules out of
 scope.
 
+Post-M104 planning selected
+`Milestone 105: Clean KISS Generator Restart Charter Slice`. The selected plan
+responds to the project owner's concern that the accepted M57-M104 lowering
+path captured useful requirements but had become too complex for a research
+prototype. M105 freezes the accumulated lowering/request/result/worklist chain
+as evidence and plans a simpler object-oriented restart path from `.tsl`
+source data to a validated catalog, selected implementations, and
+deterministic C++ and Rust library artifacts. A user correction requires the
+restart layout to move the current top-level `tslgen/` tree to `tslgenold/`
+as old-state evidence while reserving `tslgen/` for the new clean
+implementation. Local planning review returned `Accept With Follow-Ups`;
+human acceptance is pending.
+
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
 
@@ -1202,33 +1215,36 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Run post-M104 planning and review.
+Finalize post-M104 planning acceptance.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m104-planning-plus-review-prompt.md
+docs/agent/runs/post-m104-acceptance-finalization-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. M104 is accepted; the active prompt is planning-only.
+None. M105 is selected by post-M104 planning; execution awaits human
+acceptance finalization.
 ```
 
 Latest review verdict:
 
 ```text
-M104 execution-review loop returned Accept With Follow-Ups.
+Post-M104 planning returned Accept With Follow-Ups after local generalized
+simplicity and layout guardrail documentation updates.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M104 planning-plus-review prompt. The next task should
-focus on lowering and select one next high-value milestone based on the
-accepted M104 translation expansion result surface.
+If the user accepts the post-M104 planning result, run the active
+acceptance-finalization prompt. It should update the workflow state so the
+next action is M105 execution and create/activate the M105 execution-review
+loop prompt.
 ```
 
 Accepted planning prompt:
@@ -2233,10 +2249,16 @@ Completed M104 execution-review-loop prompt:
 docs/agent/runs/m104-execution-review-loop-prompt.md
 ```
 
-Active post-M104 planning-plus-review prompt:
+Completed post-M104 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m104-planning-plus-review-prompt.md
+```
+
+Active post-M104 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m104-acceptance-finalization-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -3342,8 +3364,25 @@ docs/agent/runs/post-m104-planning-plus-review-prompt.md
   dispatchers, callbacks, plugins, hidden backfeeds, fixpoint machinery, or
   category-based semantic dispatch.
 - M104 keeps ownership in new focused private result-expansion modules and
-  avoid growth in `boundary.py`, `_lowering_ir_contracts.py`, M99/M100 modules,
+  avoids growth in `boundary.py`, `_lowering_ir_contracts.py`, M99/M100 modules,
   and M103 worklist modules.
+- M105 is selected as documentation/architecture work only. It must create a
+  KISS restart charter and must not implement product code, tests, parser
+  changes, generator changes, rendering, artifact writing, CLI behavior, or
+  generated output.
+- M105 treats accepted M57-M104 lowering/request/result/worklist artifacts as
+  evidence for requirements and regression risks, not as the architecture to
+  keep extending by default.
+- Before clean restart product code is added, the current top-level `tslgen/`
+  tree should move wholesale to `tslgenold/` as quarantined old-state evidence,
+  and the new clean implementation should own the top-level `tslgen/` path.
+- The restart product path is `.tsl` source data to validated catalog to
+  selected implementations to deterministic C++ and Rust library artifacts.
+- Restart milestones should prefer small object-oriented concepts with clear
+  ownership and must not add new IR categories, request/result families,
+  inventories, worklists, provenance wrappers, registries, dispatchers,
+  hidden backfeeds, or fixpoint machinery unless at least two concrete
+  accepted stages need the concept.
 - Future lowering package decomposition must preserve accepted M57-M99
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -3713,6 +3752,14 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 - Older post-M34 wording around "do not define M35 yet" may be cleaned up
   later. This is non-blocking for current planning.
+- Post-M104 planning follow-up: M105 execution must remain
+  documentation/architecture work, create the KISS restart charter, and avoid
+  product-code implementation until the first restart slice is accepted.
+- Post-M104 planning follow-up: M105 should plan the first structural restart
+  step that moves the current `tslgen/` tree to `tslgenold/` and reserves a
+  fresh `tslgen/` tree for clean restart code.
+- Post-M104 planning follow-up: M105 should identify which accepted tests
+  remain regression evidence rather than internal-architecture constraints.
 - The retried evidence audit confirmed additional exact shift evidence ranges:
   `tsldata/primitives/bitwise/shifts.tsl:535-547`, `:625-635`, `:842-887`,
   `:933-943`, `:1222-1244`, `:1268-1280`, `:1465-1481`, and `:1507-1518`.
@@ -4708,7 +4755,8 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 ## Stop Condition
 
 No stop condition is active. The workflow is ready to run the active
-post-M104 planning-plus-review prompt.
+post-M104 acceptance-finalization prompt after human acceptance of the M105
+KISS restart planning result.
 
 ## Validation Expectations
 

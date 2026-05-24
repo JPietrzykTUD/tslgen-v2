@@ -999,6 +999,35 @@ The following should remain private or replaceable:
 | New backend naming policy | Add backend-owned naming helper, diagnostics, and golden tests. |
 | New dependency report field | Add pure report model fields from accepted dependency results. |
 
+## KISS Restart Architecture Note
+
+Post-M104 planning selects a clean restart charter before more lowering
+feature work. For the restart path, object orientation is a maintainability
+tool: classes should own real state, invariants, or behavior, and protocols
+should mark true extension boundaries. The initial architecture should stay
+small enough that contributors can answer where to add a primitive, extension,
+concept, backend translation, renderer rule, diagnostic, or output artifact.
+
+The default restart vocabulary is intentionally small:
+
+- project/source loading;
+- parser and parse result;
+- catalog and domain objects;
+- target selection;
+- generator coordination;
+- backend emitters for C++ and Rust;
+- diagnostics;
+- artifact set and writer.
+
+The accepted M57-M104 lowering modules are evidence for semantic requirements
+and mistakes to avoid. They are not the object model the restart must extend.
+
+The restart also gets a fresh package path. The current top-level `tslgen/`
+tree should move to `tslgenold/` as quarantined old-state evidence, and the
+new implementation should live under a new top-level `tslgen/`. This keeps
+imports, tests, and future contributor expectations honest: old evidence is
+visibly separate from the clean generator.
+
 ## Pure Computation And Side Effects
 
 Side-effect boundaries:

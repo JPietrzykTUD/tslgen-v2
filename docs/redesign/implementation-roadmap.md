@@ -14370,3 +14370,117 @@ Next concrete prompt:
 
 - `docs/agent/runs/post-m104-planning-plus-review-prompt.md` selects the next
   lowering milestone after accepted M104.
+
+### Milestone 105: Clean KISS Generator Restart Charter Slice
+
+Status:
+
+Planned. Post-M104 planning selected M105 after the project owner and
+orchestrator agreed that the accepted M57-M104 lowering path captured useful
+requirements but had become too complex for the intended research prototype.
+Human acceptance is pending.
+
+Planning verdict:
+
+`Accept With Follow-Ups`. The plan is accepted for handoff, with the explicit
+follow-up that M105 execution must remain documentation/architecture work and
+must not begin product-code implementation.
+
+Goal:
+
+Create a clean restart charter for a KISS, object-oriented generator
+architecture that keeps the project focused on the real product path:
+
+```text
+.tsl source data -> validated catalog -> selected implementations -> C++ and Rust library artifacts
+```
+
+M105 does not discard accepted evidence. It freezes the M57-M104
+lowering/request/result/worklist path as requirement and regression evidence,
+then defines the simpler architecture the next implementation slice should
+follow.
+
+Scope:
+
+- Create a restart charter under `docs/redesign/`, such as
+  `docs/redesign/kiss-generator-restart.md`.
+- Name the small stable concepts and ownership boundaries for the restart:
+  `TslProject`, source documents, parse result, catalog, primitive,
+  implementation, target, generator, backend, diagnostic reporter, artifact
+  set, and artifact writer.
+- Define the minimal end-to-end vertical slice that should follow M105:
+  consume a tiny `.tsl` fixture, build a validated catalog, select one
+  implementation for explicit C++ and Rust targets, and emit deterministic
+  C++ and Rust library artifacts through an explicit writer boundary.
+- State how existing `docs/redesign/`, `tslgen/`, `tsldata/`, and `frozen/`
+  material may be used as evidence without shaping the restart around the
+  micro-IR chain or legacy module layout.
+- Define the repository layout reset: the current top-level `tslgen/` tree is
+  old-state evidence and must be moved wholesale to `tslgenold/` before new
+  restart product code is added; the new clean implementation owns the
+  top-level `tslgen/` path.
+- Add anti-complexity rules for future milestones: no new IR category,
+  request/result family, inventory, worklist, registry, dispatcher, or
+  provenance wrapper unless at least two concrete accepted stages need it.
+- Record which accepted lowering capabilities remain useful as requirements
+  and which existing implementation modules should be treated as quarantined
+  evidence for the restart path.
+- Update roadmap/state/design docs so the next concrete prompt is an M105
+  documentation/architecture execution-review loop.
+
+Out of scope:
+
+- Product-code implementation, parser rewrites, catalog implementation,
+  generator implementation, renderer implementation, artifact writing, tests,
+  fixture changes, generated output, or CLI behavior.
+- Physically moving `tslgen/` to `tslgenold/`; M105 must plan and require that
+  as the first structural restart milestone unless it records a better
+  accepted layout with the same clean separation.
+- Extending `boundary.py`, M57-M104 lowering modules, M99-M104 backend
+  request/result/worklist/expansion modules, or `_lowering_ir_contracts.py`.
+- Creating another micro-IR taxonomy, scheduler/readiness oracle, Stage 9
+  plan, backend dispatcher, plugin registry, hidden backfeed, fixpoint
+  mechanism, source repair layer, or renderer-side semantic inference path.
+- Porting legacy modules or preserving the current exploratory `tslgen/`
+  object graph for convenience.
+
+Accepted outputs:
+
+- A KISS restart charter document with explicit design rules and first-slice
+  acceptance criteria.
+- A repository-layout rule that quarantines the old state under `tslgenold/`
+  and reserves `tslgen/` for the clean restart implementation.
+- Roadmap/state/design-doc updates that mark M57-M104 as evidence for the
+  restart, not the implementation path to keep extending.
+- A concrete next-run prompt for M105 execution/review after human acceptance.
+
+Validation:
+
+```bash
+git diff --check
+```
+
+Review notes:
+
+- Reviewers should reject any M105 execution that starts product code or
+  creates another lowering micro-layer instead of clarifying the restart
+  architecture.
+- Reviewers should require the first restart implementation slice to generate
+  both C++ and Rust artifacts from a tiny fixture before adding broad
+  lowering/backend machinery.
+- Reviewers should treat object orientation as a simplicity tool, not as a
+  license for broad class hierarchies.
+
+Accepted follow-ups:
+
+- M105 execution must decide whether the first restart code slice should live
+  after a dedicated `tslgen/` -> `tslgenold/` quarantine move, or whether that
+  move should be folded into the first restart structural milestone.
+- M105 execution must record which currently accepted tests remain regression
+  evidence and which should not constrain the restart internals.
+
+Next concrete prompt:
+
+- `docs/agent/runs/post-m104-acceptance-finalization-prompt.md` finalizes
+  human acceptance of this planning result and creates/activates the M105
+  execution-review-loop prompt.

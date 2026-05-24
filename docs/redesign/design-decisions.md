@@ -1755,6 +1755,17 @@ Consequences:
   It is not a generic backend dispatcher and does not infer
   direct-intrinsic/SVE semantics from tokens, extension ids, type tags, byte
   sizes, primitive names, raw source text, or hardware-looking strings.
+- Post-M104 planning selects M105 as a KISS generator restart charter instead
+  of another lowering micro-layer. The decision treats the accepted M57-M104
+  lowering/request/result/worklist path as evidence for requirements,
+  diagnostics, and regression concerns, not as the architecture to keep
+  extending by default. The restart product path is `.tsl` source data to a
+  validated catalog, selected implementations, and deterministic C++ and Rust
+  library artifacts. New abstractions must earn their place by simplifying
+  that path or by serving at least two concrete accepted stages. The restart
+  also requires a package-layout reset: the current top-level `tslgen/` tree is
+  old-state evidence that should move to `tslgenold/`, while the clean restart
+  implementation owns the top-level `tslgen/` path.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

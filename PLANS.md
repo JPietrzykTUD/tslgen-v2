@@ -156,6 +156,50 @@ Every lowering milestone must also pass an IR taxonomy pressure check:
 If the honest answer is "another one-off layer", plan a consolidation slice
 before adding more feature-specific IR.
 
+## Simplicity And End-To-End Slice Guardrails
+
+Future planning must optimize for the shortest maintainable path from source
+data to generated libraries, not for extending the existing micro-IR chain.
+The accepted M57-M104 lowering path proved useful requirements, but it also
+showed how quickly typed request/result/worklist layers can become too
+ceremonial for a research prototype.
+
+The generator architecture should make these concepts boring and explicit:
+
+- `.tsl` source documents and parse results;
+- a validated catalog of primitives, type/lane groups, extensions, templates,
+  and backend translation metadata;
+- target selection over backend, extension, type, attributes, and feature
+  requirements;
+- a small generator service coordinating catalog, selection, backend
+  translation, rendering, and artifact writing;
+- backend-specific C++ and Rust emitters behind narrow protocols;
+- diagnostics with source locations.
+
+Planning and execution must apply these pressure checks:
+
+- Can a tiny fixture generate one deterministic C++ artifact and one
+  deterministic Rust artifact sooner?
+- Is this abstraction needed by at least two concrete stages right now?
+- Can an OO object with clear ownership replace a chain of request/result
+  wrappers?
+- Would a future contributor adding a primitive, extension, concept, or backend
+  know where to make the change?
+- Is this stage doing product work, or only preserving previous milestone
+  history?
+
+When the answer points toward ceremony, simplify the design before coding.
+Current M57-M104 artifacts remain evidence and regression material, but future
+milestones should not extend them by default.
+
+## Clean Implementation Layout
+
+Repository layout is part of the architecture contract. Before new restart
+product code is added, the current top-level `tslgen/` tree should be moved to
+`tslgenold/` as quarantined old-state evidence, and a fresh top-level
+`tslgen/` should contain the new implementation. Future milestones must not
+mix clean implementation code with the old tree under the same package path.
+
 Do not include:
 
 - unrelated cleanup
