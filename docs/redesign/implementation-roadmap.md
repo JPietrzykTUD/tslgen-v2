@@ -14570,7 +14570,14 @@ Review notes:
 
 Status:
 
-Planned as the first clean restart product-code milestone after accepted M106.
+Accepted. M107 completed the first clean restart product-code vertical slice
+after focused architecture, documentation, and validation revisions. It added
+a tiny source-loading, parsing, catalog, selection, backend-emission, artifact
+value, test, and fixture surface under the fresh `tslgen/` path. It also added
+a repo-root import shim and pytest path configuration for uninstalled
+validation. It did not import from `tslgenold/` or `frozen/`, did not add broad
+TSL/TSIL parsing, and did not add lowering IR taxonomies, worklists,
+registries, dispatchers, hidden backfeeds, or fixpoint mechanisms.
 
 Goal:
 
@@ -14634,3 +14641,74 @@ Review notes:
   end-to-end fixture.
 - Reviewers should require the C++ and Rust artifact outputs to come from typed
   clean restart values, not renderer-side inference over raw source text.
+
+### Milestone 108: Minimal Clean Body Lowering Boundary Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M107.
+
+Goal:
+
+Introduce the first deliberately small lowering boundary in the clean restart
+path:
+
+```text
+selected typed implementation -> backend-neutral lowered function -> C++ and Rust artifact values
+```
+
+Scope:
+
+- Add a focused `tslgen/src/tslgen/lowering/` module for the exact M107
+  `add(left, right)` / `scalar` / `si32` body only.
+- Lower the selected M107 implementation into a small backend-neutral typed
+  function value with deterministic name, parameters, scalar type tag, and
+  binary-add expression.
+- Make C++ and Rust emitters consume the lowered function value rather than
+  reading the catalog body directly.
+- Preserve M107 generated C++ and Rust artifact content, logical paths,
+  diagnostics, and deterministic ordering.
+- Add tests for the lowering value, pipeline determinism, backend consumption
+  of lowered values, and at least one unsupported-lowering diagnostic
+  boundary.
+
+Out of scope:
+
+- Broad TSIL/body semantics, expression parsing, branch pruning, dependency
+  closure, backend manifests, type maps beyond `si32`, hardware autodetection,
+  CLI compatibility, generated tests, artifact writing, or corpus-wide
+  `tsldata/` parsing.
+- Runtime imports from `frozen/` or `tslgenold/`.
+- Porting, adapting, compatibility-wrapping, or migrating old `tslgenold/`
+  lowering modules.
+- Lowering IR taxonomies, worklists, inventories, registries, dispatchers,
+  plugin systems, hidden backfeeds, or fixpoint mechanisms.
+
+Accepted outputs:
+
+- A tiny clean lowering boundary exists and has obvious ownership.
+- Backends receive already-lowered typed values for the accepted fixture.
+- Existing M107 outputs remain byte-stable.
+- Unsupported lowering inputs produce structured diagnostics instead of source
+  repair or renderer-side inference.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+```
+
+Run the smallest compile/import checks needed for the revised clean package
+surface. Do not run the old `tslgenold` validation profile as proof of the
+clean product slice.
+
+Review notes:
+
+- Reviewers should reject any broad lowering framework, scheduler, registry,
+  or compatibility port.
+- Reviewers should require the lowering boundary to make backend ownership
+  simpler, not add milestone-shaped wrappers for their own sake.
+- Reviewers should require diagnostics for unsupported lowering inputs and
+  byte-stable artifact outputs for the accepted fixture.

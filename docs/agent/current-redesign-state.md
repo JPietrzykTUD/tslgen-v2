@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 106 is accepted.
+Milestone 107 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -158,6 +158,19 @@ reserved a fresh top-level `tslgen/` path with only a README placeholder, and
 updated layout/workflow docs. It kept `frozen/` unchanged and did not add
 parser, catalog, generator, backend, renderer, writer, CLI, fixture, test, or
 generated-output product code.
+
+The M107 execution-review loop returned `Accept` after focused architecture,
+documentation, and validation revisions. M107 added the first tiny clean
+restart source-to-artifact slice under fresh `tslgen/`: explicit source
+loading, narrow parsing for the documented M107 fixture form, typed catalog
+values, parser-to-domain catalog promotion outside `domain`, explicit target
+selection, deterministic C++ and Rust in-memory artifact values, focused
+fixtures/tests, root pytest path configuration, and a repo-root import shim for
+uninstalled validation. It preserved `tslgenold/` and `frozen/` as
+evidence-only, did not port old modules, and did not add broad TSIL/body
+semantics, dependency closure, backend manifests, CLI compatibility, artifact
+writing, generated-output parity, lowering IR taxonomies, worklists,
+registries, dispatchers, hidden backfeeds, or fixpoint mechanisms.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1231,34 +1244,35 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 107.
+Execute Milestone 108.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m107-execution-review-loop-prompt.md
+docs/agent/runs/m108-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 107: Tiny Clean Restart Source-To-Artifact Vertical Slice
+Milestone 108: Minimal Clean Body Lowering Boundary Slice
 ```
 
 Latest review verdict:
 
 ```text
-M106 execution-review loop returned Accept With Follow-Ups after layout,
-architecture, validation, and focused documentation re-review audits.
+M107 execution-review loop returned Accept after layout, architecture,
+documentation, and validation audits plus focused revisions.
 ```
 
 Next expected action:
 
 ```text
-Run the active M107 execution-review-loop prompt. M107 may start the first
-clean product slice under the fresh `tslgen/` path, but must keep
-`tslgenold/` and `frozen/` evidence-only.
+Run the active M108 execution-review-loop prompt. M108 may introduce the first
+tiny clean lowering boundary after M107, but must keep the KISS restart
+guardrails: no old-runtime imports, no broad lowering framework, and no
+renderer-side semantic inference.
 ```
 
 Accepted planning prompt:
@@ -2287,15 +2301,27 @@ Completed M106 execution-review-loop prompt:
 docs/agent/runs/m106-execution-review-loop-prompt.md
 ```
 
-Active M107 execution-review-loop prompt:
+Completed M107 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m107-execution-review-loop-prompt.md
 ```
 
+Active M108 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m108-execution-review-loop-prompt.md
+```
+
 ## Current Boundary Rules
 
 - `frozen/` is evidence only and must never become runtime input.
+- `tslgenold/` is evidence-only old implementation state and must never become
+  a runtime dependency of the clean restart package.
+- M107 established the tiny clean source-to-artifact path under fresh
+  `tslgen/`.
+- M108 is limited to the exact M107 `add(left, right)` / `scalar` / `si32`
+  body lowering boundary.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and
@@ -3791,10 +3817,10 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   product code was added.
 - M105 execution follow-up addressed by M106: old `tslgen/` state was moved to
   `tslgenold/` before clean product code starts under fresh `tslgen/`.
-- M106 follow-up for the first clean product slice: M107 must establish its own
-  targeted clean-package validation surface under fresh `tslgen/`; the old
-  `tslgenold` validation profile may remain evidence but must not be used as
-  proof of the new product path.
+- M106 follow-up addressed by M107: M107 established its own targeted
+  clean-package validation surface under fresh `tslgen/`; the old `tslgenold`
+  validation profile remains evidence and must not be used as proof of the new
+  product path.
 - M106 architecture follow-up: before any release/stabilization work resumes,
   retire or rewrite `docs/redesign/stabilization-release-checklist.md` for the
   post-M106 clean restart; it still reads like the old `tslgen` package is an
@@ -4803,7 +4829,7 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M107
+No stop condition is active. The workflow is ready to run the active M108
 execution-review-loop prompt.
 
 ## Validation Expectations
@@ -4813,6 +4839,20 @@ For docs-only planning tasks:
 ```bash
 git diff --check
 ```
+
+For M107 clean restart vertical slice, validation completed with:
+
+```bash
+git diff --check
+PYTHONDONTWRITEBYTECODE=1 python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+PYTHONDONTWRITEBYTECODE=1 python -B -c "from tslgen import Artifact, ArtifactSet, Diagnostic, GenerationResult, Generator, SourceLocation, Target, TslProject, generate_from_paths; print('import surface ok')"
+PYTHONPYCACHEPREFIX=/tmp/py-bench-m107-final-compile python -m compileall -q tslgen/__init__.py tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+```
+
+`git diff --check` returned exit 0 with no output. The targeted clean-package
+test command returned exit 0 with `4 passed`. The repo-root import-surface
+check returned exit 0 and printed `import surface ok`. The compileall command
+returned exit 0 with no output.
 
 For M106 layout reset, validation completed with:
 

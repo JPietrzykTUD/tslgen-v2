@@ -48,6 +48,28 @@ Compatibility expectation: TSL files in `tsldata/` must parse without errors.
 generated artifact, and it must be validated through parser, catalog, and
 semantic probes rather than Python linting or type-checking.
 
+### M107 Tiny Restart Source Form
+
+Milestone 107 starts the clean restart product path with one intentionally tiny
+fixture form. The source-loading boundary reads one explicit `.tsl` file, and
+the parser accepts exactly this three-line non-comment shape:
+
+```text
+prim<v:=(v,v)> add(left, right):
+  implementation scalar si32:
+    body add(left, right)
+```
+
+Catalog construction promotes that parsed form into one typed `binary`
+primitive, one `scalar`/`si32` implementation, and a typed binary-add body.
+C++ and Rust emitters consume the selected typed implementation to produce
+in-memory artifact values; they do not infer semantics from raw source text or
+write files.
+
+Nearby body forms are diagnostic boundaries, not repair targets. For example,
+`body add(left)` parses as the narrow body-line syntax but fails catalog
+validation with `TSL-CATALOG-UNSUPPORTED-BODY` at the body source location.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:
