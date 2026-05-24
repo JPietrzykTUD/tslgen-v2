@@ -1,6 +1,13 @@
 from pathlib import Path
 
-from tslgen import Target, generate_from_paths
+from tslgen import (
+    Artifact,
+    ArtifactSet,
+    ArtifactWriteRecord,
+    Target,
+    generate_from_paths,
+    write_artifacts,
+)
 from tslgen.analysis.selection import SelectedImplementation
 from tslgen.backends.cpp import CppBackend
 from tslgen.backends.rust import RustBackend
@@ -122,6 +129,102 @@ def test_tiny_fixture_pipeline_is_deterministic() -> None:
 
     assert first == second
     assert first.artifacts.digest_manifest() == second.artifacts.digest_manifest()
+
+
+def test_m109_artifact_writer_writes_m108_artifact_set(
+    tmp_path: Path,
+) -> None:
+    result = generate_from_paths((VALID_TINY_ADD,), _targets())
+    output_root = tmp_path / "generated"
+
+    report = write_artifacts(result.artifacts, output_root)
+
+    assert result.diagnostics == ()
+    assert report.diagnostics == ()
+    assert report.output_root == output_root.resolve()
+    assert report.written == (
+        ArtifactWriteRecord(
+            logical_path="include/tsl/add_scalar_si32.hpp",
+            written_path=(
+                output_root.resolve()
+                / "include"
+                / "tsl"
+                / "add_scalar_si32.hpp"
+            ),
+            digest="15c4205245a121d06a1ac8255afb9021cb3653dfe9291f7ca11de7686e832e3a",
+            bytes_written=len(CPP_CONTENT.encode("utf-8")),
+        ),
+        ArtifactWriteRecord(
+            logical_path="src/add_scalar_si32.rs",
+            written_path=output_root.resolve() / "src" / "add_scalar_si32.rs",
+            digest="9086cbbf44026eab3e4ad05490ac50879a9af3ac9d6f3ee5f7f0e28f91eb9870",
+            bytes_written=len(RUST_CONTENT.encode("utf-8")),
+        ),
+    )
+    assert (output_root / "include" / "tsl" / "add_scalar_si32.hpp").read_text(
+        encoding="utf-8"
+    ) == CPP_CONTENT
+    assert (output_root / "src" / "add_scalar_si32.rs").read_text(
+        encoding="utf-8"
+    ) == RUST_CONTENT
+
+
+def test_m109_artifact_writer_rejects_unsafe_paths_before_writing(
+    tmp_path: Path,
+) -> None:
+    artifacts = ArtifactSet.create(
+        (
+            Artifact(
+                logical_path="/absolute.hpp",
+                content="absolute",
+                media_type="text/plain",
+            ),
+            Artifact(
+                logical_path="../escape.hpp",
+                content="escape",
+                media_type="text/plain",
+            ),
+            Artifact(
+                logical_path="duplicate.hpp",
+                content="first",
+                media_type="text/plain",
+            ),
+            Artifact(
+                logical_path="duplicate.hpp",
+                content="second",
+                media_type="text/plain",
+            ),
+            Artifact(
+                logical_path="nested",
+                content="file",
+                media_type="text/plain",
+            ),
+            Artifact(
+                logical_path="nested/file.hpp",
+                content="child",
+                media_type="text/plain",
+            ),
+            Artifact(
+                logical_path="safe.hpp",
+                content="safe",
+                media_type="text/plain",
+            ),
+        )
+    )
+    output_root = tmp_path / "generated"
+
+    report = write_artifacts(artifacts, output_root)
+
+    assert report.written == ()
+    assert [diagnostic.code for diagnostic in report.diagnostics] == [
+        "TSL-WRITE-ABSOLUTE-LOGICAL-PATH",
+        "TSL-WRITE-DIRECTORY-FILE-COLLISION",
+        "TSL-WRITE-DUPLICATE-LOGICAL-PATH",
+        "TSL-WRITE-PARENT-ESCAPE",
+    ]
+    assert all(diagnostic.severity == "error" for diagnostic in report.diagnostics)
+    assert not output_root.exists()
+    assert not (tmp_path / "escape.hpp").exists()
 
 
 def test_invalid_fixture_reports_source_aware_body_diagnostic() -> None:

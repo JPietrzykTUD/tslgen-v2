@@ -4,6 +4,8 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from tslgen.analysis.selection import Target
+from tslgen.io.artifact_writer import ArtifactWriteReport, ArtifactWriter
+from tslgen.io.artifacts import ArtifactSet
 from tslgen.pipeline.generator import GenerationResult, Generator, TslProject
 
 
@@ -18,3 +20,12 @@ def generate_from_paths(
         targets=tuple(targets),
     )
     return Generator().generate(project)
+
+
+def write_artifacts(
+    artifacts: ArtifactSet,
+    output_root: Path | str,
+) -> ArtifactWriteReport:
+    """Write existing in-memory artifacts under an explicit output root."""
+
+    return ArtifactWriter().write(artifacts, output_root)

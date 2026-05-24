@@ -14728,7 +14728,17 @@ Review notes:
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M108.
+Accepted. M109 added the first explicit filesystem-write boundary for clean
+restart artifact values. The writer consumes existing in-memory `ArtifactSet`
+values plus a caller-provided output root, validates paths before writing,
+rejects unsafe logical paths with structured `TSL-WRITE-*` diagnostics,
+returns deterministic typed write reports, and keeps the existing
+`generate_from_paths(...)` path in-memory only. M109 did not add CLI
+integration, generated test execution, CMake/Cargo scaffolding, broad output
+tree parity, output-root cleaning, formatting/compiling generated C++/Rust,
+runtime imports from `frozen/` or `tslgenold/`, old writer migration, new
+lowering semantics, backend manifests, dependency closure, registries,
+dispatchers, plugin systems, hidden backfeeds, or fixpoint mechanisms.
 
 Goal:
 
@@ -14793,3 +14803,89 @@ Review notes:
 - Reviewers should require path-safety diagnostics and deterministic report
   ordering.
 - Reviewers should reject broad CLI/output-layout parity work in M109.
+
+### Milestone 110: Tiny Clean Scalar Type Lowering Table Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M109.
+This milestone intentionally follows the user's lowering focus instead of
+opening CLI work.
+
+Goal:
+
+Broaden the tiny clean lowering path from one hard-coded scalar type to a small
+typed scalar-type lowering table:
+
+```text
+selected scalar add implementation -> lowered function with typed scalar type descriptor
+```
+
+Scope:
+
+- Add a small lowering-owned scalar type descriptor model and typed descriptor
+  table for the clean restart scalar types selected for this slice.
+- Keep the descriptor backend-neutral: tags, kind/family, bit width, and
+  signedness/floating classification are lowering facts; C++ and Rust spelling
+  remain backend-owned.
+- Replace the M108 lowerer's single `si32` type constant with lookup through
+  this typed descriptor table.
+- Allow the exact existing `scalar` / `add(left, right)` clean source form to
+  use the supported scalar type tags, while malformed or unsupported tags
+  remain diagnostic boundaries.
+- Update C++ and Rust backends only as consumers of the lowered scalar type
+  descriptor, with small backend-owned spelling maps, so supported scalar tags
+  can be emitted deterministically.
+- Preserve the existing M107/M108 `si32` artifact bytes and logical paths.
+- Add focused tests for descriptor lookup, successful lowering for the
+  supported tags, unsupported-type diagnostics, byte-stable `si32` output, and
+  at least one non-`si32` end-to-end clean fixture or generated temporary
+  source.
+
+Out of scope:
+
+- CLI integration or legacy CLI compatibility.
+- Writer changes beyond preserving M109 behavior.
+- New primitive names, templates, arities, extensions, vector/SIMD shapes,
+  hardware feature selection, branch pruning, generation-time helper
+  evaluation, or broad TSIL parsing.
+- Type metadata loaded from `tsldata`, backend manifests, or old generator
+  maps.
+- Runtime imports from `frozen/` or `tslgenold/`.
+- Porting, adapting, compatibility-wrapping, or migrating old type/lowering
+  modules.
+- Dependency closure, registries, dispatchers, plugin systems, hidden
+  backfeeds, fixpoint mechanisms, or a broad type-system framework.
+
+Accepted outputs:
+
+- The clean lowerer has an obvious typed scalar type descriptor boundary
+  instead of a one-off `si32` check.
+- Supported scalar type tags lower deterministically into backend-neutral
+  descriptor values.
+- C++ and Rust emitters consume the descriptor through backend-owned spelling
+  maps and keep existing `si32` output byte-stable.
+- Unsupported scalar tags produce structured diagnostics rather than silent
+  fallback, source repair, or renderer-side inference.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+```
+
+Run the smallest compile/import checks needed for the revised clean package
+surface. Do not run the old `tslgenold` validation profile as proof of the
+clean product slice.
+
+Review notes:
+
+- Reviewers should reject hard-coded backend or extension-specific lowering
+  behavior outside the typed descriptor table.
+- Reviewers should reject moving backend spelling policy into lowering.
+- Reviewers should reject broad parser/type-system/framework growth beyond the
+  exact scalar-add source form.
+- Reviewers should require deterministic descriptor ordering, diagnostics, and
+  byte-stable existing artifacts.

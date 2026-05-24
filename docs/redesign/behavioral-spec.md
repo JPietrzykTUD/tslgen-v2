@@ -84,6 +84,25 @@ selected body values produce a structured `TSL-LOWER-UNSUPPORTED-BODY`
 diagnostic at the body source location. The M107 source-level catalog
 diagnostic for nearby parsed fixture bodies remains unchanged.
 
+### M109 Artifact Writer Boundary
+
+Milestone 109 adds the first filesystem-write boundary for clean restart
+generated artifacts. The pure source-to-artifact API still returns an
+`ArtifactSet` without writing files. Callers must pass an existing
+`ArtifactSet` and an explicit output root to the artifact writer when they
+want filesystem output.
+
+The writer validates all artifact logical paths before writing. Absolute
+logical paths, parent-directory escapes, duplicate logical paths, duplicate
+normalized target paths, and file/directory collisions produce structured
+`TSL-WRITE-*` diagnostics. If validation produces any diagnostic, the writer
+does not create the output root or write partial artifacts.
+
+Successful writes create needed parent directories, write artifact content as
+UTF-8 text, and return deterministic written records sorted by logical path.
+Each record includes the logical path, resolved written path, content digest,
+UTF-8 byte count, and `written` status.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:
