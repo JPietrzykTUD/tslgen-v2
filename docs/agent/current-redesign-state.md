@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 100 is accepted.
+Milestone 101 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -33,6 +33,20 @@ Post-M100 planning selected
 The selected plan responds to the IR-complexity concern by defining a smaller
 lowering IR taxonomy/provenance contract and applying it only to the accepted
 M99/M100 backend-translation request/result path. Human acceptance was recorded.
+
+The M101 execution-review loop returned `Accept With Follow-Ups`. M101 added a
+small private lowering IR contract/provenance module, attached explicit
+taxonomy contracts only to the accepted M99/M100 backend-translation
+request/result path, consolidated repeated key-comparison and object-identity
+mismatch helper shape, and preserved accepted M99/M100 behavior, keys,
+diagnostics, source locations, object identities, stage names, ordering, and
+public imports. It kept new lowering semantics, backend translation semantics,
+new request/result families, rendering/output, Stage 9 planning, Rust
+translation, generic backend helper evaluation, backend map/catalog/manifest
+reads, raw source parsing, source repair, selected-body direct-intrinsic
+resolution, SVE semantics, scheduling, dependency closure, broad hierarchies,
+registries, dispatchers, hidden backfeeds, and fixpoint mechanisms out of
+scope.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1106,33 +1120,33 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 101.
+Run post-M101 planning and review.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m101-execution-review-loop-prompt.md
+docs/agent/runs/post-m101-planning-plus-review-prompt.md
 ```
 
-Active executor milestone:
+Active planning target:
 
 ```text
-Milestone 101: Lowering IR Taxonomy Contract and Backend-Translation Provenance Consolidation Slice
+Select the next lowering milestone after accepted M101.
 ```
 
 Latest review verdict:
 
 ```text
-Post-M100 planning accepted M101 after adding the lowering IR taxonomy
-contract guardrail.
+M101 execution-review loop returned Accept With Follow-Ups.
 ```
 
 Next expected action:
 
 ```text
-Run the active M101 execution-review-loop prompt with one write-capable
-executor followed by read-only review/audit subagents.
+Run the active post-M101 planning-plus-review prompt with read-only planning,
+boundary, extensibility, and documentation subagents. Do not implement code
+unless the prompt explicitly selects an executor task.
 ```
 
 Accepted planning prompt:
@@ -2077,10 +2091,16 @@ Completed post-M100 acceptance-finalization prompt:
 docs/agent/runs/post-m100-acceptance-finalization-prompt.md
 ```
 
-Active M101 execution-review-loop prompt:
+Completed M101 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m101-execution-review-loop-prompt.md
+```
+
+Active post-M101 planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m101-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -3123,7 +3143,7 @@ docs/agent/runs/m101-execution-review-loop-prompt.md
 - Rust `value_array_uninit` translation remains deferred until the required
   typed type context and rules are accepted.
 - M101 is a behavior-preserving lowering IR taxonomy and provenance
-  consolidation plan over the accepted M99/M100 backend-translation
+  consolidation slice over the accepted M99/M100 backend-translation
   request/result path only.
 - M101 must distinguish semantic facts, requests, results, inventories,
   provenance values, rule inputs, and stage envelopes, and must not create a
@@ -4452,11 +4472,17 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M100 execution follow-up: future milestones should avoid adding more
   orchestration to `boundary.py` without extracting boundary request/result
   assembly, because `boundary.py` remains close to the module-size guardrail.
+- M101 validation follow-up: future diagnostic-sensitive slices should tighten
+  diagnostic matrix tests to assert exact locations and important message
+  snippets in addition to code/severity.
+- M101 validation follow-up: `boundary.py` remains close to the 1300-line
+  guardrail, so future orchestration should be extracted rather than added
+  there.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to execute M101 through the
-active M101 execution-review-loop prompt.
+No stop condition is active. The workflow is ready for post-M101 planning
+through the active post-M101 planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -4465,6 +4491,32 @@ For docs-only planning tasks:
 ```bash
 git diff --check
 ```
+
+For M101, validation completed with:
+
+```bash
+wc -l tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_lowering_stage_assembly.py tslgen/src/tslgen/lowering/_lowering_ir_contracts.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result_diagnostics.py
+PYTHONPATH=tslgen/src python -m py_compile tslgen/src/tslgen/lowering/boundary.py tslgen/src/tslgen/lowering/_stage_contracts.py tslgen/src/tslgen/lowering/_lowering_stage_assembly.py tslgen/src/tslgen/lowering/_lowering_ir_contracts.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_request_diagnostics.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result_sources.py tslgen/src/tslgen/lowering/_lowering_backend_translation_result_diagnostics.py tslgen/tests/unit/test_lowering_backend_translation_result.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_backend_translation_result.py
+PYTHONPATH=tslgen/src pytest tslgen/tests/unit/test_lowering_boundary.py -k "m99 or backend_translation_request_inventory or exact_array_backend_uninit_translation_result or m100 or m101"
+MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases tslgen/src/tslgen/lowering tslgen/tests/unit/test_lowering_backend_translation_result.py
+git diff --check
+```
+
+The M101 line counts were `1284 tslgen/src/tslgen/lowering/boundary.py`,
+`274 tslgen/src/tslgen/lowering/_lowering_stage_assembly.py`,
+`120 tslgen/src/tslgen/lowering/_lowering_ir_contracts.py`,
+`792 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_inventory.py`,
+`207 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_sources.py`,
+`64 tslgen/src/tslgen/lowering/_lowering_backend_translation_request_diagnostics.py`,
+`614 tslgen/src/tslgen/lowering/_lowering_backend_translation_result.py`,
+`275 tslgen/src/tslgen/lowering/_lowering_backend_translation_result_sources.py`,
+`85 tslgen/src/tslgen/lowering/_lowering_backend_translation_result_diagnostics.py`,
+and `3715 total`. The py-compile command returned exit 0 with no output. The
+focused M100/M101 result test returned `9 passed`. The focused M99/M100/M101
+lowering-boundary command returned `5 passed, 352 deselected`. The focused
+lowering mypy check returned `Success: no issues found in 46 source files`.
+The standalone final `git diff --check` returned exit 0 with no output.
 
 For post-M99 planning, validation completed with:
 

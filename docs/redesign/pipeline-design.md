@@ -1050,9 +1050,11 @@ remain deterministic collections, not readiness claims. Results fulfill typed
 requests from explicit facts and rules; they do not render output or infer
 semantics from raw text.
 
-M101 is planned to apply this pressure check narrowly to the accepted M99/M100
+M101 applies this pressure check narrowly to the accepted M99/M100
 backend-translation request/result path before more lowering features are
-added.
+added. Its private contract/provenance helper records the small category
+vocabulary in code and consolidates key comparison plus object-identity
+mismatch checks without changing accepted pipeline behavior.
 
 ## Pipeline Result Shape
 

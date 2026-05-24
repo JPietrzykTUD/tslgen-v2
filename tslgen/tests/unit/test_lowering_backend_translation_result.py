@@ -10,6 +10,7 @@ from _helpers import assert_diagnostic
 import tslgen.lowering._lowering_backend_translation_result as translation_result
 import tslgen.lowering._lowering_backend_translation_result_diagnostics as translation_result_diagnostics
 import tslgen.lowering._lowering_backend_translation_result_sources as translation_result_sources
+import tslgen.lowering._lowering_ir_contracts as lowering_ir_contracts
 import tslgen.lowering._lowering_backend_translation_request_inventory as request_inventory_lowering
 import tslgen.lowering._lowering_completion_gap_inventory as gap_inventory_lowering
 import tslgen.lowering._lowering_completion_manifest as completion_manifest_lowering
@@ -479,6 +480,97 @@ class LoweringBackendTranslationResultTests(unittest.TestCase):
             tuple(record.key for record in second.deferred_request_records),
         )
 
+    def test_m101_ir_taxonomy_contracts_are_attached_to_m99_m100_path(
+        self,
+    ) -> None:
+        _manifest, _gap_inventory, inventory = _request_inventory()
+        rule = _cpp_rule()
+        result = lower_exact_array_backend_uninit_translation_result(
+            inventory,
+            cpp_value_array_uninit_rules=(rule,),
+        ).unwrap()
+
+        self.assertEqual(
+            lowering_ir_contracts.LOWERING_IR_CATEGORIES,
+            (
+                "semantic_fact",
+                "request",
+                "result",
+                "inventory",
+                "provenance",
+                "rule_input",
+                "stage_envelope",
+            ),
+        )
+        self.assertIs(
+            request_inventory_lowering.Stage8BackendTranslationRequestRecordIr.ir_contract,
+            lowering_ir_contracts.STAGE8_BACKEND_TRANSLATION_REQUEST_RECORD_CONTRACT,
+        )
+        self.assertIs(
+            inventory.request_records[0].ir_contract,
+            lowering_ir_contracts.STAGE8_BACKEND_TRANSLATION_REQUEST_RECORD_CONTRACT,
+        )
+        self.assertIs(
+            inventory.no_request_records[0].ir_contract,
+            lowering_ir_contracts.STAGE8_BACKEND_TRANSLATION_NO_REQUEST_RECORD_CONTRACT,
+        )
+        self.assertIs(
+            inventory.ir_contract,
+            lowering_ir_contracts.STAGE8_BACKEND_TRANSLATION_REQUEST_INVENTORY_CONTRACT,
+        )
+        self.assertIs(
+            rule.ir_contract,
+            lowering_ir_contracts.EXACT_ARRAY_BACKEND_UNINIT_TRANSLATION_RULE_CONTRACT,
+        )
+        self.assertIs(
+            result.result_records[0].ir_contract,
+            lowering_ir_contracts.EXACT_ARRAY_BACKEND_UNINIT_TRANSLATION_RECORD_CONTRACT,
+        )
+        self.assertIs(
+            result.ir_contract,
+            lowering_ir_contracts.EXACT_ARRAY_BACKEND_UNINIT_TRANSLATION_RESULT_CONTRACT,
+        )
+        self.assertEqual(inventory.ir_contract.category, "inventory")
+        self.assertEqual(inventory.request_records[0].ir_contract.category, "request")
+        self.assertEqual(inventory.no_request_records[0].ir_contract.category, "provenance")
+        self.assertEqual(rule.ir_contract.category, "rule_input")
+        self.assertEqual(result.ir_contract.category, "result")
+
+    def test_m101_provenance_identity_contract_reports_first_mismatch(
+        self,
+    ) -> None:
+        shared = object()
+        other = object()
+
+        self.assertIsNone(
+            lowering_ir_contracts.first_provenance_identity_mismatch(
+                (
+                    lowering_ir_contracts.LoweringProvenanceIdentity(
+                        shared,
+                        shared,
+                        "shared object identity",
+                    ),
+                )
+            )
+        )
+        self.assertEqual(
+            lowering_ir_contracts.first_provenance_identity_mismatch(
+                (
+                    lowering_ir_contracts.LoweringProvenanceIdentity(
+                        shared,
+                        shared,
+                        "shared object identity",
+                    ),
+                    lowering_ir_contracts.LoweringProvenanceIdentity(
+                        other,
+                        shared,
+                        "mismatched object identity",
+                    ),
+                )
+            ),
+            "mismatched object identity",
+        )
+
     def test_m100_existing_result_rejects_copied_request_record(
         self,
     ) -> None:
@@ -548,6 +640,7 @@ class LoweringBackendTranslationResultTests(unittest.TestCase):
         self,
     ) -> None:
         result_modules = (
+            lowering_ir_contracts,
             translation_result,
             translation_result_diagnostics,
             translation_result_sources,
@@ -612,6 +705,7 @@ class LoweringBackendTranslationResultTests(unittest.TestCase):
             for path in (
                 Path(cast(str, lowering_boundary.__file__)),
                 Path(cast(str, stage_assembly.__file__)),
+                Path(cast(str, lowering_ir_contracts.__file__)),
                 Path(cast(str, request_inventory_lowering.__file__)),
                 Path(cast(str, translation_result.__file__)),
                 Path(cast(str, translation_result_sources.__file__)),
@@ -620,6 +714,7 @@ class LoweringBackendTranslationResultTests(unittest.TestCase):
         }
         self.assertLessEqual(line_counts["boundary.py"], 1300)
         self.assertLess(line_counts["_lowering_stage_assembly.py"], 1000)
+        self.assertLess(line_counts["_lowering_ir_contracts.py"], 200)
         self.assertLess(
             line_counts["_lowering_backend_translation_request_inventory.py"],
             1000,

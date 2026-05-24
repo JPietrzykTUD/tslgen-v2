@@ -1306,13 +1306,12 @@ Recommended first parity checks:
   semantics, and no hardwired `{}` fallback outside typed rule input. Most M100
   coverage should live in a focused new test file rather than expanding the
   already-large lowering boundary test file.
-- Planned M101 coverage should prove IR-taxonomy/provenance consolidation is
-  behavior-preserving. Tests should compare accepted M99/M100 keys, diagnostics,
-  stage ordering, object identity, source locations, import boundaries, and
-  line counts before and after any shared contract extraction. M101 tests must
-  not require new backend semantics, rendering, Stage 9 planning, Rust
-  translation, source repair, raw helper parsing, registries, dispatchers, or
-  broad inheritance.
+- M101 coverage proves IR-taxonomy/provenance consolidation is
+  behavior-preserving. Tests compare accepted M99/M100 keys, diagnostics, stage
+  ordering, object identity, source locations, import boundaries, and line
+  counts after the shared contract extraction. M101 tests do not require new
+  backend semantics, rendering, Stage 9 planning, Rust translation, source
+  repair, raw helper parsing, registries, dispatchers, or broad inheritance.
 
 Deferred parity checks:
 

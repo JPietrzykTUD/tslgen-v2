@@ -13713,9 +13713,10 @@ Accepted follow-ups:
 
 Status:
 
-Planned. Post-M100 planning selected this milestone in response to the
-architecture concern that the lowering IR is becoming too complex and too
-milestone-specific.
+Accepted. M101 added a small private lowering IR contract/provenance module
+and applied it only to the accepted M99/M100 backend-translation request/result
+path. The slice preserved accepted M99/M100 behavior, keys, diagnostics,
+object identities, source locations, stage names, ordering, and public imports.
 
 Goal:
 
@@ -13766,16 +13767,17 @@ Out of scope:
 
 Expected outputs:
 
-- A documented lowering IR taxonomy contract that future milestones must use
-  before adding new IR classes.
-- A narrow behavior-preserving consolidation of M99/M100 backend-translation
-  provenance/request/result structure, or a documented reason why a smaller
-  shared contract cannot safely replace the repeated shape yet.
-- Tests proving accepted M99/M100 behavior, diagnostics, deterministic keys,
-  object identity, source locations, import boundaries, and line-count
+- The documented lowering IR taxonomy contract now has a narrow private code
+  contract in `tslgen/src/tslgen/lowering/_lowering_ir_contracts.py`.
+- M99/M100 request, no-request, inventory, rule-input, record, and result
+  classes expose explicit `ir_contract` values for the stable categories
+  `request`, `provenance`, `inventory`, `rule_input`, and `result`.
+- Repeated key-comparison and provenance identity mismatch checks in the
+  M99/M100 path now use the shared contract helpers without changing keys or
+  diagnostic messages.
+- Focused tests prove accepted M99/M100 behavior, diagnostics, deterministic
+  keys, object identity, source locations, import boundaries, and line-count
   guardrails are preserved.
-- A clearer boundary for when future milestones should add a new typed IR
-  object versus reusing a semantic fact/request/result/provenance contract.
 
 Tests required:
 
@@ -13805,7 +13807,7 @@ Validation required:
   touched lowering modules and tests where practical.
 - `git diff --check`.
 
-Planning review notes:
+Review notes:
 
 - The selected milestone deliberately pauses feature expansion after M100
   because the exact-array path now has many narrow package/request/inventory/
@@ -13814,15 +13816,22 @@ Planning review notes:
 - M101 should be behavior-preserving and should make future C++ declaration,
   direct-intrinsic, Rust, or Stage 9 milestones easier by giving them a smaller
   vocabulary for facts, requests, results, provenance, and rule inputs.
+- M101 did not add backend semantics, new request families, new result
+  families, rendering/output, Stage 9 planning, Rust translation, generic
+  backend helper evaluation, backend map/catalog/manifest reads during
+  lowering, raw source parsing, source repair, selected-body direct-intrinsic
+  resolution, SVE semantics, scheduling, dependency closure, a broad hierarchy,
+  registry, dispatcher, hidden backfeed, or fixpoint mechanism.
 
 Accepted follow-ups:
 
-- If M101 discovers that M99/M100 cannot be consolidated without semantic risk,
-  record the blocker in `docs/redesign/open-questions.md` and stop before
-  speculative abstraction.
+- Future diagnostic-sensitive slices should tighten diagnostic matrix tests to
+  assert exact locations and important message snippets in addition to
+  code/severity.
+- Future milestones should continue extracting orchestration instead of adding
+  to `boundary.py`, which remains close to the module-size guardrail.
 
 Next concrete prompt:
 
-- `docs/agent/runs/post-m100-acceptance-finalization-prompt.md` finalizes
-  human acceptance of the M101 plan and creates the M101 execution-review-loop
-  prompt.
+- `docs/agent/runs/post-m101-planning-plus-review-prompt.md` selects the next
+  lowering milestone after accepted M101.

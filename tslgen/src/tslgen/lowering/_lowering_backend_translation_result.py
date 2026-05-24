@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import ClassVar, Literal
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.core.result import Result
+from tslgen.lowering._lowering_ir_contracts import (
+    EXACT_ARRAY_BACKEND_UNINIT_TRANSLATION_RECORD_CONTRACT,
+    EXACT_ARRAY_BACKEND_UNINIT_TRANSLATION_RESULT_CONTRACT,
+    EXACT_ARRAY_BACKEND_UNINIT_TRANSLATION_RULE_CONTRACT,
+    LoweringIrContract,
+    LoweringIrKeyComparable,
+    LoweringProvenanceIdentity,
+    first_provenance_identity_mismatch,
+)
 from tslgen.lowering._lowering_backend_translation_request_inventory import (
     Stage8BackendTranslationRequestInventoryIr,
     Stage8BackendTranslationRequestRecordIr,
@@ -34,16 +43,12 @@ type ExactArrayBackendUninitTranslationResultState = Literal[
 type ExactArrayBackendUninitTranslationRuleName = Literal["value_array_uninit"]
 
 
-class _KeyComparable:
-    def __eq__(self, other: object) -> bool:
-        return type(self) is type(other) and getattr(self, "key") == getattr(other, "key")
-
-    def __hash__(self) -> int:
-        return hash(getattr(self, "key"))
-
-
 @dataclass(frozen=True, slots=True, eq=False)
-class ExactArrayBackendUninitTranslationRule(_KeyComparable):
+class ExactArrayBackendUninitTranslationRule(LoweringIrKeyComparable):
+    ir_contract: ClassVar[LoweringIrContract] = (
+        EXACT_ARRAY_BACKEND_UNINIT_TRANSLATION_RULE_CONTRACT
+    )
+
     backend_id: str
     rule_name: str
     translated_value: str
@@ -71,7 +76,11 @@ class ExactArrayBackendUninitTranslationRule(_KeyComparable):
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class ExactArrayBackendUninitTranslationRecordIr(_KeyComparable):
+class ExactArrayBackendUninitTranslationRecordIr(LoweringIrKeyComparable):
+    ir_contract: ClassVar[LoweringIrContract] = (
+        EXACT_ARRAY_BACKEND_UNINIT_TRANSLATION_RECORD_CONTRACT
+    )
+
     source_request_inventory: Stage8BackendTranslationRequestInventoryIr
     source_request_record: Stage8BackendTranslationRequestRecordIr
     source_rule: ExactArrayBackendUninitTranslationRule
@@ -118,7 +127,11 @@ class ExactArrayBackendUninitTranslationRecordIr(_KeyComparable):
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class ExactArrayBackendUninitTranslationResultIr(_KeyComparable):
+class ExactArrayBackendUninitTranslationResultIr(LoweringIrKeyComparable):
+    ir_contract: ClassVar[LoweringIrContract] = (
+        EXACT_ARRAY_BACKEND_UNINIT_TRANSLATION_RESULT_CONTRACT
+    )
+
     candidate_id: str
     source_location: SourceLocation | None
     result_state: ExactArrayBackendUninitTranslationResultState
@@ -301,11 +314,20 @@ def validate_exact_array_backend_uninit_translation_result(
         expected_exact_records,
         strict=True,
     ):
-        if actual.source_request_record is not expected_record:
+        identity_mismatch = first_provenance_identity_mismatch(
+            (
+                LoweringProvenanceIdentity(
+                    actual.source_request_record,
+                    expected_record,
+                    "accepted M99 request record object identity",
+                ),
+            )
+        )
+        if identity_mismatch is not None:
             return (
                 _translation_result_provenance_mismatch_diagnostic(
                     "exact-array backend-uninit translation records must "
-                    "preserve accepted M99 request record object identity",
+                    f"preserve {identity_mismatch}",
                     actual.source_location,
                 ),
             )
@@ -317,11 +339,20 @@ def validate_exact_array_backend_uninit_translation_result(
         expected_deferred_records,
         strict=True,
     ):
-        if actual_deferred is not expected_deferred:
+        identity_mismatch = first_provenance_identity_mismatch(
+            (
+                LoweringProvenanceIdentity(
+                    actual_deferred,
+                    expected_deferred,
+                    "deferred request record object identity",
+                ),
+            )
+        )
+        if identity_mismatch is not None:
             return (
                 _translation_result_provenance_mismatch_diagnostic(
                     "exact-array backend-uninit translation results must "
-                    "preserve deferred request record object identity",
+                    f"preserve {identity_mismatch}",
                     actual_deferred.source_location,
                 ),
             )
@@ -527,11 +558,20 @@ def _validate_translation_record(
     inventory: Stage8BackendTranslationRequestInventoryIr,
     record: ExactArrayBackendUninitTranslationRecordIr,
 ) -> tuple[Diagnostic, ...]:
-    if record.source_request_inventory is not inventory:
+    identity_mismatch = first_provenance_identity_mismatch(
+        (
+            LoweringProvenanceIdentity(
+                record.source_request_inventory,
+                inventory,
+                "source request inventory object identity",
+            ),
+        )
+    )
+    if identity_mismatch is not None:
         return (
             _translation_result_provenance_mismatch_diagnostic(
                 "exact-array backend-uninit translation records must preserve "
-                "source request inventory object identity",
+                f"{identity_mismatch}",
                 record.source_location,
             ),
         )

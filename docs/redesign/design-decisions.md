@@ -1723,17 +1723,18 @@ Consequences:
   render C++ or Rust output, must not create Stage 9 backend plans, and must
   not generalize to Rust, generic backend helper evaluation, or selected-body
   direct-intrinsic/SVE semantics.
-- M101 is selected as a behavior-preserving lowering IR taxonomy and
+- M101 is accepted as a behavior-preserving lowering IR taxonomy and
   provenance consolidation before adding more lowering features. The decision
   recognizes that the accepted M57-M100 path made semantics explicit but also
   accumulated many narrow request/result/inventory/provenance object families.
   Future IR additions must fit a small vocabulary of semantic facts, requests,
   results, inventories, provenance values, rule inputs, and stage envelopes.
-  M101 may apply that contract only to the M99/M100 backend-translation
-  request/result path and must not use consolidation as a vehicle for new
-  backend semantics, rendering, Stage 9 planning, source repair, broad
-  inheritance, registries, dispatchers, hidden backfeeds, or fixpoint
-  machinery.
+  M101 applies that contract only to the M99/M100 backend-translation
+  request/result path through a small private helper for contract attachment,
+  key comparison, and provenance identity mismatch checks. It does not use
+  consolidation as a vehicle for new backend semantics, rendering, Stage 9
+  planning, source repair, broad inheritance, registries, dispatchers, hidden
+  backfeeds, or fixpoint machinery.
 - The selected `_mm256_add_ps` output can still be golden-tested, but tests must
   also prove the value came from typed metadata and lowered helper IR rather
   than a renderer table.

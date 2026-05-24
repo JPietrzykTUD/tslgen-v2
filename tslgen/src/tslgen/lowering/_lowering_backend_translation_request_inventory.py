@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import ClassVar, Literal
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.core.result import Result
@@ -28,6 +28,15 @@ from tslgen.lowering._lowering_completion_manifest import (
     Stage8LoweringCompletionManifestUnresolvedDependencyRecordIr,
     validate_stage8_lowering_completion_manifest,
 )
+from tslgen.lowering._lowering_ir_contracts import (
+    STAGE8_BACKEND_TRANSLATION_NO_REQUEST_RECORD_CONTRACT,
+    STAGE8_BACKEND_TRANSLATION_REQUEST_INVENTORY_CONTRACT,
+    STAGE8_BACKEND_TRANSLATION_REQUEST_RECORD_CONTRACT,
+    LoweringIrContract,
+    LoweringIrKeyComparable,
+    LoweringProvenanceIdentity,
+    first_provenance_identity_mismatch,
+)
 from tslgen.lowering._operation_package_diagnostics import source_location_key
 from tslgen.lowering._operation_package_models import LoweringOperationPackageIr
 from tslgen.lowering._operation_package_selected_body import (
@@ -44,16 +53,12 @@ type Stage8BackendTranslationRequestKind = Literal[
 type Stage8BackendTranslationNoRequestReason = Literal["no_accepted_backend_scoped_request"]
 
 
-class _KeyComparable:
-    def __eq__(self, other: object) -> bool:
-        return type(self) is type(other) and getattr(self, "key") == getattr(other, "key")
-
-    def __hash__(self) -> int:
-        return hash(getattr(self, "key"))
-
-
 @dataclass(frozen=True, slots=True, eq=False)
-class Stage8BackendTranslationRequestRecordIr(_KeyComparable):
+class Stage8BackendTranslationRequestRecordIr(LoweringIrKeyComparable):
+    ir_contract: ClassVar[LoweringIrContract] = (
+        STAGE8_BACKEND_TRANSLATION_REQUEST_RECORD_CONTRACT
+    )
+
     source_manifest: Stage8LoweringCompletionManifestIr
     source_package_record: Stage8LoweringCompletionManifestPackageRecordIr
     source_package: LoweringOperationPackageIr
@@ -100,7 +105,11 @@ class Stage8BackendTranslationRequestRecordIr(_KeyComparable):
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class Stage8BackendTranslationNoRequestRecordIr(_KeyComparable):
+class Stage8BackendTranslationNoRequestRecordIr(LoweringIrKeyComparable):
+    ir_contract: ClassVar[LoweringIrContract] = (
+        STAGE8_BACKEND_TRANSLATION_NO_REQUEST_RECORD_CONTRACT
+    )
+
     source_manifest: Stage8LoweringCompletionManifestIr
     source_package_record: Stage8LoweringCompletionManifestPackageRecordIr
     source_package: LoweringOperationPackageIr
@@ -133,7 +142,11 @@ class Stage8BackendTranslationNoRequestRecordIr(_KeyComparable):
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class Stage8BackendTranslationRequestInventoryIr(_KeyComparable):
+class Stage8BackendTranslationRequestInventoryIr(LoweringIrKeyComparable):
+    ir_contract: ClassVar[LoweringIrContract] = (
+        STAGE8_BACKEND_TRANSLATION_REQUEST_INVENTORY_CONTRACT
+    )
+
     candidate_id: str
     source_location: SourceLocation | None
     inventory_state: Stage8BackendTranslationRequestInventoryState
@@ -682,53 +695,58 @@ def _validate_request_record_against_expected(
                 actual.source_location,
             ),
         )
-    identity_pairs: tuple[tuple[object | None, object | None, str], ...] = (
+    identity_mismatch = first_provenance_identity_mismatch(
         (
-            actual.source_manifest,
-            expected.source_manifest,
-            "source manifest object identity",
-        ),
-        (
-            actual.source_package_record,
-            expected.source_package_record,
-            "manifest package record object identity",
-        ),
-        (actual.source_package, expected.source_package, "source package identity"),
-        (
-            actual.source_gap_inventory,
-            expected.source_gap_inventory,
-            "gap inventory object identity",
-        ),
-        (
-            actual.source_gap_record,
-            expected.source_gap_record,
-            "gap record object identity",
-        ),
-        (
-            actual.source_unresolved_dependency_record,
-            expected.source_unresolved_dependency_record,
-            "unresolved dependency record object identity",
-        ),
-        (
-            actual.source_dependency_request,
-            expected.source_dependency_request,
-            "source dependency request object identity",
-        ),
-        (
-            actual.source_selected_body_entry,
-            expected.source_selected_body_entry,
-            "selected-body package entry object identity",
-        ),
+            LoweringProvenanceIdentity(
+                actual.source_manifest,
+                expected.source_manifest,
+                "source manifest object identity",
+            ),
+            LoweringProvenanceIdentity(
+                actual.source_package_record,
+                expected.source_package_record,
+                "manifest package record object identity",
+            ),
+            LoweringProvenanceIdentity(
+                actual.source_package,
+                expected.source_package,
+                "source package identity",
+            ),
+            LoweringProvenanceIdentity(
+                actual.source_gap_inventory,
+                expected.source_gap_inventory,
+                "gap inventory object identity",
+            ),
+            LoweringProvenanceIdentity(
+                actual.source_gap_record,
+                expected.source_gap_record,
+                "gap record object identity",
+            ),
+            LoweringProvenanceIdentity(
+                actual.source_unresolved_dependency_record,
+                expected.source_unresolved_dependency_record,
+                "unresolved dependency record object identity",
+            ),
+            LoweringProvenanceIdentity(
+                actual.source_dependency_request,
+                expected.source_dependency_request,
+                "source dependency request object identity",
+            ),
+            LoweringProvenanceIdentity(
+                actual.source_selected_body_entry,
+                expected.source_selected_body_entry,
+                "selected-body package entry object identity",
+            ),
+        )
     )
-    for actual_value, expected_value, label in identity_pairs:
-        if actual_value is not expected_value:
-            return (
-                _request_inventory_provenance_mismatch_diagnostic(
-                    "Stage 8 backend-translation request records must "
-                    f"preserve {label}",
-                    actual.source_location,
-                ),
-            )
+    if identity_mismatch is not None:
+        return (
+            _request_inventory_provenance_mismatch_diagnostic(
+                "Stage 8 backend-translation request records must preserve "
+                f"{identity_mismatch}",
+                actual.source_location,
+            ),
+        )
     return ()
 
 
@@ -744,27 +762,31 @@ def _validate_no_request_record_against_expected(
                 actual.source_location,
             ),
         )
-    identity_pairs: tuple[tuple[object, object, str], ...] = (
+    identity_mismatch = first_provenance_identity_mismatch(
         (
-            actual.source_manifest,
-            expected.source_manifest,
-            "source manifest object identity",
-        ),
-        (
-            actual.source_package_record,
-            expected.source_package_record,
-            "manifest package record object identity",
-        ),
-        (actual.source_package, expected.source_package, "source package identity"),
+            LoweringProvenanceIdentity(
+                actual.source_manifest,
+                expected.source_manifest,
+                "source manifest object identity",
+            ),
+            LoweringProvenanceIdentity(
+                actual.source_package_record,
+                expected.source_package_record,
+                "manifest package record object identity",
+            ),
+            LoweringProvenanceIdentity(
+                actual.source_package,
+                expected.source_package,
+                "source package identity",
+            ),
+        )
     )
-    for actual_value, expected_value, label in identity_pairs:
-        if actual_value is not expected_value:
-            return (
-                _request_inventory_provenance_mismatch_diagnostic(
-                    "Stage 8 backend-translation no-request records must "
-                    f"preserve {label}",
-                    actual.source_location,
-                ),
-            )
+    if identity_mismatch is not None:
+        return (
+            _request_inventory_provenance_mismatch_diagnostic(
+                "Stage 8 backend-translation no-request records must "
+                f"preserve {identity_mismatch}",
+                actual.source_location,
+            ),
+        )
     return ()
-
