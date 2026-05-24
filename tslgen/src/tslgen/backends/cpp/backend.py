@@ -40,7 +40,8 @@ class CppBackend:
     backend_id = "cpp"
 
     def emit(self, function: LoweredFunction) -> BackendEmitResult:
-        scalar_spelling = _scalar_type_spelling(function.scalar_type)
+        signature = function.signature
+        scalar_spelling = _scalar_type_spelling(signature.scalar_type)
         if scalar_spelling is None:
             return BackendEmitResult(
                 artifact=None,
@@ -50,7 +51,7 @@ class CppBackend:
                         code="TSL-BACKEND-UNSUPPORTED-TYPE",
                         message=(
                             "C++ emitter has no spelling for scalar type "
-                            f"{function.scalar_type.tag!r}"
+                            f"{signature.scalar_type.tag!r}"
                         ),
                         location=function.source,
                     ),
@@ -83,12 +84,12 @@ class CppBackend:
         )
         return BackendEmitResult(
             artifact=Artifact(
-                logical_path=f"include/tsl/{function.name}.hpp",
+                logical_path=f"include/tsl/{signature.name}.hpp",
                 content=content,
                 media_type="text/x-c++hdr",
                 metadata=(
                     ArtifactMetadata("backend", "cpp"),
-                    ArtifactMetadata("primitive", function.primitive_name),
+                    ArtifactMetadata("primitive", signature.primitive_name),
                 ),
             ),
             diagnostics=(),
@@ -100,9 +101,13 @@ class CppBackend:
         scalar_spelling: str,
         operator_spelling: str,
     ) -> str:
+        signature = function.signature
         expression = function.body.return_statement.expression
         left = expression.left.parameter_name
         right = expression.right.parameter_name
+        parameters = ", ".join(
+            f"{scalar_spelling} {parameter.name}" for parameter in signature.parameters
+        )
         return (
             "#pragma once\n"
             "\n"
@@ -110,8 +115,8 @@ class CppBackend:
             "\n"
             "namespace tsl {\n"
             "\n"
-            f"inline {scalar_spelling} {function.name}"
-            f"({scalar_spelling} {left}, {scalar_spelling} {right}) {{\n"
+            f"inline {scalar_spelling} {signature.name}"
+            f"({parameters}) {{\n"
             f"  return {left} {operator_spelling} {right};\n"
             "}\n"
             "\n"

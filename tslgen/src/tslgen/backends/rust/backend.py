@@ -40,7 +40,8 @@ class RustBackend:
     backend_id = "rust"
 
     def emit(self, function: LoweredFunction) -> BackendEmitResult:
-        scalar_spelling = _scalar_type_spelling(function.scalar_type)
+        signature = function.signature
+        scalar_spelling = _scalar_type_spelling(signature.scalar_type)
         if scalar_spelling is None:
             return BackendEmitResult(
                 artifact=None,
@@ -50,7 +51,7 @@ class RustBackend:
                         code="TSL-BACKEND-UNSUPPORTED-TYPE",
                         message=(
                             "Rust emitter has no spelling for scalar type "
-                            f"{function.scalar_type.tag!r}"
+                            f"{signature.scalar_type.tag!r}"
                         ),
                         location=function.source,
                     ),
@@ -83,12 +84,12 @@ class RustBackend:
         )
         return BackendEmitResult(
             artifact=Artifact(
-                logical_path=f"src/{function.name}.rs",
+                logical_path=f"src/{signature.name}.rs",
                 content=content,
                 media_type="text/x-rust",
                 metadata=(
                     ArtifactMetadata("backend", "rust"),
-                    ArtifactMetadata("primitive", function.primitive_name),
+                    ArtifactMetadata("primitive", signature.primitive_name),
                 ),
             ),
             diagnostics=(),
@@ -100,12 +101,16 @@ class RustBackend:
         scalar_spelling: str,
         operator_spelling: str,
     ) -> str:
+        signature = function.signature
         expression = function.body.return_statement.expression
         left = expression.left.parameter_name
         right = expression.right.parameter_name
+        parameters = ", ".join(
+            f"{parameter.name}: {scalar_spelling}" for parameter in signature.parameters
+        )
         return (
-            f"pub fn {function.name}"
-            f"({left}: {scalar_spelling}, {right}: {scalar_spelling})"
+            f"pub fn {signature.name}"
+            f"({parameters})"
             f" -> {scalar_spelling} {{\n"
             f"    {left} {operator_spelling} {right}\n"
             "}\n"

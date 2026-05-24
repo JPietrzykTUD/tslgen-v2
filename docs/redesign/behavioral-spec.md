@@ -163,6 +163,19 @@ language syntax and operator spellings. Existing accepted tiny artifact bytes,
 logical paths, ordering, descriptor tables, and lowering diagnostics remain
 stable.
 
+### M113 Tiny Function Signature Model
+
+Milestone 113 keeps the M112 source and body form unchanged but makes the
+lowered function signature explicit. A lowered function now carries one
+backend-neutral signature containing the deterministic function name, source
+primitive name, ordered parameters, and scalar type descriptor, paired with
+the M112 return-statement body.
+
+C++ and Rust emitters consume the explicit signature/body pair while still
+owning language syntax, type spelling, operator spelling, logical paths, and
+metadata. Existing accepted tiny artifact bytes, logical paths, ordering,
+descriptor tables, body values, and lowering diagnostics remain stable.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

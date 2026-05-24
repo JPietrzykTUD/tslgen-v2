@@ -15101,8 +15101,22 @@ Review notes:
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M112.
-This milestone keeps the next action focused on lowering.
+Accepted. M113 made the lowered function signature explicit for the tiny clean
+lowering path. `LoweredFunction` now carries a backend-neutral
+`LoweredFunctionSignature` paired with the accepted M112
+`LoweredFunctionBody`. The signature contains only the deterministic function
+name, source primitive name, ordered parameters, and scalar type descriptor.
+C++ and Rust emitters render from the explicit signature/body pair while
+keeping language syntax, type spelling, operator spelling, logical paths, and
+metadata backend-owned. Existing artifact bytes, logical paths, ordering,
+descriptor tables, body values, lowering diagnostics, and digests remain
+stable. M113 did not add parser/source syntax changes, source repair,
+`emit_return(...)` recognition, extra arities/parameter names, function
+overloading policy, namespaces/modules/packages, include planning, artifact
+layout changes, CLI work, writer changes, generated test execution,
+CMake/Cargo scaffolding, vector/SIMD semantics, backend manifests, old
+signature/body migration, registries, dispatchers, plugin systems, hidden
+backfeeds, fixpoint mechanisms, or a broad signature/type framework.
 
 Goal:
 
@@ -15184,3 +15198,90 @@ Review notes:
   dispatchers.
 - Reviewers should require current output bytes, diagnostics, descriptor
   behavior, and the M112 body boundary to remain stable.
+
+### Milestone 114: Tiny Clean Lowering Stage Output Boundary Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M113.
+This milestone keeps the next action focused on lowering.
+
+Goal:
+
+Make the lowering stage output explicit before backend emission:
+
+```text
+selected implementations -> ordered lowered function set plus diagnostics
+```
+
+Scope:
+
+- Add a small lowering-owned stage-output value for the current tiny clean
+  slice, such as a `LoweredFunctionSet`, carrying an ordered tuple of accepted
+  `LoweredFunction` values.
+- Add a small lowering-stage result for batch lowering of selected
+  implementations, carrying the lowered function set plus accumulated lowering
+  diagnostics.
+- Keep the existing single-selected lowering semantics intact; M114 may
+  factor that path into the batch output but must not change the accepted
+  M110/M111/M112/M113 descriptor, expression, body, or signature values.
+- Update the generator to lower the selected implementations for a target into
+  the explicit lowering stage output before backend emission, then emit only
+  from the output's ordered lowered functions.
+- Preserve current C++ and Rust artifact bytes, logical paths, metadata,
+  ordering, diagnostics, and digests.
+- Add focused tests for ordered stage-output functions, diagnostic
+  accumulation for unsupported selected implementations, generator use of the
+  stage output, byte-stable existing `add` output, and at least one
+  non-`add`/non-`si32` path still passing through the stage output.
+
+Out of scope:
+
+- New `.tsl` source syntax, parser/catalog source-form changes, source-body
+  repair, broad TSIL parsing, `emit_return(...)` recognition, additional body
+  shapes, or additional arities/parameter names.
+- New scalar types, new operations, vector/SIMD shapes, hardware feature
+  selection, branch pruning, generation-time helper evaluation, backend
+  manifests, dependency closure, or old generator maps.
+- Module/package planning, function overloading policy, include planning,
+  artifact layout changes, artifact-plan values, renderer-ready IR, or backend
+  emission inside lowering.
+- Cross-target coordination, schedulers, readiness oracles, queues, registries,
+  dispatchers, plugin systems, hidden backfeeds, fixpoint mechanisms, or a
+  broad IR/stage framework.
+- CLI integration, writer changes, generated test execution, CMake/Cargo
+  scaffolding, runtime imports from `frozen/` or `tslgenold/`, or porting old
+  lowering-stage modules.
+
+Accepted outputs:
+
+- The clean lowerer has an explicit lowering stage-output boundary for ordered
+  lowered function sets and diagnostics.
+- The generator consumes the stage output before backend emission without
+  changing backend ownership of rendering, spelling, logical paths, or
+  metadata.
+- Existing generated artifacts stay byte-stable.
+- The change creates a simple extension point for future multi-function
+  lowering without adding scheduler, package, artifact-plan, or broad IR
+  machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+```
+
+Run the smallest compile/import checks needed for the revised clean package
+surface. Do not run the old `tslgenold` validation profile as proof of the
+clean product slice.
+
+Review notes:
+
+- Reviewers should reject backend emission, artifact planning, module/package
+  planning, or renderer-ready IR inside lowering.
+- Reviewers should reject schedulers, queues, readiness oracles, registries,
+  dispatchers, hidden backfeeds, fixpoint behavior, or broad stage frameworks.
+- Reviewers should require current output bytes, diagnostics, descriptor
+  behavior, M112 body values, and M113 signature values to remain stable.

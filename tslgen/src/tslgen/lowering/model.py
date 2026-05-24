@@ -36,10 +36,15 @@ class LoweredFunctionBody:
 
 
 @dataclass(frozen=True, slots=True)
-class LoweredFunction:
+class LoweredFunctionSignature:
     name: str
     primitive_name: str
     parameters: tuple[LoweredParameter, ...]
     scalar_type: ScalarTypeDescriptor
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredFunction:
+    signature: LoweredFunctionSignature
     body: LoweredFunctionBody
     source: SourceLocation

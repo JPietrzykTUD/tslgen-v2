@@ -18,6 +18,7 @@ from tslgen.lowering import (
     LoweredBinaryOperationExpression,
     LoweredFunction,
     LoweredFunctionBody,
+    LoweredFunctionSignature,
     LoweredParameter,
     LoweredParameterRef,
     LoweredReturnStatement,
@@ -178,10 +179,12 @@ def test_m108_lowerer_produces_backend_neutral_function_value() -> None:
 
     assert result.diagnostics == ()
     assert result.function == LoweredFunction(
-        name="add_scalar_si32",
-        primitive_name="add",
-        parameters=(LoweredParameter("left"), LoweredParameter("right")),
-        scalar_type=_descriptor("si32"),
+        signature=LoweredFunctionSignature(
+            name="add_scalar_si32",
+            primitive_name="add",
+            parameters=(LoweredParameter("left"), LoweredParameter("right")),
+            scalar_type=_descriptor("si32"),
+        ),
         body=LoweredFunctionBody(
             return_statement=LoweredReturnStatement(
                 expression=LoweredBinaryOperationExpression(
@@ -196,14 +199,27 @@ def test_m108_lowerer_produces_backend_neutral_function_value() -> None:
     )
 
 
+def test_m113_lowerer_produces_explicit_function_signature() -> None:
+    result = Lowerer().lower(_selected_implementation())
+
+    assert result.diagnostics == ()
+    assert result.function is not None
+    assert result.function.signature == LoweredFunctionSignature(
+        name="add_scalar_si32",
+        primitive_name="add",
+        parameters=(LoweredParameter("left"), LoweredParameter("right")),
+        scalar_type=_descriptor("si32"),
+    )
+
+
 def test_m110_lowerer_accepts_supported_scalar_descriptors() -> None:
     for type_tag in supported_scalar_type_tags():
         result = Lowerer().lower(_selected_implementation(type_tag=type_tag))
 
         assert result.diagnostics == ()
         assert result.function is not None
-        assert result.function.name == f"add_scalar_{type_tag}"
-        assert result.function.scalar_type == _descriptor(type_tag)
+        assert result.function.signature.name == f"add_scalar_{type_tag}"
+        assert result.function.signature.scalar_type == _descriptor(type_tag)
 
 
 def test_m112_lowerer_wraps_binary_expression_in_return_statement_body() -> None:
@@ -229,13 +245,13 @@ def test_m111_lowerer_accepts_supported_binary_operations() -> None:
 
         assert result.diagnostics == ()
         assert result.function is not None
-        assert result.function.name == f"{operation_id}_scalar_si32"
-        assert result.function.primitive_name == operation_id
+        assert result.function.signature.name == f"{operation_id}_scalar_si32"
+        assert result.function.signature.primitive_name == operation_id
         return_statement = result.function.body.return_statement
         assert return_statement.expression.operation == _operation(operation_id)
 
 
-def test_m112_backends_emit_from_explicit_return_statement_body() -> None:
+def test_m113_backends_emit_from_explicit_signature_and_body() -> None:
     lowering_result = Lowerer().lower(_selected_implementation())
     function = lowering_result.function
     assert function is not None
@@ -487,7 +503,12 @@ def test_m112_non_add_non_si32_output_uses_explicit_return_body(
         lowering_result.function.body.return_statement.expression.operation
         == _operation("mul")
     )
-    assert lowering_result.function.scalar_type == _descriptor("f64")
+    assert lowering_result.function.signature == LoweredFunctionSignature(
+        name="mul_scalar_f64",
+        primitive_name="mul",
+        parameters=(LoweredParameter("left"), LoweredParameter("right")),
+        scalar_type=_descriptor("f64"),
+    )
     assert result.diagnostics == ()
     assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
         "include/tsl/mul_scalar_f64.hpp",
@@ -827,10 +848,12 @@ def _lowered_function(
     operation_id: str = "add",
 ) -> LoweredFunction:
     return LoweredFunction(
-        name=f"{operation_id}_scalar_{type_tag}",
-        primitive_name=operation_id,
-        parameters=(LoweredParameter("left"), LoweredParameter("right")),
-        scalar_type=_descriptor(type_tag),
+        signature=LoweredFunctionSignature(
+            name=f"{operation_id}_scalar_{type_tag}",
+            primitive_name=operation_id,
+            parameters=(LoweredParameter("left"), LoweredParameter("right")),
+            scalar_type=_descriptor(type_tag),
+        ),
         body=LoweredFunctionBody(
             return_statement=LoweredReturnStatement(
                 expression=LoweredBinaryOperationExpression(

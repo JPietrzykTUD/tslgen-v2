@@ -13,6 +13,7 @@ from tslgen.lowering.model import (
     LoweredBinaryOperationExpression,
     LoweredFunction,
     LoweredFunctionBody,
+    LoweredFunctionSignature,
     LoweredParameter,
     LoweredParameterRef,
     LoweredReturnStatement,
@@ -46,12 +47,14 @@ class Lowerer:
 
         body = selected.implementation.body
         function = LoweredFunction(
-            name=_function_name(selected),
-            primitive_name=selected.primitive.name,
-            parameters=tuple(
-                LoweredParameter(name=name) for name in selected.primitive.parameters
+            signature=LoweredFunctionSignature(
+                name=_function_name(selected),
+                primitive_name=selected.primitive.name,
+                parameters=tuple(
+                    LoweredParameter(name=name) for name in selected.primitive.parameters
+                ),
+                scalar_type=scalar_type,
             ),
-            scalar_type=scalar_type,
             body=LoweredFunctionBody(
                 return_statement=LoweredReturnStatement(
                     expression=LoweredBinaryOperationExpression(
