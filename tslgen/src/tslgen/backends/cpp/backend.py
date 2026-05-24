@@ -53,6 +53,7 @@ _BINARY_OPERATOR_SPELLINGS: tuple[_BinaryOperatorSpelling, ...] = (
 
 _UNARY_OPERATOR_SPELLINGS: tuple[_UnaryOperatorSpelling, ...] = (
     _UnaryOperatorSpelling(operation_id="bit_not", spelling="~"),
+    _UnaryOperatorSpelling(operation_id="neg", spelling="-"),
 )
 
 

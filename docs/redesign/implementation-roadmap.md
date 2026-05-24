@@ -15744,10 +15744,21 @@ Review notes:
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M118.
-This milestone reuses the exact unary source/lowering path while adding a
-small compatibility distinction for signed, unsigned, and floating scalar
-descriptors.
+Accepted. M119 added backend-neutral unary `neg` after `bit_not` in the clean
+unary operation descriptor table, reused the accepted exact unary
+`v:=(v)`/`value` source and lowering path, and added a lowering-owned
+operation/type compatibility gate that accepts `si32`, `f32`, and `f64` while
+rejecting `ui32` with `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE`. C++ and Rust own
+the accepted `-` spelling in their backend layers. M119 preserved accepted
+binary operations, M118 `bit_not` behavior, M110 scalar descriptors, M112 body
+values, M113 signatures, M114 stage-output behavior, M116/M117/M118
+compatibility behavior, diagnostics, logical paths, artifact ordering, and
+existing artifact bytes/digests. M119 did not add source syntax beyond the
+accepted unary form, source repair, runtime overflow/wrapping policy, unsigned
+negation semantics, floating special-value policy, constant folding, broad
+arithmetic semantics, vector/SIMD semantics, backend manifests, old imports,
+registries, dispatchers, hidden backfeeds, fixpoint behavior, or a broad
+expression/type framework.
 
 Goal:
 
@@ -15845,3 +15856,119 @@ Review notes:
   bytes, diagnostics, M112 body values, M113 signature values, M114
   stage-output behavior, and M116/M117/M118 compatibility behavior to remain
   stable.
+
+### Milestone 120: Tiny Clean Shift Binary Operations Type-Gated Lowering Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M119.
+This milestone stays focused on lowering and broadens the accepted binary
+operation surface with two integer-only shift operations while preserving the
+KISS restart guardrails.
+
+Goal:
+
+Add exact integer shift operations for the accepted scalar binary source form:
+
+```text
+prim<v:=(v,v)> shift_left(left, right):
+  implementation scalar si32:
+    body shift_left(left, right)
+```
+
+and:
+
+```text
+prim<v:=(v,v)> shift_right(left, right):
+  implementation scalar si32:
+    body shift_right(left, right)
+```
+
+Scope:
+
+- Add `shift_left` and `shift_right` to the existing lowering-owned binary
+  operation descriptor table, preserving deterministic descriptor ordering
+  after `bit_xor`.
+- Reuse the accepted exact binary source/catalog/lowering shape:
+  signature `v:=(v,v)`, parameter tuple `("left", "right")`, typed binary
+  operation body, lowered binary expression, and M114 stage-output boundary.
+- Extend the lowering-owned operation/type compatibility boundary so
+  `shift_left` and `shift_right` accept the currently supported integer scalar
+  descriptors (`si32`, `ui32`) and reject floating scalar descriptors with
+  `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE`.
+- Keep binary descriptors backend-neutral. They must not contain C++ or Rust
+  spelling, shift-count range/width policy, arithmetic-vs-logical right-shift
+  policy, signedness runtime policy, overflow/wrapping policy, constant-folding
+  policy, or source repair policy.
+- Update C++ and Rust backends to render accepted shift lowered expressions
+  through backend-owned spellings.
+- Preserve accepted `add`/`sub`/`mul`/`div`/`mod`/`bit_*` binary behavior,
+  M118/M119 unary behavior, M110 scalar descriptors, M112 body values, M113
+  signatures, M114 stage-output behavior, M116-M119 compatibility behavior,
+  diagnostics, logical paths, artifact ordering, and existing artifact bytes
+  and digests.
+- Add focused tests for binary descriptor lookup/order, integer lowerer
+  acceptance, floating rejection with the existing operation/type diagnostic,
+  backend spelling ownership, generator output for at least one shift source,
+  M114 stage-output pass-through, and preservation of existing binary and
+  unary behavior.
+
+Out of scope:
+
+- New source syntax beyond the accepted binary form, broad TSIL parsing,
+  arbitrary arity support, shift-immediate forms such as `sImm`, multiple
+  statements, nested expressions, calls, variables, source repair, or
+  generalized expression trees beyond the accepted binary and exact unary
+  shapes.
+- Shift-count range validation, shift-count width policy,
+  arithmetic-vs-logical signed right-shift runtime policy, undefined-behavior
+  modeling, overflow/wrapping policy, constant folding, algebraic
+  simplification, rotates, masks, or broad bitwise/arithmetic semantics.
+- New scalar types, vector/SIMD shapes, hardware feature selection, branch
+  pruning, generation-time helper evaluation, backend manifests, dependency
+  closure, or old generator maps.
+- Module/package planning, function overloading policy, include planning,
+  artifact layout changes, artifact-plan values, renderer-ready IR, or backend
+  emission inside lowering.
+- CLI integration, writer changes, generated test execution, CMake/Cargo
+  scaffolding, runtime imports from `frozen/` or `tslgenold/`, or porting old
+  operation/lowering modules.
+- Registries, dispatchers, plugin systems, hidden backfeeds, fixpoint
+  mechanisms, or a broad expression/type framework.
+
+Accepted outputs:
+
+- `shift_left(left, right)` and `shift_right(left, right)` lower for accepted
+  integer scalar descriptors.
+- Floating shift inputs reach lowering and fail with the existing
+  operation/type compatibility diagnostic rather than source repair, fallback,
+  runtime policy, or renderer-side inference.
+- C++ and Rust emitters render accepted shifts through backend-owned spelling
+  rules while existing binary and unary operations remain byte-stable.
+- The M114 lowering stage-output boundary carries accepted shift lowered
+  functions without adding scheduler, package, artifact-plan, or broad IR
+  machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+```
+
+Run the smallest compile/import checks needed for the revised clean package
+surface. Do not run the old `tslgenold` validation profile as proof of the
+clean product slice.
+
+Review notes:
+
+- Reviewers should reject source syntax broadening beyond the accepted binary
+  form or source repair.
+- Reviewers should reject putting C++/Rust spelling or shift runtime policy
+  into lowering descriptors.
+- Reviewers should reject broad arithmetic semantics, broad expression
+  frameworks, registries, or dispatchers.
+- Reviewers should require current binary and unary output bytes, diagnostics,
+  M112 body values, M113 signature values, M114 stage-output behavior, and
+  M116-M119 compatibility behavior to remain stable.

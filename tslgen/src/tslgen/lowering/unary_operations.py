@@ -23,6 +23,13 @@ SUPPORTED_UNARY_OPERATION_DESCRIPTORS: tuple[UnaryOperationDescriptor, ...] = (
         source_body_operation="bit_not",
         semantic_name="unary.bit_not",
     ),
+    UnaryOperationDescriptor(
+        operation_id="neg",
+        arity=1,
+        category="unary",
+        source_body_operation="neg",
+        semantic_name="unary.neg",
+    ),
 )
 
 

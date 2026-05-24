@@ -290,6 +290,30 @@ policy, constant folding, or source repair. C++ and Rust emitters own their
 accepted unary bitwise-not spellings while existing binary operations remain
 byte-stable.
 
+### M119 Tiny Unary Arithmetic Negation Type Gate
+
+Milestone 119 extends only the accepted exact unary source and lowering shape
+to accept `neg` after `bit_not` in deterministic unary descriptor order:
+
+```text
+prim<v:=(v)> neg(value):
+  implementation scalar si32:
+    body neg(value)
+```
+
+Catalog construction continues to preserve the unary body as a typed
+`UnaryOperationBody` with the exact `value` argument. The lowerer owns the
+backend-neutral `neg` unary descriptor and lowers it only for the currently
+supported signed integer and floating scalar descriptors `si32`, `f32`, and
+`f64`. Unsigned scalar descriptors such as `ui32` reach lowering and fail with
+`TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` at the implementation source location.
+
+The `neg` descriptor does not define C++ or Rust spelling, unsigned-negation
+semantics, integer overflow or wrapping policy, floating special-value policy,
+constant folding, or source repair. C++ and Rust emitters own the `-` spelling
+for accepted lowered `neg` functions, while existing binary operations and
+`bit_not` remain preserved.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

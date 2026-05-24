@@ -203,6 +203,24 @@ BIT_NOT_RUST_CONTENT = """pub fn bit_not_scalar_si32(value: i32) -> i32 {
 }
 """
 
+NEG_F64_CPP_CONTENT = """#pragma once
+
+#include <cstdint>
+
+namespace tsl {
+
+inline double neg_scalar_f64(double value) {
+  return -value;
+}
+
+}  // namespace tsl
+"""
+
+NEG_F64_RUST_CONTENT = """pub fn neg_scalar_f64(value: f64) -> f64 {
+    -value
+}
+"""
+
 
 def test_m110_scalar_descriptor_lookup_table() -> None:
     assert supported_scalar_type_tags() == ("si32", "ui32", "f32", "f64")
@@ -318,8 +336,8 @@ def test_m117_binary_operation_descriptor_lookup_table_includes_bitwise() -> Non
     assert lookup_binary_operation_descriptor("pow") is None
 
 
-def test_m118_unary_operation_descriptor_lookup_table() -> None:
-    assert supported_unary_operation_ids() == ("bit_not",)
+def test_m119_unary_operation_descriptor_lookup_table_includes_neg_after_bit_not() -> None:
+    assert supported_unary_operation_ids() == ("bit_not", "neg")
     assert SUPPORTED_UNARY_OPERATION_DESCRIPTORS == (
         UnaryOperationDescriptor(
             operation_id="bit_not",
@@ -328,8 +346,16 @@ def test_m118_unary_operation_descriptor_lookup_table() -> None:
             source_body_operation="bit_not",
             semantic_name="unary.bit_not",
         ),
+        UnaryOperationDescriptor(
+            operation_id="neg",
+            arity=1,
+            category="unary",
+            source_body_operation="neg",
+            semantic_name="unary.neg",
+        ),
     )
     assert lookup_unary_operation_descriptor("bit_not") == _unary_operation("bit_not")
+    assert lookup_unary_operation_descriptor("neg") == _unary_operation("neg")
     assert lookup_unary_operation_descriptor("logical_not") is None
 
 
@@ -397,6 +423,19 @@ def test_m118_operation_type_compatibility_accepts_integer_bit_not_only() -> Non
             operation,
             _descriptor(type_tag),
         )
+
+
+def test_m119_operation_type_compatibility_accepts_signed_and_floating_neg_only() -> None:
+    operation = _unary_operation("neg")
+
+    assert supported_scalar_type_tags_for_unary_operation(operation) == (
+        "si32",
+        "f32",
+        "f64",
+    )
+    for type_tag in ("si32", "f32", "f64"):
+        assert unary_operation_supports_scalar_type(operation, _descriptor(type_tag))
+    assert not unary_operation_supports_scalar_type(operation, _descriptor("ui32"))
 
 
 def test_m118_parser_and_catalog_accept_exact_unary_source_shape(
@@ -645,6 +684,19 @@ def test_m118_lowerer_accepts_bit_not_integer_scalar_descriptors() -> None:
         assert result.function == _lowered_unary_function(type_tag=type_tag)
 
 
+def test_m119_lowerer_accepts_neg_signed_and_floating_scalar_descriptors() -> None:
+    for type_tag in ("si32", "f32", "f64"):
+        result = Lowerer().lower(
+            _selected_unary_implementation(operation_id="neg", type_tag=type_tag)
+        )
+
+        assert result.diagnostics == ()
+        assert result.function == _lowered_unary_function(
+            type_tag=type_tag,
+            operation_id="neg",
+        )
+
+
 def test_m116_lowerer_rejects_mod_floating_scalar_descriptors() -> None:
     for type_tag in ("f32", "f64"):
         result = Lowerer().lower(
@@ -696,6 +748,22 @@ def test_m118_lowerer_rejects_bit_not_floating_scalar_descriptors() -> None:
         assert "bit_not" in diagnostic.message
         assert type_tag in diagnostic.message
         assert "si32, ui32" in diagnostic.message
+
+
+def test_m119_lowerer_rejects_neg_unsigned_scalar_descriptor() -> None:
+    result = Lowerer().lower(
+        _selected_unary_implementation(operation_id="neg", type_tag="ui32")
+    )
+
+    assert result.function is None
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-OPERATION-TYPE"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == _location(2, 3)
+    assert "neg" in diagnostic.message
+    assert "ui32" in diagnostic.message
+    assert "si32, f32, f64" in diagnostic.message
 
 
 def test_m113_backends_emit_from_explicit_signature_and_body() -> None:
@@ -858,6 +926,22 @@ def test_m118_backends_emit_backend_owned_unary_operator_spellings() -> None:
     assert rust_result.artifact.content == BIT_NOT_RUST_CONTENT
     assert "return ~value;" in cpp_result.artifact.content
     assert "    !value" in rust_result.artifact.content
+
+
+def test_m119_backends_emit_backend_owned_neg_operator_spelling() -> None:
+    function = _lowered_unary_function(type_tag="f64", operation_id="neg")
+
+    cpp_result = CppBackend().emit(function)
+    rust_result = RustBackend().emit(function)
+
+    assert cpp_result.diagnostics == ()
+    assert rust_result.diagnostics == ()
+    assert cpp_result.artifact is not None
+    assert rust_result.artifact is not None
+    assert cpp_result.artifact.content == NEG_F64_CPP_CONTENT
+    assert rust_result.artifact.content == NEG_F64_RUST_CONTENT
+    assert "return -value;" in cpp_result.artifact.content
+    assert "    -value" in rust_result.artifact.content
 
 
 def test_m108_lowerer_reports_unsupported_body_boundary() -> None:
@@ -1030,6 +1114,17 @@ def test_m118_bit_not_passes_through_stage_output() -> None:
     )
 
 
+def test_m119_neg_passes_through_stage_output() -> None:
+    lowering_result = Lowerer().lower_all(
+        (_selected_unary_implementation(operation_id="neg", type_tag="f32"),)
+    )
+
+    assert lowering_result.diagnostics == ()
+    assert lowering_result.lowered_functions == LoweredFunctionSet(
+        (_lowered_unary_function(operation_id="neg", type_tag="f32"),)
+    )
+
+
 def test_m118_generator_emits_unary_stage_output_function() -> None:
     lowerer = _StageOutputOnlyLowerer(
         LoweringStageResult(
@@ -1074,6 +1169,35 @@ def test_m118_preserves_binary_lowering_and_backend_output() -> None:
     assert rust_result.artifact is not None
     assert cpp_result.artifact.content == BIT_AND_CPP_CONTENT
     assert rust_result.artifact.content == BIT_AND_RUST_CONTENT
+
+
+def test_m119_preserves_binary_and_bit_not_lowering_and_backend_output() -> None:
+    bit_and_function = Lowerer().lower(
+        _selected_implementation(operation_id="bit_and", type_tag="si32")
+    ).function
+    bit_not_function = Lowerer().lower(_selected_unary_implementation()).function
+
+    assert bit_and_function == _lowered_function(
+        operation_id="bit_and",
+        type_tag="si32",
+    )
+    assert bit_not_function == _lowered_unary_function()
+    assert bit_and_function is not None
+    assert bit_not_function is not None
+
+    bit_and_cpp = CppBackend().emit(bit_and_function)
+    bit_and_rust = RustBackend().emit(bit_and_function)
+    bit_not_cpp = CppBackend().emit(bit_not_function)
+    bit_not_rust = RustBackend().emit(bit_not_function)
+
+    assert bit_and_cpp.artifact is not None
+    assert bit_and_rust.artifact is not None
+    assert bit_not_cpp.artifact is not None
+    assert bit_not_rust.artifact is not None
+    assert bit_and_cpp.artifact.content == BIT_AND_CPP_CONTENT
+    assert bit_and_rust.artifact.content == BIT_AND_RUST_CONTENT
+    assert bit_not_cpp.artifact.content == BIT_NOT_CPP_CONTENT
+    assert bit_not_rust.artifact.content == BIT_NOT_RUST_CONTENT
 
 
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
@@ -1274,6 +1398,39 @@ def test_m118_integer_bit_not_source_generates_cpp_and_rust_artifacts(
     ]
 
 
+def test_m119_floating_neg_source_generates_cpp_and_rust_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_unary_source(tmp_path, "neg", "f64")
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="neg",
+                extension="scalar",
+                type_tag="f64",
+            ),
+            Target(
+                backend="rust",
+                primitive_name="neg",
+                extension="scalar",
+                type_tag="f64",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/neg_scalar_f64.hpp",
+        "src/neg_scalar_f64.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        NEG_F64_CPP_CONTENT,
+        NEG_F64_RUST_CONTENT,
+    ]
+
+
 def test_m112_non_add_non_si32_output_uses_explicit_return_body(
     tmp_path: Path,
 ) -> None:
@@ -1468,6 +1625,36 @@ def test_m118_floating_bit_not_source_reports_operation_type_diagnostic(
     assert "bit_not" in diagnostic.message
     assert "f32" in diagnostic.message
     assert "si32, ui32" in diagnostic.message
+
+
+def test_m119_unsigned_neg_source_reports_operation_type_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_unary_source(tmp_path, "neg", "ui32")
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="neg",
+                extension="scalar",
+                type_tag="ui32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-OPERATION-TYPE"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 2
+    assert diagnostic.location.column == 3
+    assert "neg" in diagnostic.message
+    assert "ui32" in diagnostic.message
+    assert "si32, f32, f64" in diagnostic.message
 
 
 def test_m111_source_operation_body_mismatch_reports_lowering_diagnostic(

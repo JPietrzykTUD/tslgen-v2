@@ -20,7 +20,7 @@ class BinaryOperationScalarTypeCompatibilityRule:
 @dataclass(frozen=True, slots=True)
 class UnaryOperationScalarTypeCompatibilityRule:
     operation_id: str
-    accepted_scalar_families: tuple[ScalarTypeFamily, ...]
+    accepted_scalar_type_tags: tuple[str, ...]
 
 
 _BINARY_OPERATION_SCALAR_TYPE_RULES: tuple[
@@ -49,7 +49,11 @@ _UNARY_OPERATION_SCALAR_TYPE_RULES: tuple[
 ] = (
     UnaryOperationScalarTypeCompatibilityRule(
         operation_id="bit_not",
-        accepted_scalar_families=("integer",),
+        accepted_scalar_type_tags=("si32", "ui32"),
+    ),
+    UnaryOperationScalarTypeCompatibilityRule(
+        operation_id="neg",
+        accepted_scalar_type_tags=("si32", "f32", "f64"),
     ),
 )
 
@@ -84,7 +88,7 @@ def unary_operation_supports_scalar_type(
     rule = _rule_for_unary_operation(operation)
     if rule is None:
         return True
-    return scalar_type.family in rule.accepted_scalar_families
+    return scalar_type.tag in rule.accepted_scalar_type_tags
 
 
 def supported_scalar_type_tags_for_unary_operation(
@@ -96,7 +100,7 @@ def supported_scalar_type_tags_for_unary_operation(
     return tuple(
         descriptor.tag
         for descriptor in SUPPORTED_SCALAR_TYPE_DESCRIPTORS
-        if descriptor.family in rule.accepted_scalar_families
+        if descriptor.tag in rule.accepted_scalar_type_tags
     )
 
 

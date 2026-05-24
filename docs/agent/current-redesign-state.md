@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 118 is accepted.
+Milestone 119 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -365,6 +365,22 @@ signedness runtime policy, constant folding, algebraic simplification,
 vector/SIMD semantics, backend manifests, dependency closure, old
 operation/lowering migration, registries, dispatchers, plugin systems, hidden
 backfeeds, fixpoint mechanisms, or a broad expression/type framework.
+
+The M119 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only layout/boundary, architecture,
+documentation, and validation audits. The only documentation follow-ups were
+the normal orchestrator state, roadmap, and next-prompt updates completed
+during finalization. M119 added backend-neutral unary `neg` after `bit_not` in
+the clean unary operation descriptor table, gated `neg` to accepted `si32`,
+`f32`, and `f64` scalar descriptors, rejected `ui32` with
+`TSL-LOWER-UNSUPPORTED-OPERATION-TYPE`, and kept C++/Rust `-` spelling in the
+backend layers. It preserved accepted binary behavior, M118 `bit_not`
+behavior, diagnostics, logical paths, ordering, and existing artifact bytes.
+M119 did not add source syntax beyond the accepted unary form, source repair,
+runtime overflow/wrapping or unsigned-negation policy, floating special-value
+policy, constant folding, broad arithmetic semantics, vector/SIMD semantics,
+backend manifests, old imports, registries, dispatchers, hidden backfeeds,
+fixpoint behavior, or a broad expression/type framework.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1438,37 +1454,40 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 119.
+Execute Milestone 120.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m119-execution-review-loop-prompt.md
+docs/agent/runs/m120-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 119: Tiny Clean Unary Arithmetic Negation Type-Gated Lowering Slice
+Milestone 120: Tiny Clean Shift Binary Operations Type-Gated Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-M118 execution-review loop returned Accept after read-only layout/boundary,
-architecture, documentation, and validation audits.
+M119 execution-review loop returned Accept With Follow-Ups after one
+write-capable executor plus read-only layout/boundary, architecture,
+documentation, and validation audits. Follow-up state/roadmap/next-prompt
+updates were completed during finalization.
 ```
 
 Next expected action:
 
 ```text
-Run the active M119 execution-review-loop prompt. M119 should reuse the exact
-unary source/lowering shape from M118 for `neg(value)`, accepting only signed
-integer and floating scalar descriptors while rejecting unsigned scalar
-descriptors with the existing operation/type compatibility diagnostic. Broad
-TSIL parsing, source repair, runtime overflow/wrapping policy, backend manifest
-reads, and broad expression/type frameworks stay out of scope.
+Run the active M120 execution-review-loop prompt. M120 should add exact
+integer `shift_left(left, right)` and `shift_right(left, right)` operations
+through the accepted binary lowering path, reuse the existing operation/type
+compatibility diagnostic for floating rejection, and keep C++/Rust shift
+spellings backend-owned. Broad TSIL parsing, new source syntax, shift-count
+range policy, signed-right-shift runtime policy, backend manifest reads, and
+broad expression/type frameworks stay out of scope.
 ```
 
 Accepted planning prompt:
@@ -2569,10 +2588,16 @@ Completed M118 execution-review-loop prompt:
 docs/agent/runs/m118-execution-review-loop-prompt.md
 ```
 
-Active M119 execution-review-loop prompt:
+Completed M119 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m119-execution-review-loop-prompt.md
+```
+
+Active M120 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m120-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2648,6 +2673,14 @@ docs/agent/runs/m119-execution-review-loop-prompt.md
   simplification, vector/SIMD semantics, backend manifests, old operation
   migration, registries, dispatchers, hidden backfeeds, fixpoint behavior, or
   a broad expression/type framework.
+- M120 is limited to adding exact integer `shift_left(left, right)` and
+  `shift_right(left, right)` through the accepted binary source/lowering
+  shape, with backend-neutral descriptors, lowering-owned integer type gates,
+  and backend-owned C++/Rust shift spellings. It must not add new source
+  syntax, shift-count range or width policy, arithmetic-vs-logical shift
+  runtime policy, source repair, masks, rotates, vector/SIMD semantics,
+  backend manifests, old operation migration, registries, dispatchers, hidden
+  backfeeds, fixpoint behavior, or a broad expression/type framework.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and
@@ -5178,7 +5211,7 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M119
+No stop condition is active. The workflow is ready to run the active M120
 execution-review-loop prompt.
 
 ## Validation Expectations
@@ -5364,6 +5397,25 @@ command returned exit 0 with no output. The unary-operation descriptor import
 command returned exit 0 with no output. The py_compile command returned exit 0
 with no output. Validation-created `__pycache__` directories were removed, and
 the final cache check returned exit 0 with no output.
+
+For M119 clean unary arithmetic negation type-gated lowering slice,
+validation completed with:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -c "from tslgen.lowering import lookup_unary_operation_descriptor, supported_unary_operation_ids; assert supported_unary_operation_ids() == ('bit_not', 'neg'); assert lookup_unary_operation_descriptor('neg') is not None"
+python -B -m py_compile tslgen/src/tslgen/lowering/unary_operations.py tslgen/src/tslgen/lowering/operation_type_compatibility.py tslgen/src/tslgen/backends/cpp/backend.py tslgen/src/tslgen/backends/rust/backend.py tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The targeted clean-package
+test command returned exit 0 with `69 passed`. The public API import command
+returned exit 0 with no output. The unary-operation descriptor import command
+returned exit 0 with no output. The py_compile command returned exit 0 with no
+output. No validation-created `__pycache__` directories were found under clean
+`tslgen/`.
 
 For M108 clean lowering boundary slice, validation completed with:
 
