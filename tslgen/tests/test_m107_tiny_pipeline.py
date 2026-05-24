@@ -112,6 +112,24 @@ MUL_F64_RUST_CONTENT = """pub fn mul_scalar_f64(left: f64, right: f64) -> f64 {
 }
 """
 
+DIV_CPP_CONTENT = """#pragma once
+
+#include <cstdint>
+
+namespace tsl {
+
+inline std::int32_t div_scalar_si32(std::int32_t left, std::int32_t right) {
+  return left / right;
+}
+
+}  // namespace tsl
+"""
+
+DIV_RUST_CONTENT = """pub fn div_scalar_si32(left: i32, right: i32) -> i32 {
+    left / right
+}
+"""
+
 
 def test_m110_scalar_descriptor_lookup_table() -> None:
     assert supported_scalar_type_tags() == ("si32", "ui32", "f32", "f64")
@@ -149,8 +167,8 @@ def test_m110_scalar_descriptor_lookup_table() -> None:
     assert lookup_scalar_type_descriptor("si64") is None
 
 
-def test_m111_binary_operation_descriptor_lookup_table() -> None:
-    assert supported_binary_operation_ids() == ("add", "sub", "mul")
+def test_m115_binary_operation_descriptor_lookup_table_includes_div() -> None:
+    assert supported_binary_operation_ids() == ("add", "sub", "mul", "div")
     assert SUPPORTED_BINARY_OPERATION_DESCRIPTORS == (
         BinaryOperationDescriptor(
             operation_id="add",
@@ -173,9 +191,17 @@ def test_m111_binary_operation_descriptor_lookup_table() -> None:
             source_body_operation="mul",
             semantic_name="binary.mul",
         ),
+        BinaryOperationDescriptor(
+            operation_id="div",
+            arity=2,
+            category="binary",
+            source_body_operation="div",
+            semantic_name="binary.div",
+        ),
     )
     assert lookup_binary_operation_descriptor("mul") == _operation("mul")
-    assert lookup_binary_operation_descriptor("div") is None
+    assert lookup_binary_operation_descriptor("div") == _operation("div")
+    assert lookup_binary_operation_descriptor("mod") is None
 
 
 def test_m108_lowerer_produces_backend_neutral_function_value() -> None:
@@ -237,7 +263,7 @@ def test_m114_lowerer_stage_output_accumulates_diagnostics() -> None:
     result = Lowerer().lower_all(
         (
             _selected_implementation(type_tag="si64"),
-            _selected_implementation(operation_id="div"),
+            _selected_implementation(operation_id="mod"),
         )
     )
 
@@ -289,6 +315,13 @@ def test_m111_lowerer_accepts_supported_binary_operations() -> None:
         assert result.function.signature.primitive_name == operation_id
         return_statement = result.function.body.return_statement
         assert return_statement.expression.operation == _operation(operation_id)
+
+
+def test_m115_lowerer_accepts_div_binary_operation() -> None:
+    result = Lowerer().lower(_selected_implementation(operation_id="div"))
+
+    assert result.diagnostics == ()
+    assert result.function == _lowered_function(operation_id="div")
 
 
 def test_m113_backends_emit_from_explicit_signature_and_body() -> None:
@@ -416,6 +449,7 @@ def test_m111_backends_emit_backend_owned_operator_spellings() -> None:
         ("add", "+"),
         ("sub", "-"),
         ("mul", "*"),
+        ("div", "/"),
     )
 
     for operation_id, operator in expected_operators:
@@ -467,7 +501,7 @@ def test_m110_lowerer_reports_unsupported_scalar_type() -> None:
 
 
 def test_m111_lowerer_reports_unsupported_binary_operation() -> None:
-    result = Lowerer().lower(_selected_implementation(operation_id="div"))
+    result = Lowerer().lower(_selected_implementation(operation_id="mod"))
 
     assert result.function is None
     assert len(result.diagnostics) == 1
@@ -475,8 +509,8 @@ def test_m111_lowerer_reports_unsupported_binary_operation() -> None:
     assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-OPERATION"
     assert diagnostic.severity == "error"
     assert diagnostic.location == _location(1, 1)
-    assert "div" in diagnostic.message
-    assert "add, sub, mul" in diagnostic.message
+    assert "mod" in diagnostic.message
+    assert "add, sub, mul, div" in diagnostic.message
 
 
 def test_m111_lowerer_reports_primitive_body_operation_mismatch() -> None:
@@ -560,6 +594,17 @@ def test_m114_non_add_non_si32_passes_through_stage_output() -> None:
     assert rust_result.artifact.content == MUL_F64_RUST_CONTENT
 
 
+def test_m115_div_passes_through_stage_output() -> None:
+    lowering_result = Lowerer().lower_all(
+        (_selected_implementation(operation_id="div"),)
+    )
+
+    assert lowering_result.diagnostics == ()
+    assert lowering_result.lowered_functions == LoweredFunctionSet(
+        (_lowered_function(operation_id="div"),)
+    )
+
+
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
     tmp_path: Path,
 ) -> None:
@@ -623,6 +668,39 @@ def test_m111_non_add_source_generates_cpp_and_rust_artifacts(
     assert [artifact.content for artifact in result.artifacts.artifacts] == [
         SUB_CPP_CONTENT,
         SUB_RUST_CONTENT,
+    ]
+
+
+def test_m115_div_source_generates_cpp_and_rust_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_source(tmp_path, "div", "si32")
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="div",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="rust",
+                primitive_name="div",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/div_scalar_si32.hpp",
+        "src/div_scalar_si32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        DIV_CPP_CONTENT,
+        DIV_RUST_CONTENT,
     ]
 
 
@@ -703,16 +781,16 @@ def test_m110_unsupported_source_type_reports_lowering_diagnostic(
     assert "si64" in diagnostic.message
 
 
-def test_m111_unsupported_source_operation_reports_lowering_diagnostic(
+def test_m115_unsupported_source_operation_reports_lowering_diagnostic(
     tmp_path: Path,
 ) -> None:
-    source = _write_tiny_source(tmp_path, "div", "si32")
+    source = _write_tiny_source(tmp_path, "mod", "si32")
     result = generate_from_paths(
         (source,),
         (
             Target(
                 backend="cpp",
-                primitive_name="div",
+                primitive_name="mod",
                 extension="scalar",
                 type_tag="si32",
             ),
@@ -728,7 +806,8 @@ def test_m111_unsupported_source_operation_reports_lowering_diagnostic(
     assert diagnostic.location.path == source.resolve()
     assert diagnostic.location.line == 1
     assert diagnostic.location.column == 1
-    assert "div" in diagnostic.message
+    assert "mod" in diagnostic.message
+    assert "add, sub, mul, div" in diagnostic.message
 
 
 def test_m111_source_operation_body_mismatch_reports_lowering_diagnostic(

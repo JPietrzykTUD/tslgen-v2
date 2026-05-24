@@ -37,6 +37,13 @@ SUPPORTED_BINARY_OPERATION_DESCRIPTORS: tuple[BinaryOperationDescriptor, ...] = 
         source_body_operation="mul",
         semantic_name="binary.mul",
     ),
+    BinaryOperationDescriptor(
+        operation_id="div",
+        arity=2,
+        category="binary",
+        source_body_operation="div",
+        semantic_name="binary.div",
+    ),
 )
 
 

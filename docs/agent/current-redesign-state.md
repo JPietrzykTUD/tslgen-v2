@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 114 is accepted.
+Milestone 115 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -293,6 +293,20 @@ artifact-plan values, renderer-ready IR, backend emission inside lowering,
 cross-target coordination, schedulers, queues, registries, dispatchers,
 plugin systems, hidden backfeeds, fixpoint mechanisms, or a broad IR/stage
 framework.
+
+The M115 execution-review loop returned `Accept With Follow-Ups` after
+read-only layout/boundary, architecture, documentation, and validation audits.
+M115 added `div` to the tiny clean lowering-owned binary operation descriptor
+table and backend-owned C++/Rust operator spelling tables. It preserved the
+M110 scalar descriptors, M112 explicit return body, M113 explicit signature,
+M114 lowering stage-output boundary, existing `add`/`sub`/`mul` outputs,
+diagnostics, logical paths, ordering, and digests. M115 did not add
+parser/source syntax changes, source repair, modulo/remainder semantics,
+division-by-zero diagnostics, integer overflow policy, floating special-value
+policy, constant folding, algebraic simplification, vector/SIMD semantics,
+backend manifests, dependency closure, old operation/lowering migration,
+registries, dispatchers, plugin systems, hidden backfeeds, fixpoint
+mechanisms, or a broad operation/type framework.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1366,36 +1380,37 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 115.
+Execute Milestone 116.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m115-execution-review-loop-prompt.md
+docs/agent/runs/m116-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 115: Tiny Clean Binary Division Operation Lowering Slice
+Milestone 116: Tiny Clean Integer Remainder Operation Type-Gated Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-M114 execution-review loop returned Accept after a focused revision and
-focused architecture/validation re-review.
+M115 execution-review loop returned Accept With Follow-Ups after read-only
+layout/boundary, architecture, documentation, and validation audits.
 ```
 
 Next expected action:
 
 ```text
-Run the active M115 execution-review-loop prompt. M115 should add the next
-tiny clean binary arithmetic lowering operation, `div`, through the existing
-M111 operation descriptor table and M114 stage output while preserving backend
-ownership of operator spelling and keeping parser/source syntax broadening,
-modulo semantics, and broad operation frameworks out of scope.
+Run the active M116 execution-review-loop prompt. M116 should add the next tiny
+clean lowering operation, integer-only `mod`, through the existing binary
+operation descriptor and M114 stage-output path while introducing only a small
+lowering-owned operation/type compatibility boundary. Parser/source syntax
+broadening, floating modulo semantics, runtime arithmetic policy, backend
+manifest reads, and broad operation/type frameworks stay out of scope.
 ```
 
 Accepted planning prompt:
@@ -2472,10 +2487,16 @@ Completed M114 execution-review-loop prompt:
 docs/agent/runs/m114-execution-review-loop-prompt.md
 ```
 
-Active M115 execution-review-loop prompt:
+Completed M115 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m115-execution-review-loop-prompt.md
+```
+
+Active M116 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m116-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2521,6 +2542,13 @@ docs/agent/runs/m115-execution-review-loop-prompt.md
   semantics, backend manifests, old operation migration, registries,
   dispatchers, hidden backfeeds, fixpoint behavior, or a broad operation
   framework.
+- M116 is limited to adding integer-only `mod` to the existing tiny clean
+  binary-operation lowering path plus a small lowering-owned operation/type
+  compatibility boundary over accepted scalar descriptors; it must not add
+  parser/source syntax changes, source repair, floating modulo semantics,
+  runtime remainder policy, divide-by-zero diagnostics, vector/SIMD semantics,
+  backend manifests, old operation migration, registries, dispatchers, hidden
+  backfeeds, fixpoint behavior, or a broad operation/type framework.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and
@@ -4041,6 +4069,8 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   reach lowering as `TSL-LOWER-UNSUPPORTED-OPERATION`.
 - M112 validation follow-up was addressed during finalization: ignored
   `__pycache__` directories under clean `tslgen/` were removed after review.
+- M115 validation follow-up: consider adding digest-manifest assertions for
+  newly accepted operation artifact pairs when future slices add operations.
 - M106 architecture follow-up: before any release/stabilization work resumes,
   retire or rewrite `docs/redesign/stabilization-release-checklist.md` for the
   post-M106 clean restart; it still reads like the old `tslgen` package is an
@@ -5049,7 +5079,7 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M115
+No stop condition is active. The workflow is ready to run the active M116
 execution-review-loop prompt.
 
 ## Validation Expectations
@@ -5159,6 +5189,25 @@ command returned exit 0 with no output. The py_compile command returned exit 0
 with no output. Focused architecture re-review also ran
 `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py -k m114`
 and returned exit 0 with `6 passed, 27 deselected`.
+
+For M115 clean binary division operation lowering slice, validation completed
+with:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -c "from tslgen.lowering import lookup_binary_operation_descriptor, supported_binary_operation_ids; assert supported_binary_operation_ids() == ('add', 'sub', 'mul', 'div'); assert lookup_binary_operation_descriptor('div') is not None"
+python -B -m py_compile tslgen/src/tslgen/lowering/binary_operations.py tslgen/src/tslgen/backends/cpp/backend.py tslgen/src/tslgen/backends/rust/backend.py tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The targeted clean-package
+test command returned exit 0 with `36 passed in 2.23s`. The public API import
+command returned exit 0 with no output. The binary-operation descriptor import
+command returned exit 0 with no output. The py_compile command returned exit 0
+with no output. Validation-created `__pycache__` directories were removed, and
+the final cache check returned exit 0 with no output.
 
 For M108 clean lowering boundary slice, validation completed with:
 

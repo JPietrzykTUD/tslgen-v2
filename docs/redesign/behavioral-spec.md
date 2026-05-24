@@ -190,6 +190,28 @@ ordered lowered functions from that output. Existing accepted tiny artifact
 bytes, logical paths, metadata, ordering, diagnostics, and digests remain
 stable.
 
+### M115 Tiny Binary Division Operation Lowering Slice
+
+Milestone 115 extends only the tiny clean binary operation descriptor table to
+accept `div` alongside `add`, `sub`, and `mul`:
+
+```text
+prim<v:=(v,v)> div(left, right):
+  implementation scalar si32:
+    body div(left, right)
+```
+
+Catalog construction still only preserves the parsed operation name and exact
+`left, right` body arguments. The lowerer owns the backend-neutral `div`
+descriptor and emits the existing binary operation expression shape. C++ and
+Rust emitters own the `/` spelling through their backend-local operator tables.
+
+This slice does not define divide-by-zero behavior, integer overflow behavior,
+floating special-value behavior, modulo/remainder semantics, constant folding,
+or source repair. Unsupported operation ids still fail in lowering with
+`TSL-LOWER-UNSUPPORTED-OPERATION`, now reporting `add, sub, mul, div` as the
+supported tiny clean operation set.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

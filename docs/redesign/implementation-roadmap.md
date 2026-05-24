@@ -15308,9 +15308,17 @@ Review notes:
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M114.
-This milestone keeps the next action focused on lowering while taking a small
-functional step beyond `add`/`sub`/`mul`.
+Accepted. M115 added `div` to the tiny clean lowering-owned binary operation
+descriptor table and backend-owned C++/Rust operator spelling tables. It
+preserved M110 scalar descriptors, M112 body values, M113 signatures, M114
+lowering stage-output behavior, diagnostics, logical paths, artifact ordering,
+and existing `add`/`sub`/`mul` artifact bytes and digests. M115 did not add
+parser/source syntax changes, source repair, modulo/remainder semantics,
+division-by-zero diagnostics, integer overflow policy, floating special-value
+policy, constant folding, algebraic simplification, vector/SIMD semantics,
+backend manifests, old operation migration, registries, dispatchers, plugin
+systems, hidden backfeeds, fixpoint mechanisms, or a broad operation/type
+framework.
 
 Goal:
 
@@ -15387,5 +15395,102 @@ Review notes:
 - Reviewers should reject modulo/remainder semantics, broad arithmetic
   frameworks, registries, or dispatchers.
 - Reviewers should require current `add`/`sub`/`mul` output bytes,
+  diagnostics, M112 body values, M113 signature values, and M114 stage-output
+  behavior to remain stable.
+
+### Milestone 116: Tiny Clean Integer Remainder Operation Type-Gated Lowering Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M115.
+This milestone keeps the next action focused on lowering while adding the
+first tiny operation/type compatibility boundary.
+
+Goal:
+
+Add integer-only remainder to the existing tiny clean binary-operation
+lowering path:
+
+```text
+mod(left, right) over integer scalar descriptors
+-> LoweredBinaryOperationExpression(operation="mod")
+```
+
+Scope:
+
+- Add `mod` to the existing lowering-owned binary operation descriptor table,
+  preserving deterministic descriptor ordering.
+- Introduce a small lowering-owned operation/type compatibility boundary over
+  the existing M110 scalar descriptors and M111/M115 operation descriptors.
+- Accept `mod` only for the currently supported integer scalar descriptors and
+  reject floating scalar descriptors with a structured lowering diagnostic,
+  such as `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE`.
+- Keep descriptors backend-neutral. They must not contain C++ or Rust
+  spelling, divide-by-zero policy, signed-remainder policy, overflow policy,
+  floating special-value policy, or source repair policy.
+- Update C++ and Rust backends to spell only the accepted `mod` descriptor via
+  backend-owned operator spelling tables.
+- Preserve accepted `add`/`sub`/`mul`/`div` behavior, M110 scalar descriptors,
+  M112 body values, M113 signatures, M114 lowering stage-output behavior,
+  diagnostics, logical paths, artifact ordering, and existing artifact bytes
+  and digests.
+- Add focused tests for descriptor lookup/order, integer lowerer acceptance,
+  floating-type rejection with the new diagnostic, backend spelling ownership,
+  generator output for at least one integer `mod` source, M114 stage-output
+  pass-through for `mod`, and the updated unsupported-operation diagnostic
+  boundary.
+
+Out of scope:
+
+- New `.tsl` source syntax, parser/catalog source-form changes, source-body
+  repair, broad TSIL parsing, additional arities/parameter names, or additional
+  body shapes.
+- Floating modulo semantics, division-by-zero diagnostics, signed-remainder
+  runtime policy, integer overflow policy, constant folding, algebraic
+  simplification, or broad arithmetic semantics.
+- New scalar types, vector/SIMD shapes, hardware feature selection, branch
+  pruning, generation-time helper evaluation, backend manifests, dependency
+  closure, or old generator maps.
+- Module/package planning, function overloading policy, include planning,
+  artifact layout changes, artifact-plan values, renderer-ready IR, or backend
+  emission inside lowering.
+- CLI integration, writer changes, generated test execution, CMake/Cargo
+  scaffolding, runtime imports from `frozen/` or `tslgenold/`, or porting old
+  operation/lowering modules.
+- Registries, dispatchers, plugin systems, hidden backfeeds, fixpoint
+  mechanisms, or a broad operation/type framework.
+
+Accepted outputs:
+
+- `mod(left, right)` lowers only for accepted integer scalar descriptors.
+- Floating `mod(left, right)` reaches lowering and fails with a structured
+  operation/type compatibility diagnostic rather than source repair, fallback,
+  or renderer-side inference.
+- C++ and Rust emitters render accepted `mod` through backend-owned operator
+  spelling maps while existing operations remain byte-stable.
+- The M114 lowering stage-output boundary continues to carry the accepted
+  operation without adding scheduler, package, artifact-plan, or broad IR
+  machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+```
+
+Run the smallest compile/import checks needed for the revised clean package
+surface. Do not run the old `tslgenold` validation profile as proof of the
+clean product slice.
+
+Review notes:
+
+- Reviewers should reject parser/source syntax broadening or source repair.
+- Reviewers should reject putting C++/Rust spelling or runtime arithmetic
+  policy into lowering descriptors.
+- Reviewers should reject floating modulo semantics, broad arithmetic
+  frameworks, registries, or dispatchers.
+- Reviewers should require current `add`/`sub`/`mul`/`div` output bytes,
   diagnostics, M112 body values, M113 signature values, and M114 stage-output
   behavior to remain stable.
