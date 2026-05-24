@@ -185,6 +185,24 @@ BIT_AND_RUST_CONTENT = """pub fn bit_and_scalar_si32(left: i32, right: i32) -> i
 }
 """
 
+SHIFT_LEFT_CPP_CONTENT = """#pragma once
+
+#include <cstdint>
+
+namespace tsl {
+
+inline std::int32_t shift_left_scalar_si32(std::int32_t left, std::int32_t right) {
+  return left << right;
+}
+
+}  // namespace tsl
+"""
+
+SHIFT_LEFT_RUST_CONTENT = """pub fn shift_left_scalar_si32(left: i32, right: i32) -> i32 {
+    left << right
+}
+"""
+
 BIT_NOT_CPP_CONTENT = """#pragma once
 
 #include <cstdint>
@@ -258,7 +276,7 @@ def test_m110_scalar_descriptor_lookup_table() -> None:
     assert lookup_scalar_type_descriptor("si64") is None
 
 
-def test_m117_binary_operation_descriptor_lookup_table_includes_bitwise() -> None:
+def test_m120_binary_operation_descriptor_lookup_table_includes_shifts() -> None:
     assert supported_binary_operation_ids() == (
         "add",
         "sub",
@@ -268,6 +286,8 @@ def test_m117_binary_operation_descriptor_lookup_table_includes_bitwise() -> Non
         "bit_and",
         "bit_or",
         "bit_xor",
+        "shift_left",
+        "shift_right",
     )
     assert SUPPORTED_BINARY_OPERATION_DESCRIPTORS == (
         BinaryOperationDescriptor(
@@ -326,6 +346,20 @@ def test_m117_binary_operation_descriptor_lookup_table_includes_bitwise() -> Non
             source_body_operation="bit_xor",
             semantic_name="binary.bit_xor",
         ),
+        BinaryOperationDescriptor(
+            operation_id="shift_left",
+            arity=2,
+            category="binary",
+            source_body_operation="shift_left",
+            semantic_name="binary.shift_left",
+        ),
+        BinaryOperationDescriptor(
+            operation_id="shift_right",
+            arity=2,
+            category="binary",
+            source_body_operation="shift_right",
+            semantic_name="binary.shift_right",
+        ),
     )
     assert lookup_binary_operation_descriptor("mul") == _operation("mul")
     assert lookup_binary_operation_descriptor("div") == _operation("div")
@@ -333,6 +367,10 @@ def test_m117_binary_operation_descriptor_lookup_table_includes_bitwise() -> Non
     assert lookup_binary_operation_descriptor("bit_and") == _operation("bit_and")
     assert lookup_binary_operation_descriptor("bit_or") == _operation("bit_or")
     assert lookup_binary_operation_descriptor("bit_xor") == _operation("bit_xor")
+    assert lookup_binary_operation_descriptor("shift_left") == _operation("shift_left")
+    assert lookup_binary_operation_descriptor("shift_right") == _operation(
+        "shift_right"
+    )
     assert lookup_binary_operation_descriptor("pow") is None
 
 
@@ -392,6 +430,25 @@ def test_m116_operation_type_compatibility_accepts_integer_mod_only() -> None:
 
 def test_m117_operation_type_compatibility_accepts_integer_bitwise_only() -> None:
     for operation_id in ("bit_and", "bit_or", "bit_xor"):
+        operation = _operation(operation_id)
+        assert supported_scalar_type_tags_for_binary_operation(operation) == (
+            "si32",
+            "ui32",
+        )
+        for type_tag in ("si32", "ui32"):
+            assert binary_operation_supports_scalar_type(
+                operation,
+                _descriptor(type_tag),
+            )
+        for type_tag in ("f32", "f64"):
+            assert not binary_operation_supports_scalar_type(
+                operation,
+                _descriptor(type_tag),
+            )
+
+
+def test_m120_operation_type_compatibility_accepts_integer_shifts_only() -> None:
+    for operation_id in ("shift_left", "shift_right"):
         operation = _operation(operation_id)
         assert supported_scalar_type_tags_for_binary_operation(operation) == (
             "si32",
@@ -676,6 +733,20 @@ def test_m117_lowerer_accepts_bitwise_integer_scalar_descriptors() -> None:
             )
 
 
+def test_m120_lowerer_accepts_shift_integer_scalar_descriptors() -> None:
+    for operation_id in ("shift_left", "shift_right"):
+        for type_tag in ("si32", "ui32"):
+            result = Lowerer().lower(
+                _selected_implementation(operation_id=operation_id, type_tag=type_tag)
+            )
+
+            assert result.diagnostics == ()
+            assert result.function == _lowered_function(
+                type_tag=type_tag,
+                operation_id=operation_id,
+            )
+
+
 def test_m118_lowerer_accepts_bit_not_integer_scalar_descriptors() -> None:
     for type_tag in ("si32", "ui32"):
         result = Lowerer().lower(_selected_unary_implementation(type_tag=type_tag))
@@ -716,6 +787,27 @@ def test_m116_lowerer_rejects_mod_floating_scalar_descriptors() -> None:
 
 def test_m117_lowerer_rejects_bitwise_floating_scalar_descriptors() -> None:
     for operation_id in ("bit_and", "bit_or", "bit_xor"):
+        for type_tag in ("f32", "f64"):
+            result = Lowerer().lower(
+                _selected_implementation(
+                    operation_id=operation_id,
+                    type_tag=type_tag,
+                )
+            )
+
+            assert result.function is None
+            assert len(result.diagnostics) == 1
+            diagnostic = result.diagnostics[0]
+            assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-OPERATION-TYPE"
+            assert diagnostic.severity == "error"
+            assert diagnostic.location == _location(2, 3)
+            assert operation_id in diagnostic.message
+            assert type_tag in diagnostic.message
+            assert "si32, ui32" in diagnostic.message
+
+
+def test_m120_lowerer_rejects_shift_floating_scalar_descriptors() -> None:
+    for operation_id in ("shift_left", "shift_right"):
         for type_tag in ("f32", "f64"):
             result = Lowerer().lower(
                 _selected_implementation(
@@ -912,6 +1004,26 @@ def test_m111_backends_emit_backend_owned_operator_spellings() -> None:
         assert f"    left {operator} right" in rust_result.artifact.content
 
 
+def test_m120_backends_emit_backend_owned_shift_operator_spellings() -> None:
+    expected_operators = (
+        ("shift_left", "<<"),
+        ("shift_right", ">>"),
+    )
+
+    for operation_id, operator in expected_operators:
+        function = _lowered_function(operation_id=operation_id)
+
+        cpp_result = CppBackend().emit(function)
+        rust_result = RustBackend().emit(function)
+
+        assert cpp_result.diagnostics == ()
+        assert rust_result.diagnostics == ()
+        assert cpp_result.artifact is not None
+        assert rust_result.artifact is not None
+        assert f"return left {operator} right;" in cpp_result.artifact.content
+        assert f"    left {operator} right" in rust_result.artifact.content
+
+
 def test_m118_backends_emit_backend_owned_unary_operator_spellings() -> None:
     function = _lowered_unary_function()
 
@@ -988,7 +1100,10 @@ def test_m111_lowerer_reports_unsupported_binary_operation() -> None:
     assert diagnostic.severity == "error"
     assert diagnostic.location == _location(1, 1)
     assert "pow" in diagnostic.message
-    assert "add, sub, mul, div, mod, bit_and, bit_or, bit_xor" in diagnostic.message
+    assert (
+        "add, sub, mul, div, mod, bit_and, bit_or, bit_xor, "
+        "shift_left, shift_right"
+    ) in diagnostic.message
 
 
 def test_m111_lowerer_reports_primitive_body_operation_mismatch() -> None:
@@ -1105,6 +1220,17 @@ def test_m117_bitwise_passes_through_stage_output() -> None:
     )
 
 
+def test_m120_shift_passes_through_stage_output() -> None:
+    lowering_result = Lowerer().lower_all(
+        (_selected_implementation(operation_id="shift_right", type_tag="ui32"),)
+    )
+
+    assert lowering_result.diagnostics == ()
+    assert lowering_result.lowered_functions == LoweredFunctionSet(
+        (_lowered_function(type_tag="ui32", operation_id="shift_right"),)
+    )
+
+
 def test_m118_bit_not_passes_through_stage_output() -> None:
     lowering_result = Lowerer().lower_all((_selected_unary_implementation(),))
 
@@ -1198,6 +1324,40 @@ def test_m119_preserves_binary_and_bit_not_lowering_and_backend_output() -> None
     assert bit_and_rust.artifact.content == BIT_AND_RUST_CONTENT
     assert bit_not_cpp.artifact.content == BIT_NOT_CPP_CONTENT
     assert bit_not_rust.artifact.content == BIT_NOT_RUST_CONTENT
+
+
+def test_m120_preserves_existing_binary_and_unary_behavior() -> None:
+    bit_xor_function = Lowerer().lower(
+        _selected_implementation(operation_id="bit_xor", type_tag="ui32")
+    ).function
+    neg_function = Lowerer().lower(
+        _selected_unary_implementation(operation_id="neg", type_tag="f64")
+    ).function
+
+    assert bit_xor_function == _lowered_function(
+        operation_id="bit_xor",
+        type_tag="ui32",
+    )
+    assert neg_function == _lowered_unary_function(
+        operation_id="neg",
+        type_tag="f64",
+    )
+    assert bit_xor_function is not None
+    assert neg_function is not None
+
+    bit_xor_cpp = CppBackend().emit(bit_xor_function)
+    bit_xor_rust = RustBackend().emit(bit_xor_function)
+    neg_cpp = CppBackend().emit(neg_function)
+    neg_rust = RustBackend().emit(neg_function)
+
+    assert bit_xor_cpp.artifact is not None
+    assert bit_xor_rust.artifact is not None
+    assert neg_cpp.artifact is not None
+    assert neg_rust.artifact is not None
+    assert "return left ^ right;" in bit_xor_cpp.artifact.content
+    assert "    left ^ right" in bit_xor_rust.artifact.content
+    assert neg_cpp.artifact.content == NEG_F64_CPP_CONTENT
+    assert neg_rust.artifact.content == NEG_F64_RUST_CONTENT
 
 
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
@@ -1362,6 +1522,39 @@ def test_m117_integer_bitwise_source_generates_cpp_and_rust_artifacts(
     assert [artifact.content for artifact in result.artifacts.artifacts] == [
         BIT_AND_CPP_CONTENT,
         BIT_AND_RUST_CONTENT,
+    ]
+
+
+def test_m120_integer_shift_source_generates_cpp_and_rust_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_source(tmp_path, "shift_left", "si32")
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="shift_left",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="rust",
+                primitive_name="shift_left",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/shift_left_scalar_si32.hpp",
+        "src/shift_left_scalar_si32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        SHIFT_LEFT_CPP_CONTENT,
+        SHIFT_LEFT_RUST_CONTENT,
     ]
 
 
@@ -1534,7 +1727,10 @@ def test_m116_unsupported_source_operation_reports_lowering_diagnostic(
     assert diagnostic.location.line == 1
     assert diagnostic.location.column == 1
     assert "pow" in diagnostic.message
-    assert "add, sub, mul, div, mod, bit_and, bit_or, bit_xor" in diagnostic.message
+    assert (
+        "add, sub, mul, div, mod, bit_and, bit_or, bit_xor, "
+        "shift_left, shift_right"
+    ) in diagnostic.message
 
 
 def test_m116_floating_mod_source_reports_operation_type_diagnostic(
@@ -1594,6 +1790,36 @@ def test_m117_floating_bitwise_source_reports_operation_type_diagnostic(
     assert diagnostic.location.column == 3
     assert "bit_xor" in diagnostic.message
     assert "f32" in diagnostic.message
+    assert "si32, ui32" in diagnostic.message
+
+
+def test_m120_floating_shift_source_reports_operation_type_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_source(tmp_path, "shift_right", "f64")
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="rust",
+                primitive_name="shift_right",
+                extension="scalar",
+                type_tag="f64",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-OPERATION-TYPE"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 2
+    assert diagnostic.location.column == 3
+    assert "shift_right" in diagnostic.message
+    assert "f64" in diagnostic.message
     assert "si32, ui32" in diagnostic.message
 
 

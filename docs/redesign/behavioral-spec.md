@@ -314,6 +314,34 @@ constant folding, or source repair. C++ and Rust emitters own the `-` spelling
 for accepted lowered `neg` functions, while existing binary operations and
 `bit_not` remain preserved.
 
+### M120 Tiny Integer Shift Binary Operation Type Gate
+
+Milestone 120 extends the tiny clean binary operation descriptor table to
+accept `shift_left` and `shift_right` after `bit_xor` in deterministic
+descriptor order:
+
+```text
+prim<v:=(v,v)> shift_left(left, right):
+  implementation scalar si32:
+    body shift_left(left, right)
+```
+
+Catalog construction still only preserves the parsed operation name, scalar
+type tag, and exact `left, right` body arguments. The lowerer reuses the
+operation/type compatibility boundary: `shift_left` and `shift_right` lower
+only for the currently supported integer scalar descriptors `si32` and
+`ui32`. Floating scalar descriptors such as `f32` and `f64` reach lowering and
+fail with `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` at the implementation source
+location.
+
+The shift descriptors remain backend-neutral and do not define C++ or Rust
+spelling, shift-count range or width policy, arithmetic-vs-logical right-shift
+runtime policy, signedness runtime policy, overflow or wrapping policy,
+constant folding, or source repair. C++ and Rust emitters own the `<<` and
+`>>` spellings for accepted lowered shift functions. Unsupported binary
+operation ids now report `add, sub, mul, div, mod, bit_and, bit_or, bit_xor,
+shift_left, shift_right` as the supported tiny clean operation set.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

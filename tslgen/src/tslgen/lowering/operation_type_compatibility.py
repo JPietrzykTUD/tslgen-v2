@@ -42,6 +42,14 @@ _BINARY_OPERATION_SCALAR_TYPE_RULES: tuple[
         operation_id="bit_xor",
         accepted_scalar_families=("integer",),
     ),
+    BinaryOperationScalarTypeCompatibilityRule(
+        operation_id="shift_left",
+        accepted_scalar_families=("integer",),
+    ),
+    BinaryOperationScalarTypeCompatibilityRule(
+        operation_id="shift_right",
+        accepted_scalar_families=("integer",),
+    ),
 )
 
 _UNARY_OPERATION_SCALAR_TYPE_RULES: tuple[

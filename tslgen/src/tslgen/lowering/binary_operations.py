@@ -72,6 +72,20 @@ SUPPORTED_BINARY_OPERATION_DESCRIPTORS: tuple[BinaryOperationDescriptor, ...] = 
         source_body_operation="bit_xor",
         semantic_name="binary.bit_xor",
     ),
+    BinaryOperationDescriptor(
+        operation_id="shift_left",
+        arity=2,
+        category="binary",
+        source_body_operation="shift_left",
+        semantic_name="binary.shift_left",
+    ),
+    BinaryOperationDescriptor(
+        operation_id="shift_right",
+        arity=2,
+        category="binary",
+        source_body_operation="shift_right",
+        semantic_name="binary.shift_right",
+    ),
 )
 
 

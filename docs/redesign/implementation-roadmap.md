@@ -15861,10 +15861,22 @@ Review notes:
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M119.
-This milestone stays focused on lowering and broadens the accepted binary
-operation surface with two integer-only shift operations while preserving the
-KISS restart guardrails.
+Accepted. M120 added backend-neutral `shift_left` and `shift_right` after
+`bit_xor` in the clean binary operation descriptor table, reused the accepted
+exact binary source/catalog/lowering shape, and reused the lowering-owned
+operation/type compatibility boundary so shifts lower only for `si32` and
+`ui32` while floating descriptors fail with
+`TSL-LOWER-UNSUPPORTED-OPERATION-TYPE`. C++ and Rust own the accepted `<<` and
+`>>` spellings in their backend layers. M120 preserved accepted
+`add`/`sub`/`mul`/`div`/`mod`/`bit_*` binary behavior, M118/M119 unary
+behavior, M110 scalar descriptors, M112 body values, M113 signatures, M114
+stage-output behavior, M116-M119 compatibility behavior, diagnostics, logical
+paths, artifact ordering, and existing artifact bytes/digests. M120 did not
+add source syntax beyond the accepted binary form, shift-count range/width
+policy, arithmetic-vs-logical right-shift runtime policy, undefined-behavior
+modeling, source repair, rotates, masks, vector/SIMD semantics, backend
+manifests, old imports, registries, dispatchers, hidden backfeeds, fixpoint
+behavior, or a broad expression/type framework.
 
 Goal:
 
@@ -15972,3 +15984,114 @@ Review notes:
 - Reviewers should require current binary and unary output bytes, diagnostics,
   M112 body values, M113 signature values, M114 stage-output behavior, and
   M116-M119 compatibility behavior to remain stable.
+
+### Milestone 121: Tiny Clean Scalar Compare Result Lowering Shape Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M120.
+This milestone keeps the next step in lowering but moves the clean prototype
+past same-type scalar return values by adding one exact scalar comparison
+result boundary.
+
+Goal:
+
+Add exact scalar equality comparison lowering for the documented compare source
+shape:
+
+```text
+prim<m:=(v,v)> equal(left, right):
+  implementation scalar si32:
+    body equal(left, right)
+```
+
+Scope:
+
+- Add parser/catalog support only for the exact compare source shape:
+  signature `m:=(v,v)`, parameter tuple `("left", "right")`, one scalar
+  implementation, and body argument tuple `("left", "right")`.
+- Model the accepted compare source body as typed catalog data rather than
+  forcing it through arithmetic/bitwise binary operation semantics.
+- Add a small backend-neutral comparison operation descriptor for `equal` and
+  a lowered comparison expression paired with the existing lowered
+  return-statement/function structure.
+- Introduce the smallest explicit lowered result-type boundary needed for a
+  scalar comparison result. The accepted backend result spelling is `bool` in
+  C++ and Rust, owned by the backend layer, not by lowering descriptors.
+- Allow currently supported scalar descriptors (`si32`, `ui32`, `f32`, `f64`)
+  as the left/right input scalar type for `equal(left, right)`.
+- Update C++ and Rust backends to render accepted `equal` lowered expressions
+  through backend-owned result-type and operator spelling rules.
+- Preserve accepted binary and unary operation behavior, M110 scalar
+  descriptors, M112 body values, M113 signatures, M114 stage-output behavior,
+  M116-M120 compatibility behavior, diagnostics, logical paths, artifact
+  ordering, and existing artifact bytes and digests.
+- Add focused tests for parsing/cataloging the exact compare form, rejecting
+  nearby malformed compare forms, descriptor lookup/order, lowerer acceptance
+  for representative integer and floating scalar descriptors, backend result
+  and operator spelling ownership, generator output for one `equal` source,
+  M114 stage-output pass-through, and preservation of existing binary/unary
+  behavior.
+
+Out of scope:
+
+- Compare operations beyond `equal`, broad mask modeling, vector/SIMD compare
+  results, mask lane types, boolean scalar inputs, mask composition, predicate
+  paths, or backend mask ABI decisions.
+- New source syntax beyond the exact compare form, broad TSIL parsing,
+  arbitrary arity support, multiple statements, nested expressions, calls,
+  variables, source repair, or generalized expression trees beyond the
+  accepted binary, unary, and exact comparison shapes.
+- Floating NaN/special-value policy, signed ordering policy, runtime comparison
+  semantics beyond emitting the backend-owned equality operator for accepted
+  lowered values, constant folding, algebraic simplification, or broad
+  comparison semantics.
+- New scalar types, vector/SIMD shapes, hardware feature selection, branch
+  pruning, generation-time helper evaluation, backend manifests, dependency
+  closure, or old generator maps.
+- Module/package planning, function overloading policy, include planning,
+  artifact layout changes, artifact-plan values, renderer-ready IR, or backend
+  emission inside lowering.
+- CLI integration, writer changes, generated test execution, CMake/Cargo
+  scaffolding, runtime imports from `frozen/` or `tslgenold/`, or porting old
+  operation/lowering modules.
+- Registries, dispatchers, plugin systems, hidden backfeeds, fixpoint
+  mechanisms, or a broad expression/type framework.
+
+Accepted outputs:
+
+- The clean source-to-lowering path accepts the exact scalar
+  `equal(left, right)` compare shape and rejects unsupported nearby forms with
+  structured diagnostics.
+- Accepted scalar inputs lower into a backend-neutral comparison expression
+  with an explicit scalar comparison result boundary.
+- C++ and Rust emitters render accepted equality comparison functions with
+  backend-owned `bool` result type spelling and `==` operator spelling while
+  existing binary and unary operations remain byte-stable.
+- The M114 lowering stage-output boundary carries accepted comparison lowered
+  functions without adding scheduler, package, artifact-plan, broad mask IR, or
+  broad expression machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+```
+
+Run the smallest compile/import checks needed for the revised clean package
+surface. Do not run the old `tslgenold` validation profile as proof of the
+clean product slice.
+
+Review notes:
+
+- Reviewers should reject source syntax broadening beyond the exact compare
+  form or source repair.
+- Reviewers should reject putting C++/Rust result-type spelling or comparison
+  operator spelling into lowering descriptors.
+- Reviewers should reject broad mask modeling, vector/SIMD comparison
+  semantics, broad expression frameworks, registries, or dispatchers.
+- Reviewers should require current binary and unary output bytes, diagnostics,
+  M112 body values, M113 signature values, M114 stage-output behavior, and
+  M116-M120 compatibility behavior to remain stable.
