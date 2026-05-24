@@ -94,6 +94,20 @@ translation lowerer calls, direct-intrinsic/SVE resolution, source repair,
 category-based semantic dispatch, facade integration, stage-contract
 integration, or `boundary.py`/`_lowering_ir_contracts.py` growth.
 
+Post-M103 planning selected
+`Milestone 104: Worklist-Driven Backend Translation Result Expansion Slice`.
+Internal planning review returned `Accept With Follow-Ups` after local
+planning-doc revisions. Human acceptance was recorded. The selected plan
+intentionally broadens beyond one literal M103 classification by treating
+"M103 worklist entry to typed translation expansion result" as one documented
+lowering gap. M104 remains a typed Stage 8 lowering slice: it may consume the
+accepted `exact_array_backend_uninit_unresolved` and
+`selected_body_direct_intrinsic_deferred` M103 worklist classifications, but
+semantics must come only from explicit typed rule inputs over concrete typed
+request/result objects. It must not turn the M103 worklist into a scheduler,
+readiness oracle, Stage 9 plan, renderer-ready IR, backend-map evaluator,
+source scanner, registry, dispatcher, hidden backfeed, or fixpoint mechanism.
+
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
 
@@ -1166,34 +1180,33 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Run post-M103 planning and review.
+Execute Milestone 104.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m103-planning-plus-review-prompt.md
+docs/agent/runs/m104-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. M103 is accepted; the active prompt is planning-only.
+Milestone 104: Worklist-Driven Backend Translation Result Expansion Slice
 ```
 
 Latest review verdict:
 
 ```text
-M103 execution-review loop returned Accept With Follow-Ups after focused
-fake-object validation revision and re-review.
+Post-M103 planning selected M104 and returned Accept With Follow-Ups after
+local planning-doc revisions; human acceptance was recorded.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M103 planning-plus-review prompt. The next task should
-focus on lowering and select exactly one M103 worklist row/classification or
-documented lowering gap as the next milestone.
+Run the active M104 execution-review-loop prompt with one write-capable
+executor followed by read-only review/audit subagents.
 ```
 
 Accepted planning prompt:
@@ -2180,10 +2193,22 @@ Completed M103 execution-review-loop prompt:
 docs/agent/runs/m103-execution-review-loop-prompt.md
 ```
 
-Active post-M103 planning-plus-review prompt:
+Completed post-M103 planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m103-planning-plus-review-prompt.md
+```
+
+Completed post-M103 acceptance-finalization prompt:
+
+```text
+docs/agent/runs/post-m103-acceptance-finalization-prompt.md
+```
+
+Active M104 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m104-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -3269,6 +3294,28 @@ docs/agent/runs/post-m103-planning-plus-review-prompt.md
   `_stage_contracts.py` integration, and any worklist-specific contract
   constants stay in the new focused module rather than
   `_lowering_ir_contracts.py`.
+- M104 is selected by post-M103 planning as a worklist-driven backend
+  translation result expansion slice. The broadening is accepted only as one
+  documented lowering gap: translating M103 worklist entries into typed
+  resolved/deferred/unsupported translation expansion result records.
+- M104 may consume only accepted concrete M103
+  `Stage8BackendBoundaryWorklistInventoryIr` values and only the
+  `exact_array_backend_uninit_unresolved` and
+  `selected_body_direct_intrinsic_deferred` classifications. M103
+  classifications may filter entries, but semantic behavior must come from
+  concrete typed request/result objects plus explicit typed rule inputs.
+- M104 must not dispatch by `svptrue_b*`, extension id, type tag, byte size,
+  primitive name, raw direct-intrinsic token text, hardware-looking tokens, or
+  source-location strings.
+- M104 must not add backend-map/catalog/manifest reads during lowering,
+  rendering, renderer-ready IR, generated output, Stage 9 backend planning,
+  Rust rendering, source repair, raw source reparsing, operation scheduling,
+  dependency closure, queues, scheduler/readiness behavior, registries,
+  dispatchers, callbacks, plugins, hidden backfeeds, fixpoint machinery, or
+  category-based semantic dispatch.
+- M104 must keep ownership in new focused private result-expansion modules and
+  avoid growth in `boundary.py`, `_lowering_ir_contracts.py`, M99/M100 modules,
+  and M103 worklist modules.
 - Future lowering package decomposition must preserve accepted M57-M99
   diagnostics, stage names, stage ordering, output identities, keys,
   deterministic ordering, selected-branch-only diagnostics, public imports, and
@@ -4607,15 +4654,28 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   negative tests were tightened after focused review.
 - M103 follow-up for post-M103 planning: select exactly one worklist
   row/classification or documented lowering gap as the next focused
-  implementation milestone.
+  implementation milestone. Addressed by selecting M104 as one documented
+  lowering gap: M103 worklist entry to typed translation expansion result.
 - M103 validation follow-up: future diagnostic-sensitive slices should keep
   tightening exact location and message-snippet assertions around malformed
   source/container diagnostics.
+- Post-M103 planning follow-up for M104 execution: keep the selected broadening
+  constrained to explicit typed rule inputs and typed resolved/deferred/
+  unsupported translation expansion result records.
+- Post-M103 planning follow-up for M104 execution: add line-count/import-boundary
+  tests proving no growth in `boundary.py`, `_lowering_ir_contracts.py`,
+  M99/M100 modules, or M103 worklist modules.
+- Post-M103 planning follow-up for M104 execution: add fake-object and
+  concrete-type negative tests, following the M103 review lesson.
+- Post-M103 planning follow-up for M104 execution: state and test that direct
+  intrinsic behavior is not hardwired by SVE tokens, extension ids, type tags,
+  byte sizes, primitive names, raw direct-intrinsic text, or hardware-looking
+  tokens.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active
-post-M103 planning-plus-review prompt.
+No stop condition is active. The workflow is ready to execute M104 through the
+active M104 execution-review-loop prompt.
 
 ## Validation Expectations
 
@@ -4734,6 +4794,22 @@ focused backend-translation result regression test returned
 `12 passed in 18.57s`. The focused lowering mypy check returned
 `Success: no issues found in 53 source files`. The standalone final
 `git diff --check` returned exit 0 with no output.
+
+For post-M103 planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
+
+For post-M103 acceptance finalization, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
 
 For post-M99 planning, validation completed with:
 

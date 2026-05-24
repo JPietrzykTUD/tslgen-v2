@@ -864,6 +864,18 @@ objects, read backend maps/catalogs/manifests, repair source text, resolve
 direct-intrinsic/SVE semantics, or grow `boundary.py`/`LoweredImplementation`
 orchestration.
 
+Post-M103 planning selects M104 as the next Stage 8 lowering-owned backend
+translation result expansion. M104 consumes the accepted M103 worklist as
+static inventory/provenance input and may produce typed resolved/deferred/
+unsupported translation expansion result records for exact-array backend-uninit
+unresolved entries and selected-body direct-intrinsic deferred entries. The
+worklist remains non-executable; classifications may filter entries, but
+semantic resolution must come from concrete typed facts plus explicit typed
+rule inputs. M104 must not add Stage 9 planning, renderer-ready IR, rendering,
+backend map/catalog/manifest reads, source repair, scheduler/readiness
+behavior, registry/dispatcher/plugin behavior, hidden backfeeds, fixpoint
+machinery, category dispatch, or direct-intrinsic/SVE hardwiring.
+
 ## Stage 9: Backend Planning
 
 Inputs:

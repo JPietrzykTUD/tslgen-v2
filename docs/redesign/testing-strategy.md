@@ -1331,6 +1331,16 @@ Recommended first parity checks:
   Stage 9 planning, renderer-ready IR, backend-map/catalog/manifest reads,
   source repair, registry/dispatcher/callback/plugin/backfeed/fixpoint
   behavior, and category-based semantic dispatch.
+- Planned M104 coverage should prove backend translation expansion consumes
+  the accepted M103 worklist as static inventory/provenance input and produces
+  typed resolved/deferred/unsupported result records only from explicit typed
+  rule inputs. Tests should cover positive exact-array unresolved and
+  selected-body direct-intrinsic deferred cases, missing-rule deferred/
+  unsupported cases, duplicate/conflicting rules, fake protocol-shaped inputs,
+  malformed source containers, provenance mismatches, deterministic ordering,
+  line-count/import-boundary guardrails, and direct-intrinsic negatives proving
+  no dispatch by `svptrue_b*`, extension id, type tag, byte size, primitive
+  name, raw token text, source-location text, or hardware-looking tokens.
 
 Deferred parity checks:
 

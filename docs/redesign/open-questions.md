@@ -26,18 +26,22 @@ context/direct-intrinsic semantics.
 Current follow-up:
 
 M103 created a static Stage 8 backend-translation boundary worklist inventory
-over accepted concrete M99/M100 facts. That narrows visibility of the
-backend-facing frontier but does not choose the next semantic resolver. Future
-planning after M103 must still decide which row or typed backend request family
-comes next: Rust exact-array uninit after typed `{type}` context exists,
-scalar/vector backend type spelling, backend modifier values,
-direct-intrinsic request resolution, or renderer-ready exact-array body IR.
+over accepted concrete M99/M100 facts. Post-M103 planning selects M104 as a
+broadened worklist-driven backend translation result expansion, covering the
+single documented lowering gap from M103 worklist entry to typed translation
+expansion result. M104 narrows exact-array backend-uninit unresolved and
+selected-body direct-intrinsic deferred entries only through explicit typed
+rule inputs. Broad backend-value/type translation, Rust rendering,
+scalar/vector type spelling, backend modifier values, direct-intrinsic
+broadening beyond accepted typed rules, renderer-ready exact-array body IR,
+primitive calls/dependencies, and output integration remain open.
 
 Implementation blocked:
 
-No for M100 or the accepted M103 inventory/provenance slice. Yes for broad
-backend-value/type translation, direct-intrinsic resolution, renderer-ready IR,
-and Rust uninit rendering until typed context, rule, and resolver boundaries
+No for M100, the accepted M103 inventory/provenance slice, or the planned M104
+explicit-rule translation expansion boundary. Yes for broad backend-value/type
+translation, broad direct-intrinsic resolution, renderer-ready IR, and Rust
+uninit rendering until typed context, rule, resolver, and rendering boundaries
 are selected.
 
 ## OQ-001: What Exact Python Version Should The Redesign Target?

@@ -14143,7 +14143,8 @@ Review notes:
   avoid facade/pipeline integration unless a separate extraction milestone
   accepts that ownership first.
 - After M103 is accepted, a future planning pass should select exactly one
-  row/classification from the worklist as the next implementation milestone.
+  row/classification from the worklist or one documented lowering gap as the
+  next implementation milestone.
 - M103 must not add `GenerationLoweringStageName` values or `_stage_contracts.py`
   integration; it should expose a direct private lowering function over
   accepted M99/M100 values first.
@@ -14158,9 +14159,191 @@ Accepted follow-ups:
 - Future diagnostic-sensitive slices should keep tightening exact location and
   message-snippet assertions around malformed source/container diagnostics.
 - After accepted M103, select one worklist row/classification or documented
-  lowering gap as a focused implementation milestone.
+  lowering gap as a focused implementation milestone. Addressed by post-M103
+  planning, which selected M104 as one documented gap: M103 worklist entry to
+  typed translation expansion result.
 
 Next concrete prompt:
 
 - `docs/agent/runs/post-m103-planning-plus-review-prompt.md` selects the next
   lowering milestone after accepted M103.
+
+### Milestone 104: Worklist-Driven Backend Translation Result Expansion Slice
+
+Status:
+
+Planned. Post-M103 planning selected M104 as the next lowering milestone after
+user-requested broadening. Internal planning review returned
+`Accept With Follow-Ups` after local planning-doc revisions clarified that the
+scope is one documented lowering gap: expanding M103 worklist entries into
+typed backend translation expansion results. Human acceptance was recorded,
+and M104 is ready for execution through the active execution-review-loop
+prompt.
+
+Goal:
+
+Create a typed, deterministic Stage 8 lowering result boundary that consumes
+accepted M103 backend-boundary worklist entries and produces typed
+resolved/deferred/unsupported backend translation expansion result records.
+
+M104 is intentionally broader than a single literal worklist classification,
+but it is one coherent boundary: M103 worklist entry to typed translation
+expansion result. It may cover the accepted
+`exact_array_backend_uninit_unresolved` and
+`selected_body_direct_intrinsic_deferred` classifications only when explicit
+typed rule inputs are supplied. The worklist remains static inventory and
+provenance input, not a scheduler, readiness oracle, Stage 9 plan, renderer
+surface, completeness oracle, backend-map evaluator, source scanner,
+dispatcher, hidden backfeed, or fixpoint mechanism.
+
+M101/M102/M103 taxonomy fit:
+
+- consumes a lowering inventory, specifically accepted concrete M103
+  `Stage8BackendBoundaryWorklistInventoryIr` values;
+- preserves provenance and object identity to accepted M103 worklist entries,
+  M99 request/no-request records, optional M100 result/deferred records, and
+  earlier source facts;
+- adds typed translation result records, explicit typed rule input records,
+  and local provenance values as needed;
+- must not introduce a new `work_item` taxonomy category;
+- M103 worklist classifications may filter candidate entries, but semantic
+  behavior must come from concrete typed request/result objects plus explicit
+  typed rule inputs, not from category dispatch.
+
+Scope:
+
+- Add focused private lowering modules for backend translation expansion, such
+  as `_lowering_backend_translation_expansion.py` with focused model, source,
+  validation, and diagnostic siblings if the split is needed.
+- Consume only accepted concrete M103
+  `Stage8BackendBoundaryWorklistInventoryIr` values.
+- Accept only M103 entries classified as
+  `exact_array_backend_uninit_unresolved` or
+  `selected_body_direct_intrinsic_deferred`.
+- Produce deterministic typed resolved/deferred/unsupported translation
+  expansion result records.
+- Resolve exact-array backend-uninit unresolved entries only from explicit
+  typed rule inputs. This may extend beyond M100 only when the rule carries
+  typed context M100 did not accept, such as the backend/type context required
+  for a Rust or additional exact value result.
+- Resolve selected-body direct-intrinsic deferred entries only from explicit
+  typed rule inputs identity-bound to accepted typed request/worklist facts.
+- Emit typed deferred/unsupported records with diagnostics when no explicit
+  rule applies, when a rule is malformed, or when provenance/context does not
+  match the accepted worklist entry.
+- Preserve deterministic ordering, stable keys, source locations, candidate
+  ids, source inventory/result keys, and object identities.
+- Keep new M104-specific contracts local to focused M104 modules unless a
+  later consolidation milestone accepts shared ownership.
+- Add focused tests in a new test file rather than expanding the already-large
+  `test_lowering_boundary.py`.
+
+Out of scope:
+
+- Rendering, renderer-ready IR, generated output, Stage 9 backend planning,
+  artifact planning, wrapper planning, output/report/writer behavior, compiler
+  execution, and host hardware dependency.
+- Backend map/catalog/manifest reads during lowering, `tsldata/detail/lang`
+  reads, generic backend helper evaluation, or raw helper text parsing.
+- Calling existing translation lowerers to complete missing work.
+- Source-body reparsing, source repair, source normalization, best-effort
+  correction, TSIL/body broad parsing, or guessing the intended meaning of a
+  malformed `.tsl` body.
+- Dispatching by `svptrue_b*`, extension id, type tag, byte size, primitive
+  name, raw direct-intrinsic token text, source location, or hardware-looking
+  tokens.
+- Direct-intrinsic/SVE semantic inference beyond explicit typed rule input.
+- Rust rendering or broad Rust support; Rust exact-array uninit is allowed only
+  if the typed rule input supplies the required typed backend/type context and
+  the output remains a typed translation result.
+- Operation scheduling, dependency closure, queues, scheduler/readiness
+  behavior, registries, dispatchers, callbacks, plugins, hidden backfeeds,
+  fixpoint mechanisms, or category-based semantic dispatch.
+- Pipeline integration through `LoweredImplementation`, public facade exports,
+  `_lower_input` orchestration, new `GenerationLoweringStageName` /
+  `_stage_contracts.py` integration, or `boundary.py` growth.
+- Growing `_lowering_ir_contracts.py`, M99/M100 modules, or M103 worklist
+  modules for M104 ownership.
+
+Expected outputs:
+
+- New private typed backend translation expansion modules.
+- Typed expansion result inventory/result values with resolved, deferred, and
+  unsupported records.
+- Explicit typed rule input values for the accepted exact-array and
+  selected-body direct-intrinsic result families.
+- Diagnostics for missing rules, unsupported entries, malformed/fake objects,
+  duplicate/conflicting rules, mismatched worklist/provenance/source context,
+  and forbidden hardwired-token behavior.
+- Tests proving deterministic ordering, object-identity preservation,
+  concrete-type rejection of fake protocol-shaped objects, import boundaries,
+  line-count guardrails, and absence of scheduler/readiness/backend-rendering/
+  hardwired-token/category-dispatch behavior.
+
+Tests required:
+
+- Positive exact-array unresolved entry resolved by explicit typed rule input.
+- Positive selected-body direct-intrinsic deferred entry resolved by explicit
+  typed rule input.
+- Missing rule produces typed deferred or unsupported state, not guessed
+  behavior.
+- Negative tests for rule mismatch, duplicate/conflicting rules, fake
+  protocol-shaped worklist/rule/result objects, malformed source containers,
+  malformed keys, and provenance mismatch.
+- Direct-intrinsic negative tests proving no dispatch by `svptrue_b*`,
+  extension id, type tag, byte size, primitive name, raw token text,
+  source-location text, or hardware-looking tokens.
+- Determinism tests for ordering and repeat-run equality.
+- Import-boundary/source assertions proving no `boundary.py`, public facade,
+  backend modules, renderers, backend planners, `tsldata`, `frozen`, backend
+  maps/catalogs/manifests, raw parsing helpers, source repair, registry/
+  dispatcher/callback/plugin/backfeed/fixpoint behavior, or category-based
+  semantic dispatch.
+- Line-count tests or source assertions proving M104 does not grow
+  `boundary.py`, `_lowering_ir_contracts.py`, M99/M100 modules, M103 worklist
+  modules, or new M104 modules into replacement monoliths.
+
+Validation required:
+
+- `wc -l` for `boundary.py`, `_lowering_ir_contracts.py`, M99/M100 backend-
+  translation modules, M103 worklist modules, new M104 modules, and the new
+  focused M104 test file.
+- `PYTHONPATH=tslgen/src python -m py_compile` for touched/new lowering
+  modules and touched/new tests.
+- Focused pytest for the new backend translation expansion tests.
+- Focused pytest for M103 backend-boundary worklist regression behavior.
+- Focused pytest for M100 backend-translation result regression behavior.
+- `MYPYPATH=tslgen/src:tslgen/tests/unit mypy --explicit-package-bases` for
+  touched/new lowering modules and tests where practical.
+- `git diff --check`.
+
+Review notes:
+
+- M104 is accepted as a broadened planning target only because it shares one
+  boundary: M103 worklist entry to typed translation expansion result.
+- Reviewers should reject any generic backend dispatcher, registry, source
+  scanner, scheduler/readiness oracle, hidden backfeed, fixpoint loop, Stage 9
+  planner, renderer-ready IR, or renderer-side inference.
+- Reviewers should verify that direct-intrinsic behavior is driven by explicit
+  typed rule input and not by SVE tokens, extension ids, type tags, byte sizes,
+  primitive names, or raw intrinsic text.
+- Exact-array expansion must not duplicate M100; it must either add explicitly
+  typed context not accepted by M100, produce deferred/unsupported result state,
+  or bridge unresolved M103 worklist entries to a typed result boundary.
+
+Selected follow-ups:
+
+- The M104 execution prompt must state the single-boundary justification for
+  the broadened scope.
+- The M104 execution prompt must include explicit typed rule-input guardrails,
+  no-hardwiring tests, fake-object negative tests, and line-count/import-
+  boundary tests.
+- Future post-M104 planning should choose between renderer-ready body IR,
+  additional backend value/type result families, direct-intrinsic result
+  broadening, primitive calls/dependencies, or output integration based on the
+  accepted M104 result surface.
+
+Next concrete prompt:
+
+- `docs/agent/runs/m104-execution-review-loop-prompt.md` executes and reviews
+  accepted M104.
