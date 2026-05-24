@@ -2,10 +2,16 @@
 
 from tslgen.lowering.lowerer import Lowerer, LoweringResult
 from tslgen.lowering.model import (
-    LoweredBinaryAddExpression,
+    LoweredBinaryOperationExpression,
     LoweredFunction,
     LoweredParameter,
     LoweredParameterRef,
+)
+from tslgen.lowering.binary_operations import (
+    SUPPORTED_BINARY_OPERATION_DESCRIPTORS,
+    BinaryOperationDescriptor,
+    lookup_binary_operation_descriptor,
+    supported_binary_operation_ids,
 )
 from tslgen.lowering.scalar_types import (
     SUPPORTED_SCALAR_TYPE_DESCRIPTORS,
@@ -15,12 +21,16 @@ from tslgen.lowering.scalar_types import (
 )
 
 __all__ = [
-    "LoweredBinaryAddExpression",
+    "LoweredBinaryOperationExpression",
     "LoweredFunction",
     "LoweredParameter",
     "LoweredParameterRef",
     "Lowerer",
     "LoweringResult",
+    "SUPPORTED_BINARY_OPERATION_DESCRIPTORS",
+    "BinaryOperationDescriptor",
+    "lookup_binary_operation_descriptor",
+    "supported_binary_operation_ids",
     "SUPPORTED_SCALAR_TYPE_DESCRIPTORS",
     "ScalarTypeDescriptor",
     "lookup_scalar_type_descriptor",

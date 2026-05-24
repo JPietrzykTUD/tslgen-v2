@@ -1,4 +1,4 @@
-"""Typed Rust artifact emitter for the tiny lowered add function."""
+"""Typed Rust artifact emitter for tiny lowered binary functions."""
 
 from dataclasses import dataclass
 
@@ -6,6 +6,7 @@ from tslgen.backends.base import BackendEmitResult
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.io.artifacts import Artifact, ArtifactMetadata
 from tslgen.lowering import LoweredFunction
+from tslgen.lowering.binary_operations import BinaryOperationDescriptor
 from tslgen.lowering.scalar_types import ScalarTypeDescriptor
 
 
@@ -15,11 +16,23 @@ class _ScalarTypeSpelling:
     spelling: str
 
 
+@dataclass(frozen=True, slots=True)
+class _BinaryOperatorSpelling:
+    operation_id: str
+    spelling: str
+
+
 _SCALAR_TYPE_SPELLINGS: tuple[_ScalarTypeSpelling, ...] = (
     _ScalarTypeSpelling(tag="si32", spelling="i32"),
     _ScalarTypeSpelling(tag="ui32", spelling="u32"),
     _ScalarTypeSpelling(tag="f32", spelling="f32"),
     _ScalarTypeSpelling(tag="f64", spelling="f64"),
+)
+
+_BINARY_OPERATOR_SPELLINGS: tuple[_BinaryOperatorSpelling, ...] = (
+    _BinaryOperatorSpelling(operation_id="add", spelling="+"),
+    _BinaryOperatorSpelling(operation_id="sub", spelling="-"),
+    _BinaryOperatorSpelling(operation_id="mul", spelling="*"),
 )
 
 
@@ -44,7 +57,28 @@ class RustBackend:
                 ),
             )
 
-        content = self._render_add_function(function, scalar_spelling)
+        operator_spelling = _binary_operator_spelling(function.expression.operation)
+        if operator_spelling is None:
+            return BackendEmitResult(
+                artifact=None,
+                diagnostics=(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-BACKEND-UNSUPPORTED-OPERATION",
+                        message=(
+                            "Rust emitter has no operator spelling for operation "
+                            f"{function.expression.operation.operation_id!r}"
+                        ),
+                        location=function.source,
+                    ),
+                ),
+            )
+
+        content = self._render_binary_function(
+            function,
+            scalar_spelling,
+            operator_spelling,
+        )
         return BackendEmitResult(
             artifact=Artifact(
                 logical_path=f"src/{function.name}.rs",
@@ -58,10 +92,11 @@ class RustBackend:
             diagnostics=(),
         )
 
-    def _render_add_function(
+    def _render_binary_function(
         self,
         function: LoweredFunction,
         scalar_spelling: str,
+        operator_spelling: str,
     ) -> str:
         left = function.expression.left.parameter_name
         right = function.expression.right.parameter_name
@@ -69,7 +104,7 @@ class RustBackend:
             f"pub fn {function.name}"
             f"({left}: {scalar_spelling}, {right}: {scalar_spelling})"
             f" -> {scalar_spelling} {{\n"
-            f"    {left} + {right}\n"
+            f"    {left} {operator_spelling} {right}\n"
             "}\n"
         )
 
@@ -77,5 +112,14 @@ class RustBackend:
 def _scalar_type_spelling(descriptor: ScalarTypeDescriptor) -> str | None:
     for spelling in _SCALAR_TYPE_SPELLINGS:
         if spelling.tag == descriptor.tag:
+            return spelling.spelling
+    return None
+
+
+def _binary_operator_spelling(
+    descriptor: BinaryOperationDescriptor,
+) -> str | None:
+    for spelling in _BINARY_OPERATOR_SPELLINGS:
+        if spelling.operation_id == descriptor.operation_id:
             return spelling.spelling
     return None

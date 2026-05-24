@@ -14,7 +14,7 @@ from tslgen.syntax.ast import (
 
 _HEADER_PATTERN = re.compile(
     r"^prim<(?P<signature>v:=\(v,v\))> "
-    r"(?P<name>add)"
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
     r"\((?P<params>left, right)\):$"
 )
 _IMPLEMENTATION_PATTERN = re.compile(

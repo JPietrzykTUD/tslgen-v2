@@ -1,4 +1,4 @@
-"""Minimal typed catalog values for M107."""
+"""Minimal typed catalog values for the tiny clean restart slice."""
 
 from dataclasses import dataclass
 
@@ -6,7 +6,8 @@ from tslgen.core.diagnostics import SourceLocation
 
 
 @dataclass(frozen=True, slots=True)
-class BinaryAddBody:
+class BinaryOperationBody:
+    operation: str
     left_parameter: str
     right_parameter: str
     source: SourceLocation
@@ -16,7 +17,7 @@ class BinaryAddBody:
 class Implementation:
     extension: str
     type_tag: str
-    body: BinaryAddBody
+    body: BinaryOperationBody
     source: SourceLocation
 
 

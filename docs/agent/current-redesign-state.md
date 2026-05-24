@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 110 is accepted.
+Milestone 111 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -216,6 +216,25 @@ semantics, broad TSIL parsing, backend-manifest/type-map reads, old
 type/lowering migration, dependency closure, registries, dispatchers, plugin
 systems, hidden backfeeds, fixpoint mechanisms, or a broad type-system
 framework.
+
+The M111 execution-review loop returned `Accept With Follow-Ups`. M111
+broadened the tiny clean lowering path from a one-off `add` operation check
+into a small lowering-owned binary operation descriptor table for `add`,
+`sub`, and `mul`. `LoweredFunction` now carries a backend-neutral binary
+operation expression with an operation descriptor alongside the M110 scalar
+type descriptor. C++ and Rust operator spellings remain backend-owned in their
+emitters. The parser/catalog still preserve the exact tiny scalar binary
+source shape while allowing identifier-like primitive/body operation names,
+and syntactically valid but unsupported operation ids fail in lowering with
+`TSL-LOWER-UNSUPPORTED-OPERATION`. A supported primitive whose body uses a
+different operation fails with `TSL-LOWER-OPERATION-MISMATCH`. Existing
+`add`/`si32` artifact bytes, logical paths, and digests remain stable. M111
+did not import from `tslgenold/` or `frozen/`, add CLI work, writer changes,
+vector/SIMD semantics, broad TSIL/expression parsing,
+backend-manifest/operation-map reads, old operation/lowering migration,
+dependency closure, registries, dispatchers, plugin systems, hidden
+backfeeds, fixpoint mechanisms, division/modulo semantics, or a broad
+expression/type framework.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1289,35 +1308,35 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 111.
+Execute Milestone 112.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m111-execution-review-loop-prompt.md
+docs/agent/runs/m112-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 111: Tiny Clean Binary Operation Lowering Table Slice
+Milestone 112: Tiny Clean Return Statement Body Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-M110 execution-review loop returned Accept With Follow-Ups after layout,
+M111 execution-review loop returned Accept With Follow-Ups after layout,
 architecture, documentation, and validation audits.
 ```
 
 Next expected action:
 
 ```text
-Run the active M111 execution-review-loop prompt. M111 should broaden the tiny
-clean lowering path from a one-off `add` operation check to a small typed
-binary-operation descriptor table, keep backend operator spellings
-backend-owned, and avoid CLI work or broad expression parsing.
+Run the active M112 execution-review-loop prompt. M112 should make the lowered
+function body explicit with one backend-neutral typed return statement over
+the accepted M111 binary operation expression, preserve output bytes, and
+avoid parser/source syntax broadening.
 ```
 
 Accepted planning prompt:
@@ -2370,10 +2389,16 @@ Completed M110 execution-review-loop prompt:
 docs/agent/runs/m110-execution-review-loop-prompt.md
 ```
 
-Active M111 execution-review-loop prompt:
+Completed M111 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m111-execution-review-loop-prompt.md
+```
+
+Active M112 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m112-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2397,6 +2422,11 @@ docs/agent/runs/m111-execution-review-loop-prompt.md
   expression parsing, division/modulo semantics, vector/SIMD semantics,
   backend-manifest reads, old operation/lowering migration, or a broad
   expression/type framework.
+- M112 is limited to adding an explicit lowered function-body/return-statement
+  boundary over the accepted M111 binary operation expression; it must not add
+  source syntax, `emit_return(...)` recognition, broad TSIL parsing, multiple
+  statements, locals, assignments, loops, control flow, source repair, old body
+  lowering migration, or a broad statement/expression framework.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and
@@ -3911,6 +3941,10 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   the historical M107/M108 `si32` sections to the M110 scalar-type broadening
   so quick readers do not confuse historical baseline text with the current
   accepted surface.
+- M111 documentation follow-up: consider adding one sentence to the M111
+  behavioral spec clarifying that syntactically malformed operation names are
+  parser diagnostics, while syntactically valid but unsupported operation ids
+  reach lowering as `TSL-LOWER-UNSUPPORTED-OPERATION`.
 - M106 architecture follow-up: before any release/stabilization work resumes,
   retire or rewrite `docs/redesign/stabilization-release-checklist.md` for the
   post-M106 clean restart; it still reads like the old `tslgen` package is an
@@ -4919,7 +4953,7 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M111
+No stop condition is active. The workflow is ready to run the active M112
 execution-review-loop prompt.
 
 ## Validation Expectations
@@ -4960,6 +4994,24 @@ python -B -m py_compile tslgen/src/tslgen/backends/cpp/backend.py tslgen/src/tsl
 test command returned exit 0 with `16 passed`. The public API import command
 returned exit 0 with no output. The scalar lowering import command returned
 exit 0 with no output. The py_compile command returned exit 0 with no output.
+
+For M111 clean binary operation lowering table slice, validation completed with:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -c "from tslgen.lowering import BinaryOperationDescriptor, LoweredBinaryOperationExpression, lookup_binary_operation_descriptor"
+python -B -m py_compile tslgen/src/tslgen/backends/cpp/backend.py tslgen/src/tslgen/backends/rust/backend.py tslgen/src/tslgen/domain/catalog.py tslgen/src/tslgen/lowering/__init__.py tslgen/src/tslgen/lowering/binary_operations.py tslgen/src/tslgen/lowering/lowerer.py tslgen/src/tslgen/lowering/model.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/syntax/parser.py tslgen/tests/test_m107_tiny_pipeline.py
+```
+
+`git diff --check` returned exit 0 with no output. The targeted clean-package
+test command returned exit 0 with `24 passed`. The public API import command
+returned exit 0 with no output. The binary operation lowering import command
+returned exit 0 with no output. The py_compile command returned exit 0 with no
+output. The old `LoweredBinaryAddExpression` import fails by design after M111;
+architecture and validation review accepted the surface replacement with
+`LoweredBinaryOperationExpression`.
 
 For M108 clean lowering boundary slice, validation completed with:
 

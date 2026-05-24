@@ -50,9 +50,9 @@ semantic probes rather than Python linting or type-checking.
 
 ### M107 Tiny Restart Source Form
 
-Milestone 107 starts the clean restart product path with one intentionally tiny
-fixture form. The source-loading boundary reads one explicit `.tsl` file, and
-the parser accepts exactly this three-line non-comment shape:
+Milestone 107 started the clean restart product path with one intentionally
+tiny fixture form. The source-loading boundary reads one explicit `.tsl` file,
+and the initial parser accepted exactly this three-line non-comment shape:
 
 ```text
 prim<v:=(v,v)> add(left, right):
@@ -79,10 +79,11 @@ parameters `left` and `right`, scalar type tag `si32`, and a binary-add
 expression referencing those parameters. C++ and Rust emitters consume that
 lowered value; they no longer inspect the catalog body directly.
 
-The M108 lowerer accepts only the exact selected M107 body shape. Unsupported
-selected body values produce a structured `TSL-LOWER-UNSUPPORTED-BODY`
-diagnostic at the body source location. The M107 source-level catalog
-diagnostic for nearby parsed fixture bodies remains unchanged.
+The M108 lowerer initially accepted only the exact selected M107 body shape.
+Unsupported selected body values produce a structured
+`TSL-LOWER-UNSUPPORTED-BODY` diagnostic at the body source location. The M107
+source-level catalog diagnostic for nearby parsed fixture bodies remains
+unchanged.
 
 ### M109 Artifact Writer Boundary
 
@@ -119,6 +120,34 @@ The existing `si32` C++ and Rust artifact bytes, logical paths, and digests
 remain stable. Syntactically malformed type tags are parser diagnostics.
 Syntactically valid but unsupported selected scalar tags are lowering
 diagnostics with code `TSL-LOWER-UNSUPPORTED-TYPE`.
+
+### M111 Tiny Binary Operation Lowering Table
+
+Milestone 111 broadens only the tiny clean binary operation path. The same
+three-line `scalar` source form may now use the supported clean restart
+operation ids `add`, `sub`, and `mul` as both the primitive name and the body
+operation:
+
+```text
+prim<v:=(v,v)> sub(left, right):
+  implementation scalar si32:
+    body sub(left, right)
+```
+
+Catalog construction preserves the parsed primitive name, body operation, and
+exact `left, right` body arguments without deciding backend operator spelling.
+The lowerer owns the typed binary-operation descriptor table. A lowered
+function carries a backend-neutral operation descriptor containing operation
+id, binary category, arity, expected source body operation name, and stable
+semantic name. C++ and Rust emitters consume that descriptor through
+backend-owned operator spelling tables.
+
+The existing `add`/`si32` C++ and Rust artifact bytes, logical paths, and
+digests remain stable. Unsupported selected operation ids are lowering
+diagnostics with code `TSL-LOWER-UNSUPPORTED-OPERATION`. A supported primitive
+whose body uses a different operation is a lowering diagnostic with code
+`TSL-LOWER-OPERATION-MISMATCH`. Body arguments other than exactly
+`left, right` remain diagnostic boundaries and are not repaired.
 
 ## Catalog Behavior
 

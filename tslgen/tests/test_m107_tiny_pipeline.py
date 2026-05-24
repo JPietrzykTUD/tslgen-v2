@@ -12,16 +12,20 @@ from tslgen.analysis.selection import SelectedImplementation
 from tslgen.backends.cpp import CppBackend
 from tslgen.backends.rust import RustBackend
 from tslgen.core.diagnostics import SourceLocation
-from tslgen.domain.catalog import BinaryAddBody, Implementation, Primitive
+from tslgen.domain.catalog import BinaryOperationBody, Implementation, Primitive
 from tslgen.lowering import (
-    LoweredBinaryAddExpression,
+    BinaryOperationDescriptor,
+    LoweredBinaryOperationExpression,
     LoweredFunction,
     LoweredParameter,
     LoweredParameterRef,
     Lowerer,
+    SUPPORTED_BINARY_OPERATION_DESCRIPTORS,
     SUPPORTED_SCALAR_TYPE_DESCRIPTORS,
     ScalarTypeDescriptor,
+    lookup_binary_operation_descriptor,
     lookup_scalar_type_descriptor,
+    supported_binary_operation_ids,
     supported_scalar_type_tags,
 )
 
@@ -65,6 +69,24 @@ UI32_RUST_CONTENT = """pub fn add_scalar_ui32(left: u32, right: u32) -> u32 {
 }
 """
 
+SUB_CPP_CONTENT = """#pragma once
+
+#include <cstdint>
+
+namespace tsl {
+
+inline std::int32_t sub_scalar_si32(std::int32_t left, std::int32_t right) {
+  return left - right;
+}
+
+}  // namespace tsl
+"""
+
+SUB_RUST_CONTENT = """pub fn sub_scalar_si32(left: i32, right: i32) -> i32 {
+    left - right
+}
+"""
+
 
 def test_m110_scalar_descriptor_lookup_table() -> None:
     assert supported_scalar_type_tags() == ("si32", "ui32", "f32", "f64")
@@ -102,6 +124,35 @@ def test_m110_scalar_descriptor_lookup_table() -> None:
     assert lookup_scalar_type_descriptor("si64") is None
 
 
+def test_m111_binary_operation_descriptor_lookup_table() -> None:
+    assert supported_binary_operation_ids() == ("add", "sub", "mul")
+    assert SUPPORTED_BINARY_OPERATION_DESCRIPTORS == (
+        BinaryOperationDescriptor(
+            operation_id="add",
+            arity=2,
+            category="binary",
+            source_body_operation="add",
+            semantic_name="binary.add",
+        ),
+        BinaryOperationDescriptor(
+            operation_id="sub",
+            arity=2,
+            category="binary",
+            source_body_operation="sub",
+            semantic_name="binary.sub",
+        ),
+        BinaryOperationDescriptor(
+            operation_id="mul",
+            arity=2,
+            category="binary",
+            source_body_operation="mul",
+            semantic_name="binary.mul",
+        ),
+    )
+    assert lookup_binary_operation_descriptor("mul") == _operation("mul")
+    assert lookup_binary_operation_descriptor("div") is None
+
+
 def test_m108_lowerer_produces_backend_neutral_function_value() -> None:
     result = Lowerer().lower(_selected_implementation())
 
@@ -111,7 +162,8 @@ def test_m108_lowerer_produces_backend_neutral_function_value() -> None:
         primitive_name="add",
         parameters=(LoweredParameter("left"), LoweredParameter("right")),
         scalar_type=_descriptor("si32"),
-        expression=LoweredBinaryAddExpression(
+        expression=LoweredBinaryOperationExpression(
+            operation=_operation("add"),
             left=LoweredParameterRef("left"),
             right=LoweredParameterRef("right"),
         ),
@@ -127,6 +179,17 @@ def test_m110_lowerer_accepts_supported_scalar_descriptors() -> None:
         assert result.function is not None
         assert result.function.name == f"add_scalar_{type_tag}"
         assert result.function.scalar_type == _descriptor(type_tag)
+
+
+def test_m111_lowerer_accepts_supported_binary_operations() -> None:
+    for operation_id in supported_binary_operation_ids():
+        result = Lowerer().lower(_selected_implementation(operation_id=operation_id))
+
+        assert result.diagnostics == ()
+        assert result.function is not None
+        assert result.function.name == f"{operation_id}_scalar_si32"
+        assert result.function.primitive_name == operation_id
+        assert result.function.expression.operation == _operation(operation_id)
 
 
 def test_m108_backends_emit_from_lowered_function_value() -> None:
@@ -176,10 +239,32 @@ def test_m110_backends_emit_supported_scalar_spellings() -> None:
         ) in rust_result.artifact.content
 
 
+def test_m111_backends_emit_backend_owned_operator_spellings() -> None:
+    expected_operators = (
+        ("add", "+"),
+        ("sub", "-"),
+        ("mul", "*"),
+    )
+
+    for operation_id, operator in expected_operators:
+        function = _lowered_function(operation_id=operation_id)
+
+        cpp_result = CppBackend().emit(function)
+        rust_result = RustBackend().emit(function)
+
+        assert cpp_result.diagnostics == ()
+        assert rust_result.diagnostics == ()
+        assert cpp_result.artifact is not None
+        assert rust_result.artifact is not None
+        assert f"return left {operator} right;" in cpp_result.artifact.content
+        assert f"    left {operator} right" in rust_result.artifact.content
+
+
 def test_m108_lowerer_reports_unsupported_body_boundary() -> None:
     result = Lowerer().lower(
         _selected_implementation(
-            body=BinaryAddBody(
+            body=BinaryOperationBody(
+                operation="add",
                 left_parameter="left",
                 right_parameter="value",
                 source=_location(3, 5),
@@ -209,6 +294,34 @@ def test_m110_lowerer_reports_unsupported_scalar_type() -> None:
     assert "si32, ui32, f32, f64" in diagnostic.message
 
 
+def test_m111_lowerer_reports_unsupported_binary_operation() -> None:
+    result = Lowerer().lower(_selected_implementation(operation_id="div"))
+
+    assert result.function is None
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-OPERATION"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == _location(1, 1)
+    assert "div" in diagnostic.message
+    assert "add, sub, mul" in diagnostic.message
+
+
+def test_m111_lowerer_reports_primitive_body_operation_mismatch() -> None:
+    result = Lowerer().lower(
+        _selected_implementation(operation_id="add", body_operation="sub")
+    )
+
+    assert result.function is None
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-OPERATION-MISMATCH"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == _location(3, 5)
+    assert "add" in diagnostic.message
+    assert "sub" in diagnostic.message
+
+
 def test_tiny_fixture_generates_cpp_and_rust_artifact_values() -> None:
     result = generate_from_paths((VALID_TINY_ADD,), _targets())
 
@@ -236,7 +349,7 @@ def test_tiny_fixture_generates_cpp_and_rust_artifact_values() -> None:
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
     tmp_path: Path,
 ) -> None:
-    source = _write_tiny_add_source(tmp_path, "ui32")
+    source = _write_tiny_source(tmp_path, "add", "ui32")
     result = generate_from_paths(
         (source,),
         (
@@ -266,10 +379,43 @@ def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
     ]
 
 
+def test_m111_non_add_source_generates_cpp_and_rust_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_source(tmp_path, "sub", "si32")
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="sub",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="rust",
+                primitive_name="sub",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/sub_scalar_si32.hpp",
+        "src/sub_scalar_si32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        SUB_CPP_CONTENT,
+        SUB_RUST_CONTENT,
+    ]
+
+
 def test_m110_unsupported_source_type_reports_lowering_diagnostic(
     tmp_path: Path,
 ) -> None:
-    source = _write_tiny_add_source(tmp_path, "si64")
+    source = _write_tiny_source(tmp_path, "add", "si64")
     result = generate_from_paths(
         (source,),
         (
@@ -292,6 +438,63 @@ def test_m110_unsupported_source_type_reports_lowering_diagnostic(
     assert diagnostic.location.line == 2
     assert diagnostic.location.column == 3
     assert "si64" in diagnostic.message
+
+
+def test_m111_unsupported_source_operation_reports_lowering_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_source(tmp_path, "div", "si32")
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="div",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-OPERATION"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 1
+    assert diagnostic.location.column == 1
+    assert "div" in diagnostic.message
+
+
+def test_m111_source_operation_body_mismatch_reports_lowering_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_source(tmp_path, "add", "si32", body_operation="sub")
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-OPERATION-MISMATCH"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 3
+    assert diagnostic.location.column == 5
+    assert "add" in diagnostic.message
+    assert "sub" in diagnostic.message
 
 
 def test_m110_malformed_source_type_tag_is_parse_boundary(tmp_path: Path) -> None:
@@ -450,14 +653,16 @@ def test_invalid_fixture_reports_source_aware_body_diagnostic() -> None:
     assert "add(left, right)" in diagnostic.message
 
 
-def test_non_exact_header_is_a_parse_diagnostic_boundary(tmp_path: Path) -> None:
-    source = tmp_path / "mul.tsl"
+def test_m111_malformed_operation_name_is_parse_diagnostic_boundary(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "bad_operation.tsl"
     source.write_text(
         "\n".join(
             (
-                "prim<v:=(v,v)> mul(left, right):",
+                "prim<v:=(v,v)> mul-add(left, right):",
                 "  implementation scalar si32:",
-                "    body add(left, right)",
+                "    body mul-add(left, right)",
             )
         ),
         encoding="utf-8",
@@ -478,11 +683,14 @@ def test_non_exact_header_is_a_parse_diagnostic_boundary(tmp_path: Path) -> None
 
 def _selected_implementation(
     *,
-    body: BinaryAddBody | None = None,
+    body: BinaryOperationBody | None = None,
     backend: str = "cpp",
+    operation_id: str = "add",
+    body_operation: str | None = None,
     type_tag: str = "si32",
 ) -> SelectedImplementation:
-    selected_body = body or BinaryAddBody(
+    selected_body = body or BinaryOperationBody(
+        operation=body_operation or operation_id,
         left_parameter="left",
         right_parameter="right",
         source=_location(3, 5),
@@ -494,7 +702,7 @@ def _selected_implementation(
         source=_location(2, 3),
     )
     primitive = Primitive(
-        name="add",
+        name=operation_id,
         signature="v:=(v,v)",
         parameters=("left", "right"),
         template="binary",
@@ -503,7 +711,7 @@ def _selected_implementation(
     )
     target = Target(
         backend=backend,
-        primitive_name="add",
+        primitive_name=operation_id,
         extension="scalar",
         type_tag=type_tag,
     )
@@ -520,13 +728,24 @@ def _descriptor(type_tag: str) -> ScalarTypeDescriptor:
     return descriptor
 
 
-def _lowered_function(type_tag: str) -> LoweredFunction:
+def _operation(operation_id: str) -> BinaryOperationDescriptor:
+    descriptor = lookup_binary_operation_descriptor(operation_id)
+    assert descriptor is not None
+    return descriptor
+
+
+def _lowered_function(
+    type_tag: str = "si32",
+    *,
+    operation_id: str = "add",
+) -> LoweredFunction:
     return LoweredFunction(
-        name=f"add_scalar_{type_tag}",
-        primitive_name="add",
+        name=f"{operation_id}_scalar_{type_tag}",
+        primitive_name=operation_id,
         parameters=(LoweredParameter("left"), LoweredParameter("right")),
         scalar_type=_descriptor(type_tag),
-        expression=LoweredBinaryAddExpression(
+        expression=LoweredBinaryOperationExpression(
+            operation=_operation(operation_id),
             left=LoweredParameterRef("left"),
             right=LoweredParameterRef("right"),
         ),
@@ -534,14 +753,20 @@ def _lowered_function(type_tag: str) -> LoweredFunction:
     )
 
 
-def _write_tiny_add_source(tmp_path: Path, type_tag: str) -> Path:
-    source = tmp_path / f"tiny_add_{type_tag}.tsl"
+def _write_tiny_source(
+    tmp_path: Path,
+    operation_id: str,
+    type_tag: str,
+    *,
+    body_operation: str | None = None,
+) -> Path:
+    source = tmp_path / f"tiny_{operation_id}_{type_tag}.tsl"
     source.write_text(
         "\n".join(
             (
-                "prim<v:=(v,v)> add(left, right):",
+                f"prim<v:=(v,v)> {operation_id}(left, right):",
                 f"  implementation scalar {type_tag}:",
-                "    body add(left, right)",
+                f"    body {body_operation or operation_id}(left, right)",
             )
         ),
         encoding="utf-8",

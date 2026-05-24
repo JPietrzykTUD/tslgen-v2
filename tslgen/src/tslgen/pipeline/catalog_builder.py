@@ -4,19 +4,17 @@ from dataclasses import dataclass
 
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.domain.catalog import (
-    BinaryAddBody,
+    BinaryOperationBody,
     Catalog,
     Implementation,
     Primitive,
 )
 from tslgen.syntax.ast import ParsedDocument, ParsedImplementation, ParsedPrimitive
 
-M107_PRIMITIVE_NAME = "add"
 M107_SIGNATURE = "v:=(v,v)"
 M107_PARAMETERS = ("left", "right")
 M107_TEMPLATE = "binary"
 M107_EXTENSION = "scalar"
-M107_OPERATION = "add"
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,19 +61,6 @@ class CatalogBuilder:
         parsed: ParsedPrimitive,
         diagnostics: list[Diagnostic],
     ) -> Primitive:
-        if parsed.name != M107_PRIMITIVE_NAME:
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    code="TSL-CATALOG-UNSUPPORTED-PRIMITIVE",
-                    message=(
-                        f"primitive {parsed.name!r} is unsupported; "
-                        f"expected {M107_PRIMITIVE_NAME!r}"
-                    ),
-                    location=parsed.source,
-                )
-            )
-
         if parsed.signature != M107_SIGNATURE:
             diagnostics.append(
                 Diagnostic(
@@ -151,11 +136,8 @@ class CatalogBuilder:
             )
 
         body_text = _body_text(parsed)
-        expected_body = f"{M107_OPERATION}({', '.join(M107_PARAMETERS)})"
-        if (
-            parsed.body.operation != M107_OPERATION
-            or parsed.body.arguments != M107_PARAMETERS
-        ):
+        expected_body = f"{parsed.body.operation}({', '.join(M107_PARAMETERS)})"
+        if parsed.body.arguments != M107_PARAMETERS:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
@@ -171,9 +153,14 @@ class CatalogBuilder:
         return Implementation(
             extension=parsed.extension,
             type_tag=parsed.type_tag,
-            body=BinaryAddBody(
-                left_parameter=M107_PARAMETERS[0],
-                right_parameter=M107_PARAMETERS[1],
+            body=BinaryOperationBody(
+                operation=parsed.body.operation,
+                left_parameter=parsed.body.arguments[0]
+                if len(parsed.body.arguments) > 0
+                else "",
+                right_parameter=parsed.body.arguments[1]
+                if len(parsed.body.arguments) > 1
+                else "",
                 source=parsed.body.source,
             ),
             source=parsed.source,

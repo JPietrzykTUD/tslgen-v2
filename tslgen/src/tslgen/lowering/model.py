@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from tslgen.core.diagnostics import SourceLocation
+from tslgen.lowering.binary_operations import BinaryOperationDescriptor
 from tslgen.lowering.scalar_types import ScalarTypeDescriptor
 
 
@@ -17,7 +18,8 @@ class LoweredParameterRef:
 
 
 @dataclass(frozen=True, slots=True)
-class LoweredBinaryAddExpression:
+class LoweredBinaryOperationExpression:
+    operation: BinaryOperationDescriptor
     left: LoweredParameterRef
     right: LoweredParameterRef
 
@@ -28,5 +30,5 @@ class LoweredFunction:
     primitive_name: str
     parameters: tuple[LoweredParameter, ...]
     scalar_type: ScalarTypeDescriptor
-    expression: LoweredBinaryAddExpression
+    expression: LoweredBinaryOperationExpression
     source: SourceLocation
