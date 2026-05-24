@@ -14378,7 +14378,7 @@ Status:
 Planned. Post-M104 planning selected M105 after the project owner and
 orchestrator agreed that the accepted M57-M104 lowering path captured useful
 requirements but had become too complex for the intended research prototype.
-Human acceptance is pending.
+Human acceptance was recorded.
 
 Planning verdict:
 

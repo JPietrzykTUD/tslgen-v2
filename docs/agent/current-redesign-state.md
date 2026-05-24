@@ -141,7 +141,7 @@ deterministic C++ and Rust library artifacts. A user correction requires the
 restart layout to move the current top-level `tslgen/` tree to `tslgenold/`
 as old-state evidence while reserving `tslgen/` for the new clean
 implementation. Local planning review returned `Accept With Follow-Ups`;
-human acceptance is pending.
+human acceptance was recorded.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1215,36 +1215,36 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Finalize post-M104 planning acceptance.
+Execute Milestone 105.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m104-acceptance-finalization-prompt.md
+docs/agent/runs/m105-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. M105 is selected by post-M104 planning; execution awaits human
-acceptance finalization.
+Milestone 105: Clean KISS Generator Restart Charter Slice
 ```
 
 Latest review verdict:
 
 ```text
 Post-M104 planning returned Accept With Follow-Ups after local generalized
-simplicity and layout guardrail documentation updates.
+simplicity and layout guardrail documentation updates. Human acceptance was
+recorded.
 ```
 
 Next expected action:
 
 ```text
-If the user accepts the post-M104 planning result, run the active
-acceptance-finalization prompt. It should update the workflow state so the
-next action is M105 execution and create/activate the M105 execution-review
-loop prompt.
+Run the active M105 execution-review-loop prompt. M105 is docs/architecture
+work only: create the KISS restart charter, define the `tslgen/` to
+`tslgenold/` quarantine move as the required next structural step, and do not
+implement product code.
 ```
 
 Accepted planning prompt:
@@ -2255,10 +2255,16 @@ Completed post-M104 planning-plus-review prompt:
 docs/agent/runs/post-m104-planning-plus-review-prompt.md
 ```
 
-Active post-M104 acceptance-finalization prompt:
+Completed post-M104 acceptance-finalization prompt:
 
 ```text
 docs/agent/runs/post-m104-acceptance-finalization-prompt.md
+```
+
+Active M105 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m105-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -4755,8 +4761,7 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 ## Stop Condition
 
 No stop condition is active. The workflow is ready to run the active
-post-M104 acceptance-finalization prompt after human acceptance of the M105
-KISS restart planning result.
+M105 execution-review-loop prompt.
 
 ## Validation Expectations
 
