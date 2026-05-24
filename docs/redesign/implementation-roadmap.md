@@ -15203,8 +15203,26 @@ Review notes:
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M113.
-This milestone keeps the next action focused on lowering.
+Accepted. M114 made the lowering stage output explicit for the tiny clean
+lowering path. The clean lowerer now exposes a backend-neutral
+`LoweredFunctionSet` plus `LoweringStageResult` for batch lowering selected
+implementations into an ordered lowered-function set with accumulated
+diagnostics. The existing single-selected `lower(...)` behavior remains
+available and unchanged as the unit used by the batch boundary. The generator
+consumes `lower_all(...)` stage output before backend emission and emits every
+returned lowered function while still accumulating diagnostics, preserving the
+previous per-selected behavior for mixed valid/invalid lowering results.
+Existing artifact bytes, logical paths, metadata, ordering, M110 scalar
+descriptors, M111 operation descriptors, M112 body values, M113 signature
+values, lowering diagnostics, and digests remain stable. M114 did not add
+parser/source syntax changes, source repair, `emit_return(...)` recognition,
+new scalar types, new operations, vector/SIMD semantics, hardware feature
+selection, branch pruning, generation-time helper evaluation, backend
+manifests, dependency closure, module/package planning, include planning,
+artifact-plan values, renderer-ready IR, backend emission inside lowering,
+cross-target coordination, schedulers, queues, registries, dispatchers,
+plugin systems, hidden backfeeds, fixpoint mechanisms, or a broad IR/stage
+framework.
 
 Goal:
 
@@ -15285,3 +15303,89 @@ Review notes:
   dispatchers, hidden backfeeds, fixpoint behavior, or broad stage frameworks.
 - Reviewers should require current output bytes, diagnostics, descriptor
   behavior, M112 body values, and M113 signature values to remain stable.
+
+### Milestone 115: Tiny Clean Binary Division Operation Lowering Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M114.
+This milestone keeps the next action focused on lowering while taking a small
+functional step beyond `add`/`sub`/`mul`.
+
+Goal:
+
+Add binary division to the existing tiny clean binary-operation lowering path:
+
+```text
+div(left, right) -> LoweredBinaryOperationExpression(operation="div")
+```
+
+Scope:
+
+- Add `div` to the existing lowering-owned binary operation descriptor table,
+  preserving deterministic descriptor ordering.
+- Keep the descriptor backend-neutral. It must not contain C++ or Rust
+  spelling, divide-by-zero policy, overflow policy, or source repair policy.
+- Update C++ and Rust backends to spell only the accepted `div` descriptor via
+  backend-owned operator spelling tables, preserving backend ownership of text.
+- Preserve M110 scalar descriptors, M112 body values, M113 signatures, M114
+  lowering stage-output behavior, diagnostics, logical paths, artifact
+  ordering, and existing `add`/`sub`/`mul` artifact bytes and digests.
+- Add focused tests for descriptor lookup/order, lowerer acceptance, backend
+  spelling ownership, generator output for at least one `div` source, M114
+  stage-output pass-through for `div`, and the updated unsupported-operation
+  diagnostic boundary.
+
+Out of scope:
+
+- New `.tsl` source syntax, parser/catalog source-form changes, source-body
+  repair, broad TSIL parsing, additional arities/parameter names, or additional
+  body shapes.
+- Modulo/remainder semantics, division-by-zero diagnostics, integer overflow
+  policy, floating special-value policy, constant folding, algebraic
+  simplification, or broad arithmetic semantics.
+- New scalar types, vector/SIMD shapes, hardware feature selection, branch
+  pruning, generation-time helper evaluation, backend manifests, dependency
+  closure, or old generator maps.
+- Module/package planning, function overloading policy, include planning,
+  artifact layout changes, artifact-plan values, renderer-ready IR, or backend
+  emission inside lowering.
+- CLI integration, writer changes, generated test execution, CMake/Cargo
+  scaffolding, runtime imports from `frozen/` or `tslgenold/`, or porting old
+  operation/lowering modules.
+- Registries, dispatchers, plugin systems, hidden backfeeds, fixpoint
+  mechanisms, or a broad operation/type framework.
+
+Accepted outputs:
+
+- `div(left, right)` lowers into the existing backend-neutral binary operation
+  expression shape.
+- C++ and Rust emitters render `div` through backend-owned operator spelling
+  maps while existing operations remain byte-stable.
+- Unsupported operations still produce structured lowering diagnostics rather
+  than source repair, fallback, or renderer-side inference.
+- The M114 lowering stage-output boundary continues to carry the new operation
+  without adding scheduler, package, artifact-plan, or broad IR machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+```
+
+Run the smallest compile/import checks needed for the revised clean package
+surface. Do not run the old `tslgenold` validation profile as proof of the
+clean product slice.
+
+Review notes:
+
+- Reviewers should reject parser/source syntax broadening or source repair.
+- Reviewers should reject putting C++/Rust spelling or arithmetic runtime
+  policy into lowering descriptors.
+- Reviewers should reject modulo/remainder semantics, broad arithmetic
+  frameworks, registries, or dispatchers.
+- Reviewers should require current `add`/`sub`/`mul` output bytes,
+  diagnostics, M112 body values, M113 signature values, and M114 stage-output
+  behavior to remain stable.

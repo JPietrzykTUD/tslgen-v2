@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 113 is accepted.
+Milestone 114 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -271,6 +271,28 @@ work, writer changes, generated test execution, CMake/Cargo scaffolding,
 vector/SIMD semantics, backend manifests, old signature/body migration,
 registries, dispatchers, plugin systems, hidden backfeeds, fixpoint
 mechanisms, or a broad signature/type framework.
+
+The M114 execution-review loop returned `Accept` after one focused revision.
+M114 made the lowering stage output explicit for the tiny clean lowering path.
+The clean lowerer now exposes a backend-neutral `LoweredFunctionSet` plus
+`LoweringStageResult` for batch lowering selected implementations into an
+ordered lowered-function set with accumulated diagnostics. The existing
+single-selected `lower(...)` behavior remains available and unchanged as the
+unit used by the batch boundary. The generator consumes `lower_all(...)` stage
+output before backend emission and emits every returned lowered function while
+still accumulating diagnostics, preserving the previous per-selected behavior
+for mixed valid/invalid lowering results. Existing artifact bytes, logical
+paths, metadata, ordering, M110 scalar descriptors, M111 operation
+descriptors, M112 body values, M113 signature values, lowering diagnostics,
+and digests remain stable. M114 did not import from `tslgenold/` or `frozen/`,
+add parser/source syntax changes, source repair, `emit_return(...)`
+recognition, new scalar types, new operations, vector/SIMD semantics, hardware
+feature selection, branch pruning, generation-time helper evaluation, backend
+manifests, dependency closure, module/package planning, include planning,
+artifact-plan values, renderer-ready IR, backend emission inside lowering,
+cross-target coordination, schedulers, queues, registries, dispatchers,
+plugin systems, hidden backfeeds, fixpoint mechanisms, or a broad IR/stage
+framework.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1344,36 +1366,36 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 114.
+Execute Milestone 115.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m114-execution-review-loop-prompt.md
+docs/agent/runs/m115-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 114: Tiny Clean Lowering Stage Output Boundary Slice
+Milestone 115: Tiny Clean Binary Division Operation Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-M113 execution-review loop returned Accept after layout,
-architecture, documentation, and validation audits.
+M114 execution-review loop returned Accept after a focused revision and
+focused architecture/validation re-review.
 ```
 
 Next expected action:
 
 ```text
-Run the active M114 execution-review-loop prompt. M114 should make the lowering
-stage output explicit by lowering selected implementations into an ordered
-lowered-function set plus diagnostics before backend emission, preserve output
-bytes, and avoid scheduler, module/package, backend-emission, or broad IR
-framework work.
+Run the active M115 execution-review-loop prompt. M115 should add the next
+tiny clean binary arithmetic lowering operation, `div`, through the existing
+M111 operation descriptor table and M114 stage output while preserving backend
+ownership of operator spelling and keeping parser/source syntax broadening,
+modulo semantics, and broad operation frameworks out of scope.
 ```
 
 Accepted planning prompt:
@@ -2444,10 +2466,16 @@ Completed M113 execution-review-loop prompt:
 docs/agent/runs/m113-execution-review-loop-prompt.md
 ```
 
-Active M114 execution-review-loop prompt:
+Completed M114 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m114-execution-review-loop-prompt.md
+```
+
+Active M115 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m115-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2486,6 +2514,12 @@ docs/agent/runs/m114-execution-review-loop-prompt.md
   must not add schedulers, dependency closure, module/package planning,
   artifact plans, backend emission inside lowering, cross-target coordination,
   registries, dispatchers, hidden backfeeds, fixpoint behavior, or a broad IR
+  framework.
+- M115 is limited to adding `div` to the existing tiny clean binary-operation
+  lowering descriptor/spelling path; it must not add parser/source syntax
+  changes, modulo/remainder semantics, broad arithmetic semantics, vector/SIMD
+  semantics, backend manifests, old operation migration, registries,
+  dispatchers, hidden backfeeds, fixpoint behavior, or a broad operation
   framework.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
@@ -5015,7 +5049,7 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M114
+No stop condition is active. The workflow is ready to run the active M115
 execution-review-loop prompt.
 
 ## Validation Expectations
@@ -5107,6 +5141,24 @@ test command returned exit 0 with `27 passed in 1.97s`. The public API import
 command returned exit 0 with no output. The function-signature lowering import
 command returned exit 0 with no output. The py_compile command returned exit 0
 with no output.
+
+For M114 clean lowering stage-output boundary slice, validation completed with:
+
+```bash
+git diff --check
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -c "from tslgen.lowering import LoweredFunctionSet, LoweringStageResult, Lowerer"
+python -B -m py_compile tslgen/src/tslgen/lowering/model.py tslgen/src/tslgen/lowering/lowerer.py tslgen/src/tslgen/lowering/__init__.py tslgen/src/tslgen/pipeline/generator.py tslgen/tests/test_m107_tiny_pipeline.py
+```
+
+`git diff --check` returned exit 0 with no output. The targeted clean-package
+test command returned exit 0 with `33 passed in 2.25s`. The public API import
+command returned exit 0 with no output. The lowering stage-output import
+command returned exit 0 with no output. The py_compile command returned exit 0
+with no output. Focused architecture re-review also ran
+`python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py -k m114`
+and returned exit 0 with `6 passed, 27 deselected`.
 
 For M108 clean lowering boundary slice, validation completed with:
 

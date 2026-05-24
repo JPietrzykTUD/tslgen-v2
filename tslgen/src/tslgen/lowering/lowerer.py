@@ -1,5 +1,6 @@
 """Selected-implementation lowering for the exact tiny clean binary body."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from tslgen.analysis.selection import SelectedImplementation
@@ -13,6 +14,7 @@ from tslgen.lowering.model import (
     LoweredBinaryOperationExpression,
     LoweredFunction,
     LoweredFunctionBody,
+    LoweredFunctionSet,
     LoweredFunctionSignature,
     LoweredParameter,
     LoweredParameterRef,
@@ -35,8 +37,32 @@ class LoweringResult:
     diagnostics: tuple[Diagnostic, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class LoweringStageResult:
+    lowered_functions: LoweredFunctionSet
+    diagnostics: tuple[Diagnostic, ...]
+
+
 class Lowerer:
     """Lower only the selected scalar binary implementation shape."""
+
+    def lower_all(
+        self,
+        selected: Iterable[SelectedImplementation],
+    ) -> LoweringStageResult:
+        functions: list[LoweredFunction] = []
+        diagnostics: list[Diagnostic] = []
+
+        for item in selected:
+            result = self.lower(item)
+            diagnostics.extend(result.diagnostics)
+            if result.function is not None:
+                functions.append(result.function)
+
+        return LoweringStageResult(
+            lowered_functions=LoweredFunctionSet(tuple(functions)),
+            diagnostics=tuple(diagnostics),
+        )
 
     def lower(self, selected: SelectedImplementation) -> LoweringResult:
         scalar_type = lookup_scalar_type_descriptor(selected.implementation.type_tag)

@@ -4,25 +4,29 @@ from tslgen import (
     Artifact,
     ArtifactSet,
     ArtifactWriteRecord,
+    Generator,
     Target,
+    TslProject,
     generate_from_paths,
     write_artifacts,
 )
 from tslgen.analysis.selection import SelectedImplementation
 from tslgen.backends.cpp import CppBackend
 from tslgen.backends.rust import RustBackend
-from tslgen.core.diagnostics import SourceLocation
+from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import BinaryOperationBody, Implementation, Primitive
 from tslgen.lowering import (
     BinaryOperationDescriptor,
     LoweredBinaryOperationExpression,
     LoweredFunction,
     LoweredFunctionBody,
+    LoweredFunctionSet,
     LoweredFunctionSignature,
     LoweredParameter,
     LoweredParameterRef,
     LoweredReturnStatement,
     Lowerer,
+    LoweringStageResult,
     SUPPORTED_BINARY_OPERATION_DESCRIPTORS,
     SUPPORTED_SCALAR_TYPE_DESCRIPTORS,
     ScalarTypeDescriptor,
@@ -212,6 +216,42 @@ def test_m113_lowerer_produces_explicit_function_signature() -> None:
     )
 
 
+def test_m114_lowerer_stage_output_preserves_selected_order() -> None:
+    result = Lowerer().lower_all(
+        (
+            _selected_implementation(operation_id="sub"),
+            _selected_implementation(operation_id="mul", type_tag="f64"),
+        )
+    )
+
+    assert result.diagnostics == ()
+    assert result.lowered_functions == LoweredFunctionSet(
+        (
+            _lowered_function(operation_id="sub"),
+            _lowered_function(operation_id="mul", type_tag="f64"),
+        )
+    )
+
+
+def test_m114_lowerer_stage_output_accumulates_diagnostics() -> None:
+    result = Lowerer().lower_all(
+        (
+            _selected_implementation(type_tag="si64"),
+            _selected_implementation(operation_id="div"),
+        )
+    )
+
+    assert result.lowered_functions == LoweredFunctionSet(())
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-TYPE",
+        "TSL-LOWER-UNSUPPORTED-OPERATION",
+    ]
+    assert [diagnostic.location for diagnostic in result.diagnostics] == [
+        _location(2, 3),
+        _location(1, 1),
+    ]
+
+
 def test_m110_lowerer_accepts_supported_scalar_descriptors() -> None:
     for type_tag in supported_scalar_type_tags():
         result = Lowerer().lower(_selected_implementation(type_tag=type_tag))
@@ -267,6 +307,79 @@ def test_m113_backends_emit_from_explicit_signature_and_body() -> None:
     assert rust_result.artifact.logical_path == "src/add_scalar_si32.rs"
     assert cpp_result.artifact.content == CPP_CONTENT
     assert rust_result.artifact.content == RUST_CONTENT
+
+
+def test_m114_generator_emits_only_from_lowering_stage_output() -> None:
+    lowerer = _StageOutputOnlyLowerer(
+        LoweringStageResult(
+            lowered_functions=LoweredFunctionSet(
+                (_lowered_function(operation_id="mul", type_tag="f64"),)
+            ),
+            diagnostics=(),
+        )
+    )
+    result = Generator(lowerer=lowerer, backends=(CppBackend(),)).generate(
+        TslProject(
+            source_paths=(VALID_TINY_ADD,),
+            targets=(
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+    )
+
+    assert len(lowerer.selected) == 1
+    assert lowerer.selected[0].primitive.name == "add"
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/mul_scalar_f64.hpp",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        MUL_F64_CPP_CONTENT,
+    ]
+
+
+def test_m114_generator_emits_stage_output_functions_with_diagnostics() -> None:
+    lowerer = _StageOutputOnlyLowerer(
+        LoweringStageResult(
+            lowered_functions=LoweredFunctionSet((_lowered_function(),)),
+            diagnostics=(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-LOWER-TEST-ERROR",
+                    message="stage output retained a valid lowered function",
+                    location=_location(3, 5),
+                ),
+            ),
+        )
+    )
+    result = Generator(lowerer=lowerer, backends=(CppBackend(),)).generate(
+        TslProject(
+            source_paths=(VALID_TINY_ADD,),
+            targets=(
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+    )
+
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-LOWER-TEST-ERROR",
+    ]
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/add_scalar_si32.hpp",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        CPP_CONTENT,
+    ]
 
 
 def test_m110_backends_emit_supported_scalar_spellings() -> None:
@@ -403,6 +516,48 @@ def test_tiny_fixture_generates_cpp_and_rust_artifact_values() -> None:
             "9086cbbf44026eab3e4ad05490ac50879a9af3ac9d6f3ee5f7f0e28f91eb9870",
         ),
     )
+
+
+def test_m114_stage_output_preserves_byte_stable_add_artifacts() -> None:
+    result = generate_from_paths((VALID_TINY_ADD,), _targets())
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/add_scalar_si32.hpp",
+        "src/add_scalar_si32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        CPP_CONTENT,
+        RUST_CONTENT,
+    ]
+    assert result.artifacts.digest_manifest() == (
+        (
+            "include/tsl/add_scalar_si32.hpp",
+            "15c4205245a121d06a1ac8255afb9021cb3653dfe9291f7ca11de7686e832e3a",
+        ),
+        (
+            "src/add_scalar_si32.rs",
+            "9086cbbf44026eab3e4ad05490ac50879a9af3ac9d6f3ee5f7f0e28f91eb9870",
+        ),
+    )
+
+
+def test_m114_non_add_non_si32_passes_through_stage_output() -> None:
+    lowering_result = Lowerer().lower_all(
+        (_selected_implementation(operation_id="mul", type_tag="f64"),)
+    )
+
+    assert lowering_result.diagnostics == ()
+    assert lowering_result.lowered_functions == LoweredFunctionSet(
+        (_lowered_function(operation_id="mul", type_tag="f64"),)
+    )
+    function = lowering_result.lowered_functions.functions[0]
+    cpp_result = CppBackend().emit(function)
+    rust_result = RustBackend().emit(function)
+    assert cpp_result.artifact is not None
+    assert rust_result.artifact is not None
+    assert cpp_result.artifact.content == MUL_F64_CPP_CONTENT
+    assert rust_result.artifact.content == MUL_F64_RUST_CONTENT
 
 
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
@@ -787,6 +942,22 @@ def test_m111_malformed_operation_name_is_parse_diagnostic_boundary(
     assert diagnostic.location.path == source.resolve()
     assert diagnostic.location.line == 1
     assert diagnostic.location.column == 1
+
+
+class _StageOutputOnlyLowerer:
+    def __init__(self, result: LoweringStageResult) -> None:
+        self._result = result
+        self.selected: tuple[SelectedImplementation, ...] = ()
+
+    def lower_all(
+        self,
+        selected: tuple[SelectedImplementation, ...],
+    ) -> LoweringStageResult:
+        self.selected = tuple(selected)
+        return self._result
+
+    def lower(self, selected: SelectedImplementation) -> None:
+        raise AssertionError("generator must use the lowering stage output")
 
 
 def _selected_implementation(

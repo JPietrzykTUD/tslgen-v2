@@ -83,16 +83,11 @@ class Generator:
                 )
                 continue
 
-            for selected in selection_result.selected:
-                lowering_result = self._lowerer.lower(selected)
-                diagnostics.extend(lowering_result.diagnostics)
-                if (
-                    has_errors(lowering_result.diagnostics)
-                    or lowering_result.function is None
-                ):
-                    continue
+            lowering_result = self._lowerer.lower_all(selection_result.selected)
+            diagnostics.extend(lowering_result.diagnostics)
 
-                emit_result = emitter.emit(lowering_result.function)
+            for function in lowering_result.lowered_functions.functions:
+                emit_result = emitter.emit(function)
                 diagnostics.extend(emit_result.diagnostics)
                 if emit_result.artifact is not None:
                     artifacts.append(emit_result.artifact)

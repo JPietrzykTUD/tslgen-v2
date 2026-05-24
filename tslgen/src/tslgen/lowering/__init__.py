@@ -1,10 +1,11 @@
 """Tiny lowering boundary for the clean restart generator."""
 
-from tslgen.lowering.lowerer import Lowerer, LoweringResult
+from tslgen.lowering.lowerer import Lowerer, LoweringResult, LoweringStageResult
 from tslgen.lowering.model import (
     LoweredBinaryOperationExpression,
     LoweredFunction,
     LoweredFunctionBody,
+    LoweredFunctionSet,
     LoweredFunctionSignature,
     LoweredParameter,
     LoweredParameterRef,
@@ -27,12 +28,14 @@ __all__ = [
     "LoweredBinaryOperationExpression",
     "LoweredFunction",
     "LoweredFunctionBody",
+    "LoweredFunctionSet",
     "LoweredFunctionSignature",
     "LoweredParameter",
     "LoweredParameterRef",
     "LoweredReturnStatement",
     "Lowerer",
     "LoweringResult",
+    "LoweringStageResult",
     "SUPPORTED_BINARY_OPERATION_DESCRIPTORS",
     "BinaryOperationDescriptor",
     "lookup_binary_operation_descriptor",

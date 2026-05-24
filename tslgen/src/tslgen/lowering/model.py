@@ -48,3 +48,8 @@ class LoweredFunction:
     signature: LoweredFunctionSignature
     body: LoweredFunctionBody
     source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredFunctionSet:
+    functions: tuple[LoweredFunction, ...]

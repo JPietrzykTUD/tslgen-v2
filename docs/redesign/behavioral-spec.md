@@ -176,6 +176,20 @@ owning language syntax, type spelling, operator spelling, logical paths, and
 metadata. Existing accepted tiny artifact bytes, logical paths, ordering,
 descriptor tables, body values, and lowering diagnostics remain stable.
 
+### M114 Tiny Lowering Stage Output Boundary
+
+Milestone 114 keeps the M113 source, signature, and body values unchanged but
+makes the lowering stage output explicit. Batch lowering of selected
+implementations returns an ordered lowered function set plus accumulated
+lowering diagnostics. The existing single-selected lowering behavior remains
+available and is the unit used by the batch boundary.
+
+The generator lowers each target's selected implementations into this stage
+output before backend emission, and C++ and Rust emitters consume only the
+ordered lowered functions from that output. Existing accepted tiny artifact
+bytes, logical paths, metadata, ordering, diagnostics, and digests remain
+stable.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:
