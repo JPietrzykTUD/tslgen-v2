@@ -575,6 +575,25 @@ This slice does not add broad TSIL parsing, comparison operators beyond exact
 type groups, implementation ranking, runtime `tsldata` semantic reads,
 backend-manifest reads, source repair, or renderer-side inference.
 
+### Exact Operator-Looking TSIL Body Spellings
+
+Operator-looking TSIL body fragments are accepted only as documented exact
+source spellings inside narrow implementation-body contexts, currently exact
+single-line `tsil "emit_return(...);"` forms for selected scalar primitives.
+They are not parsed as a general C, C++, Rust, or TSIL expression language.
+
+When accepted, an operator-looking spelling is promoted immediately into typed
+semantic body data for an existing TSL primitive operation. For example,
+`left == right` promotes to operation id `equal`, and `left != right` promotes
+to operation id `nequal`. Later pipeline stages consume only those typed body
+values; they do not rescan raw TSIL text or treat the original source spelling
+as target-language text.
+
+The generator must not add arbitrary target-language operators merely because
+their spelling is shared by C, C++, and Rust. New operator-looking forms must
+be selected as explicit milestones, map to existing typed TSL semantics, and
+include positive, mismatch, malformed-form, and no-raw-passthrough coverage.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

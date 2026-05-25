@@ -1828,3 +1828,53 @@ Consequences:
 - Future data-driven operation semantics require an explicit typed rule-loading
   milestone with diagnostics and tests; they must not be introduced through
   renderer inference, backend manifest shortcuts, or ad hoc dictionary maps.
+
+## ADR-035: Exact Operator-Looking Source Spellings Are Semantic Bridges, Not A Target-Language Parser
+
+Status: Accepted
+
+Context:
+
+Clean restart milestones M126-M129 added exact `tsil "emit_return(...);"`
+source-body spellings as alternatives to the synthetic `body ...` fixture
+forms. Some accepted scalar source forms contain operator-looking text such as
+`left == right` and `left != right`, and future ordered comparison forms use
+spelling that is valid in C, C++, and Rust. A product-owner review clarified
+that the redesign must not drift into modeling every operator shared by those
+target languages.
+
+Considered alternatives:
+
+- Treat operator-looking TSIL body text as raw target-language text and pass it
+  through to C++ and Rust renderers.
+- Build a general expression parser for C/C++/Rust-like operators.
+- Recognize only documented exact source spellings that map to existing typed
+  TSL primitive semantics.
+
+Decision:
+
+Recognize operator-looking source text only as exact, documented `.tsl` body
+spellings in a narrow context, such as `tsil "emit_return(left == right);"`.
+Each accepted spelling must immediately promote to an existing typed TSL
+semantic operation, such as `equal(left, right)`, `nequal(left, right)`, or an
+accepted comparison primitive. Backend emitters render their own C++/Rust
+spellings from typed lowering values.
+
+Rationale:
+
+Shared syntax across C, C++, and Rust is convenient evidence for source forms,
+but it is not a generator semantic boundary. Raw passthrough would make the
+source body itself the semantic model and would hide backend behavior in text
+that happens to compile today. A broad expression parser would add complexity
+that the research prototype does not need.
+
+Consequences:
+
+- Future milestones must not add arbitrary operator parsing, precedence,
+  associativity, casts, temporary variables, or mixed expressions unless a
+  separate design decision selects that work.
+- New operator-looking spellings require exact accepted forms, typed semantic
+  promotion, diagnostics for malformed nearby forms, and tests proving
+  renderers do not rescan or emit from raw source text.
+- Backend-owned operator spellings remain in backend renderers or typed backend
+  translation rules, not in parser/catalog/lowering passthrough text.

@@ -632,15 +632,28 @@ corpus reads, source repair, renderer inference, registries, dispatchers,
 hidden backfeeds, fixpoint behavior, or new lowering IR families.
 
 Integrated post-M129 next-run planning selected
-`Milestone 130: Tiny Clean Exact TSIL Emit-Return Less-Than Comparison Body Lowering Slice`.
-The selected M130 task keeps focus on lowering and adds the next
-corpus-observed exact scalar comparison TSIL emit-return spelling by accepting
-exactly `tsil "emit_return(left < right);"` under
-`prim<m:=(v,v)> name(left, right):`. That source spelling must promote to the
-existing typed comparison body for operation id `less_than` before lowering.
-It must not add broad TSIL parsing, comparison operators beyond exact
-`left < right`, new binary/unary forms, target discovery, backend manifests,
-source repair, renderer inference, or new lowering IR families.
+`Milestone 130: Tiny Clean Exact TSIL Emit-Return Ordered Comparison Body Lowering Slice`.
+The selected M130 task keeps focus on lowering and adds the remaining
+corpus-observed exact scalar ordered-comparison TSIL emit-return spellings by
+accepting exactly `tsil "emit_return(left < right);"`,
+`tsil "emit_return(left > right);"`,
+`tsil "emit_return(left <= right);"`, and
+`tsil "emit_return(left >= right);"` under
+`prim<m:=(v,v)> name(left, right):`. Those source spellings must promote to
+the existing typed comparison body operation ids `less_than`, `greater_than`,
+`less_than_or_equal`, and `greater_than_or_equal` before lowering. They are
+semantic bridges for existing TSL comparison primitives, not arbitrary C,
+C++, or Rust operator parsing. M130 must not add broad TSIL parsing,
+comparison operators beyond those exact spellings, new binary/unary forms,
+target discovery, backend manifests, source repair, renderer inference, or new
+lowering IR families.
+
+A post-M129 documentation correction clarified the standing operator boundary:
+operator-looking source spellings are exact semantic bridges to existing typed
+TSL primitive operations, not arbitrary C, C++, Rust, or TSIL operator
+modeling. The correction updated `AGENTS.md`, `PLANS.md`,
+`docs/redesign/design-decisions.md`, `docs/redesign/behavioral-spec.md`, the
+M130 roadmap entry, and the active M130 run prompt.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1726,7 +1739,7 @@ docs/agent/runs/m130-execution-review-loop-prompt.md
 Active executor milestone:
 
 ```text
-Milestone 130: Tiny Clean Exact TSIL Emit-Return Less-Than Comparison Body Lowering Slice
+Milestone 130: Tiny Clean Exact TSIL Emit-Return Ordered Comparison Body Lowering Slice
 ```
 
 Latest review verdict:
@@ -1742,11 +1755,15 @@ Next expected action:
 
 ```text
 Run the active M130 execution-review-loop prompt. M130 should accept exactly
-one TSIL-like less-than comparison scalar implementation body form,
-`tsil "emit_return(left < right);"`, promote it to the existing typed
-comparison body for operation id `less_than`, lower it through the same typed
-selected-implementation path as existing exact comparison bodies, and preserve
-M107-M129 behavior.
+four TSIL-like ordered-comparison scalar implementation body forms,
+`tsil "emit_return(left < right);"`,
+`tsil "emit_return(left > right);"`,
+`tsil "emit_return(left <= right);"`, and
+`tsil "emit_return(left >= right);"`, promote them to the existing typed
+comparison body operation ids `less_than`, `greater_than`,
+`less_than_or_equal`, and `greater_than_or_equal`, lower them through the same
+typed selected-implementation path as existing exact comparison bodies, and
+preserve M107-M129 behavior.
 ```
 
 Accepted planning prompt:
@@ -3054,13 +3071,19 @@ docs/agent/runs/m125-execution-review-loop-prompt.md
   target discovery, backend manifests, registries, dispatchers, hidden
   backfeeds, fixpoint behavior, or new lowering IR families.
 - M130 is planned, not implemented. It is limited to accepting the exact
-  less-than comparison TSIL body line `tsil "emit_return(left < right);"`
-  under `prim<m:=(v,v)> name(left, right):` and promoting it to the existing
-  typed comparison body for operation id `less_than`. It must not parse broad
-  TSIL, comparison operators beyond exact `left < right`, runtime `tsldata`
-  semantics, source repair, renderer inference, target discovery, backend
-  manifests, registries, dispatchers, hidden backfeeds, fixpoint behavior, or
-  new lowering IR families.
+  ordered-comparison TSIL body lines `tsil "emit_return(left < right);"`,
+  `tsil "emit_return(left > right);"`,
+  `tsil "emit_return(left <= right);"`, and
+  `tsil "emit_return(left >= right);"` under
+  `prim<m:=(v,v)> name(left, right):` and promoting them to the existing typed
+  comparison body operation ids `less_than`, `greater_than`,
+  `less_than_or_equal`, and `greater_than_or_equal`. These spellings are
+  semantic bridges for existing TSL comparison primitives, not arbitrary C,
+  C++, or Rust operator parsing. M130 must not parse broad TSIL, comparison
+  operators beyond those exact spellings, runtime `tsldata` semantics, source
+  repair, renderer inference, target discovery, backend manifests,
+  registries, dispatchers, hidden backfeeds, fixpoint behavior, or new
+  lowering IR families.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and

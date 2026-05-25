@@ -3,7 +3,7 @@
 You are executing and reviewing the accepted next milestone after M129:
 
 ```text
-Milestone 130: Tiny Clean Exact TSIL Emit-Return Less-Than Comparison Body Lowering Slice
+Milestone 130: Tiny Clean Exact TSIL Emit-Return Ordered Comparison Body Lowering Slice
 ```
 
 Milestones 1 through 129 are accepted. M106 moved the pre-restart top-level
@@ -15,13 +15,20 @@ writing, focused scalar operation expansion, bootstrap-core semantic origins,
 deterministic source-set generation, and exact binary/unary/equality/
 inequality TSIL emit-return body spellings.
 
-M130 keeps the next task focused on lowering and adds the next
-corpus-observed exact scalar comparison TSIL emit-return body spelling:
-selected less-than comparison scalar implementations may use the exact
-TSIL-like `emit_return(left < right);` body line instead of only the synthetic
-clean-restart `body ...` fixture line. The corpus evidence is
-`tsldata/primitives/comparison/fundamental.tsl:344`; this evidence must not
+M130 keeps the next task focused on lowering and adds the remaining
+corpus-observed exact scalar ordered-comparison TSIL emit-return body
+spellings. Selected ordered-comparison scalar implementations may use exact
+TSIL-like body lines for `<`, `>`, `<=`, and `>=` instead of only the
+synthetic clean-restart `body ...` fixture line. Corpus evidence exists at
+`tsldata/primitives/comparison/fundamental.tsl:344`,
+`tsldata/primitives/comparison/fundamental.tsl:539`,
+`tsldata/primitives/comparison/fundamental.tsl:734`, and
+`tsldata/primitives/comparison/fundamental.tsl:900`; this evidence must not
 become a runtime semantic dependency.
+
+This milestone is not target-language operator modeling. It recognizes only
+exact documented source spellings that map to existing typed TSL comparison
+operation ids.
 
 ## Read First
 
@@ -44,18 +51,23 @@ become a runtime semantic dependency.
 
 ## Goal
 
-Allow one exact selected comparison scalar implementation body line of the
-form:
+Allow these exact selected comparison scalar implementation body lines:
 
 ```text
     tsil "emit_return(left < right);"
+    tsil "emit_return(left > right);"
+    tsil "emit_return(left <= right);"
+    tsil "emit_return(left >= right);"
 ```
 
-to produce the same typed backend-neutral comparison operation body as the
-accepted fixture form:
+to produce the same typed backend-neutral comparison operation bodies as the
+accepted fixture forms:
 
 ```text
     body less_than(left, right)
+    body greater_than(left, right)
+    body less_than_or_equal(left, right)
+    body greater_than_or_equal(left, right)
 ```
 
 The selected implementation must lower through the existing typed
@@ -69,19 +81,22 @@ Run exactly one write-capable executor for M130. The executor should:
 2. Preserve the M125 exact source-document shape: one primitive header followed
    by one or more implementation/body pairs. Each implementation block remains
    exactly an implementation header immediately followed by one body line.
-3. Add exact recognition for less-than comparison scalar TSIL emit-return body
-   lines shaped as `tsil "emit_return(left < right);"` under the accepted
-   comparison primitive header form `prim<m:=(v,v)> name(left, right):`.
-   This source spelling must promote to the existing typed comparison body for
-   operation id `less_than`.
+3. Add exact recognition for ordered-comparison scalar TSIL emit-return body
+   lines under the accepted comparison primitive header form
+   `prim<m:=(v,v)> name(left, right):`. The exact source spellings and typed
+   operation ids are:
+   - `tsil "emit_return(left < right);"` -> `less_than`
+   - `tsil "emit_return(left > right);"` -> `greater_than`
+   - `tsil "emit_return(left <= right);"` -> `less_than_or_equal`
+   - `tsil "emit_return(left >= right);"` -> `greater_than_or_equal`
 4. Keep the accepted synthetic comparison `body <operation>(left, right)` line
    working byte-for-byte for existing tests and artifacts.
 5. Keep the accepted M126 binary, M127 unary, M128 equality, and M129
    inequality TSIL emit-return body forms working byte-for-byte for existing
    tests and artifacts.
-6. Promote the exact less-than TSIL emit-return body into typed operation body
-   data before lowering/backend emission. Downstream lowering and emitters must
-   not rescan raw TSIL text or render from raw TSIL text.
+6. Promote exact ordered-comparison TSIL emit-return bodies into typed
+   operation body data before lowering/backend emission. Downstream lowering
+   and emitters must not rescan raw TSIL text or render from raw TSIL text.
 7. Preserve accepted primitive header shapes, selected-implementation
    behavior, body argument shape rules, operation descriptors, scalar type
    descriptors, compatibility rules, and the
@@ -90,18 +105,19 @@ Run exactly one write-capable executor for M130. The executor should:
    matching the target extension and type tag; do not add target discovery,
    generate-all behavior, extension fallback, type groups, or implementation
    ranking.
-9. Prove that selected exact less-than TSIL emit-return bodies drive lowering
-   by testing generated C++/Rust artifacts for the representative `less_than`
-   primitive.
-10. Prove that unselected exact less-than TSIL emit-return bodies are not
-    lowered by adding a focused multi-implementation test where an unselected
-    `tsil "emit_return(left < right);"` body would be a
-    `less_than`/primitive mismatch if selected, while the selected
-    implementation still generates successfully.
-11. Add negative tests showing selected mismatched less-than TSIL emit-return
-    bodies, such as using `left < right` for a non-`less_than` comparison
-    primitive, and malformed nearby comparison TSIL forms produce structured
-    diagnostics, not source repair, renderer inference, or silent fallback.
+9. Prove that each selected exact ordered-comparison TSIL emit-return body
+   drives lowering by testing generated C++/Rust artifacts for `less_than`,
+   `greater_than`, `less_than_or_equal`, and `greater_than_or_equal`.
+10. Prove that unselected exact ordered-comparison TSIL emit-return bodies are
+    not lowered by adding focused multi-implementation coverage where an
+    unselected exact ordered-comparison TSIL body would be an
+    operation/primitive mismatch if selected, while the selected implementation
+    still generates successfully.
+11. Add negative tests showing selected mismatched ordered-comparison TSIL
+    emit-return bodies, such as using `left < right` for a non-`less_than`
+    comparison primitive, and malformed nearby comparison TSIL forms produce
+    structured diagnostics, not source repair, renderer inference, or silent
+    fallback.
 12. Preserve M129 inequality TSIL behavior, M128 equality TSIL behavior, M127
     unary TSIL behavior, M126 binary TSIL behavior, M125 multi-implementation
     behavior, M124 multi-source behavior, and deterministic artifact ordering.
@@ -114,9 +130,10 @@ Run exactly one write-capable executor for M130. The executor should:
   variables, immediates, multiple statements, multiline TSIL bodies, helper
   evaluation, branch pruning, source repair, or TSIL compiler behavior.
 - Adding new binary or unary TSIL forms in this slice.
-- Adding comparison TSIL operator forms beyond the exact `left < right`
-  less-than spelling, including `left > right`, `left <= right`, and
-  `left >= right`.
+- Adding comparison TSIL operator forms beyond the four exact ordered
+  comparison spellings listed in this milestone.
+- Modeling arbitrary C, C++, or Rust operators, precedence, associativity,
+  casts, temporaries, mixed expressions, or target-language passthrough.
 - Parsing multiple primitive blocks inside one `.tsl` document, loading broad
   `tsldata/`, parsing broad TSL syntax, adding new operation ids, scalar
   types, templates, type groups, extension fallback, dependency closure,
@@ -136,16 +153,18 @@ Run exactly one write-capable executor for M130. The executor should:
 After the executor finishes, use read-only subagents:
 
 1. Architecture reviewer: verify M130 is an exact selected-body lowering slice,
-   remains KISS-compatible, and does not add broad TSIL parsing, corpus
-   loading, target discovery, or IR ceremony.
+   remains KISS-compatible, and does not add broad TSIL parsing, arbitrary
+   target-language operator modeling, corpus loading, target discovery, or IR
+   ceremony.
 2. Boundary auditor: verify `frozen/`, `tslgenold/`, and `tsldata/` remain
    evidence/source inputs only and are not runtime shortcuts for operation
    lookup, compatibility evaluation, implementation selection, lowering, or
    backend spellings.
 3. Documentation auditor: verify behavior, roadmap, design decisions, and
    workflow state remain coherent and do not describe M130 as broad TSIL
-   parsing, corpus ingestion, backend manifest loading, source repair, target
-   discovery, CLI, writer, or old migration work.
+   parsing, arbitrary target-language operator modeling, corpus ingestion,
+   backend manifest loading, source repair, target discovery, CLI, writer, or
+   old migration work.
 4. Validation auditor: verify required validation ran and report exact command
    results.
 

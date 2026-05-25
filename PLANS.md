@@ -156,6 +156,21 @@ Every lowering milestone must also pass an IR taxonomy pressure check:
 If the honest answer is "another one-off layer", plan a consolidation slice
 before adding more feature-specific IR.
 
+Lowering milestones that recognize operator-looking source text must also pass
+an operator boundary check:
+
+- Is the accepted spelling an exact documented `.tsl` source form in a narrow
+  context, not an arbitrary C, C++, Rust, or TSIL expression?
+- Does it map immediately to an existing typed TSL primitive semantic
+  operation or explicit semantic concept?
+- Are nearby malformed forms diagnostic boundaries rather than source repair?
+- Do backend renderers consume typed lowering values instead of raw source
+  text?
+
+If the milestone would require precedence, associativity, casts, temporary
+variables, mixed expressions, or general target-language operator support, it
+is too broad for an exact lowering slice.
+
 ## Simplicity And End-To-End Slice Guardrails
 
 Future planning must optimize for the shortest maintainable path from source
