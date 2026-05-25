@@ -16893,12 +16893,16 @@ exit 0 with no output.
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M127.
-This milestone keeps the next task focused on lowering and completes the
-current exact TSIL emit-return family for comparison scalar implementation
-bodies: selected comparison scalar implementations may use one exact TSIL-like
-`emit_return(...)` body line instead of only the synthetic clean-restart
-`body ...` fixture line.
+Accepted. The M128 execution-review loop returned `Accept With Follow-Ups`
+after one write-capable executor and read-only architecture, boundary,
+documentation, and validation audits. Follow-ups were finalization-only and
+were handled by removing validation-created cache directories, refreshing
+current-boundary bullets, and recording the consolidated validation result.
+M128 kept the next task focused on lowering and added the corpus-observed
+exact scalar equality TSIL emit-return body spelling: selected equality
+comparison scalar implementations may use the exact TSIL-like
+`emit_return(left == right);` body line instead of only the synthetic
+clean-restart `body ...` fixture line.
 
 Goal:
 
@@ -16906,7 +16910,7 @@ Allow one exact selected comparison scalar implementation body line of the
 form:
 
 ```text
-    tsil "emit_return(equal(left, right));"
+    tsil "emit_return(left == right);"
 ```
 
 to produce the same typed backend-neutral comparison operation body as the
@@ -16921,9 +16925,11 @@ selected-implementation path and preserve M107-M127 behavior.
 
 Scope:
 
-- Add exact source recognition for comparison scalar implementation body lines
-  shaped as `tsil "emit_return(<operation>(left, right));"` under the existing
-  comparison primitive header form `prim<m:=(v,v)> name(left, right):`.
+- Add exact source recognition for equality comparison scalar implementation
+  body lines shaped as `tsil "emit_return(left == right);"` under the existing
+  comparison primitive header form `prim<m:=(v,v)> name(left, right):`. This
+  source spelling must promote to the existing typed comparison body for
+  operation id `equal`.
 - Preserve the accepted synthetic `body <operation>(left, right)` comparison
   form, the accepted M126 binary TSIL emit-return form, the accepted M127
   unary TSIL emit-return form, all accepted primitive header shapes,
@@ -16934,17 +16940,17 @@ Scope:
   comparison operation body value consumed by lowering; do not introduce a new
   lowering IR category, request/result family, registry, dispatcher, or
   raw-text rewrite path.
-- Prove selected comparison TSIL emit-return bodies drive lowering and
-  generated C++/Rust artifacts for at least one representative comparison
-  primitive.
-- Prove unselected exact comparison TSIL emit-return bodies are not lowered by
-  including a multi-implementation document where an unselected exact
-  comparison TSIL body would be a lowering mismatch if selected, while the
-  selected implementation still generates successfully.
-- Add negative tests for selected mismatched comparison TSIL emit-return
-  operation bodies and malformed nearby comparison TSIL forms, producing
-  structured diagnostics rather than source repair, renderer inference, or
-  silent fallback.
+- Prove selected exact equality TSIL emit-return bodies drive lowering and
+  generated C++/Rust artifacts for the representative `equal` primitive.
+- Prove unselected exact equality TSIL emit-return bodies are not lowered by
+  including a multi-implementation document where an unselected
+  `tsil "emit_return(left == right);"` body would be an `equal`/primitive
+  mismatch if selected, while the selected implementation still generates
+  successfully.
+- Add negative tests for selected mismatched equality TSIL emit-return bodies,
+  such as using `left == right` for a non-`equal` comparison primitive, and
+  malformed nearby comparison TSIL forms, producing structured diagnostics
+  rather than source repair, renderer inference, or silent fallback.
 - Preserve M127 unary TSIL behavior, M126 binary TSIL behavior, M125
   multi-implementation behavior, M124 multi-source behavior, and deterministic
   artifact ordering.
@@ -16954,7 +16960,8 @@ Out of scope:
 - Parsing broad TSIL strings, nested calls, primitive calls, intrinsics, casts,
   variables, immediates, multiple statements, multiline TSIL bodies, helper
   evaluation, branch pruning, source repair, or TSIL compiler behavior.
-- Adding new binary or unary TSIL forms in this slice.
+- Adding new binary or unary TSIL forms in this slice, or adding comparison
+  TSIL operator forms beyond the exact `left == right` equality spelling.
 - Parsing multiple primitive blocks inside one `.tsl` document, loading broad
   `tsldata/`, parsing broad TSL syntax, adding new operation ids, scalar
   types, templates, type groups, extension fallback, dependency closure,
@@ -16971,14 +16978,15 @@ Out of scope:
 
 Accepted outputs:
 
-- A selected comparison scalar implementation may use either the accepted
-  synthetic `body <operation>(left, right)` line or the exact TSIL emit-return
-  line `tsil "emit_return(<operation>(left, right));"`.
-- Lowering consumes a typed comparison operation body value and does not emit
-  from raw TSIL text.
-- Selected mismatched comparison TSIL emit-return bodies produce the existing
-  structured lowering mismatch diagnostic.
-- Malformed nearby comparison TSIL forms are rejected with structured
+- A selected equality comparison scalar implementation may use either the
+  accepted synthetic `body equal(left, right)` line or the exact TSIL
+  emit-return line `tsil "emit_return(left == right);"`.
+- Lowering consumes a typed comparison operation body value for operation id
+  `equal` and does not emit from raw TSIL text.
+- Selected mismatched equality TSIL emit-return bodies, such as
+  `left == right` under a non-`equal` comparison primitive, produce the
+  existing structured lowering mismatch diagnostic.
+- Malformed nearby equality TSIL forms are rejected with structured
   diagnostics and are not repaired or normalized.
 - Existing M107-M127 behavior and representative artifact bytes remain stable.
 
@@ -16996,6 +17004,15 @@ Remove any validation-created `__pycache__` directories before the final cache
 check. Do not run the old `tslgenold` validation profile as proof of the clean
 product slice.
 
+Validation completed with the required M128 profile. `git diff --check`
+returned exit 0 with no output. The public API import command returned exit 0
+with no output. The py-compile command returned exit 0 with no output. The
+targeted clean-package pytest command returned exit 0 with
+`127 passed in 7.37s`. The first cache check found validation-created
+`__pycache__` directories under the clean `tslgen/` tree; they were removed,
+and the final `find tslgen -type d -name __pycache__ -print` returned exit 0
+with no output.
+
 Review notes:
 
 - Reviewers should require M128 to remain an exact selected-body lowering
@@ -17005,5 +17022,140 @@ Review notes:
   loading, renderer-side semantic inference, target discovery, or source
   repair.
 - Reviewers should require comparison TSIL emit-return recognition to produce
+  typed body values before backend emission; generated output must not be
+  rendered by rescanning raw TSIL text.
+
+Next concrete prompt:
+
+```text
+docs/agent/runs/m129-execution-review-loop-prompt.md
+```
+
+### Milestone 129: Tiny Clean Exact TSIL Emit-Return Inequality Comparison Body Lowering Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M128.
+This milestone keeps the task focused on lowering and adds the next
+corpus-observed exact scalar comparison TSIL emit-return body spelling:
+selected inequality comparison scalar implementations may use the exact
+TSIL-like `emit_return(left != right);` body line instead of only the synthetic
+clean-restart `body ...` fixture line. Evidence exists in
+`tsldata/primitives/comparison/fundamental.tsl:192`; this evidence must not
+become a runtime semantic dependency.
+
+Goal:
+
+Allow one exact selected comparison scalar implementation body line of the
+form:
+
+```text
+    tsil "emit_return(left != right);"
+```
+
+to produce the same typed backend-neutral comparison operation body as the
+accepted fixture form:
+
+```text
+    body nequal(left, right)
+```
+
+The selected implementation must lower through the existing typed
+selected-implementation path and preserve M107-M128 behavior.
+
+Scope:
+
+- Add exact source recognition for inequality comparison scalar implementation
+  body lines shaped as `tsil "emit_return(left != right);"` under the existing
+  comparison primitive header form `prim<m:=(v,v)> name(left, right):`. This
+  source spelling must promote to the existing typed comparison body for
+  operation id `nequal`.
+- Preserve the accepted synthetic `body <operation>(left, right)` comparison
+  form, the accepted M126 binary TSIL emit-return form, the accepted M127
+  unary TSIL emit-return form, the accepted M128 equality TSIL emit-return
+  form, all accepted primitive header shapes, selected-implementation
+  lowering behavior, operation descriptors, scalar type descriptors,
+  compatibility rules, and the `clean_restart_bootstrap_core`
+  semantic-origin contract.
+- Promote the exact inequality TSIL emit-return body into the existing typed
+  comparison operation body value consumed by lowering; do not introduce a new
+  lowering IR category, request/result family, registry, dispatcher, or
+  raw-text rewrite path.
+- Prove selected exact inequality TSIL emit-return bodies drive lowering and
+  generated C++/Rust artifacts for the representative `nequal` primitive.
+- Prove unselected exact inequality TSIL emit-return bodies are not lowered by
+  including a multi-implementation document where an unselected
+  `tsil "emit_return(left != right);"` body would be a `nequal`/primitive
+  mismatch if selected, while the selected implementation still generates
+  successfully.
+- Add negative tests for selected mismatched inequality TSIL emit-return
+  bodies, such as using `left != right` for a non-`nequal` comparison
+  primitive, and malformed nearby comparison TSIL forms, producing structured
+  diagnostics rather than source repair, renderer inference, or silent
+  fallback.
+- Preserve M128 equality TSIL behavior, M127 unary TSIL behavior, M126 binary
+  TSIL behavior, M125 multi-implementation behavior, M124 multi-source
+  behavior, and deterministic artifact ordering.
+
+Out of scope:
+
+- Parsing broad TSIL strings, nested calls, primitive calls, intrinsics, casts,
+  variables, immediates, multiple statements, multiline TSIL bodies, helper
+  evaluation, branch pruning, source repair, or TSIL compiler behavior.
+- Adding new binary or unary TSIL forms in this slice, or adding comparison
+  TSIL operator forms beyond the exact `left != right` inequality spelling.
+- Adding exact ordered comparison TSIL forms such as `left < right`,
+  `left > right`, `left <= right`, or `left >= right`.
+- Parsing multiple primitive blocks inside one `.tsl` document, loading broad
+  `tsldata/`, parsing broad TSL syntax, adding new operation ids, scalar
+  types, templates, type groups, extension fallback, dependency closure,
+  backend manifests, target discovery, generated-test execution, CLI behavior,
+  writer behavior, or output tree parity.
+- Loading operation semantics, compatibility rules, or backend spellings from
+  `tsldata/`, backend manifests, YAML, `frozen`, `tslgenold`, plugins, or
+  environment configuration at runtime.
+- Moving backend-owned C++/Rust type, result, or operator spellings into
+  lowering.
+- Introducing a registry, dispatcher, callback map, plugin system, hidden
+  backfeed, fixpoint mechanism, broad operation framework, or new lowering IR
+  category/request/result family.
+
+Accepted outputs:
+
+- A selected inequality comparison scalar implementation may use either the
+  accepted synthetic `body nequal(left, right)` line or the exact TSIL
+  emit-return line `tsil "emit_return(left != right);"`.
+- Lowering consumes a typed comparison operation body value for operation id
+  `nequal` and does not emit from raw TSIL text.
+- Selected mismatched inequality TSIL emit-return bodies, such as
+  `left != right` under a non-`nequal` comparison primitive, produce the
+  existing structured lowering mismatch diagnostic.
+- Malformed nearby inequality TSIL forms are rejected with structured
+  diagnostics and are not repaired or normalized.
+- Existing M107-M128 behavior and representative artifact bytes remain stable.
+
+Validation:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Remove any validation-created `__pycache__` directories before the final cache
+check. Do not run the old `tslgenold` validation profile as proof of the clean
+product slice.
+
+Review notes:
+
+- Reviewers should require M129 to remain an exact selected-body lowering
+  slice, not a broad TSIL parser or compiler milestone.
+- Reviewers should reject ordered comparison parsing, nested helper parsing,
+  primitive-call lowering, intrinsics, casts, generation-time helpers, branch
+  pruning, backend manifest loading, renderer-side semantic inference, target
+  discovery, or source repair.
+- Reviewers should require inequality TSIL emit-return recognition to produce
   typed body values before backend emission; generated output must not be
   rendered by rescanning raw TSIL text.

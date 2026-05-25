@@ -1,25 +1,27 @@
-# M128 Execution Review Loop Prompt
+# M129 Execution Review Loop Prompt
 
-You are executing and reviewing the accepted next milestone after M127:
+You are executing and reviewing the accepted next milestone after M128:
 
 ```text
-Milestone 128: Tiny Clean Exact TSIL Emit-Return Comparison Body Lowering Slice
+Milestone 129: Tiny Clean Exact TSIL Emit-Return Inequality Comparison Body Lowering Slice
 ```
 
-Milestones 1 through 127 are accepted. M106 moved the pre-restart top-level
-`tslgen/` tree to `tslgenold/` as evidence-only old state. M107-M127 built the
+Milestones 1 through 128 are accepted. M106 moved the pre-restart top-level
+`tslgen/` tree to `tslgenold/` as evidence-only old state. M107-M128 built the
 tiny clean restart path from explicit `.tsl` source loading through
 multi-document and multi-implementation catalog construction, explicit target
 selection, selected-implementation lowering, backend emission, artifact
 writing, focused scalar operation expansion, bootstrap-core semantic origins,
-deterministic source-set generation, and exact binary/unary TSIL emit-return
-body spellings.
+deterministic source-set generation, and exact binary/unary/equality TSIL
+emit-return body spellings.
 
-M128 keeps the next task focused on lowering and adds the corpus-observed
-exact scalar equality TSIL emit-return body spelling: selected equality
+M129 keeps the next task focused on lowering and adds the next corpus-observed
+exact scalar comparison TSIL emit-return body spelling: selected inequality
 comparison scalar implementations may use the exact TSIL-like
-`emit_return(left == right);` body line instead of only the synthetic
-clean-restart `body ...` fixture line.
+`emit_return(left != right);` body line instead of only the synthetic
+clean-restart `body ...` fixture line. The corpus evidence is
+`tsldata/primitives/comparison/fundamental.tsl:192`; this evidence must not
+become a runtime semantic dependency.
 
 ## Read First
 
@@ -46,62 +48,63 @@ Allow one exact selected comparison scalar implementation body line of the
 form:
 
 ```text
-    tsil "emit_return(left == right);"
+    tsil "emit_return(left != right);"
 ```
 
 to produce the same typed backend-neutral comparison operation body as the
 accepted fixture form:
 
 ```text
-    body equal(left, right)
+    body nequal(left, right)
 ```
 
 The selected implementation must lower through the existing typed
-selected-implementation path and preserve M107-M127 behavior.
+selected-implementation path and preserve M107-M128 behavior.
 
 ## Required Executor Task
 
-Run exactly one write-capable executor for M128. The executor should:
+Run exactly one write-capable executor for M129. The executor should:
 
 1. Inspect dirty worktree state before editing and preserve unrelated changes.
 2. Preserve the M125 exact source-document shape: one primitive header followed
    by one or more implementation/body pairs. Each implementation block remains
    exactly an implementation header immediately followed by one body line.
-3. Add exact recognition for equality comparison scalar TSIL emit-return body
-   lines shaped as `tsil "emit_return(left == right);"` under the accepted
+3. Add exact recognition for inequality comparison scalar TSIL emit-return body
+   lines shaped as `tsil "emit_return(left != right);"` under the accepted
    comparison primitive header form `prim<m:=(v,v)> name(left, right):`.
    This source spelling must promote to the existing typed comparison body for
-   operation id `equal`.
+   operation id `nequal`.
 4. Keep the accepted synthetic comparison `body <operation>(left, right)` line
    working byte-for-byte for existing tests and artifacts.
-5. Keep the accepted M126 binary and M127 unary TSIL emit-return body forms
-   working byte-for-byte for existing tests and artifacts.
-6. Promote the exact comparison TSIL emit-return body into typed operation body
+5. Keep the accepted M126 binary, M127 unary, and M128 equality TSIL
+   emit-return body forms working byte-for-byte for existing tests and
+   artifacts.
+6. Promote the exact inequality TSIL emit-return body into typed operation body
    data before lowering/backend emission. Downstream lowering and emitters must
    not rescan raw TSIL text or render from raw TSIL text.
 7. Preserve accepted primitive header shapes, selected-implementation
    behavior, body argument shape rules, operation descriptors, scalar type
-   descriptors, compatibility rules, and the `clean_restart_bootstrap_core`
-   semantic-origin contract.
+   descriptors, compatibility rules, and the
+   `clean_restart_bootstrap_core` semantic-origin contract.
 8. Keep target requests explicit. Selection should pick only the implementation
    matching the target extension and type tag; do not add target discovery,
    generate-all behavior, extension fallback, type groups, or implementation
    ranking.
-9. Prove that selected exact equality TSIL emit-return bodies drive lowering
-   by testing generated C++/Rust artifacts for the representative `equal`
+9. Prove that selected exact inequality TSIL emit-return bodies drive lowering
+   by testing generated C++/Rust artifacts for the representative `nequal`
    primitive.
-10. Prove that unselected exact equality TSIL emit-return bodies are not
+10. Prove that unselected exact inequality TSIL emit-return bodies are not
     lowered by adding a focused multi-implementation test where an unselected
-    `tsil "emit_return(left == right);"` body would be an `equal`/primitive
+    `tsil "emit_return(left != right);"` body would be a `nequal`/primitive
     mismatch if selected, while the selected implementation still generates
     successfully.
-11. Add negative tests showing selected mismatched equality TSIL emit-return
-    bodies, such as using `left == right` for a non-`equal` comparison
+11. Add negative tests showing selected mismatched inequality TSIL emit-return
+    bodies, such as using `left != right` for a non-`nequal` comparison
     primitive, and malformed nearby comparison TSIL forms produce structured
     diagnostics, not source repair, renderer inference, or silent fallback.
-12. Preserve M127 unary TSIL behavior, M126 binary TSIL behavior, M125
-    multi-implementation behavior, M124 multi-document source-set behavior,
-    and deterministic artifact ordering.
+12. Preserve M128 equality TSIL behavior, M127 unary TSIL behavior, M126 binary
+    TSIL behavior, M125 multi-implementation behavior, M124 multi-document
+    source-set behavior, and deterministic artifact ordering.
 13. Update docs only for behavior, decisions, open questions, or workflow state
     revealed by this slice.
 
@@ -110,8 +113,10 @@ Run exactly one write-capable executor for M128. The executor should:
 - Parsing broad TSIL strings, nested calls, primitive calls, intrinsics, casts,
   variables, immediates, multiple statements, multiline TSIL bodies, helper
   evaluation, branch pruning, source repair, or TSIL compiler behavior.
-- Adding new binary or unary TSIL forms in this slice, or adding comparison
-  TSIL operator forms beyond the exact `left == right` equality spelling.
+- Adding new binary or unary TSIL forms in this slice.
+- Adding comparison TSIL operator forms beyond the exact `left != right`
+  inequality spelling, including `left < right`, `left > right`,
+  `left <= right`, and `left >= right`.
 - Parsing multiple primitive blocks inside one `.tsl` document, loading broad
   `tsldata/`, parsing broad TSL syntax, adding new operation ids, scalar
   types, templates, type groups, extension fallback, dependency closure,
@@ -130,7 +135,7 @@ Run exactly one write-capable executor for M128. The executor should:
 
 After the executor finishes, use read-only subagents:
 
-1. Architecture reviewer: verify M128 is an exact selected-body lowering slice,
+1. Architecture reviewer: verify M129 is an exact selected-body lowering slice,
    remains KISS-compatible, and does not add broad TSIL parsing, corpus
    loading, target discovery, or IR ceremony.
 2. Boundary auditor: verify `frozen/`, `tslgenold/`, and `tsldata/` remain
@@ -138,7 +143,7 @@ After the executor finishes, use read-only subagents:
    lookup, compatibility evaluation, implementation selection, lowering, or
    backend spellings.
 3. Documentation auditor: verify behavior, roadmap, design decisions, and
-   workflow state remain coherent and do not describe M128 as broad TSIL
+   workflow state remain coherent and do not describe M129 as broad TSIL
    parsing, corpus ingestion, backend manifest loading, source repair, target
    discovery, CLI, writer, or old migration work.
 4. Validation auditor: verify required validation ran and report exact command
@@ -164,17 +169,17 @@ product slice.
 
 ## Completion Rules
 
-If M128 review returns `Accept` or `Accept With Follow-Ups`:
+If M129 review returns `Accept` or `Accept With Follow-Ups`:
 
 - update `docs/agent/current-redesign-state.md`;
-- mark M128 accepted in `docs/redesign/implementation-roadmap.md`;
+- mark M129 accepted in `docs/redesign/implementation-roadmap.md`;
 - record follow-ups in state if any;
 - create the next concrete run prompt under `docs/agent/runs/`.
 
 To keep planning and execution integrated, do the next-run planning inside this
-prompt after M128 is accepted. Select exactly one concrete M129 task, prefer a
+prompt after M129 is accepted. Select exactly one concrete M130 task, prefer a
 high-value research-prototype step, and create the next execution-review-loop
-prompt directly. Do not create a separate post-M128 planning prompt unless
+prompt directly. Do not create a separate post-M129 planning prompt unless
 review returns `Return To Planner`, `Reject`, or an explicit stop condition is
 recorded.
 
@@ -183,7 +188,7 @@ a focused re-review. If review returns `Return To Planner` or `Reject`, stop
 implementation and create the appropriate planner/rollback prompt instead of
 continuing.
 
-Do not start Milestone 129 implementation in this prompt.
+Do not start Milestone 130 implementation in this prompt.
 
 ## Final Report
 

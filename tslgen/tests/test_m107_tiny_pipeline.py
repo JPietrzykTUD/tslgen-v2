@@ -2814,6 +2814,177 @@ def test_m127_malformed_unary_tsil_emit_return_reports_parse_diagnostic(
     assert "emit_return(bit_not(value))" in diagnostic.message
 
 
+def test_m128_catalog_builder_promotes_exact_equality_tsil_to_comparison_body(
+    tmp_path: Path,
+) -> None:
+    document = _source_document(
+        tmp_path,
+        "tiny_equal_tsil.tsl",
+        "\n".join(
+            (
+                "prim<m:=(v,v)> equal(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(left == right);"',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((document,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    assert body == ComparisonOperationBody(
+        operation="equal",
+        left_parameter="left",
+        right_parameter="right",
+        source=SourceLocation(document.path, 3, 5),
+    )
+
+
+def test_m128_selected_equality_tsil_source_generates_cpp_and_rust_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_compare_tsil_source(tmp_path, "equal", "si32")
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="equal",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="rust",
+                primitive_name="equal",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/equal_scalar_si32.hpp",
+        "src/equal_scalar_si32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        EQUAL_CPP_CONTENT,
+        EQUAL_RUST_CONTENT,
+    ]
+
+
+def test_m128_unselected_equality_tsil_body_is_not_lowered(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_compare_multi_implementation_body_source(
+        tmp_path,
+        "nequal",
+        (
+            ("ui32", '    tsil "emit_return(left == right);"'),
+            ("si32", "    body nequal(left, right)"),
+        ),
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="nequal",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/nequal_scalar_si32.hpp",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        NEQUAL_CPP_CONTENT,
+    ]
+
+
+def test_m128_selected_mismatched_equality_tsil_reports_lowering_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_compare_tsil_source(tmp_path, "nequal", "si32")
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="rust",
+                primitive_name="nequal",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-OPERATION-MISMATCH"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 3
+    assert diagnostic.location.column == 5
+    assert "nequal" in diagnostic.message
+    assert "equal" in diagnostic.message
+
+
+def test_m128_malformed_equality_tsil_forms_report_parse_diagnostics(
+    tmp_path: Path,
+) -> None:
+    malformed_cases = (
+        ('    tsil "emit_return(left==right);"', "left==right"),
+        ('    tsil "emit_return(right == left);"', "right == left"),
+        ('    tsil "emit_return(left != right);"', "left != right"),
+        ('    tsil "emit_return(equal(left, right));"', "equal(left, right)"),
+        ('    tsil "emit_return(left == right)"', "left == right"),
+    )
+
+    for index, (body_line, expected_fragment) in enumerate(malformed_cases):
+        source = _write_tiny_compare_tsil_source(
+            tmp_path,
+            "equal",
+            "si32",
+            body_line=body_line,
+            file_suffix=f"bad_{index}",
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name="equal",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.artifacts.artifacts == ()
+        assert len(result.diagnostics) == 1
+        diagnostic = result.diagnostics[0]
+        assert diagnostic.code == "TSL-PARSE-UNSUPPORTED-FORM"
+        assert diagnostic.severity == "error"
+        assert diagnostic.location is not None
+        assert diagnostic.location.path == source.resolve()
+        assert diagnostic.location.line == 3
+        assert diagnostic.location.column == 5
+        assert expected_fragment in diagnostic.message
+
+
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
     tmp_path: Path,
 ) -> None:
@@ -4028,6 +4199,46 @@ def _write_tiny_compare_source(
         ),
         encoding="utf-8",
     )
+    return source
+
+
+def _write_tiny_compare_tsil_source(
+    tmp_path: Path,
+    operation_id: str,
+    type_tag: str,
+    *,
+    body_line: str | None = None,
+    file_suffix: str = "tsil",
+) -> Path:
+    source = tmp_path / f"tiny_{operation_id}_{type_tag}_{file_suffix}.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                f"prim<m:=(v,v)> {operation_id}(left, right):",
+                f"  implementation scalar {type_tag}:",
+                body_line or '    tsil "emit_return(left == right);"',
+            )
+        ),
+        encoding="utf-8",
+    )
+    return source
+
+
+def _write_tiny_compare_multi_implementation_body_source(
+    tmp_path: Path,
+    operation_id: str,
+    implementations: tuple[tuple[str, str], ...],
+) -> Path:
+    source = tmp_path / f"tiny_{operation_id}_compare_multi_body.tsl"
+    lines = [f"prim<m:=(v,v)> {operation_id}(left, right):"]
+    for type_tag, body_line in implementations:
+        lines.extend(
+            (
+                f"  implementation scalar {type_tag}:",
+                body_line,
+            )
+        )
+    source.write_text("\n".join(lines), encoding="utf-8")
     return source
 
 

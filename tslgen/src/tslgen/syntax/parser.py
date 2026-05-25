@@ -1,6 +1,7 @@
 """Narrow parser for the tiny clean source form."""
 
 import re
+from dataclasses import dataclass
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.io.sources import SourceDocument
@@ -54,7 +55,16 @@ _TSIL_UNARY_EMIT_RETURN_BODY_PATTERN = re.compile(
     r"\((?P<arguments>value)\)"
     r'\);"$'
 )
+_TSIL_COMPARISON_EQUAL_EMIT_RETURN_BODY_PATTERN = re.compile(
+    r'^    tsil "emit_return\(left == right\);"$'
+)
 _NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+@dataclass(frozen=True, slots=True)
+class _MatchedBody:
+    operation: str
+    arguments: tuple[str, ...]
 
 
 class TslParser:
@@ -132,7 +142,7 @@ class TslParser:
                 )
                 return None
 
-            arguments = _split_names(body.group("arguments"))
+            arguments = body.arguments
             invalid_names = tuple(
                 name for name in (*parameters, *arguments) if not _valid_name(name)
             )
@@ -151,7 +161,7 @@ class TslParser:
                 return None
 
             parsed_body = ParsedBody(
-                operation=body.group("operation"),
+                operation=body.operation,
                 arguments=arguments,
                 source=SourceLocation(document.path, body_line_no, 5),
             )
@@ -195,14 +205,33 @@ def _match_header(line: str) -> re.Match[str] | None:
     return None
 
 
-def _match_body(line: str, *, signature: str) -> re.Match[str] | None:
+def _match_body(line: str, *, signature: str) -> _MatchedBody | None:
     body = _BODY_PATTERN.match(line)
     if body is not None:
-        return body
+        return _MatchedBody(
+            operation=body.group("operation"),
+            arguments=_split_names(body.group("arguments")),
+        )
     if signature == "v:=(v,v)":
-        return _TSIL_BINARY_EMIT_RETURN_BODY_PATTERN.match(line)
+        tsil_body = _TSIL_BINARY_EMIT_RETURN_BODY_PATTERN.match(line)
+        if tsil_body is not None:
+            return _MatchedBody(
+                operation=tsil_body.group("operation"),
+                arguments=_split_names(tsil_body.group("arguments")),
+            )
+        return None
     if signature == "v:=(v)":
-        return _TSIL_UNARY_EMIT_RETURN_BODY_PATTERN.match(line)
+        tsil_body = _TSIL_UNARY_EMIT_RETURN_BODY_PATTERN.match(line)
+        if tsil_body is not None:
+            return _MatchedBody(
+                operation=tsil_body.group("operation"),
+                arguments=_split_names(tsil_body.group("arguments")),
+            )
+        return None
+    if signature == "m:=(v,v)" and (
+        _TSIL_COMPARISON_EQUAL_EMIT_RETURN_BODY_PATTERN.match(line) is not None
+    ):
+        return _MatchedBody(operation="equal", arguments=("left", "right"))
     return None
 
 
