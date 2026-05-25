@@ -290,6 +290,13 @@ NEQUAL_RUST_CONTENT = """pub fn nequal_scalar_si32(left: i32, right: i32) -> boo
 }
 """
 
+ORDERED_COMPARISON_TSIL_CASES = (
+    ("less_than", '    tsil "emit_return(left < right);"', "<"),
+    ("greater_than", '    tsil "emit_return(left > right);"', ">"),
+    ("less_than_or_equal", '    tsil "emit_return(left <= right);"', "<="),
+    ("greater_than_or_equal", '    tsil "emit_return(left >= right);"', ">="),
+)
+
 
 def test_m110_scalar_descriptor_lookup_table() -> None:
     assert supported_scalar_type_tags() == ("si32", "ui32", "f32", "f64")
@@ -3129,7 +3136,7 @@ def test_m129_malformed_inequality_tsil_forms_report_parse_diagnostics(
     malformed_cases = (
         ('    tsil "emit_return(left!=right);"', "left!=right"),
         ('    tsil "emit_return(right != left);"', "right != left"),
-        ('    tsil "emit_return(left < right);"', "left < right"),
+        ('    tsil "emit_return(left !== right);"', "left !== right"),
         ('    tsil "emit_return(nequal(left, right));"', "nequal(left, right)"),
         ('    tsil "emit_return(left != right)"', "left != right"),
     )
@@ -3149,6 +3156,208 @@ def test_m129_malformed_inequality_tsil_forms_report_parse_diagnostics(
                 Target(
                     backend="cpp",
                     primitive_name="nequal",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.artifacts.artifacts == ()
+        assert len(result.diagnostics) == 1
+        diagnostic = result.diagnostics[0]
+        assert diagnostic.code == "TSL-PARSE-UNSUPPORTED-FORM"
+        assert diagnostic.severity == "error"
+        assert diagnostic.location is not None
+        assert diagnostic.location.path == source.resolve()
+        assert diagnostic.location.line == 3
+        assert diagnostic.location.column == 5
+        assert expected_fragment in diagnostic.message
+
+
+def test_m130_catalog_builder_promotes_exact_ordered_comparison_tsil_to_body(
+    tmp_path: Path,
+) -> None:
+    for operation_id, body_line, _operator in ORDERED_COMPARISON_TSIL_CASES:
+        document = _source_document(
+            tmp_path,
+            f"tiny_{operation_id}_ordered_tsil.tsl",
+            "\n".join(
+                (
+                    f"prim<m:=(v,v)> {operation_id}(left, right):",
+                    "  implementation scalar si32:",
+                    body_line,
+                )
+            ),
+        )
+
+        parse_result = TslParser().parse((document,))
+        catalog_result = CatalogBuilder().build(parse_result.documents)
+
+        assert parse_result.diagnostics == ()
+        assert catalog_result.diagnostics == ()
+        assert catalog_result.catalog is not None
+        body = catalog_result.catalog.primitives[0].implementations[0].body
+        assert body == ComparisonOperationBody(
+            operation=operation_id,
+            left_parameter="left",
+            right_parameter="right",
+            source=SourceLocation(document.path, 3, 5),
+        )
+
+
+def test_m130_selected_ordered_comparison_tsil_sources_generate_artifacts(
+    tmp_path: Path,
+) -> None:
+    for operation_id, body_line, operator in ORDERED_COMPARISON_TSIL_CASES:
+        source = _write_tiny_compare_tsil_source(
+            tmp_path,
+            operation_id,
+            "si32",
+            body_line=body_line,
+            file_suffix=f"ordered_{operation_id}",
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name=operation_id,
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+                Target(
+                    backend="rust",
+                    primitive_name=operation_id,
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.diagnostics == ()
+        assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+            f"include/tsl/{operation_id}_scalar_si32.hpp",
+            f"src/{operation_id}_scalar_si32.rs",
+        ]
+        assert [artifact.content for artifact in result.artifacts.artifacts] == [
+            _expected_compare_cpp_content(operation_id, operator),
+            _expected_compare_rust_content(operation_id, operator),
+        ]
+        assert all(
+            "tsil" not in artifact.content and "emit_return" not in artifact.content
+            for artifact in result.artifacts.artifacts
+        )
+
+
+def test_m130_unselected_ordered_comparison_tsil_bodies_are_not_lowered(
+    tmp_path: Path,
+) -> None:
+    for operation_id, body_line, _operator in ORDERED_COMPARISON_TSIL_CASES:
+        selected_operation = (
+            "greater_than" if operation_id != "greater_than" else "less_than"
+        )
+        selected_operator = _ordered_comparison_operator(selected_operation)
+        source = tmp_path / (
+            f"tiny_{selected_operation}_{operation_id}_unselected_ordered.tsl"
+        )
+        source.write_text(
+            "\n".join(
+                (
+                    f"prim<m:=(v,v)> {selected_operation}(left, right):",
+                    "  implementation scalar ui32:",
+                    body_line,
+                    "  implementation scalar si32:",
+                    f"    body {selected_operation}(left, right)",
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name=selected_operation,
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.diagnostics == ()
+        assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+            f"include/tsl/{selected_operation}_scalar_si32.hpp",
+        ]
+        assert [artifact.content for artifact in result.artifacts.artifacts] == [
+            _expected_compare_cpp_content(selected_operation, selected_operator),
+        ]
+
+
+def test_m130_selected_mismatched_ordered_comparison_tsil_reports_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_compare_tsil_source(
+        tmp_path,
+        "greater_than",
+        "si32",
+        body_line='    tsil "emit_return(left < right);"',
+        file_suffix="ordered_mismatch",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="rust",
+                primitive_name="greater_than",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-OPERATION-MISMATCH"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 3
+    assert diagnostic.location.column == 5
+    assert "greater_than" in diagnostic.message
+    assert "less_than" in diagnostic.message
+
+
+def test_m130_malformed_ordered_comparison_tsil_forms_report_parse_diagnostics(
+    tmp_path: Path,
+) -> None:
+    malformed_cases = (
+        ('    tsil "emit_return(left<right);"', "left<right"),
+        ('    tsil "emit_return(right < left);"', "right < left"),
+        ('    tsil "emit_return(less_than(left, right));"', "less_than(left, right)"),
+        ('    tsil "emit_return(left < right)"', "left < right"),
+        ('    tsil "emit_return(left <> right);"', "left <> right"),
+        ('    tsil "emit_return(left < right + right);"', "left < right + right"),
+    )
+
+    for index, (body_line, expected_fragment) in enumerate(malformed_cases):
+        source = _write_tiny_compare_tsil_source(
+            tmp_path,
+            "less_than",
+            "si32",
+            body_line=body_line,
+            file_suffix=f"bad_ordered_{index}",
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name="less_than",
                     extension="scalar",
                     type_tag="si32",
                 ),
@@ -4161,6 +4370,38 @@ def _comparison_operation(operation_id: str) -> ComparisonOperationDescriptor:
     descriptor = lookup_comparison_operation_descriptor(operation_id)
     assert descriptor is not None
     return descriptor
+
+
+def _ordered_comparison_operator(operation_id: str) -> str:
+    for candidate_id, _body_line, operator in ORDERED_COMPARISON_TSIL_CASES:
+        if candidate_id == operation_id:
+            return operator
+    raise AssertionError(f"missing ordered comparison operator for {operation_id!r}")
+
+
+def _expected_compare_cpp_content(operation_id: str, operator: str) -> str:
+    return (
+        "#pragma once\n"
+        "\n"
+        "#include <cstdint>\n"
+        "\n"
+        "namespace tsl {\n"
+        "\n"
+        f"inline bool {operation_id}_scalar_si32"
+        "(std::int32_t left, std::int32_t right) {\n"
+        f"  return left {operator} right;\n"
+        "}\n"
+        "\n"
+        "}  // namespace tsl\n"
+    )
+
+
+def _expected_compare_rust_content(operation_id: str, operator: str) -> str:
+    return (
+        f"pub fn {operation_id}_scalar_si32(left: i32, right: i32) -> bool {{\n"
+        f"    left {operator} right\n"
+        "}\n"
+    )
 
 
 def _record_strings(value: object) -> tuple[str, ...]:

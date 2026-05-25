@@ -17180,16 +17180,19 @@ docs/agent/runs/m130-execution-review-loop-prompt.md
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M129.
-This milestone keeps the task focused on lowering and adds the remaining
-corpus-observed exact scalar ordered-comparison TSIL emit-return body
-spellings. Selected ordered-comparison scalar implementations may use exact
-TSIL-like body lines for `<`, `>`, `<=`, and `>=` instead of only the
-synthetic clean-restart `body ...` fixture line. Evidence exists in
+Accepted. The M130 execution-review loop returned `Accept With Follow-Ups`
+after one write-capable executor and read-only architecture, boundary,
+documentation, and validation audits. Follow-ups were finalization-only and
+were handled by updating workflow state, roadmap state, and ADR wording before
+rerunning required validation. M130 kept the task focused on lowering and
+added the remaining corpus-observed exact scalar ordered-comparison TSIL
+emit-return body spellings. Selected ordered-comparison scalar implementations
+may use exact TSIL-like body lines for `<`, `>`, `<=`, and `>=` instead of
+only the synthetic clean-restart `body ...` fixture line. Evidence exists in
 `tsldata/primitives/comparison/fundamental.tsl:344`,
 `tsldata/primitives/comparison/fundamental.tsl:539`,
 `tsldata/primitives/comparison/fundamental.tsl:734`, and
-`tsldata/primitives/comparison/fundamental.tsl:900`; this evidence must not
+`tsldata/primitives/comparison/fundamental.tsl:900`; this evidence did not
 become a runtime semantic dependency.
 
 This milestone is not target-language operator modeling. It recognizes only
@@ -17310,6 +17313,14 @@ Remove any validation-created `__pycache__` directories before the final cache
 check. Do not run the old `tslgenold` validation profile as proof of the clean
 product slice.
 
+Validation completed with the required M130 profile. `git diff --check`
+returned exit 0 with no output. The public API import command returned exit 0
+with no output. The py-compile command returned exit 0 with no output. The
+targeted clean-package pytest command returned exit 0 with
+`137 passed in 7.55s`.
+Validation-created `__pycache__` directories were removed, and the final
+`find tslgen -type d -name __pycache__ -print` returned exit 0 with no output.
+
 Review notes:
 
 - Reviewers should require M130 to remain an exact selected-body lowering
@@ -17320,5 +17331,166 @@ Review notes:
   pruning, backend manifest loading, renderer-side semantic inference, target
   discovery, or source repair.
 - Reviewers should require ordered-comparison TSIL emit-return recognition to
+  produce typed body values before backend emission; generated output must not
+  be rendered by rescanning raw TSIL text.
+
+Next concrete prompt:
+
+```text
+docs/agent/runs/m131-execution-review-loop-prompt.md
+```
+
+### Milestone 131: Tiny Clean Exact TSIL Emit-Return Binary Operator Body Lowering Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M130.
+This milestone keeps the task focused on lowering and adds the next
+corpus-observed exact scalar binary TSIL emit-return body spellings. Selected
+binary scalar implementations may use exact TSIL-like body lines for `+`,
+`-`, `&`, `|`, and `^` instead of only the synthetic clean-restart `body ...`
+fixture line or the accepted M126 function-call-shaped binary TSIL form.
+Evidence exists in `tsldata/primitives/arithmetic/fundamental.tsl:31`,
+`tsldata/primitives/arithmetic/fundamental.tsl:328`,
+`tsldata/primitives/bitwise/bit_ops.tsl:31`,
+`tsldata/primitives/bitwise/bit_ops.tsl:312`, and
+`tsldata/primitives/bitwise/bit_ops.tsl:462`; this evidence must not become a
+runtime semantic dependency.
+
+This milestone is not target-language operator modeling. It recognizes only
+exact documented source spellings that map to existing typed TSL binary
+operation ids.
+
+Goal:
+
+Allow these exact selected binary scalar implementation body lines:
+
+```text
+    tsil "emit_return(left + right);"
+    tsil "emit_return(left - right);"
+    tsil "emit_return(left & right);"
+    tsil "emit_return(left | right);"
+    tsil "emit_return(left ^ right);"
+```
+
+to produce the same typed backend-neutral binary operation bodies as the
+accepted fixture forms:
+
+```text
+    body add(left, right)
+    body sub(left, right)
+    body bit_and(left, right)
+    body bit_or(left, right)
+    body bit_xor(left, right)
+```
+
+The selected implementation must lower through the existing typed
+selected-implementation path and preserve M107-M130 behavior.
+
+Scope:
+
+- Add exact source recognition for binary scalar implementation body lines
+  under the existing binary primitive header form
+  `prim<v:=(v,v)> name(left, right):`. The exact source spellings and typed
+  operation ids are:
+  - `tsil "emit_return(left + right);"` -> `add`
+  - `tsil "emit_return(left - right);"` -> `sub`
+  - `tsil "emit_return(left & right);"` -> `bit_and`
+  - `tsil "emit_return(left | right);"` -> `bit_or`
+  - `tsil "emit_return(left ^ right);"` -> `bit_xor`
+- Preserve the accepted synthetic `body <operation>(left, right)` binary form,
+  the accepted M126 `tsil "emit_return(<operation>(left, right));"` binary
+  form, the accepted M127 unary TSIL emit-return form, the accepted
+  M128-M130 comparison TSIL emit-return forms, all accepted primitive header
+  shapes, selected-implementation lowering behavior, operation descriptors,
+  scalar type descriptors, compatibility rules, and the
+  `clean_restart_bootstrap_core` semantic-origin contract.
+- Promote exact binary operator TSIL emit-return bodies into the existing
+  typed binary operation body values consumed by lowering; do not introduce a
+  new lowering IR category, request/result family, registry, dispatcher, or
+  raw-text rewrite path.
+- Prove selected exact binary operator TSIL emit-return bodies drive lowering
+  and generated C++/Rust artifacts for `add`, `sub`, `bit_and`, `bit_or`, and
+  `bit_xor`.
+- Prove unselected exact binary operator TSIL emit-return bodies are not
+  lowered by including multi-implementation coverage where an unselected exact
+  binary operator TSIL body would be an operation/primitive mismatch if
+  selected, while the selected implementation still generates successfully.
+- Add negative tests for selected mismatched binary operator TSIL emit-return
+  bodies, such as using `left + right` for a non-`add` binary primitive, and
+  malformed nearby binary operator TSIL forms, producing structured
+  diagnostics rather than source repair, renderer inference, or silent
+  fallback.
+- Preserve M130 ordered comparison TSIL behavior, M129 inequality TSIL
+  behavior, M128 equality TSIL behavior, M127 unary TSIL behavior, M126 binary
+  function-call TSIL behavior, M125 multi-implementation behavior, M124
+  multi-source behavior, and deterministic artifact ordering.
+
+Out of scope:
+
+- Parsing broad TSIL strings, nested calls, primitive calls, intrinsics, casts,
+  variables, immediates, multiple statements, multiline TSIL bodies, helper
+  evaluation, branch pruning, source repair, or TSIL compiler behavior.
+- Adding binary operator TSIL forms beyond the five exact spellings listed in
+  this milestone, including `*`, `/`, `%`, `<<`, or `>>`.
+- Adding new unary or comparison TSIL forms in this slice.
+- Modeling arbitrary C, C++, or Rust operators, precedence, associativity,
+  casts, temporaries, mixed expressions, or target-language passthrough.
+- Adding primitive aliases such as current corpus `binary_and` names for the
+  accepted clean operation id `bit_and`.
+- Parsing multiple primitive blocks inside one `.tsl` document, loading broad
+  `tsldata/`, parsing broad TSL syntax, adding new operation ids, scalar
+  types, templates, type groups, extension fallback, dependency closure,
+  backend manifests, target discovery, generated-test execution, CLI behavior,
+  writer behavior, or output tree parity.
+- Loading operation semantics, compatibility rules, or backend spellings from
+  `tsldata/`, backend manifests, YAML, `frozen`, `tslgenold`, plugins, or
+  environment configuration at runtime.
+- Moving backend-owned C++/Rust type, result, or operator spellings into
+  lowering.
+- Introducing a registry, dispatcher, callback map, plugin system, hidden
+  backfeed, fixpoint mechanism, broad operation framework, or new lowering IR
+  category/request/result family.
+
+Accepted outputs:
+
+- A selected binary scalar implementation may use either the accepted
+  synthetic `body <operation>(left, right)` line, the accepted M126
+  function-call-shaped binary TSIL line, or the matching exact TSIL
+  emit-return line for `+`, `-`, `&`, `|`, or `^`.
+- Lowering consumes typed binary operation body values for operation ids
+  `add`, `sub`, `bit_and`, `bit_or`, and `bit_xor` and does not emit from raw
+  TSIL text.
+- Selected mismatched binary operator TSIL emit-return bodies, such as
+  `left + right` under a non-`add` binary primitive, produce the existing
+  structured lowering mismatch diagnostic.
+- Malformed nearby binary operator TSIL forms are rejected with structured
+  diagnostics and are not repaired or normalized.
+- Existing M107-M130 behavior and representative artifact bytes remain stable.
+
+Validation:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Remove any validation-created `__pycache__` directories before the final cache
+check. Do not run the old `tslgenold` validation profile as proof of the clean
+product slice.
+
+Review notes:
+
+- Reviewers should require M131 to remain an exact selected-body lowering
+  slice, not a broad TSIL parser or compiler milestone.
+- Reviewers should reject arbitrary target-language operator modeling, binary
+  operator parsing beyond the five exact spellings, nested helper parsing,
+  primitive-call lowering, intrinsics, casts, generation-time helpers, branch
+  pruning, backend manifest loading, renderer-side semantic inference, target
+  discovery, primitive aliasing, or source repair.
+- Reviewers should require binary operator TSIL emit-return recognition to
   produce typed body values before backend emission; generated output must not
   be rendered by rescanning raw TSIL text.

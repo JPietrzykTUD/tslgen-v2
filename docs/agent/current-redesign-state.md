@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 129 is accepted.
+Milestone 130 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -654,6 +654,49 @@ TSL primitive operations, not arbitrary C, C++, Rust, or TSIL operator
 modeling. The correction updated `AGENTS.md`, `PLANS.md`,
 `docs/redesign/design-decisions.md`, `docs/redesign/behavioral-spec.md`, the
 M130 roadmap entry, and the active M130 run prompt.
+
+The M130 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, documentation,
+and validation audits. M130 added exact parser-owned recognition for the
+ordered comparison TSIL body lines `tsil "emit_return(left < right);"`,
+`tsil "emit_return(left > right);"`,
+`tsil "emit_return(left <= right);"`, and
+`tsil "emit_return(left >= right);"` and immediately promoted them into the
+existing typed comparison body operation ids `less_than`, `greater_than`,
+`less_than_or_equal`, and `greater_than_or_equal` before catalog
+construction, selection, lowering, and backend emission. It preserved the
+accepted synthetic ordered-comparison body forms, M129 inequality TSIL
+behavior, M128 equality TSIL behavior, M127 unary TSIL behavior, M126 binary
+TSIL behavior, M125 multi-implementation behavior, M124 multi-source
+behavior, explicit target selection, bootstrap-core lowering semantics,
+backend-owned spellings, source-body integrity, deterministic artifact
+ordering, and representative artifact bytes. It did not add broad TSIL
+parsing, target-language operator modeling, comparison operators beyond the
+four exact ordered spellings, new binary/unary forms, nested calls,
+intrinsics, casts, variables, multiple statements, target discovery, backend
+manifests, runtime corpus reads, source repair, renderer inference,
+registries, dispatchers, hidden backfeeds, fixpoint behavior, or new lowering
+IR families. Documentation and validation follow-ups were finalization-only
+and were handled by refreshing workflow/roadmap/ADR state and rerunning the
+required validation on the final worktree.
+
+Integrated post-M130 next-run planning selected
+`Milestone 131: Tiny Clean Exact TSIL Emit-Return Binary Operator Body Lowering Slice`.
+The selected M131 task keeps focus on lowering and adds the next
+corpus-observed exact scalar binary TSIL emit-return spellings by accepting
+exactly `tsil "emit_return(left + right);"`,
+`tsil "emit_return(left - right);"`,
+`tsil "emit_return(left & right);"`,
+`tsil "emit_return(left | right);"`, and
+`tsil "emit_return(left ^ right);"` under
+`prim<v:=(v,v)> name(left, right):`. Those source spellings must promote to
+the existing typed binary body operation ids `add`, `sub`, `bit_and`,
+`bit_or`, and `bit_xor` before lowering. They are semantic bridges for
+existing TSL binary primitives, not arbitrary C, C++, Rust, or TSIL operator
+parsing. M131 must not add broad TSIL parsing, precedence or associativity,
+additional binary operator forms such as `*`, `/`, `%`, `<<`, or `>>`, new
+unary/comparison forms, primitive aliases, target discovery, backend
+manifests, source repair, renderer inference, or new lowering IR families.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1727,43 +1770,45 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 130.
+Execute Milestone 131.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m130-execution-review-loop-prompt.md
+docs/agent/runs/m131-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 130: Tiny Clean Exact TSIL Emit-Return Ordered Comparison Body Lowering Slice
+Milestone 131: Tiny Clean Exact TSIL Emit-Return Binary Operator Body Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-M129 execution-review returned Accept after one write-capable executor and
-read-only architecture, boundary, documentation, and validation audits.
-Integrated next-run planning selected M130 and created
-docs/agent/runs/m130-execution-review-loop-prompt.md.
+M130 execution-review returned Accept With Follow-Ups after one write-capable
+executor and read-only architecture, boundary, documentation, and validation
+audits. Finalization follow-ups were handled by updating workflow, roadmap,
+and ADR state, then rerunning required validation. Integrated next-run
+planning selected M131 and created
+docs/agent/runs/m131-execution-review-loop-prompt.md.
 ```
 
 Next expected action:
 
 ```text
-Run the active M130 execution-review-loop prompt. M130 should accept exactly
-four TSIL-like ordered-comparison scalar implementation body forms,
-`tsil "emit_return(left < right);"`,
-`tsil "emit_return(left > right);"`,
-`tsil "emit_return(left <= right);"`, and
-`tsil "emit_return(left >= right);"`, promote them to the existing typed
-comparison body operation ids `less_than`, `greater_than`,
-`less_than_or_equal`, and `greater_than_or_equal`, lower them through the same
-typed selected-implementation path as existing exact comparison bodies, and
-preserve M107-M129 behavior.
+Run the active M131 execution-review-loop prompt. M131 should accept exactly
+five TSIL-like binary scalar implementation body forms,
+`tsil "emit_return(left + right);"`,
+`tsil "emit_return(left - right);"`,
+`tsil "emit_return(left & right);"`,
+`tsil "emit_return(left | right);"`, and
+`tsil "emit_return(left ^ right);"`, promote them to the existing typed
+binary body operation ids `add`, `sub`, `bit_and`, `bit_or`, and `bit_xor`,
+lower them through the same typed selected-implementation path as existing
+exact binary bodies, and preserve M107-M130 behavior.
 ```
 
 Accepted planning prompt:
@@ -3070,8 +3115,8 @@ docs/agent/runs/m125-execution-review-loop-prompt.md
   operators, runtime `tsldata` semantics, source repair, renderer inference,
   target discovery, backend manifests, registries, dispatchers, hidden
   backfeeds, fixpoint behavior, or new lowering IR families.
-- M130 is planned, not implemented. It is limited to accepting the exact
-  ordered-comparison TSIL body lines `tsil "emit_return(left < right);"`,
+- M130 is accepted. It is limited to accepting the exact ordered-comparison
+  TSIL body lines `tsil "emit_return(left < right);"`,
   `tsil "emit_return(left > right);"`,
   `tsil "emit_return(left <= right);"`, and
   `tsil "emit_return(left >= right);"` under
@@ -3084,6 +3129,22 @@ docs/agent/runs/m125-execution-review-loop-prompt.md
   repair, renderer inference, target discovery, backend manifests,
   registries, dispatchers, hidden backfeeds, fixpoint behavior, or new
   lowering IR families.
+- M131 is planned, not implemented. It is limited to accepting the exact
+  binary TSIL body lines `tsil "emit_return(left + right);"`,
+  `tsil "emit_return(left - right);"`,
+  `tsil "emit_return(left & right);"`,
+  `tsil "emit_return(left | right);"`, and
+  `tsil "emit_return(left ^ right);"` under
+  `prim<v:=(v,v)> name(left, right):` and promoting them to the existing
+  typed binary body operation ids `add`, `sub`, `bit_and`, `bit_or`, and
+  `bit_xor`. These spellings are semantic bridges for existing TSL binary
+  primitives, not arbitrary C, C++, Rust, or TSIL operator parsing. M131 must
+  not parse broad TSIL, add precedence or associativity, accept additional
+  binary operator forms such as `*`, `/`, `%`, `<<`, or `>>`, introduce
+  primitive aliases, load runtime `tsldata` semantics, repair source, infer in
+  renderers, discover targets, read backend manifests, add registries or
+  dispatchers, add hidden backfeeds or fixpoint behavior, or add new lowering
+  IR families.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and
@@ -5638,13 +5699,33 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M130
+No stop condition is active. The workflow is ready to run the active M131
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M130 execution, run the validation command listed in
-`docs/agent/runs/m130-execution-review-loop-prompt.md`.
+For active M131 execution, run the validation command listed in
+`docs/agent/runs/m131-execution-review-loop-prompt.md`.
+
+For M130 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The public API import
+command returned exit 0 with no output. The py-compile command returned exit 0
+with no output. The targeted clean-package pytest command returned exit 0 with
+`137 passed in 7.55s`. The first cache check found validation-created
+`__pycache__` directories under `tslgen/src/tslgen/analysis`,
+`tslgen/src/tslgen/lowering`, `tslgen/src/tslgen/pipeline`,
+`tslgen/src/tslgen/syntax`, and `tslgen/tests`; they were removed, and the
+final `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+output.
 
 For M129 execution and review, validation completed with:
 

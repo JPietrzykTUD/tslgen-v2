@@ -55,12 +55,6 @@ _TSIL_UNARY_EMIT_RETURN_BODY_PATTERN = re.compile(
     r"\((?P<arguments>value)\)"
     r'\);"$'
 )
-_TSIL_COMPARISON_EQUAL_EMIT_RETURN_BODY_PATTERN = re.compile(
-    r'^    tsil "emit_return\(left == right\);"$'
-)
-_TSIL_COMPARISON_NEQUAL_EMIT_RETURN_BODY_PATTERN = re.compile(
-    r'^    tsil "emit_return\(left != right\);"$'
-)
 _NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -68,6 +62,40 @@ _NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 class _MatchedBody:
     operation: str
     arguments: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _ExactComparisonTsilBody:
+    source_line: str
+    operation: str
+
+
+_EXACT_COMPARISON_TSIL_BODIES: tuple[_ExactComparisonTsilBody, ...] = (
+    _ExactComparisonTsilBody(
+        source_line='    tsil "emit_return(left == right);"',
+        operation="equal",
+    ),
+    _ExactComparisonTsilBody(
+        source_line='    tsil "emit_return(left != right);"',
+        operation="nequal",
+    ),
+    _ExactComparisonTsilBody(
+        source_line='    tsil "emit_return(left < right);"',
+        operation="less_than",
+    ),
+    _ExactComparisonTsilBody(
+        source_line='    tsil "emit_return(left > right);"',
+        operation="greater_than",
+    ),
+    _ExactComparisonTsilBody(
+        source_line='    tsil "emit_return(left <= right);"',
+        operation="less_than_or_equal",
+    ),
+    _ExactComparisonTsilBody(
+        source_line='    tsil "emit_return(left >= right);"',
+        operation="greater_than_or_equal",
+    ),
+)
 
 
 class TslParser:
@@ -232,10 +260,12 @@ def _match_body(line: str, *, signature: str) -> _MatchedBody | None:
             )
         return None
     if signature == "m:=(v,v)":
-        if _TSIL_COMPARISON_EQUAL_EMIT_RETURN_BODY_PATTERN.match(line) is not None:
-            return _MatchedBody(operation="equal", arguments=("left", "right"))
-        if _TSIL_COMPARISON_NEQUAL_EMIT_RETURN_BODY_PATTERN.match(line) is not None:
-            return _MatchedBody(operation="nequal", arguments=("left", "right"))
+        for body in _EXACT_COMPARISON_TSIL_BODIES:
+            if line == body.source_line:
+                return _MatchedBody(
+                    operation=body.operation,
+                    arguments=("left", "right"),
+                )
     return None
 
 

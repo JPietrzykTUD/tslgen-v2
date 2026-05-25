@@ -575,6 +575,42 @@ This slice does not add broad TSIL parsing, comparison operators beyond exact
 type groups, implementation ranking, runtime `tsldata` semantic reads,
 backend-manifest reads, source repair, or renderer-side inference.
 
+### M130 Tiny Exact TSIL Emit-Return Ordered Comparison Body Lowering Slice
+
+Milestone 130 adds four exact TSIL-like implementation body spellings for the
+accepted comparison scalar primitive shape. Under `prim<m:=(v,v)> name(left,
+right):`, these implementation body lines are accepted alongside the existing
+synthetic `body <operation>(left, right)` comparison lines:
+
+```text
+tsil "emit_return(left < right);"
+tsil "emit_return(left > right);"
+tsil "emit_return(left <= right);"
+tsil "emit_return(left >= right);"
+```
+
+The parser promotes those exact ordered comparison TSIL emit-return forms into
+the same typed comparison body data used by the synthetic forms: operation ids
+`less_than`, `greater_than`, `less_than_or_equal`, and
+`greater_than_or_equal`, with `left` and `right` parameters and source
+location. Catalog construction, selection, lowering, and backend emission
+consume only typed body data; they do not rescan raw TSIL text or render from
+the original TSIL spelling.
+
+Selected ordered comparison TSIL emit-return bodies follow the same lowering
+diagnostics as synthetic comparison bodies. A selected body whose promoted
+operation differs from the primitive operation fails with
+`TSL-LOWER-OPERATION-MISMATCH`. Malformed nearby comparison TSIL forms,
+function-call-shaped comparison TSIL forms, missing punctuation, different
+operand names, or non-exact ordered expressions are unsupported source forms
+and are not repaired, normalized, or silently interpreted.
+
+This slice does not add broad TSIL parsing, ordered comparison operators beyond
+the four exact spellings listed above, target discovery, generate-all behavior,
+extension fallback, type groups, implementation ranking, runtime `tsldata`
+semantic reads, backend-manifest reads, source repair, target-language
+operator modeling, or renderer-side inference.
+
 ### Exact Operator-Looking TSIL Body Spellings
 
 Operator-looking TSIL body fragments are accepted only as documented exact
@@ -584,8 +620,9 @@ They are not parsed as a general C, C++, Rust, or TSIL expression language.
 
 When accepted, an operator-looking spelling is promoted immediately into typed
 semantic body data for an existing TSL primitive operation. For example,
-`left == right` promotes to operation id `equal`, and `left != right` promotes
-to operation id `nequal`. Later pipeline stages consume only those typed body
+`left == right` promotes to operation id `equal`, `left != right` promotes to
+operation id `nequal`, and `left <= right` promotes to operation id
+`less_than_or_equal`. Later pipeline stages consume only those typed body
 values; they do not rescan raw TSIL text or treat the original source spelling
 as target-language text.
 

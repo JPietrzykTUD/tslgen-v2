@@ -1835,13 +1835,13 @@ Status: Accepted
 
 Context:
 
-Clean restart milestones M126-M129 added exact `tsil "emit_return(...);"`
+Clean restart milestones M126-M130 added exact `tsil "emit_return(...);"`
 source-body spellings as alternatives to the synthetic `body ...` fixture
 forms. Some accepted scalar source forms contain operator-looking text such as
-`left == right` and `left != right`, and future ordered comparison forms use
-spelling that is valid in C, C++, and Rust. A product-owner review clarified
-that the redesign must not drift into modeling every operator shared by those
-target languages.
+`left == right`, `left != right`, `left < right`, `left > right`,
+`left <= right`, and `left >= right`. These spellings are valid in C, C++,
+and Rust, but a product-owner review clarified that the redesign must not
+drift into modeling every operator shared by those target languages.
 
 Considered alternatives:
 
