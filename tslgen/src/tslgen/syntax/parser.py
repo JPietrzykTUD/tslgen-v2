@@ -58,6 +58,9 @@ _TSIL_UNARY_EMIT_RETURN_BODY_PATTERN = re.compile(
 _TSIL_COMPARISON_EQUAL_EMIT_RETURN_BODY_PATTERN = re.compile(
     r'^    tsil "emit_return\(left == right\);"$'
 )
+_TSIL_COMPARISON_NEQUAL_EMIT_RETURN_BODY_PATTERN = re.compile(
+    r'^    tsil "emit_return\(left != right\);"$'
+)
 _NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -228,10 +231,11 @@ def _match_body(line: str, *, signature: str) -> _MatchedBody | None:
                 arguments=_split_names(tsil_body.group("arguments")),
             )
         return None
-    if signature == "m:=(v,v)" and (
-        _TSIL_COMPARISON_EQUAL_EMIT_RETURN_BODY_PATTERN.match(line) is not None
-    ):
-        return _MatchedBody(operation="equal", arguments=("left", "right"))
+    if signature == "m:=(v,v)":
+        if _TSIL_COMPARISON_EQUAL_EMIT_RETURN_BODY_PATTERN.match(line) is not None:
+            return _MatchedBody(operation="equal", arguments=("left", "right"))
+        if _TSIL_COMPARISON_NEQUAL_EMIT_RETURN_BODY_PATTERN.match(line) is not None:
+            return _MatchedBody(operation="nequal", arguments=("left", "right"))
     return None
 
 

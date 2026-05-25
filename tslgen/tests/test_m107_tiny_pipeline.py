@@ -2947,7 +2947,6 @@ def test_m128_malformed_equality_tsil_forms_report_parse_diagnostics(
     malformed_cases = (
         ('    tsil "emit_return(left==right);"', "left==right"),
         ('    tsil "emit_return(right == left);"', "right == left"),
-        ('    tsil "emit_return(left != right);"', "left != right"),
         ('    tsil "emit_return(equal(left, right));"', "equal(left, right)"),
         ('    tsil "emit_return(left == right)"', "left == right"),
     )
@@ -2967,6 +2966,189 @@ def test_m128_malformed_equality_tsil_forms_report_parse_diagnostics(
                 Target(
                     backend="cpp",
                     primitive_name="equal",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.artifacts.artifacts == ()
+        assert len(result.diagnostics) == 1
+        diagnostic = result.diagnostics[0]
+        assert diagnostic.code == "TSL-PARSE-UNSUPPORTED-FORM"
+        assert diagnostic.severity == "error"
+        assert diagnostic.location is not None
+        assert diagnostic.location.path == source.resolve()
+        assert diagnostic.location.line == 3
+        assert diagnostic.location.column == 5
+        assert expected_fragment in diagnostic.message
+
+
+def test_m129_catalog_builder_promotes_exact_inequality_tsil_to_comparison_body(
+    tmp_path: Path,
+) -> None:
+    document = _source_document(
+        tmp_path,
+        "tiny_nequal_tsil.tsl",
+        "\n".join(
+            (
+                "prim<m:=(v,v)> nequal(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(left != right);"',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((document,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    assert body == ComparisonOperationBody(
+        operation="nequal",
+        left_parameter="left",
+        right_parameter="right",
+        source=SourceLocation(document.path, 3, 5),
+    )
+
+
+def test_m129_selected_inequality_tsil_source_generates_cpp_and_rust_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_compare_tsil_source(
+        tmp_path,
+        "nequal",
+        "si32",
+        body_line='    tsil "emit_return(left != right);"',
+        file_suffix="inequality_tsil",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="nequal",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="rust",
+                primitive_name="nequal",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/nequal_scalar_si32.hpp",
+        "src/nequal_scalar_si32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        NEQUAL_CPP_CONTENT,
+        NEQUAL_RUST_CONTENT,
+    ]
+
+
+def test_m129_unselected_inequality_tsil_body_is_not_lowered(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_compare_multi_implementation_body_source(
+        tmp_path,
+        "equal",
+        (
+            ("ui32", '    tsil "emit_return(left != right);"'),
+            ("si32", "    body equal(left, right)"),
+        ),
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="equal",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/equal_scalar_si32.hpp",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        EQUAL_CPP_CONTENT,
+    ]
+
+
+def test_m129_selected_mismatched_inequality_tsil_reports_lowering_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_compare_tsil_source(
+        tmp_path,
+        "equal",
+        "si32",
+        body_line='    tsil "emit_return(left != right);"',
+        file_suffix="inequality_mismatch",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="rust",
+                primitive_name="equal",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-OPERATION-MISMATCH"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 3
+    assert diagnostic.location.column == 5
+    assert "equal" in diagnostic.message
+    assert "nequal" in diagnostic.message
+
+
+def test_m129_malformed_inequality_tsil_forms_report_parse_diagnostics(
+    tmp_path: Path,
+) -> None:
+    malformed_cases = (
+        ('    tsil "emit_return(left!=right);"', "left!=right"),
+        ('    tsil "emit_return(right != left);"', "right != left"),
+        ('    tsil "emit_return(left < right);"', "left < right"),
+        ('    tsil "emit_return(nequal(left, right));"', "nequal(left, right)"),
+        ('    tsil "emit_return(left != right)"', "left != right"),
+    )
+
+    for index, (body_line, expected_fragment) in enumerate(malformed_cases):
+        source = _write_tiny_compare_tsil_source(
+            tmp_path,
+            "nequal",
+            "si32",
+            body_line=body_line,
+            file_suffix=f"bad_inequality_{index}",
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name="nequal",
                     extension="scalar",
                     type_tag="si32",
                 ),

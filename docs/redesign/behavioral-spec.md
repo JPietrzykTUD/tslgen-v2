@@ -548,6 +548,33 @@ This slice does not add broad TSIL parsing, comparison operators beyond exact
 type groups, implementation ranking, runtime `tsldata` semantic reads,
 backend-manifest reads, source repair, or renderer-side inference.
 
+### M129 Tiny Exact TSIL Emit-Return Inequality Comparison Body Lowering Slice
+
+Milestone 129 adds one exact TSIL-like implementation body spelling for the
+accepted comparison scalar primitive shape. Under `prim<m:=(v,v)> name(left,
+right):`, an implementation body line shaped exactly as
+`tsil "emit_return(left != right);"` is accepted alongside the existing
+synthetic `body nequal(left, right)` line.
+
+The parser promotes that exact inequality TSIL emit-return form into the same
+typed comparison body data used by the synthetic form: operation id `nequal`,
+`left` parameter, `right` parameter, and source location. Catalog construction,
+selection, lowering, and backend emission consume only typed body data; they do
+not rescan raw TSIL text or render from the original TSIL spelling.
+
+Selected inequality TSIL emit-return bodies follow the same lowering
+diagnostics as synthetic comparison bodies. A selected body whose promoted
+`nequal` operation differs from the primitive operation fails with
+`TSL-LOWER-OPERATION-MISMATCH`. Malformed nearby comparison TSIL forms,
+ordered comparison operators, function-call-shaped comparison TSIL forms,
+missing punctuation, or different operand names are unsupported source forms
+and are not repaired, normalized, or silently interpreted.
+
+This slice does not add broad TSIL parsing, comparison operators beyond exact
+`left != right`, target discovery, generate-all behavior, extension fallback,
+type groups, implementation ranking, runtime `tsldata` semantic reads,
+backend-manifest reads, source repair, or renderer-side inference.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

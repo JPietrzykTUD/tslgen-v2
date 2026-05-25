@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 128 is accepted.
+Milestone 129 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -613,6 +613,34 @@ existing typed comparison body for operation id `nequal` before lowering. It
 must not add broad TSIL parsing, ordered comparison operators, new binary/unary
 forms, target discovery, backend manifests, source repair, renderer inference,
 or new lowering IR families.
+
+The M129 execution-review loop returned `Accept` after one write-capable
+executor and read-only architecture, boundary, documentation, and validation
+audits. M129 added exact parser-owned recognition for the scalar comparison
+TSIL body line `tsil "emit_return(left != right);"` and immediately promoted
+it into the existing typed comparison body for operation id `nequal` before
+catalog construction, selection, lowering, and backend emission. It preserved
+the accepted synthetic `body nequal(left, right)` form, the M126 binary TSIL
+emit-return form, the M127 unary TSIL emit-return form, the M128 equality TSIL
+emit-return form, M125 multi-implementation behavior, M124 multi-source
+behavior, explicit target selection, bootstrap-core lowering semantics,
+backend-owned spellings, source-body integrity, deterministic artifact
+ordering, and representative artifact bytes. It did not add broad TSIL
+parsing, ordered comparison operators, nested calls, intrinsics, casts,
+variables, multiple statements, target discovery, backend manifests, runtime
+corpus reads, source repair, renderer inference, registries, dispatchers,
+hidden backfeeds, fixpoint behavior, or new lowering IR families.
+
+Integrated post-M129 next-run planning selected
+`Milestone 130: Tiny Clean Exact TSIL Emit-Return Less-Than Comparison Body Lowering Slice`.
+The selected M130 task keeps focus on lowering and adds the next
+corpus-observed exact scalar comparison TSIL emit-return spelling by accepting
+exactly `tsil "emit_return(left < right);"` under
+`prim<m:=(v,v)> name(left, right):`. That source spelling must promote to the
+existing typed comparison body for operation id `less_than` before lowering.
+It must not add broad TSIL parsing, comparison operators beyond exact
+`left < right`, new binary/unary forms, target discovery, backend manifests,
+source repair, renderer inference, or new lowering IR families.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1686,41 +1714,39 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 129.
+Execute Milestone 130.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m129-execution-review-loop-prompt.md
+docs/agent/runs/m130-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 129: Tiny Clean Exact TSIL Emit-Return Inequality Comparison Body Lowering Slice
+Milestone 130: Tiny Clean Exact TSIL Emit-Return Less-Than Comparison Body Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-M128 execution-review returned Accept With Follow-Ups after one write-capable
-executor and read-only architecture, boundary, documentation, and validation
-audits. Follow-ups were finalization-only and have been handled: validation
-caches were removed, current-boundary bullets were refreshed, and the
-consolidated validation result was recorded. Integrated next-run planning
-selected M129 and created docs/agent/runs/m129-execution-review-loop-prompt.md.
+M129 execution-review returned Accept after one write-capable executor and
+read-only architecture, boundary, documentation, and validation audits.
+Integrated next-run planning selected M130 and created
+docs/agent/runs/m130-execution-review-loop-prompt.md.
 ```
 
 Next expected action:
 
 ```text
-Run the active M129 execution-review-loop prompt. M129 should accept exactly
-one TSIL-like inequality comparison scalar implementation body form,
-`tsil "emit_return(left != right);"`, promote it to the existing typed
-comparison body for operation id `nequal`, lower it through the same typed
+Run the active M130 execution-review-loop prompt. M130 should accept exactly
+one TSIL-like less-than comparison scalar implementation body form,
+`tsil "emit_return(left < right);"`, promote it to the existing typed
+comparison body for operation id `less_than`, lower it through the same typed
 selected-implementation path as existing exact comparison bodies, and preserve
-M107-M128 behavior.
+M107-M129 behavior.
 ```
 
 Accepted planning prompt:
@@ -3020,14 +3046,21 @@ docs/agent/runs/m125-execution-review-loop-prompt.md
   renderer inference, target discovery, backend manifests, registries,
   dispatchers, hidden backfeeds, fixpoint behavior, or new lowering IR
   families.
-- M129 is planned, not implemented. It is limited to accepting the exact
-  inequality comparison TSIL body line `tsil "emit_return(left != right);"`
+- M129 is limited to accepting the exact inequality comparison TSIL body line
+  `tsil "emit_return(left != right);"` under `prim<m:=(v,v)> name(left,
+  right):` and promoting it to the existing typed comparison body for
+  operation id `nequal`. It must not parse broad TSIL, ordered comparison
+  operators, runtime `tsldata` semantics, source repair, renderer inference,
+  target discovery, backend manifests, registries, dispatchers, hidden
+  backfeeds, fixpoint behavior, or new lowering IR families.
+- M130 is planned, not implemented. It is limited to accepting the exact
+  less-than comparison TSIL body line `tsil "emit_return(left < right);"`
   under `prim<m:=(v,v)> name(left, right):` and promoting it to the existing
-  typed comparison body for operation id `nequal`. It must not parse broad
-  TSIL, ordered comparison operators, runtime `tsldata` semantics, source
-  repair, renderer inference, target discovery, backend manifests,
-  registries, dispatchers, hidden backfeeds, fixpoint behavior, or new
-  lowering IR families.
+  typed comparison body for operation id `less_than`. It must not parse broad
+  TSIL, comparison operators beyond exact `left < right`, runtime `tsldata`
+  semantics, source repair, renderer inference, target discovery, backend
+  manifests, registries, dispatchers, hidden backfeeds, fixpoint behavior, or
+  new lowering IR families.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and
@@ -5582,13 +5615,33 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M129
+No stop condition is active. The workflow is ready to run the active M130
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M129 execution, run the validation command listed in
-`docs/agent/runs/m129-execution-review-loop-prompt.md`.
+For active M130 execution, run the validation command listed in
+`docs/agent/runs/m130-execution-review-loop-prompt.md`.
+
+For M129 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The public API import
+command returned exit 0 with no output. The py-compile command returned exit 0
+with no output. The targeted clean-package pytest command returned exit 0 with
+`132 passed in 7.90s`. The first cache check found validation-created
+`__pycache__` directories under `tslgen/src/tslgen/analysis`,
+`tslgen/src/tslgen/lowering`, `tslgen/src/tslgen/pipeline`,
+`tslgen/src/tslgen/syntax`, and `tslgen/tests`; they were removed, and the
+final `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+output.
 
 For M128 execution and review, validation completed with:
 

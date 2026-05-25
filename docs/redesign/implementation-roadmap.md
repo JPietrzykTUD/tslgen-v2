@@ -17035,13 +17035,14 @@ docs/agent/runs/m129-execution-review-loop-prompt.md
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M128.
-This milestone keeps the task focused on lowering and adds the next
-corpus-observed exact scalar comparison TSIL emit-return body spelling:
+Accepted. The M129 execution-review loop returned `Accept` after one
+write-capable executor and read-only architecture, boundary, documentation,
+and validation audits. M129 kept the task focused on lowering and added the
+next corpus-observed exact scalar comparison TSIL emit-return body spelling:
 selected inequality comparison scalar implementations may use the exact
 TSIL-like `emit_return(left != right);` body line instead of only the synthetic
 clean-restart `body ...` fixture line. Evidence exists in
-`tsldata/primitives/comparison/fundamental.tsl:192`; this evidence must not
+`tsldata/primitives/comparison/fundamental.tsl:192`; this evidence did not
 become a runtime semantic dependency.
 
 Goal:
@@ -17148,6 +17149,15 @@ Remove any validation-created `__pycache__` directories before the final cache
 check. Do not run the old `tslgenold` validation profile as proof of the clean
 product slice.
 
+Validation completed with the required M129 profile. `git diff --check`
+returned exit 0 with no output. The public API import command returned exit 0
+with no output. The py-compile command returned exit 0 with no output. The
+targeted clean-package pytest command returned exit 0 with
+`132 passed in 7.90s`. The first cache check found validation-created
+`__pycache__` directories under the clean `tslgen/` tree; they were removed,
+and the final `find tslgen -type d -name __pycache__ -print` returned exit 0
+with no output.
+
 Review notes:
 
 - Reviewers should require M129 to remain an exact selected-body lowering
@@ -17157,5 +17167,140 @@ Review notes:
   pruning, backend manifest loading, renderer-side semantic inference, target
   discovery, or source repair.
 - Reviewers should require inequality TSIL emit-return recognition to produce
+  typed body values before backend emission; generated output must not be
+  rendered by rescanning raw TSIL text.
+
+Next concrete prompt:
+
+```text
+docs/agent/runs/m130-execution-review-loop-prompt.md
+```
+
+### Milestone 130: Tiny Clean Exact TSIL Emit-Return Less-Than Comparison Body Lowering Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M129.
+This milestone keeps the task focused on lowering and adds the next
+corpus-observed exact scalar comparison TSIL emit-return body spelling:
+selected less-than comparison scalar implementations may use the exact
+TSIL-like `emit_return(left < right);` body line instead of only the synthetic
+clean-restart `body ...` fixture line. Evidence exists in
+`tsldata/primitives/comparison/fundamental.tsl:344`; this evidence must not
+become a runtime semantic dependency.
+
+Goal:
+
+Allow one exact selected comparison scalar implementation body line of the
+form:
+
+```text
+    tsil "emit_return(left < right);"
+```
+
+to produce the same typed backend-neutral comparison operation body as the
+accepted fixture form:
+
+```text
+    body less_than(left, right)
+```
+
+The selected implementation must lower through the existing typed
+selected-implementation path and preserve M107-M129 behavior.
+
+Scope:
+
+- Add exact source recognition for less-than comparison scalar implementation
+  body lines shaped as `tsil "emit_return(left < right);"` under the existing
+  comparison primitive header form `prim<m:=(v,v)> name(left, right):`. This
+  source spelling must promote to the existing typed comparison body for
+  operation id `less_than`.
+- Preserve the accepted synthetic `body <operation>(left, right)` comparison
+  form, the accepted M126 binary TSIL emit-return form, the accepted M127
+  unary TSIL emit-return form, the accepted M128 equality TSIL emit-return
+  form, the accepted M129 inequality TSIL emit-return form, all accepted
+  primitive header shapes, selected-implementation lowering behavior,
+  operation descriptors, scalar type descriptors, compatibility rules, and the
+  `clean_restart_bootstrap_core` semantic-origin contract.
+- Promote the exact less-than TSIL emit-return body into the existing typed
+  comparison operation body value consumed by lowering; do not introduce a new
+  lowering IR category, request/result family, registry, dispatcher, or
+  raw-text rewrite path.
+- Prove selected exact less-than TSIL emit-return bodies drive lowering and
+  generated C++/Rust artifacts for the representative `less_than` primitive.
+- Prove unselected exact less-than TSIL emit-return bodies are not lowered by
+  including a multi-implementation document where an unselected
+  `tsil "emit_return(left < right);"` body would be a
+  `less_than`/primitive mismatch if selected, while the selected
+  implementation still generates successfully.
+- Add negative tests for selected mismatched less-than TSIL emit-return
+  bodies, such as using `left < right` for a non-`less_than` comparison
+  primitive, and malformed nearby comparison TSIL forms, producing structured
+  diagnostics rather than source repair, renderer inference, or silent
+  fallback.
+- Preserve M129 inequality TSIL behavior, M128 equality TSIL behavior, M127
+  unary TSIL behavior, M126 binary TSIL behavior, M125 multi-implementation
+  behavior, M124 multi-source behavior, and deterministic artifact ordering.
+
+Out of scope:
+
+- Parsing broad TSIL strings, nested calls, primitive calls, intrinsics, casts,
+  variables, immediates, multiple statements, multiline TSIL bodies, helper
+  evaluation, branch pruning, source repair, or TSIL compiler behavior.
+- Adding new binary or unary TSIL forms in this slice, or adding comparison
+  TSIL operator forms beyond the exact `left < right` less-than spelling.
+- Adding exact ordered comparison TSIL forms beyond less-than, such as
+  `left > right`, `left <= right`, or `left >= right`.
+- Parsing multiple primitive blocks inside one `.tsl` document, loading broad
+  `tsldata/`, parsing broad TSL syntax, adding new operation ids, scalar
+  types, templates, type groups, extension fallback, dependency closure,
+  backend manifests, target discovery, generated-test execution, CLI behavior,
+  writer behavior, or output tree parity.
+- Loading operation semantics, compatibility rules, or backend spellings from
+  `tsldata/`, backend manifests, YAML, `frozen`, `tslgenold`, plugins, or
+  environment configuration at runtime.
+- Moving backend-owned C++/Rust type, result, or operator spellings into
+  lowering.
+- Introducing a registry, dispatcher, callback map, plugin system, hidden
+  backfeed, fixpoint mechanism, broad operation framework, or new lowering IR
+  category/request/result family.
+
+Accepted outputs:
+
+- A selected less-than comparison scalar implementation may use either the
+  accepted synthetic `body less_than(left, right)` line or the exact TSIL
+  emit-return line `tsil "emit_return(left < right);"`.
+- Lowering consumes a typed comparison operation body value for operation id
+  `less_than` and does not emit from raw TSIL text.
+- Selected mismatched less-than TSIL emit-return bodies, such as
+  `left < right` under a non-`less_than` comparison primitive, produce the
+  existing structured lowering mismatch diagnostic.
+- Malformed nearby less-than TSIL forms are rejected with structured
+  diagnostics and are not repaired or normalized.
+- Existing M107-M129 behavior and representative artifact bytes remain stable.
+
+Validation:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Remove any validation-created `__pycache__` directories before the final cache
+check. Do not run the old `tslgenold` validation profile as proof of the clean
+product slice.
+
+Review notes:
+
+- Reviewers should require M130 to remain an exact selected-body lowering
+  slice, not a broad TSIL parser or compiler milestone.
+- Reviewers should reject ordered comparison parsing beyond exact less-than,
+  nested helper parsing, primitive-call lowering, intrinsics, casts,
+  generation-time helpers, branch pruning, backend manifest loading,
+  renderer-side semantic inference, target discovery, or source repair.
+- Reviewers should require less-than TSIL emit-return recognition to produce
   typed body values before backend emission; generated output must not be
   rendered by rescanning raw TSIL text.
