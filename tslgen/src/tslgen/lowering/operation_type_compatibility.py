@@ -8,6 +8,10 @@ from tslgen.lowering.scalar_types import (
     ScalarTypeDescriptor,
     ScalarTypeFamily,
 )
+from tslgen.lowering.semantic_origin import (
+    BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
+    LoweringSemanticOrigin,
+)
 from tslgen.lowering.unary_operations import UnaryOperationDescriptor
 
 
@@ -15,12 +19,18 @@ from tslgen.lowering.unary_operations import UnaryOperationDescriptor
 class BinaryOperationScalarTypeCompatibilityRule:
     operation_id: str
     accepted_scalar_families: tuple[ScalarTypeFamily, ...]
+    semantic_origin: LoweringSemanticOrigin = (
+        BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN
+    )
 
 
 @dataclass(frozen=True, slots=True)
 class UnaryOperationScalarTypeCompatibilityRule:
     operation_id: str
     accepted_scalar_type_tags: tuple[str, ...]
+    semantic_origin: LoweringSemanticOrigin = (
+        BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN
+    )
 
 
 _BINARY_OPERATION_SCALAR_TYPE_RULES: tuple[
@@ -29,26 +39,32 @@ _BINARY_OPERATION_SCALAR_TYPE_RULES: tuple[
     BinaryOperationScalarTypeCompatibilityRule(
         operation_id="mod",
         accepted_scalar_families=("integer",),
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
     BinaryOperationScalarTypeCompatibilityRule(
         operation_id="bit_and",
         accepted_scalar_families=("integer",),
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
     BinaryOperationScalarTypeCompatibilityRule(
         operation_id="bit_or",
         accepted_scalar_families=("integer",),
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
     BinaryOperationScalarTypeCompatibilityRule(
         operation_id="bit_xor",
         accepted_scalar_families=("integer",),
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
     BinaryOperationScalarTypeCompatibilityRule(
         operation_id="shift_left",
         accepted_scalar_families=("integer",),
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
     BinaryOperationScalarTypeCompatibilityRule(
         operation_id="shift_right",
         accepted_scalar_families=("integer",),
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
 )
 
@@ -58,12 +74,26 @@ _UNARY_OPERATION_SCALAR_TYPE_RULES: tuple[
     UnaryOperationScalarTypeCompatibilityRule(
         operation_id="bit_not",
         accepted_scalar_type_tags=("si32", "ui32"),
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
     UnaryOperationScalarTypeCompatibilityRule(
         operation_id="neg",
         accepted_scalar_type_tags=("si32", "f32", "f64"),
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
 )
+
+
+def binary_operation_scalar_type_compatibility_rules() -> tuple[
+    BinaryOperationScalarTypeCompatibilityRule, ...
+]:
+    return _BINARY_OPERATION_SCALAR_TYPE_RULES
+
+
+def unary_operation_scalar_type_compatibility_rules() -> tuple[
+    UnaryOperationScalarTypeCompatibilityRule, ...
+]:
+    return _UNARY_OPERATION_SCALAR_TYPE_RULES
 
 
 def binary_operation_supports_scalar_type(

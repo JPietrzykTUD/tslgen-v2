@@ -3,6 +3,11 @@
 from dataclasses import dataclass
 from typing import Literal
 
+from tslgen.lowering.semantic_origin import (
+    BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
+    LoweringSemanticOrigin,
+)
+
 UnaryOperationCategory = Literal["unary"]
 
 
@@ -13,6 +18,9 @@ class UnaryOperationDescriptor:
     category: UnaryOperationCategory
     source_body_operation: str
     semantic_name: str
+    semantic_origin: LoweringSemanticOrigin = (
+        BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN
+    )
 
 
 SUPPORTED_UNARY_OPERATION_DESCRIPTORS: tuple[UnaryOperationDescriptor, ...] = (
@@ -22,6 +30,7 @@ SUPPORTED_UNARY_OPERATION_DESCRIPTORS: tuple[UnaryOperationDescriptor, ...] = (
         category="unary",
         source_body_operation="bit_not",
         semantic_name="unary.bit_not",
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
     UnaryOperationDescriptor(
         operation_id="neg",
@@ -29,6 +38,7 @@ SUPPORTED_UNARY_OPERATION_DESCRIPTORS: tuple[UnaryOperationDescriptor, ...] = (
         category="unary",
         source_body_operation="neg",
         semantic_name="unary.neg",
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
 )
 

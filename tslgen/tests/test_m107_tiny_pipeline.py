@@ -1,3 +1,4 @@
+from dataclasses import fields, is_dataclass
 from pathlib import Path
 
 from tslgen import (
@@ -23,6 +24,7 @@ from tslgen.domain.catalog import (
 )
 from tslgen.io.sources import SourceDocument
 from tslgen.lowering import (
+    BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     INPUT_SCALAR_RESULT_TYPE,
     SCALAR_COMPARISON_RESULT_TYPE,
     BinaryOperationDescriptor,
@@ -56,10 +58,14 @@ from tslgen.lowering import (
     supported_unary_operation_ids,
 )
 from tslgen.lowering.operation_type_compatibility import (
+    BinaryOperationScalarTypeCompatibilityRule,
+    UnaryOperationScalarTypeCompatibilityRule,
     binary_operation_supports_scalar_type,
+    binary_operation_scalar_type_compatibility_rules,
     supported_scalar_type_tags_for_binary_operation,
     supported_scalar_type_tags_for_unary_operation,
     unary_operation_supports_scalar_type,
+    unary_operation_scalar_type_compatibility_rules,
 )
 from tslgen.pipeline.catalog_builder import CatalogBuilder
 from tslgen.syntax.parser import TslParser
@@ -500,6 +506,160 @@ def test_m122_comparison_operation_descriptor_lookup_table_includes_family() -> 
             _comparison_operation(operation_id)
         )
     assert lookup_comparison_operation_descriptor("less") is None
+
+
+def test_m123_operation_descriptors_declare_bootstrap_core_origin() -> None:
+    descriptors = (
+        *SUPPORTED_BINARY_OPERATION_DESCRIPTORS,
+        *SUPPORTED_UNARY_OPERATION_DESCRIPTORS,
+        *SUPPORTED_COMPARISON_OPERATION_DESCRIPTORS,
+    )
+
+    assert descriptors
+    assert {
+        descriptor.semantic_origin
+        for descriptor in descriptors
+    } == {BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN}
+    assert all(
+        descriptor.semantic_origin.origin_id == "clean_restart_bootstrap_core"
+        for descriptor in descriptors
+    )
+
+
+def test_m123_compatibility_rules_declare_bootstrap_core_origin() -> None:
+    binary_rules = binary_operation_scalar_type_compatibility_rules()
+    unary_rules = unary_operation_scalar_type_compatibility_rules()
+
+    assert binary_rules == (
+        BinaryOperationScalarTypeCompatibilityRule(
+            operation_id="mod",
+            accepted_scalar_families=("integer",),
+            semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
+        ),
+        BinaryOperationScalarTypeCompatibilityRule(
+            operation_id="bit_and",
+            accepted_scalar_families=("integer",),
+            semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
+        ),
+        BinaryOperationScalarTypeCompatibilityRule(
+            operation_id="bit_or",
+            accepted_scalar_families=("integer",),
+            semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
+        ),
+        BinaryOperationScalarTypeCompatibilityRule(
+            operation_id="bit_xor",
+            accepted_scalar_families=("integer",),
+            semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
+        ),
+        BinaryOperationScalarTypeCompatibilityRule(
+            operation_id="shift_left",
+            accepted_scalar_families=("integer",),
+            semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
+        ),
+        BinaryOperationScalarTypeCompatibilityRule(
+            operation_id="shift_right",
+            accepted_scalar_families=("integer",),
+            semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
+        ),
+    )
+    assert unary_rules == (
+        UnaryOperationScalarTypeCompatibilityRule(
+            operation_id="bit_not",
+            accepted_scalar_type_tags=("si32", "ui32"),
+            semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
+        ),
+        UnaryOperationScalarTypeCompatibilityRule(
+            operation_id="neg",
+            accepted_scalar_type_tags=("si32", "f32", "f64"),
+            semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
+        ),
+    )
+    assert {
+        rule.semantic_origin
+        for rule in (*binary_rules, *unary_rules)
+    } == {BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN}
+
+
+def test_m123_operation_semantic_records_are_backend_and_corpus_neutral() -> None:
+    records = (
+        *SUPPORTED_BINARY_OPERATION_DESCRIPTORS,
+        *SUPPORTED_UNARY_OPERATION_DESCRIPTORS,
+        *SUPPORTED_COMPARISON_OPERATION_DESCRIPTORS,
+        *binary_operation_scalar_type_compatibility_rules(),
+        *unary_operation_scalar_type_compatibility_rules(),
+    )
+    forbidden_fragments = (
+        "tsldata",
+        "frozen",
+        "tslgenold",
+        ".tsl",
+        ".yaml",
+        "std::",
+        "return ",
+        "inline ",
+        "pub ",
+        "bool",
+        "+",
+        "-",
+        "*",
+        "/",
+        "%",
+        "&",
+        "|",
+        "^",
+        "<<",
+        ">>",
+        "~",
+        "!",
+        "==",
+        "!=",
+        "<",
+        ">",
+        "<=",
+        ">=",
+        "\\",
+    )
+
+    for record in records:
+        for value in _record_strings(record):
+            for fragment in forbidden_fragments:
+                assert fragment not in value
+
+
+def test_m123_operation_lookup_and_lowering_do_not_read_runtime_corpus(
+    monkeypatch,
+) -> None:
+    def fail_path_read(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("lowering operation semantics must not read files")
+
+    monkeypatch.setattr(Path, "open", fail_path_read)
+    monkeypatch.setattr(Path, "read_text", fail_path_read)
+
+    assert lookup_binary_operation_descriptor("shift_left") == _operation(
+        "shift_left"
+    )
+    assert lookup_unary_operation_descriptor("neg") == _unary_operation("neg")
+    assert lookup_comparison_operation_descriptor("nequal") == (
+        _comparison_operation("nequal")
+    )
+    assert binary_operation_supports_scalar_type(
+        _operation("shift_left"),
+        _descriptor("ui32"),
+    )
+    assert unary_operation_supports_scalar_type(
+        _unary_operation("neg"),
+        _descriptor("f64"),
+    )
+
+    result = Lowerer().lower(
+        _selected_comparison_implementation(operation_id="nequal", type_tag="f32")
+    )
+
+    assert result.diagnostics == ()
+    assert result.function == _lowered_comparison_function(
+        operation_id="nequal",
+        type_tag="f32",
+    )
 
 
 def test_m121_lowered_result_type_boundary_is_backend_neutral() -> None:
@@ -1787,6 +1947,74 @@ def test_m122_preserves_existing_binary_unary_and_equal_behavior() -> None:
     assert equal_rust.artifact.content == EQUAL_RUST_CONTENT
 
 
+def test_m123_bootstrap_origin_preserves_representative_artifact_bytes(
+    tmp_path: Path,
+) -> None:
+    cases = (
+        (
+            _write_tiny_source(tmp_path, "shift_left", "si32"),
+            Target(
+                backend="cpp",
+                primitive_name="shift_left",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            "include/tsl/shift_left_scalar_si32.hpp",
+            SHIFT_LEFT_CPP_CONTENT,
+        ),
+        (
+            _write_tiny_unary_source(tmp_path, "bit_not", "si32"),
+            Target(
+                backend="rust",
+                primitive_name="bit_not",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            "src/bit_not_scalar_si32.rs",
+            BIT_NOT_RUST_CONTENT,
+        ),
+        (
+            _write_tiny_compare_source(tmp_path, "nequal", "si32"),
+            Target(
+                backend="cpp",
+                primitive_name="nequal",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            "include/tsl/nequal_scalar_si32.hpp",
+            NEQUAL_CPP_CONTENT,
+        ),
+    )
+
+    for source, target, logical_path, content in cases:
+        result = generate_from_paths((source,), (target,))
+
+        assert result.diagnostics == ()
+        assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+            logical_path,
+        ]
+        assert [artifact.content for artifact in result.artifacts.artifacts] == [
+            content,
+        ]
+
+
+def test_m123_bootstrap_origin_preserves_operation_type_diagnostic() -> None:
+    result = Lowerer().lower(
+        _selected_unary_implementation(operation_id="neg", type_tag="ui32")
+    )
+
+    assert result.function is None
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-OPERATION-TYPE"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == _location(2, 3)
+    assert diagnostic.message == (
+        "operation 'neg' cannot be lowered for scalar type 'ui32'; "
+        "expected one of: si32, f32, f64"
+    )
+
+
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
     tmp_path: Path,
 ) -> None:
@@ -2781,6 +3009,25 @@ def _comparison_operation(operation_id: str) -> ComparisonOperationDescriptor:
     descriptor = lookup_comparison_operation_descriptor(operation_id)
     assert descriptor is not None
     return descriptor
+
+
+def _record_strings(value: object) -> tuple[str, ...]:
+    strings: list[str] = []
+
+    def collect(item: object) -> None:
+        if isinstance(item, str):
+            strings.append(item)
+            return
+        if isinstance(item, tuple):
+            for element in item:
+                collect(element)
+            return
+        if is_dataclass(item):
+            for field in fields(item):
+                collect(getattr(item, field.name))
+
+    collect(value)
+    return tuple(strings)
 
 
 def _lowered_function(

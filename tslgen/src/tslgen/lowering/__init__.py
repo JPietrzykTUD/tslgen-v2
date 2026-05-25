@@ -41,9 +41,15 @@ from tslgen.lowering.scalar_types import (
     lookup_scalar_type_descriptor,
     supported_scalar_type_tags,
 )
+from tslgen.lowering.semantic_origin import (
+    BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
+    LoweringSemanticOrigin,
+)
 
 __all__ = [
+    "BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN",
     "INPUT_SCALAR_RESULT_TYPE",
+    "LoweringSemanticOrigin",
     "LoweredBinaryOperationExpression",
     "LoweredComparisonOperationExpression",
     "LoweredExpression",

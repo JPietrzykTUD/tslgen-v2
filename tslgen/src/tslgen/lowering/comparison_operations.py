@@ -3,6 +3,11 @@
 from dataclasses import dataclass
 from typing import Literal
 
+from tslgen.lowering.semantic_origin import (
+    BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
+    LoweringSemanticOrigin,
+)
+
 ComparisonOperationCategory = Literal["comparison"]
 
 
@@ -13,6 +18,9 @@ class ComparisonOperationDescriptor:
     category: ComparisonOperationCategory
     source_body_operation: str
     semantic_name: str
+    semantic_origin: LoweringSemanticOrigin = (
+        BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN
+    )
 
 
 SUPPORTED_COMPARISON_OPERATION_DESCRIPTORS: tuple[
@@ -24,6 +32,7 @@ SUPPORTED_COMPARISON_OPERATION_DESCRIPTORS: tuple[
         category="comparison",
         source_body_operation="equal",
         semantic_name="comparison.equal",
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
     ComparisonOperationDescriptor(
         operation_id="nequal",
@@ -31,6 +40,7 @@ SUPPORTED_COMPARISON_OPERATION_DESCRIPTORS: tuple[
         category="comparison",
         source_body_operation="nequal",
         semantic_name="comparison.nequal",
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
     ComparisonOperationDescriptor(
         operation_id="less_than",
@@ -38,6 +48,7 @@ SUPPORTED_COMPARISON_OPERATION_DESCRIPTORS: tuple[
         category="comparison",
         source_body_operation="less_than",
         semantic_name="comparison.less_than",
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
     ComparisonOperationDescriptor(
         operation_id="greater_than",
@@ -45,6 +56,7 @@ SUPPORTED_COMPARISON_OPERATION_DESCRIPTORS: tuple[
         category="comparison",
         source_body_operation="greater_than",
         semantic_name="comparison.greater_than",
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
     ComparisonOperationDescriptor(
         operation_id="less_than_or_equal",
@@ -52,6 +64,7 @@ SUPPORTED_COMPARISON_OPERATION_DESCRIPTORS: tuple[
         category="comparison",
         source_body_operation="less_than_or_equal",
         semantic_name="comparison.less_than_or_equal",
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
     ComparisonOperationDescriptor(
         operation_id="greater_than_or_equal",
@@ -59,6 +72,7 @@ SUPPORTED_COMPARISON_OPERATION_DESCRIPTORS: tuple[
         category="comparison",
         source_body_operation="greater_than_or_equal",
         semantic_name="comparison.greater_than_or_equal",
+        semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
 )
 

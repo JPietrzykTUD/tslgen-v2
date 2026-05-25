@@ -404,6 +404,20 @@ scalar inputs, floating NaN/special-value policy, signed ordering policy,
 constant folding, source repair, backend manifests, or broad comparison
 semantics.
 
+### M123 Bootstrap Operation Semantics Contract
+
+Milestone 123 keeps the accepted M111-M122 scalar operation set as deliberate
+clean-restart bootstrap core lowering semantics. Binary, unary, and comparison
+operation descriptors, plus the lowering-owned operation/type compatibility
+rules for integer-only and tag-specific gates, carry an explicit typed
+semantic origin identifying `clean_restart_bootstrap_core`.
+
+The origin is not a path into `tsldata/`, `frozen/`, or `tslgenold/`, and the
+descriptor/rule records continue to omit backend type names, result spellings,
+operator spellings, backend manifest keys, and renderer policy. `tsldata/`
+remains source corpus and fixture evidence rather than runtime input to these
+lowering-owned operation tables.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

@@ -16237,10 +16237,11 @@ Review notes:
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M122.
-This milestone keeps the next task focused on lowering by making the accepted
-M111-M122 scalar operation facts an explicit bootstrap-core lowering contract
-rather than implicit corpus-derived knowledge in product code.
+Accepted after one write-capable executor plus read-only architecture,
+boundary, documentation, and validation audits. M123 kept the next task
+focused on lowering by making the accepted M111-M122 scalar operation facts an
+explicit bootstrap-core lowering contract rather than implicit corpus-derived
+knowledge in product code.
 
 Goal:
 
