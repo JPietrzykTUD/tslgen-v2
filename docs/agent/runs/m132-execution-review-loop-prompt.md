@@ -23,8 +23,10 @@ must not become a runtime semantic dependency.
 
 This milestone is not broad `tsldata` parsing or parameter alias inference. It
 recognizes declared binary parameter names only in the existing tiny clean
-source-document shape and requires accepted body forms to use those declared
-parameters in order.
+source-document shape. Declared binary parameters must be distinct, but
+accepted body forms may reference either declared parameter in either operand
+position, including repeated use. Operand order and repetition are
+source-authored semantics and must be preserved exactly.
 
 ## Read First
 
@@ -74,6 +76,12 @@ typed catalog body values, lowered function signatures, lowered parameter
 references, and generated C++/Rust artifacts while preserving M107-M131
 behavior.
 
+Source-authored operand order must be preserved. For example,
+`body sub(rhs, lhs)` under `prim<v:=(v,v)> sub(lhs, rhs):` should lower to a
+return expression equivalent to `rhs - lhs`, not be rejected or normalized.
+Likewise, repeated declared operands such as `body add(lhs, lhs)` are accepted
+when the source says so.
+
 ## Required Executor Task
 
 Run exactly one write-capable executor for M132. The executor should:
@@ -85,13 +93,15 @@ Run exactly one write-capable executor for M132. The executor should:
 3. Allow the binary primitive header shape `prim<v:=(v,v)> name(param0,
    param1):` to use any two distinct valid identifier parameter names.
 4. Keep comparison and unary primitive header parameter shapes unchanged.
-5. Require accepted binary body forms to reference the declared binary
-   parameters in order:
-   - synthetic `body <operation>(param0, param1)`;
-   - M126 function-call-shaped `tsil "emit_return(<operation>(param0,
-     param1));"`;
+5. Require accepted binary body operands to reference declared binary
+   parameters, while preserving source-authored operand order and repetition:
+   - synthetic `body <operation>(operand0, operand1)`;
+   - M126 function-call-shaped `tsil "emit_return(<operation>(operand0,
+     operand1));"`;
    - M131 exact operator spellings for `+`, `-`, `&`, `|`, and `^` over
-     `param0` and `param1`.
+     `operand0` and `operand1`.
+   Here each operand must be one of the two declared binary parameters, but the
+   operands may be swapped or repeated if that is what the `.tsl` source says.
 6. Preserve declared binary parameter names in typed `BinaryOperationBody`,
    `LoweredFunctionSignature`, `LoweredBinaryOperationExpression`, generated
    C++ function parameters, generated Rust function parameters, and generated
@@ -107,16 +117,18 @@ Run exactly one write-capable executor for M132. The executor should:
 9. Prove selected non-`left/right` binary parameters drive lowering by testing
    generated C++/Rust artifacts for representative synthetic, M126
    function-call-shaped TSIL, and M131 operator-shaped TSIL bodies.
-10. Prove selected body parameter mismatches, such as swapped or undeclared
-    parameters, produce structured diagnostics and are not normalized.
-11. Prove duplicate binary parameter names produce a structured diagnostic
+10. Prove swapped and repeated declared body operands preserve source-authored
+    semantics in generated C++/Rust instead of being rejected or normalized.
+11. Prove undeclared body operands produce structured diagnostics and are not
+    normalized.
+12. Prove duplicate binary parameter declarations produce a structured diagnostic
     before generating artifacts.
-12. Preserve M131 exact binary operator TSIL behavior, M130 ordered comparison
+13. Preserve M131 exact binary operator TSIL behavior, M130 ordered comparison
     TSIL behavior, M129 inequality TSIL behavior, M128 equality TSIL behavior,
     M127 unary TSIL behavior, M126 binary function-call TSIL behavior, M125
     multi-implementation behavior, M124 multi-source behavior, and
     deterministic artifact ordering.
-13. Update docs only for behavior, decisions, open questions, or workflow state
+14. Update docs only for behavior, decisions, open questions, or workflow state
     revealed by this slice.
 
 ## Out Of Scope

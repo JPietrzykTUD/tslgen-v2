@@ -731,14 +731,15 @@ The selected M132 task keeps focus on lowering and removes the current
 binary-fixture assumption that declared binary parameters must be exactly
 `left, right`. Binary clean source may declare any two distinct identifier
 parameters under `prim<v:=(v,v)> name(param0, param1):`, and accepted binary
-body forms must use those declared parameters in order. The selected
-implementation must preserve those names through typed catalog body values,
-lowered signatures, lowered parameter references, and generated C++/Rust
-artifacts. M132 must not broaden comparison or unary parameter shapes, add new
-operator spellings, accept actual broad `tsldata` layout, introduce primitive
-aliases, infer parameter aliases, repair source, discover targets, read
-backend manifests or runtime corpus semantics, or add new lowering IR
-families.
+body operands may reference either declared parameter in either operand
+position, including repeated use. The selected implementation must preserve
+declared names plus source-authored body operand order/repetition through typed
+catalog body values, lowered signatures, lowered parameter references, and
+generated C++/Rust artifacts. M132 must not broaden comparison or unary
+parameter shapes, add new operator spellings, accept actual broad `tsldata`
+layout, introduce primitive aliases, infer parameter aliases, repair source,
+discover targets, read backend manifests or runtime corpus semantics, or add
+new lowering IR families.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1844,9 +1845,9 @@ Next expected action:
 Run the active M132 execution-review-loop prompt. M132 should allow binary
 clean source to declare any two distinct identifier parameters under
 `prim<v:=(v,v)> name(param0, param1):`, require accepted binary body forms to
-use those declared parameters in order, preserve those names through typed
-catalog values and lowered C++/Rust artifacts, and preserve M107-M131
-behavior.
+use only declared parameters while preserving source-authored operand order and
+repetition, preserve those names through typed catalog values and lowered
+C++/Rust artifacts, and preserve M107-M131 behavior.
 ```
 
 Accepted planning prompt:
@@ -3186,14 +3187,15 @@ docs/agent/runs/m125-execution-review-loop-prompt.md
 - M132 is planned, not implemented. It is limited to allowing binary clean
   source declarations under `prim<v:=(v,v)> name(param0, param1):` to use any
   two distinct identifier parameter names, requiring accepted binary body
-  forms to reference those declared parameters in order, and preserving those
-  names through catalog, lowering, and generated C++/Rust artifacts. It must
-  not broaden comparison or unary parameter shapes, add new binary operators
-  such as `*`, `/`, `%`, `<<`, or `>>`, accept broad `tsldata` layout,
-  introduce primitive aliases, infer parameter aliases, repair source,
-  discover targets, read runtime `tsldata` semantics or backend manifests,
-  infer in renderers, add registries or dispatchers, add hidden backfeeds or
-  fixpoint behavior, or add new lowering IR families.
+  operands to reference declared parameters, allowing source-authored operand
+  order and repetition, and preserving those names and operand references
+  through catalog, lowering, and generated C++/Rust artifacts. It must not
+  broaden comparison or unary parameter shapes, add new binary operators such
+  as `*`, `/`, `%`, `<<`, or `>>`, accept broad `tsldata` layout, introduce
+  primitive aliases, infer parameter aliases, repair source, discover targets,
+  read runtime `tsldata` semantics or backend manifests, infer in renderers,
+  add registries or dispatchers, add hidden backfeeds or fixpoint behavior, or
+  add new lowering IR families.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and

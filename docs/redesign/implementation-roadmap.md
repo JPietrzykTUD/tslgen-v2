@@ -17529,8 +17529,10 @@ become a runtime semantic dependency.
 
 This milestone is not broad `tsldata` parsing or parameter alias inference. It
 recognizes declared binary parameter names only in the existing tiny clean
-source-document shape and requires accepted body forms to use those declared
-parameters in order.
+source-document shape. Declared binary parameters must be distinct, but
+accepted body forms may reference either declared parameter in either operand
+position, including repeated use. Operand order and repetition are
+source-authored semantics and must be preserved exactly.
 
 Goal:
 
@@ -17561,26 +17563,37 @@ typed catalog body values, lowered function signatures, lowered parameter
 references, and generated C++/Rust artifacts while preserving M107-M131
 behavior.
 
+Source-authored operand order must be preserved. For example,
+`body sub(rhs, lhs)` under `prim<v:=(v,v)> sub(lhs, rhs):` should lower to a
+return expression equivalent to `rhs - lhs`, not be rejected or normalized.
+Likewise, repeated declared operands such as `body add(lhs, lhs)` are accepted
+when the source says so.
+
 Scope:
 
 - Allow the binary primitive header shape `prim<v:=(v,v)> name(param0,
   param1):` to use any two distinct valid identifier parameter names.
 - Keep comparison and unary primitive header parameter shapes unchanged in
   this milestone.
-- Require accepted binary body forms to reference the declared binary
-  parameters in order:
-  - synthetic `body <operation>(param0, param1)`;
-  - M126 function-call-shaped `tsil "emit_return(<operation>(param0,
-    param1));"`;
+- Require accepted binary body operands to reference declared binary
+  parameters, while preserving source-authored operand order and repetition:
+  - synthetic `body <operation>(operand0, operand1)`;
+  - M126 function-call-shaped `tsil "emit_return(<operation>(operand0,
+    operand1));"`;
   - M131 exact operator spellings for `+`, `-`, `&`, `|`, and `^` over
-    `param0` and `param1`.
+    `operand0` and `operand1`.
+  Each operand must be one of the two declared binary parameters, but the
+  operands may be swapped or repeated if that is what the `.tsl` source says.
 - Preserve declared parameter names in typed `BinaryOperationBody`,
   `LoweredFunctionSignature`, `LoweredBinaryOperationExpression`, generated
   C++ function parameters, generated Rust function parameters, and generated
   return expressions.
-- Add negative tests for duplicate binary parameter names, body parameters
-  that are swapped or undeclared, and nearby TSIL operator forms that look like
-  aliases or repairs.
+- Add tests proving swapped and repeated declared body operands preserve
+  source-authored semantics in generated C++/Rust instead of being rejected or
+  normalized.
+- Add negative tests for duplicate binary parameter declarations, undeclared
+  body operands, and nearby TSIL operator forms that look like aliases or
+  repairs.
 - Preserve M131 exact binary operator TSIL behavior, M130 ordered comparison
   TSIL behavior, M129 inequality TSIL behavior, M128 equality TSIL behavior,
   M127 unary TSIL behavior, M126 binary function-call TSIL behavior, M125
@@ -17619,8 +17632,11 @@ Accepted outputs:
   in declaration order.
 - Generated C++/Rust artifacts preserve declared binary parameter names in the
   function signature and return expression.
-- Swapped, duplicate, undeclared, or repaired-looking parameter forms produce
-  structured diagnostics and are not silently normalized.
+- Swapped and repeated declared body operands preserve source-authored
+  semantics in generated output.
+- Duplicate binary parameter declarations, undeclared body operands, or
+  repaired-looking parameter forms produce structured diagnostics and are not
+  silently normalized.
 - Existing M107-M131 behavior and representative artifact bytes remain stable.
 
 Validation:
