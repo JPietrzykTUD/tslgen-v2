@@ -2015,6 +2015,291 @@ def test_m123_bootstrap_origin_preserves_operation_type_diagnostic() -> None:
     )
 
 
+def test_m124_catalog_builder_accepts_multiple_explicit_source_documents(
+    tmp_path: Path,
+) -> None:
+    bit_not = _source_document(
+        tmp_path,
+        "01_bit_not.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v)> bit_not(value):",
+                "  implementation scalar si32:",
+                "    body bit_not(value)",
+            )
+        ),
+    )
+    nequal = _source_document(
+        tmp_path,
+        "02_nequal.tsl",
+        "\n".join(
+            (
+                "prim<m:=(v,v)> nequal(left, right):",
+                "  implementation scalar f32:",
+                "    body nequal(left, right)",
+            )
+        ),
+    )
+    sub = _source_document(
+        tmp_path,
+        "03_sub.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> sub(left, right):",
+                "  implementation scalar ui32:",
+                "    body sub(left, right)",
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((sub, nequal, bit_not))
+    catalog_result = CatalogBuilder().build(tuple(reversed(parse_result.documents)))
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    primitives = catalog_result.catalog.primitives
+    assert [primitive.name for primitive in primitives] == [
+        "bit_not",
+        "nequal",
+        "sub",
+    ]
+    assert [primitive.template for primitive in primitives] == [
+        "unary",
+        "compare",
+        "binary",
+    ]
+    assert isinstance(primitives[0].implementations[0].body, UnaryOperationBody)
+    assert isinstance(primitives[1].implementations[0].body, ComparisonOperationBody)
+    assert isinstance(primitives[2].implementations[0].body, BinaryOperationBody)
+
+
+def test_m124_multi_source_set_generates_representative_artifacts(
+    tmp_path: Path,
+) -> None:
+    sub = _write_tiny_source(tmp_path, "sub", "si32")
+    bit_not = _write_tiny_unary_source(tmp_path, "bit_not", "si32")
+    nequal = _write_tiny_compare_source(tmp_path, "nequal", "si32")
+    result = generate_from_paths(
+        (nequal, sub, bit_not),
+        (
+            Target(
+                backend="rust",
+                primitive_name="nequal",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="cpp",
+                primitive_name="sub",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="rust",
+                primitive_name="bit_not",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="cpp",
+                primitive_name="nequal",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="rust",
+                primitive_name="sub",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="cpp",
+                primitive_name="bit_not",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/bit_not_scalar_si32.hpp",
+        "include/tsl/nequal_scalar_si32.hpp",
+        "include/tsl/sub_scalar_si32.hpp",
+        "src/bit_not_scalar_si32.rs",
+        "src/nequal_scalar_si32.rs",
+        "src/sub_scalar_si32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        BIT_NOT_CPP_CONTENT,
+        NEQUAL_CPP_CONTENT,
+        SUB_CPP_CONTENT,
+        BIT_NOT_RUST_CONTENT,
+        NEQUAL_RUST_CONTENT,
+        SUB_RUST_CONTENT,
+    ]
+
+
+def test_m124_duplicate_primitive_names_stop_before_selection(
+    tmp_path: Path,
+) -> None:
+    first = _write_tiny_source_file(tmp_path, "01_add_si32.tsl", "add", "si32")
+    second = _write_tiny_source_file(tmp_path, "02_add_ui32.tsl", "add", "ui32")
+    lowerer = _StageOutputOnlyLowerer(
+        LoweringStageResult(
+            lowered_functions=LoweredFunctionSet((_lowered_function(),)),
+            diagnostics=(),
+        )
+    )
+
+    result = Generator(lowerer=lowerer).generate(
+        TslProject(
+            source_paths=(second, first),
+            targets=(
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+    )
+
+    assert lowerer.selected == ()
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-CATALOG-DUPLICATE-PRIMITIVE-NAME"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == second.resolve()
+    assert diagnostic.location.line == 1
+    assert diagnostic.location.column == 1
+    assert "add" in diagnostic.message
+    assert str(first.resolve()) in diagnostic.message
+
+
+def test_m124_multi_source_unsupported_operation_remains_lowering_diagnostic(
+    tmp_path: Path,
+) -> None:
+    add = _write_tiny_source(tmp_path, "add", "si32")
+    pow_source = _write_tiny_source(tmp_path, "pow", "si32")
+    result = generate_from_paths(
+        (pow_source, add),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="pow",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-OPERATION"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == pow_source.resolve()
+    assert diagnostic.location.line == 1
+    assert diagnostic.location.column == 1
+
+
+def test_m124_multi_source_mismatched_body_remains_lowering_diagnostic(
+    tmp_path: Path,
+) -> None:
+    bit_not = _write_tiny_unary_source(tmp_path, "bit_not", "si32")
+    add = _write_tiny_source(tmp_path, "add", "si32", body_operation="sub")
+    result = generate_from_paths(
+        (add, bit_not),
+        (
+            Target(
+                backend="rust",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-OPERATION-MISMATCH"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == add.resolve()
+    assert diagnostic.location.line == 3
+    assert diagnostic.location.column == 5
+    assert "add" in diagnostic.message
+    assert "sub" in diagnostic.message
+
+
+def test_m124_source_set_generation_is_deterministic_across_input_orders(
+    tmp_path: Path,
+) -> None:
+    sub = _write_tiny_source(tmp_path, "sub", "si32")
+    bit_not = _write_tiny_unary_source(tmp_path, "bit_not", "si32")
+    nequal = _write_tiny_compare_source(tmp_path, "nequal", "si32")
+    targets = (
+        Target(
+            backend="rust",
+            primitive_name="sub",
+            extension="scalar",
+            type_tag="si32",
+        ),
+        Target(
+            backend="cpp",
+            primitive_name="nequal",
+            extension="scalar",
+            type_tag="si32",
+        ),
+        Target(
+            backend="cpp",
+            primitive_name="bit_not",
+            extension="scalar",
+            type_tag="si32",
+        ),
+        Target(
+            backend="rust",
+            primitive_name="bit_not",
+            extension="scalar",
+            type_tag="si32",
+        ),
+        Target(
+            backend="cpp",
+            primitive_name="sub",
+            extension="scalar",
+            type_tag="si32",
+        ),
+        Target(
+            backend="rust",
+            primitive_name="nequal",
+            extension="scalar",
+            type_tag="si32",
+        ),
+    )
+
+    first = generate_from_paths((sub, bit_not, nequal), targets)
+    second = generate_from_paths(
+        (nequal, sub, bit_not),
+        tuple(reversed(targets)),
+    )
+
+    assert first.diagnostics == second.diagnostics == ()
+    assert [artifact.logical_path for artifact in first.artifacts.artifacts] == [
+        artifact.logical_path for artifact in second.artifacts.artifacts
+    ]
+    assert [artifact.content for artifact in first.artifacts.artifacts] == [
+        artifact.content for artifact in second.artifacts.artifacts
+    ]
+    assert first.artifacts.digest_manifest() == second.artifacts.digest_manifest()
+
+
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
     tmp_path: Path,
 ) -> None:
@@ -3116,6 +3401,28 @@ def _write_tiny_source(
     body_operation: str | None = None,
 ) -> Path:
     source = tmp_path / f"tiny_{operation_id}_{type_tag}.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                f"prim<v:=(v,v)> {operation_id}(left, right):",
+                f"  implementation scalar {type_tag}:",
+                f"    body {body_operation or operation_id}(left, right)",
+            )
+        ),
+        encoding="utf-8",
+    )
+    return source
+
+
+def _write_tiny_source_file(
+    tmp_path: Path,
+    file_name: str,
+    operation_id: str,
+    type_tag: str,
+    *,
+    body_operation: str | None = None,
+) -> Path:
+    source = tmp_path / file_name
     source.write_text(
         "\n".join(
             (

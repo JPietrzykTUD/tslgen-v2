@@ -16349,11 +16349,11 @@ Review notes:
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M123.
-This milestone keeps the next task focused on lowering while moving the
-research prototype closer to the intended product loop: changing explicit
-`.tsl` source files should affect selected lowered functions and generated
-artifacts, or produce clear diagnostics.
+Accepted after one write-capable executor plus read-only architecture,
+boundary, documentation, and validation audits. M124 kept the next task
+focused on lowering while moving the research prototype closer to the intended
+product loop: changing explicit `.tsl` source files affects selected lowered
+functions and generated artifacts, or produces clear diagnostics.
 
 Goal:
 
@@ -16447,3 +16447,111 @@ Review notes:
 - Reviewers should require existing one-primitive behavior, backend-owned
   spellings, accepted semantic-origin fields, deterministic target ordering,
   and artifact bytes to remain stable.
+
+### Milestone 125: Tiny Clean Multi-Implementation Primitive Lowering Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M124.
+This milestone keeps the next task focused on lowering and moves the research
+prototype closer to real `.tsl` primitive authoring: one supported primitive
+document may declare multiple exact scalar implementations, and explicit
+targets select which implementation is lowered.
+
+Goal:
+
+Allow one exact supported primitive `.tsl` document to contain multiple scalar
+implementation blocks for distinct type tags. Selection must choose the
+implementation requested by the explicit target, and lowering/backend emission
+must consume only that selected implementation while preserving accepted
+M108-M124 behavior.
+
+Scope:
+
+- Broaden the narrow parser/catalog source shape from one scalar
+  implementation block per primitive document to two or more exact scalar
+  implementation blocks under one primitive header. Each implementation block
+  remains exactly an implementation header immediately followed by one body
+  line.
+- Preserve the accepted primitive header shapes, body argument shapes,
+  operation descriptors, scalar type descriptors, compatibility rules, and
+  `clean_restart_bootstrap_core` semantic-origin contract.
+- Add duplicate implementation-key diagnostics for repeated
+  `(extension, type_tag)` entries within the same primitive before selection
+  and lowering.
+- Keep target requests explicit. Selection should pick only the implementation
+  matching the target extension and type tag; M125 must not add target
+  discovery, generate-all behavior, extension fallback, type groups, or
+  implementation ranking.
+- Prove that selected implementation bodies drive lowering by testing a source
+  document with multiple type-specific implementations for at least one
+  representative binary primitive, and by asserting generated C++/Rust
+  artifacts reflect the selected implementation's type/body.
+- Prove that unselected implementation bodies are not lowered by adding a
+  focused test where an unselected exact-shape implementation would be
+  semantically unsupported if selected, while the selected implementation still
+  generates successfully.
+- Add negative tests showing duplicate implementation keys and selected
+  mismatched bodies produce structured diagnostics, not source repair,
+  renderer inference, or silent fallback.
+- Preserve M124 multi-document source-set behavior and deterministic artifact
+  ordering.
+
+Out of scope:
+
+- Parsing multiple primitive blocks inside one `.tsl` document, loading broad
+  `tsldata/`, parsing broad TSL syntax, parsing TSIL strings, or accepting
+  body shapes beyond the exact M107-M124 forms.
+- Adding new operation ids, scalar types, templates, type groups, extension
+  fallback, dependency closure, backend manifests, target discovery,
+  generated-test execution, CLI behavior, writer behavior, or output tree
+  parity.
+- Loading operation semantics, compatibility rules, or backend spellings from
+  `tsldata/`, backend manifests, YAML, `frozen`, `tslgenold`, plugins, or
+  environment configuration at runtime.
+- Moving backend-owned C++/Rust type, result, or operator spellings into
+  lowering.
+- Introducing a registry, dispatcher, callback map, plugin system, hidden
+  backfeed, fixpoint mechanism, broad operation framework, or new lowering IR
+  category/request/result family.
+
+Accepted outputs:
+
+- A parsed primitive may contain multiple exact scalar implementation blocks
+  with distinct type tags.
+- A catalog primitive may expose multiple typed `Implementation` values for
+  explicit target selection.
+- Duplicate implementation keys fail with a structured diagnostic before
+  selection/lowering.
+- Selection and lowering consume only the explicit target's implementation;
+  unselected exact-shape implementation bodies do not create lowering
+  diagnostics.
+- Existing one-implementation, M124 multi-source, and representative artifact
+  bytes remain stable.
+
+Validation:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Remove any validation-created `__pycache__` directories before the final cache
+check. Do not run the old `tslgenold` validation profile as proof of the clean
+product slice.
+
+Review notes:
+
+- Reviewers should require M125 to remain a selected-implementation lowering
+  slice, not broad TSL parsing or corpus ingestion.
+- Reviewers should reject automatic target discovery, type-group expansion,
+  extension fallback, implementation ranking, backend manifest loading,
+  renderer-side semantic inference, or source repair.
+- Reviewers should require duplicate implementation-key diagnostics to remain
+  narrow and deterministic.
+- Reviewers should require existing one-implementation behavior, M124
+  multi-source behavior, backend-owned spellings, accepted semantic-origin
+  fields, and artifact bytes to remain stable.

@@ -61,32 +61,51 @@ class CatalogBuilder:
     """Promote parsed tiny clean syntax into validated domain values."""
 
     def build(self, documents: tuple[ParsedDocument, ...]) -> CatalogBuildResult:
-        parsed_primitives = tuple(
-            primitive
-            for document in documents
-            for primitive in document.primitives
-        )
         diagnostics: list[Diagnostic] = []
-        if len(parsed_primitives) != 1:
-            location = parsed_primitives[0].source if parsed_primitives else None
+        parsed_primitives: list[ParsedPrimitive] = []
+
+        for document in sorted(documents, key=lambda item: item.path):
+            if len(document.primitives) != 1:
+                location = (
+                    document.primitives[0].source
+                    if document.primitives
+                    else None
+                )
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-CATALOG-UNSUPPORTED-PRIMITIVE-COUNT",
+                        message=(
+                            f"source document {document.path!r} contains "
+                            f"{len(document.primitives)} primitives; expected "
+                            "exactly 1"
+                        ),
+                        location=location,
+                    )
+                )
+                continue
+            parsed_primitives.append(document.primitives[0])
+
+        if not parsed_primitives:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
                     code="TSL-CATALOG-UNSUPPORTED-PRIMITIVE-COUNT",
-                    message=(
-                        f"M107 supports exactly one primitive per run; "
-                        f"got {len(parsed_primitives)}"
-                    ),
-                    location=location,
+                    message="source set contains no parsed primitives",
                 )
             )
             return CatalogBuildResult(catalog=None, diagnostics=tuple(diagnostics))
 
-        primitive = self._build_primitive(parsed_primitives[0], diagnostics)
+        diagnostics.extend(_duplicate_primitive_name_diagnostics(parsed_primitives))
+
+        primitives = tuple(
+            self._build_primitive(parsed, diagnostics)
+            for parsed in parsed_primitives
+        )
         if diagnostics:
             return CatalogBuildResult(catalog=None, diagnostics=tuple(diagnostics))
         return CatalogBuildResult(
-            catalog=Catalog(primitives=(primitive,)),
+            catalog=Catalog(primitives=primitives),
             diagnostics=(),
         )
 
@@ -197,6 +216,34 @@ class CatalogBuilder:
 
 def _body_text(parsed: ParsedImplementation) -> str:
     return f"{parsed.body.operation}({', '.join(parsed.body.arguments)})"
+
+
+def _duplicate_primitive_name_diagnostics(
+    parsed_primitives: list[ParsedPrimitive],
+) -> tuple[Diagnostic, ...]:
+    first_by_name: dict[str, ParsedPrimitive] = {}
+    diagnostics: list[Diagnostic] = []
+    for primitive in sorted(
+        parsed_primitives,
+        key=lambda item: (item.name, item.source.path.as_posix()),
+    ):
+        first = first_by_name.get(primitive.name)
+        if first is None:
+            first_by_name[primitive.name] = primitive
+            continue
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-CATALOG-DUPLICATE-PRIMITIVE-NAME",
+                message=(
+                    f"primitive name {primitive.name!r} is declared more than "
+                    "once in the explicit source set; first declaration is at "
+                    f"{first.source.path}:{first.source.line}:{first.source.column}"
+                ),
+                location=primitive.source,
+            )
+        )
+    return tuple(diagnostics)
 
 
 def _build_body(

@@ -418,6 +418,29 @@ operator spellings, backend manifest keys, and renderer policy. `tsldata/`
 remains source corpus and fixture evidence rather than runtime input to these
 lowering-owned operation tables.
 
+### M124 Tiny Multi-Primitive Source-Set Lowering Slice
+
+Milestone 124 broadens the clean restart product path from one parsed
+primitive per generator run to a small explicit source set containing multiple
+parsed documents. Each `.tsl` document still uses the exact narrow parser shape:
+one primitive header, one scalar implementation header, and one body line.
+Catalog construction accepts one parsed primitive per document and builds a
+deterministically ordered catalog from the explicit source documents.
+
+Duplicate primitive names in the explicit source set fail during catalog
+construction with `TSL-CATALOG-DUPLICATE-PRIMITIVE-NAME` before selection,
+lowering, or backend emission can choose whichever declaration happens to
+appear first. Target requests remain explicit by backend, primitive name,
+extension, and type tag; M124 does not add automatic target discovery or
+generate-all behavior.
+
+The source-set slice reuses the accepted M108-M123 lowering semantics. It does
+not add operations, scalar types, source body forms, backend manifests, runtime
+`tsldata/` semantic reads, source repair, or renderer-side inference. Unsupported
+operation ids, operation/type mismatches, and mismatched body operations in a
+multi-document source set continue to produce the same structured lowering
+diagnostics as the corresponding one-document cases.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

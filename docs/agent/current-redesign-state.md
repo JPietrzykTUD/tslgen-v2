@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 123 is accepted.
+Milestone 124 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -474,6 +474,32 @@ backend-owned spellings. It must not load broad `tsldata/`, parse multiple
 primitive blocks in one file, add new operations/types/body forms, discover
 targets automatically, or introduce broad registries, dispatchers, source
 repair, backend manifests, or new lowering IR families.
+
+The M124 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, documentation,
+and validation audits. M124 broadened catalog construction from one parsed
+primitive per run to a deterministic explicit source set containing multiple
+one-primitive `.tsl` documents, added the
+`TSL-CATALOG-DUPLICATE-PRIMITIVE-NAME` diagnostic before selection/lowering,
+and proved representative binary, unary, and comparison source documents flow
+through explicit target selection, lowering, and deterministic C++/Rust
+artifacts. It preserved accepted M107-M123 lowering semantics,
+`clean_restart_bootstrap_core` semantic-origin records, backend-owned
+spellings, explicit target requests, one-primitive behavior, representative
+artifact bytes, and source-body integrity. It did not load broad `tsldata/`,
+parse multiple primitive blocks inside one document, add new operations, scalar
+types, body forms, target discovery, backend manifests, source repair,
+registries, dispatchers, hidden backfeeds, fixpoint behavior, or new lowering
+IR families.
+
+Integrated post-M124 next-run planning selected
+`Milestone 125: Tiny Clean Multi-Implementation Primitive Lowering Slice`.
+The selected M125 task keeps focus on lowering and moves the prototype toward
+real `.tsl` primitive authoring by allowing one supported primitive document to
+declare multiple exact scalar implementation blocks while explicit targets
+select which implementation is lowered. It must not add broad TSL parsing,
+target discovery, type groups, extension fallback, backend manifests, source
+repair, or new lowering IR families.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1547,38 +1573,38 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 124.
+Execute Milestone 125.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m124-execution-review-loop-prompt.md
+docs/agent/runs/m125-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 124: Tiny Clean Multi-Primitive Source-Set Lowering Slice
+Milestone 125: Tiny Clean Multi-Implementation Primitive Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-Post-M123 planning selected Milestone 124 and returned Accept With Follow-Ups
-after read-only architecture, boundary, documentation, and validation audits.
-The selected plan is lowering focused and makes explicit `.tsl` source-set
-changes flow through selection, lowering, and deterministic C++/Rust artifacts
-without broad corpus parsing or target discovery.
+M124 execution-review returned Accept With Follow-Ups after one write-capable
+executor and read-only architecture, boundary, documentation, and validation
+audits. Follow-ups were finalization-only: update state, mark M124 accepted,
+create the integrated M125 execution prompt, and clean validation-created
+caches.
 ```
 
 Next expected action:
 
 ```text
-Run the active M124 execution-review-loop prompt. M124 should allow multiple
-exact supported primitive `.tsl` files in one explicit source set to build a
-deterministic catalog, select explicit targets, lower through the accepted
-M108-M123 path, and emit deterministic artifacts.
+Run the active M125 execution-review-loop prompt. M125 should allow one exact
+supported primitive `.tsl` document to contain multiple scalar implementation
+blocks, select only the explicit target implementation, and lower/backend-emit
+that selected implementation while preserving M107-M124 behavior.
 ```
 
 Accepted planning prompt:
@@ -2721,10 +2747,16 @@ Completed post-M123 lowering planning-plus-review prompt:
 docs/agent/runs/post-m123-planning-plus-review-prompt.md
 ```
 
-Active M124 execution-review-loop prompt:
+Completed M124 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m124-execution-review-loop-prompt.md
+```
+
+Active M125 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m125-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2840,6 +2872,14 @@ docs/agent/runs/m124-execution-review-loop-prompt.md
   types, body forms, automatic target discovery, backend manifests, source
   repair, registries, dispatchers, hidden backfeeds, fixpoint behavior, or new
   lowering IR request/result families.
+- M125 is limited to allowing one exact supported primitive `.tsl` document to
+  contain multiple scalar implementation blocks for distinct type tags, with
+  explicit targets selecting the implementation to lower. It must not parse
+  multiple primitive blocks inside one `.tsl` document, load broad `tsldata/`,
+  add new operations, scalar types, body forms beyond repeated exact
+  implementation blocks, automatic target discovery, type groups, extension
+  fallback, backend manifests, source repair, registries, dispatchers, hidden
+  backfeeds, fixpoint behavior, or new lowering IR request/result families.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and
@@ -4379,6 +4419,13 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   keeps planning and execution integrated by requiring the next-run planning
   step to happen inside the M124 execution-review loop after M124 acceptance,
   rather than creating a separate post-M124 planning prompt.
+- M124 validation follow-up addressed during finalization:
+  validation-created `__pycache__` directories under clean `tslgen/` were
+  removed after read-only validation audits.
+- M124 review watchpoint recorded for M125 and future source-set/catalog work:
+  duplicate-name and duplicate-implementation diagnostics must remain narrow
+  and must not become broad corpus ingestion, target discovery, or
+  implementation ranking.
 - M106 architecture follow-up: before any release/stabilization work resumes,
   retire or rewrite `docs/redesign/stabilization-release-checklist.md` for the
   post-M106 clean restart; it still reads like the old `tslgen` package is an
@@ -5387,7 +5434,7 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M124
+No stop condition is active. The workflow is ready to run the active M125
 execution-review-loop prompt.
 
 ## Validation Expectations
@@ -5691,6 +5738,23 @@ git diff --check
 The intent-to-add command returned exit 0 with no output so the new M124 prompt
 was included in diff validation. The final `git diff --check` returned exit 0
 with no output.
+
+For M124 clean multi-primitive source-set lowering slice, validation completed
+with:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/pipeline/generator.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The public API import
+command returned exit 0 with no output. The py_compile command returned exit 0
+with no output. The targeted clean-package test command returned exit 0 with
+`107 passed in 7.22s`. Validation-created `__pycache__` directories were
+removed, and the final cache check returned exit 0 with no output.
 
 For M108 clean lowering boundary slice, validation completed with:
 
