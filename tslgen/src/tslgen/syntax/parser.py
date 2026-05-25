@@ -48,6 +48,12 @@ _TSIL_BINARY_EMIT_RETURN_BODY_PATTERN = re.compile(
     r"\((?P<arguments>left, right)\)"
     r'\);"$'
 )
+_TSIL_UNARY_EMIT_RETURN_BODY_PATTERN = re.compile(
+    r'^    tsil "emit_return\('
+    r"(?P<operation>[A-Za-z_][A-Za-z0-9_]*)"
+    r"\((?P<arguments>value)\)"
+    r'\);"$'
+)
 _NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -195,6 +201,8 @@ def _match_body(line: str, *, signature: str) -> re.Match[str] | None:
         return body
     if signature == "v:=(v,v)":
         return _TSIL_BINARY_EMIT_RETURN_BODY_PATTERN.match(line)
+    if signature == "v:=(v)":
+        return _TSIL_UNARY_EMIT_RETURN_BODY_PATTERN.match(line)
     return None
 
 

@@ -2649,19 +2649,79 @@ def test_m126_malformed_tsil_emit_return_reports_parse_diagnostic(
     assert "emit_return(add(left, right))" in diagnostic.message
 
 
-def test_m126_tsil_emit_return_is_not_accepted_for_unary_bodies(
+def test_m127_catalog_builder_promotes_exact_unary_tsil_emit_return_to_unary_body(
     tmp_path: Path,
 ) -> None:
-    source = tmp_path / "tiny_neg_tsil.tsl"
-    source.write_text(
+    document = _source_document(
+        tmp_path,
+        "tiny_bit_not_tsil.tsl",
         "\n".join(
             (
-                "prim<v:=(v)> neg(value):",
+                "prim<v:=(v)> bit_not(value):",
                 "  implementation scalar si32:",
-                '    tsil "emit_return(neg(value));"',
+                '    tsil "emit_return(bit_not(value));"',
             )
         ),
-        encoding="utf-8",
+    )
+
+    parse_result = TslParser().parse((document,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    assert body == UnaryOperationBody(
+        operation="bit_not",
+        value_parameter="value",
+        source=SourceLocation(document.path, 3, 5),
+    )
+
+
+def test_m127_selected_unary_tsil_emit_return_source_generates_cpp_and_rust_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_unary_tsil_source(tmp_path, "bit_not", "si32")
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="bit_not",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="rust",
+                primitive_name="bit_not",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/bit_not_scalar_si32.hpp",
+        "src/bit_not_scalar_si32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        BIT_NOT_CPP_CONTENT,
+        BIT_NOT_RUST_CONTENT,
+    ]
+
+
+def test_m127_unselected_unary_tsil_emit_return_body_is_not_lowered(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_unary_multi_implementation_body_source(
+        tmp_path,
+        "bit_not",
+        (
+            ("ui32", '    tsil "emit_return(neg(value));"'),
+            ("si32", "    body bit_not(value)"),
+        ),
     )
 
     result = generate_from_paths(
@@ -2669,7 +2729,73 @@ def test_m126_tsil_emit_return_is_not_accepted_for_unary_bodies(
         (
             Target(
                 backend="cpp",
-                primitive_name="neg",
+                primitive_name="bit_not",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/bit_not_scalar_si32.hpp",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        BIT_NOT_CPP_CONTENT,
+    ]
+
+
+def test_m127_selected_mismatched_unary_tsil_emit_return_reports_lowering_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_unary_tsil_source(
+        tmp_path,
+        "bit_not",
+        "si32",
+        body_operation="neg",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="rust",
+                primitive_name="bit_not",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-OPERATION-MISMATCH"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 3
+    assert diagnostic.location.column == 5
+    assert "bit_not" in diagnostic.message
+    assert "neg" in diagnostic.message
+
+
+def test_m127_malformed_unary_tsil_emit_return_reports_parse_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_unary_tsil_source(
+        tmp_path,
+        "bit_not",
+        "si32",
+        body_line='    tsil "emit_return(bit_not(value))"',
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="bit_not",
                 extension="scalar",
                 type_tag="si32",
             ),
@@ -2685,6 +2811,7 @@ def test_m126_tsil_emit_return_is_not_accepted_for_unary_bodies(
     assert diagnostic.location.path == source.resolve()
     assert diagnostic.location.line == 3
     assert diagnostic.location.column == 5
+    assert "emit_return(bit_not(value))" in diagnostic.message
 
 
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
@@ -3922,6 +4049,47 @@ def _write_tiny_unary_source(
         ),
         encoding="utf-8",
     )
+    return source
+
+
+def _write_tiny_unary_tsil_source(
+    tmp_path: Path,
+    operation_id: str,
+    type_tag: str,
+    *,
+    body_operation: str | None = None,
+    body_line: str | None = None,
+) -> Path:
+    source = tmp_path / f"tiny_{operation_id}_{type_tag}_unary_tsil.tsl"
+    selected_body_operation = body_operation or operation_id
+    source.write_text(
+        "\n".join(
+            (
+                f"prim<v:=(v)> {operation_id}(value):",
+                f"  implementation scalar {type_tag}:",
+                body_line or f'    tsil "emit_return({selected_body_operation}(value));"',
+            )
+        ),
+        encoding="utf-8",
+    )
+    return source
+
+
+def _write_tiny_unary_multi_implementation_body_source(
+    tmp_path: Path,
+    operation_id: str,
+    implementations: tuple[tuple[str, str], ...],
+) -> Path:
+    source = tmp_path / f"tiny_{operation_id}_unary_multi_body.tsl"
+    lines = [f"prim<v:=(v)> {operation_id}(value):"]
+    for type_tag, body_line in implementations:
+        lines.extend(
+            (
+                f"  implementation scalar {type_tag}:",
+                body_line,
+            )
+        )
+    source.write_text("\n".join(lines), encoding="utf-8")
     return source
 
 
