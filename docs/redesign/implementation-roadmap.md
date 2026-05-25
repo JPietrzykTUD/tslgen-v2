@@ -16452,11 +16452,11 @@ Review notes:
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M124.
-This milestone keeps the next task focused on lowering and moves the research
-prototype closer to real `.tsl` primitive authoring: one supported primitive
-document may declare multiple exact scalar implementations, and explicit
-targets select which implementation is lowered.
+Accepted. The M125 execution-review loop returned `Accept With Follow-Ups`
+after one write-capable executor and read-only architecture, boundary,
+documentation, and validation audits. The follow-ups were finalization-only:
+mark M125 accepted, update workflow state, and create the integrated M126
+execution prompt.
 
 Goal:
 
@@ -16555,3 +16555,147 @@ Review notes:
 - Reviewers should require existing one-implementation behavior, M124
   multi-source behavior, backend-owned spellings, accepted semantic-origin
   fields, and artifact bytes to remain stable.
+
+Review result:
+
+- Parser support was broadened from one scalar implementation block to one or
+  more exact scalar implementation/body pairs under the same primitive header.
+- Catalog construction now rejects duplicate `(extension, type_tag)`
+  implementation keys within one primitive with
+  `TSL-CATALOG-DUPLICATE-IMPLEMENTATION-KEY` before selection/lowering.
+- Explicit target selection and lowering consume only the matching
+  implementation; unselected exact-shape implementation bodies do not create
+  lowering diagnostics.
+- Existing one-implementation behavior, M124 multi-source behavior,
+  `clean_restart_bootstrap_core` semantic-origin records, backend-owned
+  spellings, source-body integrity, deterministic artifact ordering, and
+  representative artifact bytes remained stable.
+
+Validation result:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The public API import
+command returned exit 0 with no output. The py-compile command returned exit 0
+with no output. The targeted clean-package pytest command returned exit 0 with
+`112 passed in 7.38s`. Validation-created `__pycache__` directories were
+removed, and the final `find tslgen -type d -name __pycache__ -print` returned
+exit 0 with no output.
+
+### Milestone 126: Tiny Clean Exact TSIL Emit-Return Binary Body Lowering Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M125.
+This milestone keeps the next task focused on lowering and moves the research
+prototype closer to `.tsl`-authored implementation bodies: selected binary
+scalar implementations may use one exact TSIL-like `emit_return(...)` body
+line instead of only the synthetic clean-restart `body ...` fixture line.
+
+Goal:
+
+Allow one exact selected binary scalar implementation body line of the form:
+
+```text
+    tsil "emit_return(add(left, right));"
+```
+
+to produce the same typed backend-neutral binary operation body as the
+accepted fixture form:
+
+```text
+    body add(left, right)
+```
+
+The selected implementation must lower through the existing typed
+selected-implementation path and preserve M107-M125 behavior.
+
+Scope:
+
+- Add exact source recognition for binary scalar implementation body lines
+  shaped as `tsil "emit_return(<operation>(left, right));"` under the existing
+  one-primitive / one-or-more-implementation document shape.
+- Preserve the accepted synthetic `body <operation>(left, right)` form, all
+  accepted primitive header shapes, selected-implementation lowering behavior,
+  operation descriptors, scalar type descriptors, compatibility rules, and the
+  `clean_restart_bootstrap_core` semantic-origin contract.
+- Promote the exact TSIL emit-return body into the existing typed binary
+  operation body value consumed by lowering; do not introduce a new lowering
+  IR category, request/result family, registry, dispatcher, or raw-text
+  rewrite path.
+- Prove selected TSIL emit-return bodies drive lowering and generated C++/Rust
+  artifacts for at least one representative binary primitive.
+- Prove unselected exact TSIL emit-return bodies are not lowered by including
+  a multi-implementation document where an unselected exact TSIL body would be
+  a lowering mismatch if selected, while the selected implementation still
+  generates successfully.
+- Add negative tests for selected mismatched TSIL emit-return operation bodies
+  and malformed nearby TSIL forms, producing structured diagnostics rather
+  than source repair, renderer inference, or silent fallback.
+- Preserve M125 multi-implementation behavior, M124 multi-source behavior, and
+  deterministic artifact ordering.
+
+Out of scope:
+
+- Parsing broad TSIL strings, nested calls, primitive calls, intrinsics, casts,
+  variables, immediates, multiple statements, multiline TSIL bodies, helper
+  evaluation, branch pruning, source repair, or TSIL compiler behavior.
+- Accepting unary or comparison TSIL emit-return forms in this slice.
+- Parsing multiple primitive blocks inside one `.tsl` document, loading broad
+  `tsldata/`, parsing broad TSL syntax, adding new operation ids, scalar
+  types, templates, type groups, extension fallback, dependency closure,
+  backend manifests, target discovery, generated-test execution, CLI behavior,
+  writer behavior, or output tree parity.
+- Loading operation semantics, compatibility rules, or backend spellings from
+  `tsldata/`, backend manifests, YAML, `frozen`, `tslgenold`, plugins, or
+  environment configuration at runtime.
+- Moving backend-owned C++/Rust type, result, or operator spellings into
+  lowering.
+- Introducing a registry, dispatcher, callback map, plugin system, hidden
+  backfeed, fixpoint mechanism, broad operation framework, or new lowering IR
+  category/request/result family.
+
+Accepted outputs:
+
+- A selected binary scalar implementation may use either the accepted
+  synthetic `body <operation>(left, right)` line or the exact TSIL emit-return
+  line `tsil "emit_return(<operation>(left, right));"`.
+- Lowering consumes a typed binary operation body value and does not emit from
+  raw TSIL text.
+- Selected mismatched TSIL emit-return bodies produce the existing structured
+  lowering mismatch diagnostic.
+- Malformed nearby TSIL forms are rejected with structured diagnostics and are
+  not repaired or normalized.
+- Existing M107-M125 behavior and representative artifact bytes remain stable.
+
+Validation:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Remove any validation-created `__pycache__` directories before the final cache
+check. Do not run the old `tslgenold` validation profile as proof of the clean
+product slice.
+
+Review notes:
+
+- Reviewers should require M126 to remain an exact selected-body lowering
+  slice, not a broad TSIL parser or compiler milestone.
+- Reviewers should reject nested helper parsing, primitive-call lowering,
+  intrinsics, casts, generation-time helpers, branch pruning, backend manifest
+  loading, renderer-side semantic inference, target discovery, or source
+  repair.
+- Reviewers should require TSIL emit-return recognition to produce typed body
+  values before backend emission; generated output must not be rendered by
+  rescanning raw TSIL text.

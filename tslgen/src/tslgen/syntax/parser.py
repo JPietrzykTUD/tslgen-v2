@@ -66,16 +66,15 @@ class TslParser:
         diagnostics: list[Diagnostic],
     ) -> ParsedDocument | None:
         meaningful_lines = tuple(_meaningful_lines(document.text))
-        if len(meaningful_lines) != 3:
+        if len(meaningful_lines) < 3 or len(meaningful_lines) % 2 == 0:
             line, column = _diagnostic_position(meaningful_lines)
             diagnostics.append(
                 Diagnostic(
                     severity="error",
                     code="TSL-PARSE-UNSUPPORTED-FORM",
                     message=(
-                        "the clean restart parser supports exactly three "
-                        "non-comment lines: "
-                        "primitive header, implementation header, and body line"
+                        "the clean restart parser supports one primitive header "
+                        "followed by one or more implementation/body line pairs"
                     ),
                     location=SourceLocation(document.path, line, column),
                 )
@@ -83,70 +82,81 @@ class TslParser:
             return None
 
         header_line_no, header_line = meaningful_lines[0]
-        implementation_line_no, implementation_line = meaningful_lines[1]
-        body_line_no, body_line = meaningful_lines[2]
 
         header = _match_header(header_line)
         if header is None:
             diagnostics.append(_unsupported_line(document, header_line_no, 1, header_line))
             return None
 
-        implementation = _IMPLEMENTATION_PATTERN.match(implementation_line)
-        if implementation is None:
-            diagnostics.append(
-                _unsupported_line(
-                    document,
-                    implementation_line_no,
-                    _first_content_column(implementation_line),
-                    implementation_line,
-                )
-            )
-            return None
-
-        body = _BODY_PATTERN.match(body_line)
-        if body is None:
-            diagnostics.append(
-                _unsupported_line(
-                    document,
-                    body_line_no,
-                    _first_content_column(body_line),
-                    body_line,
-                )
-            )
-            return None
-
         parameters = _split_names(header.group("params"))
-        arguments = _split_names(body.group("arguments"))
-        invalid_names = tuple(name for name in (*parameters, *arguments) if not _valid_name(name))
-        if invalid_names:
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    code="TSL-PARSE-INVALID-NAME",
-                    message=(
-                        f"name {invalid_names[0]!r} is invalid; expected an identifier"
-                    ),
-                    location=SourceLocation(document.path, header_line_no, 1),
+        parsed_implementations: list[ParsedImplementation] = []
+        for (
+            implementation_line_no,
+            implementation_line,
+            body_line_no,
+            body_line,
+        ) in _implementation_body_pairs(meaningful_lines):
+            implementation = _IMPLEMENTATION_PATTERN.match(implementation_line)
+            if implementation is None:
+                diagnostics.append(
+                    _unsupported_line(
+                        document,
+                        implementation_line_no,
+                        _first_content_column(implementation_line),
+                        implementation_line,
+                    )
+                )
+                return None
+
+            body = _BODY_PATTERN.match(body_line)
+            if body is None:
+                diagnostics.append(
+                    _unsupported_line(
+                        document,
+                        body_line_no,
+                        _first_content_column(body_line),
+                        body_line,
+                    )
+                )
+                return None
+
+            arguments = _split_names(body.group("arguments"))
+            invalid_names = tuple(
+                name for name in (*parameters, *arguments) if not _valid_name(name)
+            )
+            if invalid_names:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-PARSE-INVALID-NAME",
+                        message=(
+                            f"name {invalid_names[0]!r} is invalid; "
+                            "expected an identifier"
+                        ),
+                        location=SourceLocation(document.path, header_line_no, 1),
+                    )
+                )
+                return None
+
+            parsed_body = ParsedBody(
+                operation=body.group("operation"),
+                arguments=arguments,
+                source=SourceLocation(document.path, body_line_no, 5),
+            )
+            parsed_implementations.append(
+                ParsedImplementation(
+                    extension=implementation.group("extension"),
+                    type_tag=implementation.group("type_tag"),
+                    body=parsed_body,
+                    source=SourceLocation(document.path, implementation_line_no, 3),
                 )
             )
-            return None
 
-        parsed_body = ParsedBody(
-            operation=body.group("operation"),
-            arguments=arguments,
-            source=SourceLocation(document.path, body_line_no, 5),
-        )
-        parsed_implementation = ParsedImplementation(
-            extension=implementation.group("extension"),
-            type_tag=implementation.group("type_tag"),
-            body=parsed_body,
-            source=SourceLocation(document.path, implementation_line_no, 3),
-        )
         parsed_primitive = ParsedPrimitive(
             name=header.group("name"),
             signature=header.group("signature"),
             parameters=parameters,
-            implementations=(parsed_implementation,),
+            implementations=tuple(parsed_implementations),
             source=SourceLocation(document.path, header_line_no, 1),
         )
         return ParsedDocument(
@@ -176,11 +186,26 @@ def _match_header(line: str) -> re.Match[str] | None:
 def _diagnostic_position(lines: tuple[tuple[int, str], ...]) -> tuple[int, int]:
     if not lines:
         return (1, 1)
-    if len(lines) > 3:
-        line_number, line = lines[3]
-        return (line_number, _first_content_column(line))
     line_number, line = lines[-1]
     return (line_number, _first_content_column(line))
+
+
+def _implementation_body_pairs(
+    lines: tuple[tuple[int, str], ...],
+) -> tuple[tuple[int, str, int, str], ...]:
+    pairs: list[tuple[int, str, int, str]] = []
+    for offset in range(1, len(lines), 2):
+        implementation_line_no, implementation_line = lines[offset]
+        body_line_no, body_line = lines[offset + 1]
+        pairs.append(
+            (
+                implementation_line_no,
+                implementation_line,
+                body_line_no,
+                body_line,
+            )
+        )
+    return tuple(pairs)
 
 
 def _unsupported_line(

@@ -441,6 +441,33 @@ operation ids, operation/type mismatches, and mismatched body operations in a
 multi-document source set continue to produce the same structured lowering
 diagnostics as the corresponding one-document cases.
 
+### M125 Tiny Multi-Implementation Primitive Lowering Slice
+
+Milestone 125 broadens the accepted exact primitive document shape from one
+scalar implementation block to one or more scalar implementation blocks under
+the same primitive header. Each accepted block is still exactly an
+`implementation scalar <type_tag>:` line followed by one `body ...` line, using
+the same primitive header forms and body argument shapes accepted by
+M107-M124.
+
+Catalog construction promotes all accepted implementation blocks into typed
+`Implementation` values for the primitive. Repeated implementation keys within
+one primitive, where the key is `(extension, type_tag)`, fail during catalog
+construction with `TSL-CATALOG-DUPLICATE-IMPLEMENTATION-KEY` before selection,
+lowering, or backend emission.
+
+Target requests remain explicit by backend, primitive name, extension, and type
+tag. Selection picks only the implementation whose extension and type tag match
+the target; unselected exact-shape implementation bodies are not lowered and do
+not produce lowering diagnostics. If the selected implementation body is
+semantically unsupported or mismatched, the existing structured lowering
+diagnostics apply to that selected body.
+
+This slice does not add target discovery, generate-all behavior, extension
+fallback, type groups, implementation ranking, broad TSL parsing, new operation
+or scalar type semantics, runtime `tsldata/` semantic reads, source repair, or
+renderer-side inference.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

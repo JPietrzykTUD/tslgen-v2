@@ -144,7 +144,7 @@ class CatalogBuilder:
                 )
             )
 
-        if len(parsed.implementations) != 1:
+        if not parsed.implementations:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
@@ -152,11 +152,12 @@ class CatalogBuilder:
                     message=(
                         f"primitive {parsed.name!r} has "
                         f"{len(parsed.implementations)} implementations; "
-                        "expected exactly 1"
+                        "expected at least 1"
                     ),
                     location=parsed.source,
                 )
             )
+        diagnostics.extend(_duplicate_implementation_key_diagnostics(parsed))
 
         implementations = tuple(
             self._build_implementation(parsed, implementation, shape, diagnostics)
@@ -241,6 +242,34 @@ def _duplicate_primitive_name_diagnostics(
                     f"{first.source.path}:{first.source.line}:{first.source.column}"
                 ),
                 location=primitive.source,
+            )
+        )
+    return tuple(diagnostics)
+
+
+def _duplicate_implementation_key_diagnostics(
+    primitive: ParsedPrimitive,
+) -> tuple[Diagnostic, ...]:
+    first_by_key: dict[tuple[str, str], ParsedImplementation] = {}
+    diagnostics: list[Diagnostic] = []
+    for implementation in primitive.implementations:
+        key = (implementation.extension, implementation.type_tag)
+        first = first_by_key.get(key)
+        if first is None:
+            first_by_key[key] = implementation
+            continue
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-CATALOG-DUPLICATE-IMPLEMENTATION-KEY",
+                message=(
+                    f"primitive {primitive.name!r} declares implementation "
+                    f"extension {implementation.extension!r} and type "
+                    f"{implementation.type_tag!r} more than once; first "
+                    "declaration is at "
+                    f"{first.source.path}:{first.source.line}:{first.source.column}"
+                ),
+                location=implementation.source,
             )
         )
     return tuple(diagnostics)

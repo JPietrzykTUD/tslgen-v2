@@ -2300,6 +2300,215 @@ def test_m124_source_set_generation_is_deterministic_across_input_orders(
     assert first.artifacts.digest_manifest() == second.artifacts.digest_manifest()
 
 
+def test_m125_catalog_builder_accepts_multiple_implementations_in_one_document(
+    tmp_path: Path,
+) -> None:
+    document = _source_document(
+        tmp_path,
+        "tiny_add_multi_type.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar ui32:",
+                "    body add(left, right)",
+                "  implementation scalar si32:",
+                "    body add(left, right)",
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((document,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    primitive = catalog_result.catalog.primitives[0]
+    assert primitive.name == "add"
+    assert primitive.template == "binary"
+    assert [implementation.type_tag for implementation in primitive.implementations] == [
+        "ui32",
+        "si32",
+    ]
+    assert [implementation.source for implementation in primitive.implementations] == [
+        SourceLocation(document.path, 2, 3),
+        SourceLocation(document.path, 4, 3),
+    ]
+    assert [implementation.body for implementation in primitive.implementations] == [
+        BinaryOperationBody(
+            operation="add",
+            left_parameter="left",
+            right_parameter="right",
+            source=SourceLocation(document.path, 3, 5),
+        ),
+        BinaryOperationBody(
+            operation="add",
+            left_parameter="left",
+            right_parameter="right",
+            source=SourceLocation(document.path, 5, 5),
+        ),
+    ]
+
+
+def test_m125_multi_implementation_source_selects_requested_type_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_multi_implementation_source(
+        tmp_path,
+        "add",
+        (
+            ("ui32", "add"),
+            ("si32", "add"),
+        ),
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="rust",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="ui32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/add_scalar_ui32.hpp",
+        "src/add_scalar_si32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        UI32_CPP_CONTENT,
+        RUST_CONTENT,
+    ]
+
+
+def test_m125_unselected_mismatched_body_is_not_lowered(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_multi_implementation_source(
+        tmp_path,
+        "add",
+        (
+            ("ui32", "sub"),
+            ("si32", "add"),
+        ),
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/add_scalar_si32.hpp",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        CPP_CONTENT,
+    ]
+
+
+def test_m125_duplicate_implementation_keys_stop_before_selection(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_multi_implementation_source(
+        tmp_path,
+        "add",
+        (
+            ("si32", "add"),
+            ("si32", "add"),
+        ),
+    )
+    lowerer = _StageOutputOnlyLowerer(
+        LoweringStageResult(
+            lowered_functions=LoweredFunctionSet((_lowered_function(),)),
+            diagnostics=(),
+        )
+    )
+
+    result = Generator(lowerer=lowerer).generate(
+        TslProject(
+            source_paths=(source,),
+            targets=(
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+    )
+
+    assert lowerer.selected == ()
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-CATALOG-DUPLICATE-IMPLEMENTATION-KEY"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 4
+    assert diagnostic.location.column == 3
+    assert "add" in diagnostic.message
+    assert "scalar" in diagnostic.message
+    assert "si32" in diagnostic.message
+    assert f"{source.resolve()}:2:3" in diagnostic.message
+
+
+def test_m125_selected_mismatched_body_reports_lowering_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_multi_implementation_source(
+        tmp_path,
+        "add",
+        (
+            ("si32", "sub"),
+            ("ui32", "add"),
+        ),
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="rust",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-OPERATION-MISMATCH"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 3
+    assert diagnostic.location.column == 5
+    assert "add" in diagnostic.message
+    assert "sub" in diagnostic.message
+
+
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
     tmp_path: Path,
 ) -> None:
@@ -3433,6 +3642,24 @@ def _write_tiny_source_file(
         ),
         encoding="utf-8",
     )
+    return source
+
+
+def _write_tiny_multi_implementation_source(
+    tmp_path: Path,
+    operation_id: str,
+    implementations: tuple[tuple[str, str], ...],
+) -> Path:
+    source = tmp_path / f"tiny_{operation_id}_multi.tsl"
+    lines = [f"prim<v:=(v,v)> {operation_id}(left, right):"]
+    for type_tag, body_operation in implementations:
+        lines.extend(
+            (
+                f"  implementation scalar {type_tag}:",
+                f"    body {body_operation}(left, right)",
+            )
+        )
+    source.write_text("\n".join(lines), encoding="utf-8")
     return source
 
 
