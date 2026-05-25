@@ -468,6 +468,32 @@ fallback, type groups, implementation ranking, broad TSL parsing, new operation
 or scalar type semantics, runtime `tsldata/` semantic reads, source repair, or
 renderer-side inference.
 
+### M126 Tiny Exact TSIL Emit-Return Binary Body Lowering Slice
+
+Milestone 126 adds one exact TSIL-like implementation body spelling for the
+accepted binary scalar primitive shape. Under `prim<v:=(v,v)> name(left,
+right):`, an implementation body line shaped exactly as
+`tsil "emit_return(<operation>(left, right));"` is accepted alongside the
+existing synthetic `body <operation>(left, right)` line.
+
+The parser promotes that exact TSIL emit-return form into the same typed body
+data used by the synthetic form: operation id, `left` parameter, `right`
+parameter, and source location. Catalog construction, selection, lowering, and
+backend emission consume only typed body data; they do not rescan raw TSIL text
+or render from the original TSIL spelling.
+
+Selected TSIL emit-return bodies follow the same lowering diagnostics as
+synthetic bodies. A selected body whose operation differs from the primitive
+operation fails with `TSL-LOWER-OPERATION-MISMATCH`. Malformed nearby TSIL
+forms, unary TSIL forms, comparison TSIL forms, nested calls, extra statements,
+missing punctuation, or different argument shapes are unsupported source forms
+and are not repaired, normalized, or silently interpreted.
+
+This slice does not add broad TSIL parsing, target discovery, generate-all
+behavior, extension fallback, type groups, implementation ranking, runtime
+`tsldata` semantic reads, backend-manifest reads, source repair, or
+renderer-side inference.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

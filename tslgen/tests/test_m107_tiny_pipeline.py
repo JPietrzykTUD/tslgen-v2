@@ -2509,6 +2509,184 @@ def test_m125_selected_mismatched_body_reports_lowering_diagnostic(
     assert "sub" in diagnostic.message
 
 
+def test_m126_catalog_builder_promotes_exact_tsil_emit_return_to_binary_body(
+    tmp_path: Path,
+) -> None:
+    document = _source_document(
+        tmp_path,
+        "tiny_add_tsil.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(add(left, right));"',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((document,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    assert body == BinaryOperationBody(
+        operation="add",
+        left_parameter="left",
+        right_parameter="right",
+        source=SourceLocation(document.path, 3, 5),
+    )
+
+
+def test_m126_selected_tsil_emit_return_source_generates_cpp_and_rust_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_tsil_source(tmp_path, "add", "si32")
+
+    result = generate_from_paths(source_paths=(source,), targets=_targets())
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/add_scalar_si32.hpp",
+        "src/add_scalar_si32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        CPP_CONTENT,
+        RUST_CONTENT,
+    ]
+
+
+def test_m126_unselected_tsil_emit_return_body_is_not_lowered(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_multi_implementation_body_source(
+        tmp_path,
+        "add",
+        (
+            ("ui32", '    tsil "emit_return(sub(left, right));"'),
+            ("si32", "    body add(left, right)"),
+        ),
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/add_scalar_si32.hpp",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        CPP_CONTENT,
+    ]
+
+
+def test_m126_selected_mismatched_tsil_emit_return_reports_lowering_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_tsil_source(
+        tmp_path,
+        "add",
+        "si32",
+        body_operation="sub",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="rust",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-OPERATION-MISMATCH"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 3
+    assert diagnostic.location.column == 5
+    assert "add" in diagnostic.message
+    assert "sub" in diagnostic.message
+
+
+def test_m126_malformed_tsil_emit_return_reports_parse_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_tsil_source(
+        tmp_path,
+        "add",
+        "si32",
+        body_line='    tsil "emit_return(add(left, right))"',
+    )
+
+    result = generate_from_paths(source_paths=(source,), targets=_targets())
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-PARSE-UNSUPPORTED-FORM"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 3
+    assert diagnostic.location.column == 5
+    assert "emit_return(add(left, right))" in diagnostic.message
+
+
+def test_m126_tsil_emit_return_is_not_accepted_for_unary_bodies(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_neg_tsil.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v)> neg(value):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(neg(value));"',
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="neg",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-PARSE-UNSUPPORTED-FORM"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 3
+    assert diagnostic.location.column == 5
+
+
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
     tmp_path: Path,
 ) -> None:
@@ -3657,6 +3835,48 @@ def _write_tiny_multi_implementation_source(
             (
                 f"  implementation scalar {type_tag}:",
                 f"    body {body_operation}(left, right)",
+            )
+        )
+    source.write_text("\n".join(lines), encoding="utf-8")
+    return source
+
+
+def _write_tiny_tsil_source(
+    tmp_path: Path,
+    operation_id: str,
+    type_tag: str,
+    *,
+    body_operation: str | None = None,
+    body_line: str | None = None,
+) -> Path:
+    source = tmp_path / f"tiny_{operation_id}_{type_tag}_tsil.tsl"
+    selected_body_operation = body_operation or operation_id
+    source.write_text(
+        "\n".join(
+            (
+                f"prim<v:=(v,v)> {operation_id}(left, right):",
+                f"  implementation scalar {type_tag}:",
+                body_line
+                or f'    tsil "emit_return({selected_body_operation}(left, right));"',
+            )
+        ),
+        encoding="utf-8",
+    )
+    return source
+
+
+def _write_tiny_multi_implementation_body_source(
+    tmp_path: Path,
+    operation_id: str,
+    implementations: tuple[tuple[str, str], ...],
+) -> Path:
+    source = tmp_path / f"tiny_{operation_id}_multi_body.tsl"
+    lines = [f"prim<v:=(v,v)> {operation_id}(left, right):"]
+    for type_tag, body_line in implementations:
+        lines.extend(
+            (
+                f"  implementation scalar {type_tag}:",
+                body_line,
             )
         )
     source.write_text("\n".join(lines), encoding="utf-8")

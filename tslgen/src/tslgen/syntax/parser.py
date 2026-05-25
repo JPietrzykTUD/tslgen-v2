@@ -42,6 +42,12 @@ _BODY_PATTERN = re.compile(
     r"(?P<operation>[A-Za-z_][A-Za-z0-9_]*)"
     r"\((?P<arguments>[^)]*)\)$"
 )
+_TSIL_BINARY_EMIT_RETURN_BODY_PATTERN = re.compile(
+    r'^    tsil "emit_return\('
+    r"(?P<operation>[A-Za-z_][A-Za-z0-9_]*)"
+    r"\((?P<arguments>left, right)\)"
+    r'\);"$'
+)
 _NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -108,7 +114,7 @@ class TslParser:
                 )
                 return None
 
-            body = _BODY_PATTERN.match(body_line)
+            body = _match_body(body_line, signature=header.group("signature"))
             if body is None:
                 diagnostics.append(
                     _unsupported_line(
@@ -180,6 +186,15 @@ def _match_header(line: str) -> re.Match[str] | None:
         match = pattern.match(line)
         if match is not None:
             return match
+    return None
+
+
+def _match_body(line: str, *, signature: str) -> re.Match[str] | None:
+    body = _BODY_PATTERN.match(line)
+    if body is not None:
+        return body
+    if signature == "v:=(v,v)":
+        return _TSIL_BINARY_EMIT_RETURN_BODY_PATTERN.match(line)
     return None
 
 

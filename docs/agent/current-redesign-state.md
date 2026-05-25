@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 125 is accepted.
+Milestone 126 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -528,6 +528,33 @@ parse broad TSIL strings, nested calls, intrinsics, casts, variables,
 multiple statements, multiline bodies, unary/comparison TSIL forms, target
 discovery, backend manifests, source repair, renderer inference, or new
 lowering IR families.
+
+The M126 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, documentation,
+and validation audits. M126 added exact parser-owned recognition for the
+binary scalar TSIL body line
+`tsil "emit_return(<operation>(left, right));"` and immediately promoted it
+into the existing typed parsed body data before catalog construction,
+selection, lowering, and backend emission. It preserved the accepted
+synthetic `body <operation>(left, right)` form, M125 multi-implementation
+behavior, M124 multi-source behavior, explicit target selection,
+bootstrap-core lowering semantics, backend-owned spellings, source-body
+integrity, deterministic artifact ordering, and representative artifact
+bytes. It did not add broad TSIL parsing, nested calls, intrinsics, casts,
+variables, multiple statements, unary/comparison TSIL forms, target discovery,
+backend manifests, runtime corpus reads, source repair, renderer inference,
+registries, dispatchers, hidden backfeeds, fixpoint behavior, or new lowering
+IR families.
+
+Integrated post-M126 next-run planning selected
+`Milestone 127: Tiny Clean Exact TSIL Emit-Return Unary Body Lowering Slice`.
+The selected M127 task keeps focus on lowering and follows the accepted M126
+pattern for unary scalar implementation bodies by accepting exactly
+`tsil "emit_return(<operation>(value));"` under the accepted unary primitive
+header form. It must remain exact-form parser recognition that promotes to
+typed unary body data before lowering, and must not add broad TSIL parsing,
+binary/comparison expansion beyond accepted forms, target discovery, backend
+manifests, source repair, renderer inference, or new lowering IR families.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1601,39 +1628,39 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 126.
+Execute Milestone 127.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m126-execution-review-loop-prompt.md
+docs/agent/runs/m127-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 126: Tiny Clean Exact TSIL Emit-Return Binary Body Lowering Slice
+Milestone 127: Tiny Clean Exact TSIL Emit-Return Unary Body Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-M125 execution-review returned Accept With Follow-Ups after one write-capable
+M126 execution-review returned Accept With Follow-Ups after one write-capable
 executor and read-only architecture, boundary, documentation, and validation
-audits. Follow-ups were finalization-only: update state, mark M125 accepted,
-create the integrated M126 execution prompt, and keep validation-created
+audits. Follow-ups were finalization-only: update state, mark M126 accepted,
+create the integrated M127 execution prompt, and keep validation-created
 caches removed.
 ```
 
 Next expected action:
 
 ```text
-Run the active M126 execution-review-loop prompt. M126 should accept exactly
-one TSIL-like binary scalar implementation body form,
-`tsil "emit_return(<operation>(left, right));"`, lower it through the same
-typed selected-implementation path as existing exact binary bodies, and
-preserve M107-M125 behavior.
+Run the active M127 execution-review-loop prompt. M127 should accept exactly
+one TSIL-like unary scalar implementation body form,
+`tsil "emit_return(<operation>(value));"`, lower it through the same typed
+selected-implementation path as existing exact unary bodies, and preserve
+M107-M126 behavior.
 ```
 
 Accepted planning prompt:
@@ -5463,13 +5490,30 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M126
+No stop condition is active. The workflow is ready to run the active M127
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M126 execution, run the validation command listed in
-`docs/agent/runs/m126-execution-review-loop-prompt.md`.
+For active M127 execution, run the validation command listed in
+`docs/agent/runs/m127-execution-review-loop-prompt.md`.
+
+For M126 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The public API import
+command returned exit 0 with no output. The py-compile command returned exit 0
+with no output. The targeted clean-package pytest command returned exit 0 with
+`118 passed in 7.42s`. Validation-created `__pycache__` directories were
+removed, and the final `find tslgen -type d -name __pycache__ -print` returned
+exit 0 with no output. The validation auditor reported `Accept`.
 
 For M125 execution and review, validation completed with:
 
