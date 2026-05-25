@@ -305,6 +305,19 @@ BINARY_OPERATOR_TSIL_CASES = (
     ("bit_xor", '    tsil "emit_return(left ^ right);"', "^"),
 )
 
+REMAINING_BINARY_OPERATOR_TSIL_CASES = (
+    ("mul", '    tsil "emit_return(left * right);"', "*"),
+    ("div", '    tsil "emit_return(left / right);"', "/"),
+    ("mod", '    tsil "emit_return(left % right);"', "%"),
+    ("shift_left", '    tsil "emit_return(left << right);"', "<<"),
+    ("shift_right", '    tsil "emit_return(left >> right);"', ">>"),
+)
+
+ALL_BINARY_OPERATOR_TSIL_CASES = (
+    *BINARY_OPERATOR_TSIL_CASES,
+    *REMAINING_BINARY_OPERATOR_TSIL_CASES,
+)
+
 
 def test_m110_scalar_descriptor_lookup_table() -> None:
     assert supported_scalar_type_tags() == ("si32", "ui32", "f32", "f64")
@@ -3536,8 +3549,6 @@ def test_m131_malformed_binary_operator_tsil_forms_report_parse_diagnostics(
 ) -> None:
     malformed_cases = (
         ('    tsil "emit_return(left+right);"', "left+right"),
-        ('    tsil "emit_return(left * right);"', "left * right"),
-        ('    tsil "emit_return(left << right);"', "left << right"),
         ('    tsil "emit_return(left + right)"', "left + right"),
         ('    tsil "emit_return(left + right + right);"', "left + right + right"),
     )
@@ -3845,6 +3856,319 @@ def test_m132_comparison_and_unary_parameter_shapes_remain_unchanged(
     assert [diagnostic.location for diagnostic in unary_result.diagnostics] == [
         SourceLocation(unary.path, 1, 1),
     ]
+
+
+def test_m133_catalog_builder_promotes_remaining_binary_operator_tsil_to_body(
+    tmp_path: Path,
+) -> None:
+    for operation_id, body_line, _operator in REMAINING_BINARY_OPERATOR_TSIL_CASES:
+        document = _source_document(
+            tmp_path,
+            f"tiny_{operation_id}_remaining_binary_operator_tsil.tsl",
+            "\n".join(
+                (
+                    f"prim<v:=(v,v)> {operation_id}(left, right):",
+                    "  implementation scalar si32:",
+                    body_line,
+                )
+            ),
+        )
+
+        parse_result = TslParser().parse((document,))
+        catalog_result = CatalogBuilder().build(parse_result.documents)
+
+        assert parse_result.diagnostics == ()
+        assert catalog_result.diagnostics == ()
+        assert catalog_result.catalog is not None
+        body = catalog_result.catalog.primitives[0].implementations[0].body
+        assert body == BinaryOperationBody(
+            operation=operation_id,
+            left_parameter="left",
+            right_parameter="right",
+            source=SourceLocation(document.path, 3, 5),
+        )
+
+
+def test_m133_remaining_binary_operator_tsil_sources_generate_artifacts(
+    tmp_path: Path,
+) -> None:
+    cases = (
+        (
+            "mul",
+            ("factor1", "factor2"),
+            '    tsil "emit_return(factor1 * factor2);"',
+            "*",
+            ("factor1", "factor2"),
+        ),
+        (
+            "div",
+            ("divident", "divisor"),
+            '    tsil "emit_return(divident / divisor);"',
+            "/",
+            ("divident", "divisor"),
+        ),
+        (
+            "mod",
+            ("dividend", "divisor"),
+            '    tsil "emit_return(dividend % divisor);"',
+            "%",
+            ("dividend", "divisor"),
+        ),
+        (
+            "shift_left",
+            ("data", "shift"),
+            '    tsil "emit_return(data << shift);"',
+            "<<",
+            ("data", "shift"),
+        ),
+        (
+            "shift_right",
+            ("data", "shift"),
+            '    tsil "emit_return(data >> shift);"',
+            ">>",
+            ("data", "shift"),
+        ),
+    )
+
+    for operation_id, parameters, body_line, operator, operands in cases:
+        source = _write_tiny_binary_body_source(
+            tmp_path,
+            f"tiny_{operation_id}_m133_operator.tsl",
+            operation_id,
+            parameters=parameters,
+            body_line=body_line,
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name=operation_id,
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+                Target(
+                    backend="rust",
+                    primitive_name=operation_id,
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.diagnostics == ()
+        assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+            f"include/tsl/{operation_id}_scalar_si32.hpp",
+            f"src/{operation_id}_scalar_si32.rs",
+        ]
+        assert [artifact.content for artifact in result.artifacts.artifacts] == [
+            _expected_binary_cpp_content(
+                operation_id,
+                operator,
+                parameters=parameters,
+                operands=operands,
+            ),
+            _expected_binary_rust_content(
+                operation_id,
+                operator,
+                parameters=parameters,
+                operands=operands,
+            ),
+        ]
+        assert all(
+            "tsil" not in artifact.content and "emit_return" not in artifact.content
+            for artifact in result.artifacts.artifacts
+        )
+
+
+def test_m133_remaining_binary_operator_tsil_preserves_swapped_and_repeated_operands(
+    tmp_path: Path,
+) -> None:
+    cases = (
+        (
+            "mul_swapped",
+            '    tsil "emit_return(rhs * lhs);"',
+            ("rhs", "lhs"),
+        ),
+        (
+            "mul_repeated",
+            '    tsil "emit_return(lhs * lhs);"',
+            ("lhs", "lhs"),
+        ),
+    )
+
+    for suffix, body_line, operands in cases:
+        source = _write_tiny_binary_body_source(
+            tmp_path,
+            f"tiny_mul_{suffix}.tsl",
+            "mul",
+            parameters=("lhs", "rhs"),
+            body_line=body_line,
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name="mul",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+                Target(
+                    backend="rust",
+                    primitive_name="mul",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.diagnostics == ()
+        assert [artifact.content for artifact in result.artifacts.artifacts] == [
+            _expected_binary_cpp_content(
+                "mul",
+                "*",
+                parameters=("lhs", "rhs"),
+                operands=operands,
+            ),
+            _expected_binary_rust_content(
+                "mul",
+                "*",
+                parameters=("lhs", "rhs"),
+                operands=operands,
+            ),
+        ]
+
+
+def test_m133_undeclared_remaining_binary_operator_operands_report_catalog_diagnostics(
+    tmp_path: Path,
+) -> None:
+    cases = (
+        ("mul", '    tsil "emit_return(lhs * ghost);"'),
+        ("shift_right", '    tsil "emit_return(ghost >> rhs);"'),
+    )
+
+    for operation_id, body_line in cases:
+        source = _write_tiny_binary_body_source(
+            tmp_path,
+            f"tiny_{operation_id}_m133_undeclared.tsl",
+            operation_id,
+            parameters=("lhs", "rhs"),
+            body_line=body_line,
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name=operation_id,
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.artifacts.artifacts == ()
+        assert len(result.diagnostics) == 1
+        diagnostic = result.diagnostics[0]
+        assert diagnostic.code == "TSL-CATALOG-UNDECLARED-BODY-OPERAND"
+        assert diagnostic.severity == "error"
+        assert diagnostic.location is not None
+        assert diagnostic.location.path == source.resolve()
+        assert diagnostic.location.line == 3
+        assert diagnostic.location.column == 5
+        assert "ghost" in diagnostic.message
+        assert "'lhs', 'rhs'" in diagnostic.message
+
+
+def test_m133_selected_mismatched_remaining_binary_operator_tsil_reports_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_binary_body_source(
+        tmp_path,
+        "tiny_shift_right_m133_mismatch.tsl",
+        "shift_right",
+        parameters=("data", "shift"),
+        body_line='    tsil "emit_return(data << shift);"',
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="rust",
+                primitive_name="shift_right",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-OPERATION-MISMATCH"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 3
+    assert diagnostic.location.column == 5
+    assert "shift_right" in diagnostic.message
+    assert "shift_left" in diagnostic.message
+
+
+def test_m133_malformed_remaining_binary_operator_tsil_forms_report_parse_diagnostics(
+    tmp_path: Path,
+) -> None:
+    malformed_cases = (
+        ('    tsil "emit_return(left*right);"', "left*right"),
+        ('    tsil "emit_return(left && right);"', "left && right"),
+        ('    tsil "emit_return(left * (right));"', "left * (right)"),
+        (
+            '    tsil "emit_return(static_cast<int>(left) * right);"',
+            "static_cast<int>(left) * right",
+        ),
+        ('    tsil "emit_return(left * right)"', "left * right"),
+        (
+            '    tsil "emit_return(details::arith_mul(left, right));"',
+            "details::arith_mul",
+        ),
+    )
+
+    for index, (body_line, expected_fragment) in enumerate(malformed_cases):
+        source = _write_tiny_binary_body_source(
+            tmp_path,
+            f"tiny_mul_m133_bad_operator_{index}.tsl",
+            "mul",
+            parameters=("left", "right"),
+            body_line=body_line,
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name="mul",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.artifacts.artifacts == ()
+        assert len(result.diagnostics) == 1
+        diagnostic = result.diagnostics[0]
+        assert diagnostic.code == "TSL-PARSE-UNSUPPORTED-FORM"
+        assert diagnostic.severity == "error"
+        assert diagnostic.location is not None
+        assert diagnostic.location.path == source.resolve()
+        assert diagnostic.location.line == 3
+        assert diagnostic.location.column == 5
+        assert expected_fragment in diagnostic.message
 
 
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
@@ -4853,7 +5177,7 @@ def _ordered_comparison_operator(operation_id: str) -> str:
 
 
 def _binary_operator(operation_id: str) -> str:
-    for candidate_id, _body_line, operator in BINARY_OPERATOR_TSIL_CASES:
+    for candidate_id, _body_line, operator in ALL_BINARY_OPERATOR_TSIL_CASES:
         if candidate_id == operation_id:
             return operator
     raise AssertionError(f"missing binary operator for {operation_id!r}")

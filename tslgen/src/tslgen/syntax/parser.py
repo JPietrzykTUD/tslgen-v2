@@ -54,7 +54,7 @@ _TSIL_BINARY_EMIT_RETURN_BODY_PATTERN = re.compile(
 _TSIL_BINARY_OPERATOR_EMIT_RETURN_BODY_PATTERN = re.compile(
     r'^    tsil "emit_return\('
     rf"(?P<left>{_IDENTIFIER}) "
-    r"(?P<operator>\+|-|&|\||\^) "
+    r"(?P<operator><<|>>|\+|-|\*|/|%|&|\||\^) "
     rf"(?P<right>{_IDENTIFIER})"
     r'\);"$'
 )
@@ -95,6 +95,18 @@ _EXACT_BINARY_OPERATOR_TSIL_BODIES: tuple[_ExactBinaryOperatorTsilBody, ...] = (
         operation="sub",
     ),
     _ExactBinaryOperatorTsilBody(
+        operator="*",
+        operation="mul",
+    ),
+    _ExactBinaryOperatorTsilBody(
+        operator="/",
+        operation="div",
+    ),
+    _ExactBinaryOperatorTsilBody(
+        operator="%",
+        operation="mod",
+    ),
+    _ExactBinaryOperatorTsilBody(
         operator="&",
         operation="bit_and",
     ),
@@ -105,6 +117,14 @@ _EXACT_BINARY_OPERATOR_TSIL_BODIES: tuple[_ExactBinaryOperatorTsilBody, ...] = (
     _ExactBinaryOperatorTsilBody(
         operator="^",
         operation="bit_xor",
+    ),
+    _ExactBinaryOperatorTsilBody(
+        operator="<<",
+        operation="shift_left",
+    ),
+    _ExactBinaryOperatorTsilBody(
+        operator=">>",
+        operation="shift_right",
     ),
 )
 

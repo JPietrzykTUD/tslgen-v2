@@ -17685,18 +17685,23 @@ docs/agent/runs/m133-execution-review-loop-prompt.md
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M132.
-This milestone keeps the task focused on lowering and completes the currently
-modeled binary operator-shaped TSIL bridge by adding exact selected-body
-recognition for the remaining already-supported binary operations whose
-backend spellings and lowering descriptors already exist: `mul`, `div`, `mod`,
-`shift_left`, and `shift_right`.
+Accepted after the M133 execution-review loop. This milestone kept the task
+focused on lowering and completed the currently modeled binary operator-shaped
+TSIL bridge by adding exact selected-body recognition for the remaining
+already-supported binary operations whose backend spellings and lowering
+descriptors already exist: `mul`, `div`, `mod`, `shift_left`, and
+`shift_right`.
 
 This milestone is not arbitrary C, C++, Rust, or TSIL expression parsing. It
 recognizes only exact `tsil "emit_return(operand0 OP operand1);"` forms for
 `*`, `/`, `%`, `<<`, and `>>` under the existing tiny clean binary document
 shape. Operands must be declared binary parameters. Operand order and
 repetition are source-authored semantics and must be preserved exactly.
+Legacy helper-shaped bodies such as `details::arith_mul(...)` are backend
+evidence from `frozen/`, not clean source semantics. The clean source form for
+the modeled operation is the exact operator spelling, for example
+`factor1 * factor2`; any future backend helper choice belongs after typed
+lowering, inside backend translation/rendering.
 
 Goal:
 
@@ -17761,7 +17766,8 @@ Out of scope:
 - Broad TSIL parsing, primitive calls, intrinsics, helper calls such as
   `details::arith_mul(...)`, casts, variables, immediates, multiple statements,
   multiline TSIL bodies, helper evaluation, branch pruning, source repair, or
-  TSIL compiler behavior.
+  TSIL compiler behavior. Treat `details::arith_mul(...)` and similar helper
+  calls as legacy/backend evidence, not accepted clean source forms.
 - Adding operation ids, backend spellings, scalar type support, compatibility
   rules, or semantic rules beyond operations already modeled before this
   milestone.
@@ -17807,6 +17813,17 @@ Remove any validation-created `__pycache__` directories before the final cache
 check. Do not run the old `tslgenold` validation profile as proof of the clean
 product slice.
 
+Validation completed with the required M133 profile. `git diff --check`
+returned exit 0 with no output. The public API import command returned exit 0
+with no output. The py-compile command returned exit 0 with no output. The
+targeted clean-package pytest command returned exit 0 with
+`154 passed in 8.92s`. The first cache check found validation-created
+`__pycache__` directories under `tslgen/src/tslgen/analysis`,
+`tslgen/src/tslgen/lowering`, `tslgen/src/tslgen/pipeline`,
+`tslgen/src/tslgen/syntax`, and `tslgen/tests`; they were removed, and the
+final `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+output.
+
 Review notes:
 
 - Reviewers should require M133 to remain an exact remaining binary operator
@@ -17818,3 +17835,142 @@ Review notes:
   renderer-side inference, or new IR ceremony.
 - Reviewers should require accepted M133 TSIL operator forms to become typed
   catalog/lowering values before backend emission.
+
+Next concrete prompt:
+
+```text
+docs/agent/runs/m134-execution-review-loop-prompt.md
+```
+
+### Milestone 134: Tiny Clean Scalar Width Type Descriptor Lowering Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M133.
+This milestone keeps the task focused on lowering. It broadens the tiny clean
+scalar type descriptor set beyond the current 32-bit integer baseline by
+adding common 8-bit, 16-bit, and 64-bit integer scalar descriptors. This makes
+future `.tsl` edits to explicit scalar type tags product input rather than
+requiring code changes for every ordinary integer width.
+
+This milestone is not a broad type system or corpus type-group loader. It adds
+only explicit lowering-owned scalar descriptors and backend-owned C++/Rust
+type spellings for already-known scalar type tags.
+
+Goal:
+
+Allow explicit tiny clean scalar implementations and targets for these new
+integer type tags:
+
+```text
+si8, ui8, si16, ui16, si64, ui64
+```
+
+For example:
+
+```text
+prim<v:=(v,v)> add(left, right):
+  implementation scalar si16:
+    tsil "emit_return(left + right);"
+```
+
+with target:
+
+```python
+Target(backend="rust", primitive_name="add", extension="scalar", type_tag="si16")
+```
+
+should lower through a typed `ScalarTypeDescriptor(tag="si16", family="integer",
+bit_width=16, signedness="signed")` and generate backend-owned Rust/C++ type
+spellings from the backends, not from lowering.
+
+Scope:
+
+- Add lowering-owned scalar descriptors for `si8`, `ui8`, `si16`, `ui16`,
+  `si64`, and `ui64`, preserving existing descriptors for `si32`, `ui32`,
+  `f32`, and `f64`.
+- Preserve descriptor fields: tag, kind, family, bit width, and signedness.
+  Do not put C++ or Rust spelling text in lowering descriptors.
+- Add backend-owned type spellings for the new scalar tags:
+  - C++: `std::int8_t`, `std::uint8_t`, `std::int16_t`, `std::uint16_t`,
+    `std::int64_t`, `std::uint64_t`;
+  - Rust: `i8`, `u8`, `i16`, `u16`, `i64`, `u64`.
+- Preserve existing backend-owned spellings for `si32`, `ui32`, `f32`, and
+  `f64`.
+- Preserve existing binary, unary, and comparison operation descriptors and
+  exact source-body forms from M107-M133.
+- Update operation/type compatibility only as needed for the expanded scalar
+  descriptor set: arithmetic binaries without explicit restrictions support
+  all scalar descriptors; integer-only binary operations support all integer
+  descriptors and reject floating descriptors; comparison operations continue
+  to lower for all scalar descriptors; unary `bit_not` supports integer
+  descriptors; unary `neg` supports signed integer and floating descriptors.
+- Add generated C++/Rust artifact tests for representative new types across
+  binary, unary, and comparison lowering.
+- Add negative tests proving unsupported type tags remain
+  `TSL-LOWER-UNSUPPORTED-TYPE` diagnostics and floating descriptors remain
+  rejected for integer-only operations.
+- Preserve deterministic descriptor ordering, generated artifact ordering,
+  diagnostics, and representative existing artifact bytes where the selected
+  type remains unchanged.
+
+Out of scope:
+
+- Broad `tsldata` type groups, lane sets, vector/register metadata, mask
+  types, immediate types, pointer/reference types, extension-specific type
+  shapes, or backend manifest/YAML type-map loading.
+- Parsing broad corpus layout, nested implementation maps, multiple primitive
+  blocks in one document, attributes, tests, descriptions, `requires` clauses,
+  type groups, extension fallback, dependency closure, or target discovery.
+- Broad TSIL parsing, primitive calls, intrinsics, helper calls such as
+  `details::arith_mul(...)`, casts, variables, immediates, multiple statements,
+  multiline TSIL bodies, helper evaluation, branch pruning, source repair, or
+  TSIL compiler behavior.
+- Scalar shift-count signatures such as `v:=(v,s)` or `v:=(v,sImm)`,
+  immediate parameters, runtime/immediate shift-count range policy, integer
+  promotion policy, overflow/wrapping policy, arithmetic-vs-logical right
+  shift policy beyond already accepted operation/type compatibility, or
+  generated-code execution semantics.
+- Adding operation ids, backend operator spellings, primitive aliases, target
+  discovery, registries, dispatchers, callback maps, plugin systems, hidden
+  backfeeds, fixpoint mechanisms, broad operation frameworks, or new lowering
+  IR category/request/result families.
+- Loading operation semantics, compatibility rules, type aliases, or backend
+  spellings from `tsldata/`, backend manifests, YAML, `frozen`, `tslgenold`,
+  plugins, or environment configuration at runtime.
+
+Accepted outputs:
+
+- Explicit tiny clean scalar source for the new type tags can be selected and
+  lowered when operation/type compatibility allows the selected operation.
+- Generated C++/Rust artifacts use backend-owned type spellings for the new
+  scalar tags.
+- Lowering descriptors remain backend-neutral typed values.
+- Unsupported type tags and incompatible operation/type pairs produce
+  structured diagnostics and are not normalized or inferred.
+- Existing M107-M133 behavior and representative artifact bytes remain stable.
+
+Validation:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/scalar_types.py tslgen/src/tslgen/lowering/operation_type_compatibility.py tslgen/src/tslgen/lowering/lowerer.py tslgen/src/tslgen/backends/cpp/backend.py tslgen/src/tslgen/backends/rust/backend.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Remove any validation-created `__pycache__` directories before the final cache
+check. Do not run the old `tslgenold` validation profile as proof of the clean
+product slice.
+
+Review notes:
+
+- Reviewers should require M134 to remain a scalar descriptor/type lowering
+  slice, not broad type-group loading, vector/SIMD work, backend manifest
+  loading, or corpus ingestion.
+- Reviewers should reject moving backend-owned type spellings into lowering,
+  adding scalar shift-count signatures, source repair, target discovery,
+  primitive aliases, runtime corpus reads, or new IR ceremony.
+- Reviewers should require operation/type compatibility changes to be explicit,
+  typed, and tested.

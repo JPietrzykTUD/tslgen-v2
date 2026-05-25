@@ -683,6 +683,42 @@ add parameter aliasing, broad `tsldata` parsing, shift/immediate source
 forms, new binary operator TSIL spellings, target discovery, backend manifest
 loading, or renderer-side semantic inference.
 
+### M133 Tiny Remaining Binary Operator TSIL Body Lowering Slice
+
+Milestone 133 adds exact operator-shaped TSIL body spellings for the remaining
+already-modeled binary scalar primitive operations. Under
+`prim<v:=(v,v)> name(param0, param1):`, these implementation body lines are
+accepted alongside the existing synthetic `body <operation>(operand0,
+operand1)` form, the M126 function-call TSIL form, and the M131 operator TSIL
+forms:
+
+```text
+tsil "emit_return(operand0 * operand1);"
+tsil "emit_return(operand0 / operand1);"
+tsil "emit_return(operand0 % operand1);"
+tsil "emit_return(operand0 << operand1);"
+tsil "emit_return(operand0 >> operand1);"
+```
+
+The parser promotes those exact body spellings into typed
+`BinaryOperationBody` values with operation ids `mul`, `div`, `mod`,
+`shift_left`, and `shift_right`. Operands must be declared binary parameters,
+and source-authored operand order and repetition are preserved through
+catalog construction, lowering, and backend emission.
+
+Selected M133 operator TSIL bodies follow the same lowering diagnostics as
+synthetic binary bodies. A selected body whose promoted operation differs from
+the primitive operation fails with `TSL-LOWER-OPERATION-MISMATCH`. Malformed
+nearby forms such as missing spaces, logical operators, nested expressions,
+casts, missing semicolons, or helper-shaped calls such as
+`details::arith_mul(...)` are unsupported source forms and are not repaired,
+normalized, parsed as target-language syntax, or silently interpreted.
+
+This slice does not add broad TSIL parsing, helper-call parsing, new operation
+ids, backend spellings, scalar shift-count signatures, primitive aliases,
+target discovery, backend manifest loading, runtime corpus reads, source
+repair, or renderer-side semantic inference.
+
 ### Exact Operator-Looking TSIL Body Spellings
 
 Operator-looking TSIL body fragments are accepted only as documented exact
@@ -694,9 +730,11 @@ When accepted, an operator-looking spelling is promoted immediately into typed
 semantic body data for an existing TSL primitive operation. For example,
 `left == right` promotes to operation id `equal`, `left != right` promotes to
 operation id `nequal`, and `left <= right` promotes to operation id
-`less_than_or_equal`. Later pipeline stages consume only those typed body
-values; they do not rescan raw TSIL text or treat the original source spelling
-as target-language text.
+`less_than_or_equal`. Binary spellings such as `factor1 * factor2` and
+`data << shift` promote to `mul` and `shift_left` only when the operands are
+declared binary parameters. Later pipeline stages consume only those typed
+body values; they do not rescan raw TSIL text or treat the original source
+spelling as target-language text.
 
 The generator must not add arbitrary target-language operators merely because
 their spelling is shared by C, C++, and Rust. New operator-looking forms must

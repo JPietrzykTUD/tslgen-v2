@@ -27,6 +27,11 @@ recognizes only exact `tsil "emit_return(operand0 OP operand1);"` forms for
 `*`, `/`, `%`, `<<`, and `>>` under the existing tiny clean binary document
 shape. Operands must be declared binary parameters. Operand order and
 repetition are source-authored semantics and must be preserved exactly.
+Legacy helper-shaped bodies such as `details::arith_mul(...)` are backend
+evidence from `frozen/`, not clean source semantics. The clean source form for
+the modeled operation is the exact operator spelling, for example
+`factor1 * factor2`; any future backend helper choice belongs after typed
+lowering, inside backend translation/rendering.
 
 ## Read First
 
@@ -131,7 +136,8 @@ Run exactly one write-capable executor for M133. The executor should:
 - Broad TSIL parsing, primitive calls, intrinsics, helper calls such as
   `details::arith_mul(...)`, casts, variables, immediates, multiple statements,
   multiline TSIL bodies, helper evaluation, branch pruning, source repair, or
-  TSIL compiler behavior.
+  TSIL compiler behavior. Treat `details::arith_mul(...)` and similar helper
+  calls as legacy/backend evidence, not accepted clean source forms.
 - Adding operation ids, backend spellings, scalar type support, compatibility
   rules, or semantic rules beyond operations already modeled before this
   milestone.
