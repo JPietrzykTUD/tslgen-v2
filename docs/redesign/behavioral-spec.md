@@ -611,6 +611,44 @@ extension fallback, type groups, implementation ranking, runtime `tsldata`
 semantic reads, backend-manifest reads, source repair, target-language
 operator modeling, or renderer-side inference.
 
+### M131 Tiny Exact TSIL Emit-Return Binary Operator Body Lowering Slice
+
+Milestone 131 adds five exact TSIL-like implementation body spellings for the
+accepted binary scalar primitive shape. Under `prim<v:=(v,v)> name(left,
+right):`, these implementation body lines are accepted alongside the existing
+synthetic `body <operation>(left, right)` lines and the M126
+function-call-shaped TSIL emit-return form:
+
+```text
+tsil "emit_return(left + right);"
+tsil "emit_return(left - right);"
+tsil "emit_return(left & right);"
+tsil "emit_return(left | right);"
+tsil "emit_return(left ^ right);"
+```
+
+The parser promotes those exact binary operator TSIL emit-return forms into
+the same typed binary body data used by the synthetic forms: operation ids
+`add`, `sub`, `bit_and`, `bit_or`, and `bit_xor`, with `left` and `right`
+parameters and source location. Catalog construction, selection, lowering,
+and backend emission consume only typed body data; they do not rescan raw TSIL
+text or render from the original TSIL spelling.
+
+Selected binary operator TSIL emit-return bodies follow the same lowering
+diagnostics as synthetic binary bodies. A selected body whose promoted
+operation differs from the primitive operation fails with
+`TSL-LOWER-OPERATION-MISMATCH`. Malformed nearby binary operator TSIL forms,
+operators beyond the five exact spellings listed above, missing punctuation,
+different operand names, or non-exact binary expressions are unsupported
+source forms and are not repaired, normalized, or silently interpreted.
+
+This slice does not add broad TSIL parsing, binary operator spellings beyond
+the five exact spellings listed above, target discovery, generate-all
+behavior, extension fallback, type groups, implementation ranking, runtime
+`tsldata` semantic reads, backend-manifest reads, source repair,
+target-language operator modeling, primitive aliasing, or renderer-side
+inference.
+
 ### Exact Operator-Looking TSIL Body Spellings
 
 Operator-looking TSIL body fragments are accepted only as documented exact

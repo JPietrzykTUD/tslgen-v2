@@ -1835,13 +1835,14 @@ Status: Accepted
 
 Context:
 
-Clean restart milestones M126-M130 added exact `tsil "emit_return(...);"`
+Clean restart milestones M126-M131 added exact `tsil "emit_return(...);"`
 source-body spellings as alternatives to the synthetic `body ...` fixture
 forms. Some accepted scalar source forms contain operator-looking text such as
 `left == right`, `left != right`, `left < right`, `left > right`,
-`left <= right`, and `left >= right`. These spellings are valid in C, C++,
-and Rust, but a product-owner review clarified that the redesign must not
-drift into modeling every operator shared by those target languages.
+`left <= right`, `left >= right`, `left + right`, `left - right`,
+`left & right`, `left | right`, and `left ^ right`. These spellings are valid
+in C, C++, and Rust, but a product-owner review clarified that the redesign
+must not drift into modeling every operator shared by those target languages.
 
 Considered alternatives:
 
@@ -1857,8 +1858,8 @@ Recognize operator-looking source text only as exact, documented `.tsl` body
 spellings in a narrow context, such as `tsil "emit_return(left == right);"`.
 Each accepted spelling must immediately promote to an existing typed TSL
 semantic operation, such as `equal(left, right)`, `nequal(left, right)`, or an
-accepted comparison primitive. Backend emitters render their own C++/Rust
-spellings from typed lowering values.
+accepted comparison or binary primitive. Backend emitters render their own
+C++/Rust spellings from typed lowering values.
 
 Rationale:
 

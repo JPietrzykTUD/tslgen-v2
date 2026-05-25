@@ -70,6 +70,36 @@ class _ExactComparisonTsilBody:
     operation: str
 
 
+@dataclass(frozen=True, slots=True)
+class _ExactBinaryOperatorTsilBody:
+    source_line: str
+    operation: str
+
+
+_EXACT_BINARY_OPERATOR_TSIL_BODIES: tuple[_ExactBinaryOperatorTsilBody, ...] = (
+    _ExactBinaryOperatorTsilBody(
+        source_line='    tsil "emit_return(left + right);"',
+        operation="add",
+    ),
+    _ExactBinaryOperatorTsilBody(
+        source_line='    tsil "emit_return(left - right);"',
+        operation="sub",
+    ),
+    _ExactBinaryOperatorTsilBody(
+        source_line='    tsil "emit_return(left & right);"',
+        operation="bit_and",
+    ),
+    _ExactBinaryOperatorTsilBody(
+        source_line='    tsil "emit_return(left | right);"',
+        operation="bit_or",
+    ),
+    _ExactBinaryOperatorTsilBody(
+        source_line='    tsil "emit_return(left ^ right);"',
+        operation="bit_xor",
+    ),
+)
+
+
 _EXACT_COMPARISON_TSIL_BODIES: tuple[_ExactComparisonTsilBody, ...] = (
     _ExactComparisonTsilBody(
         source_line='    tsil "emit_return(left == right);"',
@@ -250,6 +280,12 @@ def _match_body(line: str, *, signature: str) -> _MatchedBody | None:
                 operation=tsil_body.group("operation"),
                 arguments=_split_names(tsil_body.group("arguments")),
             )
+        for body in _EXACT_BINARY_OPERATOR_TSIL_BODIES:
+            if line == body.source_line:
+                return _MatchedBody(
+                    operation=body.operation,
+                    arguments=("left", "right"),
+                )
         return None
     if signature == "v:=(v)":
         tsil_body = _TSIL_UNARY_EMIT_RETURN_BODY_PATTERN.match(line)
