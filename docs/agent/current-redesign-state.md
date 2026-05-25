@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 131 is accepted.
+Milestone 132 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -740,6 +740,41 @@ parameter shapes, add new operator spellings, accept actual broad `tsldata`
 layout, introduce primitive aliases, infer parameter aliases, repair source,
 discover targets, read backend manifests or runtime corpus semantics, or add
 new lowering IR families.
+
+The M132 execution-review loop returned `Accept` after one write-capable
+executor and read-only architecture, boundary, documentation, and validation
+audits. M132 allowed binary clean source declarations under
+`prim<v:=(v,v)> name(param0, param1):` to use any two distinct valid identifier
+parameters, required accepted binary body operands to reference declared
+parameters, and preserved source-authored operand order and repetition through
+typed `BinaryOperationBody` values, lowered function signatures, lowered
+binary parameter references, and generated C++/Rust artifacts. It preserved
+comparison and unary parameter shapes, M131 exact binary operator TSIL forms,
+M130 ordered comparison TSIL behavior, M129 inequality TSIL behavior, M128
+equality TSIL behavior, M127 unary TSIL behavior, M126 binary function-call
+TSIL behavior, M125 multi-implementation behavior, M124 multi-source behavior,
+explicit target selection, bootstrap-core lowering semantics, backend-owned
+spellings, source-body integrity, deterministic artifact ordering, and
+representative artifact bytes. It did not add broad TSIL parsing,
+target-language operator modeling, new binary operator spellings, broad
+`tsldata` parsing, primitive aliases, parameter alias inference, target
+discovery, backend manifest loading, runtime corpus reads, source repair,
+renderer inference, registries, dispatchers, hidden backfeeds, fixpoint
+behavior, or new lowering IR families.
+
+Integrated post-M132 next-run planning selected
+`Milestone 133: Tiny Clean Remaining Binary Operator TSIL Lowering Slice`.
+The selected M133 task keeps focus on lowering and completes the exact
+operator-shaped TSIL bridge for the remaining already-modeled binary
+operations by accepting only `*`, `/`, `%`, `<<`, and `>>` spellings under the
+existing tiny clean binary document shape. These spellings must promote to the
+existing typed binary body operation ids `mul`, `div`, `mod`, `shift_left`,
+and `shift_right` before lowering. M133 must preserve declared binary
+parameter names and source-authored operand order/repetition, and must not add
+broad TSIL parsing, target-language operator modeling, helper-call parsing,
+new operation ids, scalar shift-count signatures, primitive aliases, target
+discovery, backend manifests, runtime corpus reads, source repair, renderer
+inference, or new lowering IR families.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1813,41 +1848,40 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 132.
+Execute Milestone 133.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m132-execution-review-loop-prompt.md
+docs/agent/runs/m133-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 132: Tiny Clean Binary Declared-Parameter Lowering Slice
+Milestone 133: Tiny Clean Remaining Binary Operator TSIL Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-M131 execution-review returned Accept With Follow-Ups after one write-capable
-executor, one focused cache-cleanliness revision executor, and read-only
-architecture, boundary, documentation, and validation audits. Finalization
-follow-ups were handled by updating workflow, roadmap, and ADR state, then
-rerunning required validation. Integrated next-run planning selected M132 and
-created docs/agent/runs/m132-execution-review-loop-prompt.md.
+M132 execution-review returned Accept after one write-capable executor and
+read-only architecture, boundary, documentation, and validation audits. No
+blocking review findings or follow-ups were recorded. Integrated next-run
+planning selected M133 and created
+docs/agent/runs/m133-execution-review-loop-prompt.md.
 ```
 
 Next expected action:
 
 ```text
-Run the active M132 execution-review-loop prompt. M132 should allow binary
-clean source to declare any two distinct identifier parameters under
-`prim<v:=(v,v)> name(param0, param1):`, require accepted binary body forms to
-use only declared parameters while preserving source-authored operand order and
-repetition, preserve those names through typed catalog values and lowered
-C++/Rust artifacts, and preserve M107-M131 behavior.
+Run the active M133 execution-review-loop prompt. M133 should accept only exact
+operator-shaped TSIL bodies for the remaining already-modeled binary
+operations: `*` -> `mul`, `/` -> `div`, `%` -> `mod`, `<<` -> `shift_left`,
+and `>>` -> `shift_right`. It should promote those spellings to typed binary
+body values before lowering, preserve declared parameter names and
+source-authored operand order/repetition, and preserve M107-M132 behavior.
 ```
 
 Accepted planning prompt:
@@ -3184,18 +3218,29 @@ docs/agent/runs/m125-execution-review-loop-prompt.md
   renderers, discover targets, read backend manifests, add registries or
   dispatchers, add hidden backfeeds or fixpoint behavior, or add new lowering
   IR families.
-- M132 is planned, not implemented. It is limited to allowing binary clean
-  source declarations under `prim<v:=(v,v)> name(param0, param1):` to use any
-  two distinct identifier parameter names, requiring accepted binary body
-  operands to reference declared parameters, allowing source-authored operand
-  order and repetition, and preserving those names and operand references
-  through catalog, lowering, and generated C++/Rust artifacts. It must not
-  broaden comparison or unary parameter shapes, add new binary operators such
-  as `*`, `/`, `%`, `<<`, or `>>`, accept broad `tsldata` layout, introduce
-  primitive aliases, infer parameter aliases, repair source, discover targets,
-  read runtime `tsldata` semantics or backend manifests, infer in renderers,
-  add registries or dispatchers, add hidden backfeeds or fixpoint behavior, or
-  add new lowering IR families.
+- M132 is accepted. Binary clean source declarations under
+  `prim<v:=(v,v)> name(param0, param1):` may use any two distinct identifier
+  parameter names. Accepted binary body operands must reference declared
+  parameters, may use source-authored operand order and repetition, and must
+  preserve those names and operand references through catalog, lowering, and
+  generated C++/Rust artifacts. M132 does not broaden comparison or unary
+  parameter shapes, add new binary operators such as `*`, `/`, `%`, `<<`, or
+  `>>`, accept broad `tsldata` layout, introduce primitive aliases, infer
+  parameter aliases, repair source, discover targets, read runtime `tsldata`
+  semantics or backend manifests, infer in renderers, add registries or
+  dispatchers, add hidden backfeeds or fixpoint behavior, or add new lowering
+  IR families.
+- M133 is planned, not implemented. It is limited to accepting the exact
+  operator-shaped TSIL body spellings `*`, `/`, `%`, `<<`, and `>>` for the
+  already-modeled binary operations `mul`, `div`, `mod`, `shift_left`, and
+  `shift_right` under the existing tiny clean binary document shape. M133 must
+  promote accepted spellings to typed binary body values before lowering and
+  must preserve declared binary parameter names plus source-authored operand
+  order/repetition. It must not add broad TSIL parsing, target-language
+  operator modeling, helper-call parsing, new operation ids, scalar
+  shift-count signatures, primitive aliases, target discovery, backend
+  manifests, runtime corpus reads, source repair, renderer inference, or new
+  lowering IR families.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and
@@ -5750,13 +5795,33 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M132
+No stop condition is active. The workflow is ready to run the active M133
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M132 execution, run the validation command listed in
-`docs/agent/runs/m132-execution-review-loop-prompt.md`.
+For active M133 execution, run the validation command listed in
+`docs/agent/runs/m133-execution-review-loop-prompt.md`.
+
+For M132 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The public API import
+command returned exit 0 with no output. The py-compile command returned exit 0
+with no output. The targeted clean-package pytest command returned exit 0 with
+`148 passed in 8.01s`. The first cache check found validation-created
+`__pycache__` directories under `tslgen/src/tslgen/analysis`,
+`tslgen/src/tslgen/lowering`, `tslgen/src/tslgen/pipeline`,
+`tslgen/src/tslgen/syntax`, and `tslgen/tests`; they were removed, and the
+final `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+output.
 
 For M131 execution and review, validation completed with:
 

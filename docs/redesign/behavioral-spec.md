@@ -649,6 +649,40 @@ behavior, extension fallback, type groups, implementation ranking, runtime
 target-language operator modeling, primitive aliasing, or renderer-side
 inference.
 
+### M132 Tiny Binary Declared-Parameter Lowering Slice
+
+Milestone 132 broadens only the accepted binary scalar primitive header
+parameters. Under `prim<v:=(v,v)> name(param0, param1):`, `param0` and
+`param1` may be any two distinct valid identifiers. Comparison and unary
+primitive header parameter shapes remain exact: comparison uses `left, right`
+and unary uses `value`.
+
+Accepted binary implementation body operands must reference the declared
+binary parameters. This applies to the synthetic `body <operation>(operand0,
+operand1)` form, the M126 function-call-shaped
+`tsil "emit_return(<operation>(operand0, operand1));"` form, and the M131
+operator-shaped TSIL forms for `+`, `-`, `&`, `|`, and `^`. Operand order and
+repetition are source-authored semantics: `body sub(rhs, lhs)` lowers to a
+return expression over `rhs - lhs`, and `body add(lhs, lhs)` lowers to a
+return expression over `lhs + lhs` when those operands are declared
+parameters.
+
+Catalog construction preserves declared binary parameter names and body
+operand names in typed `BinaryOperationBody` values. Lowering preserves the
+declared names in `LoweredFunctionSignature` parameters and preserves
+source-authored operand references in `LoweredBinaryOperationExpression`.
+C++ and Rust emitters consume those lowered values, so generated function
+parameters and return expressions use the declared names rather than
+normalizing to `left, right`.
+
+Duplicate binary parameter declarations fail with a structured catalog
+diagnostic before selection, lowering, or backend emission. Binary body
+operands that do not name a declared parameter fail with a structured catalog
+diagnostic and are not repaired, aliased, or normalized. This slice does not
+add parameter aliasing, broad `tsldata` parsing, shift/immediate source
+forms, new binary operator TSIL spellings, target discovery, backend manifest
+loading, or renderer-side semantic inference.
+
 ### Exact Operator-Looking TSIL Body Spellings
 
 Operator-looking TSIL body fragments are accepted only as documented exact

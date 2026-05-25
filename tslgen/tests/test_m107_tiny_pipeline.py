@@ -1511,7 +1511,7 @@ def test_m122_backends_emit_backend_owned_compare_family_operator_spellings() ->
         assert f"    left {operator} right" in rust_result.artifact.content
 
 
-def test_m108_lowerer_reports_unsupported_body_boundary() -> None:
+def test_m132_lowerer_reports_undeclared_binary_body_operand_boundary() -> None:
     result = Lowerer().lower(
         _selected_implementation(
             body=BinaryOperationBody(
@@ -1526,10 +1526,11 @@ def test_m108_lowerer_reports_unsupported_body_boundary() -> None:
     assert result.function is None
     assert len(result.diagnostics) == 1
     diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-BODY"
+    assert diagnostic.code == "TSL-LOWER-UNDECLARED-BODY-OPERAND"
     assert diagnostic.severity == "error"
     assert diagnostic.location == _location(3, 5)
-    assert "add(left, right)" in diagnostic.message
+    assert "value" in diagnostic.message
+    assert "'left', 'right'" in diagnostic.message
 
 
 def test_m110_lowerer_reports_unsupported_scalar_type() -> None:
@@ -3535,7 +3536,6 @@ def test_m131_malformed_binary_operator_tsil_forms_report_parse_diagnostics(
 ) -> None:
     malformed_cases = (
         ('    tsil "emit_return(left+right);"', "left+right"),
-        ('    tsil "emit_return(right + left);"', "right + left"),
         ('    tsil "emit_return(left * right);"', "left * right"),
         ('    tsil "emit_return(left << right);"', "left << right"),
         ('    tsil "emit_return(left + right)"', "left + right"),
@@ -3565,6 +3565,286 @@ def test_m131_malformed_binary_operator_tsil_forms_report_parse_diagnostics(
         assert diagnostic.location.line == 3
         assert diagnostic.location.column == 5
         assert expected_fragment in diagnostic.message
+
+
+def test_m132_catalog_preserves_declared_binary_parameters_and_body_operands(
+    tmp_path: Path,
+) -> None:
+    document = _source_document(
+        tmp_path,
+        "tiny_sub_declared_params.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> sub(lhs, rhs):",
+                "  implementation scalar si32:",
+                "    body sub(rhs, lhs)",
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((document,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    primitive = catalog_result.catalog.primitives[0]
+    assert primitive.parameters == ("lhs", "rhs")
+    body = primitive.implementations[0].body
+    assert body == BinaryOperationBody(
+        operation="sub",
+        left_parameter="rhs",
+        right_parameter="lhs",
+        source=SourceLocation(document.path, 3, 5),
+    )
+
+
+def test_m132_lowerer_preserves_declared_binary_parameters_and_body_operands() -> None:
+    result = Lowerer().lower(
+        _selected_implementation(
+            operation_id="sub",
+            parameters=("lhs", "rhs"),
+            body=BinaryOperationBody(
+                operation="sub",
+                left_parameter="rhs",
+                right_parameter="lhs",
+                source=_location(3, 5),
+            ),
+        )
+    )
+
+    assert result.diagnostics == ()
+    assert result.function == LoweredFunction(
+        signature=LoweredFunctionSignature(
+            name="sub_scalar_si32",
+            primitive_name="sub",
+            parameters=(LoweredParameter("lhs"), LoweredParameter("rhs")),
+            scalar_type=_descriptor("si32"),
+        ),
+        body=LoweredFunctionBody(
+            return_statement=LoweredReturnStatement(
+                expression=LoweredBinaryOperationExpression(
+                    operation=_operation("sub"),
+                    left=LoweredParameterRef("rhs"),
+                    right=LoweredParameterRef("lhs"),
+                ),
+                source=_location(3, 5),
+            ),
+        ),
+        source=_location(2, 3),
+    )
+
+
+def test_m132_declared_parameter_binary_source_forms_generate_artifacts(
+    tmp_path: Path,
+) -> None:
+    cases = (
+        (
+            "synthetic",
+            "add",
+            "    body add(lhs, rhs)",
+            "+",
+            ("lhs", "rhs"),
+        ),
+        (
+            "m126_call_tsil_swapped",
+            "sub",
+            '    tsil "emit_return(sub(rhs, lhs));"',
+            "-",
+            ("rhs", "lhs"),
+        ),
+        (
+            "m131_operator_tsil_repeated",
+            "bit_xor",
+            '    tsil "emit_return(lhs ^ lhs);"',
+            "^",
+            ("lhs", "lhs"),
+        ),
+    )
+
+    for suffix, operation_id, body_line, operator, operands in cases:
+        source = _write_tiny_binary_body_source(
+            tmp_path,
+            f"tiny_{operation_id}_{suffix}.tsl",
+            operation_id,
+            parameters=("lhs", "rhs"),
+            body_line=body_line,
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name=operation_id,
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+                Target(
+                    backend="rust",
+                    primitive_name=operation_id,
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.diagnostics == ()
+        assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+            f"include/tsl/{operation_id}_scalar_si32.hpp",
+            f"src/{operation_id}_scalar_si32.rs",
+        ]
+        assert [artifact.content for artifact in result.artifacts.artifacts] == [
+            _expected_binary_cpp_content(
+                operation_id,
+                operator,
+                parameters=("lhs", "rhs"),
+                operands=operands,
+            ),
+            _expected_binary_rust_content(
+                operation_id,
+                operator,
+                parameters=("lhs", "rhs"),
+                operands=operands,
+            ),
+        ]
+        assert all(
+            "left" not in artifact.content and "right" not in artifact.content
+            for artifact in result.artifacts.artifacts
+        )
+
+
+def test_m132_undeclared_binary_body_operands_report_catalog_diagnostics(
+    tmp_path: Path,
+) -> None:
+    cases = (
+        ("synthetic", "    body add(lhs, ghost)"),
+        ("m126_call_tsil", '    tsil "emit_return(add(lhs, ghost));"'),
+        ("m131_operator_tsil", '    tsil "emit_return(lhs + ghost);"'),
+    )
+
+    for suffix, body_line in cases:
+        source = _write_tiny_binary_body_source(
+            tmp_path,
+            f"tiny_add_undeclared_{suffix}.tsl",
+            "add",
+            parameters=("lhs", "rhs"),
+            body_line=body_line,
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.artifacts.artifacts == ()
+        assert len(result.diagnostics) == 1
+        diagnostic = result.diagnostics[0]
+        assert diagnostic.code == "TSL-CATALOG-UNDECLARED-BODY-OPERAND"
+        assert diagnostic.severity == "error"
+        assert diagnostic.location is not None
+        assert diagnostic.location.path == source.resolve()
+        assert diagnostic.location.line == 3
+        assert diagnostic.location.column == 5
+        assert "ghost" in diagnostic.message
+        assert "'lhs', 'rhs'" in diagnostic.message
+
+
+def test_m132_duplicate_binary_parameter_declarations_stop_before_selection(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_binary_body_source(
+        tmp_path,
+        "tiny_add_duplicate_params.tsl",
+        "add",
+        parameters=("lhs", "lhs"),
+        body_line="    body add(lhs, lhs)",
+    )
+    lowerer = _StageOutputOnlyLowerer(
+        LoweringStageResult(
+            lowered_functions=LoweredFunctionSet((_lowered_function(),)),
+            diagnostics=(),
+        )
+    )
+
+    result = Generator(lowerer=lowerer).generate(
+        TslProject(
+            source_paths=(source,),
+            targets=(
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+    )
+
+    assert lowerer.selected == ()
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-CATALOG-DUPLICATE-BINARY-PARAMETER"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location is not None
+    assert diagnostic.location.path == source.resolve()
+    assert diagnostic.location.line == 1
+    assert diagnostic.location.column == 1
+    assert "lhs" in diagnostic.message
+    assert "distinct" in diagnostic.message
+
+
+def test_m132_comparison_and_unary_parameter_shapes_remain_unchanged(
+    tmp_path: Path,
+) -> None:
+    compare = _source_document(
+        tmp_path,
+        "bad_compare_declared_params.tsl",
+        "\n".join(
+            (
+                "prim<m:=(v,v)> equal(lhs, rhs):",
+                "  implementation scalar si32:",
+                "    body equal(lhs, rhs)",
+            )
+        ),
+    )
+    unary = _source_document(
+        tmp_path,
+        "bad_unary_declared_param.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v)> bit_not(input):",
+                "  implementation scalar si32:",
+                "    body bit_not(input)",
+            )
+        ),
+    )
+
+    compare_result = TslParser().parse((compare,))
+    unary_result = TslParser().parse((unary,))
+
+    assert compare_result.documents == ()
+    assert unary_result.documents == ()
+    assert [diagnostic.code for diagnostic in compare_result.diagnostics] == [
+        "TSL-PARSE-UNSUPPORTED-FORM",
+    ]
+    assert [diagnostic.location for diagnostic in compare_result.diagnostics] == [
+        SourceLocation(compare.path, 1, 1),
+    ]
+    assert [diagnostic.code for diagnostic in unary_result.diagnostics] == [
+        "TSL-PARSE-UNSUPPORTED-FORM",
+    ]
+    assert [diagnostic.location for diagnostic in unary_result.diagnostics] == [
+        SourceLocation(unary.path, 1, 1),
+    ]
 
 
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
@@ -4423,12 +4703,14 @@ def _selected_implementation(
     backend: str = "cpp",
     operation_id: str = "add",
     body_operation: str | None = None,
+    body_arguments: tuple[str, str] = ("left", "right"),
+    parameters: tuple[str, str] = ("left", "right"),
     type_tag: str = "si32",
 ) -> SelectedImplementation:
     selected_body = body or BinaryOperationBody(
         operation=body_operation or operation_id,
-        left_parameter="left",
-        right_parameter="right",
+        left_parameter=body_arguments[0],
+        right_parameter=body_arguments[1],
         source=_location(3, 5),
     )
     implementation = Implementation(
@@ -4440,7 +4722,7 @@ def _selected_implementation(
     primitive = Primitive(
         name=operation_id,
         signature="v:=(v,v)",
-        parameters=("left", "right"),
+        parameters=parameters,
         template="binary",
         implementations=(implementation,),
         source=_location(1, 1),
@@ -4577,7 +4859,13 @@ def _binary_operator(operation_id: str) -> str:
     raise AssertionError(f"missing binary operator for {operation_id!r}")
 
 
-def _expected_binary_cpp_content(operation_id: str, operator: str) -> str:
+def _expected_binary_cpp_content(
+    operation_id: str,
+    operator: str,
+    *,
+    parameters: tuple[str, str] = ("left", "right"),
+    operands: tuple[str, str] = ("left", "right"),
+) -> str:
     return (
         "#pragma once\n"
         "\n"
@@ -4586,18 +4874,25 @@ def _expected_binary_cpp_content(operation_id: str, operator: str) -> str:
         "namespace tsl {\n"
         "\n"
         f"inline std::int32_t {operation_id}_scalar_si32"
-        "(std::int32_t left, std::int32_t right) {\n"
-        f"  return left {operator} right;\n"
+        f"(std::int32_t {parameters[0]}, std::int32_t {parameters[1]}) {{\n"
+        f"  return {operands[0]} {operator} {operands[1]};\n"
         "}\n"
         "\n"
         "}  // namespace tsl\n"
     )
 
 
-def _expected_binary_rust_content(operation_id: str, operator: str) -> str:
+def _expected_binary_rust_content(
+    operation_id: str,
+    operator: str,
+    *,
+    parameters: tuple[str, str] = ("left", "right"),
+    operands: tuple[str, str] = ("left", "right"),
+) -> str:
     return (
-        f"pub fn {operation_id}_scalar_si32(left: i32, right: i32) -> i32 {{\n"
-        f"    left {operator} right\n"
+        f"pub fn {operation_id}_scalar_si32"
+        f"({parameters[0]}: i32, {parameters[1]}: i32) -> i32 {{\n"
+        f"    {operands[0]} {operator} {operands[1]}\n"
         "}\n"
     )
 
@@ -4738,6 +5033,29 @@ def _write_tiny_source(
                 f"prim<v:=(v,v)> {operation_id}(left, right):",
                 f"  implementation scalar {type_tag}:",
                 f"    body {body_operation or operation_id}(left, right)",
+            )
+        ),
+        encoding="utf-8",
+    )
+    return source
+
+
+def _write_tiny_binary_body_source(
+    tmp_path: Path,
+    file_name: str,
+    operation_id: str,
+    *,
+    parameters: tuple[str, str],
+    body_line: str,
+    type_tag: str = "si32",
+) -> Path:
+    source = tmp_path / file_name
+    source.write_text(
+        "\n".join(
+            (
+                f"prim<v:=(v,v)> {operation_id}({parameters[0]}, {parameters[1]}):",
+                f"  implementation scalar {type_tag}:",
+                body_line,
             )
         ),
         encoding="utf-8",

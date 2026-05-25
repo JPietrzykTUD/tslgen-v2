@@ -13,10 +13,12 @@ from tslgen.syntax.ast import (
     ParseResult,
 )
 
+_IDENTIFIER = r"[A-Za-z_][A-Za-z0-9_]*"
+
 _BINARY_HEADER_PATTERN = re.compile(
     r"^prim<(?P<signature>v:=\(v,v\))> "
-    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
-    r"\((?P<params>left, right)\):$"
+    rf"(?P<name>{_IDENTIFIER})"
+    rf"\((?P<params>{_IDENTIFIER}, {_IDENTIFIER})\):$"
 )
 _COMPARE_HEADER_PATTERN = re.compile(
     r"^prim<(?P<signature>m:=\(v,v\))> "
@@ -45,8 +47,15 @@ _BODY_PATTERN = re.compile(
 )
 _TSIL_BINARY_EMIT_RETURN_BODY_PATTERN = re.compile(
     r'^    tsil "emit_return\('
-    r"(?P<operation>[A-Za-z_][A-Za-z0-9_]*)"
-    r"\((?P<arguments>left, right)\)"
+    rf"(?P<operation>{_IDENTIFIER})"
+    rf"\((?P<arguments>{_IDENTIFIER}, {_IDENTIFIER})\)"
+    r'\);"$'
+)
+_TSIL_BINARY_OPERATOR_EMIT_RETURN_BODY_PATTERN = re.compile(
+    r'^    tsil "emit_return\('
+    rf"(?P<left>{_IDENTIFIER}) "
+    r"(?P<operator>\+|-|&|\||\^) "
+    rf"(?P<right>{_IDENTIFIER})"
     r'\);"$'
 )
 _TSIL_UNARY_EMIT_RETURN_BODY_PATTERN = re.compile(
@@ -72,29 +81,29 @@ class _ExactComparisonTsilBody:
 
 @dataclass(frozen=True, slots=True)
 class _ExactBinaryOperatorTsilBody:
-    source_line: str
+    operator: str
     operation: str
 
 
 _EXACT_BINARY_OPERATOR_TSIL_BODIES: tuple[_ExactBinaryOperatorTsilBody, ...] = (
     _ExactBinaryOperatorTsilBody(
-        source_line='    tsil "emit_return(left + right);"',
+        operator="+",
         operation="add",
     ),
     _ExactBinaryOperatorTsilBody(
-        source_line='    tsil "emit_return(left - right);"',
+        operator="-",
         operation="sub",
     ),
     _ExactBinaryOperatorTsilBody(
-        source_line='    tsil "emit_return(left & right);"',
+        operator="&",
         operation="bit_and",
     ),
     _ExactBinaryOperatorTsilBody(
-        source_line='    tsil "emit_return(left | right);"',
+        operator="|",
         operation="bit_or",
     ),
     _ExactBinaryOperatorTsilBody(
-        source_line='    tsil "emit_return(left ^ right);"',
+        operator="^",
         operation="bit_xor",
     ),
 )
@@ -280,12 +289,17 @@ def _match_body(line: str, *, signature: str) -> _MatchedBody | None:
                 operation=tsil_body.group("operation"),
                 arguments=_split_names(tsil_body.group("arguments")),
             )
-        for body in _EXACT_BINARY_OPERATOR_TSIL_BODIES:
-            if line == body.source_line:
-                return _MatchedBody(
-                    operation=body.operation,
-                    arguments=("left", "right"),
-                )
+        operator_body = _TSIL_BINARY_OPERATOR_EMIT_RETURN_BODY_PATTERN.match(line)
+        if operator_body is not None:
+            for body in _EXACT_BINARY_OPERATOR_TSIL_BODIES:
+                if operator_body.group("operator") == body.operator:
+                    return _MatchedBody(
+                        operation=body.operation,
+                        arguments=(
+                            operator_body.group("left"),
+                            operator_body.group("right"),
+                        ),
+                    )
         return None
     if signature == "v:=(v)":
         tsil_body = _TSIL_UNARY_EMIT_RETURN_BODY_PATTERN.match(line)

@@ -130,19 +130,7 @@ class CatalogBuilder:
             )
 
         shape = signature_shape or _SUPPORTED_SOURCE_SHAPES[0]
-        if parsed.parameters != shape.parameters:
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    code="TSL-CATALOG-UNSUPPORTED-PARAMETERS",
-                    message=(
-                        f"primitive {parsed.name!r} uses parameters "
-                        f"{parsed.parameters!r}; expected exactly "
-                        f"{shape.parameters!r}"
-                    ),
-                    location=parsed.source,
-                )
-            )
+        diagnostics.extend(_parameter_diagnostics(parsed, shape))
 
         if not parsed.implementations:
             diagnostics.append(
@@ -192,20 +180,7 @@ class CatalogBuilder:
                 )
             )
 
-        body_text = _body_text(parsed)
-        expected_body = f"{parsed.body.operation}({', '.join(shape.parameters)})"
-        if parsed.body.arguments != shape.parameters:
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    code="TSL-CATALOG-UNSUPPORTED-BODY",
-                    message=(
-                        f"implementation body {body_text!r} is unsupported; "
-                        f"expected exactly {expected_body!r}"
-                    ),
-                    location=parsed.body.source,
-                )
-            )
+        diagnostics.extend(_body_diagnostics(primitive, parsed, shape))
 
         return Implementation(
             extension=parsed.extension,
@@ -217,6 +192,131 @@ class CatalogBuilder:
 
 def _body_text(parsed: ParsedImplementation) -> str:
     return f"{parsed.body.operation}({', '.join(parsed.body.arguments)})"
+
+
+def _parameter_diagnostics(
+    parsed: ParsedPrimitive,
+    shape: _SourceShape,
+) -> tuple[Diagnostic, ...]:
+    if shape.signature == M107_SIGNATURE:
+        return _binary_parameter_diagnostics(parsed)
+
+    if parsed.parameters == shape.parameters:
+        return ()
+
+    return (
+        Diagnostic(
+            severity="error",
+            code="TSL-CATALOG-UNSUPPORTED-PARAMETERS",
+            message=(
+                f"primitive {parsed.name!r} uses parameters "
+                f"{parsed.parameters!r}; expected exactly {shape.parameters!r}"
+            ),
+            location=parsed.source,
+        ),
+    )
+
+
+def _binary_parameter_diagnostics(
+    parsed: ParsedPrimitive,
+) -> tuple[Diagnostic, ...]:
+    diagnostics: list[Diagnostic] = []
+    if len(parsed.parameters) != 2:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-CATALOG-UNSUPPORTED-PARAMETERS",
+                message=(
+                    f"primitive {parsed.name!r} uses parameters "
+                    f"{parsed.parameters!r}; expected exactly two declared "
+                    "binary parameters"
+                ),
+                location=parsed.source,
+            )
+        )
+        return tuple(diagnostics)
+
+    if parsed.parameters[0] == parsed.parameters[1]:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-CATALOG-DUPLICATE-BINARY-PARAMETER",
+                message=(
+                    f"primitive {parsed.name!r} declares binary parameter "
+                    f"{parsed.parameters[0]!r} more than once; binary "
+                    "parameters must be distinct"
+                ),
+                location=parsed.source,
+            )
+        )
+    return tuple(diagnostics)
+
+
+def _body_diagnostics(
+    primitive: ParsedPrimitive,
+    parsed: ParsedImplementation,
+    shape: _SourceShape,
+) -> tuple[Diagnostic, ...]:
+    if shape.signature == M107_SIGNATURE:
+        return _binary_body_diagnostics(primitive, parsed)
+
+    body_text = _body_text(parsed)
+    expected_body = f"{parsed.body.operation}({', '.join(shape.parameters)})"
+    if parsed.body.arguments == shape.parameters:
+        return ()
+
+    return (
+        Diagnostic(
+            severity="error",
+            code="TSL-CATALOG-UNSUPPORTED-BODY",
+            message=(
+                f"implementation body {body_text!r} is unsupported; "
+                f"expected exactly {expected_body!r}"
+            ),
+            location=parsed.body.source,
+        ),
+    )
+
+
+def _binary_body_diagnostics(
+    primitive: ParsedPrimitive,
+    parsed: ParsedImplementation,
+) -> tuple[Diagnostic, ...]:
+    body_text = _body_text(parsed)
+    expected_body = f"{parsed.body.operation}({', '.join(primitive.parameters)})"
+    if len(parsed.body.arguments) != 2:
+        return (
+            Diagnostic(
+                severity="error",
+                code="TSL-CATALOG-UNSUPPORTED-BODY",
+                message=(
+                    f"implementation body {body_text!r} is unsupported; "
+                    f"expected exactly {expected_body!r}"
+                ),
+                location=parsed.body.source,
+            ),
+        )
+
+    declared_parameters = set(primitive.parameters)
+    diagnostics: list[Diagnostic] = []
+    reported_operands: set[str] = set()
+    for operand in parsed.body.arguments:
+        if operand in declared_parameters or operand in reported_operands:
+            continue
+        reported_operands.add(operand)
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-CATALOG-UNDECLARED-BODY-OPERAND",
+                message=(
+                    f"implementation body operand {operand!r} is not declared "
+                    f"by primitive {primitive.name!r}; expected one of: "
+                    f"{', '.join(repr(parameter) for parameter in primitive.parameters)}"
+                ),
+                location=parsed.body.source,
+            )
+        )
+    return tuple(diagnostics)
 
 
 def _duplicate_primitive_name_diagnostics(

@@ -17517,14 +17517,14 @@ docs/agent/runs/m132-execution-review-loop-prompt.md
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M131.
-This milestone keeps the task focused on lowering and removes the current
-binary-fixture assumption that all binary source parameters are literally
-`left, right`. Real corpus evidence uses binary parameter names such as
-`data, shift` in `tsldata/primitives/bitwise/shifts.tsl:2` and
+Accepted after the M132 execution-review loop. This milestone kept the task
+focused on lowering and removed the current binary-fixture assumption that all
+binary source parameters are literally `left, right`. Real corpus evidence
+uses binary parameter names such as `data, shift` in
+`tsldata/primitives/bitwise/shifts.tsl:2` and
 `tsldata/primitives/bitwise/shifts.tsl:442`, `divident, divisor` in
 `tsldata/primitives/arithmetic/complex.tsl:453`, and `dividend, divisor` in
-`tsldata/primitives/arithmetic/complex.tsl:1008`; this evidence must not
+`tsldata/primitives/arithmetic/complex.tsl:1008`; this evidence does not
 become a runtime semantic dependency.
 
 This milestone is not broad `tsldata` parsing or parameter alias inference. It
@@ -17653,6 +17653,17 @@ Remove any validation-created `__pycache__` directories before the final cache
 check. Do not run the old `tslgenold` validation profile as proof of the clean
 product slice.
 
+Validation completed with the required M132 profile. `git diff --check`
+returned exit 0 with no output. The public API import command returned exit 0
+with no output. The py-compile command returned exit 0 with no output. The
+targeted clean-package pytest command returned exit 0 with
+`148 passed in 8.01s`. The first cache check found validation-created
+`__pycache__` directories under `tslgen/src/tslgen/analysis`,
+`tslgen/src/tslgen/lowering`, `tslgen/src/tslgen/pipeline`,
+`tslgen/src/tslgen/syntax`, and `tslgen/tests`; they were removed, and the
+final `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+output.
+
 Review notes:
 
 - Reviewers should require M132 to remain a binary declared-parameter
@@ -17663,3 +17674,147 @@ Review notes:
   loading, runtime corpus reads, renderer-side inference, or new IR ceremony.
 - Reviewers should require typed catalog/lowering values and generated
   artifacts to preserve declared binary parameter names exactly.
+
+Next concrete prompt:
+
+```text
+docs/agent/runs/m133-execution-review-loop-prompt.md
+```
+
+### Milestone 133: Tiny Clean Remaining Binary Operator TSIL Lowering Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M132.
+This milestone keeps the task focused on lowering and completes the currently
+modeled binary operator-shaped TSIL bridge by adding exact selected-body
+recognition for the remaining already-supported binary operations whose
+backend spellings and lowering descriptors already exist: `mul`, `div`, `mod`,
+`shift_left`, and `shift_right`.
+
+This milestone is not arbitrary C, C++, Rust, or TSIL expression parsing. It
+recognizes only exact `tsil "emit_return(operand0 OP operand1);"` forms for
+`*`, `/`, `%`, `<<`, and `>>` under the existing tiny clean binary document
+shape. Operands must be declared binary parameters. Operand order and
+repetition are source-authored semantics and must be preserved exactly.
+
+Goal:
+
+Allow exact binary TSIL operator bodies such as:
+
+```text
+prim<v:=(v,v)> div(divident, divisor):
+  implementation scalar si32:
+    tsil "emit_return(divident / divisor);"
+```
+
+```text
+prim<v:=(v,v)> shift_left(data, shift):
+  implementation scalar si32:
+    tsil "emit_return(data << shift);"
+```
+
+The selected implementation must promote the exact source spelling into the
+existing typed `BinaryOperationBody` operation ids before lowering, preserve
+declared parameter names and source-authored operand references through
+lowered values, and generate deterministic C++/Rust artifacts from typed
+lowering results.
+
+Scope:
+
+- Preserve M132 binary parameter behavior: `prim<v:=(v,v)> name(param0,
+  param1):` may use any two distinct valid identifier parameter names, and
+  accepted binary body operands must reference declared parameters while
+  preserving source-authored order and repetition.
+- Add exact operator-shaped TSIL body recognition for:
+  - `operand0 * operand1` -> `mul`;
+  - `operand0 / operand1` -> `div`;
+  - `operand0 % operand1` -> `mod`;
+  - `operand0 << operand1` -> `shift_left`;
+  - `operand0 >> operand1` -> `shift_right`.
+- Preserve accepted M131 exact operator-shaped TSIL bodies for `+`, `-`, `&`,
+  `|`, and `^`.
+- Promote accepted M133 operator-shaped TSIL bodies into typed
+  `BinaryOperationBody` values before selection, lowering, and backend
+  emission. Do not render by rescanning raw TSIL text.
+- Preserve declared binary parameter names and source-authored operand order
+  and repetition in typed catalog values, lowered values, and generated
+  C++/Rust artifacts.
+- Add positive artifact tests for `mul`, `div`, `mod`, `shift_left`, and
+  `shift_right`, including representative non-`left/right` names such as
+  `divident, divisor`, `dividend, divisor`, and `data, shift`.
+- Add negative tests for undeclared operands, selected operation/operator
+  mismatches, and malformed nearby M133 operator forms.
+- Preserve M132 declared-parameter behavior, M131 exact binary operator TSIL
+  behavior, M130 ordered comparison TSIL behavior, M129 inequality TSIL
+  behavior, M128 equality TSIL behavior, M127 unary TSIL behavior, M126 binary
+  function-call TSIL behavior, M125 multi-implementation behavior, M124
+  multi-source behavior, explicit target selection, compatibility diagnostics,
+  and deterministic artifact ordering.
+
+Out of scope:
+
+- Broad `tsldata` syntax/layout parsing, nested implementation maps, multiple
+  primitive blocks in one document, attributes, tests, descriptions,
+  `requires` clauses, type groups, extension fallback, dependency closure, or
+  target discovery.
+- Broad TSIL parsing, primitive calls, intrinsics, helper calls such as
+  `details::arith_mul(...)`, casts, variables, immediates, multiple statements,
+  multiline TSIL bodies, helper evaluation, branch pruning, source repair, or
+  TSIL compiler behavior.
+- Adding operation ids, backend spellings, scalar type support, compatibility
+  rules, or semantic rules beyond operations already modeled before this
+  milestone.
+- Supporting signatures such as `v:=(v,s)`, `v:=(v,sImm)`, mask signatures,
+  immediate parameters, scalar shift-count source forms, or actual broad
+  corpus implementation maps.
+- Adding primitive aliases such as current corpus `binary_and` names for the
+  accepted clean operation id `bit_and`.
+- Loading operation semantics, compatibility rules, parameter aliases, or
+  backend spellings from `tsldata/`, backend manifests, YAML, `frozen`,
+  `tslgenold`, plugins, or environment configuration at runtime.
+- Moving backend-owned C++/Rust type, result, or operator spellings into
+  lowering.
+- Introducing a registry, dispatcher, callback map, plugin system, hidden
+  backfeed, fixpoint mechanism, broad operation framework, or new lowering IR
+  category/request/result family.
+
+Accepted outputs:
+
+- Selected binary scalar implementations may use exact operator-shaped TSIL
+  bodies for `*`, `/`, `%`, `<<`, and `>>` when the selected operation matches
+  the documented operation id and operands are declared parameters.
+- Generated C++/Rust artifacts preserve declared binary parameter names in the
+  function signature and return expression.
+- Swapped and repeated declared body operands preserve source-authored
+  semantics in generated output.
+- Undeclared operands, selected mismatched operation/operator pairs, and
+  malformed nearby operator forms produce structured diagnostics and are not
+  silently normalized.
+- Existing M107-M132 behavior and representative artifact bytes remain stable.
+
+Validation:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Remove any validation-created `__pycache__` directories before the final cache
+check. Do not run the old `tslgenold` validation profile as proof of the clean
+product slice.
+
+Review notes:
+
+- Reviewers should require M133 to remain an exact remaining binary operator
+  TSIL lowering slice, not broad `tsldata` parsing, source repair, aliasing, or
+  TSIL expression parsing.
+- Reviewers should reject arbitrary operator parsing, precedence,
+  associativity, helper-call parsing, scalar shift-count signatures, primitive
+  aliasing, target discovery, backend manifest loading, runtime corpus reads,
+  renderer-side inference, or new IR ceremony.
+- Reviewers should require accepted M133 TSIL operator forms to become typed
+  catalog/lowering values before backend emission.

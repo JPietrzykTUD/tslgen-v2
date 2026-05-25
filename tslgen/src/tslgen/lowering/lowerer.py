@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from tslgen.analysis.selection import SelectedImplementation
-from tslgen.core.diagnostics import Diagnostic
+from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
     BinaryOperationBody,
     ComparisonOperationBody,
@@ -56,7 +56,6 @@ _SUPPORTED_BINARY_TEMPLATE = "binary"
 _SUPPORTED_UNARY_TEMPLATE = "unary"
 _SUPPORTED_COMPARISON_TEMPLATE = "compare"
 _SUPPORTED_EXTENSION = "scalar"
-_SUPPORTED_BINARY_PARAMETERS = ("left", "right")
 _SUPPORTED_UNARY_PARAMETERS = ("value",)
 _SUPPORTED_COMPARISON_PARAMETERS = ("left", "right")
 
@@ -190,15 +189,32 @@ def _unsupported_binary_diagnostics(
             )
         )
 
-    if selected.primitive.parameters != _SUPPORTED_BINARY_PARAMETERS:
+    if len(selected.primitive.parameters) != 2:
         diagnostics.append(
             Diagnostic(
                 severity="error",
                 code="TSL-LOWER-UNSUPPORTED-PARAMETERS",
                 message=(
                     f"primitive {selected.primitive.name!r} uses parameters "
-                    f"{selected.primitive.parameters!r}; expected exactly "
-                    f"{_SUPPORTED_BINARY_PARAMETERS!r}"
+                    f"{selected.primitive.parameters!r}; expected exactly two "
+                    "declared binary parameters"
+                ),
+                location=selected.primitive.source,
+            )
+        )
+
+    if (
+        len(selected.primitive.parameters) == 2
+        and selected.primitive.parameters[0] == selected.primitive.parameters[1]
+    ):
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-LOWER-UNSUPPORTED-PARAMETERS",
+                message=(
+                    f"primitive {selected.primitive.name!r} uses duplicate "
+                    f"binary parameter {selected.primitive.parameters[0]!r}; "
+                    "expected distinct declared parameters"
                 ),
                 location=selected.primitive.source,
             )
@@ -265,22 +281,42 @@ def _unsupported_binary_diagnostics(
             )
         )
 
-    if (
-        body.left_parameter != _SUPPORTED_BINARY_PARAMETERS[0]
-        or body.right_parameter != _SUPPORTED_BINARY_PARAMETERS[1]
-    ):
+    diagnostics.extend(
+        _undeclared_binary_operand_diagnostics(
+            selected,
+            (body.left_parameter, body.right_parameter),
+            body.source,
+        )
+    )
+
+    return tuple(diagnostics)
+
+
+def _undeclared_binary_operand_diagnostics(
+    selected: SelectedImplementation,
+    operands: tuple[str, str],
+    body_source: SourceLocation,
+) -> tuple[Diagnostic, ...]:
+    declared_parameters = set(selected.primitive.parameters)
+    diagnostics: list[Diagnostic] = []
+    reported_operands: set[str] = set()
+    for operand in operands:
+        if operand in declared_parameters or operand in reported_operands:
+            continue
+        reported_operands.add(operand)
         diagnostics.append(
             Diagnostic(
                 severity="error",
-                code="TSL-LOWER-UNSUPPORTED-BODY",
+                code="TSL-LOWER-UNDECLARED-BODY-OPERAND",
                 message=(
-                    "implementation body cannot be lowered; expected exactly "
-                    f"'{body.operation}(left, right)'"
+                    f"implementation body operand {operand!r} is not declared "
+                    f"by primitive {selected.primitive.name!r}; expected one "
+                    "of: "
+                    f"{', '.join(repr(parameter) for parameter in selected.primitive.parameters)}"
                 ),
-                location=body.source,
+                location=body_source,
             )
         )
-
     return tuple(diagnostics)
 
 
