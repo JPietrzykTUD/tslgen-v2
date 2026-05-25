@@ -1780,3 +1780,51 @@ Consequences:
   deferred until their own helper slices are selected.
 - Future native rendering milestones must state which helper IR and translation
   data they consume before adding generated output.
+
+## ADR-034: Tiny Scalar Operation Tables Are Bootstrap Core Lowering Semantics
+
+Status: Accepted for post-M122 planning
+
+Context:
+
+The clean restart M111-M122 slices intentionally used small lowering-owned
+tables for scalar operation descriptors and operation/type compatibility rules.
+Those operation names are visible in `tsldata/*`, but the accepted clean
+implementation currently does not parse broad `tsldata/` operation metadata or
+load backend manifests to derive them. A product-owner review called out the
+risk that corpus facts might appear to have silently leaked into generator
+code.
+
+Considered alternatives:
+
+- Treat the current operation tables as test-only fixtures.
+- Read `tsldata/*` or backend manifests at runtime to populate operation
+  semantics now.
+- Declare the current scalar operation set as explicit bootstrap core lowering
+  semantics until a future typed rule-loading milestone is selected.
+
+Decision:
+
+The accepted M111-M122 scalar operation descriptors and compatibility rules are
+bootstrap core lowering semantics for the clean restart, not accidental
+runtime imports from `tsldata/*`. Milestone 123 will make that contract explicit
+in typed lowering-owned records.
+
+Rationale:
+
+The clean restart is still proving a tiny source-to-artifact path. Loading
+operation semantics from the broad corpus now would pull backend manifests,
+translation maps, and catalog-wide policy into a slice that is only ready to
+handle exact scalar source forms. At the same time, leaving the current tables
+undocumented makes it unclear whether they are product semantics or fixture
+leakage.
+
+Consequences:
+
+- `tsldata/` remains source corpus and fixture evidence, not a runtime source
+  for the accepted scalar operation descriptor tables.
+- Backend spellings remain backend-owned; lowering operation descriptors and
+  compatibility rules must not carry C++ or Rust operator text.
+- Future data-driven operation semantics require an explicit typed rule-loading
+  milestone with diagnostics and tests; they must not be introduced through
+  renderer inference, backend manifest shortcuts, or ad hoc dictionary maps.

@@ -433,6 +433,19 @@ vector/SIMD comparison results, runtime floating or signed-ordering policy,
 source repair, backend manifests, old imports, registries, dispatchers, hidden
 backfeeds, fixpoint behavior, or a broad expression/type framework.
 
+Post-M122 planning selected
+`Milestone 123: Tiny Clean Bootstrap Operation Semantics Contract Slice`.
+Internal planning review accepted the selected lowering-focused plan after a
+focused workflow handoff revision. The selected plan responds to the
+product-owner concern that operation facts observed in `tsldata/*` must not
+silently leak into product generator code by making accepted M111-M122 scalar
+operation descriptors and operation/type compatibility rules explicit
+bootstrap-core lowering semantics. It must not load operation semantics from
+`tsldata/`, backend manifests, YAML, `frozen/`, `tslgenold/`, plugins, or
+environment configuration at runtime, and it must not move backend spellings,
+renderer policy, broad operation registries, dispatchers, or new lowering IR
+families into the clean lowering path.
+
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
 
@@ -1505,42 +1518,39 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Run post-M122 lowering-focused planning plus review.
+Execute Milestone 123.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m122-planning-plus-review-prompt.md
+docs/agent/runs/m123-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The active prompt is a docs-only planning/review prompt for selecting
-Milestone 123.
+Milestone 123: Tiny Clean Bootstrap Operation Semantics Contract Slice
 ```
 
 Latest review verdict:
 
 ```text
-M122 execution-review loop returned Accept With Follow-Ups after one
-write-capable executor plus read-only layout/boundary, architecture,
-documentation, and validation audits. No blocking findings were reported. The
-documentation follow-up was finalization-only: mark M122 accepted, update
-workflow state, create the next concrete prompt, and clear the M121 malformed
-compare-body follow-up as addressed by M122.
+Post-M122 planning selected Milestone 123 and returned Accept With Follow-Ups
+after read-only architecture, boundary, documentation, and validation audits
+plus a focused workflow handoff revision. The selected plan is lowering
+focused and makes accepted scalar operation descriptor/type-compatibility facts
+explicit bootstrap-core semantics rather than implicit `tsldata/*` leakage.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M122 planning-plus-review prompt. The next selected
-milestone must focus on lowering and should account for the product-owner
-concern that operation facts observed in `tsldata/*` must be documented as
-accepted bootstrap/core semantics or moved behind explicit typed lowering rule
-ownership, rather than leaking into product code as unreviewed hardwired corpus
-data.
+Run the active M123 execution-review-loop prompt. M123 should add the smallest
+typed lowering-owned semantic-origin contract for existing operation descriptor
+and operation/type compatibility rule records, keep backend spellings
+backend-owned, and prove the accepted scalar operation facts are deliberate
+bootstrap-core lowering semantics rather than runtime `tsldata/*` input.
 ```
 
 Accepted planning prompt:
@@ -2665,10 +2675,16 @@ Completed M122 execution-review-loop prompt:
 docs/agent/runs/m122-execution-review-loop-prompt.md
 ```
 
-Active post-M122 lowering planning-plus-review prompt:
+Completed post-M122 lowering planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m122-planning-plus-review-prompt.md
+```
+
+Active M123 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m123-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2769,6 +2785,13 @@ docs/agent/runs/post-m122-planning-plus-review-prompt.md
   beyond backend operator emission, source repair, backend manifests,
   registries, dispatchers, hidden backfeeds, fixpoint behavior, or a broad
   expression/type framework.
+- M123 is limited to making the accepted M111-M122 scalar operation
+  descriptors and operation/type compatibility rules explicitly identify their
+  semantic origin as accepted bootstrap-core lowering semantics. It must not
+  add new operations, source syntax, scalar types, backend spellings, backend
+  manifest loading, runtime `tsldata`/`frozen`/`tslgenold` rule loading,
+  registries, dispatchers, plugins, hidden backfeeds, fixpoint behavior, new
+  lowering IR request/result families, or a broad operation framework.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and
@@ -4294,11 +4317,15 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M121 validation follow-up addressed by M122: comparison-family tests now
   include an explicit malformed body-argument negative case such as
   `equal(value, right)`.
-- Product-owner lowering follow-up for post-M122 planning: operation facts
-  observed in `tsldata/*` must not silently leak into product generator code as
-  unreviewed hardwired corpus data. Future lowering planning should either
-  document the accepted scalar operation descriptors as bootstrap/core
-  semantics or move them behind explicit typed lowering rule ownership.
+- Product-owner lowering follow-up addressed by post-M122 planning: M123
+  selects an explicit bootstrap-core lowering semantics contract for accepted
+  scalar operation descriptors and operation/type compatibility rules, and
+  forbids runtime `tsldata/*` operation-rule loading in that slice.
+- Post-M122 planning follow-up for M123 execution: add the focused
+  no-runtime-corpus-read regression for operation descriptor and
+  compatibility-rule lookup/lowering if it can be done without broad monkey
+  patching or hidden environment dependencies; otherwise document why it is
+  not appropriate for the M123 slice.
 - M106 architecture follow-up: before any release/stabilization work resumes,
   retire or rewrite `docs/redesign/stabilization-release-checklist.md` for the
   post-M106 clean restart; it still reads like the old `tslgen` package is an
@@ -5307,8 +5334,8 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active
-post-M122 lowering planning-plus-review prompt.
+No stop condition is active. The workflow is ready to run the active M123
+execution-review-loop prompt.
 
 ## Validation Expectations
 
@@ -5567,6 +5594,17 @@ command returned exit 0 with no output. The py_compile command returned exit 0
 with no output. The targeted clean-package test command returned exit 0 with
 `95 passed in 16.13s`. Validation-created `__pycache__` directories were
 removed, and the final cache check returned exit 0 with no output.
+
+For post-M122 lowering planning, validation completed with:
+
+```bash
+git add -N docs/agent/runs/m123-execution-review-loop-prompt.md
+git diff --check
+```
+
+The intent-to-add command returned exit 0 with no output so the new M123 prompt
+was included in diff validation. The final `git diff --check` returned exit 0
+with no output.
 
 For M108 clean lowering boundary slice, validation completed with:
 
