@@ -25,6 +25,41 @@ SUPPORTED_COMPARISON_OPERATION_DESCRIPTORS: tuple[
         source_body_operation="equal",
         semantic_name="comparison.equal",
     ),
+    ComparisonOperationDescriptor(
+        operation_id="nequal",
+        arity=2,
+        category="comparison",
+        source_body_operation="nequal",
+        semantic_name="comparison.nequal",
+    ),
+    ComparisonOperationDescriptor(
+        operation_id="less_than",
+        arity=2,
+        category="comparison",
+        source_body_operation="less_than",
+        semantic_name="comparison.less_than",
+    ),
+    ComparisonOperationDescriptor(
+        operation_id="greater_than",
+        arity=2,
+        category="comparison",
+        source_body_operation="greater_than",
+        semantic_name="comparison.greater_than",
+    ),
+    ComparisonOperationDescriptor(
+        operation_id="less_than_or_equal",
+        arity=2,
+        category="comparison",
+        source_body_operation="less_than_or_equal",
+        semantic_name="comparison.less_than_or_equal",
+    ),
+    ComparisonOperationDescriptor(
+        operation_id="greater_than_or_equal",
+        arity=2,
+        category="comparison",
+        source_body_operation="greater_than_or_equal",
+        semantic_name="comparison.greater_than_or_equal",
+    ),
 )
 
 

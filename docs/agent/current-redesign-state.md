@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 121 is accepted.
+Milestone 122 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -416,6 +416,22 @@ modeling, vector/SIMD comparison results, comparison families beyond equality,
 floating NaN/special-value policy, signed ordering policy, source repair,
 backend manifests, old imports, registries, dispatchers, hidden backfeeds,
 fixpoint behavior, or a broad expression/type framework.
+
+The M122 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only layout/boundary, architecture,
+documentation, and validation audits. M122 broadened the accepted M121
+same-shape scalar comparison path from `equal` to `nequal`, `less_than`,
+`greater_than`, `less_than_or_equal`, and `greater_than_or_equal` using
+backend-neutral comparison descriptors and backend-owned C++/Rust `bool`
+result/operator spellings. It preserved accepted binary, unary, and `equal`
+behavior, M110 scalar descriptors, M112 body values, M113 signatures, M114
+stage-output behavior, M116-M121 compatibility behavior, diagnostics, logical
+paths, artifact ordering, and existing artifact bytes. M122 addressed the M121
+malformed compare-body follow-up with an explicit `equal(value, right)`
+negative test. It did not add new compare source syntax, broad mask modeling,
+vector/SIMD comparison results, runtime floating or signed-ordering policy,
+source repair, backend manifests, old imports, registries, dispatchers, hidden
+backfeeds, fixpoint behavior, or a broad expression/type framework.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1489,40 +1505,42 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 122.
+Run post-M122 lowering-focused planning plus review.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m122-execution-review-loop-prompt.md
+docs/agent/runs/post-m122-planning-plus-review-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 122: Tiny Clean Scalar Comparison Operator Family Lowering Slice
+None. The active prompt is a docs-only planning/review prompt for selecting
+Milestone 123.
 ```
 
 Latest review verdict:
 
 ```text
-M121 execution-review loop returned Accept With Follow-Ups after one
+M122 execution-review loop returned Accept With Follow-Ups after one
 write-capable executor plus read-only layout/boundary, architecture,
-documentation, and validation audits. The only non-blocking implementation
-follow-up is a sharper malformed compare body argument negative test for a
-future comparison-family slice; state, roadmap, and next-prompt updates were
-completed during finalization.
+documentation, and validation audits. No blocking findings were reported. The
+documentation follow-up was finalization-only: mark M122 accepted, update
+workflow state, create the next concrete prompt, and clear the M121 malformed
+compare-body follow-up as addressed by M122.
 ```
 
 Next expected action:
 
 ```text
-Run the active M122 execution-review-loop prompt. M122 should broaden the
-accepted M121 scalar comparison path from `equal` to the evidence-backed
-same-shape scalar comparison operator family while keeping backend result and
-operator spellings backend-owned, keeping lowering backend-neutral, and
-avoiding mask/vector/runtime-special-value policy or source repair.
+Run the active post-M122 planning-plus-review prompt. The next selected
+milestone must focus on lowering and should account for the product-owner
+concern that operation facts observed in `tsldata/*` must be documented as
+accepted bootstrap/core semantics or moved behind explicit typed lowering rule
+ownership, rather than leaking into product code as unreviewed hardwired corpus
+data.
 ```
 
 Accepted planning prompt:
@@ -2641,10 +2659,16 @@ Completed M121 execution-review-loop prompt:
 docs/agent/runs/m121-execution-review-loop-prompt.md
 ```
 
-Active M122 execution-review-loop prompt:
+Completed M122 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m122-execution-review-loop-prompt.md
+```
+
+Active post-M122 lowering planning-plus-review prompt:
+
+```text
+docs/agent/runs/post-m122-planning-plus-review-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -4267,8 +4291,14 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   `__pycache__` directories under clean `tslgen/` were removed after review.
 - M115 validation follow-up: consider adding digest-manifest assertions for
   newly accepted operation artifact pairs when future slices add operations.
-- M121 validation follow-up: future comparison-family tests should include an
-  explicit malformed body-argument negative case such as `equal(value, right)`.
+- M121 validation follow-up addressed by M122: comparison-family tests now
+  include an explicit malformed body-argument negative case such as
+  `equal(value, right)`.
+- Product-owner lowering follow-up for post-M122 planning: operation facts
+  observed in `tsldata/*` must not silently leak into product generator code as
+  unreviewed hardwired corpus data. Future lowering planning should either
+  document the accepted scalar operation descriptors as bootstrap/core
+  semantics or move them behind explicit typed lowering rule ownership.
 - M106 architecture follow-up: before any release/stabilization work resumes,
   retire or rewrite `docs/redesign/stabilization-release-checklist.md` for the
   post-M106 clean restart; it still reads like the old `tslgen` package is an
@@ -5277,8 +5307,8 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M122
-execution-review-loop prompt.
+No stop condition is active. The workflow is ready to run the active
+post-M122 lowering planning-plus-review prompt.
 
 ## Validation Expectations
 
@@ -5519,6 +5549,23 @@ test command returned exit 0 with `91 passed in 16.29s`. The public API import
 command returned exit 0 with no output. The comparison-operation descriptor
 import command returned exit 0 with no output. The py_compile command returned
 exit 0 with no output. Validation-created `__pycache__` directories were
+removed, and the final cache check returned exit 0 with no output.
+
+For M122 clean scalar comparison operator family lowering slice, validation
+completed with:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/lowering/comparison_operations.py tslgen/src/tslgen/backends/cpp/backend.py tslgen/src/tslgen/backends/rust/backend.py tslgen/src/tslgen/lowering/lowerer.py tslgen/src/tslgen/__init__.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The public API import
+command returned exit 0 with no output. The py_compile command returned exit 0
+with no output. The targeted clean-package test command returned exit 0 with
+`95 passed in 16.13s`. Validation-created `__pycache__` directories were
 removed, and the final cache check returned exit 0 with no output.
 
 For M108 clean lowering boundary slice, validation completed with:

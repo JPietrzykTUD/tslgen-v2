@@ -16110,10 +16110,18 @@ Review notes:
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M121.
-This milestone keeps the next step in lowering by broadening the accepted M121
-same-shape scalar comparison path from equality to the small evidence-backed
-comparison operator family.
+Accepted. M122 broadened the accepted M121 same-shape scalar comparison path
+from `equal` to `nequal`, `less_than`, `greater_than`,
+`less_than_or_equal`, and `greater_than_or_equal`. It reused the exact
+`m:=(v,v)` / `left, right` source/catalog/lowering shape, kept comparison
+descriptors backend-neutral, kept C++/Rust result and operator spellings
+backend-owned, and preserved accepted binary, unary, and `equal` behavior.
+M122 also addressed the M121 malformed compare-body follow-up with an explicit
+`equal(value, right)` negative test. It did not add new compare source syntax,
+broad mask modeling, vector/SIMD comparison results, runtime floating or
+signed-ordering policy, source repair, backend manifests, old imports,
+registries, dispatchers, hidden backfeeds, fixpoint behavior, or a broad
+expression/type framework.
 
 Goal:
 

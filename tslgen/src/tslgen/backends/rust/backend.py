@@ -80,6 +80,11 @@ _UNARY_OPERATOR_SPELLINGS: tuple[_UnaryOperatorSpelling, ...] = (
 
 _COMPARISON_OPERATOR_SPELLINGS: tuple[_ComparisonOperatorSpelling, ...] = (
     _ComparisonOperatorSpelling(operation_id="equal", spelling="=="),
+    _ComparisonOperatorSpelling(operation_id="nequal", spelling="!="),
+    _ComparisonOperatorSpelling(operation_id="less_than", spelling="<"),
+    _ComparisonOperatorSpelling(operation_id="greater_than", spelling=">"),
+    _ComparisonOperatorSpelling(operation_id="less_than_or_equal", spelling="<="),
+    _ComparisonOperatorSpelling(operation_id="greater_than_or_equal", spelling=">="),
 )
 
 

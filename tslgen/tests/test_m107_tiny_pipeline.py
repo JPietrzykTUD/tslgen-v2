@@ -266,6 +266,24 @@ EQUAL_RUST_CONTENT = """pub fn equal_scalar_si32(left: i32, right: i32) -> bool 
 }
 """
 
+NEQUAL_CPP_CONTENT = """#pragma once
+
+#include <cstdint>
+
+namespace tsl {
+
+inline bool nequal_scalar_si32(std::int32_t left, std::int32_t right) {
+  return left != right;
+}
+
+}  // namespace tsl
+"""
+
+NEQUAL_RUST_CONTENT = """pub fn nequal_scalar_si32(left: i32, right: i32) -> bool {
+    left != right
+}
+"""
+
 
 def test_m110_scalar_descriptor_lookup_table() -> None:
     assert supported_scalar_type_tags() == ("si32", "ui32", "f32", "f64")
@@ -424,8 +442,15 @@ def test_m119_unary_operation_descriptor_lookup_table_includes_neg_after_bit_not
     assert lookup_unary_operation_descriptor("logical_not") is None
 
 
-def test_m121_comparison_operation_descriptor_lookup_table_accepts_equal_only() -> None:
-    assert supported_comparison_operation_ids() == ("equal",)
+def test_m122_comparison_operation_descriptor_lookup_table_includes_family() -> None:
+    assert supported_comparison_operation_ids() == (
+        "equal",
+        "nequal",
+        "less_than",
+        "greater_than",
+        "less_than_or_equal",
+        "greater_than_or_equal",
+    )
     assert SUPPORTED_COMPARISON_OPERATION_DESCRIPTORS == (
         ComparisonOperationDescriptor(
             operation_id="equal",
@@ -434,10 +459,46 @@ def test_m121_comparison_operation_descriptor_lookup_table_accepts_equal_only() 
             source_body_operation="equal",
             semantic_name="comparison.equal",
         ),
+        ComparisonOperationDescriptor(
+            operation_id="nequal",
+            arity=2,
+            category="comparison",
+            source_body_operation="nequal",
+            semantic_name="comparison.nequal",
+        ),
+        ComparisonOperationDescriptor(
+            operation_id="less_than",
+            arity=2,
+            category="comparison",
+            source_body_operation="less_than",
+            semantic_name="comparison.less_than",
+        ),
+        ComparisonOperationDescriptor(
+            operation_id="greater_than",
+            arity=2,
+            category="comparison",
+            source_body_operation="greater_than",
+            semantic_name="comparison.greater_than",
+        ),
+        ComparisonOperationDescriptor(
+            operation_id="less_than_or_equal",
+            arity=2,
+            category="comparison",
+            source_body_operation="less_than_or_equal",
+            semantic_name="comparison.less_than_or_equal",
+        ),
+        ComparisonOperationDescriptor(
+            operation_id="greater_than_or_equal",
+            arity=2,
+            category="comparison",
+            source_body_operation="greater_than_or_equal",
+            semantic_name="comparison.greater_than_or_equal",
+        ),
     )
-    assert lookup_comparison_operation_descriptor("equal") == _comparison_operation(
-        "equal"
-    )
+    for operation_id in supported_comparison_operation_ids():
+        assert lookup_comparison_operation_descriptor(operation_id) == (
+            _comparison_operation(operation_id)
+        )
     assert lookup_comparison_operation_descriptor("less") is None
 
 
@@ -642,48 +703,55 @@ def test_m118_parser_rejects_nearby_malformed_unary_header(
     assert diagnostic.location == SourceLocation(document.path, 1, 1)
 
 
-def test_m121_parser_and_catalog_accept_exact_compare_source_shape(
+def test_m122_parser_and_catalog_accept_exact_compare_family_source_shape(
     tmp_path: Path,
 ) -> None:
-    document = _source_document(
-        tmp_path,
-        "tiny_equal.tsl",
-        "\n".join(
-            (
-                "prim<m:=(v,v)> equal(left, right):",
-                "  implementation scalar si32:",
-                "    body equal(left, right)",
-            )
-        ),
-    )
+    for operation_id in supported_comparison_operation_ids():
+        document = _source_document(
+            tmp_path,
+            f"tiny_{operation_id}.tsl",
+            "\n".join(
+                (
+                    f"prim<m:=(v,v)> {operation_id}(left, right):",
+                    "  implementation scalar si32:",
+                    f"    body {operation_id}(left, right)",
+                )
+            ),
+        )
 
-    parse_result = TslParser().parse((document,))
-    catalog_result = CatalogBuilder().build(parse_result.documents)
+        parse_result = TslParser().parse((document,))
+        catalog_result = CatalogBuilder().build(parse_result.documents)
 
-    assert parse_result.diagnostics == ()
-    assert catalog_result.diagnostics == ()
-    assert catalog_result.catalog is not None
-    primitive = catalog_result.catalog.primitives[0]
-    assert primitive.name == "equal"
-    assert primitive.signature == "m:=(v,v)"
-    assert primitive.parameters == ("left", "right")
-    assert primitive.template == "compare"
-    body = primitive.implementations[0].body
-    assert isinstance(body, ComparisonOperationBody)
-    assert not isinstance(body, BinaryOperationBody)
-    assert not isinstance(body, UnaryOperationBody)
-    assert body == ComparisonOperationBody(
-        operation="equal",
-        left_parameter="left",
-        right_parameter="right",
-        source=SourceLocation(document.path, 3, 5),
-    )
+        assert parse_result.diagnostics == ()
+        assert catalog_result.diagnostics == ()
+        assert catalog_result.catalog is not None
+        primitive = catalog_result.catalog.primitives[0]
+        assert primitive.name == operation_id
+        assert primitive.signature == "m:=(v,v)"
+        assert primitive.parameters == ("left", "right")
+        assert primitive.template == "compare"
+        body = primitive.implementations[0].body
+        assert isinstance(body, ComparisonOperationBody)
+        assert not isinstance(body, BinaryOperationBody)
+        assert not isinstance(body, UnaryOperationBody)
+        assert body == ComparisonOperationBody(
+            operation=operation_id,
+            left_parameter="left",
+            right_parameter="right",
+            source=SourceLocation(document.path, 3, 5),
+        )
 
 
 def test_m121_catalog_rejects_nearby_malformed_compare_body_shapes(
     tmp_path: Path,
 ) -> None:
-    for body_arguments in ("", "left", "right, left", "left, right, extra"):
+    for body_arguments in (
+        "",
+        "left",
+        "value, right",
+        "right, left",
+        "left, right, extra",
+    ):
         document = _source_document(
             tmp_path,
             f"bad_equal_{body_arguments.replace(', ', '_') or 'empty'}.tsl",
@@ -819,16 +887,23 @@ def test_m110_lowerer_accepts_supported_scalar_descriptors() -> None:
         assert result.function.signature.scalar_type == _descriptor(type_tag)
 
 
-def test_m121_lowerer_accepts_equal_for_supported_scalar_descriptors() -> None:
-    for type_tag in supported_scalar_type_tags():
-        result = Lowerer().lower(
-            _selected_comparison_implementation(type_tag=type_tag)
-        )
+def test_m122_lowerer_accepts_comparison_family_for_supported_scalar_descriptors() -> None:
+    for operation_id in supported_comparison_operation_ids():
+        for type_tag in supported_scalar_type_tags():
+            result = Lowerer().lower(
+                _selected_comparison_implementation(
+                    operation_id=operation_id,
+                    type_tag=type_tag,
+                )
+            )
 
-        assert result.diagnostics == ()
-        assert result.function == _lowered_comparison_function(type_tag=type_tag)
-        assert result.function is not None
-        assert result.function.signature.result_type == SCALAR_COMPARISON_RESULT_TYPE
+            assert result.diagnostics == ()
+            assert result.function == _lowered_comparison_function(
+                type_tag=type_tag,
+                operation_id=operation_id,
+            )
+            assert result.function is not None
+            assert result.function.signature.result_type == SCALAR_COMPARISON_RESULT_TYPE
 
 
 def test_m112_lowerer_wraps_binary_expression_in_return_statement_body() -> None:
@@ -1235,6 +1310,32 @@ def test_m121_backends_emit_backend_owned_compare_result_and_operator_spelling()
     assert "    left == right" in rust_result.artifact.content
 
 
+def test_m122_backends_emit_backend_owned_compare_family_operator_spellings() -> None:
+    expected_operators = (
+        ("equal", "=="),
+        ("nequal", "!="),
+        ("less_than", "<"),
+        ("greater_than", ">"),
+        ("less_than_or_equal", "<="),
+        ("greater_than_or_equal", ">="),
+    )
+
+    for operation_id, operator in expected_operators:
+        function = _lowered_comparison_function(operation_id=operation_id)
+
+        cpp_result = CppBackend().emit(function)
+        rust_result = RustBackend().emit(function)
+
+        assert cpp_result.diagnostics == ()
+        assert rust_result.diagnostics == ()
+        assert cpp_result.artifact is not None
+        assert rust_result.artifact is not None
+        assert f"inline bool {operation_id}_scalar_si32" in cpp_result.artifact.content
+        assert " -> bool" in rust_result.artifact.content
+        assert f"return left {operator} right;" in cpp_result.artifact.content
+        assert f"    left {operator} right" in rust_result.artifact.content
+
+
 def test_m108_lowerer_reports_unsupported_body_boundary() -> None:
     result = Lowerer().lower(
         _selected_implementation(
@@ -1300,7 +1401,7 @@ def test_m111_lowerer_reports_primitive_body_operation_mismatch() -> None:
     assert "sub" in diagnostic.message
 
 
-def test_m121_lowerer_reports_unsupported_comparison_operation() -> None:
+def test_m122_lowerer_reports_unsupported_comparison_operation() -> None:
     result = Lowerer().lower(_selected_comparison_implementation(operation_id="less"))
 
     assert result.function is None
@@ -1310,7 +1411,10 @@ def test_m121_lowerer_reports_unsupported_comparison_operation() -> None:
     assert diagnostic.severity == "error"
     assert diagnostic.location == _location(1, 1)
     assert "less" in diagnostic.message
-    assert "equal" in diagnostic.message
+    assert (
+        "equal, nequal, less_than, greater_than, "
+        "less_than_or_equal, greater_than_or_equal"
+    ) in diagnostic.message
 
 
 def test_m121_lowerer_reports_comparison_body_operation_mismatch() -> None:
@@ -1469,6 +1573,27 @@ def test_m121_equal_passes_through_stage_output() -> None:
     assert lowering_result.diagnostics == ()
     assert lowering_result.lowered_functions == LoweredFunctionSet(
         (_lowered_comparison_function(type_tag="f64"),)
+    )
+
+
+def test_m122_comparison_family_passes_through_stage_output() -> None:
+    lowering_result = Lowerer().lower_all(
+        (
+            _selected_comparison_implementation(
+                operation_id="greater_than_or_equal",
+                type_tag="ui32",
+            ),
+        )
+    )
+
+    assert lowering_result.diagnostics == ()
+    assert lowering_result.lowered_functions == LoweredFunctionSet(
+        (
+            _lowered_comparison_function(
+                operation_id="greater_than_or_equal",
+                type_tag="ui32",
+            ),
+        )
     )
 
 
@@ -1632,6 +1757,34 @@ def test_m121_preserves_existing_binary_and_unary_behavior() -> None:
     )
     assert shift_function == _lowered_function(operation_id="shift_left")
     assert bit_not_function == _lowered_unary_function()
+
+
+def test_m122_preserves_existing_binary_unary_and_equal_behavior() -> None:
+    shift_function = Lowerer().lower(
+        _selected_implementation(operation_id="shift_left", type_tag="si32")
+    ).function
+    neg_function = Lowerer().lower(
+        _selected_unary_implementation(operation_id="neg", type_tag="f64")
+    ).function
+    equal_function = Lowerer().lower(_selected_comparison_implementation()).function
+
+    assert shift_function == _lowered_function(operation_id="shift_left")
+    assert neg_function == _lowered_unary_function(
+        operation_id="neg",
+        type_tag="f64",
+    )
+    assert equal_function == _lowered_comparison_function()
+    assert shift_function is not None
+    assert neg_function is not None
+    assert equal_function is not None
+
+    equal_cpp = CppBackend().emit(equal_function)
+    equal_rust = RustBackend().emit(equal_function)
+
+    assert equal_cpp.artifact is not None
+    assert equal_rust.artifact is not None
+    assert equal_cpp.artifact.content == EQUAL_CPP_CONTENT
+    assert equal_rust.artifact.content == EQUAL_RUST_CONTENT
 
 
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
@@ -1862,6 +2015,39 @@ def test_m121_equal_source_generates_cpp_and_rust_artifacts(
     assert [artifact.content for artifact in result.artifacts.artifacts] == [
         EQUAL_CPP_CONTENT,
         EQUAL_RUST_CONTENT,
+    ]
+
+
+def test_m122_new_comparison_source_generates_cpp_and_rust_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_compare_source(tmp_path, "nequal", "si32")
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="nequal",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="rust",
+                primitive_name="nequal",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/nequal_scalar_si32.hpp",
+        "src/nequal_scalar_si32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        NEQUAL_CPP_CONTENT,
+        NEQUAL_RUST_CONTENT,
     ]
 
 
@@ -2219,7 +2405,7 @@ def test_m111_source_operation_body_mismatch_reports_lowering_diagnostic(
     assert "sub" in diagnostic.message
 
 
-def test_m121_unsupported_compare_source_operation_reports_lowering_diagnostic(
+def test_m122_unsupported_compare_source_operation_reports_lowering_diagnostic(
     tmp_path: Path,
 ) -> None:
     source = _write_tiny_compare_source(tmp_path, "less", "si32")
@@ -2245,7 +2431,10 @@ def test_m121_unsupported_compare_source_operation_reports_lowering_diagnostic(
     assert diagnostic.location.line == 1
     assert diagnostic.location.column == 1
     assert "less" in diagnostic.message
-    assert "equal" in diagnostic.message
+    assert (
+        "equal, nequal, less_than, greater_than, "
+        "less_than_or_equal, greater_than_or_equal"
+    ) in diagnostic.message
 
 
 def test_m110_malformed_source_type_tag_is_parse_boundary(tmp_path: Path) -> None:

@@ -373,6 +373,37 @@ modeling, vector/SIMD compare results, boolean scalar inputs, floating
 NaN/special-value policy, constant folding, source repair, backend manifests,
 or broad comparison semantics.
 
+### M122 Tiny Scalar Comparison Operator Family
+
+Milestone 122 broadens only the accepted M121 exact scalar comparison source
+and lowering shape. The same `m:=(v,v)` / `left, right` form now accepts the
+comparison operation ids `equal`, `nequal`, `less_than`, `greater_than`,
+`less_than_or_equal`, and `greater_than_or_equal`:
+
+```text
+prim<m:=(v,v)> nequal(left, right):
+  implementation scalar si32:
+    body nequal(left, right)
+```
+
+Catalog construction continues to preserve accepted comparison bodies as typed
+`ComparisonOperationBody` values with exactly the `left, right` body arguments.
+Nearby body forms such as `equal(value, right)`, missing arguments, reordered
+arguments, or extra arguments remain diagnostic boundaries and are not repaired.
+
+The lowerer owns the backend-neutral comparison descriptor table and lowers the
+accepted comparison family for the currently supported scalar input
+descriptors `si32`, `ui32`, `f32`, and `f64`. Each accepted function retains
+the explicit scalar-comparison result boundary introduced in M121.
+
+C++ and Rust emitters own result-type spelling and comparison operator
+spelling. Both backends render scalar-comparison results as `bool` and render
+the comparison family as `==`, `!=`, `<`, `>`, `<=`, and `>=` respectively.
+This slice does not define mask modeling, vector/SIMD compare results, boolean
+scalar inputs, floating NaN/special-value policy, signed ordering policy,
+constant folding, source repair, backend manifests, or broad comparison
+semantics.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:
