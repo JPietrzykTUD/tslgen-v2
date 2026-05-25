@@ -719,6 +719,37 @@ ids, backend spellings, scalar shift-count signatures, primitive aliases,
 target discovery, backend manifest loading, runtime corpus reads, source
 repair, or renderer-side semantic inference.
 
+### M134 Tiny Scalar Width Type Descriptor Lowering Slice
+
+Milestone 134 broadens only the lowering-owned scalar descriptor set for the
+tiny clean restart path. In addition to the accepted `si32`, `ui32`, `f32`,
+and `f64` descriptors, the lowerer now accepts the explicit integer scalar
+tags `si8`, `ui8`, `si16`, `ui16`, `si64`, and `ui64`.
+
+Each descriptor remains backend-neutral and contains only tag, kind, family,
+bit width, and signedness. C++ and Rust type spellings for the new tags remain
+backend-owned: C++ emits `std::int8_t`, `std::uint8_t`, `std::int16_t`,
+`std::uint16_t`, `std::int64_t`, and `std::uint64_t`; Rust emits `i8`, `u8`,
+`i16`, `u16`, `i64`, and `u64`.
+
+The accepted M107-M133 source body forms and operation descriptors are
+unchanged. Ordinary arithmetic binary operations without an explicit type
+restriction lower for all scalar descriptors. Integer-only binary operations
+such as `mod`, bitwise operations, and shifts lower for all integer scalar
+descriptors and continue to reject floating descriptors with
+`TSL-LOWER-UNSUPPORTED-OPERATION-TYPE`. Comparisons lower for all scalar
+descriptors. Unary `bit_not` lowers for integer descriptors and rejects
+floating descriptors. Unary `neg` lowers for signed integer and floating
+descriptors and rejects unsigned descriptors.
+
+Unsupported explicit tags such as `si128` or vector-like identifier tags still
+reach lowering as source-authored type tags and fail with
+`TSL-LOWER-UNSUPPORTED-TYPE`; they are not normalized, inferred, repaired, or
+loaded from type groups. This slice does not add vector/SIMD, masks,
+immediates, scalar shift-count signatures, backend manifest loading, target
+discovery, primitive aliases, broad type groups, runtime corpus reads, or new
+lowering IR families.
+
 ### Exact Operator-Looking TSIL Body Spellings
 
 Operator-looking TSIL body fragments are accepted only as documented exact

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 133 is accepted.
+Milestone 134 is accepted.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -810,6 +810,28 @@ and operation/type compatibility diagnostics, and must not add broad type
 groups, vector/SIMD types, mask/immediate types, scalar shift-count
 signatures, backend manifest loading, runtime corpus reads, source repair,
 target discovery, or new lowering IR families.
+
+The M134 execution-review loop returned `Accept` after one write-capable
+executor, read-only architecture, boundary, documentation, and validation
+audits, and one focused validation-cache cleanup/re-review. M134 added
+lowering-owned backend-neutral scalar descriptors for `si8`, `ui8`, `si16`,
+`ui16`, `si64`, and `ui64`, preserved existing descriptors for `si32`,
+`ui32`, `f32`, and `f64`, kept C++ and Rust type spellings backend-owned, and
+updated typed operation/type compatibility only for the expanded descriptor
+set. It preserved accepted M107-M133 source body forms, operation descriptors,
+backend-owned spellings, diagnostics, deterministic artifact ordering, and
+representative artifact bytes. It did not add broad type groups, vector/SIMD,
+masks, immediates, scalar shift-count signatures, backend manifests, runtime
+corpus reads, source repair, target discovery, primitive aliases, or new
+lowering IR families.
+
+Integrated post-M134 next-run planning selected
+`Milestone 135: Tiny Clean Exact Indexed Binary Assignment Body Lowering Boundary Slice`.
+The selected M135 task keeps focus on lowering by recognizing exactly one
+indexed binary assignment body shape, carrying it as typed source-owned
+semantics through parser, catalog, and lowering boundaries, and making backend
+unsupported-body behavior explicit until a later rendering slice defines array
+signatures, result storage, loop envelopes, and generated output.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1883,38 +1905,40 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 134.
+Execute Milestone 135.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m134-execution-review-loop-prompt.md
+docs/agent/runs/m135-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 134: Tiny Clean Scalar Width Type Descriptor Lowering Slice
+Milestone 135: Tiny Clean Exact Indexed Binary Assignment Body Lowering Boundary Slice
 ```
 
 Latest review verdict:
 
 ```text
-M133 execution-review returned Accept after one write-capable executor and
-read-only architecture, boundary, documentation, and validation audits. No
-blocking review findings or follow-ups were recorded. Integrated next-run
-planning selected M134 and created
-docs/agent/runs/m134-execution-review-loop-prompt.md.
+M134 execution-review returned Accept after one write-capable executor,
+read-only architecture, boundary, documentation, and validation audits, plus a
+focused validation-cache cleanup/re-review. No product-code blocking review
+findings or follow-ups were recorded. Integrated next-run planning selected
+M135 and created docs/agent/runs/m135-execution-review-loop-prompt.md.
 ```
 
 Next expected action:
 
 ```text
-Run the active M134 execution-review-loop prompt. M134 should add explicit
-lowering-owned scalar descriptors for `si8`, `ui8`, `si16`, `ui16`, `si64`,
-and `ui64`, keep C++/Rust type spellings backend-owned, update compatibility
-only for the expanded scalar descriptor set, and preserve M107-M133 behavior.
+Run the active M135 execution-review-loop prompt. M135 should recognize only
+the exact indexed binary assignment body form
+`tsil "result[i] = operand0[i] <operator> operand1[i];"`, promote it to typed
+catalog/lowering values, preserve declared operand order and repetition, and
+return structured unsupported-backend diagnostics until array signatures,
+loops, result storage, and rendering are deliberately added later.
 ```
 
 Accepted planning prompt:
@@ -3275,15 +3299,24 @@ docs/agent/runs/m125-execution-review-loop-prompt.md
   manifests, runtime corpus reads, source repair, renderer inference, or new
   lowering IR families. Helper-shaped bodies such as `details::arith_mul(...)`
   remain legacy/backend evidence rather than accepted clean source forms.
-- M134 is planned, not implemented. It is limited to adding explicit
-  lowering-owned scalar descriptors for `si8`, `ui8`, `si16`, `ui16`, `si64`,
-  and `ui64`, plus backend-owned C++/Rust type spellings and compatibility
-  tests for the expanded scalar descriptor set. M134 must not add broad type
-  groups, vector/SIMD types, mask/immediate types, scalar shift-count
-  signatures, backend manifest or YAML type-map loading, runtime corpus reads,
-  source repair, target discovery, primitive aliases, registries or
-  dispatchers, hidden backfeeds or fixpoint behavior, or new lowering IR
-  families.
+- M134 is accepted. It added explicit lowering-owned scalar descriptors for
+  `si8`, `ui8`, `si16`, `ui16`, `si64`, and `ui64`, plus backend-owned C++/Rust
+  type spellings and compatibility tests for the expanded scalar descriptor
+  set. M134 did not add broad type groups, vector/SIMD types, mask/immediate
+  types, scalar shift-count signatures, backend manifest or YAML type-map
+  loading, runtime corpus reads, source repair, target discovery, primitive
+  aliases, registries or dispatchers, hidden backfeeds or fixpoint behavior, or
+  new lowering IR families.
+- M135 is planned, not implemented. It is limited to exact indexed binary
+  assignment body recognition/lowering for
+  `tsil "result[i] = operand0[i] <operator> operand1[i];"` with already
+  accepted binary operator spellings and declared operands. M135 must not add
+  full TSIL parsing, loops, array/pointer/slice signatures, result allocation,
+  backend rendering, helper substitution, primitive calls, casts, arbitrary
+  index expressions, target-language parsing, runtime corpus reads, source
+  repair, target discovery, backend manifests, aliases, registries,
+  dispatchers, hidden backfeeds, fixpoint behavior, or new lowering IR
+  request/result/worklist families.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and
@@ -5838,13 +5871,34 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M134
+No stop condition is active. The workflow is ready to run the active M135
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M134 execution, run the validation command listed in
-`docs/agent/runs/m134-execution-review-loop-prompt.md`.
+For active M135 execution, run the validation command listed in
+`docs/agent/runs/m135-execution-review-loop-prompt.md`.
+
+For M134 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/scalar_types.py tslgen/src/tslgen/lowering/operation_type_compatibility.py tslgen/src/tslgen/lowering/lowerer.py tslgen/src/tslgen/backends/cpp/backend.py tslgen/src/tslgen/backends/rust/backend.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The public API import
+command returned exit 0 with no output. The py-compile command returned exit 0
+with no output. The targeted clean-package pytest command returned exit 0 with
+`158 passed in 13.54s`. The first cache check found validation-created
+`__pycache__` directories under `tslgen/src/tslgen/analysis`,
+`tslgen/src/tslgen/backends/cpp`, `tslgen/src/tslgen/backends/rust`,
+`tslgen/src/tslgen/lowering`, `tslgen/src/tslgen/pipeline`,
+`tslgen/src/tslgen/syntax`, and `tslgen/tests`; they were removed, and the
+final `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+output.
 
 For M133 execution and review, validation completed with:
 

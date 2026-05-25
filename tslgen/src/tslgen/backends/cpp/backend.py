@@ -50,8 +50,14 @@ class _ComparisonOperatorSpelling:
 
 
 _SCALAR_TYPE_SPELLINGS: tuple[_ScalarTypeSpelling, ...] = (
+    _ScalarTypeSpelling(tag="si8", spelling="std::int8_t"),
+    _ScalarTypeSpelling(tag="ui8", spelling="std::uint8_t"),
+    _ScalarTypeSpelling(tag="si16", spelling="std::int16_t"),
+    _ScalarTypeSpelling(tag="ui16", spelling="std::uint16_t"),
     _ScalarTypeSpelling(tag="si32", spelling="std::int32_t"),
     _ScalarTypeSpelling(tag="ui32", spelling="std::uint32_t"),
+    _ScalarTypeSpelling(tag="si64", spelling="std::int64_t"),
+    _ScalarTypeSpelling(tag="ui64", spelling="std::uint64_t"),
     _ScalarTypeSpelling(tag="f32", spelling="float"),
     _ScalarTypeSpelling(tag="f64", spelling="double"),
 )

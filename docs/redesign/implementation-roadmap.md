@@ -17974,3 +17974,135 @@ Review notes:
   primitive aliases, runtime corpus reads, or new IR ceremony.
 - Reviewers should require operation/type compatibility changes to be explicit,
   typed, and tested.
+
+Validation completed with the required M134 profile. `git diff --check`
+returned exit 0 with no output. The public API import command returned exit 0
+with no output. The py-compile command returned exit 0 with no output. The
+targeted clean-package pytest command returned exit 0 with
+`158 passed in 13.54s`. The first cache check found validation-created
+`__pycache__` directories under `tslgen/src/tslgen/analysis`,
+`tslgen/src/tslgen/backends/cpp`, `tslgen/src/tslgen/backends/rust`,
+`tslgen/src/tslgen/lowering`, `tslgen/src/tslgen/pipeline`,
+`tslgen/src/tslgen/syntax`, and `tslgen/tests`; they were removed, and the
+final `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+output.
+
+Next concrete prompt:
+
+```text
+docs/agent/runs/m135-execution-review-loop-prompt.md
+```
+
+### Milestone 135: Tiny Clean Exact Indexed Binary Assignment Body Lowering Boundary Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M134.
+This milestone keeps the task focused on lowering. It starts the array/body
+path by recognizing exactly one indexed assignment body shape and carrying it
+as typed source-owned semantics through parser, catalog, and lowering
+boundaries. It is not generated loop support; C++ and Rust may reject the new
+lowered body with a structured unsupported-body diagnostic until a later
+milestone defines array signatures, result storage, loop envelopes, and
+rendering.
+
+Goal:
+
+Recognize this exact single-line body shape under the existing tiny binary
+source shape:
+
+```text
+prim<v:=(v,v)> add(left, right):
+  implementation scalar si32:
+    tsil "result[i] = left[i] + right[i];"
+```
+
+and promote it into typed body/lowering values that preserve assignment target
+`result`, index `i`, source-authored declared operand names and order, existing
+binary operation descriptor semantics, the scalar type descriptor, and source
+location for diagnostics.
+
+Scope:
+
+- Add exact parser recognition for
+  `tsil "result[i] = operand0[i] <operator> operand1[i];"` using only already
+  accepted M131/M133 binary operator spellings.
+- Promote accepted forms into a typed catalog body value before selection,
+  lowering, or backend emission.
+- Preserve source-authored binary operand order and repetition, and require
+  RHS operands to reference declared binary primitive parameters.
+- Accept only assignment target `result[i]` and RHS operand indexes using the
+  same exact index token `i`.
+- Lower accepted indexed assignment bodies into backend-neutral typed lowering
+  values carrying operation descriptor, scalar descriptor, assignment target,
+  index, and indexed parameter references.
+- Make backend behavior explicit: M135 may return structured unsupported-body
+  diagnostics and no artifacts for indexed assignment bodies until a later
+  rendering slice adds array/result signatures and loop emission.
+- Add direct parser/catalog/lowering tests and generator-path tests for exact
+  accepted forms plus malformed nearby forms.
+- Preserve all M107-M134 accepted return-expression behavior, deterministic
+  artifact ordering, backend-owned spellings, compatibility diagnostics, and
+  representative existing artifact bytes.
+
+Out of scope:
+
+- Full TSIL parsing, multiline bodies, statement lists, loops, variables,
+  scopes, result allocation, vector lengths, lane counts, array/pointer/slice
+  type descriptors, mutable result parameters, or generated loop artifacts.
+- Backend rendering for indexed assignment bodies, C++ array/span/pointer
+  signature design, Rust slice signature design, bounds policy, aliasing
+  policy, loop unrolling, or compiler execution.
+- Helper substitution for `details::arith_mul`, `details::arith_rem`, or
+  `details::arith_add`; primitive calls; casts; generation/backend type
+  queries; direct intrinsics; pointer helpers; ternaries; conditionals; or
+  general expression parsing.
+- Broad `tsldata` syntax/layout parsing, nested implementation maps, multiple
+  primitive blocks in one document, attributes, tests, descriptions,
+  `requires` clauses, type groups, extension fallback, dependency closure, or
+  target discovery.
+- Adding operation ids, scalar type tags, backend operator spellings,
+  primitive aliases, scalar shift-count signatures, backend manifests,
+  registries, dispatchers, callback maps, plugin systems, hidden backfeeds,
+  fixpoint mechanisms, broad operation frameworks, or new lowering IR
+  request/result/worklist families.
+- Loading semantics, compatibility rules, type aliases, source-body rewrites,
+  or backend spellings from `tsldata/`, backend manifests, YAML, `frozen`,
+  `tslgenold`, plugins, or environment configuration at runtime.
+
+Accepted outputs:
+
+- Exact indexed assignment TSIL bodies can be recognized as typed catalog and
+  lowering values for already-modeled binary operations.
+- Source-authored operand order/repetition, target `result`, index `i`, scalar
+  type descriptors, operation descriptors, and source locations are preserved.
+- C++ and Rust backends produce structured unsupported-body diagnostics and no
+  artifacts for indexed assignment bodies until rendering support exists.
+- Nearby unsupported forms produce structured diagnostics and are not repaired,
+  normalized, partially lowered, or interpreted as target-language syntax.
+- Existing M107-M134 behavior and representative artifact bytes remain stable.
+
+Validation:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/model.py tslgen/src/tslgen/lowering/lowerer.py tslgen/src/tslgen/backends/cpp/backend.py tslgen/src/tslgen/backends/rust/backend.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Remove any validation-created `__pycache__` directories before the final cache
+check. Do not run the old `tslgenold` validation profile as proof of the clean
+product slice.
+
+Review notes:
+
+- Reviewers should require M135 to remain an exact indexed-assignment
+  body/lowering boundary slice, not full TSIL parsing, loop lowering, helper
+  substitution, array signature design, or backend rendering.
+- Reviewers should reject raw source rescanning in backends, source repair,
+  arbitrary index expressions, target-language parsing, runtime corpus reads,
+  broad body models, or new request/result/worklist ceremony.
+- Reviewers should require accepted indexed assignment forms to become typed
+  catalog/lowering values before any backend diagnostic is emitted.

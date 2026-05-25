@@ -318,10 +318,66 @@ ALL_BINARY_OPERATOR_TSIL_CASES = (
     *REMAINING_BINARY_OPERATOR_TSIL_CASES,
 )
 
+INTEGER_SCALAR_TYPE_TAGS = (
+    "si8",
+    "ui8",
+    "si16",
+    "ui16",
+    "si32",
+    "ui32",
+    "si64",
+    "ui64",
+)
+SIGNED_INTEGER_OR_FLOATING_SCALAR_TYPE_TAGS = (
+    "si8",
+    "si16",
+    "si32",
+    "si64",
+    "f32",
+    "f64",
+)
+SUPPORTED_SCALAR_TYPE_TAGS = (
+    *INTEGER_SCALAR_TYPE_TAGS,
+    "f32",
+    "f64",
+)
+INTEGER_SCALAR_TYPE_TEXT = ", ".join(INTEGER_SCALAR_TYPE_TAGS)
+SIGNED_INTEGER_OR_FLOATING_SCALAR_TYPE_TEXT = ", ".join(
+    SIGNED_INTEGER_OR_FLOATING_SCALAR_TYPE_TAGS
+)
+
 
 def test_m110_scalar_descriptor_lookup_table() -> None:
-    assert supported_scalar_type_tags() == ("si32", "ui32", "f32", "f64")
+    assert supported_scalar_type_tags() == SUPPORTED_SCALAR_TYPE_TAGS
     assert SUPPORTED_SCALAR_TYPE_DESCRIPTORS == (
+        ScalarTypeDescriptor(
+            tag="si8",
+            kind="scalar",
+            family="integer",
+            bit_width=8,
+            signedness="signed",
+        ),
+        ScalarTypeDescriptor(
+            tag="ui8",
+            kind="scalar",
+            family="integer",
+            bit_width=8,
+            signedness="unsigned",
+        ),
+        ScalarTypeDescriptor(
+            tag="si16",
+            kind="scalar",
+            family="integer",
+            bit_width=16,
+            signedness="signed",
+        ),
+        ScalarTypeDescriptor(
+            tag="ui16",
+            kind="scalar",
+            family="integer",
+            bit_width=16,
+            signedness="unsigned",
+        ),
         ScalarTypeDescriptor(
             tag="si32",
             kind="scalar",
@@ -334,6 +390,20 @@ def test_m110_scalar_descriptor_lookup_table() -> None:
             kind="scalar",
             family="integer",
             bit_width=32,
+            signedness="unsigned",
+        ),
+        ScalarTypeDescriptor(
+            tag="si64",
+            kind="scalar",
+            family="integer",
+            bit_width=64,
+            signedness="signed",
+        ),
+        ScalarTypeDescriptor(
+            tag="ui64",
+            kind="scalar",
+            family="integer",
+            bit_width=64,
             signedness="unsigned",
         ),
         ScalarTypeDescriptor(
@@ -352,7 +422,22 @@ def test_m110_scalar_descriptor_lookup_table() -> None:
         ),
     )
     assert _descriptor("f32").is_floating
-    assert lookup_scalar_type_descriptor("si64") is None
+    assert not _descriptor("si64").is_floating
+    assert lookup_scalar_type_descriptor("si128") is None
+
+
+def test_m134_scalar_descriptors_remain_backend_neutral() -> None:
+    assert tuple(field.name for field in fields(ScalarTypeDescriptor)) == (
+        "tag",
+        "kind",
+        "family",
+        "bit_width",
+        "signedness",
+    )
+    for descriptor in SUPPORTED_SCALAR_TYPE_DESCRIPTORS:
+        assert descriptor.kind == "scalar"
+        assert not hasattr(descriptor, "cpp_spelling")
+        assert not hasattr(descriptor, "rust_spelling")
 
 
 def test_m120_binary_operation_descriptor_lookup_table_includes_shifts() -> None:
@@ -593,12 +678,12 @@ def test_m123_compatibility_rules_declare_bootstrap_core_origin() -> None:
     assert unary_rules == (
         UnaryOperationScalarTypeCompatibilityRule(
             operation_id="bit_not",
-            accepted_scalar_type_tags=("si32", "ui32"),
+            accepted_scalar_type_tags=INTEGER_SCALAR_TYPE_TAGS,
             semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
         ),
         UnaryOperationScalarTypeCompatibilityRule(
             operation_id="neg",
-            accepted_scalar_type_tags=("si32", "f32", "f64"),
+            accepted_scalar_type_tags=SIGNED_INTEGER_OR_FLOATING_SCALAR_TYPE_TAGS,
             semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
         ),
     )
@@ -705,11 +790,11 @@ def test_m121_lowered_result_type_boundary_is_backend_neutral() -> None:
 def test_m116_operation_type_compatibility_accepts_integer_mod_only() -> None:
     mod_operation = _operation("mod")
 
-    assert supported_scalar_type_tags_for_binary_operation(mod_operation) == (
-        "si32",
-        "ui32",
+    assert (
+        supported_scalar_type_tags_for_binary_operation(mod_operation)
+        == INTEGER_SCALAR_TYPE_TAGS
     )
-    for type_tag in ("si32", "ui32"):
+    for type_tag in INTEGER_SCALAR_TYPE_TAGS:
         assert binary_operation_supports_scalar_type(
             mod_operation,
             _descriptor(type_tag),
@@ -736,11 +821,11 @@ def test_m116_operation_type_compatibility_accepts_integer_mod_only() -> None:
 def test_m117_operation_type_compatibility_accepts_integer_bitwise_only() -> None:
     for operation_id in ("bit_and", "bit_or", "bit_xor"):
         operation = _operation(operation_id)
-        assert supported_scalar_type_tags_for_binary_operation(operation) == (
-            "si32",
-            "ui32",
+        assert (
+            supported_scalar_type_tags_for_binary_operation(operation)
+            == INTEGER_SCALAR_TYPE_TAGS
         )
-        for type_tag in ("si32", "ui32"):
+        for type_tag in INTEGER_SCALAR_TYPE_TAGS:
             assert binary_operation_supports_scalar_type(
                 operation,
                 _descriptor(type_tag),
@@ -755,11 +840,11 @@ def test_m117_operation_type_compatibility_accepts_integer_bitwise_only() -> Non
 def test_m120_operation_type_compatibility_accepts_integer_shifts_only() -> None:
     for operation_id in ("shift_left", "shift_right"):
         operation = _operation(operation_id)
-        assert supported_scalar_type_tags_for_binary_operation(operation) == (
-            "si32",
-            "ui32",
+        assert (
+            supported_scalar_type_tags_for_binary_operation(operation)
+            == INTEGER_SCALAR_TYPE_TAGS
         )
-        for type_tag in ("si32", "ui32"):
+        for type_tag in INTEGER_SCALAR_TYPE_TAGS:
             assert binary_operation_supports_scalar_type(
                 operation,
                 _descriptor(type_tag),
@@ -774,11 +859,11 @@ def test_m120_operation_type_compatibility_accepts_integer_shifts_only() -> None
 def test_m118_operation_type_compatibility_accepts_integer_bit_not_only() -> None:
     operation = _unary_operation("bit_not")
 
-    assert supported_scalar_type_tags_for_unary_operation(operation) == (
-        "si32",
-        "ui32",
+    assert (
+        supported_scalar_type_tags_for_unary_operation(operation)
+        == INTEGER_SCALAR_TYPE_TAGS
     )
-    for type_tag in ("si32", "ui32"):
+    for type_tag in INTEGER_SCALAR_TYPE_TAGS:
         assert unary_operation_supports_scalar_type(operation, _descriptor(type_tag))
     for type_tag in ("f32", "f64"):
         assert not unary_operation_supports_scalar_type(
@@ -790,14 +875,17 @@ def test_m118_operation_type_compatibility_accepts_integer_bit_not_only() -> Non
 def test_m119_operation_type_compatibility_accepts_signed_and_floating_neg_only() -> None:
     operation = _unary_operation("neg")
 
-    assert supported_scalar_type_tags_for_unary_operation(operation) == (
-        "si32",
-        "f32",
-        "f64",
+    assert (
+        supported_scalar_type_tags_for_unary_operation(operation)
+        == SIGNED_INTEGER_OR_FLOATING_SCALAR_TYPE_TAGS
     )
-    for type_tag in ("si32", "f32", "f64"):
+    for type_tag in SIGNED_INTEGER_OR_FLOATING_SCALAR_TYPE_TAGS:
         assert unary_operation_supports_scalar_type(operation, _descriptor(type_tag))
-    assert not unary_operation_supports_scalar_type(operation, _descriptor("ui32"))
+    for type_tag in ("ui8", "ui16", "ui32", "ui64"):
+        assert not unary_operation_supports_scalar_type(
+            operation,
+            _descriptor(type_tag),
+        )
 
 
 def test_m118_parser_and_catalog_accept_exact_unary_source_shape(
@@ -1049,7 +1137,7 @@ def test_m114_lowerer_stage_output_preserves_selected_order() -> None:
 def test_m114_lowerer_stage_output_accumulates_diagnostics() -> None:
     result = Lowerer().lower_all(
         (
-            _selected_implementation(type_tag="si64"),
+            _selected_implementation(type_tag="si128"),
             _selected_implementation(operation_id="pow"),
         )
     )
@@ -1131,7 +1219,7 @@ def test_m115_lowerer_accepts_div_binary_operation() -> None:
 
 
 def test_m116_lowerer_accepts_mod_integer_scalar_descriptors() -> None:
-    for type_tag in ("si32", "ui32"):
+    for type_tag in INTEGER_SCALAR_TYPE_TAGS:
         result = Lowerer().lower(
             _selected_implementation(operation_id="mod", type_tag=type_tag)
         )
@@ -1145,7 +1233,7 @@ def test_m116_lowerer_accepts_mod_integer_scalar_descriptors() -> None:
 
 def test_m117_lowerer_accepts_bitwise_integer_scalar_descriptors() -> None:
     for operation_id in ("bit_and", "bit_or", "bit_xor"):
-        for type_tag in ("si32", "ui32"):
+        for type_tag in INTEGER_SCALAR_TYPE_TAGS:
             result = Lowerer().lower(
                 _selected_implementation(operation_id=operation_id, type_tag=type_tag)
             )
@@ -1159,7 +1247,7 @@ def test_m117_lowerer_accepts_bitwise_integer_scalar_descriptors() -> None:
 
 def test_m120_lowerer_accepts_shift_integer_scalar_descriptors() -> None:
     for operation_id in ("shift_left", "shift_right"):
-        for type_tag in ("si32", "ui32"):
+        for type_tag in INTEGER_SCALAR_TYPE_TAGS:
             result = Lowerer().lower(
                 _selected_implementation(operation_id=operation_id, type_tag=type_tag)
             )
@@ -1172,7 +1260,7 @@ def test_m120_lowerer_accepts_shift_integer_scalar_descriptors() -> None:
 
 
 def test_m118_lowerer_accepts_bit_not_integer_scalar_descriptors() -> None:
-    for type_tag in ("si32", "ui32"):
+    for type_tag in INTEGER_SCALAR_TYPE_TAGS:
         result = Lowerer().lower(_selected_unary_implementation(type_tag=type_tag))
 
         assert result.diagnostics == ()
@@ -1180,7 +1268,7 @@ def test_m118_lowerer_accepts_bit_not_integer_scalar_descriptors() -> None:
 
 
 def test_m119_lowerer_accepts_neg_signed_and_floating_scalar_descriptors() -> None:
-    for type_tag in ("si32", "f32", "f64"):
+    for type_tag in SIGNED_INTEGER_OR_FLOATING_SCALAR_TYPE_TAGS:
         result = Lowerer().lower(
             _selected_unary_implementation(operation_id="neg", type_tag=type_tag)
         )
@@ -1206,7 +1294,7 @@ def test_m116_lowerer_rejects_mod_floating_scalar_descriptors() -> None:
         assert diagnostic.location == _location(2, 3)
         assert "mod" in diagnostic.message
         assert type_tag in diagnostic.message
-        assert "si32, ui32" in diagnostic.message
+        assert INTEGER_SCALAR_TYPE_TEXT in diagnostic.message
 
 
 def test_m117_lowerer_rejects_bitwise_floating_scalar_descriptors() -> None:
@@ -1227,7 +1315,7 @@ def test_m117_lowerer_rejects_bitwise_floating_scalar_descriptors() -> None:
             assert diagnostic.location == _location(2, 3)
             assert operation_id in diagnostic.message
             assert type_tag in diagnostic.message
-            assert "si32, ui32" in diagnostic.message
+            assert INTEGER_SCALAR_TYPE_TEXT in diagnostic.message
 
 
 def test_m120_lowerer_rejects_shift_floating_scalar_descriptors() -> None:
@@ -1248,7 +1336,7 @@ def test_m120_lowerer_rejects_shift_floating_scalar_descriptors() -> None:
             assert diagnostic.location == _location(2, 3)
             assert operation_id in diagnostic.message
             assert type_tag in diagnostic.message
-            assert "si32, ui32" in diagnostic.message
+            assert INTEGER_SCALAR_TYPE_TEXT in diagnostic.message
 
 
 def test_m118_lowerer_rejects_bit_not_floating_scalar_descriptors() -> None:
@@ -1263,7 +1351,7 @@ def test_m118_lowerer_rejects_bit_not_floating_scalar_descriptors() -> None:
         assert diagnostic.location == _location(2, 3)
         assert "bit_not" in diagnostic.message
         assert type_tag in diagnostic.message
-        assert "si32, ui32" in diagnostic.message
+        assert INTEGER_SCALAR_TYPE_TEXT in diagnostic.message
 
 
 def test_m119_lowerer_rejects_neg_unsigned_scalar_descriptor() -> None:
@@ -1279,7 +1367,7 @@ def test_m119_lowerer_rejects_neg_unsigned_scalar_descriptor() -> None:
     assert diagnostic.location == _location(2, 3)
     assert "neg" in diagnostic.message
     assert "ui32" in diagnostic.message
-    assert "si32, f32, f64" in diagnostic.message
+    assert SIGNED_INTEGER_OR_FLOATING_SCALAR_TYPE_TEXT in diagnostic.message
 
 
 def test_m113_backends_emit_from_explicit_signature_and_body() -> None:
@@ -1375,8 +1463,14 @@ def test_m114_generator_emits_stage_output_functions_with_diagnostics() -> None:
 
 def test_m110_backends_emit_supported_scalar_spellings() -> None:
     expected_spellings = (
+        ("si8", "std::int8_t", "i8"),
+        ("ui8", "std::uint8_t", "u8"),
+        ("si16", "std::int16_t", "i16"),
+        ("ui16", "std::uint16_t", "u16"),
         ("si32", "std::int32_t", "i32"),
         ("ui32", "std::uint32_t", "u32"),
+        ("si64", "std::int64_t", "i64"),
+        ("ui64", "std::uint64_t", "u64"),
         ("f32", "float", "f32"),
         ("f64", "double", "f64"),
     )
@@ -1547,7 +1641,7 @@ def test_m132_lowerer_reports_undeclared_binary_body_operand_boundary() -> None:
 
 
 def test_m110_lowerer_reports_unsupported_scalar_type() -> None:
-    result = Lowerer().lower(_selected_implementation(type_tag="si64"))
+    result = Lowerer().lower(_selected_implementation(type_tag="si128"))
 
     assert result.function is None
     assert len(result.diagnostics) == 1
@@ -1555,8 +1649,8 @@ def test_m110_lowerer_reports_unsupported_scalar_type() -> None:
     assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-TYPE"
     assert diagnostic.severity == "error"
     assert diagnostic.location == _location(2, 3)
-    assert "si64" in diagnostic.message
-    assert "si32, ui32, f32, f64" in diagnostic.message
+    assert "si128" in diagnostic.message
+    assert ", ".join(SUPPORTED_SCALAR_TYPE_TAGS) in diagnostic.message
 
 
 def test_m111_lowerer_reports_unsupported_binary_operation() -> None:
@@ -2040,7 +2134,7 @@ def test_m123_bootstrap_origin_preserves_operation_type_diagnostic() -> None:
     assert diagnostic.location == _location(2, 3)
     assert diagnostic.message == (
         "operation 'neg' cannot be lowered for scalar type 'ui32'; "
-        "expected one of: si32, f32, f64"
+        f"expected one of: {SIGNED_INTEGER_OR_FLOATING_SCALAR_TYPE_TEXT}"
     )
 
 
@@ -4171,6 +4265,150 @@ def test_m133_malformed_remaining_binary_operator_tsil_forms_report_parse_diagno
         assert expected_fragment in diagnostic.message
 
 
+def test_m134_new_scalar_width_binary_sources_generate_cpp_and_rust_artifacts(
+    tmp_path: Path,
+) -> None:
+    cases = (
+        ("add", "si16", '    tsil "emit_return(left + right);"', "+"),
+        ("shift_left", "ui8", '    tsil "emit_return(left << right);"', "<<"),
+        ("div", "si64", "    body div(left, right)", "/"),
+    )
+
+    for operation_id, type_tag, body_line, operator in cases:
+        source = _write_tiny_binary_body_source(
+            tmp_path,
+            f"tiny_{operation_id}_{type_tag}_m134.tsl",
+            operation_id,
+            parameters=("left", "right"),
+            body_line=body_line,
+            type_tag=type_tag,
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="rust",
+                    primitive_name=operation_id,
+                    extension="scalar",
+                    type_tag=type_tag,
+                ),
+                Target(
+                    backend="cpp",
+                    primitive_name=operation_id,
+                    extension="scalar",
+                    type_tag=type_tag,
+                ),
+            ),
+        )
+
+        assert result.diagnostics == ()
+        assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+            f"include/tsl/{operation_id}_scalar_{type_tag}.hpp",
+            f"src/{operation_id}_scalar_{type_tag}.rs",
+        ]
+        assert [artifact.content for artifact in result.artifacts.artifacts] == [
+            _expected_binary_cpp_content(
+                operation_id,
+                operator,
+                type_tag=type_tag,
+            ),
+            _expected_binary_rust_content(
+                operation_id,
+                operator,
+                type_tag=type_tag,
+            ),
+        ]
+
+
+def test_m134_new_scalar_width_unary_sources_generate_cpp_and_rust_artifacts(
+    tmp_path: Path,
+) -> None:
+    cases = (
+        ("bit_not", "ui16", "~", "!"),
+        ("neg", "si64", "-", "-"),
+    )
+
+    for operation_id, type_tag, cpp_operator, rust_operator in cases:
+        source = _write_tiny_unary_tsil_source(tmp_path, operation_id, type_tag)
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="rust",
+                    primitive_name=operation_id,
+                    extension="scalar",
+                    type_tag=type_tag,
+                ),
+                Target(
+                    backend="cpp",
+                    primitive_name=operation_id,
+                    extension="scalar",
+                    type_tag=type_tag,
+                ),
+            ),
+        )
+
+        assert result.diagnostics == ()
+        assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+            f"include/tsl/{operation_id}_scalar_{type_tag}.hpp",
+            f"src/{operation_id}_scalar_{type_tag}.rs",
+        ]
+        assert [artifact.content for artifact in result.artifacts.artifacts] == [
+            _expected_unary_cpp_content(
+                operation_id,
+                cpp_operator,
+                type_tag=type_tag,
+            ),
+            _expected_unary_rust_content(
+                operation_id,
+                rust_operator,
+                type_tag=type_tag,
+            ),
+        ]
+
+
+def test_m134_new_scalar_width_comparison_source_generates_cpp_and_rust_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_compare_tsil_source(
+        tmp_path,
+        "nequal",
+        "ui64",
+        body_line='    tsil "emit_return(left != right);"',
+        file_suffix="m134_ui64",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="rust",
+                primitive_name="nequal",
+                extension="scalar",
+                type_tag="ui64",
+            ),
+            Target(
+                backend="cpp",
+                primitive_name="nequal",
+                extension="scalar",
+                type_tag="ui64",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/nequal_scalar_ui64.hpp",
+        "src/nequal_scalar_ui64.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        _expected_compare_cpp_content("nequal", "!=", type_tag="ui64"),
+        _expected_compare_rust_content("nequal", "!=", type_tag="ui64"),
+    ]
+
+
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
     tmp_path: Path,
 ) -> None:
@@ -4553,29 +4791,31 @@ def test_m112_non_add_non_si32_output_uses_explicit_return_body(
 def test_m110_unsupported_source_type_reports_lowering_diagnostic(
     tmp_path: Path,
 ) -> None:
-    source = _write_tiny_source(tmp_path, "add", "si64")
-    result = generate_from_paths(
-        (source,),
-        (
-            Target(
-                backend="cpp",
-                primitive_name="add",
-                extension="scalar",
-                type_tag="si64",
+    for type_tag in ("si128", "vsi32x4"):
+        source = _write_tiny_source(tmp_path, "add", type_tag)
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag=type_tag,
+                ),
             ),
-        ),
-    )
+        )
 
-    assert result.artifacts.artifacts == ()
-    assert len(result.diagnostics) == 1
-    diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-TYPE"
-    assert diagnostic.severity == "error"
-    assert diagnostic.location is not None
-    assert diagnostic.location.path == source.resolve()
-    assert diagnostic.location.line == 2
-    assert diagnostic.location.column == 3
-    assert "si64" in diagnostic.message
+        assert result.artifacts.artifacts == ()
+        assert len(result.diagnostics) == 1
+        diagnostic = result.diagnostics[0]
+        assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-TYPE"
+        assert diagnostic.severity == "error"
+        assert diagnostic.location is not None
+        assert diagnostic.location.path == source.resolve()
+        assert diagnostic.location.line == 2
+        assert diagnostic.location.column == 3
+        assert type_tag in diagnostic.message
+        assert ", ".join(SUPPORTED_SCALAR_TYPE_TAGS) in diagnostic.message
 
 
 def test_m116_unsupported_source_operation_reports_lowering_diagnostic(
@@ -4637,7 +4877,7 @@ def test_m116_floating_mod_source_reports_operation_type_diagnostic(
     assert diagnostic.location.column == 3
     assert "mod" in diagnostic.message
     assert "f32" in diagnostic.message
-    assert "si32, ui32" in diagnostic.message
+    assert INTEGER_SCALAR_TYPE_TEXT in diagnostic.message
 
 
 def test_m117_floating_bitwise_source_reports_operation_type_diagnostic(
@@ -4667,7 +4907,7 @@ def test_m117_floating_bitwise_source_reports_operation_type_diagnostic(
     assert diagnostic.location.column == 3
     assert "bit_xor" in diagnostic.message
     assert "f32" in diagnostic.message
-    assert "si32, ui32" in diagnostic.message
+    assert INTEGER_SCALAR_TYPE_TEXT in diagnostic.message
 
 
 def test_m120_floating_shift_source_reports_operation_type_diagnostic(
@@ -4697,7 +4937,7 @@ def test_m120_floating_shift_source_reports_operation_type_diagnostic(
     assert diagnostic.location.column == 3
     assert "shift_right" in diagnostic.message
     assert "f64" in diagnostic.message
-    assert "si32, ui32" in diagnostic.message
+    assert INTEGER_SCALAR_TYPE_TEXT in diagnostic.message
 
 
 def test_m118_floating_bit_not_source_reports_operation_type_diagnostic(
@@ -4727,7 +4967,7 @@ def test_m118_floating_bit_not_source_reports_operation_type_diagnostic(
     assert diagnostic.location.column == 3
     assert "bit_not" in diagnostic.message
     assert "f32" in diagnostic.message
-    assert "si32, ui32" in diagnostic.message
+    assert INTEGER_SCALAR_TYPE_TEXT in diagnostic.message
 
 
 def test_m119_unsigned_neg_source_reports_operation_type_diagnostic(
@@ -4757,7 +4997,7 @@ def test_m119_unsigned_neg_source_reports_operation_type_diagnostic(
     assert diagnostic.location.column == 3
     assert "neg" in diagnostic.message
     assert "ui32" in diagnostic.message
-    assert "si32, f32, f64" in diagnostic.message
+    assert SIGNED_INTEGER_OR_FLOATING_SCALAR_TYPE_TEXT in diagnostic.message
 
 
 def test_m111_source_operation_body_mismatch_reports_lowering_diagnostic(
@@ -5183,13 +5423,53 @@ def _binary_operator(operation_id: str) -> str:
     raise AssertionError(f"missing binary operator for {operation_id!r}")
 
 
+def _cpp_scalar_spelling(type_tag: str) -> str:
+    spellings = (
+        ("si8", "std::int8_t"),
+        ("ui8", "std::uint8_t"),
+        ("si16", "std::int16_t"),
+        ("ui16", "std::uint16_t"),
+        ("si32", "std::int32_t"),
+        ("ui32", "std::uint32_t"),
+        ("si64", "std::int64_t"),
+        ("ui64", "std::uint64_t"),
+        ("f32", "float"),
+        ("f64", "double"),
+    )
+    for candidate_tag, spelling in spellings:
+        if candidate_tag == type_tag:
+            return spelling
+    raise AssertionError(f"missing C++ scalar spelling for {type_tag!r}")
+
+
+def _rust_scalar_spelling(type_tag: str) -> str:
+    spellings = (
+        ("si8", "i8"),
+        ("ui8", "u8"),
+        ("si16", "i16"),
+        ("ui16", "u16"),
+        ("si32", "i32"),
+        ("ui32", "u32"),
+        ("si64", "i64"),
+        ("ui64", "u64"),
+        ("f32", "f32"),
+        ("f64", "f64"),
+    )
+    for candidate_tag, spelling in spellings:
+        if candidate_tag == type_tag:
+            return spelling
+    raise AssertionError(f"missing Rust scalar spelling for {type_tag!r}")
+
+
 def _expected_binary_cpp_content(
     operation_id: str,
     operator: str,
     *,
+    type_tag: str = "si32",
     parameters: tuple[str, str] = ("left", "right"),
     operands: tuple[str, str] = ("left", "right"),
 ) -> str:
+    scalar_spelling = _cpp_scalar_spelling(type_tag)
     return (
         "#pragma once\n"
         "\n"
@@ -5197,8 +5477,9 @@ def _expected_binary_cpp_content(
         "\n"
         "namespace tsl {\n"
         "\n"
-        f"inline std::int32_t {operation_id}_scalar_si32"
-        f"(std::int32_t {parameters[0]}, std::int32_t {parameters[1]}) {{\n"
+        f"inline {scalar_spelling} {operation_id}_scalar_{type_tag}"
+        f"({scalar_spelling} {parameters[0]}, "
+        f"{scalar_spelling} {parameters[1]}) {{\n"
         f"  return {operands[0]} {operator} {operands[1]};\n"
         "}\n"
         "\n"
@@ -5210,18 +5491,27 @@ def _expected_binary_rust_content(
     operation_id: str,
     operator: str,
     *,
+    type_tag: str = "si32",
     parameters: tuple[str, str] = ("left", "right"),
     operands: tuple[str, str] = ("left", "right"),
 ) -> str:
+    scalar_spelling = _rust_scalar_spelling(type_tag)
     return (
-        f"pub fn {operation_id}_scalar_si32"
-        f"({parameters[0]}: i32, {parameters[1]}: i32) -> i32 {{\n"
+        f"pub fn {operation_id}_scalar_{type_tag}"
+        f"({parameters[0]}: {scalar_spelling}, "
+        f"{parameters[1]}: {scalar_spelling}) -> {scalar_spelling} {{\n"
         f"    {operands[0]} {operator} {operands[1]}\n"
         "}\n"
     )
 
 
-def _expected_compare_cpp_content(operation_id: str, operator: str) -> str:
+def _expected_unary_cpp_content(
+    operation_id: str,
+    operator: str,
+    *,
+    type_tag: str = "si32",
+) -> str:
+    scalar_spelling = _cpp_scalar_spelling(type_tag)
     return (
         "#pragma once\n"
         "\n"
@@ -5229,8 +5519,46 @@ def _expected_compare_cpp_content(operation_id: str, operator: str) -> str:
         "\n"
         "namespace tsl {\n"
         "\n"
-        f"inline bool {operation_id}_scalar_si32"
-        "(std::int32_t left, std::int32_t right) {\n"
+        f"inline {scalar_spelling} {operation_id}_scalar_{type_tag}"
+        f"({scalar_spelling} value) {{\n"
+        f"  return {operator}value;\n"
+        "}\n"
+        "\n"
+        "}  // namespace tsl\n"
+    )
+
+
+def _expected_unary_rust_content(
+    operation_id: str,
+    operator: str,
+    *,
+    type_tag: str = "si32",
+) -> str:
+    scalar_spelling = _rust_scalar_spelling(type_tag)
+    return (
+        f"pub fn {operation_id}_scalar_{type_tag}"
+        f"(value: {scalar_spelling}) -> {scalar_spelling} {{\n"
+        f"    {operator}value\n"
+        "}\n"
+    )
+
+
+def _expected_compare_cpp_content(
+    operation_id: str,
+    operator: str,
+    *,
+    type_tag: str = "si32",
+) -> str:
+    scalar_spelling = _cpp_scalar_spelling(type_tag)
+    return (
+        "#pragma once\n"
+        "\n"
+        "#include <cstdint>\n"
+        "\n"
+        "namespace tsl {\n"
+        "\n"
+        f"inline bool {operation_id}_scalar_{type_tag}"
+        f"({scalar_spelling} left, {scalar_spelling} right) {{\n"
         f"  return left {operator} right;\n"
         "}\n"
         "\n"
@@ -5238,9 +5566,16 @@ def _expected_compare_cpp_content(operation_id: str, operator: str) -> str:
     )
 
 
-def _expected_compare_rust_content(operation_id: str, operator: str) -> str:
+def _expected_compare_rust_content(
+    operation_id: str,
+    operator: str,
+    *,
+    type_tag: str = "si32",
+) -> str:
+    scalar_spelling = _rust_scalar_spelling(type_tag)
     return (
-        f"pub fn {operation_id}_scalar_si32(left: i32, right: i32) -> bool {{\n"
+        f"pub fn {operation_id}_scalar_{type_tag}"
+        f"(left: {scalar_spelling}, right: {scalar_spelling}) -> bool {{\n"
         f"    left {operator} right\n"
         "}\n"
     )

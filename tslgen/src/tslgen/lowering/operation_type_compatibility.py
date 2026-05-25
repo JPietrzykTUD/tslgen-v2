@@ -68,17 +68,34 @@ _BINARY_OPERATION_SCALAR_TYPE_RULES: tuple[
     ),
 )
 
+
+def _integer_scalar_type_tags() -> tuple[str, ...]:
+    return tuple(
+        descriptor.tag
+        for descriptor in SUPPORTED_SCALAR_TYPE_DESCRIPTORS
+        if descriptor.family == "integer"
+    )
+
+
+def _signed_integer_or_floating_scalar_type_tags() -> tuple[str, ...]:
+    return tuple(
+        descriptor.tag
+        for descriptor in SUPPORTED_SCALAR_TYPE_DESCRIPTORS
+        if descriptor.family == "floating" or descriptor.signedness == "signed"
+    )
+
+
 _UNARY_OPERATION_SCALAR_TYPE_RULES: tuple[
     UnaryOperationScalarTypeCompatibilityRule, ...
 ] = (
     UnaryOperationScalarTypeCompatibilityRule(
         operation_id="bit_not",
-        accepted_scalar_type_tags=("si32", "ui32"),
+        accepted_scalar_type_tags=_integer_scalar_type_tags(),
         semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
     UnaryOperationScalarTypeCompatibilityRule(
         operation_id="neg",
-        accepted_scalar_type_tags=("si32", "f32", "f64"),
+        accepted_scalar_type_tags=_signed_integer_or_floating_scalar_type_tags(),
         semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
 )
