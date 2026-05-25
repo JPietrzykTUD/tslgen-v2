@@ -16344,3 +16344,106 @@ Review notes:
   systems, or wrapper-only provenance abstractions.
 - Reviewers should require current binary, unary, and comparison behavior,
   diagnostics, output bytes, and stage-output behavior to remain stable.
+
+### Milestone 124: Tiny Clean Multi-Primitive Source-Set Lowering Slice
+
+Status:
+
+Planned as the next clean restart product-code milestone after accepted M123.
+This milestone keeps the next task focused on lowering while moving the
+research prototype closer to the intended product loop: changing explicit
+`.tsl` source files should affect selected lowered functions and generated
+artifacts, or produce clear diagnostics.
+
+Goal:
+
+Allow one generator run to consume a small explicit source set containing
+multiple exact supported primitive `.tsl` files, select explicit targets from
+that catalog, lower the selected implementations through the accepted M108-M123
+lowering path, and emit deterministic C++/Rust artifacts.
+
+Scope:
+
+- Broaden catalog construction from exactly one parsed primitive per run to a
+  deterministic catalog of multiple parsed primitives across explicit source
+  documents. Preserve the current exact parser shape of one primitive,
+  one scalar implementation, and one body line per `.tsl` file.
+- Preserve the accepted M107-M123 body forms, scalar type descriptors,
+  operation descriptors, compatibility rules, and
+  `clean_restart_bootstrap_core` semantic-origin contract. M124 must not add
+  operations, scalar types, or source body syntax.
+- Add a focused duplicate primitive-name diagnostic before selection/lowering
+  so multiple source files cannot silently choose whichever duplicate appears
+  first.
+- Keep target requests explicit. Selection should choose requested primitive,
+  backend, extension, and type from the multi-primitive catalog; M124 must not
+  add automatic target discovery or "generate everything" behavior.
+- Prove that a source-set change flows through lowering by adding fixtures or
+  test-built source documents for at least representative binary, unary, and
+  comparison primitives and by asserting selected lowered functions/artifacts
+  reflect the `.tsl` primitive/body/type data.
+- Add negative tests showing unsupported or mismatched `.tsl` operation bodies
+  still produce structured lowering diagnostics rather than source repair,
+  renderer inference, or silent fallback.
+- Add determinism tests that run the same explicit source set in different
+  input orders and compare diagnostics, artifact logical paths, contents, and
+  digests.
+
+Out of scope:
+
+- Parsing multiple primitive blocks inside one `.tsl` document, loading the
+  broad `tsldata/` corpus, parsing broad TSL syntax, parsing TSIL strings, or
+  accepting body shapes beyond the exact M107-M123 forms.
+- Adding new operation ids, scalar types, templates, implementation variants,
+  extension fallback, dependency closure, backend manifests, target discovery,
+  generated-test execution, CLI behavior, writer behavior, or output tree
+  parity.
+- Loading operation semantics, compatibility rules, or backend spellings from
+  `tsldata/`, backend manifests, YAML, `frozen/`, `tslgenold/`, plugins, or
+  environment configuration at runtime.
+- Moving backend-owned C++/Rust type, result, or operator spellings into
+  lowering.
+- Introducing a registry, dispatcher, callback map, plugin system, hidden
+  backfeed, fixpoint mechanism, broad operation framework, or new lowering IR
+  category/request/result family.
+
+Accepted outputs:
+
+- A `Catalog` may contain multiple exact supported primitives from explicit
+  source documents, ordered deterministically.
+- Duplicate primitive names in the explicit source set fail with a structured
+  diagnostic before selection/lowering.
+- Existing one-primitive generation behavior and representative artifact bytes
+  remain stable.
+- Multiple explicit targets can select and lower different primitives from the
+  same source set and produce deterministic C++/Rust artifacts.
+- Tests demonstrate that future `.tsl` edits to accepted primitive/body/type
+  data are the product input to lowering, while unsupported edits remain
+  diagnostic boundaries.
+
+Validation:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/pipeline/generator.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Remove any validation-created `__pycache__` directories before the final cache
+check. Do not run the old `tslgenold` validation profile as proof of the clean
+product slice.
+
+Review notes:
+
+- Reviewers should require M124 to remain a source-set-to-lowering product
+  slice, not a broad parser/corpus-loading milestone.
+- Reviewers should reject multi-block `.tsl` parsing, broad `tsldata/`
+  ingestion, automatic target discovery, operation semantics loaded from
+  corpus/manifest data, or renderer-side semantic inference.
+- Reviewers should require explicit diagnostics for duplicate primitive names
+  and unsupported/mismatched body operations.
+- Reviewers should require existing one-primitive behavior, backend-owned
+  spellings, accepted semantic-origin fields, deterministic target ordering,
+  and artifact bytes to remain stable.

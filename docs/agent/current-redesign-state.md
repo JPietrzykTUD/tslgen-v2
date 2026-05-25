@@ -460,6 +460,21 @@ backend manifests, runtime `tsldata`/`frozen`/`tslgenold` rule loading,
 registries, dispatchers, hidden backfeeds, fixpoint behavior, new lowering IR
 request/result families, or a broad operation framework.
 
+Post-M123 planning selected
+`Milestone 124: Tiny Clean Multi-Primitive Source-Set Lowering Slice`.
+Internal planning review returned `Accept With Follow-Ups`. The selected plan
+keeps the next task focused on lowering while moving the research prototype
+closer to the intended product loop: changing explicit `.tsl` source files
+should affect selected lowered functions and generated artifacts, or produce
+clear diagnostics. M124 may broaden catalog construction from one primitive
+per run to a deterministic catalog of multiple exact supported primitive
+files, but it must preserve the current one-primitive-per-file parser shape,
+explicit target requests, accepted M107-M123 lowering semantics, and
+backend-owned spellings. It must not load broad `tsldata/`, parse multiple
+primitive blocks in one file, add new operations/types/body forms, discover
+targets automatically, or introduce broad registries, dispatchers, source
+repair, backend manifests, or new lowering IR families.
+
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
 
@@ -1532,36 +1547,38 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Run post-M123 lowering-focused planning plus review.
+Execute Milestone 124.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m123-planning-plus-review-prompt.md
+docs/agent/runs/m124-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The active task is docs-only planning and review.
+Milestone 124: Tiny Clean Multi-Primitive Source-Set Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-M123 execution-review returned Accept With Follow-Ups after one write-capable
-executor and read-only architecture, boundary, documentation, and validation
-audits. The only follow-ups were finalization work: update workflow state,
-mark M123 accepted in the roadmap, create the next concrete prompt, and clean
-validation-created caches.
+Post-M123 planning selected Milestone 124 and returned Accept With Follow-Ups
+after read-only architecture, boundary, documentation, and validation audits.
+The selected plan is lowering focused and makes explicit `.tsl` source-set
+changes flow through selection, lowering, and deterministic C++/Rust artifacts
+without broad corpus parsing or target discovery.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M123 planning-plus-review prompt. The next selected task
-must focus on lowering and must not implement Milestone 124 during planning.
+Run the active M124 execution-review-loop prompt. M124 should allow multiple
+exact supported primitive `.tsl` files in one explicit source set to build a
+deterministic catalog, select explicit targets, lower through the accepted
+M108-M123 path, and emit deterministic artifacts.
 ```
 
 Accepted planning prompt:
@@ -2698,10 +2715,16 @@ Completed M123 execution-review-loop prompt:
 docs/agent/runs/m123-execution-review-loop-prompt.md
 ```
 
-Active post-M123 lowering planning-plus-review prompt:
+Completed post-M123 lowering planning-plus-review prompt:
 
 ```text
 docs/agent/runs/post-m123-planning-plus-review-prompt.md
+```
+
+Active M124 execution-review-loop prompt:
+
+```text
+docs/agent/runs/m124-execution-review-loop-prompt.md
 ```
 
 ## Current Boundary Rules
@@ -2809,6 +2832,14 @@ docs/agent/runs/post-m123-planning-plus-review-prompt.md
   manifest loading, runtime `tsldata`/`frozen`/`tslgenold` rule loading,
   registries, dispatchers, plugins, hidden backfeeds, fixpoint behavior, new
   lowering IR request/result families, or a broad operation framework.
+- M124 is limited to allowing multiple exact supported primitive `.tsl` source
+  files in one explicit source set to build a deterministic catalog, select
+  explicit targets, lower through the accepted M108-M123 path, and emit
+  deterministic artifacts. It must not parse multiple primitive blocks inside
+  one `.tsl` document, load broad `tsldata/`, add new operations, scalar
+  types, body forms, automatic target discovery, backend manifests, source
+  repair, registries, dispatchers, hidden backfeeds, fixpoint behavior, or new
+  lowering IR request/result families.
 - M43 produces backend-neutral `GenerationTypeRef` values.
 - M45 produces explicit intrinsic suffix modifier values such as `epi32`.
 - M46 produces explicit backend type-spelling values such as `int32_t` and
@@ -4344,6 +4375,10 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M123 validation follow-up addressed during finalization:
   validation-created `__pycache__` directories under clean `tslgen/` were
   removed after read-only validation audits.
+- Workflow follow-up addressed by post-M123 planning: the active M124 prompt
+  keeps planning and execution integrated by requiring the next-run planning
+  step to happen inside the M124 execution-review loop after M124 acceptance,
+  rather than creating a separate post-M124 planning prompt.
 - M106 architecture follow-up: before any release/stabilization work resumes,
   retire or rewrite `docs/redesign/stabilization-release-checklist.md` for the
   post-M106 clean restart; it still reads like the old `tslgen` package is an
@@ -5352,8 +5387,8 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active post-M123
-lowering planning-plus-review prompt.
+No stop condition is active. The workflow is ready to run the active M124
+execution-review-loop prompt.
 
 ## Validation Expectations
 
@@ -5645,6 +5680,17 @@ with no output. The semantic-origin import command returned exit 0 with no
 output. The py_compile command returned exit 0 with no output.
 Validation-created `__pycache__` directories were removed, and the final cache
 check returned exit 0 with no output.
+
+For post-M123 lowering planning, validation completed with:
+
+```bash
+git add -N docs/agent/runs/m124-execution-review-loop-prompt.md
+git diff --check
+```
+
+The intent-to-add command returned exit 0 with no output so the new M124 prompt
+was included in diff validation. The final `git diff --check` returned exit 0
+with no output.
 
 For M108 clean lowering boundary slice, validation completed with:
 
