@@ -15,6 +15,7 @@ from tslgen.domain.catalog import (
     SegmentedLine,
 )
 from tslgen.syntax.ast import (
+    PARSED_TSIL_BODY_ENVELOPE,
     ParsedBodySegment,
     ParsedDocument,
     ParsedImplementation,
@@ -209,18 +210,19 @@ class CatalogBuilder:
         body_fragment = _single_operation_fragment(parsed.body)
         expected_body = _expected_body_text(body_fragment, shape.parameters)
         if body_fragment is None:
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    code="TSL-CATALOG-UNSUPPORTED-BODY",
-                    message=(
-                        "implementation body is unsupported; expected exactly "
-                        "one segmented line containing one lowerable operation "
-                        "fragment"
-                    ),
-                    location=parsed.body.source,
+            if not _is_parsed_tsil_raw_body(parsed.body):
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-CATALOG-UNSUPPORTED-BODY",
+                        message=(
+                            "implementation body is unsupported; expected exactly "
+                            "one segmented line containing one lowerable operation "
+                            "fragment"
+                        ),
+                        location=parsed.body.source,
+                    )
                 )
-            )
         elif body_fragment.arguments != shape.parameters:
             diagnostics.append(
                 Diagnostic(
@@ -333,6 +335,13 @@ def _single_operation_fragment(
     if not isinstance(segment, ParsedLowerableOperationFragment):
         return None
     return segment
+
+
+def _is_parsed_tsil_raw_body(body: ParsedImplementationBody) -> bool:
+    return (
+        body.envelope == PARSED_TSIL_BODY_ENVELOPE
+        and all(isinstance(line, ParsedRawStringLine) for line in body.lines)
+    )
 
 
 def _build_implementation_body(body: ParsedImplementationBody) -> ImplementationBody:

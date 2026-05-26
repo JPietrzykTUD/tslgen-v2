@@ -317,6 +317,10 @@ Invariants:
 - M126 accepts only the existing `body <operation>(...)` source line, promoted
   as one segmented line with one `LowerableOperationFragment`; broader TSIL
   text and mixed raw/lowerable lines require separate accepted milestones.
+- M128 accepts exact quoted `tsil` payload envelopes in the current narrow
+  outer fixture shape and promotes their payload content to ordered
+  `RawStringLine` values. Those raw lines are catalog data only until a later
+  milestone selects exact lowerable TSIL islands.
 - `requires_value` remains structurally preserved for the existing flag and
   selector normalization rules.
 - Unknown extra fields remain preserved as `extra_fields` so future milestones

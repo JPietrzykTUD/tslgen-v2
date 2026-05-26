@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 127 is accepted.
+Milestone 128 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -29,6 +29,25 @@ M127 review follow-ups are nonblocking:
   forms before any cast, memory, or I/O lowering milestone.
 - Keep M128 described as a lowering-enabling TSIL payload-envelope intake
   slice, not as semantic TSIL lowering.
+
+The M128 execution-review loop returned `Accept With Follow-Ups`. M128 added
+exact quoted `tsil` payload-envelope intake to the clean restart parser/body
+model. Inline quoted payloads become one source-owned `RawStringLine`;
+multiline quoted payloads become ordered source-owned `RawStringLine` values.
+Catalog construction accepts only parser-recognized quoted-TSIL raw bodies as
+typed raw implementation bodies; arbitrary raw parsed body containers remain
+malformed catalog input. Selected raw TSIL bodies still produce
+`TSL-LOWER-UNSUPPORTED-BODY`, and no `emit_return(...)` lowering, helper
+substitution, primitive-call lowering, operator parsing, raw TSIL rendering,
+runtime `tsldata` semantic lookup, `frozen` dependency, or `tslgenold`
+dependency was added.
+
+M128 review verdicts were: architecture `Accept With Follow-Ups`, boundary
+`Accept`, documentation `Accept With Follow-Ups`, and validation `Accept`.
+There were no blocking findings. The recorded nonblocking follow-up is to keep
+`ParsedImplementationBody.envelope` as a parser/catalog admission marker only;
+if future milestones add more source envelope forms, document or narrow that
+marker before it becomes a general downstream dispatch mechanism.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -1623,45 +1642,45 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 128.
+Execute Milestone 129.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m128-execution-review-loop-prompt.md
+docs/agent/runs/m129-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 128: Real TSIL Payload Envelope Body Intake Slice
+Milestone 129: Exact Inline TSIL Emit-Return Operator Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-M127 execution-review returned Accept With Follow-Ups after one write-capable
-documentation/evidence executor and read-only architecture, boundary,
-documentation, and validation audits. Architecture and documentation returned
-Accept With Follow-Ups; boundary and validation returned Accept. There were no
-blocking findings. Follow-ups are to explicitly name `else if<generation>` and
-TSIL-style `cast<...>` / `mem<...>` / `io<...>` forms before selecting related
-lowering milestones, and to keep M128 framed as lowering-enabling payload
-intake rather than semantic lowering.
+M128 execution-review returned Accept With Follow-Ups after one write-capable
+executor and read-only architecture, boundary, documentation, and validation
+audits. Architecture and documentation returned Accept With Follow-Ups;
+boundary and validation returned Accept. There were no blocking findings. The
+nonblocking follow-up is to keep `ParsedImplementationBody.envelope` as a
+parser/catalog admission marker only unless a later milestone explicitly
+documents or narrows additional envelope forms.
 ```
 
 Next expected action:
 
 ```text
-Run the active M128 execution-review-loop prompt. M128 should focus on the
-lowering boundary by admitting real quoted `tsil` payload envelopes into the
-M126 `ImplementationBody` line model as source-owned raw body lines. It should
-preserve existing synthetic `body <operation>(...)` fixture behavior while
-adding no semantic TSIL lowering, no raw TSIL backend rendering, no primitive
-call lowering, no `emit_return(...)` parsing, no helper substitution, and no
-generation/backend-control lowering. The expected selected raw TSIL body
-result is an explicit unsupported-lowering diagnostic, not generated code.
+Run the active M129 execution-review-loop prompt. M129 should focus on the
+lowering boundary by recognizing only exact single-line raw TSIL
+`emit_return(<identifier> <operator> <identifier>);` islands admitted by M128
+for scalar `add`, `sub`, and the six accepted comparison primitive ids. It
+should lower those islands to existing typed lowered expressions, preserve
+source-owned operand order, keep backend rendering driven by typed lowered
+values, and leave helpers, primitive calls, intrinsics, casts, loops,
+generation/backend control, multiline TSIL, unsupported operators, source
+repair, and raw TSIL rendering out of scope.
 ```
 
 Accepted planning prompt:

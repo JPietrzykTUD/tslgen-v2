@@ -2554,6 +2554,191 @@ def test_m126_catalog_promotes_body_line_to_lowerable_operation_fragment(
     )
 
 
+def test_m128_parser_accepts_inline_quoted_tsil_as_raw_body_line(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_inline_tsil.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(left + right);"',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+
+    assert parse_result.diagnostics == ()
+    body = parse_result.documents[0].primitives[0].implementations[0].body
+    assert body.source == SourceLocation(source.path, 3, 5)
+    assert len(body.lines) == 1
+    line = body.lines[0]
+    assert isinstance(line, ParsedRawStringLine)
+    assert line.text == "emit_return(left + right);"
+    assert line.source == SourceLocation(source.path, 3, 11)
+
+
+def test_m128_parser_accepts_multiline_quoted_tsil_in_order(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_multiline_tsil.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil """',
+                "      var<init_register>(result)",
+                "      emit_return(result);",
+                '    """',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+
+    assert parse_result.diagnostics == ()
+    body = parse_result.documents[0].primitives[0].implementations[0].body
+    assert body.source == SourceLocation(source.path, 3, 5)
+    assert len(body.lines) == 2
+    assert all(isinstance(line, ParsedRawStringLine) for line in body.lines)
+    assert tuple(
+        (line.text, line.source)
+        for line in body.lines
+        if isinstance(line, ParsedRawStringLine)
+    ) == (
+        ("      var<init_register>(result)", SourceLocation(source.path, 4, 1)),
+        ("      emit_return(result);", SourceLocation(source.path, 5, 1)),
+    )
+
+
+def test_m128_parser_reports_malformed_inline_tsil_payload(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "bad_inline_tsil.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(left + right);',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+
+    assert parse_result.documents == ()
+    assert len(parse_result.diagnostics) == 1
+    diagnostic = parse_result.diagnostics[0]
+    assert diagnostic.code == "TSL-PARSE-UNSUPPORTED-FORM"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.path, 3, 5)
+    assert "unsupported clean restart source line" in diagnostic.message
+
+
+def test_m128_parser_reports_unterminated_multiline_tsil_payload(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "unterminated_multiline_tsil.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil """',
+                "      emit_return(left + right);",
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+
+    assert parse_result.documents == ()
+    assert len(parse_result.diagnostics) == 1
+    diagnostic = parse_result.diagnostics[0]
+    assert diagnostic.code == "TSL-PARSE-UNSUPPORTED-FORM"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.path, 3, 5)
+    assert "unterminated quoted tsil payload" in diagnostic.message
+
+
+def test_m128_catalog_accepts_raw_tsil_payload_body(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_catalog_raw_tsil.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(left + right);"',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    assert body == ImplementationBody(
+        lines=(
+            RawStringLine(
+                text="emit_return(left + right);",
+                source=SourceLocation(source.path, 3, 11),
+            ),
+        ),
+        source=SourceLocation(source.path, 3, 5),
+    )
+
+
+def test_m128_selected_raw_tsil_body_is_unsupported_lowering_boundary(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_raw_tsil.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(left + right);"',
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-BODY"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 5)
+    assert "one segmented line" in diagnostic.message
+    assert "add(left, right)" in diagnostic.message
+
+
 def test_m126_catalog_rejects_malformed_body_line_containers(
     tmp_path: Path,
 ) -> None:

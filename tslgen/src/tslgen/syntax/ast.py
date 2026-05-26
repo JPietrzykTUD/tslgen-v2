@@ -1,8 +1,13 @@
 """Parser-owned values for the tiny clean TSL source forms."""
 
 from dataclasses import dataclass
+from typing import Literal
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
+
+
+PARSED_TSIL_BODY_ENVELOPE = "tsil"
+ParsedImplementationBodyEnvelope = Literal["unknown", "tsil"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +56,7 @@ ParsedBodyLine = ParsedRawStringLine | ParsedSegmentedLine
 class ParsedImplementationBody:
     lines: tuple[ParsedBodyLine, ...]
     source: SourceLocation
+    envelope: ParsedImplementationBodyEnvelope = "unknown"
 
 
 @dataclass(frozen=True, slots=True)

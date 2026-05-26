@@ -491,6 +491,31 @@ assignments, array access, loops, multiline bodies, raw/lowerable mixed TSIL
 lines, backend manifests, target discovery, runtime `tsldata/` semantic reads,
 or backend-owned operator spellings in lowering.
 
+### M128 Real TSIL Payload Envelope Body Intake
+
+Milestone 128 adds source intake for exact quoted `tsil` payload envelopes in
+the current narrow clean primitive/implementation shape. Inline quoted payloads
+such as `tsil "emit_return(left + right);"` are promoted to an
+`ImplementationBody` with one `RawStringLine` containing the payload text inside
+the quotes. Multiline quoted payloads opened by `tsil """` and closed by a line
+whose stripped text is `"""` are promoted to ordered `RawStringLine` values for
+the intervening payload lines. Payload raw text and source locations are
+preserved; indentation, punctuation, comments, blank payload lines, and nearby
+malformed source are not repaired.
+
+Catalog construction accepts only parser-recognized quoted `tsil` raw bodies as
+source-owned raw implementation bodies. Arbitrary raw parsed body containers
+remain malformed catalog input. Selected raw TSIL bodies still produce
+`TSL-LOWER-UNSUPPORTED-BODY`; no raw TSIL payload text may be rendered as C++ or
+Rust.
+
+M128 does not parse or lower `emit_return(...)`, primitive calls, helpers,
+intrinsics, assignments, array access, operators, declarations, loops,
+generation/backend/runtime control, casts, memory helpers, I/O helpers,
+`tsil:` block entries, full `tsldata/` `impls:` nesting, or any complete TSIL
+grammar. The existing exact `body <operation>(...)` fixture syntax and artifact
+bytes remain stable.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

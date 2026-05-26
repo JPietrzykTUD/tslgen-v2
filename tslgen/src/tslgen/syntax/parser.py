@@ -5,11 +5,13 @@ import re
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.io.sources import SourceDocument
 from tslgen.syntax.ast import (
+    PARSED_TSIL_BODY_ENVELOPE,
     ParsedDocument,
     ParsedImplementation,
     ParsedImplementationBody,
     ParsedLowerableOperationFragment,
     ParsedPrimitive,
+    ParsedRawStringLine,
     ParseResult,
     ParsedSegmentedLine,
 )
@@ -44,11 +46,14 @@ _BODY_PATTERN = re.compile(
     r"(?P<operation>[A-Za-z_][A-Za-z0-9_]*)"
     r"\((?P<arguments>[^)]*)\)$"
 )
+_TSIL_INLINE_PATTERN = re.compile(r'^    tsil "(?P<payload>.*)"$')
+_TSIL_MULTILINE_START = '    tsil """'
+_TSIL_MULTILINE_END = '"""'
 _NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class TslParser:
-    """Parse only the exact primitive/implementation/body shape."""
+    """Parse only the exact primitive/implementation/body envelope shapes."""
 
     def parse(self, documents: tuple[SourceDocument, ...]) -> ParseResult:
         parsed_documents: list[ParsedDocument] = []
@@ -67,9 +72,9 @@ class TslParser:
         document: SourceDocument,
         diagnostics: list[Diagnostic],
     ) -> ParsedDocument | None:
-        meaningful_lines = tuple(_meaningful_lines(document.text))
-        if len(meaningful_lines) < 3 or len(meaningful_lines) % 2 == 0:
-            line, column = _diagnostic_position(meaningful_lines)
+        source_lines = tuple(enumerate(document.text.splitlines(), start=1))
+        header_index = _next_meaningful_index(source_lines, 0)
+        if header_index is None:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
@@ -78,12 +83,12 @@ class TslParser:
                         "the clean restart parser supports one primitive header "
                         "followed by one or more implementation/body line pairs"
                     ),
-                    location=SourceLocation(document.path, line, column),
+                    location=SourceLocation(document.path, 1, 1),
                 )
             )
             return None
 
-        header_line_no, header_line = meaningful_lines[0]
+        header_line_no, header_line = source_lines[header_index]
 
         header = _match_header(header_line)
         if header is None:
@@ -92,12 +97,15 @@ class TslParser:
 
         parameters = _split_names(header.group("params"))
         parsed_implementations: list[ParsedImplementation] = []
-        for (
-            implementation_line_no,
-            implementation_line,
-            body_line_no,
-            body_line,
-        ) in _implementation_body_pairs(meaningful_lines):
+        next_index = header_index + 1
+        while True:
+            implementation_index = _next_meaningful_index(source_lines, next_index)
+            if implementation_index is None:
+                break
+
+            implementation_line_no, implementation_line = source_lines[
+                implementation_index
+            ]
             implementation = _IMPLEMENTATION_PATTERN.match(implementation_line)
             if implementation is None:
                 diagnostics.append(
@@ -110,19 +118,35 @@ class TslParser:
                 )
                 return None
 
-            body = _BODY_PATTERN.match(body_line)
-            if body is None:
+            body_index = _next_meaningful_index(source_lines, implementation_index + 1)
+            if body_index is None:
                 diagnostics.append(
-                    _unsupported_line(
-                        document,
-                        body_line_no,
-                        _first_content_column(body_line),
-                        body_line,
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-PARSE-UNSUPPORTED-FORM",
+                        message=(
+                            "implementation header is missing a following "
+                            "body or tsil payload line"
+                        ),
+                        location=SourceLocation(
+                            document.path,
+                            implementation_line_no,
+                            _first_content_column(implementation_line),
+                        ),
                     )
                 )
                 return None
 
-            arguments = _split_names(body.group("arguments"))
+            parsed_body_result = _parse_implementation_body(
+                document,
+                source_lines,
+                body_index,
+                diagnostics,
+            )
+            if parsed_body_result is None:
+                return None
+            parsed_body, arguments, next_index = parsed_body_result
+
             invalid_names = tuple(
                 name for name in (*parameters, *arguments) if not _valid_name(name)
             )
@@ -140,22 +164,6 @@ class TslParser:
                 )
                 return None
 
-            body_source = SourceLocation(document.path, body_line_no, 5)
-            parsed_body = ParsedImplementationBody(
-                lines=(
-                    ParsedSegmentedLine(
-                        segments=(
-                            ParsedLowerableOperationFragment(
-                                operation=body.group("operation"),
-                                arguments=arguments,
-                                source=body_source,
-                            ),
-                        ),
-                        source=body_source,
-                    ),
-                ),
-                source=body_source,
-            )
             parsed_implementations.append(
                 ParsedImplementation(
                     extension=implementation.group("extension"),
@@ -164,6 +172,20 @@ class TslParser:
                     source=SourceLocation(document.path, implementation_line_no, 3),
                 )
             )
+
+        if not parsed_implementations:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-PARSE-UNSUPPORTED-FORM",
+                    message=(
+                        "the clean restart parser supports one primitive header "
+                        "followed by one or more implementation/body line pairs"
+                    ),
+                    location=SourceLocation(document.path, header_line_no, 1),
+                )
+            )
+            return None
 
         parsed_primitive = ParsedPrimitive(
             name=header.group("name"),
@@ -178,14 +200,19 @@ class TslParser:
         )
 
 
-def _meaningful_lines(text: str) -> tuple[tuple[int, str], ...]:
-    lines: list[tuple[int, str]] = []
-    for line_number, line in enumerate(text.splitlines(), start=1):
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or stripped.startswith("//"):
-            continue
-        lines.append((line_number, line))
-    return tuple(lines)
+def _next_meaningful_index(
+    lines: tuple[tuple[int, str], ...],
+    start: int,
+) -> int | None:
+    for index in range(start, len(lines)):
+        if not _is_ignored_line(lines[index][1]):
+            return index
+    return None
+
+
+def _is_ignored_line(line: str) -> bool:
+    stripped = line.strip()
+    return not stripped or stripped.startswith("#") or stripped.startswith("//")
 
 
 def _match_header(line: str) -> re.Match[str] | None:
@@ -196,29 +223,94 @@ def _match_header(line: str) -> re.Match[str] | None:
     return None
 
 
-def _diagnostic_position(lines: tuple[tuple[int, str], ...]) -> tuple[int, int]:
-    if not lines:
-        return (1, 1)
-    line_number, line = lines[-1]
-    return (line_number, _first_content_column(line))
-
-
-def _implementation_body_pairs(
+def _parse_implementation_body(
+    document: SourceDocument,
     lines: tuple[tuple[int, str], ...],
-) -> tuple[tuple[int, str, int, str], ...]:
-    pairs: list[tuple[int, str, int, str]] = []
-    for offset in range(1, len(lines), 2):
-        implementation_line_no, implementation_line = lines[offset]
-        body_line_no, body_line = lines[offset + 1]
-        pairs.append(
-            (
-                implementation_line_no,
-                implementation_line,
-                body_line_no,
-                body_line,
+    body_index: int,
+    diagnostics: list[Diagnostic],
+) -> tuple[ParsedImplementationBody, tuple[str, ...], int] | None:
+    body_line_no, body_line = lines[body_index]
+    body_source = SourceLocation(document.path, body_line_no, 5)
+
+    body = _BODY_PATTERN.match(body_line)
+    if body is not None:
+        arguments = _split_names(body.group("arguments"))
+        parsed_body = ParsedImplementationBody(
+            lines=(
+                ParsedSegmentedLine(
+                    segments=(
+                        ParsedLowerableOperationFragment(
+                            operation=body.group("operation"),
+                            arguments=arguments,
+                            source=body_source,
+                        ),
+                    ),
+                    source=body_source,
+                ),
+            ),
+            source=body_source,
+        )
+        return (parsed_body, arguments, body_index + 1)
+
+    if body_line == _TSIL_MULTILINE_START:
+        payload_lines: list[ParsedRawStringLine] = []
+        index = body_index + 1
+        while index < len(lines):
+            payload_line_no, payload_line = lines[index]
+            if payload_line.strip() == _TSIL_MULTILINE_END:
+                return (
+                    ParsedImplementationBody(
+                        lines=tuple(payload_lines),
+                        source=body_source,
+                        envelope=PARSED_TSIL_BODY_ENVELOPE,
+                    ),
+                    (),
+                    index + 1,
+                )
+            payload_lines.append(
+                ParsedRawStringLine(
+                    text=payload_line,
+                    source=SourceLocation(document.path, payload_line_no, 1),
+                )
+            )
+            index += 1
+
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-PARSE-UNSUPPORTED-FORM",
+                message=(
+                    "unterminated quoted tsil payload; expected a closing "
+                    '""" line'
+                ),
+                location=body_source,
             )
         )
-    return tuple(pairs)
+        return None
+
+    inline_tsil = _TSIL_INLINE_PATTERN.match(body_line)
+    if inline_tsil is not None:
+        parsed_body = ParsedImplementationBody(
+            lines=(
+                ParsedRawStringLine(
+                    text=inline_tsil.group("payload"),
+                    source=SourceLocation(document.path, body_line_no, 11),
+                ),
+            ),
+            source=body_source,
+            envelope=PARSED_TSIL_BODY_ENVELOPE,
+        )
+        return (parsed_body, (), body_index + 1)
+
+    diagnostics.append(
+        _unsupported_line(
+            document,
+            body_line_no,
+            _first_content_column(body_line),
+            body_line,
+        )
+    )
+    return None
 
 
 def _unsupported_line(

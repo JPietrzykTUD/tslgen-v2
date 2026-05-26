@@ -16925,11 +16925,11 @@ current `.tsl` corpus paths. The required corpus `rg -n` command returned exit
 
 Status:
 
-Planned as the next clean restart implementation milestone after accepted
-M127. This is a lowering-enabling slice, not semantic TSIL lowering: it admits
-real source-authored quoted `tsil` payload envelopes into the M126
-`ImplementationBody` line model as source-owned raw body lines so future
-lowering milestones can select exact TSIL islands from real payloads.
+Accepted after the M128 execution-review loop. This is a lowering-enabling
+slice, not semantic TSIL lowering: it admits real source-authored quoted
+`tsil` payload envelopes into the M126 `ImplementationBody` line model as
+source-owned raw body lines so future lowering milestones can select exact
+TSIL islands from real payloads.
 
 Goal:
 
@@ -17027,3 +17027,155 @@ Review notes:
 - Reviewers should require the M127 follow-ups about `else if<generation>` and
   `cast<...>` / `mem<...>` / `io<...>` buckets to remain recorded for future
   milestones rather than being accidentally implemented here.
+
+Accepted result:
+
+- Parser/domain/catalog intake accepts exact inline and multiline quoted
+  `tsil` payload envelopes as ordered raw `ImplementationBody` lines.
+- Catalog admission for raw bodies is gated by the parser-owned quoted-TSIL
+  envelope marker; arbitrary raw parsed body containers remain malformed
+  catalog input.
+- Lowering still rejects selected raw TSIL bodies with
+  `TSL-LOWER-UNSUPPORTED-BODY`; no raw TSIL rendering or semantic TSIL lowering
+  was added.
+- Existing exact synthetic `body <operation>(...)` fixture behavior and
+  representative generated artifact bytes remain stable.
+- Review returned `Accept With Follow-Ups`: architecture and documentation
+  returned `Accept With Follow-Ups`; boundary and validation returned
+  `Accept`; no blocking findings were reported. The recorded follow-up is to
+  keep `ParsedImplementationBody.envelope` as a parser/catalog admission marker
+  only unless a later milestone explicitly documents or narrows additional
+  envelope forms.
+
+Validation result:
+
+```bash
+git diff --check
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/domain/catalog.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The py-compile command
+returned exit 0 with no output. The pytest command returned exit 0 with
+`122 passed in 8.23s`. The first cache check printed validation-created cache
+directories; after removal, the final cache check returned exit 0 with no
+output.
+
+### Milestone 129: Exact Inline TSIL Emit-Return Operator Lowering Slice
+
+Status:
+
+Planned as the next clean restart implementation milestone after accepted
+M128. This is the first semantic lowering slice over real quoted TSIL payload
+content. It should recognize only exact single-line raw TSIL payloads that are
+already visible through M128 and lower a small corpus-grounded `emit_return`
+operator island into the existing backend-neutral lowered function model.
+
+Corpus grounding:
+
+- `tsldata/primitives/arithmetic/fundamental.tsl:31` uses
+  `tsil "emit_return(left + right);"`.
+- `tsldata/primitives/arithmetic/fundamental.tsl:328` uses
+  `tsil "emit_return(left - right);"`.
+- `tsldata/primitives/comparison/fundamental.tsl:33`,
+  `:192`, `:344`, `:539`, `:734`, and `:900` use exact scalar comparison
+  returns for `==`, `!=`, `<`, `>`, `<=`, and `>=`.
+
+Goal:
+
+When the selected implementation body contains exactly one M128 raw TSIL line
+matching one of these exact forms:
+
+```text
+emit_return(<identifier> + <identifier>);
+emit_return(<identifier> - <identifier>);
+emit_return(<identifier> == <identifier>);
+emit_return(<identifier> != <identifier>);
+emit_return(<identifier> < <identifier>);
+emit_return(<identifier> > <identifier>);
+emit_return(<identifier> <= <identifier>);
+emit_return(<identifier> >= <identifier>);
+```
+
+lower it to the existing typed `LoweredBinaryOperationExpression` or
+`LoweredComparisonOperationExpression` for the selected primitive operation.
+The operation meaning comes from the selected primitive and the exact accepted
+operator spelling together, not from target-language passthrough. Operand names
+are source-owned identifier tokens and should be carried into
+`LoweredParameterRef` in the order written when they refer to declared
+primitive parameters.
+
+Scope:
+
+- Preserve the accepted synthetic `body <operation>(...)` lowering path and
+  existing generated artifact bytes.
+- Add exact raw-TSIL lowering for scalar `add` / `sub` and the accepted scalar
+  comparison primitive ids `equal`, `nequal`, `less_than`,
+  `greater_than`, `less_than_or_equal`, and `greater_than_or_equal`.
+- Use existing lowering-owned operation descriptors and backend-owned operator
+  rendering; do not move backend spellings into parsing or source intake.
+- Accept only one raw TSIL line containing exactly one `emit_return(...)`
+  statement with one supported operator and identifier operands.
+- Preserve operand order exactly. Do not normalize swapped operands, reject
+  duplicate operands merely because they are duplicated, or repair source text.
+- Diagnose unknown operands, primitive/operator mismatches, malformed return
+  syntax, multiline raw TSIL bodies, helper calls, primitive calls, intrinsics,
+  casts, generation/backend queries, assignments, loops, or unsupported
+  operators as unsupported lowering.
+- Keep the parser/catalog M128 raw-body intake unchanged except for tests
+  needed to exercise the new lowering path.
+
+Out of scope:
+
+- Full TSIL parsing, expression precedence, nested expressions, parentheses
+  beyond the exact envelope, literals, constants, member access, array access,
+  assignments, declarations, loops, block structure, comments inside
+  expressions, semicolon repair, or whitespace normalization beyond the exact
+  accepted forms.
+- Lowering `details::arith_mul`, `details::arith_rem`,
+  `details::arith_add`, `call<primitive=...>`, `intrin`,
+  `intrin_compose`, `cast<...>`, `type<generation>`, `type<backend>`,
+  `value<generation>`, `value<backend>`, `if<generation>`,
+  `else if<generation>`, `else<generation>`, `if<compile>`,
+  `else<compile>`, `if<runtime>`, `else<runtime>`, `mem<...>`, or `io<...>`.
+- Adding operation semantics from `tsldata/`, backend manifests, YAML,
+  `frozen`, `tslgenold`, plugins, or environment configuration at runtime.
+- Adding a complete TSIL grammar, semantic validator, target-language parser,
+  renderer-side fallback, registry, dispatcher, callback map, hidden backfeed,
+  fixpoint mechanism, or new lowering IR category/request/result/worklist
+  family.
+
+Accepted outputs:
+
+- Exact inline raw TSIL `emit_return(left + right);` can generate the same
+  typed lowered function and C++/Rust artifacts as the accepted synthetic
+  `body add(left, right)` fixture path.
+- Exact inline raw TSIL `emit_return(left - right);` can generate the same
+  typed lowered function and C++/Rust artifacts as the accepted synthetic
+  `body sub(left, right)` fixture path.
+- Exact inline raw TSIL comparison returns for `==`, `!=`, `<`, `>`, `<=`,
+  and `>=` can generate the existing typed comparison lowered expressions and
+  backend artifacts for the matching comparison primitive ids.
+- Nearby raw TSIL payloads remain unsupported lowering diagnostics rather than
+  raw backend output or guessed semantic lowering.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Review notes:
+
+- Reviewers should require M129 to remain exact raw-TSIL `emit_return`
+  operator-island lowering only. It should not become a general expression or
+  TSIL parser.
+- Reviewers should require operand order to remain source-owned and backend
+  rendering to remain driven by typed lowered expressions, not by raw TSIL
+  passthrough.
+- Reviewers should require helper substitution and generic/vector body lowering
+  to remain future milestones.
