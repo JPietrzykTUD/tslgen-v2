@@ -17739,79 +17739,105 @@ Validation result:
   `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
   output.
 
-### Milestone 134: Exact Emit-Return Primitive-Call Payload Lowering Slice
+### Milestone 134: Exact Lowerable Directive Payload Token Boundary Slice
 
 Status:
 
 Planned as the next clean restart implementation milestone after accepted
-M133. This is a narrow lowering-composition slice over the already recognized
-M129 `emit_return` directive boundary and the already accepted M133 exact add
-primitive-call boundary.
+M133. This is a narrow body-token composition slice. It gives selected
+lowerable directives a source-owned payload-token boundary so lowerable islands
+inside directive payloads can be represented as tokens instead of forcing later
+milestones to hardcode combined source strings.
 
 Goal:
 
-When the selected implementation body is exactly one M129 directive token:
+When an M129 `emit_return(...)` directive payload contains an exact M132
+primitive-call island:
 
 ```text
-LowerableDirective(
-    name="emit_return",
-    arguments=("call<primitive=add>(left, right)",),
-)
+emit_return(call<primitive=add>(left, right));
 ```
 
-and the selected primitive is the already supported scalar `add(left, right)`
-shape, lowering routes the body through the same typed add-operation path as
-`body add(left, right)` and the M133 self-contained
-`call<primitive=add>(left, right)` body.
+the `emit_return` directive should retain the original opaque payload text for
+diagnostics and also expose a payload-token stream containing the already
+recognized primitive-call token. Lowering may then compose existing boundaries:
+`emit_return` supplies the return context, and the payload token lowers only if
+it is already accepted by the M133 exact self-contained add-call boundary.
+
+This is not a milestone for matching the combined source string
+`emit_return(call<primitive=add>(left, right));`. It is a milestone for making
+directive payloads capable of carrying raw text plus lowerable islands in the
+same spirit as `ImplementationBody.tokens`.
 
 Scope:
 
-- Consume the existing M129 `emit_return` directive representation; do not
-  change parser, directive classification, primitive-call classification, or
-  domain body-token vocabulary except for defects found by tests.
-- Match only the exact whole payload text
-  `call<primitive=add>(left, right)` on a selected single-token
-  `emit_return` body.
-- Lower only that exact add-call payload for the accepted scalar add shape by
-  reusing the M133 typed add-operation path.
-- Preserve `TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION` for all other
-  `emit_return` payloads, including operators, identifiers, helper calls,
-  malformed primitive-call payloads, `@self` primitive-call payloads, non-add
-  primitive-call payloads, extra statements, and payloads with raw prefix or
-  suffix text.
-- Add tests for exact artifact parity with `body add(left, right)` and M133
-  self-contained `call<primitive=add>(left, right)`, unresolved
-  `emit_return(call<primitive=sub>(left, right));` staying an opaque return
-  diagnostic, `emit_return(call<primitive=@self[...]>(...));` staying an
-  opaque return diagnostic, direct selected M133 `@self` primitive-call
-  diagnostic coverage, malformed/nearby emit-return payloads preserving
-  existing diagnostics, and existing M126-M133 artifact-byte stability.
+- Consume the existing M129 `emit_return` directive representation and M132
+  primitive-call island classifier; do not change parser syntax, source
+  envelope intake, or standalone M132 call-token behavior except for defects
+  found by tests.
+- Introduce the smallest durable payload-token representation needed for
+  lowerable directive payloads. The first accepted producer is
+  `emit_return(...)`; other directive payloads such as `var`, `let`, `loop`,
+  `if`, and `switch` remain opaque unless explicitly selected later.
+- Preserve the original opaque payload text for diagnostics while exposing
+  ordered payload tokens for exact lowerable islands. Raw prefix/suffix payload
+  text remains raw payload-token data.
+- Classify only exact `call<primitive=...>(...)` islands inside the
+  `emit_return` payload using the M132 call-envelope rules. Selector and
+  payload text inside the call remain opaque.
+- Lower an `emit_return` directive only when its payload-token stream contains
+  exactly one payload token that can already lower through the M133 exact
+  `call<primitive=add>(left, right)` boundary for the accepted scalar add
+  shape.
+- Emit `TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL` at the call token source when an
+  `emit_return` payload contains a recognized primitive-call token that cannot
+  lower through the M133 boundary.
+- Preserve `TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION` for raw-only,
+  raw-plus-call, malformed nearby call-like, helper/operator/identifier, and
+  other unsupported `emit_return` payloads.
+- Add tests for payload-token representation of
+  `emit_return(call<primitive=add>(left, right));`, exact artifact parity with
+  `body add(left, right)` and M133 self-contained
+  `call<primitive=add>(left, right)`, unsupported primitive-call diagnostics
+  for `emit_return(call<primitive=sub>(left, right));` and
+  `emit_return(call<primitive=@self[...]>(...));`, direct selected M133 `@self`
+  primitive-call diagnostic coverage, raw-plus-call payload diagnostics,
+  malformed/nearby emit-return payloads preserving existing diagnostics, and
+  existing M126-M133 artifact-byte stability.
 
 Out of scope:
 
-- General `emit_return` expression lowering; directive-payload segmentation;
-  general primitive resolution; dependency closure; `@self` interpretation;
-  type-argument parsing; call argument splitting; expression parsing;
-  helper/operator lowering; assignment lowering; array access lowering;
-  generation/backend query evaluation; new backend call rendering; source
-  repair; complete TSIL grammar; runtime `tsldata` semantic lookup; `frozen` or
-  `tslgenold` runtime dependency; registries; dispatchers; hidden backfeeds;
-  fixpoint mechanisms; or new lowering IR category/request/result/worklist
-  families.
+General directive-payload segmentation; recursive payload parsing; broad
+`emit_return` expression lowering; general primitive resolution; dependency
+closure; `@self` interpretation; type-argument parsing; call argument
+splitting; expression parsing; helper/operator lowering; assignment lowering;
+array access lowering; generation/backend query evaluation; new backend call
+rendering; source repair; complete TSIL grammar; runtime `tsldata` semantic
+lookup; `frozen` or `tslgenold` runtime dependency; registries; dispatchers;
+hidden backfeeds; fixpoint mechanisms; or new lowering IR
+category/request/result/worklist families.
 
 Expected outputs:
 
-- A selected exact `emit_return(call<primitive=add>(left, right));` body for
-  the accepted scalar add shape lowers through the same typed operation path
-  as `body add(left, right)` and M133's exact self-contained add call.
-- Other selected `emit_return(...)` bodies preserve the existing opaque return
+- `emit_return(...)` can retain opaque payload text and expose ordered payload
+  tokens for exact lowerable islands, first for M132 primitive-call islands.
+- A selected `emit_return(...)` body whose payload-token stream consists only
+  of the M133 exact `call<primitive=add>(left, right)` token lowers through the
+  same typed operation path as `body add(left, right)` and M133's exact
+  self-contained add call.
+- Recognized but unsupported primitive-call payload tokens produce the same
+  precise primitive-call diagnostic boundary as M133 instead of disappearing
+  inside an opaque return-expression string.
+- Raw-only or mixed raw payloads preserve the existing opaque return-expression
   diagnostic boundary unless a later milestone explicitly selects their
   payload form.
 - Existing M126-M133 behavior, diagnostics, source locations, and artifact
-  bytes remain stable except for the deliberately added exact emit-return
-  add-call lowering case.
-- No general `emit_return` expression parser, directive-payload segmentation,
-  primitive dependency closure, or backend call rendering is introduced.
+  bytes remain stable except for the deliberately added directive payload-token
+  boundary, exact composed add-call return lowering, and narrowed diagnostics
+  for recognized unsupported primitive-call payload tokens.
+- No general `emit_return` expression parser, recursive directive-payload
+  parser, primitive dependency closure, or backend call rendering is
+  introduced.
 
 Validation:
 

@@ -1766,7 +1766,7 @@ docs/agent/runs/m134-execution-review-loop-prompt.md
 Active executor milestone:
 
 ```text
-Milestone 134: Exact Emit-Return Primitive-Call Payload Lowering Slice
+Milestone 134: Exact Lowerable Directive Payload Token Boundary Slice
 ```
 
 Latest review verdict:
@@ -1783,16 +1783,19 @@ lowering test slice.
 Next expected action:
 
 ```text
-Run the active M134 execution-review-loop prompt. M134 should lower only the
-exact selected `emit_return(call<primitive=add>(left, right));` payload through
-the same typed add-operation path accepted by M126 and M133. It must preserve
-opaque `TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION` diagnostics for other
-`emit_return(...)` payloads, including non-add primitive calls and `@self`
-primitive-call payloads, and it must not add directive-payload segmentation,
-general primitive resolution, dependency closure, `@self` interpretation,
-argument splitting, expression parsing, assignment/array-access lowering,
-backend call rendering, source repair, runtime `tsldata`, `frozen`, or
-`tslgenold` dependencies.
+Run the active M134 execution-review-loop prompt. M134 should introduce a
+narrow source-owned payload-token boundary for selected lowerable directives,
+first only for `emit_return(...)` payloads, so an already recognized
+`call<primitive=...>(...)` payload island can remain a lowerable call token
+instead of an opaque string. It may lower `emit_return(...)` only when the
+payload token stream contains exactly one payload token that is already
+lowerable through the M133 exact `call<primitive=add>(left, right)` boundary.
+It must not lower by hardcoding the combined
+`emit_return(call<primitive=add>(left, right));` source string, and it must not
+add general directive-payload segmentation, general primitive resolution,
+dependency closure, `@self` interpretation, argument splitting, expression
+parsing, assignment/array-access lowering, backend call rendering, source
+repair, runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
 ```
 
 Accepted planning prompt:
