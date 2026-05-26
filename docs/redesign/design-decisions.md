@@ -1828,3 +1828,82 @@ Consequences:
 - Future data-driven operation semantics require an explicit typed rule-loading
   milestone with diagnostics and tests; they must not be introduced through
   renderer inference, backend manifest shortcuts, or ad hoc dictionary maps.
+## ADR-036: Implementation Bodies Are Source-Owned Lines With Lowerable Segments
+
+Status: Accepted
+
+Context:
+
+Clean restart milestones M135-M137 introduced exact typed body values for
+specific indexed-assignment and loop-envelope TSIL forms. A product-owner
+review clarified that this is drifting toward a validator/compiler for TSIL
+instead of a generator that should primarily preserve `.tsl` implementation
+body text and lower only the pseudo-language islands that require generator or
+backend ownership. TSIL bodies can contain lines where raw target-like text and
+lowerable pseudo-language fragments are mixed, such as helper calls embedded in
+assignments.
+
+Considered alternatives:
+
+- Continue adding one typed body class for each exact multiline source shape.
+- Parse TSIL as a complete statement and expression language.
+- Treat each implementation body as raw text with no typed lowerable fragments.
+- Model implementation bodies as ordered source-authored lines whose lines may
+  be raw or segmented into raw text and lowerable islands.
+
+Decision:
+
+Implementation bodies are source-owned ordered lines. A line may remain raw, or
+it may be segmented when it contains documented lowerable islands. The working
+model is:
+
+```text
+ImplementationBody
+  lines: tuple[BodyLine, ...]
+
+BodyLine =
+  RawStringLine
+  SegmentedLine
+
+SegmentedLine
+  segments: tuple[BodySegment, ...]
+
+BodySegment =
+  RawStringToken
+  LowerableOperationFragment
+  LowerableDirective
+```
+
+Raw text is the default. The generator recognizes and lowers only documented
+pseudo-language islands that need generator/backend ownership, such as helper
+operation fragments, generation/backend directives, or exact return/loop
+directives selected by future milestones. Recognition of an island must not
+imply parsing the surrounding assignment, array access, expression, scope, or
+statement list unless a separate milestone explicitly selects that behavior.
+
+Rationale:
+
+The research prototype needs to generate code from `.tsl` files that will
+continue to change. Treating every nearby body shape as a new semantic object
+creates noise and makes the generator look like a TSIL compiler. Treating the
+entire body as raw text hides the parts that backends must own. A segmented
+line model keeps source order and source-authored text intact while giving the
+generator precise hooks for the few constructs it actually lowers.
+
+Consequences:
+
+- Future body-lowering milestones should prefer consolidating toward ordered
+  body lines and lowerable segments instead of adding another exact whole-body
+  wrapper class.
+- Backends may render raw text segments as source-authored text only within an
+  explicit backend rendering policy; backend-owned spellings and directives
+  must still come from typed lowerable segments or backend translation rules.
+- Unknown or unsupported source text should be preserved or diagnosed at the
+  documented boundary; it must not be silently repaired, normalized, reordered,
+  or guessed.
+- Exact M135/M137 body values remain accepted evidence, but future work should
+  avoid extending that shape-proliferation pattern without a clear product
+  reason.
+- The generator still does not parse TSIL as a complete language: no general
+  precedence, associativity, statement-list, scope, loop, or expression model
+  is implied by recognizing lowerable islands inside a line.

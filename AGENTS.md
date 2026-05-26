@@ -176,6 +176,26 @@ not invitations to add extra supported syntax. Generated output must reflect
 accepted typed lowering/translation results only, never a best-effort repair of
 the original source text.
 
+## Target-Language Operator Boundary
+
+Do not model arbitrary C, C++, or Rust operators merely because their spelling
+is shared across current backends. Target-language syntax similarity is not a
+semantic contract for the generator.
+
+Exact operator-looking `.tsl` source spellings may be recognized only when they
+are all of the following:
+
+- documented as an accepted source form;
+- scoped to a narrow body context such as an exact `tsil "emit_return(...);"`
+  line;
+- mapped immediately to an existing typed TSL primitive semantic operation or
+  explicitly selected semantic concept;
+- covered by positive, mismatch, malformed-form, and no-raw-passthrough tests.
+
+Such recognition is not a general expression parser, precedence model, source
+repair mechanism, or target-language passthrough. Backends remain responsible
+for rendering C++ and Rust operator spellings from typed lowering values.
+
 ## Module Size And Encapsulation Guardrails
 
 Keep production files cohesive and small enough to review. Prefer multiple

@@ -3,7 +3,7 @@
 You are executing and reviewing the accepted next milestone after M125:
 
 ```text
-Milestone 126: Tiny Clean Exact TSIL Emit-Return Binary Body Lowering Slice
+Milestone 126: Tiny Clean Ordered Implementation Body Line Boundary Slice
 ```
 
 Milestones 1 through 125 are accepted. M106 moved the pre-restart top-level
@@ -14,10 +14,13 @@ selection, selected-implementation lowering, backend emission, artifact
 writing, focused scalar operation expansion, bootstrap-core semantic origins,
 and deterministic source-set generation.
 
-M126 keeps the next task focused on lowering and moves the research prototype
-closer to `.tsl`-authored implementation bodies: selected binary scalar
-implementations may use one exact TSIL-like `emit_return(...)` body line
-instead of only the synthetic clean-restart `body ...` fixture line.
+M126 applies ADR-036 before adding more TSIL source forms. Implementation
+bodies should become ordered source-owned body lines with optional lowerable
+segments. This first slice preserves the existing exact `body ...` fixture
+syntax by representing it as a one-line body containing one lowerable operation
+fragment. It must not add TSIL `emit_return(...)` parsing, helper
+substitution, raw body passthrough, broad statement/expression parsing, or
+renderer-side inference.
 
 ## Read First
 
@@ -40,21 +43,25 @@ instead of only the synthetic clean-restart `body ...` fixture line.
 
 ## Goal
 
-Allow one exact selected binary scalar implementation body line of the form:
-
-```text
-    tsil "emit_return(add(left, right));"
-```
-
-to produce the same typed backend-neutral binary operation body as the
-accepted fixture form:
+Represent the existing accepted source body line:
 
 ```text
     body add(left, right)
 ```
 
-The selected implementation must lower through the existing typed
-selected-implementation path and preserve M107-M125 behavior.
+as an ordered implementation body:
+
+```text
+ImplementationBody
+  lines:
+    SegmentedBodyLine
+      segments:
+        LowerableOperationFragment(operation="add", arguments=("left", "right"))
+```
+
+The selected implementation must still lower through the existing typed
+selected-implementation path and preserve M107-M125 behavior and representative
+artifact bytes.
 
 ## Required Executor Task
 
@@ -64,14 +71,20 @@ Run exactly one write-capable executor for M126. The executor should:
 2. Preserve the M125 exact source-document shape: one primitive header followed
    by one or more implementation/body pairs. Each implementation block remains
    exactly an implementation header immediately followed by one body line.
-3. Add exact recognition for binary scalar TSIL emit-return body lines shaped
-   as `tsil "emit_return(<operation>(left, right));"` under the accepted
-   binary primitive header form.
-4. Keep the accepted synthetic `body <operation>(left, right)` line working
-   byte-for-byte for existing tests and artifacts.
-5. Promote the exact TSIL emit-return body into typed operation body data
-   before lowering/backend emission. Downstream lowering and emitters must not
-   rescan raw TSIL text or render from raw TSIL text.
+3. Introduce small typed parser/domain values for implementation bodies as
+   ordered body lines with optional lowerable segments, aligned with ADR-036.
+   Suggested names are less important than the boundary:
+   - `ImplementationBody` or equivalent body container;
+   - `BodyLine` values for body lines;
+   - `RawStringLine` / `SegmentedLine` or equivalent line variants;
+   - `RawStringToken`, `LowerableOperationFragment`, and
+     `LowerableDirective` segment concepts, if segment values are introduced
+     in this slice.
+4. Represent the existing exact `body <operation>(...)` line as a one-line
+   body containing one lowerable operation fragment. Do not add new accepted
+   source syntax.
+5. Keep lowering focused: consume only the accepted one-line / one-fragment
+   body forms for already supported binary, unary, and comparison templates.
 6. Preserve accepted primitive header shapes, selected-implementation
    behavior, body argument shape rules, operation descriptors, scalar type
    descriptors, compatibility rules, and the `clean_restart_bootstrap_core`
@@ -80,16 +93,14 @@ Run exactly one write-capable executor for M126. The executor should:
    matching the target extension and type tag; do not add target discovery,
    generate-all behavior, extension fallback, type groups, or implementation
    ranking.
-8. Prove that selected exact TSIL emit-return bodies drive lowering by testing
-   generated C++/Rust artifacts for at least one representative binary
-   primitive.
-9. Prove that unselected exact TSIL emit-return bodies are not lowered by
-   adding a focused multi-implementation test where an unselected exact TSIL
-   body would be a lowering mismatch if selected, while the selected
-   implementation still generates successfully.
-10. Add negative tests showing selected mismatched TSIL emit-return operation
-    bodies and malformed nearby TSIL forms produce structured diagnostics, not
-    source repair, renderer inference, or silent fallback.
+8. Prove that existing selected bodies still drive lowering by testing
+   generated C++/Rust artifacts for representative binary, unary, and
+   comparison primitives.
+9. Prove that unselected body lines are still not lowered by preserving or
+   adapting the M125 multi-implementation tests.
+10. Add negative tests showing malformed body-line/segment containers produce
+    structured diagnostics, not source repair, renderer inference, raw
+    passthrough, or silent fallback.
 11. Preserve M125 multi-implementation behavior, M124 multi-document
     source-set behavior, and deterministic artifact ordering.
 12. Update docs only for behavior, decisions, open questions, or workflow state
@@ -97,10 +108,13 @@ Run exactly one write-capable executor for M126. The executor should:
 
 ## Out Of Scope
 
-- Parsing broad TSIL strings, nested calls, primitive calls, intrinsics, casts,
-  variables, immediates, multiple statements, multiline TSIL bodies, helper
-  evaluation, branch pruning, source repair, or TSIL compiler behavior.
-- Accepting unary or comparison TSIL emit-return forms in this slice.
+- Parsing or accepting TSIL strings, `emit_return(...)`, helper calls,
+  primitive calls, intrinsics, casts, variables, immediates, multiple
+  statements, multiline bodies, raw body passthrough, helper evaluation, branch
+  pruning, source repair, or TSIL compiler behavior.
+- Segmenting mixed raw/lowerable TSIL lines. M126 creates the body-line
+  boundary but does not yet recognize raw text tokens or lowerable islands
+  inside a raw source line.
 - Parsing multiple primitive blocks inside one `.tsl` document, loading broad
   `tsldata/`, parsing broad TSL syntax, adding new operation ids, scalar
   types, templates, type groups, extension fallback, dependency closure,
@@ -113,23 +127,25 @@ Run exactly one write-capable executor for M126. The executor should:
   lowering.
 - Introducing a registry, dispatcher, callback map, plugin system, hidden
   backfeed, fixpoint mechanism, broad operation framework, or new lowering IR
-  category/request/result family.
+  category/request/result/worklist family.
 
 ## Required Review/Audit Subagents
 
 After the executor finishes, use read-only subagents:
 
-1. Architecture reviewer: verify M126 is an exact selected-body lowering slice,
-   remains KISS-compatible, and does not add broad TSIL parsing, corpus
-   loading, target discovery, or IR ceremony.
+1. Architecture reviewer: verify M126 is a body-model consolidation slice,
+   remains KISS-compatible, and does not add broad TSIL parsing, new exact TSIL
+   source forms, corpus loading, target discovery, raw passthrough rendering,
+   or IR ceremony.
 2. Boundary auditor: verify `frozen/`, `tslgenold/`, and `tsldata/` remain
    evidence/source inputs only and are not runtime shortcuts for operation
-   lookup, compatibility evaluation, implementation selection, lowering, or
-   backend spellings.
+   lookup, compatibility evaluation, implementation selection, lowering, body
+   segmentation, or backend spellings.
 3. Documentation auditor: verify behavior, roadmap, design decisions, and
-   workflow state remain coherent and do not describe M126 as broad TSIL
-   parsing, corpus ingestion, backend manifest loading, source repair, target
-   discovery, CLI, writer, or old migration work.
+   workflow state remain coherent and do not describe M126 as TSIL
+   `emit_return(...)` support, broad TSIL parsing, corpus ingestion, backend
+   manifest loading, source repair, target discovery, CLI, writer, or old
+   migration work.
 4. Validation auditor: verify required validation ran and report exact command
    results.
 
@@ -142,7 +158,7 @@ Run:
 ```bash
 git diff --check
 python -B -c "from tslgen import Generator, Target, generate_from_paths"
-python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/domain/catalog.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/model.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
 python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
 find tslgen -type d -name __pycache__ -print
 ```
@@ -162,10 +178,10 @@ If M126 review returns `Accept` or `Accept With Follow-Ups`:
 
 To keep planning and execution integrated, do the next-run planning inside this
 prompt after M126 is accepted. Select exactly one concrete M127 task, prefer a
-high-value research-prototype step, and create the next execution-review-loop
-prompt directly. Do not create a separate post-M126 planning prompt unless
-review returns `Return To Planner`, `Reject`, or an explicit stop condition is
-recorded.
+high-value research-prototype step aligned with ADR-036, and create the next
+execution-review-loop prompt directly. Do not create a separate post-M126
+planning prompt unless review returns `Return To Planner`, `Reject`, or an
+explicit stop condition is recorded.
 
 If review returns `Needs Revision`, run one focused revision executor and then
 a focused re-review. If review returns `Return To Planner` or `Reject`, stop

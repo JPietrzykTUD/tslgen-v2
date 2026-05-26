@@ -518,16 +518,16 @@ manifests, runtime corpus reads, source repair, registries, dispatchers,
 hidden backfeeds, fixpoint behavior, or new lowering IR families.
 
 Integrated post-M125 next-run planning selected
-`Milestone 126: Tiny Clean Exact TSIL Emit-Return Binary Body Lowering Slice`.
-The selected M126 task keeps focus on lowering and moves the prototype closer
-to source-authored `.tsl` implementation text by accepting one exact
-binary-scalar TSIL body line,
-`tsil "emit_return(<operation>(left, right));"`, as an alternative to the
-current synthetic `body <operation>(left, right)` fixture line. It must not
-parse broad TSIL strings, nested calls, intrinsics, casts, variables,
-multiple statements, multiline bodies, unary/comparison TSIL forms, target
-discovery, backend manifests, source repair, renderer inference, or new
-lowering IR families.
+`Milestone 126: Tiny Clean Ordered Implementation Body Line Boundary Slice`.
+The selected M126 task applies ADR-036 before adding more TSIL source forms:
+implementation bodies become ordered source-owned body lines with optional
+lowerable segments. The first slice should represent the existing exact
+`body <operation>(...)` fixture line as a one-line body containing one
+lowerable operation fragment, preserve selected-implementation lowering and
+byte-stable artifacts, and avoid adding TSIL emit-return parsing, helper
+substitution, raw body passthrough, broad statement/expression parsing,
+renderer inference, target discovery, backend manifests, source repair, or new
+request/result/worklist families.
 
 Post-M47 planning is accepted. The accepted planning result selected
 Milestone 48, and the M48 execution-review loop returned `Accept`.
@@ -1613,7 +1613,7 @@ docs/agent/runs/m126-execution-review-loop-prompt.md
 Active executor milestone:
 
 ```text
-Milestone 126: Tiny Clean Exact TSIL Emit-Return Binary Body Lowering Slice
+Milestone 126: Tiny Clean Ordered Implementation Body Line Boundary Slice
 ```
 
 Latest review verdict:
@@ -1629,11 +1629,12 @@ caches removed.
 Next expected action:
 
 ```text
-Run the active M126 execution-review-loop prompt. M126 should accept exactly
-one TSIL-like binary scalar implementation body form,
-`tsil "emit_return(<operation>(left, right));"`, lower it through the same
-typed selected-implementation path as existing exact binary bodies, and
-preserve M107-M125 behavior.
+Run the active M126 execution-review-loop prompt. M126 should introduce the
+ADR-036 body model boundary by representing implementation bodies as ordered
+source-owned body lines with optional lowerable segments, initially preserving
+only the existing exact `body <operation>(...)` behavior as a one-line
+lowerable operation fragment. It must not add TSIL emit-return parsing or raw
+body rendering in this slice.
 ```
 
 Accepted planning prompt:
