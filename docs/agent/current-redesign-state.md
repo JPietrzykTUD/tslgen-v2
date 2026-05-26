@@ -6,21 +6,29 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 126 is accepted.
+Milestone 127 is accepted.
 
-The M126 execution-review loop returned `Accept With Follow-Ups` after a
-focused documentation revision and re-review. M126 introduced the ADR-036 body
-model boundary in the clean restart product path: the existing exact
-`body <operation>(...)` fixture line is now represented as an ordered
-`ImplementationBody` with one segmented body line and one
-`LowerableOperationFragment`. Catalog construction and lowering consume typed
-body-line/segment values and reject malformed containers with structured
-diagnostics instead of raw passthrough, source repair, renderer inference, or
-TSIL parsing. M107-M125 behavior, unselected-body behavior, backend-owned
-spellings, deterministic ordering, and representative artifact bytes remained
-stable. The only review follow-up was stale behavioral documentation naming
-old per-operation body classes; `behavioral-spec.md` and `domain-model.md`
-were updated and focused documentation re-review returned `Accept`.
+The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
+`docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
+all 41 current `tsldata/**/*.tsl` files. It re-anchored the next lowering work
+on real TSIL source constructs instead of synthetic clean-restart
+`body <operation>(...)` fixture syntax. The inventory explicitly classifies
+`tsil` payload envelopes, `emit_return(...)`, `call<primitive=...>`,
+`call<primitive=@self[...]>(...)`, generation-control directives,
+backend-control directives including present `if<compile>` / `else<compile>`
+and absent `if<runtime>` / `else<runtime>`, backend/generation queries,
+intrinsics, helper calls, raw target-language-like text, and backend
+translation metadata. No production parser, catalog, lowering, backend,
+renderer, writer, or generated-output behavior changed.
+
+M127 review follow-ups are nonblocking:
+
+- Record `else if<generation>` explicitly before any generation-control
+  lowering milestone.
+- Record TSIL-style `cast<...>`, `mem<...>`, and `io<...>` call/template
+  forms before any cast, memory, or I/O lowering milestone.
+- Keep M128 described as a lowering-enabling TSIL payload-envelope intake
+  slice, not as semantic TSIL lowering.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -1615,45 +1623,45 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 127.
+Execute Milestone 128.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m127-execution-review-loop-prompt.md
+docs/agent/runs/m128-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 127: TSIL Corpus Surface Inventory And Lowering Classification Slice
+Milestone 128: Real TSIL Payload Envelope Body Intake Slice
 ```
 
 Latest review verdict:
 
 ```text
-M126 execution-review returned Accept With Follow-Ups after one write-capable
-executor, read-only architecture, boundary, documentation, and validation
-audits, one focused documentation revision, and focused documentation
-re-review. Architecture returned Accept With Follow-Ups with documentation
-coherence as the only follow-up. Boundary and validation audits returned
-Accept. Documentation audit initially returned Needs Revision because stale
-behavioral docs still named old per-operation body classes; the focused docs
-revision updated behavioral/domain docs, and re-review returned Accept.
+M127 execution-review returned Accept With Follow-Ups after one write-capable
+documentation/evidence executor and read-only architecture, boundary,
+documentation, and validation audits. Architecture and documentation returned
+Accept With Follow-Ups; boundary and validation returned Accept. There were no
+blocking findings. Follow-ups are to explicitly name `else if<generation>` and
+TSIL-style `cast<...>` / `mem<...>` / `io<...>` forms before selecting related
+lowering milestones, and to keep M128 framed as lowering-enabling payload
+intake rather than semantic lowering.
 ```
 
 Next expected action:
 
 ```text
-Run the active M127 execution-review-loop prompt. M127 should keep focus on
-lowering by inventorying the actual TSIL surface across all current
-`tsldata/**/*.tsl` files before selecting another implementation slice. The
-inventory must classify real TSIL constructs, including generation-control and
-backend-control buckets such as `if<compile>`, `else<compile>`,
-`if<runtime>`, and `else<runtime>`, and distinguish them from synthetic
-clean-restart `body <operation>(...)` fixture syntax. It must not implement
-production parser/lowering code or accept new source syntax.
+Run the active M128 execution-review-loop prompt. M128 should focus on the
+lowering boundary by admitting real quoted `tsil` payload envelopes into the
+M126 `ImplementationBody` line model as source-owned raw body lines. It should
+preserve existing synthetic `body <operation>(...)` fixture behavior while
+adding no semantic TSIL lowering, no raw TSIL backend rendering, no primitive
+call lowering, no `emit_return(...)` parsing, no helper substitution, and no
+generation/backend-control lowering. The expected selected raw TSIL body
+result is an explicit unsupported-lowering diagnostic, not generated code.
 ```
 
 Accepted planning prompt:

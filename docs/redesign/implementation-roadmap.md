@@ -16751,13 +16751,12 @@ exit 0 with no output.
 
 Status:
 
-Planned as the next clean restart milestone after accepted M126. This
-milestone corrects the next-step direction after the body-model boundary:
-before adding more lowerable body fragments, inventory the actual TSIL surface
-used by the current `tsldata/**/*.tsl` corpus and classify which construct
-families are raw text, generator directives, backend-control directives,
-primitive-call semantics, backend-owned operations, helper calls, or deferred
-language forms.
+Accepted. This milestone corrected the next-step direction after the
+body-model boundary: before adding more lowerable body fragments, it
+inventoried the actual TSIL surface used by the current `tsldata/**/*.tsl`
+corpus and classified which construct families are raw text, generator
+directives, backend-control directives, primitive-call semantics,
+backend-owned operations, helper calls, or deferred language forms.
 
 Goal:
 
@@ -16876,3 +16875,155 @@ Review notes:
 - Reviewers should reject any recommendation that treats `sub(...)`,
   `add(...)`, or similar primitive-looking calls as real TSIL constructs
   unless the inventory shows that exact surface form in `tsldata/`.
+
+Review result:
+
+- Created `docs/redesign/tsil-surface-inventory.md` as the M127 inventory
+  document grounded in all 41 current `tsldata/**/*.tsl` files.
+- The inventory records `tsil` payload envelopes, `emit_return(...)`,
+  primitive-call forms, generation-control forms, backend-control forms,
+  backend/generation queries, intrinsic forms, helper calls, raw surrounding
+  target-language-like text, and backend translation metadata.
+- The backend-control bucket explicitly records present `if<compile>` and
+  `else<compile>` forms and explicitly records that `if<runtime>` and
+  `else<runtime>` are absent from the current corpus.
+- The inventory distinguishes real TSIL constructs from the clean-restart
+  synthetic `body <operation>(...)` fixture syntax and records that bare
+  primitive-looking calls such as `sub(left, right)` are not real TSIL
+  primitive-call syntax in the current corpus.
+- The inventory recommends M128 as a lowering-enabling real `tsil`
+  payload-envelope intake slice.
+- No production parser, catalog, lowering, backend, renderer, writer, or
+  generated-output code changed in M127.
+
+Internal review verdict:
+
+`Accept With Follow-Ups`. Architecture returned `Accept With Follow-Ups` with
+one nonblocking note to keep M128 framed as a lowering-enabling payload intake
+slice rather than semantic lowering. Boundary returned `Accept`. Documentation
+returned `Accept With Follow-Ups` with nonblocking notes to explicitly record
+`else if<generation>` before any generation-control lowering milestone and to
+record TSIL-style `cast<...>`, `mem<...>`, and `io<...>` forms before any
+related lowering milestone. Validation returned `Accept`.
+
+Validation result:
+
+```bash
+git diff --check
+rg --files tsldata | rg "\\.tsl$" | sort
+rg -n "tsil|emit_return|call<primitive=|intrin|intrin_compose|details::|if<generation>|else<generation>|if<compile>|else<compile>|if<runtime>|else<runtime>|loop<|var<|let<|type<generation>|type<backend>|value<generation>|value<backend>" tsldata -g "*.tsl"
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output.
+`rg --files tsldata | rg "\\.tsl$" | sort` returned exit 0 and printed the 41
+current `.tsl` corpus paths. The required corpus `rg -n` command returned exit
+0 and printed 5827 matching lines. The final
+`find tslgen -type d -name __pycache__ -print` returned exit 0 with no output.
+
+### Milestone 128: Real TSIL Payload Envelope Body Intake Slice
+
+Status:
+
+Planned as the next clean restart implementation milestone after accepted
+M127. This is a lowering-enabling slice, not semantic TSIL lowering: it admits
+real source-authored quoted `tsil` payload envelopes into the M126
+`ImplementationBody` line model as source-owned raw body lines so future
+lowering milestones can select exact TSIL islands from real payloads.
+
+Goal:
+
+Extend the clean restart parser/catalog body intake to recognize quoted
+`tsil` payload envelopes in the existing narrow clean source shape. Preserve
+the existing synthetic `body <operation>(...)` fixture behavior, but allow a
+selected implementation body to carry raw TSIL payload lines such as:
+
+```text
+tsil "emit_return(left + right);"
+```
+
+and multiline quoted TSIL payloads such as:
+
+```text
+tsil """
+  var<init_register>(result)
+  emit_return(result);
+"""
+```
+
+The payload content becomes ordered `RawStringLine` values inside
+`ImplementationBody`. It is not parsed into `emit_return`, primitive-call,
+helper, intrinsic, assignment, loop, generation-control, backend-control, or
+operator semantics in this slice.
+
+Scope:
+
+- Keep the existing exact `body <operation>(...)` path and accepted artifact
+  behavior stable.
+- Add parser-owned and domain-owned raw body-line intake for exact quoted
+  `tsil` payload envelopes inside the current clean restart outer fixture
+  shape.
+- Preserve payload line order, source locations, and raw text. Do not repair
+  indentation, punctuation, missing delimiters, or unsupported nearby source
+  forms.
+- Catalog construction may accept raw TSIL payload bodies as typed
+  `ImplementationBody` values, but selected raw TSIL bodies must lower to an
+  explicit unsupported-body diagnostic until later milestones select exact
+  lowerable islands.
+- Add focused tests for inline quoted `tsil`, multiline quoted `tsil`,
+  malformed/unterminated quoted `tsil`, existing synthetic `body ...`
+  stability, and selected raw TSIL unsupported-lowering behavior.
+- Update docs if the implementation clarifies raw body-line behavior or
+  diagnostic boundaries.
+
+Out of scope:
+
+- Parsing full current `tsldata/` primitive nesting under `impls:`.
+- Supporting `tsil:` block entries; record as a follow-up unless selected by a
+  later milestone.
+- Lowering or parsing `emit_return(...)`, `call<primitive=...>`,
+  `call<primitive=@self[...]>(...)`, helpers, intrinsics, assignments, array
+  access, declarations, operators, loops, `if<generation>`,
+  `else if<generation>`, `else<generation>`, `if<compile>`,
+  `else<compile>`, `if<runtime>`, `else<runtime>`, `switch<compile>`, casts,
+  memory helpers, or I/O helpers.
+- Rendering raw TSIL payload text as C++ or Rust code.
+- Loading operation semantics, compatibility rules, or backend spellings from
+  `tsldata/`, backend manifests, YAML, `frozen`, `tslgenold`, plugins, or
+  environment configuration at runtime.
+- Building a complete TSIL grammar/parser, semantic validator, source repair
+  mechanism, broad expression parser, or target-language compiler.
+- Introducing a registry, dispatcher, callback map, plugin system, hidden
+  backfeed, fixpoint mechanism, broad operation framework, or new lowering IR
+  category/request/result/worklist family.
+
+Accepted outputs:
+
+- Exact quoted `tsil` payload envelopes can be represented as ordered raw
+  `ImplementationBody` lines in parser and domain values.
+- Existing synthetic `body <operation>(...)` fixture behavior and generated
+  artifact bytes remain stable.
+- Selected raw TSIL bodies produce structured unsupported-lowering diagnostics
+  instead of generated backend code.
+- No semantic TSIL lowerable islands are accepted in this milestone.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/domain/catalog.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Review notes:
+
+- Reviewers should require M128 to remain payload-envelope intake only. It is
+  useful because future lowering must see real `tsil` payloads in the body
+  model, but it must not overclaim semantic lowering.
+- Reviewers should reject raw TSIL backend rendering, `emit_return(...)`
+  parsing, helper substitution, primitive-call dependency lowering, or
+  generation/backend-control lowering in this slice.
+- Reviewers should require the M127 follow-ups about `else if<generation>` and
+  `cast<...>` / `mem<...>` / `io<...>` buckets to remain recorded for future
+  milestones rather than being accidentally implemented here.
