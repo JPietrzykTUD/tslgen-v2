@@ -274,23 +274,11 @@ class RawStringToken:
     text: str
     source_span: SourceSpan
 
-BodySegment = RawStringToken | LowerableOperationFragment | LowerableDirective
-
-@dataclass(frozen=True, slots=True)
-class RawStringLine:
-    text: str
-    source_span: SourceSpan
-
-@dataclass(frozen=True, slots=True)
-class SegmentedLine:
-    segments: tuple[BodySegment, ...]
-    source_span: SourceSpan
-
-BodyLine = RawStringLine | SegmentedLine
+BodyToken = RawStringToken | LowerableOperationFragment | LowerableDirective
 
 @dataclass(frozen=True, slots=True)
 class ImplementationBody:
-    lines: tuple[BodyLine, ...]
+    tokens: tuple[BodyToken, ...]
     source_span: SourceSpan
 
 @dataclass(frozen=True, slots=True)
@@ -312,22 +300,24 @@ Invariants:
 - Promotion may be selector-aware; unsupported unselected branches are deferred
   instead of making the whole primitive invalid.
 - Selectors preserve raw text and normalized selector names.
-- Implementation bodies preserve source-owned line order. A line may be raw or
-  segmented into raw string tokens and documented lowerable fragments.
+- Implementation bodies preserve source-owned token order. Raw text tokens may
+  contain line breaks, indentation, braces, assignments, semicolons, and other
+  source-authored text; lowerable tokens mark only documented generator-owned
+  islands.
 - M126 accepts only the existing `body <operation>(...)` source line, promoted
-  as one segmented line with one `LowerableOperationFragment`; broader TSIL
-  text and mixed raw/lowerable lines require separate accepted milestones.
+  as one `LowerableOperationFragment` token; broader TSIL text and mixed
+  raw/lowerable token streams require separate accepted milestones.
 - M128 accepts exact quoted `tsil` payload envelopes in the current narrow
   outer fixture shape and promotes their payload content to ordered
-  `RawStringLine` values. Those raw lines are catalog data only until a later
+  `RawStringToken` values. Those raw tokens are catalog data only until a later
   milestone selects exact lowerable TSIL islands.
 - M129 classifies exact `emit_return(...)` payload lines as
-  `LowerableDirective` segments with opaque source-text arguments. The
+  `LowerableDirective` tokens with opaque source-text arguments. The
   directive boundary does not imply expression, operator, helper, call, or
   backend rendering semantics.
 - M130 classifies selected exact TSIL directive envelopes
   `var<...>(...)`, `let<...>(...)`, `loop<...>(...)`, `if<...>(...)`,
-  `switch<...>(...)`, and `else<...>` as `LowerableDirective` segments with
+  `switch<...>(...)`, and `else<...>` as `LowerableDirective` tokens with
   opaque selector and payload arguments. Raw prefix/suffix text such as a
   leading `}` before `else<...>` or trailing `{` / `;` remains
   `RawStringToken` data. The

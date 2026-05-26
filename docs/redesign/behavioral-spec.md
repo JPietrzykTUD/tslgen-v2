@@ -564,6 +564,20 @@ source, or render backend code. Selected bodies containing these directives
 still produce unsupported lowering diagnostics until later milestones define
 complete body lowering.
 
+### M131 Planned Body Token Stream Consolidation
+
+Milestone 131 is planned as a behavior-preserving consolidation of the
+implementation-body model. The intended canonical domain shape is a
+source-owned token stream made of raw text tokens and lowerable tokens, not a
+line-primary `RawStringLine | SegmentedLine` structure. Raw text tokens may
+contain newlines and target-like text; lowerable tokens preserve the accepted
+M126-M130 operation/directive facts.
+
+M131 must not add new TSIL syntax recognition or backend rendering. Its purpose
+is to keep accepted M126-M130 behavior stable while removing the single-line
+constraint that would otherwise make future lowerable islands awkward or push
+the generator toward a full TSIL parser.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

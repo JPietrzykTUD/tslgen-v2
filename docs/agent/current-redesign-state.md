@@ -1697,7 +1697,7 @@ docs/agent/runs/m131-execution-review-loop-prompt.md
 Active executor milestone:
 
 ```text
-Milestone 131: Exact TSIL Primitive-Call Island Boundary Slice
+Milestone 131: Source-Owned Body Token Stream Consolidation Slice
 ```
 
 Latest review verdict:
@@ -1718,17 +1718,17 @@ selected and tested.
 Next expected action:
 
 ```text
-Run the active M131 execution-review-loop prompt. M131 should focus on the
-lowerable-island boundary by recognizing exact single-line
-`call<primitive=...>(...)` islands in parser-recognized TSIL body lines that
-remain raw after M130 directive classification. It should preserve primitive
-selector text, payload text, and surrounding raw source text in the existing
-typed source-body model, and leave primitive resolution, dependency closure,
-`@self` resolution, type-argument parsing, argument splitting, expression
-parsing, helper/operator lowering, assignment lowering, array access lowering,
-directive-payload segmentation, multiline call matching, generation/backend
-query evaluation, backend rendering, source repair, and runtime `tsldata`
-semantic lookup out of scope.
+Run the active M131 execution-review-loop prompt. M131 should consolidate the
+canonical domain implementation body from line containers into a source-owned
+token stream. It should preserve M126-M130 behavior, diagnostics, source
+locations, and artifact bytes while making `ImplementationBody` expose a
+deterministic sequence of raw text tokens and lowerable tokens. It should
+leave new TSIL syntax recognition, `call<primitive=...>` island matching,
+primitive resolution, dependency closure, `@self` resolution, type-argument
+parsing, argument splitting, expression parsing, helper/operator lowering,
+assignment lowering, array access lowering, directive-payload segmentation,
+multiline call matching, generation/backend query evaluation, backend
+rendering, source repair, and runtime `tsldata` semantic lookup out of scope.
 ```
 
 Accepted planning prompt:

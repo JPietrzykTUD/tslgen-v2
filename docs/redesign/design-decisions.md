@@ -1848,53 +1848,48 @@ Considered alternatives:
 - Continue adding one typed body class for each exact multiline source shape.
 - Parse TSIL as a complete statement and expression language.
 - Treat each implementation body as raw text with no typed lowerable fragments.
-- Model implementation bodies as ordered source-authored lines whose lines may
-  be raw or segmented into raw text and lowerable islands.
+- Model implementation bodies as an ordered source-authored token stream where
+  raw text and lowerable islands are peers.
 
 Decision:
 
-Implementation bodies are source-owned ordered lines. A line may remain raw, or
-it may be segmented when it contains documented lowerable islands. The working
-model is:
+Implementation bodies are source-owned ordered token streams. Raw source text
+and documented lowerable islands are peers in the stream. The working model is:
 
 ```text
 ImplementationBody
-  lines: tuple[BodyLine, ...]
+  tokens: tuple[BodyToken, ...]
 
-BodyLine =
-  RawStringLine
-  SegmentedLine
-
-SegmentedLine
-  segments: tuple[BodySegment, ...]
-
-BodySegment =
+BodyToken =
   RawStringToken
   LowerableOperationFragment
   LowerableDirective
 ```
 
-Raw text is the default. The generator recognizes and lowers only documented
-pseudo-language islands that need generator/backend ownership, such as helper
-operation fragments, generation/backend directives, or exact return/loop
-directives selected by future milestones. Recognition of an island must not
-imply parsing the surrounding assignment, array access, expression, scope, or
-statement list unless a separate milestone explicitly selects that behavior.
+Raw text is the default and may contain newlines, indentation, braces,
+assignments, semicolons, and target-like text. The generator recognizes and
+lowers only documented pseudo-language islands that need generator/backend
+ownership, such as helper operation fragments, generation/backend directives,
+or exact return/loop directives selected by future milestones. Recognition of
+an island must not imply parsing the surrounding assignment, array access,
+expression, scope, or statement list unless a separate milestone explicitly
+selects that behavior.
 
 Rationale:
 
 The research prototype needs to generate code from `.tsl` files that will
 continue to change. Treating every nearby body shape as a new semantic object
 creates noise and makes the generator look like a TSIL compiler. Treating the
-entire body as raw text hides the parts that backends must own. A segmented
-line model keeps source order and source-authored text intact while giving the
-generator precise hooks for the few constructs it actually lowers.
+entire body as raw text hides the parts that backends must own. A token stream
+keeps source order and source-authored text intact while giving the generator
+precise hooks for the few constructs it actually lowers, including future
+islands that may span source lines.
 
 Consequences:
 
-- Future body-lowering milestones should prefer consolidating toward ordered
-  body lines and lowerable segments instead of adding another exact whole-body
-  wrapper class.
+- Future body-lowering milestones should prefer the ordered body-token stream
+  instead of adding another exact whole-body wrapper class or line-primary
+  container.
 - Backends may render raw text segments as source-authored text only within an
   explicit backend rendering policy; backend-owned spellings and directives
   must still come from typed lowerable segments or backend translation rules.
@@ -1906,4 +1901,4 @@ Consequences:
   reason.
 - The generator still does not parse TSIL as a complete language: no general
   precedence, associativity, statement-list, scope, loop, or expression model
-  is implied by recognizing lowerable islands inside a line.
+  is implied by recognizing lowerable islands inside the token stream.

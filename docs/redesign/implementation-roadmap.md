@@ -17397,85 +17397,100 @@ Execution notes:
   pytest; the final cache check returned exit 0 with no output after removing
   validation-created `__pycache__` directories.
 
-### Milestone 131: Exact TSIL Primitive-Call Island Boundary Slice
+### Milestone 131: Source-Owned Body Token Stream Consolidation Slice
 
 Status:
 
 Planned as the next clean restart implementation milestone after accepted
-M130. This is a lowerable-island boundary slice over M128 raw TSIL payload
-lines that remain raw after M129-M130 directive classification. It recognizes
-exact single-line `call<primitive=...>(...)` islands and preserves primitive
-selector text, payload text, and surrounding raw source text. It must not
-resolve primitive names, dependency closure, `@self`, type/backend queries,
-arguments, assignments, array access, helper calls, operators, or backend
-rendering.
+M130. This is a behavior-preserving body-model consolidation slice. It replaces
+line-as-primary domain body structure with a source-owned token stream so later
+lowerable islands can cross source lines without forcing a TSIL statement or
+expression parser. It must preserve accepted M126-M130 behavior exactly while
+making the canonical domain body shape a sequence of raw text tokens and
+lowerable tokens.
 
-Corpus grounding:
+Design grounding:
 
-- `tsldata/primitives/arithmetic/fundamental.tsl:43` uses
-  `result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);`.
-- `tsldata/primitives/arithmetic/fundamental.tsl:130` uses
-  `emit_return(call<primitive=set_zero[Vec]>());`; M131 should not yet
-  segment calls inside already classified directive payloads.
-- `tsldata/primitives/bitwise/bit_ops.tsl:36-37` uses
-  `call<primitive=reinterpret[...]>(...)` inside `var<...>(...)` directive
-  payloads; M131 records this as future directive-payload segmentation
-  evidence, not current scope.
+- ADR-036 already records that implementation bodies are source-owned and
+  lowerable islands should not imply parsing surrounding assignment,
+  expression, scope, or statement-list syntax.
+- M128-M130 show that `RawStringLine | SegmentedLine` is too line-centered for
+  future lowerable islands that may span multiple lines.
+- Current `.tsl` source contains multiline TSIL payloads and future island
+  candidates such as `call<primitive=...>(...)`; those candidates should not
+  force single-line-only lowering or a full TSIL parser.
 
 Goal:
 
-When an M128 raw TSIL body line that remains raw after M130 contains one exact
-single-line primitive-call island:
+Make the domain `ImplementationBody` canonical shape a token stream:
 
 ```text
-call<primitive=selector>(opaque-payload)
+ImplementationBody
+  tokens: tuple[BodyToken, ...]
+
+BodyToken =
+  RawStringToken
+  LowerableOperationFragment
+  LowerableDirective
 ```
 
-classify only that call span as a lowerable body segment and preserve any raw
-prefix/suffix as `RawStringToken` data. A zero-argument payload such as
-`call<primitive=set_zero[Vec]>()` is accepted. Selector and payload text remain
-opaque.
+Raw string tokens may contain newlines, indentation, braces, assignments,
+semicolons, and any target-like text. Lowerable tokens keep the existing
+opaque arguments/source locations accepted by M126-M130.
+
+Parser output may remain line-oriented as an adapter detail if that keeps the
+slice small, but catalog/domain/lowering code should consume the token stream
+as the accepted body model. Existing line container values such as
+`RawStringLine`, `SegmentedLine`, and `BodyLine` should be removed from the
+canonical domain model or reduced to private/parser-side compatibility only if
+removal would make the slice unnecessarily risky.
 
 Scope:
 
-- Preserve M128-M130 behavior and existing generated artifact bytes.
-- Recognize only `call<primitive=...>(...)` islands in parser-recognized TSIL
-  raw body lines that are still `RawStringLine` values after directive
-  classification.
-- Preserve raw prefix/suffix text around the call island.
-- Match the outer `call<primitive=...>` selector with delimiter matching
-  sufficient for the current corpus forms, including nested `<...>` text such
-  as `type<backend>(...)` inside selector brackets.
-- Match the outer call payload parentheses with nested-parenthesis delimiter
-  matching only. Payload text remains opaque and may be empty.
-- Keep selected bodies containing primitive-call islands unsupported for
-  backend rendering unless a later milestone defines semantic call lowering.
-- Add tests for assignment-like raw prefix/suffix preservation,
-  zero-argument `set_zero` payload preservation, malformed call envelopes,
-  unsupported nearby call-like names, direct primitive-looking names remaining
-  unsupported, and no segmentation inside existing M129/M130 directive
-  payloads.
+- Preserve M126 synthetic `body <operation>(...)` lowering behavior and
+  generated artifact bytes.
+- Preserve M128 quoted-TSIL intake semantics: inline and multiline payloads
+  become source-owned raw text in deterministic order.
+- Preserve M129 `emit_return(...)` directive classification and unsupported
+  opaque-return diagnostics.
+- Preserve M130 directive-envelope classification, raw prefix/suffix
+  preservation, and unsupported selected-body behavior.
+- Preserve source locations for diagnostics. If raw text spans multiple lines,
+  keep enough source identity for diagnostics and future cross-line lowerable
+  islands.
+- Update production code and tests to use the token-stream model as the domain
+  and lowering boundary.
+- Add tests proving:
+  - `body add(left, right)` becomes one `LowerableOperationFragment` token;
+  - inline quoted `tsil` becomes raw token data;
+  - multiline quoted `tsil` preserves order and newline/text boundaries;
+  - M129 `emit_return(...)` becomes one directive token;
+  - M130 `} else<compile> {` becomes raw/directive/raw tokens in order;
+  - selected unsupported TSIL bodies still diagnose without rendering raw text;
+  - existing accepted artifact bytes remain stable.
 
 Out of scope:
 
-- Primitive resolution, dependency closure, `@self` resolution, type-argument
-  parsing, argument splitting, expression parsing, helper/operator lowering,
-  assignment lowering, array access lowering, directive-payload segmentation,
-  multiline call matching, generation/backend query evaluation, backend
-  rendering, source repair, runtime `tsldata` semantic lookup, `frozen` or
-  `tslgenold` runtime dependency, registries, dispatchers, hidden backfeeds,
-  fixpoint mechanisms, or new lowering IR category/request/result/worklist
+- New TSIL syntax recognition; `call<primitive=...>` island matching;
+  primitive resolution; dependency closure; `@self` resolution; type-argument
+  parsing; argument splitting; expression parsing; helper/operator lowering;
+  assignment lowering; array access lowering; directive-payload segmentation;
+  multiline call matching; generation/backend query evaluation; backend
+  rendering; source repair; runtime `tsldata` semantic lookup; `frozen` or
+  `tslgenold` runtime dependency; registries; dispatchers; hidden backfeeds;
+  fixpoint mechanisms; or new lowering IR category/request/result/worklist
   families.
 
 Accepted outputs:
 
-- Exact selected primitive-call islands in raw body lines become typed body
-  segments carrying opaque selector and payload text, with raw prefix/suffix
-  preserved.
-- Already classified `emit_return`, `var`, `let`, `loop`, `if`, `switch`, and
-  `else` directive payloads remain opaque.
-- Selected bodies containing primitive-call islands do not render backend code
-  or infer semantics.
+- `ImplementationBody` exposes a deterministic token sequence as its canonical
+  domain shape.
+- Existing `RawStringToken`, `LowerableOperationFragment`, and
+  `LowerableDirective` values become the body-token vocabulary unless a
+  smaller equivalent is justified during implementation.
+- Accepted M126-M130 behavior, diagnostics, source locations, and artifact
+  bytes remain stable.
+- No new lowerable island is recognized in M131.
 
 Validation:
 
