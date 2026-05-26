@@ -258,9 +258,39 @@ class ImplementationSelector:
     names: tuple[str, ...]
 
 @dataclass(frozen=True, slots=True)
+class LowerableOperationFragment:
+    operation: str
+    arguments: tuple[str, ...]
+    source_span: SourceSpan
+
+@dataclass(frozen=True, slots=True)
+class LowerableDirective:
+    name: str
+    arguments: tuple[str, ...]
+    source_span: SourceSpan
+
+@dataclass(frozen=True, slots=True)
+class RawStringToken:
+    text: str
+    source_span: SourceSpan
+
+BodySegment = RawStringToken | LowerableOperationFragment | LowerableDirective
+
+@dataclass(frozen=True, slots=True)
+class RawStringLine:
+    text: str
+    source_span: SourceSpan
+
+@dataclass(frozen=True, slots=True)
+class SegmentedLine:
+    segments: tuple[BodySegment, ...]
+    source_span: SourceSpan
+
+BodyLine = RawStringLine | SegmentedLine
+
+@dataclass(frozen=True, slots=True)
 class ImplementationBody:
-    kind: str
-    payload: CatalogValue
+    lines: tuple[BodyLine, ...]
     source_span: SourceSpan
 
 @dataclass(frozen=True, slots=True)
@@ -282,8 +312,11 @@ Invariants:
 - Promotion may be selector-aware; unsupported unselected branches are deferred
   instead of making the whole primitive invalid.
 - Selectors preserve raw text and normalized selector names.
-- Implementation bodies expose classification and text-payload accessors while
-  preserving the opaque catalog payload for future lowering.
+- Implementation bodies preserve source-owned line order. A line may be raw or
+  segmented into raw string tokens and documented lowerable fragments.
+- M126 accepts only the existing `body <operation>(...)` source line, promoted
+  as one segmented line with one `LowerableOperationFragment`; broader TSIL
+  text and mixed raw/lowerable lines require separate accepted milestones.
 - `requires_value` remains structurally preserved for the existing flag and
   selector normalization rules.
 - Unknown extra fields remain preserved as `extra_fields` so future milestones

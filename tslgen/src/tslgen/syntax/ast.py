@@ -6,9 +6,50 @@ from tslgen.core.diagnostics import Diagnostic, SourceLocation
 
 
 @dataclass(frozen=True, slots=True)
-class ParsedBody:
+class ParsedLowerableOperationFragment:
     operation: str
     arguments: tuple[str, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedRawStringToken:
+    text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedLowerableDirective:
+    name: str
+    arguments: tuple[str, ...]
+    source: SourceLocation
+
+
+ParsedBodySegment = (
+    ParsedRawStringToken
+    | ParsedLowerableOperationFragment
+    | ParsedLowerableDirective
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedRawStringLine:
+    text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedSegmentedLine:
+    segments: tuple[ParsedBodySegment, ...]
+    source: SourceLocation
+
+
+ParsedBodyLine = ParsedRawStringLine | ParsedSegmentedLine
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedImplementationBody:
+    lines: tuple[ParsedBodyLine, ...]
     source: SourceLocation
 
 
@@ -16,7 +57,7 @@ class ParsedBody:
 class ParsedImplementation:
     extension: str
     type_tag: str
-    body: ParsedBody
+    body: ParsedImplementationBody
     source: SourceLocation
 
 

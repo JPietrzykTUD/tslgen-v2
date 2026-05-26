@@ -16,11 +16,12 @@ from tslgen.backends.cpp import CppBackend
 from tslgen.backends.rust import RustBackend
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
-    BinaryOperationBody,
-    ComparisonOperationBody,
     Implementation,
+    ImplementationBody,
+    LowerableOperationFragment,
     Primitive,
-    UnaryOperationBody,
+    RawStringLine,
+    SegmentedLine,
 )
 from tslgen.io.sources import SourceDocument
 from tslgen.lowering import (
@@ -68,6 +69,16 @@ from tslgen.lowering.operation_type_compatibility import (
     unary_operation_scalar_type_compatibility_rules,
 )
 from tslgen.pipeline.catalog_builder import CatalogBuilder
+from tslgen.syntax.ast import (
+    ParsedDocument,
+    ParsedImplementation,
+    ParsedImplementationBody,
+    ParsedLowerableOperationFragment,
+    ParsedPrimitive,
+    ParsedRawStringLine,
+    ParsedRawStringToken,
+    ParsedSegmentedLine,
+)
 from tslgen.syntax.parser import TslParser
 
 FIXTURES = Path(__file__).parent / "fixtures" / "tsl"
@@ -799,11 +810,9 @@ def test_m118_parser_and_catalog_accept_exact_unary_source_shape(
     assert primitive.parameters == ("value",)
     assert primitive.template == "unary"
     body = primitive.implementations[0].body
-    assert isinstance(body, UnaryOperationBody)
-    assert not isinstance(body, BinaryOperationBody)
-    assert body == UnaryOperationBody(
-        operation="bit_not",
-        value_parameter="value",
+    assert body == _implementation_body(
+        "bit_not",
+        ("value",),
         source=SourceLocation(document.path, 3, 5),
     )
 
@@ -891,13 +900,9 @@ def test_m122_parser_and_catalog_accept_exact_compare_family_source_shape(
         assert primitive.parameters == ("left", "right")
         assert primitive.template == "compare"
         body = primitive.implementations[0].body
-        assert isinstance(body, ComparisonOperationBody)
-        assert not isinstance(body, BinaryOperationBody)
-        assert not isinstance(body, UnaryOperationBody)
-        assert body == ComparisonOperationBody(
-            operation=operation_id,
-            left_parameter="left",
-            right_parameter="right",
+        assert body == _implementation_body(
+            operation_id,
+            ("left", "right"),
             source=SourceLocation(document.path, 3, 5),
         )
 
@@ -1499,12 +1504,7 @@ def test_m122_backends_emit_backend_owned_compare_family_operator_spellings() ->
 def test_m108_lowerer_reports_unsupported_body_boundary() -> None:
     result = Lowerer().lower(
         _selected_implementation(
-            body=BinaryOperationBody(
-                operation="add",
-                left_parameter="left",
-                right_parameter="value",
-                source=_location(3, 5),
-            )
+            body=_implementation_body("add", ("left", "value"))
         )
     )
 
@@ -2069,9 +2069,27 @@ def test_m124_catalog_builder_accepts_multiple_explicit_source_documents(
         "compare",
         "binary",
     ]
-    assert isinstance(primitives[0].implementations[0].body, UnaryOperationBody)
-    assert isinstance(primitives[1].implementations[0].body, ComparisonOperationBody)
-    assert isinstance(primitives[2].implementations[0].body, BinaryOperationBody)
+    assert _body_fragment(primitives[0].implementations[0].body) == (
+        LowerableOperationFragment(
+            operation="bit_not",
+            arguments=("value",),
+            source=SourceLocation(bit_not.path, 3, 5),
+        )
+    )
+    assert _body_fragment(primitives[1].implementations[0].body) == (
+        LowerableOperationFragment(
+            operation="nequal",
+            arguments=("left", "right"),
+            source=SourceLocation(nequal.path, 3, 5),
+        )
+    )
+    assert _body_fragment(primitives[2].implementations[0].body) == (
+        LowerableOperationFragment(
+            operation="sub",
+            arguments=("left", "right"),
+            source=SourceLocation(sub.path, 3, 5),
+        )
+    )
 
 
 def test_m124_multi_source_set_generates_representative_artifacts(
@@ -2335,16 +2353,14 @@ def test_m125_catalog_builder_accepts_multiple_implementations_in_one_document(
         SourceLocation(document.path, 4, 3),
     ]
     assert [implementation.body for implementation in primitive.implementations] == [
-        BinaryOperationBody(
-            operation="add",
-            left_parameter="left",
-            right_parameter="right",
+        _implementation_body(
+            "add",
+            ("left", "right"),
             source=SourceLocation(document.path, 3, 5),
         ),
-        BinaryOperationBody(
-            operation="add",
-            left_parameter="left",
-            right_parameter="right",
+        _implementation_body(
+            "add",
+            ("left", "right"),
             source=SourceLocation(document.path, 5, 5),
         ),
     ]
@@ -2507,6 +2523,161 @@ def test_m125_selected_mismatched_body_reports_lowering_diagnostic(
     assert diagnostic.location.column == 5
     assert "add" in diagnostic.message
     assert "sub" in diagnostic.message
+
+
+def test_m126_catalog_promotes_body_line_to_lowerable_operation_fragment(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_body_model.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                "    body add(left, right)",
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    assert body == _implementation_body(
+        "add",
+        ("left", "right"),
+        source=SourceLocation(source.path, 3, 5),
+    )
+
+
+def test_m126_catalog_rejects_malformed_body_line_containers(
+    tmp_path: Path,
+) -> None:
+    source = SourceLocation((tmp_path / "malformed_body_model.tsl").resolve(), 3, 5)
+    bad_bodies = (
+        ParsedImplementationBody(lines=(), source=source),
+        ParsedImplementationBody(
+            lines=(ParsedRawStringLine(text="body add(left, right)", source=source),),
+            source=source,
+        ),
+        ParsedImplementationBody(
+            lines=(
+                ParsedSegmentedLine(
+                    segments=(
+                        ParsedRawStringToken(
+                            text="add(left, right)",
+                            source=source,
+                        ),
+                    ),
+                    source=source,
+                ),
+            ),
+            source=source,
+        ),
+        ParsedImplementationBody(
+            lines=(
+                ParsedSegmentedLine(
+                    segments=(
+                        ParsedLowerableOperationFragment(
+                            operation="add",
+                            arguments=("left", "right"),
+                            source=source,
+                        ),
+                        ParsedRawStringToken(text=";", source=source),
+                    ),
+                    source=source,
+                ),
+            ),
+            source=source,
+        ),
+    )
+
+    for body in bad_bodies:
+        catalog_result = CatalogBuilder().build(
+            (_parsed_add_document(tmp_path, body),)
+        )
+
+        assert catalog_result.catalog is None
+        assert len(catalog_result.diagnostics) == 1
+        diagnostic = catalog_result.diagnostics[0]
+        assert diagnostic.code == "TSL-CATALOG-UNSUPPORTED-BODY"
+        assert diagnostic.severity == "error"
+        assert diagnostic.location == source
+        assert "one segmented line" in diagnostic.message
+        assert "one lowerable operation fragment" in diagnostic.message
+
+
+def test_m126_lowerer_rejects_malformed_body_line_containers() -> None:
+    body = ImplementationBody(
+        lines=(RawStringLine(text="body add(left, right)", source=_location(3, 5)),),
+        source=_location(3, 5),
+    )
+
+    result = Lowerer().lower(_selected_implementation(body=body))
+
+    assert result.function is None
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-BODY"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == _location(3, 5)
+    assert "one segmented line" in diagnostic.message
+    assert "add(left, right)" in diagnostic.message
+
+
+def test_m126_segmented_body_model_preserves_representative_artifact_bytes(
+    tmp_path: Path,
+) -> None:
+    cases = (
+        (
+            _write_tiny_source(tmp_path, "sub", "si32"),
+            Target(
+                backend="cpp",
+                primitive_name="sub",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            "include/tsl/sub_scalar_si32.hpp",
+            SUB_CPP_CONTENT,
+        ),
+        (
+            _write_tiny_unary_source(tmp_path, "neg", "f64"),
+            Target(
+                backend="rust",
+                primitive_name="neg",
+                extension="scalar",
+                type_tag="f64",
+            ),
+            "src/neg_scalar_f64.rs",
+            NEG_F64_RUST_CONTENT,
+        ),
+        (
+            _write_tiny_compare_source(tmp_path, "nequal", "si32"),
+            Target(
+                backend="cpp",
+                primitive_name="nequal",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            "include/tsl/nequal_scalar_si32.hpp",
+            NEQUAL_CPP_CONTENT,
+        ),
+    )
+
+    for source, target, logical_path, content in cases:
+        result = generate_from_paths((source,), (target,))
+
+        assert result.diagnostics == ()
+        assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+            logical_path,
+        ]
+        assert [artifact.content for artifact in result.artifacts.artifacts] == [
+            content,
+        ]
 
 
 def test_m110_non_si32_source_generates_cpp_and_rust_artifacts(
@@ -3359,19 +3530,77 @@ class _StageOutputOnlyLowerer:
         raise AssertionError("generator must use the lowering stage output")
 
 
+def _implementation_body(
+    operation: str,
+    arguments: tuple[str, ...],
+    *,
+    source: SourceLocation | None = None,
+) -> ImplementationBody:
+    body_source = source or _location(3, 5)
+    return ImplementationBody(
+        lines=(
+            SegmentedLine(
+                segments=(
+                    LowerableOperationFragment(
+                        operation=operation,
+                        arguments=arguments,
+                        source=body_source,
+                    ),
+                ),
+                source=body_source,
+            ),
+        ),
+        source=body_source,
+    )
+
+
+def _body_fragment(body: ImplementationBody) -> LowerableOperationFragment:
+    assert len(body.lines) == 1
+    line = body.lines[0]
+    assert isinstance(line, SegmentedLine)
+    assert len(line.segments) == 1
+    segment = line.segments[0]
+    assert isinstance(segment, LowerableOperationFragment)
+    return segment
+
+
+def _parsed_add_document(
+    tmp_path: Path,
+    body: ParsedImplementationBody,
+) -> ParsedDocument:
+    path = (tmp_path / "malformed_body_model.tsl").resolve().as_posix()
+    return ParsedDocument(
+        path=path,
+        primitives=(
+            ParsedPrimitive(
+                name="add",
+                signature="v:=(v,v)",
+                parameters=("left", "right"),
+                implementations=(
+                    ParsedImplementation(
+                        extension="scalar",
+                        type_tag="si32",
+                        body=body,
+                        source=SourceLocation(Path(path), 2, 3),
+                    ),
+                ),
+                source=SourceLocation(Path(path), 1, 1),
+            ),
+        ),
+    )
+
+
 def _selected_implementation(
     *,
-    body: BinaryOperationBody | None = None,
+    body: ImplementationBody | None = None,
     backend: str = "cpp",
     operation_id: str = "add",
     body_operation: str | None = None,
     type_tag: str = "si32",
 ) -> SelectedImplementation:
-    selected_body = body or BinaryOperationBody(
-        operation=body_operation or operation_id,
-        left_parameter="left",
-        right_parameter="right",
-        source=_location(3, 5),
+    selected_body = body or _implementation_body(
+        body_operation or operation_id,
+        ("left", "right"),
     )
     implementation = Implementation(
         extension="scalar",
@@ -3402,16 +3631,15 @@ def _selected_implementation(
 
 def _selected_unary_implementation(
     *,
-    body: UnaryOperationBody | None = None,
+    body: ImplementationBody | None = None,
     backend: str = "cpp",
     operation_id: str = "bit_not",
     body_operation: str | None = None,
     type_tag: str = "si32",
 ) -> SelectedImplementation:
-    selected_body = body or UnaryOperationBody(
-        operation=body_operation or operation_id,
-        value_parameter="value",
-        source=_location(3, 5),
+    selected_body = body or _implementation_body(
+        body_operation or operation_id,
+        ("value",),
     )
     implementation = Implementation(
         extension="scalar",
@@ -3442,17 +3670,15 @@ def _selected_unary_implementation(
 
 def _selected_comparison_implementation(
     *,
-    body: ComparisonOperationBody | None = None,
+    body: ImplementationBody | None = None,
     backend: str = "cpp",
     operation_id: str = "equal",
     body_operation: str | None = None,
     type_tag: str = "si32",
 ) -> SelectedImplementation:
-    selected_body = body or ComparisonOperationBody(
-        operation=body_operation or operation_id,
-        left_parameter="left",
-        right_parameter="right",
-        source=_location(3, 5),
+    selected_body = body or _implementation_body(
+        body_operation or operation_id,
+        ("left", "right"),
     )
     implementation = Implementation(
         extension="scalar",

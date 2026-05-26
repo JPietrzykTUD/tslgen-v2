@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from tslgen.analysis.selection import SelectedImplementation
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.domain.catalog import (
-    BinaryOperationBody,
-    ComparisonOperationBody,
-    UnaryOperationBody,
+    ImplementationBody,
+    LowerableOperationFragment,
+    SegmentedLine,
 )
 from tslgen.lowering.binary_operations import (
     BinaryOperationDescriptor,
@@ -97,66 +97,112 @@ class Lowerer:
     def lower(self, selected: SelectedImplementation) -> LoweringResult:
         scalar_type = lookup_scalar_type_descriptor(selected.implementation.type_tag)
         body = selected.implementation.body
-        if isinstance(body, BinaryOperationBody):
-            operation = lookup_binary_operation_descriptor(selected.primitive.name)
-            diagnostics = tuple(
-                _unsupported_binary_diagnostics(
-                    selected,
-                    body,
-                    scalar_type,
-                    operation,
-                )
-            )
-            if diagnostics or scalar_type is None or operation is None:
-                return LoweringResult(function=None, diagnostics=diagnostics)
-            return LoweringResult(
-                function=_lower_binary_function(selected, body, scalar_type, operation),
-                diagnostics=(),
-            )
-
-        if isinstance(body, ComparisonOperationBody):
+        fragment = _operation_fragment_from_body(body)
+        if selected.primitive.template == _SUPPORTED_COMPARISON_TEMPLATE:
             operation = lookup_comparison_operation_descriptor(selected.primitive.name)
             diagnostics = tuple(
                 _unsupported_comparison_diagnostics(
                     selected,
                     body,
+                    fragment,
                     scalar_type,
                     operation,
                 )
             )
-            if diagnostics or scalar_type is None or operation is None:
+            if (
+                diagnostics
+                or scalar_type is None
+                or operation is None
+                or fragment is None
+            ):
                 return LoweringResult(function=None, diagnostics=diagnostics)
             return LoweringResult(
                 function=_lower_comparison_function(
                     selected,
-                    body,
+                    fragment,
                     scalar_type,
                     operation,
                 ),
                 diagnostics=(),
             )
 
-        operation = lookup_unary_operation_descriptor(selected.primitive.name)
-        diagnostics = tuple(
-            _unsupported_unary_diagnostics(
-                selected,
-                body,
-                scalar_type,
-                operation,
+        if selected.primitive.template == _SUPPORTED_UNARY_TEMPLATE:
+            operation = lookup_unary_operation_descriptor(selected.primitive.name)
+            diagnostics = tuple(
+                _unsupported_unary_diagnostics(
+                    selected,
+                    body,
+                    fragment,
+                    scalar_type,
+                    operation,
+                )
+            )
+            if (
+                diagnostics
+                or scalar_type is None
+                or operation is None
+                or fragment is None
+            ):
+                return LoweringResult(function=None, diagnostics=diagnostics)
+
+            return LoweringResult(
+                function=_lower_unary_function(
+                    selected,
+                    fragment,
+                    scalar_type,
+                    operation,
+                ),
+                diagnostics=(),
+            )
+
+        if selected.primitive.template == _SUPPORTED_BINARY_TEMPLATE:
+            operation = lookup_binary_operation_descriptor(selected.primitive.name)
+            diagnostics = tuple(
+                _unsupported_binary_diagnostics(
+                    selected,
+                    body,
+                    fragment,
+                    scalar_type,
+                    operation,
+                )
+            )
+            if (
+                diagnostics
+                or scalar_type is None
+                or operation is None
+                or fragment is None
+            ):
+                return LoweringResult(function=None, diagnostics=diagnostics)
+            return LoweringResult(
+                function=_lower_binary_function(
+                    selected,
+                    fragment,
+                    scalar_type,
+                    operation,
+                ),
+                diagnostics=(),
+            )
+
+        diagnostics = (
+            Diagnostic(
+                severity="error",
+                code="TSL-LOWER-UNSUPPORTED-TEMPLATE",
+                message=(
+                    f"primitive {selected.primitive.name!r} uses template "
+                    f"{selected.primitive.template!r}; expected one of: "
+                    f"{_SUPPORTED_BINARY_TEMPLATE}, {_SUPPORTED_UNARY_TEMPLATE}, "
+                    f"{_SUPPORTED_COMPARISON_TEMPLATE}"
+                ),
+                location=selected.primitive.source,
             )
         )
-        if diagnostics or scalar_type is None or operation is None:
-            return LoweringResult(function=None, diagnostics=diagnostics)
-
-        return LoweringResult(
-            function=_lower_unary_function(selected, body, scalar_type, operation),
-            diagnostics=(),
-        )
+        return LoweringResult(function=None, diagnostics=diagnostics)
 
 
 def _unsupported_binary_diagnostics(
     selected: SelectedImplementation,
-    body: BinaryOperationBody,
+    body: ImplementationBody,
+    fragment: LowerableOperationFragment | None,
     scalar_type: ScalarTypeDescriptor | None,
     operation: BinaryOperationDescriptor | None,
 ) -> tuple[Diagnostic, ...]:
@@ -251,7 +297,18 @@ def _unsupported_binary_diagnostics(
             )
         )
 
-    if operation is not None and body.operation != operation.source_body_operation:
+    if fragment is None:
+        diagnostics.append(
+            _unsupported_body_shape_diagnostic(
+                body,
+                _SUPPORTED_BINARY_PARAMETERS,
+                selected.primitive.name,
+            )
+        )
+    elif (
+        operation is not None
+        and fragment.operation != operation.source_body_operation
+    ):
         diagnostics.append(
             Diagnostic(
                 severity="error",
@@ -259,25 +316,22 @@ def _unsupported_binary_diagnostics(
                 message=(
                     f"primitive operation {selected.primitive.name!r} expects "
                     f"body operation {operation.source_body_operation!r}; got "
-                    f"{body.operation!r}"
+                    f"{fragment.operation!r}"
                 ),
-                location=body.source,
+                location=fragment.source,
             )
         )
 
-    if (
-        body.left_parameter != _SUPPORTED_BINARY_PARAMETERS[0]
-        or body.right_parameter != _SUPPORTED_BINARY_PARAMETERS[1]
-    ):
+    if fragment is not None and fragment.arguments != _SUPPORTED_BINARY_PARAMETERS:
         diagnostics.append(
             Diagnostic(
                 severity="error",
                 code="TSL-LOWER-UNSUPPORTED-BODY",
                 message=(
                     "implementation body cannot be lowered; expected exactly "
-                    f"'{body.operation}(left, right)'"
+                    f"'{fragment.operation}(left, right)'"
                 ),
-                location=body.source,
+                location=fragment.source,
             )
         )
 
@@ -286,7 +340,8 @@ def _unsupported_binary_diagnostics(
 
 def _unsupported_comparison_diagnostics(
     selected: SelectedImplementation,
-    body: ComparisonOperationBody,
+    body: ImplementationBody,
+    fragment: LowerableOperationFragment | None,
     scalar_type: ScalarTypeDescriptor | None,
     operation: ComparisonOperationDescriptor | None,
 ) -> tuple[Diagnostic, ...]:
@@ -362,7 +417,18 @@ def _unsupported_comparison_diagnostics(
             )
         )
 
-    if operation is not None and body.operation != operation.source_body_operation:
+    if fragment is None:
+        diagnostics.append(
+            _unsupported_body_shape_diagnostic(
+                body,
+                _SUPPORTED_COMPARISON_PARAMETERS,
+                selected.primitive.name,
+            )
+        )
+    elif (
+        operation is not None
+        and fragment.operation != operation.source_body_operation
+    ):
         diagnostics.append(
             Diagnostic(
                 severity="error",
@@ -370,25 +436,22 @@ def _unsupported_comparison_diagnostics(
                 message=(
                     f"primitive operation {selected.primitive.name!r} expects "
                     f"body operation {operation.source_body_operation!r}; got "
-                    f"{body.operation!r}"
+                    f"{fragment.operation!r}"
                 ),
-                location=body.source,
+                location=fragment.source,
             )
         )
 
-    if (
-        body.left_parameter != _SUPPORTED_COMPARISON_PARAMETERS[0]
-        or body.right_parameter != _SUPPORTED_COMPARISON_PARAMETERS[1]
-    ):
+    if fragment is not None and fragment.arguments != _SUPPORTED_COMPARISON_PARAMETERS:
         diagnostics.append(
             Diagnostic(
                 severity="error",
                 code="TSL-LOWER-UNSUPPORTED-BODY",
                 message=(
                     "implementation body cannot be lowered; expected exactly "
-                    f"'{body.operation}(left, right)'"
+                    f"'{fragment.operation}(left, right)'"
                 ),
-                location=body.source,
+                location=fragment.source,
             )
         )
 
@@ -397,7 +460,8 @@ def _unsupported_comparison_diagnostics(
 
 def _unsupported_unary_diagnostics(
     selected: SelectedImplementation,
-    body: UnaryOperationBody,
+    body: ImplementationBody,
+    fragment: LowerableOperationFragment | None,
     scalar_type: ScalarTypeDescriptor | None,
     operation: UnaryOperationDescriptor | None,
 ) -> tuple[Diagnostic, ...]:
@@ -492,7 +556,18 @@ def _unsupported_unary_diagnostics(
             )
         )
 
-    if operation is not None and body.operation != operation.source_body_operation:
+    if fragment is None:
+        diagnostics.append(
+            _unsupported_body_shape_diagnostic(
+                body,
+                _SUPPORTED_UNARY_PARAMETERS,
+                selected.primitive.name,
+            )
+        )
+    elif (
+        operation is not None
+        and fragment.operation != operation.source_body_operation
+    ):
         diagnostics.append(
             Diagnostic(
                 severity="error",
@@ -500,31 +575,64 @@ def _unsupported_unary_diagnostics(
                 message=(
                     f"primitive operation {selected.primitive.name!r} expects "
                     f"body operation {operation.source_body_operation!r}; got "
-                    f"{body.operation!r}"
+                    f"{fragment.operation!r}"
                 ),
-                location=body.source,
+                location=fragment.source,
             )
         )
 
-    if body.value_parameter != _SUPPORTED_UNARY_PARAMETERS[0]:
+    if fragment is not None and fragment.arguments != _SUPPORTED_UNARY_PARAMETERS:
         diagnostics.append(
             Diagnostic(
                 severity="error",
                 code="TSL-LOWER-UNSUPPORTED-BODY",
                 message=(
                     "implementation body cannot be lowered; expected exactly "
-                    f"'{body.operation}(value)'"
+                    f"'{fragment.operation}(value)'"
                 ),
-                location=body.source,
+                location=fragment.source,
             )
         )
 
     return tuple(diagnostics)
 
 
+def _operation_fragment_from_body(
+    body: ImplementationBody,
+) -> LowerableOperationFragment | None:
+    if len(body.lines) != 1:
+        return None
+    line = body.lines[0]
+    if not isinstance(line, SegmentedLine):
+        return None
+    if len(line.segments) != 1:
+        return None
+    segment = line.segments[0]
+    if not isinstance(segment, LowerableOperationFragment):
+        return None
+    return segment
+
+
+def _unsupported_body_shape_diagnostic(
+    body: ImplementationBody,
+    expected_arguments: tuple[str, ...],
+    operation_id: str,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-LOWER-UNSUPPORTED-BODY",
+        message=(
+            "implementation body cannot be lowered; expected exactly one "
+            "segmented line containing "
+            f"'{operation_id}({', '.join(expected_arguments)})'"
+        ),
+        location=body.source,
+    )
+
+
 def _lower_binary_function(
     selected: SelectedImplementation,
-    body: BinaryOperationBody,
+    fragment: LowerableOperationFragment,
     scalar_type: ScalarTypeDescriptor,
     operation: BinaryOperationDescriptor,
 ) -> LoweredFunction:
@@ -534,10 +642,10 @@ def _lower_binary_function(
             return_statement=LoweredReturnStatement(
                 expression=LoweredBinaryOperationExpression(
                     operation=operation,
-                    left=LoweredParameterRef(body.left_parameter),
-                    right=LoweredParameterRef(body.right_parameter),
+                    left=LoweredParameterRef(fragment.arguments[0]),
+                    right=LoweredParameterRef(fragment.arguments[1]),
                 ),
-                source=body.source,
+                source=fragment.source,
             ),
         ),
         source=selected.implementation.source,
@@ -546,7 +654,7 @@ def _lower_binary_function(
 
 def _lower_comparison_function(
     selected: SelectedImplementation,
-    body: ComparisonOperationBody,
+    fragment: LowerableOperationFragment,
     scalar_type: ScalarTypeDescriptor,
     operation: ComparisonOperationDescriptor,
 ) -> LoweredFunction:
@@ -560,10 +668,10 @@ def _lower_comparison_function(
             return_statement=LoweredReturnStatement(
                 expression=LoweredComparisonOperationExpression(
                     operation=operation,
-                    left=LoweredParameterRef(body.left_parameter),
-                    right=LoweredParameterRef(body.right_parameter),
+                    left=LoweredParameterRef(fragment.arguments[0]),
+                    right=LoweredParameterRef(fragment.arguments[1]),
                 ),
-                source=body.source,
+                source=fragment.source,
             ),
         ),
         source=selected.implementation.source,
@@ -572,7 +680,7 @@ def _lower_comparison_function(
 
 def _lower_unary_function(
     selected: SelectedImplementation,
-    body: UnaryOperationBody,
+    fragment: LowerableOperationFragment,
     scalar_type: ScalarTypeDescriptor,
     operation: UnaryOperationDescriptor,
 ) -> LoweredFunction:
@@ -582,9 +690,9 @@ def _lower_unary_function(
             return_statement=LoweredReturnStatement(
                 expression=LoweredUnaryOperationExpression(
                     operation=operation,
-                    value=LoweredParameterRef(body.value_parameter),
+                    value=LoweredParameterRef(fragment.arguments[0]),
                 ),
-                source=body.source,
+                source=fragment.source,
             ),
         ),
         source=selected.implementation.source,

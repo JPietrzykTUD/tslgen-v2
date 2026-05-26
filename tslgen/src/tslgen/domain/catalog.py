@@ -6,36 +6,54 @@ from tslgen.core.diagnostics import SourceLocation
 
 
 @dataclass(frozen=True, slots=True)
-class BinaryOperationBody:
+class LowerableOperationFragment:
     operation: str
-    left_parameter: str
-    right_parameter: str
+    arguments: tuple[str, ...]
     source: SourceLocation
 
 
 @dataclass(frozen=True, slots=True)
-class UnaryOperationBody:
-    operation: str
-    value_parameter: str
+class LowerableDirective:
+    name: str
+    arguments: tuple[str, ...]
     source: SourceLocation
 
 
 @dataclass(frozen=True, slots=True)
-class ComparisonOperationBody:
-    operation: str
-    left_parameter: str
-    right_parameter: str
+class RawStringToken:
+    text: str
     source: SourceLocation
 
 
-OperationBody = BinaryOperationBody | UnaryOperationBody | ComparisonOperationBody
+BodySegment = RawStringToken | LowerableOperationFragment | LowerableDirective
+
+
+@dataclass(frozen=True, slots=True)
+class RawStringLine:
+    text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class SegmentedLine:
+    segments: tuple[BodySegment, ...]
+    source: SourceLocation
+
+
+BodyLine = RawStringLine | SegmentedLine
+
+
+@dataclass(frozen=True, slots=True)
+class ImplementationBody:
+    lines: tuple[BodyLine, ...]
+    source: SourceLocation
 
 
 @dataclass(frozen=True, slots=True)
 class Implementation:
     extension: str
     type_tag: str
-    body: OperationBody
+    body: ImplementationBody
     source: SourceLocation
 
 

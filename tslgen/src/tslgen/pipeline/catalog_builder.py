@@ -4,14 +4,28 @@ from dataclasses import dataclass
 
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.domain.catalog import (
-    BinaryOperationBody,
     Catalog,
-    ComparisonOperationBody,
+    ImplementationBody,
     Implementation,
+    LowerableDirective,
+    LowerableOperationFragment,
     Primitive,
-    UnaryOperationBody,
+    RawStringLine,
+    RawStringToken,
+    SegmentedLine,
 )
-from tslgen.syntax.ast import ParsedDocument, ParsedImplementation, ParsedPrimitive
+from tslgen.syntax.ast import (
+    ParsedBodySegment,
+    ParsedDocument,
+    ParsedImplementation,
+    ParsedImplementationBody,
+    ParsedLowerableDirective,
+    ParsedLowerableOperationFragment,
+    ParsedPrimitive,
+    ParsedRawStringLine,
+    ParsedRawStringToken,
+    ParsedSegmentedLine,
+)
 
 M107_SIGNATURE = "v:=(v,v)"
 M107_PARAMETERS = ("left", "right")
@@ -192,18 +206,32 @@ class CatalogBuilder:
                 )
             )
 
-        body_text = _body_text(parsed)
-        expected_body = f"{parsed.body.operation}({', '.join(shape.parameters)})"
-        if parsed.body.arguments != shape.parameters:
+        body_fragment = _single_operation_fragment(parsed.body)
+        expected_body = _expected_body_text(body_fragment, shape.parameters)
+        if body_fragment is None:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
                     code="TSL-CATALOG-UNSUPPORTED-BODY",
                     message=(
-                        f"implementation body {body_text!r} is unsupported; "
-                        f"expected exactly {expected_body!r}"
+                        "implementation body is unsupported; expected exactly "
+                        "one segmented line containing one lowerable operation "
+                        "fragment"
                     ),
                     location=parsed.body.source,
+                )
+            )
+        elif body_fragment.arguments != shape.parameters:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-CATALOG-UNSUPPORTED-BODY",
+                    message=(
+                        f"implementation body {_body_text(body_fragment)!r} "
+                        "is unsupported; "
+                        f"expected exactly {expected_body!r}"
+                    ),
+                    location=body_fragment.source,
                 )
             )
 
@@ -215,8 +243,16 @@ class CatalogBuilder:
         )
 
 
-def _body_text(parsed: ParsedImplementation) -> str:
-    return f"{parsed.body.operation}({', '.join(parsed.body.arguments)})"
+def _body_text(fragment: ParsedLowerableOperationFragment) -> str:
+    return f"{fragment.operation}({', '.join(fragment.arguments)})"
+
+
+def _expected_body_text(
+    fragment: ParsedLowerableOperationFragment | None,
+    parameters: tuple[str, ...],
+) -> str:
+    operation = fragment.operation if fragment is not None else "<operation>"
+    return f"{operation}({', '.join(parameters)})"
 
 
 def _duplicate_primitive_name_diagnostics(
@@ -278,36 +314,63 @@ def _duplicate_implementation_key_diagnostics(
 def _build_body(
     parsed: ParsedImplementation,
     shape: _SourceShape,
-) -> BinaryOperationBody | ComparisonOperationBody | UnaryOperationBody:
-    if shape.template == M118_TEMPLATE:
-        return UnaryOperationBody(
-            operation=parsed.body.operation,
-            value_parameter=parsed.body.arguments[0]
-            if len(parsed.body.arguments) > 0
-            else "",
-            source=parsed.body.source,
-        )
-    if shape.template == M121_TEMPLATE:
-        return ComparisonOperationBody(
-            operation=parsed.body.operation,
-            left_parameter=parsed.body.arguments[0]
-            if len(parsed.body.arguments) > 0
-            else "",
-            right_parameter=parsed.body.arguments[1]
-            if len(parsed.body.arguments) > 1
-            else "",
-            source=parsed.body.source,
-        )
-    return BinaryOperationBody(
-        operation=parsed.body.operation,
-        left_parameter=parsed.body.arguments[0]
-        if len(parsed.body.arguments) > 0
-        else "",
-        right_parameter=parsed.body.arguments[1]
-        if len(parsed.body.arguments) > 1
-        else "",
-        source=parsed.body.source,
+) -> ImplementationBody:
+    del shape
+    return _build_implementation_body(parsed.body)
+
+
+def _single_operation_fragment(
+    body: ParsedImplementationBody,
+) -> ParsedLowerableOperationFragment | None:
+    if len(body.lines) != 1:
+        return None
+    line = body.lines[0]
+    if not isinstance(line, ParsedSegmentedLine):
+        return None
+    if len(line.segments) != 1:
+        return None
+    segment = line.segments[0]
+    if not isinstance(segment, ParsedLowerableOperationFragment):
+        return None
+    return segment
+
+
+def _build_implementation_body(body: ParsedImplementationBody) -> ImplementationBody:
+    return ImplementationBody(
+        lines=tuple(_build_body_line(line) for line in body.lines),
+        source=body.source,
     )
+
+
+def _build_body_line(line: ParsedRawStringLine | ParsedSegmentedLine) -> (
+    RawStringLine | SegmentedLine
+):
+    if isinstance(line, ParsedRawStringLine):
+        return RawStringLine(text=line.text, source=line.source)
+    return SegmentedLine(
+        segments=tuple(_build_body_segment(segment) for segment in line.segments),
+        source=line.source,
+    )
+
+
+def _build_body_segment(segment: ParsedBodySegment) -> (
+    RawStringToken | LowerableOperationFragment | LowerableDirective
+):
+    if isinstance(segment, ParsedLowerableOperationFragment):
+        return LowerableOperationFragment(
+            operation=segment.operation,
+            arguments=segment.arguments,
+            source=segment.source,
+        )
+    if isinstance(segment, ParsedLowerableDirective):
+        return LowerableDirective(
+            name=segment.name,
+            arguments=segment.arguments,
+            source=segment.source,
+        )
+    if isinstance(segment, ParsedRawStringToken):
+        return RawStringToken(text=segment.text, source=segment.source)
+    raise TypeError(f"unsupported parsed body segment {segment!r}")
 
 
 def _shape_for_signature(signature: str) -> _SourceShape | None:

@@ -301,11 +301,12 @@ prim<v:=(v)> neg(value):
     body neg(value)
 ```
 
-Catalog construction continues to preserve the unary body as a typed
-`UnaryOperationBody` with the exact `value` argument. The lowerer owns the
-backend-neutral `neg` unary descriptor and lowers it only for the currently
-supported signed integer and floating scalar descriptors `si32`, `f32`, and
-`f64`. Unsigned scalar descriptors such as `ui32` reach lowering and fail with
+Catalog construction continues to preserve the unary body as an exact
+one-line implementation body whose single lowerable operation fragment carries
+the `value` argument. The lowerer owns the backend-neutral `neg` unary
+descriptor and lowers it only for the currently supported signed integer and
+floating scalar descriptors `si32`, `f32`, and `f64`. Unsigned scalar
+descriptors such as `ui32` reach lowering and fail with
 `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` at the implementation source location.
 
 The `neg` descriptor does not define C++ or Rust spelling, unsigned-negation
@@ -352,11 +353,11 @@ prim<m:=(v,v)> equal(left, right):
     body equal(left, right)
 ```
 
-Catalog construction preserves this as a typed `ComparisonOperationBody` with
-the exact `left, right` body arguments rather than adapting it to the binary
-arithmetic/bitwise body model. Nearby compare body forms with missing,
-renamed, reordered, or extra body arguments are diagnostic boundaries and are
-not repaired.
+Catalog construction preserves this as an exact one-line implementation body
+whose single lowerable operation fragment carries the `left, right` arguments
+rather than adapting it to the binary arithmetic/bitwise body model. Nearby
+compare body forms with missing, renamed, reordered, or extra body arguments
+are diagnostic boundaries and are not repaired.
 
 The lowerer owns the backend-neutral comparison descriptor table and accepts
 only `equal`. It lowers accepted `equal(left, right)` bodies for the currently
@@ -386,10 +387,11 @@ prim<m:=(v,v)> nequal(left, right):
     body nequal(left, right)
 ```
 
-Catalog construction continues to preserve accepted comparison bodies as typed
-`ComparisonOperationBody` values with exactly the `left, right` body arguments.
-Nearby body forms such as `equal(value, right)`, missing arguments, reordered
-arguments, or extra arguments remain diagnostic boundaries and are not repaired.
+Catalog construction continues to preserve accepted comparison bodies as exact
+one-line implementation bodies with one lowerable operation fragment and
+exactly the `left, right` body arguments. Nearby body forms such as
+`equal(value, right)`, missing arguments, reordered arguments, or extra
+arguments remain diagnostic boundaries and are not repaired.
 
 The lowerer owns the backend-neutral comparison descriptor table and lowers the
 accepted comparison family for the currently supported scalar input
@@ -467,6 +469,27 @@ This slice does not add target discovery, generate-all behavior, extension
 fallback, type groups, implementation ranking, broad TSL parsing, new operation
 or scalar type semantics, runtime `tsldata/` semantic reads, source repair, or
 renderer-side inference.
+
+### M126 Ordered Implementation Body Line Boundary
+
+Milestone 126 keeps the accepted source syntax unchanged but changes the body
+model underneath it. Each accepted `body <operation>(...)` line is promoted to
+an `ImplementationBody` containing one `SegmentedLine` with one
+`LowerableOperationFragment`. The fragment carries the operation name,
+argument names, and source location used by catalog diagnostics and lowering.
+
+Lowering consumes the typed body-line and segment values. It accepts only the
+current one-line / one-fragment body shape for the already supported binary,
+unary, and comparison templates. Malformed containers, raw-only body lines,
+multi-segment lines, missing fragments, or unsupported argument shapes produce
+structured diagnostics rather than raw passthrough, source repair, renderer
+inference, or TSIL parsing.
+
+M126 does not add new accepted source syntax. It does not parse TSIL strings,
+`emit_return(...)`, helper calls, primitive calls, intrinsics, casts,
+assignments, array access, loops, multiline bodies, raw/lowerable mixed TSIL
+lines, backend manifests, target discovery, runtime `tsldata/` semantic reads,
+or backend-owned operator spellings in lowering.
 
 ## Catalog Behavior
 

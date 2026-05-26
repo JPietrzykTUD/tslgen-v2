@@ -16592,10 +16592,9 @@ exit 0 with no output.
 
 Status:
 
-Planned as the next clean restart product-code milestone after accepted M125.
-This milestone applies ADR-036 before adding more TSIL source forms. It
-consolidates implementation bodies toward ordered source-owned body lines with
-optional lowerable segments. The first slice preserves the current exact
+Accepted. This milestone applied ADR-036 before adding more TSIL source forms.
+It consolidated implementation bodies toward ordered source-owned body lines
+with optional lowerable segments. The first slice preserved the current exact
 synthetic `body ...` fixture behavior by representing it as a one-line body
 containing one lowerable operation fragment.
 
@@ -16703,3 +16702,177 @@ Review notes:
   discovery, or source repair.
 - Reviewers should require existing body behavior to flow through typed
   body-line/segment values before lowering/backend emission.
+
+Review result:
+
+- Parser-owned body values now represent the existing exact
+  `body <operation>(...)` line as `ParsedImplementationBody` containing one
+  `ParsedSegmentedLine` with one `ParsedLowerableOperationFragment`.
+- Domain `Implementation` values now carry `ImplementationBody` with ordered
+  `RawStringLine` / `SegmentedLine` body lines and typed body segments.
+- Catalog construction promotes accepted exact body lines into typed
+  lowerable operation fragments and rejects malformed body-line/segment
+  containers with `TSL-CATALOG-UNSUPPORTED-BODY`.
+- Lowering consumes typed `ImplementationBody` values and accepts only the
+  one-line / one-fragment shape for the already supported binary, unary, and
+  comparison templates. It rejects raw-only or malformed containers with
+  `TSL-LOWER-UNSUPPORTED-BODY`.
+- M107-M125 source syntax, selected-implementation behavior, unselected-body
+  behavior, bootstrap operation descriptors, backend-owned spellings,
+  deterministic ordering, and representative artifact bytes remained stable.
+
+Internal review verdict:
+
+`Accept With Follow-Ups`. Architecture returned `Accept With Follow-Ups` with
+documentation coherence as the only follow-up. Boundary and validation audits
+returned `Accept`. Documentation audit initially returned `Needs Revision`
+because `behavioral-spec.md` still named the old per-operation body classes;
+a focused docs revision updated `behavioral-spec.md` and `domain-model.md`,
+and focused documentation re-review returned `Accept`.
+
+Validation result:
+
+```bash
+git diff --check
+python -B -c "from tslgen import Generator, Target, generate_from_paths"
+python -B -m py_compile tslgen/src/tslgen/syntax/parser.py tslgen/src/tslgen/syntax/ast.py tslgen/src/tslgen/domain/catalog.py tslgen/src/tslgen/pipeline/catalog_builder.py tslgen/src/tslgen/analysis/selection.py tslgen/src/tslgen/lowering/model.py tslgen/src/tslgen/lowering/lowerer.py tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The public API import
+command returned exit 0 with no output. The py-compile command returned exit 0
+with no output. The targeted clean-package pytest command returned exit 0 with
+`116 passed in 12.79s`. Validation-created `__pycache__` directories were
+removed, and the final `find tslgen -type d -name __pycache__ -print` returned
+exit 0 with no output.
+
+### Milestone 127: TSIL Corpus Surface Inventory And Lowering Classification Slice
+
+Status:
+
+Planned as the next clean restart milestone after accepted M126. This
+milestone corrects the next-step direction after the body-model boundary:
+before adding more lowerable body fragments, inventory the actual TSIL surface
+used by the current `tsldata/**/*.tsl` corpus and classify which construct
+families are raw text, generator directives, backend-control directives,
+primitive-call semantics, backend-owned operations, helper calls, or deferred
+language forms.
+
+Goal:
+
+Create a corpus-grounded inventory from all current `tsldata/**/*.tsl` files,
+not from one representative source file and not from synthetic clean-restart
+fixture syntax. The inventory should make clear that primitive-looking calls
+such as `sub(...)` are not a real accepted TSIL surface form unless they occur
+through documented TSIL constructs such as:
+
+```text
+emit_return(left + right);
+emit_return(call<primitive=sub>(left, right));
+result[i] = details::arith_mul(data[i], factor);
+if<generation>(...) { ... } else<generation> { ... }
+if<compile>(...) { ... } else<compile> { ... }
+if<runtime>(...) { ... } else<runtime> { ... }
+```
+
+The result should recommend the next implementation milestone as one real,
+documented TSIL construct family rather than another synthetic
+`body <operation>(...)` refinement.
+
+Scope:
+
+- Inspect all current `tsldata/**/*.tsl` files as the ground-truth corpus for
+  source-body surface evidence. `frozen/` may be cited only as grammar or
+  historical evidence, not as the corpus being inventoried.
+- Create or update a focused redesign document, preferably
+  `docs/redesign/tsil-surface-inventory.md`, that records the observed TSIL
+  construct families with representative current `tsldata/` file references.
+- Classify at least these buckets:
+  - TSIL payload envelope forms: inline and multiline `tsil` payloads.
+  - Return/directive forms such as `emit_return(...)`.
+  - Primitive-call forms such as `call<primitive=...>(...)` and
+    `call<primitive=@self[...]>(...)`.
+  - Generation-time control forms such as `if<generation>`,
+    `else<generation>`, generation loops, and generation `type<...>` /
+    `value<...>` queries.
+  - Backend-control forms, explicitly checking `if<compile>`,
+    `else<compile>`, `if<runtime>`, and `else<runtime>` even if the current
+    corpus count is zero.
+  - Backend/generation query forms such as `type<backend>(...)`,
+    `value<backend>(...)`, `type<generation>(...)`, and
+    `value<generation>(...)`.
+  - Backend intrinsic forms such as `intrin_compose<...>(...)` and
+    `intrin<...>(...)`.
+  - Helper-call forms such as `details::arith_add`, `details::arith_mul`,
+    `details::arith_rem`, `details::popcount`, `details::clz`,
+    `details::ctz`, and `details::mask_test`.
+  - Raw target-language-like syntax around TSIL islands, including
+    assignments, declarations, array indexing, operators, loops, and braces.
+- For each bucket, state whether the likely generator treatment is `raw`,
+  `lowerable directive`, `lowerable semantic operation`, `backend-owned`,
+  `helper substitution candidate`, or `defer/diagnose`.
+- Recommend exactly one next M128 implementation milestone grounded in the
+  inventory. Prefer a small construct family that moves the source-to-artifact
+  path toward real `.tsl` bodies without requiring a complete TSIL compiler.
+- Preserve M126 as a body-line/segment container boundary, but do not treat
+  the synthetic `body <operation>(...)` fixture form as evidence that
+  `sub(...)`, `add(...)`, or similar primitive-looking calls are real TSIL
+  constructs.
+
+Out of scope:
+
+- Implementing production parser, catalog, selection, lowering, backend, CLI,
+  writer, or generated-output code.
+- Accepting new source syntax in the clean generator.
+- Lowering `emit_return(...)`, `call<primitive=...>`, helpers, intrinsics,
+  assignments, array access, loops, declarations, backend-control forms, or
+  raw target-language text in this milestone.
+- Loading operation semantics, compatibility rules, or backend spellings from
+  `tsldata/`, backend manifests, YAML, `frozen`, `tslgenold`, plugins, or
+  environment configuration at runtime.
+- Treating current `tsldata/` corpus inspection as a runtime dependency.
+- Building a complete TSIL grammar/parser, semantic validator, source repair
+  mechanism, broad expression parser, or target-language compiler.
+- Introducing a registry, dispatcher, callback map, plugin system, hidden
+  backfeed, fixpoint mechanism, broad operation framework, or new lowering IR
+  category/request/result/worklist family.
+
+Accepted outputs:
+
+- A reviewed TSIL surface inventory document grounded in all current
+  `tsldata/**/*.tsl` files.
+- The inventory explicitly records generation-control and backend-control
+  buckets, including `if<compile>`, `else<compile>`, `if<runtime>`, and
+  `else<runtime>`.
+- The inventory distinguishes real TSIL constructs from the clean-restart
+  synthetic `body <operation>(...)` fixture syntax.
+- The next concrete M128 prompt is an implementation milestone selected from
+  one real, documented TSIL construct family.
+- No production generator behavior changes in this milestone.
+
+Validation:
+
+```bash
+git diff --check
+rg --files tsldata | rg "\\.tsl$" | sort
+rg -n "tsil|emit_return|call<primitive=|intrin|intrin_compose|details::|if<generation>|else<generation>|if<compile>|else<compile>|if<runtime>|else<runtime>|loop<|var<|let<|type<generation>|type<backend>|value<generation>|value<backend>" tsldata -g "*.tsl"
+find tslgen -type d -name __pycache__ -print
+```
+
+Do not run the old `tslgenold` validation profile as proof of the clean
+product slice. This is a documentation/evidence milestone; if no Python code
+is executed, the final cache check should normally return no output.
+
+Review notes:
+
+- Reviewers should require M127 to remain a corpus inventory and lowering
+  classification milestone, not a product-code parser/lowering milestone.
+- Reviewers should reject any inventory based on a single file or synthetic
+  fixture forms instead of all current `tsldata/**/*.tsl` files.
+- Reviewers should require backend-control forms `if<compile>`,
+  `else<compile>`, `if<runtime>`, and `else<runtime>` to be explicitly checked
+  and recorded even if absent from the current corpus.
+- Reviewers should reject any recommendation that treats `sub(...)`,
+  `add(...)`, or similar primitive-looking calls as real TSIL constructs
+  unless the inventory shows that exact surface form in `tsldata/`.

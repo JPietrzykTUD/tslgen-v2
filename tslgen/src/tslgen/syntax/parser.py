@@ -5,11 +5,13 @@ import re
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.io.sources import SourceDocument
 from tslgen.syntax.ast import (
-    ParsedBody,
     ParsedDocument,
     ParsedImplementation,
+    ParsedImplementationBody,
+    ParsedLowerableOperationFragment,
     ParsedPrimitive,
     ParseResult,
+    ParsedSegmentedLine,
 )
 
 _BINARY_HEADER_PATTERN = re.compile(
@@ -138,10 +140,21 @@ class TslParser:
                 )
                 return None
 
-            parsed_body = ParsedBody(
-                operation=body.group("operation"),
-                arguments=arguments,
-                source=SourceLocation(document.path, body_line_no, 5),
+            body_source = SourceLocation(document.path, body_line_no, 5)
+            parsed_body = ParsedImplementationBody(
+                lines=(
+                    ParsedSegmentedLine(
+                        segments=(
+                            ParsedLowerableOperationFragment(
+                                operation=body.group("operation"),
+                                arguments=arguments,
+                                source=body_source,
+                            ),
+                        ),
+                        source=body_source,
+                    ),
+                ),
+                source=body_source,
             )
             parsed_implementations.append(
                 ParsedImplementation(
