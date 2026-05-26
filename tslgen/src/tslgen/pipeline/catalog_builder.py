@@ -14,6 +14,7 @@ from tslgen.domain.catalog import (
     RawStringToken,
     SegmentedLine,
 )
+from tslgen.pipeline._tsil_directives import classify_tsil_directive_line
 from tslgen.syntax.ast import (
     PARSED_TSIL_BODY_ENVELOPE,
     ParsedBodySegment,
@@ -38,8 +39,6 @@ M118_SIGNATURE = "v:=(v)"
 M118_PARAMETERS = ("value",)
 M118_TEMPLATE = "unary"
 SUPPORTED_EXTENSION = "scalar"
-_EMIT_RETURN_DIRECTIVE = "emit_return"
-_EMIT_RETURN_PREFIX = f"{_EMIT_RETURN_DIRECTIVE}("
 
 
 @dataclass(frozen=True, slots=True)
@@ -368,7 +367,7 @@ def _build_body_line(
 ) -> RawStringLine | SegmentedLine:
     if isinstance(line, ParsedRawStringLine):
         if classify_tsil_directives:
-            directive_line = _emit_return_directive_line(line)
+            directive_line = classify_tsil_directive_line(line)
             if directive_line is not None:
                 return directive_line
         return RawStringLine(text=line.text, source=line.source)
@@ -396,52 +395,6 @@ def _build_body_segment(segment: ParsedBodySegment) -> (
     if isinstance(segment, ParsedRawStringToken):
         return RawStringToken(text=segment.text, source=segment.source)
     raise TypeError(f"unsupported parsed body segment {segment!r}")
-
-
-def _emit_return_directive_line(line: ParsedRawStringLine) -> SegmentedLine | None:
-    stripped = line.text.strip()
-    payload = _emit_return_payload(stripped)
-    if payload is None:
-        return None
-
-    leading_columns = len(line.text) - len(line.text.lstrip(" "))
-    source = SourceLocation(
-        line.source.path,
-        line.source.line,
-        line.source.column + leading_columns,
-    )
-    return SegmentedLine(
-        segments=(
-            LowerableDirective(
-                name=_EMIT_RETURN_DIRECTIVE,
-                arguments=(payload,),
-                source=source,
-            ),
-        ),
-        source=source,
-    )
-
-
-def _emit_return_payload(stripped: str) -> str | None:
-    if not stripped.startswith(_EMIT_RETURN_PREFIX):
-        return None
-
-    payload_start = len(_EMIT_RETURN_PREFIX)
-    depth = 1
-    for index in range(payload_start, len(stripped)):
-        char = stripped[index]
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-            if depth == 0:
-                payload = stripped[payload_start:index]
-                if not payload:
-                    return None
-                if stripped[index + 1 :].strip() == ";":
-                    return payload
-                return None
-    return None
 
 
 def _shape_for_signature(signature: str) -> _SourceShape | None:

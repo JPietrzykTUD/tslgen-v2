@@ -22,6 +22,7 @@ from tslgen.domain.catalog import (
     LowerableOperationFragment,
     Primitive,
     RawStringLine,
+    RawStringToken,
     SegmentedLine,
 )
 from tslgen.io.sources import SourceDocument
@@ -2680,7 +2681,7 @@ def test_m128_catalog_accepts_raw_tsil_payload_body(
             (
                 "prim<v:=(v,v)> add(left, right):",
                 "  implementation scalar si32:",
-                '    tsil "var<init_register>(result)"',
+                '    tsil "call<primitive=set_zero>()"',
             )
         ),
     )
@@ -2695,7 +2696,7 @@ def test_m128_catalog_accepts_raw_tsil_payload_body(
     assert body == ImplementationBody(
         lines=(
             RawStringLine(
-                text="var<init_register>(result)",
+                text="call<primitive=set_zero>()",
                 source=SourceLocation(source.path, 3, 11),
             ),
         ),
@@ -2712,7 +2713,7 @@ def test_m128_selected_raw_tsil_body_is_unsupported_lowering_boundary(
             (
                 "prim<v:=(v,v)> add(left, right):",
                 "  implementation scalar si32:",
-                '    tsil "var<init_register>(result)"',
+                '    tsil "call<primitive=set_zero>()"',
             )
         ),
         encoding="utf-8",
@@ -2794,7 +2795,7 @@ def test_m129_catalog_classifies_multiline_indented_emit_return_directive(
                 "prim<v:=(v,v)> add(left, right):",
                 "  implementation scalar si32:",
                 '    tsil """',
-                "      var<init_register>(result)",
+                "      left + right;",
                 "      emit_return(result);",
                 '    """',
             )
@@ -2810,7 +2811,7 @@ def test_m129_catalog_classifies_multiline_indented_emit_return_directive(
     body = catalog_result.catalog.primitives[0].implementations[0].body
     assert body.lines == (
         RawStringLine(
-            text="      var<init_register>(result)",
+            text="      left + right;",
             source=SourceLocation(source.path, 4, 1),
         ),
         SegmentedLine(
@@ -2852,6 +2853,347 @@ def test_m129_catalog_preserves_nested_emit_return_payload(
     assert directive.name == "emit_return"
     assert directive.arguments == ("call<primitive=add>(left, right)",)
     assert directive.source == SourceLocation(source.path, 3, 11)
+
+
+def test_m129_catalog_accepts_emit_return_space_before_semicolon(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_emit_return_spaced_semicolon.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(result) ;"',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    directive = _body_directive(body)
+    assert directive.name == "emit_return"
+    assert directive.arguments == ("result",)
+    assert directive.source == SourceLocation(source.path, 3, 11)
+
+
+def test_m130_catalog_classifies_var_directive_without_semicolon(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_var_directive.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "var<init_register>(result)"',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    directive = _body_directive(body)
+    assert directive.name == "var"
+    assert directive.arguments == ("init_register", "result")
+    assert directive.source == SourceLocation(source.path, 3, 11)
+
+
+def test_m130_catalog_preserves_var_payload_and_semicolon_suffix(
+    tmp_path: Path,
+) -> None:
+    directive_text = "var<const_infer>(ua, call<primitive=reinterpret[Vec]>(left))"
+    source = _source_document(
+        tmp_path,
+        "tiny_add_var_payload_directive.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                f'    tsil "{directive_text};"',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    line = _body_segmented_line(body, 0)
+    assert line.segments == (
+        LowerableDirective(
+            name="var",
+            arguments=(
+                "const_infer",
+                "ua, call<primitive=reinterpret[Vec]>(left)",
+            ),
+            source=SourceLocation(source.path, 3, 11),
+        ),
+        RawStringToken(
+            text=";",
+            source=SourceLocation(source.path, 3, 11 + len(directive_text)),
+        ),
+    )
+
+
+def test_m130_catalog_preserves_helper_payload_opaque(
+    tmp_path: Path,
+) -> None:
+    directive_text = "var<const_infer>(tmp, details::arith_mul(left, right))"
+    source = _source_document(
+        tmp_path,
+        "tiny_add_var_helper_payload_directive.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                f'    tsil "{directive_text};"',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    line = _body_segmented_line(body, 0)
+    assert line.segments[0] == LowerableDirective(
+        name="var",
+        arguments=("const_infer", "tmp, details::arith_mul(left, right)"),
+        source=SourceLocation(source.path, 3, 11),
+    )
+    assert line.segments[1] == RawStringToken(
+        text=";",
+        source=SourceLocation(source.path, 3, 11 + len(directive_text)),
+    )
+
+
+def test_m130_catalog_classifies_directive_headers_with_raw_tokens(
+    tmp_path: Path,
+) -> None:
+    let_text = (
+        "let<type>(UnsignedT, "
+        "type<generation>(base::unsigned_of(type<generation>(base::in))))"
+    )
+    loop_range_text = "loop<range>(i, 0, value<generation>(vector::length), 1)"
+    if_generation_text = (
+        "if<generation>(value<generation>(primitive::attribute(aligned)))"
+    )
+    if_compile_text = "if<compile>(!PreserveSign)"
+    switch_text = "switch<compile>(scale)"
+    source = _source_document(
+        tmp_path,
+        "tiny_add_directive_headers.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil """',
+                f"      {let_text}",
+                "      loop<unroll>(value<generation>(vector::length))",
+                f"      {loop_range_text} {{",
+                f"      {if_generation_text} {{",
+                f"      {if_compile_text} {{",
+                f"      {switch_text} {{",
+                "      } else<compile> {",
+                '    """',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    assert len(body.lines) == 7
+
+    let_directive = _single_directive_at(body, 0)
+    assert let_directive.name == "let"
+    assert let_directive.arguments == (
+        "type",
+        "UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in)))",
+    )
+    assert let_directive.source == SourceLocation(source.path, 4, 7)
+
+    loop_unroll = _single_directive_at(body, 1)
+    assert loop_unroll.name == "loop"
+    assert loop_unroll.arguments == (
+        "unroll",
+        "value<generation>(vector::length)",
+    )
+    assert loop_unroll.source == SourceLocation(source.path, 5, 7)
+
+    loop_range = _body_segmented_line(body, 2)
+    assert loop_range.segments == (
+        LowerableDirective(
+            name="loop",
+            arguments=("range", "i, 0, value<generation>(vector::length), 1"),
+            source=SourceLocation(source.path, 6, 7),
+        ),
+        RawStringToken(
+            text=" {",
+            source=SourceLocation(source.path, 6, 7 + len(loop_range_text)),
+        ),
+    )
+
+    if_generation = _body_segmented_line(body, 3)
+    assert if_generation.segments == (
+        LowerableDirective(
+            name="if",
+            arguments=(
+                "generation",
+                "value<generation>(primitive::attribute(aligned))",
+            ),
+            source=SourceLocation(source.path, 7, 7),
+        ),
+        RawStringToken(
+            text=" {",
+            source=SourceLocation(source.path, 7, 7 + len(if_generation_text)),
+        ),
+    )
+
+    if_compile = _body_segmented_line(body, 4)
+    assert if_compile.segments == (
+        LowerableDirective(
+            name="if",
+            arguments=("compile", "!PreserveSign"),
+            source=SourceLocation(source.path, 8, 7),
+        ),
+        RawStringToken(
+            text=" {",
+            source=SourceLocation(source.path, 8, 7 + len(if_compile_text)),
+        ),
+    )
+
+    switch = _body_segmented_line(body, 5)
+    assert switch.segments == (
+        LowerableDirective(
+            name="switch",
+            arguments=("compile", "scale"),
+            source=SourceLocation(source.path, 9, 7),
+        ),
+        RawStringToken(
+            text=" {",
+            source=SourceLocation(source.path, 9, 7 + len(switch_text)),
+        ),
+    )
+
+    else_line = _body_segmented_line(body, 6)
+    assert else_line.segments == (
+        RawStringToken(text="} ", source=SourceLocation(source.path, 10, 7)),
+        LowerableDirective(
+            name="else",
+            arguments=("compile",),
+            source=SourceLocation(source.path, 10, 9),
+        ),
+        RawStringToken(text=" {", source=SourceLocation(source.path, 10, 22)),
+    )
+
+
+def test_m130_catalog_classifies_var_and_emit_return_in_order(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_var_emit_return_directives.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil """',
+                "      var<init_register>(result)",
+                "      emit_return(result);",
+                '    """',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    assert body.lines == (
+        SegmentedLine(
+            segments=(
+                LowerableDirective(
+                    name="var",
+                    arguments=("init_register", "result"),
+                    source=SourceLocation(source.path, 4, 7),
+                ),
+            ),
+            source=SourceLocation(source.path, 4, 7),
+        ),
+        SegmentedLine(
+            segments=(
+                LowerableDirective(
+                    name="emit_return",
+                    arguments=("result",),
+                    source=SourceLocation(source.path, 5, 7),
+                ),
+            ),
+            source=SourceLocation(source.path, 5, 7),
+        ),
+    )
+
+
+def test_m130_selected_directive_body_is_unsupported_lowering_boundary(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_selected_var_directive.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "var<init_register>(result)"',
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-BODY"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 5)
+    assert "one segmented line" in diagnostic.message
 
 
 def test_m129_emit_return_payloads_remain_opaque_and_unsupported(
@@ -2911,6 +3253,55 @@ def test_m129_malformed_or_unsupported_directive_lines_remain_unsupported(
 
     for index, payload_line in enumerate(payload_lines):
         source = tmp_path / f"tiny_add_bad_directive_{index}.tsl"
+        source.write_text(
+            "\n".join(
+                (
+                    "prim<v:=(v,v)> add(left, right):",
+                    "  implementation scalar si32:",
+                    f'    tsil "{payload_line}"',
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.artifacts.artifacts == ()
+        assert len(result.diagnostics) == 1
+        diagnostic = result.diagnostics[0]
+        assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-BODY"
+        assert diagnostic.severity == "error"
+        assert diagnostic.location == SourceLocation(source.resolve(), 3, 5)
+        assert "one segmented line" in diagnostic.message
+
+
+def test_m130_malformed_or_unsupported_directive_envelopes_remain_unsupported(
+    tmp_path: Path,
+) -> None:
+    payload_lines = (
+        "var<>(result)",
+        "var<init_register>()",
+        "var<init_register>(result); var<init_register>(other)",
+        "loop<range>(i, 0, value<generation>(vector::length), 1",
+        "} if<compile>(condition) {",
+        "if<generation>(condition);",
+        "else<compile>();",
+        "while<generation>(condition) {",
+        "call<primitive=add>(left, right)",
+    )
+
+    for index, payload_line in enumerate(payload_lines):
+        source = tmp_path / f"tiny_add_bad_directive_envelope_{index}.tsl"
         source.write_text(
             "\n".join(
                 (
@@ -3957,6 +4348,20 @@ def _body_directive(body: ImplementationBody) -> LowerableDirective:
     assert len(body.lines) == 1
     line = body.lines[0]
     assert isinstance(line, SegmentedLine)
+    assert len(line.segments) == 1
+    segment = line.segments[0]
+    assert isinstance(segment, LowerableDirective)
+    return segment
+
+
+def _body_segmented_line(body: ImplementationBody, index: int) -> SegmentedLine:
+    line = body.lines[index]
+    assert isinstance(line, SegmentedLine)
+    return line
+
+
+def _single_directive_at(body: ImplementationBody, index: int) -> LowerableDirective:
+    line = _body_segmented_line(body, index)
     assert len(line.segments) == 1
     segment = line.segments[0]
     assert isinstance(segment, LowerableDirective)

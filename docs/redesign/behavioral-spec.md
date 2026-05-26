@@ -539,6 +539,31 @@ missing semicolons, extra statement text, unsupported directive names, and
 non-directive raw lines remain unsupported body/shape diagnostics. No raw TSIL
 payload text may be rendered as C++ or Rust.
 
+### M130 Exact TSIL Directive Envelope Boundary
+
+Milestone 130 extends directive-envelope classification to the selected
+keyword set `var`, `let`, `loop`, `if`, `switch`, and `else` inside M128
+quoted-TSIL raw payload lines. Call-shaped envelopes are recognized as
+`keyword<selector>(payload)` with optional semicolon for `var` and `let`, and
+optional trailing `{` for `loop`, `if`, and `switch`. Selector-only
+`else<selector>` envelopes may also have an optional trailing `{`. The M129
+`emit_return(...)` directive remains supported.
+
+The recognized directive span becomes a `LowerableDirective` with opaque
+source-text arguments: `(selector, payload)` for call-shaped directives and
+`(selector,)` for `else`. Leading multiline indentation may be ignored only to
+find the directive. A leading `}` before `else<...>` and accepted trailing
+`;` or `{` text are preserved as `RawStringToken` segments rather than
+interpreted.
+
+M130 performs only directive-envelope delimiter matching. It does not evaluate
+generation or compile conditions, pair `if`/`else`, match block bodies across
+lines, execute loops, infer variable/type semantics, parse expressions, lower
+helper or primitive calls, evaluate `type<...>` / `value<...>` queries, repair
+source, or render backend code. Selected bodies containing these directives
+still produce unsupported lowering diagnostics until later milestones define
+complete body lowering.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 129 is accepted.
+Milestone 130 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -68,6 +68,29 @@ keep the TSIL envelope marker as an admission guard only, to consider
 extracting the small directive-envelope matcher before adding more directive
 recognition, and to add explicit coverage for the `emit_return(payload) ;`
 space-before-semicolon variant.
+
+The M130 execution-review loop returned `Accept With Follow-Ups`. M130 added a
+focused private TSIL directive-envelope classifier and classifies exact
+selected directive envelopes `var<...>(...)`, `let<...>(...)`,
+`loop<...>(...)`, `if<...>(...)`, `switch<...>(...)`, and `else<...>` from
+parser-recognized quoted `tsil` payload lines into existing body segments. It
+keeps selector and payload text opaque, preserves accepted raw prefix/suffix
+text such as `} ` before `else<...>`, ` {`, and `;` as `RawStringToken`
+segments, and leaves selected bodies containing these directives unsupported
+for backend rendering. It did not add expression parsing, helper/call/operator
+lowering, variable/type semantics, condition evaluation, loop execution, block
+matching, generation/backend query evaluation, runtime `tsldata` semantic
+lookup, `frozen` or `tslgenold` runtime dependencies, renderer inference, or
+new IR category/request/result/worklist families.
+
+M130 review verdicts were: architecture `Accept With Follow-Ups`, boundary
+`Accept With Follow-Ups`, documentation `Accept With Follow-Ups`, and
+validation `Accept With Follow-Ups`. Nonblocking review items about raw
+leading `}` scope, helper-payload opacity coverage, explicit `var` plus
+`emit_return` coexistence coverage, and generation-control inventory wording
+were addressed during the loop. The remaining follow-up is that M130 directive
+selector matching supports the current simple selector corpus only; future
+nested directive selector syntax must be explicitly selected and tested.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -1662,45 +1685,50 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 130.
+Execute Milestone 131.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m130-execution-review-loop-prompt.md
+docs/agent/runs/m131-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 130: Exact TSIL Var Directive Boundary Slice
+Milestone 131: Exact TSIL Primitive-Call Island Boundary Slice
 ```
 
 Latest review verdict:
 
 ```text
-M129 execution-review returned Accept With Follow-Ups after one write-capable
+M130 execution-review returned Accept With Follow-Ups after one write-capable
 executor and read-only architecture, boundary, documentation, and validation
-audits. Architecture, documentation, and validation returned
-Accept With Follow-Ups; boundary returned Accept. There were no blocking
-findings. Follow-ups are to keep the TSIL envelope marker as an admission
-guard only, to consider extracting the small directive matcher before adding
-more directive recognition, and to add explicit coverage for the
-`emit_return(payload) ;` space-before-semicolon variant.
+audits. Architecture, boundary, documentation, and validation all returned
+Accept With Follow-Ups. There were no blocking findings. Nonblocking review
+items about raw leading `}` scope, helper-payload opacity coverage, explicit
+`var` plus `emit_return` coexistence coverage, and generation-control
+inventory wording were addressed during the loop. The remaining follow-up is
+that M130 directive selector matching supports the current simple selector
+corpus only; future nested directive selector syntax must be explicitly
+selected and tested.
 ```
 
 Next expected action:
 
 ```text
-Run the active M130 execution-review-loop prompt. M130 should focus on the
-keyword/directive lowering boundary by recognizing exact TSIL
-`var<...>(...)` directive envelopes in raw payload lines admitted by M128. It
-should preserve the modifier and payload as opaque source text in typed
-directive/body values, coexist with M129 `emit_return` directive
-classification, and leave variable semantics, type inference, operators,
-helpers, primitive calls, assignments, loops, generation/backend control,
-expression parsing, source repair, and raw TSIL rendering out of scope.
+Run the active M131 execution-review-loop prompt. M131 should focus on the
+lowerable-island boundary by recognizing exact single-line
+`call<primitive=...>(...)` islands in parser-recognized TSIL body lines that
+remain raw after M130 directive classification. It should preserve primitive
+selector text, payload text, and surrounding raw source text in the existing
+typed source-body model, and leave primitive resolution, dependency closure,
+`@self` resolution, type-argument parsing, argument splitting, expression
+parsing, helper/operator lowering, assignment lowering, array access lowering,
+directive-payload segmentation, multiline call matching, generation/backend
+query evaluation, backend rendering, source repair, and runtime `tsldata`
+semantic lookup out of scope.
 ```
 
 Accepted planning prompt:

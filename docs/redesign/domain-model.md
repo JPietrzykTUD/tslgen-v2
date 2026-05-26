@@ -325,6 +325,15 @@ Invariants:
   `LowerableDirective` segments with opaque source-text arguments. The
   directive boundary does not imply expression, operator, helper, call, or
   backend rendering semantics.
+- M130 classifies selected exact TSIL directive envelopes
+  `var<...>(...)`, `let<...>(...)`, `loop<...>(...)`, `if<...>(...)`,
+  `switch<...>(...)`, and `else<...>` as `LowerableDirective` segments with
+  opaque selector and payload arguments. Raw prefix/suffix text such as a
+  leading `}` before `else<...>` or trailing `{` / `;` remains
+  `RawStringToken` data. The
+  directive boundary does not imply block matching, branch evaluation, loop
+  execution, type inference, expression parsing, helper/call lowering, or
+  backend rendering semantics.
 - `requires_value` remains structurally preserved for the existing flag and
   selector normalization rules.
 - Unknown extra fields remain preserved as `extra_fields` so future milestones

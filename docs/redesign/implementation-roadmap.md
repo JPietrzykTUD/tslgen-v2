@@ -17226,17 +17226,18 @@ returned exit 0 with no output. The pytest command returned exit 0 with
 directories; after removal, the final cache check returned exit 0 with no
 output.
 
-### Milestone 130: Exact TSIL Var Directive Boundary Slice
+### Milestone 130: Exact TSIL Directive Envelope Boundary Slice
 
 Status:
 
-Planned as the next clean restart implementation milestone after accepted
-M129. This is a keyword/directive boundary slice over M128 raw TSIL payload
-lines and the M129 directive-classification path. It recognizes exact
-`var<...>(...)` TSIL directive envelopes and preserves their payloads as
-opaque source text. It must not interpret initializer expressions, helper
-calls, primitive calls, operators, type queries, target-language-looking text,
-or storage semantics.
+Accepted. The M130 execution-review loop returned `Accept With Follow-Ups`.
+This is a keyword/directive boundary slice over M128 raw TSIL payload lines and
+the M129 directive-classification path. It recognizes a small, explicit set of
+exact TSIL directive envelopes and preserves their selectors, payloads, and raw
+surrounding text as source-owned opaque text. It does not interpret
+initializer expressions, helper calls, primitive calls, operators, type
+queries, target-language-looking text, branch conditions, loop semantics,
+block bodies, or storage semantics.
 
 Corpus grounding:
 
@@ -17245,48 +17246,88 @@ Corpus grounding:
 - `tsldata/primitives/bitwise/bit_ops.tsl:37-38` use
   `var<const_infer>(ua, call<primitive=reinterpret[...]>(left));` and
   `var<const_infer>(ub, call<primitive=reinterpret[...]>(right));`.
-- Many multiline bodies combine `var<...>(...)` directive lines with later
-  loops, assignments, and `emit_return(...)` directives.
+- `tsldata/primitives/bitwise/shifts.tsl:625-633` shows nested
+  `if<generation>(...) {`, `if<compile>(...) {`, and
+  `} else<compile> {` directive headers.
+- `tsldata/primitives/load_store/rnd_access.tsl:33` uses
+  `switch<compile>(scale) {`.
+- `tsldata/primitives/arithmetic/fundamental.tsl:41-42` uses adjacent
+  `loop<unroll>(...)` and `loop<range>(...) {` directive headers.
+- `tsldata/primitives/bitwise/shifts.tsl:626` and nearby lines show
+  `let<type>(...)` and `var<const_infer>(...)` inside directive blocks.
 
 Goal:
 
-When an M128 raw TSIL body line contains an exact `var<modifier>(payload)`
-directive envelope, with an optional trailing semicolon:
+When an M128 raw TSIL body line contains one exact selected directive
+envelope, classify only the directive span and preserve surrounding source
+text as raw tokens when present.
+
+Accepted call-shaped directive envelopes:
 
 ```text
-var<init_register>(result)
-var<const_infer>(ua, call<primitive=reinterpret[... ]>(left));
+var<selector>(opaque-payload)
+var<selector>(opaque-payload);
+let<selector>(opaque-payload)
+let<selector>(opaque-payload);
+loop<selector>(opaque-payload)
+loop<selector>(opaque-payload) {
+if<selector>(opaque-payload)
+if<selector>(opaque-payload) {
+switch<selector>(opaque-payload)
+switch<selector>(opaque-payload) {
 ```
 
-classify it as a typed directive value such as:
+Accepted selector-only directive envelopes:
 
 ```text
-LowerableDirective(name="var", arguments=(<modifier>, <opaque-payload>))
+else<selector>
+else<selector> {
+```
+
+The existing M129 `emit_return(opaque-payload)` directive remains accepted.
+Classify with the existing source-body model, for example:
+
+```text
+LowerableDirective(name="var", arguments=(<selector>, <opaque-payload>))
+LowerableDirective(name="loop", arguments=(<selector>, <opaque-payload>))
+LowerableDirective(name="else", arguments=(<selector>,))
 ```
 
 or an equally narrow typed directive value if implementation evidence shows the
-existing domain value is insufficient. The modifier and payload are
-source-owned opaque text. Do not split initializer arguments, parse operators,
-resolve helper calls, resolve primitive calls, infer storage semantics, or map
-the directive to backend code in this milestone.
+existing domain value is insufficient. Selector and payload text are
+source-owned opaque text. Preserve raw source before or after the matched
+directive as `RawStringToken` segments. Do not split initializer arguments,
+parse operators, resolve helper calls, resolve primitive calls, infer storage
+semantics, evaluate conditions, pair `else` with `if`, match block bodies, or
+map directives to backend code in this milestone.
 
 Scope:
 
 - Preserve M128 quoted-TSIL intake, M129 `emit_return` directive
   classification, and existing synthetic `body <operation>(...)` generated
   artifacts.
-- Recognize only `var<...>(...)` directive envelopes from parser-recognized
-  TSIL payload bodies.
-- Preserve the modifier text between `var<` and the matching `>` and the
-  payload text between the outer `(` and its matching `)`.
+- Recognize only the selected directive envelopes from parser-recognized TSIL
+  payload bodies: `var<...>(...)`, `let<...>(...)`, `loop<...>(...)`,
+  `if<...>(...)`, `switch<...>(...)`, and `else<...>`.
+- Preserve the selector text between `<` and the matching `>` and, for
+  call-shaped directives, the payload text between the outer `(` and its
+  matching `)`.
 - Use delimiter matching for the directive envelope only. Nested parentheses
   and bracket/angle-like source text inside the payload remain opaque.
+- Treat trailing `{`, trailing semicolons where accepted above, a leading `}`
+  before `else<...>`, indentation, and other accepted surrounding target-like
+  text as raw source tokens. Do not match or validate whole block bodies
+  across lines.
 - Classify indented multiline payload lines by ignoring indentation only to
-  find the directive keyword; do not normalize modifier or payload text.
-- Keep selected bodies containing var directives unsupported for backend
+  find the directive keyword; do not normalize selector, payload, or preserved
+  raw text.
+- Keep selected bodies containing these directives unsupported for backend
   rendering unless a later milestone defines complete statement/body lowering.
 - Add tests for `var<init_register>(result)`,
-  `var<const_infer>(ua, call<primitive=...>(left));`, malformed envelopes,
+  `var<const_infer>(ua, call<primitive=...>(left));`,
+  `let<type>(UnsignedT, type<generation>(...))`, `loop<unroll>(...)`,
+  `loop<range>(...) {`, `if<generation>(...) {`, `if<compile>(...) {`,
+  `switch<compile>(...) {`, `} else<compile> {`, malformed envelopes,
   unsupported nearby directives, and coexistence with an already classified
   `emit_return` line in a multiline body.
 
@@ -17294,20 +17335,28 @@ Out of scope:
 
 - Variable declaration semantics, storage initialization, type inference,
   expression parsing, helper/call/operator lowering, assignment lowering,
-  loops, generation/backend control, backend rendering, source repair,
+  loop execution semantics, branch/control evaluation, block-body matching,
+  generation/backend query evaluation, backend rendering, source repair,
   complete TSIL grammar, runtime `tsldata` semantic lookup, `frozen` or
   `tslgenold` runtime dependency, registries, dispatchers, hidden backfeeds,
   fixpoint mechanisms, or new lowering IR category/request/result/worklist
   families.
+- Supporting `call<...>`, `intrin`, `intrin_compose`, `cast<...>`, `mem<...>`,
+  `io<...>`, `type<...>`, `value<...>`, helper calls, assignments, array
+  access, or any keyword/directive not explicitly selected here.
+- Pairing `if`/`else`, validating `else if<...>` chains, matching braces
+  across multiple lines, or interpreting any raw prefix/suffix around a
+  directive envelope.
 
 Accepted outputs:
 
-- Exact `var<...>(...)` directive envelopes become typed directive/body values
-  carrying opaque modifier and payload text.
-- `var` directive classification coexists with M129 `emit_return`
+- Exact selected directive envelopes become typed directive/body values
+  carrying opaque selector and payload text, with any raw prefix/suffix kept as
+  raw source tokens.
+- New directive classification coexists with M129 `emit_return`
   classification in ordered multiline bodies.
-- Selected bodies containing `var` directives do not render backend code or
-  infer semantics.
+- Selected bodies containing recognized directives do not render backend code,
+  infer semantics, evaluate conditions, or match blocks.
 - Existing M128/M129 behavior remains stable.
 
 Validation:
@@ -17321,11 +17370,118 @@ find tslgen -type d -name __pycache__ -print
 
 Review notes:
 
-- Reviewers should require M130 to remain exact `var` directive-boundary
+- Reviewers should require M130 to remain exact directive-envelope
   classification only.
 - Reviewers should reject initializer expression parsing, helper/call/operator
-  lowering, variable lifetime/type inference, assignment lowering, and backend
-  rendering.
-- Reviewers should consider whether adding this second directive should extract
+  lowering, variable lifetime/type inference, condition evaluation, block/body
+  matching, assignment lowering, and backend rendering.
+- Reviewers should consider whether adding these directives should extract
   the small directive-envelope matcher from `catalog_builder.py` into a focused
   syntax/catalog helper module without introducing a broad TSIL parser.
+
+Execution notes:
+
+- M130 added the focused private classifier
+  `tslgen/src/tslgen/pipeline/_tsil_directives.py` and kept catalog promotion
+  gated to parser-recognized quoted `tsil` payload envelopes.
+- Exact selected directive envelopes become `LowerableDirective` segments;
+  accepted raw prefix/suffix text such as `} ` before `else<...>`, ` {`, and
+  `;` becomes `RawStringToken` data.
+- Selected bodies containing M130 directives remain unsupported for backend
+  rendering unless a later milestone defines complete body lowering.
+- Review follow-ups were either addressed in the execution loop or recorded
+  for later. The remaining follow-up is that M130 directive selector matching
+  supports the current simple selector corpus only; future nested selector
+  syntax must be explicitly selected and tested.
+- Required validation returned exit 0 for `git diff --check`, compileall, and
+  pytest; the final cache check returned exit 0 with no output after removing
+  validation-created `__pycache__` directories.
+
+### Milestone 131: Exact TSIL Primitive-Call Island Boundary Slice
+
+Status:
+
+Planned as the next clean restart implementation milestone after accepted
+M130. This is a lowerable-island boundary slice over M128 raw TSIL payload
+lines that remain raw after M129-M130 directive classification. It recognizes
+exact single-line `call<primitive=...>(...)` islands and preserves primitive
+selector text, payload text, and surrounding raw source text. It must not
+resolve primitive names, dependency closure, `@self`, type/backend queries,
+arguments, assignments, array access, helper calls, operators, or backend
+rendering.
+
+Corpus grounding:
+
+- `tsldata/primitives/arithmetic/fundamental.tsl:43` uses
+  `result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);`.
+- `tsldata/primitives/arithmetic/fundamental.tsl:130` uses
+  `emit_return(call<primitive=set_zero[Vec]>());`; M131 should not yet
+  segment calls inside already classified directive payloads.
+- `tsldata/primitives/bitwise/bit_ops.tsl:36-37` uses
+  `call<primitive=reinterpret[...]>(...)` inside `var<...>(...)` directive
+  payloads; M131 records this as future directive-payload segmentation
+  evidence, not current scope.
+
+Goal:
+
+When an M128 raw TSIL body line that remains raw after M130 contains one exact
+single-line primitive-call island:
+
+```text
+call<primitive=selector>(opaque-payload)
+```
+
+classify only that call span as a lowerable body segment and preserve any raw
+prefix/suffix as `RawStringToken` data. A zero-argument payload such as
+`call<primitive=set_zero[Vec]>()` is accepted. Selector and payload text remain
+opaque.
+
+Scope:
+
+- Preserve M128-M130 behavior and existing generated artifact bytes.
+- Recognize only `call<primitive=...>(...)` islands in parser-recognized TSIL
+  raw body lines that are still `RawStringLine` values after directive
+  classification.
+- Preserve raw prefix/suffix text around the call island.
+- Match the outer `call<primitive=...>` selector with delimiter matching
+  sufficient for the current corpus forms, including nested `<...>` text such
+  as `type<backend>(...)` inside selector brackets.
+- Match the outer call payload parentheses with nested-parenthesis delimiter
+  matching only. Payload text remains opaque and may be empty.
+- Keep selected bodies containing primitive-call islands unsupported for
+  backend rendering unless a later milestone defines semantic call lowering.
+- Add tests for assignment-like raw prefix/suffix preservation,
+  zero-argument `set_zero` payload preservation, malformed call envelopes,
+  unsupported nearby call-like names, direct primitive-looking names remaining
+  unsupported, and no segmentation inside existing M129/M130 directive
+  payloads.
+
+Out of scope:
+
+- Primitive resolution, dependency closure, `@self` resolution, type-argument
+  parsing, argument splitting, expression parsing, helper/operator lowering,
+  assignment lowering, array access lowering, directive-payload segmentation,
+  multiline call matching, generation/backend query evaluation, backend
+  rendering, source repair, runtime `tsldata` semantic lookup, `frozen` or
+  `tslgenold` runtime dependency, registries, dispatchers, hidden backfeeds,
+  fixpoint mechanisms, or new lowering IR category/request/result/worklist
+  families.
+
+Accepted outputs:
+
+- Exact selected primitive-call islands in raw body lines become typed body
+  segments carrying opaque selector and payload text, with raw prefix/suffix
+  preserved.
+- Already classified `emit_return`, `var`, `let`, `loop`, `if`, `switch`, and
+  `else` directive payloads remain opaque.
+- Selected bodies containing primitive-call islands do not render backend code
+  or infer semantics.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
