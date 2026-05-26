@@ -705,11 +705,13 @@ def _is_exact_add_primitive_call_directive(
     selector = primitive_call.selector
     if not isinstance(selector.target, NamedPrimitiveReference):
         return False
+    argument_texts = tuple(argument.text for argument in primitive_call.arguments)
     return (
         selector.target.name == _SUPPORTED_EXACT_PRIMITIVE_CALL_TARGET
         and selector.specialization is None
         and selector.attrs is None
         and primitive_call.payload == _SUPPORTED_EXACT_PRIMITIVE_CALL_PAYLOAD
+        and argument_texts == _SUPPORTED_BINARY_PARAMETERS
     )
 
 
@@ -820,6 +822,7 @@ def _primitive_call_context(directive: LowerableDirective) -> str:
         )
     if selector.attrs is not None:
         details.append(f"attrs remain opaque: {selector.attrs!r}")
+    details.append(f"argument count is {len(primitive_call.arguments)}")
     details.append(f"payload remains opaque: {primitive_call.payload!r}")
     return "; ".join(details)
 

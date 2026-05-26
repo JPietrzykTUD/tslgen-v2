@@ -23,6 +23,7 @@ from tslgen.domain.catalog import (
     NamedPrimitiveReference,
     Primitive,
     PrimitiveCall,
+    PrimitiveCallArgument,
     PrimitiveCallSelector,
     RawStringToken,
     SelfPrimitiveReference,
@@ -2896,6 +2897,16 @@ def test_m132_catalog_classifies_primitive_call_across_raw_tokens(
                     "type<backend>\n"
                     "      (vector::as_extension(scalar))"
                 ),
+                arguments=(
+                    PrimitiveCallArgument(
+                        text="left",
+                        source=SourceLocation(source.path, 5, 40),
+                    ),
+                    PrimitiveCallArgument(
+                        text="right",
+                        source=SourceLocation(source.path, 6, 7),
+                    ),
+                ),
             ),
         ),
         RawStringToken(
@@ -3608,6 +3619,283 @@ def test_m135_malformed_primitive_call_selectors_remain_raw(
         source = _source_document(
             tmp_path,
             f"tiny_add_m135_bad_call_selector_{index}.tsl",
+            "\n".join(
+                (
+                    "prim<v:=(v,v)> add(left, right):",
+                    "  implementation scalar si32:",
+                    f'    tsil "{payload}"',
+                )
+            ),
+        )
+
+        parse_result = TslParser().parse((source,))
+        catalog_result = CatalogBuilder().build(parse_result.documents)
+
+        assert parse_result.diagnostics == ()
+        assert catalog_result.diagnostics == ()
+        assert catalog_result.catalog is not None
+        body = catalog_result.catalog.primitives[0].implementations[0].body
+        assert body.tokens == (
+            RawStringToken(
+                text=payload,
+                source=SourceLocation(source.path, 3, 11),
+            ),
+        )
+
+
+def test_m136_catalog_structures_primitive_call_arguments(
+    tmp_path: Path,
+) -> None:
+    cases = (
+        (
+            "zero_arguments",
+            "call<primitive=set_zero[Vec]>()",
+            "set_zero[Vec]",
+            "",
+            "set_zero",
+            "Vec",
+            None,
+            (),
+        ),
+        (
+            "spaced_two_arguments",
+            "call<primitive=add>(left,  right)",
+            "add",
+            "left,  right",
+            "add",
+            None,
+            None,
+            (
+                ("left", 31),
+                ("right", 38),
+            ),
+        ),
+        (
+            "nested_call_argument",
+            "call<primitive=mov>(call<primitive=set_zero[Vec]>(), left)",
+            "mov",
+            "call<primitive=set_zero[Vec]>(), left",
+            "mov",
+            None,
+            None,
+            (
+                ("call<primitive=set_zero[Vec]>()", 31),
+                ("left", 64),
+            ),
+        ),
+        (
+            "helper_cast_argument",
+            (
+                "call<primitive=set1>"
+                "(cast<static>(type<generation>(base::in), factor))"
+            ),
+            "set1",
+            "cast<static>(type<generation>(base::in), factor)",
+            "set1",
+            None,
+            None,
+            (
+                ("cast<static>(type<generation>(base::in), factor)", 32),
+            ),
+        ),
+    )
+
+    for (
+        name,
+        call_text,
+        selector,
+        payload,
+        target_name,
+        specialization,
+        attrs,
+        arguments,
+    ) in cases:
+        source = _source_document(
+            tmp_path,
+            f"tiny_add_m136_{name}.tsl",
+            "\n".join(
+                (
+                    "prim<v:=(v,v)> add(left, right):",
+                    "  implementation scalar si32:",
+                    f'    tsil "{call_text}"',
+                )
+            ),
+        )
+
+        parse_result = TslParser().parse((source,))
+        catalog_result = CatalogBuilder().build(parse_result.documents)
+
+        assert parse_result.diagnostics == ()
+        assert catalog_result.diagnostics == ()
+        assert catalog_result.catalog is not None
+        directive = _body_directive(
+            catalog_result.catalog.primitives[0].implementations[0].body
+        )
+        assert directive.primitive_call == _primitive_call(
+            source.path,
+            3,
+            11,
+            selector,
+            payload,
+            target_name=target_name,
+            specialization=specialization,
+            attrs=attrs,
+            arguments=tuple(
+                PrimitiveCallArgument(
+                    text=text,
+                    source=SourceLocation(source.path, 3, column),
+                )
+                for text, column in arguments
+            ),
+        )
+
+
+def test_m136_emit_return_payload_call_has_structured_arguments(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_m136_emit_return_call_arguments.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                (
+                    '    tsil "emit_return('
+                    "call<primitive=mov>"
+                    "(call<primitive=set_zero[Vec]>(), left));"
+                    '"'
+                ),
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    directive = _body_directive(
+        catalog_result.catalog.primitives[0].implementations[0].body
+    )
+    assert directive.name == "emit_return"
+    assert len(directive.payload_tokens) == 1
+    payload_token = directive.payload_tokens[0]
+    assert isinstance(payload_token, LowerableDirective)
+    assert payload_token.primitive_call == _primitive_call(
+        source.path,
+        3,
+        23,
+        "mov",
+        "call<primitive=set_zero[Vec]>(), left",
+        target_name="mov",
+        arguments=(
+            PrimitiveCallArgument(
+                text="call<primitive=set_zero[Vec]>()",
+                source=SourceLocation(source.path, 3, 43),
+            ),
+            PrimitiveCallArgument(
+                text="left",
+                source=SourceLocation(source.path, 3, 76),
+            ),
+        ),
+    )
+
+
+def test_m136_exact_add_call_with_extra_spacing_stays_unsupported(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_m136_spaced_add_call.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "call<primitive=add>(left,  right)"',
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+    assert "argument count is 2" in diagnostic.message
+    assert "left,  right" in diagnostic.message
+
+
+def test_m136_exact_add_call_argument_variants_stay_unsupported(
+    tmp_path: Path,
+) -> None:
+    payloads = (
+        "right, left",
+        "left",
+        "left, left",
+        "left, right, extra",
+        "left + one, right",
+    )
+
+    for index, payload in enumerate(payloads):
+        source = tmp_path / f"tiny_add_m136_argument_variant_{index}.tsl"
+        source.write_text(
+            "\n".join(
+                (
+                    "prim<v:=(v,v)> add(left, right):",
+                    "  implementation scalar si32:",
+                    f'    tsil "call<primitive=add>({payload})"',
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.artifacts.artifacts == ()
+        assert len(result.diagnostics) == 1
+        diagnostic = result.diagnostics[0]
+        assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+        assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+        assert payload in diagnostic.message
+
+
+def test_m136_malformed_primitive_call_arguments_remain_raw(
+    tmp_path: Path,
+) -> None:
+    payloads = (
+        "call<primitive=add>(left,, right)",
+        "call<primitive=add>(left, right])",
+        "call<primitive=add>(left, helper(right)",
+    )
+
+    for index, payload in enumerate(payloads):
+        source = _source_document(
+            tmp_path,
+            f"tiny_add_m136_bad_call_arguments_{index}.tsl",
             "\n".join(
                 (
                     "prim<v:=(v,v)> add(left, right):",
@@ -5130,6 +5418,7 @@ def _primitive_call(
     target_name: str | None,
     specialization: str | None = None,
     attrs: str | None = None,
+    arguments: tuple[PrimitiveCallArgument, ...] | None = None,
 ) -> PrimitiveCall:
     selector_source = SourceLocation(
         path,
@@ -5151,7 +5440,42 @@ def _primitive_call(
         ),
         payload=payload,
         source=SourceLocation(path, line, call_column),
+        arguments=(
+            arguments
+            if arguments is not None
+            else _same_line_call_arguments(
+                path,
+                line,
+                call_column + len("call<primitive=") + len(selector) + 2,
+                payload,
+            )
+        ),
     )
+
+
+def _same_line_call_arguments(
+    path: Path,
+    line: int,
+    payload_column: int,
+    payload: str,
+) -> tuple[PrimitiveCallArgument, ...]:
+    if payload.strip() == "":
+        return ()
+
+    arguments: list[PrimitiveCallArgument] = []
+    offset = 0
+    for part in payload.split(","):
+        leading = len(part) - len(part.lstrip())
+        text = part.strip()
+        assert text
+        arguments.append(
+            PrimitiveCallArgument(
+                text=text,
+                source=SourceLocation(path, line, payload_column + offset + leading),
+            )
+        )
+        offset += len(part) + 1
+    return tuple(arguments)
 
 
 def _parsed_add_document(

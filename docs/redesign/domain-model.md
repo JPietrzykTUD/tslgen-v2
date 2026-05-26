@@ -355,6 +355,14 @@ Invariants:
   `@self` expansion, specialization or attrs interpretation, argument
   splitting, recursive call parsing, expression parsing, or backend call
   rendering.
+- M136 gives recognized `call<primitive=...>(...)` tokens an ordered
+  source-owned argument-list representation while preserving the original
+  opaque call payload. Arguments are raw payload values with source locations,
+  split only at top-level commas while respecting nested parentheses and square
+  brackets. The argument-list boundary does not imply primitive resolution,
+  `@self` expansion, argument identifier resolution, nested call semantics,
+  helper/cast/operator parsing, recursive argument lowering, or backend call
+  rendering.
 - `requires_value` remains structurally preserved for the existing flag and
   selector normalization rules.
 - Unknown extra fields remain preserved as `extra_fields` so future milestones

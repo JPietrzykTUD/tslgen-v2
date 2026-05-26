@@ -44,10 +44,17 @@ class PrimitiveCallSelector:
 
 
 @dataclass(frozen=True, slots=True)
+class PrimitiveCallArgument:
+    text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
 class PrimitiveCall:
     selector: PrimitiveCallSelector
     payload: str
     source: SourceLocation
+    arguments: tuple[PrimitiveCallArgument, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

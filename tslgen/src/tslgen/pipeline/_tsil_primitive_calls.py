@@ -9,6 +9,7 @@ from tslgen.domain.catalog import (
     LowerableDirective,
     NamedPrimitiveReference,
     PrimitiveCall,
+    PrimitiveCallArgument,
     PrimitiveCallSelector,
     RawStringToken,
     SelfPrimitiveReference,
@@ -25,6 +26,7 @@ class _PrimitiveCallMatch:
     selector: str
     selector_parts: "_PrimitiveCallSelectorParts"
     payload: str
+    argument_parts: tuple["_PrimitiveCallArgumentPart", ...]
     start: int
     selector_start: int
     end: int
@@ -36,6 +38,12 @@ class _PrimitiveCallSelectorParts:
     target_name: str | None
     specialization: str | None
     attrs: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _PrimitiveCallArgumentPart:
+    text: str
+    start: int
 
 
 def classify_tsil_primitive_call_tokens(
@@ -133,11 +141,19 @@ def _match_primitive_call(text: str, start: int) -> _PrimitiveCallMatch | None:
     close_index = _matching_close_paren(text, open_index)
     if close_index is None:
         return None
+    argument_parts = _split_call_argument_parts(
+        text,
+        open_index + 1,
+        close_index,
+    )
+    if argument_parts is None:
+        return None
 
     return _PrimitiveCallMatch(
         selector=selector,
         selector_parts=selector_parts,
         payload=text[open_index + 1 : close_index],
+        argument_parts=argument_parts,
         start=start,
         selector_start=selector_start,
         end=close_index + 1,
@@ -254,6 +270,13 @@ def _primitive_call_from_match(
         ),
         payload=match.payload,
         source=joined.source_at(match.start),
+        arguments=tuple(
+            PrimitiveCallArgument(
+                text=argument.text,
+                source=joined.source_at(argument.start),
+            )
+            for argument in match.argument_parts
+        ),
     )
 
 
@@ -268,6 +291,64 @@ def _matching_close_paren(text: str, open_index: int) -> int | None:
             if depth == 0:
                 return index
     return None
+
+
+def _split_call_argument_parts(
+    text: str,
+    start: int,
+    end: int,
+) -> tuple[_PrimitiveCallArgumentPart, ...] | None:
+    if text[start:end].strip() == "":
+        return ()
+
+    parts: list[_PrimitiveCallArgumentPart] = []
+    part_start = start
+    paren_depth = 0
+    bracket_depth = 0
+
+    for index in range(start, end):
+        char = text[index]
+        if char == "(":
+            paren_depth += 1
+        elif char == ")":
+            if paren_depth == 0:
+                return None
+            paren_depth -= 1
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]":
+            if bracket_depth == 0:
+                return None
+            bracket_depth -= 1
+        elif char == "," and paren_depth == 0 and bracket_depth == 0:
+            part = _call_argument_part(text, part_start, index)
+            if part is None:
+                return None
+            parts.append(part)
+            part_start = index + 1
+
+    if paren_depth != 0 or bracket_depth != 0:
+        return None
+
+    part = _call_argument_part(text, part_start, end)
+    if part is None:
+        return None
+    parts.append(part)
+    return tuple(parts)
+
+
+def _call_argument_part(
+    text: str,
+    start: int,
+    end: int,
+) -> _PrimitiveCallArgumentPart | None:
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    if start >= end:
+        return None
+    return _PrimitiveCallArgumentPart(text=text[start:end], start=start)
 
 
 def _raw_token(

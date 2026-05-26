@@ -699,6 +699,39 @@ parsing, assignment or array-access lowering, backend call rendering, source
 repair, runtime `tsldata` lookup, and `frozen` / `tslgenold` runtime
 dependencies remain out of scope.
 
+### M136 Structured Primitive-Call Argument List Boundary
+
+Milestone 136 keeps the M135 primitive-call selector boundary and adds an
+ordered source-owned argument-list representation for recognized
+`call<primitive=...>(...)` tokens. The original opaque
+`PrimitiveCall.payload` string remains preserved for diagnostics and exact
+boundary checks.
+
+The argument-list splitter recognizes only top-level commas in the call
+payload. It respects nested parentheses and square brackets so forms such as:
+
+```text
+call<primitive=mov>(call<primitive=set_zero[Vec]>(), left)
+call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+```
+
+produce raw argument payload records without interpreting the nested call,
+cast-like text, helper-like text, or identifiers. Zero-argument calls produce
+an empty argument tuple.
+
+M136 preserves the accepted M133/M134 exact
+`call<primitive=add>(left, right)` lowering boundary. The exact add-call check
+may consume the structured argument list, but it still requires the same exact
+payload shape and does not accept swapped, missing, duplicate, extra, spaced,
+or expression-like argument variants.
+
+Malformed argument delimiters remain unsupported source boundaries rather
+than being repaired. M136 does not resolve primitive references, expand
+`@self`, interpret selector specialization or `attrs[...]`, resolve argument
+identifiers, parse array access, assignment, operators, helpers, casts, or
+nested call semantics, recursively lower arguments, render backend call
+syntax, use runtime `tsldata`, or depend on `frozen` / `tslgenold`.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

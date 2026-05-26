@@ -18013,8 +18013,7 @@ Validation result:
 
 Status:
 
-Planned as the next clean restart implementation milestone after accepted
-M135. This is still representation-first lowering work over explicit TSIL
+Accepted. This is still representation-first lowering work over explicit TSIL
 `call<primitive=...>(...)` constructs, not primitive resolution or expression
 interpretation.
 
@@ -18061,6 +18060,100 @@ Expected outputs:
   locations, and artifact bytes remain stable.
 - No primitive resolution, argument expression parsing, dependency closure, or
   backend call rendering is introduced.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Execution notes:
+
+- `PrimitiveCall` now preserves the accepted opaque `payload` string and also
+  carries ordered `PrimitiveCallArgument` values with raw text and source
+  locations.
+- The argument splitter recognizes only top-level commas in recognized
+  primitive-call payloads and respects nested parentheses and square brackets.
+- Zero-argument calls produce an empty argument tuple.
+- Argument lists are populated for standalone M132 call tokens and for M134
+  `emit_return(...)` payload call tokens.
+- M133/M134 exact `call<primitive=add>(left, right)` lowering now checks both
+  the exact opaque payload and exact structured argument texts, preserving the
+  strict exact boundary.
+- Malformed argument delimiters remain raw unsupported source text rather than
+  being repaired.
+- Architecture, boundary, documentation, and validation audits all returned
+  `Accept`; there were no blocking findings or recorded follow-ups.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `157 passed in 8.47s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
+### Milestone 137: Exact Primitive Call Dependency Diagnostic Boundary Slice
+
+Status:
+
+Planned as the next clean restart implementation milestone after accepted
+M136. This is a lowering diagnostic boundary over the M135/M136 structured
+primitive-call representation. It still does not resolve or render primitive
+calls.
+
+Goal:
+
+Selected implementation bodies containing recognized primitive-call tokens
+that are not the accepted exact add-call case should report why the call is
+unresolved in terms of the structured call data. The diagnostic should name
+the target kind (`@self` or named primitive), selector source text, optional
+specialization and attrs payloads, and raw argument count. It should make the
+next required semantic capability explicit: primitive-call dependency
+resolution is not implemented yet.
+
+Scope:
+
+- Preserve M133/M134 exact `call<primitive=add>(left, right)` lowering and all
+  M132-M136 body-token representation behavior.
+- Replace or refine the generic unsupported primitive-call message with a
+  stable structured diagnostic message for unresolved primitive calls.
+- Keep the diagnostic code `TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL` unless a
+  focused test demonstrates a need for a narrower code.
+- Report structured context for standalone call tokens and for M134
+  `emit_return(...)` payload call tokens.
+- Add focused tests for named primitive calls, `@self`, specialization,
+  `attrs[...]`, zero arguments, nested raw arguments, and exact source
+  locations.
+- Add tests proving raw `emit_return(left)`, malformed call selectors,
+  malformed call arguments, and raw-plus-call payloads preserve existing
+  diagnostics.
+
+Out of scope:
+
+Primitive dependency closure; resolving named primitive references against the
+catalog; expanding `@self`; interpreting selector specialization or
+`attrs[...]`; resolving argument identifiers; recursively lowering argument
+expressions; backend call rendering; source repair; complete TSIL grammar;
+runtime `tsldata` semantic lookup; `frozen` or `tslgenold` runtime dependency;
+registries; dispatchers; hidden backfeeds; fixpoint mechanisms; or new
+request/result/worklist families.
+
+Expected outputs:
+
+- Unsupported recognized primitive calls fail with a more actionable
+  structured diagnostic grounded in the M135/M136 call representation.
+- Accepted exact add-call lowering, source locations, and artifact bytes remain
+  stable.
+- The next semantic step, dependency resolution, is visible as an explicit
+  unsupported boundary rather than an implicit opaque-string failure.
 
 Validation:
 
