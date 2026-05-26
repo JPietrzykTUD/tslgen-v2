@@ -17877,75 +17877,96 @@ Validation result:
   `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
   output.
 
-### Milestone 135: Exact Emit-Return Parameter Payload Lowering Slice
+### Milestone 135: Structured Primitive Call Representation Boundary Slice
 
 Status:
 
 Planned as the next clean restart implementation milestone after accepted
-M134. This is a narrow lowering slice over the M134 `emit_return(...)`
-payload-token boundary. It lowers only a single raw payload token that exactly
-names one selected primitive parameter.
+M134. This supersedes the previously planned raw
+`emit_return(<selected-parameter>)` idea, because resolving raw payload
+identifiers would push the generator back toward target-language expression
+interpretation. M135 instead strengthens the representation of the explicit
+TSIL `call<primitive=...>` keyword.
 
 Goal:
 
-When the selected implementation body is exactly an `emit_return(...)`
-directive and its payload-token stream contains exactly one raw token:
+Recognized TSIL primitive-call islands should expose a typed source-owned
+representation of the `primitive=` selector. The selector target may be the
+`@self` keyword, meaning the currently selected primitive, or an arbitrary
+named primitive reference such as `add`, `binary_and`, `reinterpret`, or
+`set_zero`.
 
 ```text
-emit_return(left);
+call<primitive=@self>(...)
+call<primitive=@self[...]>(...)
+call<primitive=@self attrs[...]>(...)
+call<primitive=@self[...] attrs[...]>(...)
+call<primitive=<primitive-name>>(...)
+call<primitive=<primitive-name>[...]>(...)
+call<primitive=<primitive-name> attrs[...]>(...)
+call<primitive=<primitive-name>[...] attrs[...]>(...)
 ```
 
-and that raw token exactly matches one selected primitive parameter, lowering
-emits a return of that parameter through a typed lowered value-reference
-expression that C++ and Rust backends render directly.
+`<primitive-name>` is documentation notation for an arbitrary primitive name
+token, not a literal source spelling. Bracket specialization payloads,
+`attrs[...]` payloads, and call argument payloads remain opaque source text.
+This milestone represents the selector; it does not resolve or execute the
+call.
 
 Scope:
 
-- Consume the M134 `emit_return` payload-token representation; do not change
-  parser syntax, directive classification, primitive-call classification, or
-  the M133/M134 call lowering behavior except for defects found by tests.
-- Accept only a selected `emit_return(...)` body whose payload-token stream is
-  exactly one `RawStringToken` with text equal to one declared selected
-  primitive parameter name.
-- Add the smallest typed lowered expression needed to represent returning a
-  selected parameter by name, and teach C++/Rust emitters to render only that
-  typed value-reference expression.
-- Emit a precise unsupported return-value diagnostic for raw identifier payload
-  tokens that do not match a selected primitive parameter, such as `result`,
-  until a later variable/assignment milestone defines them.
-- Preserve existing diagnostics for raw payloads that are not exact single
-  identifiers, mixed raw/call payloads, recognized unsupported primitive-call
-  payload tokens, and malformed nearby forms.
-- Add tests for `emit_return(left);` and `emit_return(right);` artifact
-  rendering, unknown identifier diagnostics such as `emit_return(result);`,
-  non-identifier raw payload diagnostics such as `emit_return(left + right);`,
-  preserved M134 primitive-call payload behavior, and existing M126-M134
-  artifact-byte stability.
+- Keep parser syntax, M129/M130 directive classification, M132 call-island
+  recognition, M133 exact add-call lowering, and M134 emit-return payload-token
+  behavior stable unless a focused test exposes a defect.
+- Add the smallest typed representation for a recognized primitive-call
+  selector, distinguishing self target, named target, optional specialization
+  payload, optional attrs payload, original selector source text, and source
+  location.
+- Preserve the existing opaque call argument payload exactly. Do not split
+  arguments, parse nested calls, parse expressions, or evaluate attributes.
+- Populate the structured selector for both standalone M132 call tokens and
+  M134 `emit_return(...)` payload call tokens.
+- Preserve M133/M134 exact add-call lowering behavior. If the existing exact
+  add lowering consumes the old opaque selector arguments, adapt it to use or
+  coexist with the typed selector without broadening semantics.
+- Preserve unsupported-call diagnostics for all recognized calls that are not
+  the accepted exact add-call lowering case. Diagnostics may include the
+  structured target kind/name as context, but must not resolve the call.
+- Add tests for structured representation of `@self`, `@self[...]`,
+  named primitive references, named references with specialization brackets,
+  named references with `attrs[...]`, named references with both
+  specialization and attrs, and the same representation inside an
+  `emit_return(call<primitive=...>(...));` payload token.
+- Add negative tests for malformed selector brackets or malformed
+  `attrs[...]` forms proving they remain unsupported/malformed boundaries
+  rather than source repair.
 
 Out of scope:
 
-General `emit_return` expression parsing; variable declarations or lookup;
-assignment lowering; array access; primitive-call dependency closure; `@self`
-interpretation; type-argument parsing; call argument splitting;
-helper/operator lowering; generation/backend query evaluation; backend call
-rendering; source repair; complete TSIL grammar; runtime `tsldata` semantic
-lookup; `frozen` or `tslgenold` runtime dependency; registries; dispatchers;
-hidden backfeeds; fixpoint mechanisms; or new lowering IR
-category/request/result/worklist families beyond the single value-reference
-expression needed by this slice.
+Raw `emit_return(left)` or `emit_return(result)` name resolution; primitive
+dependency closure; resolving named primitive references against the catalog;
+expanding `@self`; interpreting specialization payloads; interpreting
+`attrs[...]`; splitting call arguments; recursive primitive-call trees;
+expression parsing; helper/operator lowering; assignment lowering; array
+access lowering; generation/backend query evaluation; backend call rendering;
+source repair; complete TSIL grammar; runtime `tsldata` semantic lookup;
+`frozen` or `tslgenold` runtime dependency; registries; dispatchers; hidden
+backfeeds; fixpoint mechanisms; or new request/result/worklist families.
 
 Expected outputs:
 
-- Exact `emit_return(<selected-parameter>);` bodies can lower to deterministic
-  C++ and Rust artifacts returning that parameter.
-- Unknown identifiers and non-identifier raw return payloads produce precise
-  lowering diagnostics rather than source repair or target-language
-  passthrough.
+- Recognized primitive-call tokens carry typed selector structure for self
+  references, named primitive references, specialization payloads, and attrs
+  payloads while preserving original source text.
+- Call arguments remain opaque source text.
+- Existing M133/M134 exact add-call lowering and unsupported-call diagnostics
+  remain stable.
 - Existing M126-M134 behavior, diagnostics, source locations, and artifact
-  bytes remain stable except for the deliberately added exact parameter-return
-  lowering and narrowed identifier diagnostics.
-- No general expression parser, variable model, assignment lowering, or
-  backend call rendering is introduced.
+  bytes remain stable except for the deliberately added selector
+  representation.
+- No raw return-payload identifier resolution, primitive dependency closure,
+  `@self` expansion, argument splitting, expression parser, or backend call
+  rendering is introduced.
 
 Validation:
 

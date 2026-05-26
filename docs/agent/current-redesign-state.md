@@ -1797,7 +1797,7 @@ docs/agent/runs/m135-execution-review-loop-prompt.md
 Active executor milestone:
 
 ```text
-Milestone 135: Exact Emit-Return Parameter Payload Lowering Slice
+Milestone 135: Structured Primitive Call Representation Boundary Slice
 ```
 
 Latest review verdict:
@@ -1812,16 +1812,20 @@ Accept. There were no blocking findings or recorded follow-ups.
 Next expected action:
 
 ```text
-Run the active M135 execution-review-loop prompt. M135 should lower only an
-exact selected `emit_return(...)` body whose M134 payload-token stream contains
-one raw token that exactly names a selected primitive parameter, such as
-`emit_return(left);`. It should add the smallest typed lowered value-reference
-expression needed for C++ and Rust backends to render that parameter return.
-It must keep unknown identifiers such as `result`, non-identifier raw payloads,
-mixed raw/call payloads, unsupported primitive-call payloads, assignment/array
-access, variables, general expression parsing, dependency closure, backend
-call rendering, source repair, runtime `tsldata`, `frozen`, and `tslgenold`
-out of scope.
+Run the active M135 execution-review-loop prompt. M135 should add structured
+source-owned representation for recognized TSIL `call<primitive=...>(...)`
+selectors. It should distinguish `@self` from named primitive references,
+record optional selector specialization payloads from `[...]`, record optional
+`attrs[...]` payloads, and preserve the original selector and opaque call
+argument payload text. It must populate this representation for standalone
+M132 call tokens and M134 `emit_return(...)` payload call tokens while
+preserving M133/M134 exact add-call lowering and unsupported-call diagnostics.
+
+M135 must not resolve named primitive references against the catalog, expand
+`@self`, interpret specialization or attrs payloads, split call arguments,
+parse expressions, lower raw `emit_return(left)` / `emit_return(result)` name
+references, add dependency closure, add backend call rendering, repair source,
+or introduce runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
 ```
 
 Accepted planning prompt:
