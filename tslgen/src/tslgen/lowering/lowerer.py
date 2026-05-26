@@ -9,6 +9,7 @@ from tslgen.domain.catalog import (
     ImplementationBody,
     LowerableDirective,
     LowerableOperationFragment,
+    PayloadToken,
 )
 from tslgen.lowering.binary_operations import (
     BinaryOperationDescriptor,
@@ -305,7 +306,7 @@ def _unsupported_binary_diagnostics(
     if fragment is None:
         directive = _emit_return_directive_from_body(body)
         if directive is not None:
-            diagnostics.append(_unsupported_return_expression_diagnostic(directive))
+            diagnostics.extend(_unsupported_emit_return_diagnostics(directive))
         elif primitive_call_diagnostics := _unsupported_primitive_call_diagnostics(
             body
         ):
@@ -433,7 +434,7 @@ def _unsupported_comparison_diagnostics(
     if fragment is None:
         directive = _emit_return_directive_from_body(body)
         if directive is not None:
-            diagnostics.append(_unsupported_return_expression_diagnostic(directive))
+            diagnostics.extend(_unsupported_emit_return_diagnostics(directive))
         elif primitive_call_diagnostics := _unsupported_primitive_call_diagnostics(
             body
         ):
@@ -580,7 +581,7 @@ def _unsupported_unary_diagnostics(
     if fragment is None:
         directive = _emit_return_directive_from_body(body)
         if directive is not None:
-            diagnostics.append(_unsupported_return_expression_diagnostic(directive))
+            diagnostics.extend(_unsupported_emit_return_diagnostics(directive))
         elif primitive_call_diagnostics := _unsupported_primitive_call_diagnostics(
             body
         ):
@@ -651,25 +652,44 @@ def _exact_add_primitive_call_fragment_from_body(
     selected: SelectedImplementation,
     body: ImplementationBody,
 ) -> LowerableOperationFragment | None:
-    if selected.primitive.name != "add":
-        return None
-    if selected.primitive.template != _SUPPORTED_BINARY_TEMPLATE:
-        return None
     if len(body.tokens) != 1:
         return None
 
     segment = body.tokens[0]
     if not isinstance(segment, LowerableDirective):
         return None
-    if segment.name != "call":
+
+    if segment.name == "emit_return":
+        if len(segment.payload_tokens) != 1:
+            return None
+        payload_token = segment.payload_tokens[0]
+        if not isinstance(payload_token, LowerableDirective):
+            return None
+        return _exact_add_primitive_call_fragment_from_directive(
+            selected,
+            payload_token,
+        )
+
+    return _exact_add_primitive_call_fragment_from_directive(selected, segment)
+
+
+def _exact_add_primitive_call_fragment_from_directive(
+    selected: SelectedImplementation,
+    directive: LowerableDirective,
+) -> LowerableOperationFragment | None:
+    if selected.primitive.name != "add":
         return None
-    if segment.arguments != _SUPPORTED_EXACT_PRIMITIVE_CALL_ARGUMENTS:
+    if selected.primitive.template != _SUPPORTED_BINARY_TEMPLATE:
+        return None
+    if directive.name != "call":
+        return None
+    if directive.arguments != _SUPPORTED_EXACT_PRIMITIVE_CALL_ARGUMENTS:
         return None
 
     return LowerableOperationFragment(
         operation="add",
         arguments=_SUPPORTED_BINARY_PARAMETERS,
-        source=segment.source,
+        source=directive.source,
     )
 
 
@@ -702,6 +722,14 @@ def _primitive_call_directives_from_body(
 def _unsupported_primitive_call_diagnostics(
     body: ImplementationBody,
 ) -> tuple[Diagnostic, ...]:
+    return _unsupported_primitive_call_diagnostics_from_directives(
+        _primitive_call_directives_from_body(body)
+    )
+
+
+def _unsupported_primitive_call_diagnostics_from_directives(
+    directives: tuple[LowerableDirective, ...],
+) -> tuple[Diagnostic, ...]:
     return tuple(
         Diagnostic(
             severity="error",
@@ -713,7 +741,35 @@ def _unsupported_primitive_call_diagnostics(
             ),
             location=directive.source,
         )
-        for directive in _primitive_call_directives_from_body(body)
+        for directive in directives
+    )
+
+
+def _unsupported_emit_return_diagnostics(
+    directive: LowerableDirective,
+) -> tuple[Diagnostic, ...]:
+    primitive_call_tokens = _primitive_call_directives_from_tokens(
+        directive.payload_tokens
+    )
+    if primitive_call_tokens and len(primitive_call_tokens) == len(
+        directive.payload_tokens
+    ):
+        return _unsupported_primitive_call_diagnostics_from_directives(
+            primitive_call_tokens
+        )
+    return (_unsupported_return_expression_diagnostic(directive),)
+
+
+def _primitive_call_directives_from_tokens(
+    tokens: tuple[PayloadToken, ...],
+) -> tuple[LowerableDirective, ...]:
+    return tuple(
+        token
+        for token in tokens
+        if isinstance(token, LowerableDirective)
+        and token.name == "call"
+        and len(token.arguments) == 3
+        and token.arguments[0] == "primitive"
     )
 
 

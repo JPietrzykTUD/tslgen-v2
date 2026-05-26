@@ -1,5 +1,7 @@
 """Minimal typed catalog values for the tiny clean restart slice."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 from tslgen.core.diagnostics import SourceLocation
@@ -13,18 +15,20 @@ class LowerableOperationFragment:
 
 
 @dataclass(frozen=True, slots=True)
-class LowerableDirective:
-    name: str
-    arguments: tuple[str, ...]
-    source: SourceLocation
-
-
-@dataclass(frozen=True, slots=True)
 class RawStringToken:
     text: str
     source: SourceLocation
 
 
+@dataclass(frozen=True, slots=True)
+class LowerableDirective:
+    name: str
+    arguments: tuple[str, ...]
+    source: SourceLocation
+    payload_tokens: tuple[PayloadToken, ...] = ()
+
+
+PayloadToken = RawStringToken | LowerableDirective
 BodyToken = RawStringToken | LowerableOperationFragment | LowerableDirective
 
 

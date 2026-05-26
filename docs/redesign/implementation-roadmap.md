@@ -17743,8 +17743,7 @@ Validation result:
 
 Status:
 
-Planned as the next clean restart implementation milestone after accepted
-M133. This is a narrow body-token composition slice. It gives selected
+Accepted. This is a narrow body-token composition slice. It gives selected
 lowerable directives a source-owned payload-token boundary so lowerable islands
 inside directive payloads can be represented as tokens instead of forcing later
 milestones to hardcode combined source strings.
@@ -17838,6 +17837,115 @@ Expected outputs:
 - No general `emit_return` expression parser, recursive directive-payload
   parser, primitive dependency closure, or backend call rendering is
   introduced.
+
+Execution notes:
+
+- `LowerableDirective` now preserves the existing opaque `arguments` tuple and
+  adds `payload_tokens` for source-owned directive payload tokens.
+- Catalog promotion currently populates payload tokens only for
+  `emit_return(...)` directives from parser-recognized quoted TSIL payloads.
+  Other directive payloads remain opaque.
+- M134 reuses the M132 primitive-call island classifier over the
+  `emit_return` payload text. Selector and call payload strings remain opaque.
+- Lowering composes with M133 only when the selected `emit_return` payload
+  stream contains exactly one exact add-call token. It does not match the
+  combined source string directly.
+- Unsupported recognized primitive-call payload tokens produce
+  `TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL`; raw-only or mixed raw payloads keep
+  `TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION`.
+- Review returned `Accept` from architecture, boundary, documentation, and
+  validation auditors. There were no blocking findings or recorded follow-ups.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `149 passed in 7.78s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
+### Milestone 135: Exact Emit-Return Parameter Payload Lowering Slice
+
+Status:
+
+Planned as the next clean restart implementation milestone after accepted
+M134. This is a narrow lowering slice over the M134 `emit_return(...)`
+payload-token boundary. It lowers only a single raw payload token that exactly
+names one selected primitive parameter.
+
+Goal:
+
+When the selected implementation body is exactly an `emit_return(...)`
+directive and its payload-token stream contains exactly one raw token:
+
+```text
+emit_return(left);
+```
+
+and that raw token exactly matches one selected primitive parameter, lowering
+emits a return of that parameter through a typed lowered value-reference
+expression that C++ and Rust backends render directly.
+
+Scope:
+
+- Consume the M134 `emit_return` payload-token representation; do not change
+  parser syntax, directive classification, primitive-call classification, or
+  the M133/M134 call lowering behavior except for defects found by tests.
+- Accept only a selected `emit_return(...)` body whose payload-token stream is
+  exactly one `RawStringToken` with text equal to one declared selected
+  primitive parameter name.
+- Add the smallest typed lowered expression needed to represent returning a
+  selected parameter by name, and teach C++/Rust emitters to render only that
+  typed value-reference expression.
+- Emit a precise unsupported return-value diagnostic for raw identifier payload
+  tokens that do not match a selected primitive parameter, such as `result`,
+  until a later variable/assignment milestone defines them.
+- Preserve existing diagnostics for raw payloads that are not exact single
+  identifiers, mixed raw/call payloads, recognized unsupported primitive-call
+  payload tokens, and malformed nearby forms.
+- Add tests for `emit_return(left);` and `emit_return(right);` artifact
+  rendering, unknown identifier diagnostics such as `emit_return(result);`,
+  non-identifier raw payload diagnostics such as `emit_return(left + right);`,
+  preserved M134 primitive-call payload behavior, and existing M126-M134
+  artifact-byte stability.
+
+Out of scope:
+
+General `emit_return` expression parsing; variable declarations or lookup;
+assignment lowering; array access; primitive-call dependency closure; `@self`
+interpretation; type-argument parsing; call argument splitting;
+helper/operator lowering; generation/backend query evaluation; backend call
+rendering; source repair; complete TSIL grammar; runtime `tsldata` semantic
+lookup; `frozen` or `tslgenold` runtime dependency; registries; dispatchers;
+hidden backfeeds; fixpoint mechanisms; or new lowering IR
+category/request/result/worklist families beyond the single value-reference
+expression needed by this slice.
+
+Expected outputs:
+
+- Exact `emit_return(<selected-parameter>);` bodies can lower to deterministic
+  C++ and Rust artifacts returning that parameter.
+- Unknown identifiers and non-identifier raw return payloads produce precise
+  lowering diagnostics rather than source repair or target-language
+  passthrough.
+- Existing M126-M134 behavior, diagnostics, source locations, and artifact
+  bytes remain stable except for the deliberately added exact parameter-return
+  lowering and narrowed identifier diagnostics.
+- No general expression parser, variable model, assignment lowering, or
+  backend call rendering is introduced.
 
 Validation:
 

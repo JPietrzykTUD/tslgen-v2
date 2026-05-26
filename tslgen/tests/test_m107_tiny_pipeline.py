@@ -3118,6 +3118,12 @@ def test_m129_catalog_classifies_inline_emit_return_directive_opaque_payload(
                 name="emit_return",
                 arguments=("left + right",),
                 source=SourceLocation(source.path, 3, 11),
+                payload_tokens=(
+                    RawStringToken(
+                        text="left + right",
+                        source=SourceLocation(source.path, 3, 23),
+                    ),
+                ),
             ),
         ),
         source=SourceLocation(source.path, 3, 5),
@@ -3158,6 +3164,12 @@ def test_m129_catalog_classifies_multiline_indented_emit_return_directive(
             name="emit_return",
             arguments=("result",),
             source=SourceLocation(source.path, 5, 7),
+            payload_tokens=(
+                RawStringToken(
+                    text="result",
+                    source=SourceLocation(source.path, 5, 19),
+                ),
+            ),
         ),
     )
 
@@ -3188,6 +3200,188 @@ def test_m129_catalog_preserves_nested_emit_return_payload(
     assert directive.name == "emit_return"
     assert directive.arguments == ("call<primitive=add>(left, right)",)
     assert directive.source == SourceLocation(source.path, 3, 11)
+    assert directive.payload_tokens == (
+        LowerableDirective(
+            name="call",
+            arguments=("primitive", "add", "left, right"),
+            source=SourceLocation(source.path, 3, 23),
+        ),
+    )
+
+
+def test_m134_emit_return_exact_add_call_lowers_to_existing_add_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_emit_return_primitive_call.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(call<primitive=add>(left, right));"',
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths((source,), _targets())
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/add_scalar_si32.hpp",
+        "src/add_scalar_si32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        CPP_CONTENT,
+        RUST_CONTENT,
+    ]
+
+
+def test_m134_emit_return_sub_call_reports_primitive_call_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_emit_return_sub_call.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(call<primitive=sub>(left, right));"',
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 23)
+    assert "sub" in diagnostic.message
+    assert "left, right" in diagnostic.message
+
+
+def test_m134_emit_return_self_call_reports_primitive_call_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_emit_return_self_call.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left, right));"',
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 23)
+    assert "@self" in diagnostic.message
+    assert "opaque" in diagnostic.message
+
+
+def test_m134_selected_self_primitive_call_reports_precise_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_selected_self_call.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left, right)"',
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+    assert "@self" in diagnostic.message
+    assert "opaque" in diagnostic.message
+
+
+def test_m134_emit_return_raw_plus_call_payload_remains_return_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_emit_return_raw_plus_call.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(prefix call<primitive=add>(left, right));"',
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+    assert "prefix call<primitive=add>(left, right)" in diagnostic.message
 
 
 def test_m129_catalog_accepts_emit_return_space_before_semicolon(
@@ -3216,6 +3410,12 @@ def test_m129_catalog_accepts_emit_return_space_before_semicolon(
     assert directive.name == "emit_return"
     assert directive.arguments == ("result",)
     assert directive.source == SourceLocation(source.path, 3, 11)
+    assert directive.payload_tokens == (
+        RawStringToken(
+            text="result",
+            source=SourceLocation(source.path, 3, 23),
+        ),
+    )
 
 
 def test_m130_catalog_classifies_var_directive_without_semicolon(
@@ -3474,6 +3674,12 @@ def test_m130_catalog_classifies_var_and_emit_return_in_order(
             name="emit_return",
             arguments=("result",),
             source=SourceLocation(source.path, 5, 7),
+            payload_tokens=(
+                RawStringToken(
+                    text="result",
+                    source=SourceLocation(source.path, 5, 19),
+                ),
+            ),
         ),
     )
 
@@ -3520,7 +3726,6 @@ def test_m129_emit_return_payloads_remain_opaque_and_unsupported(
     payloads = (
         "left + right",
         "details::arith_mul(left, right)",
-        "call<primitive=add>(left, right)",
     )
 
     for index, payload in enumerate(payloads):

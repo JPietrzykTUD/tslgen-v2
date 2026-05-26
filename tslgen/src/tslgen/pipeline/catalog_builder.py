@@ -41,6 +41,8 @@ M118_SIGNATURE = "v:=(v)"
 M118_PARAMETERS = ("value",)
 M118_TEMPLATE = "unary"
 SUPPORTED_EXTENSION = "scalar"
+_EMIT_RETURN_DIRECTIVE = "emit_return"
+_EMIT_RETURN_PREFIX = f"{_EMIT_RETURN_DIRECTIVE}("
 
 
 @dataclass(frozen=True, slots=True)
@@ -359,10 +361,42 @@ def _build_implementation_body(body: ParsedImplementationBody) -> Implementation
     )
     if body.envelope == PARSED_TSIL_BODY_ENVELOPE:
         tokens = classify_tsil_primitive_call_tokens(tokens)
+        tokens = _classify_emit_return_payload_tokens(tokens)
 
     return ImplementationBody(
         tokens=tokens,
         source=body.source,
+    )
+
+
+def _classify_emit_return_payload_tokens(
+    tokens: tuple[BodyToken, ...],
+) -> tuple[BodyToken, ...]:
+    return tuple(_classify_emit_return_payload_token(token) for token in tokens)
+
+
+def _classify_emit_return_payload_token(token: BodyToken) -> BodyToken:
+    if not isinstance(token, LowerableDirective):
+        return token
+    if token.name != _EMIT_RETURN_DIRECTIVE:
+        return token
+    if len(token.arguments) != 1:
+        return token
+
+    payload = token.arguments[0]
+    payload_source = SourceLocation(
+        token.source.path,
+        token.source.line,
+        token.source.column + len(_EMIT_RETURN_PREFIX),
+    )
+    payload_tokens = classify_tsil_primitive_call_tokens(
+        (RawStringToken(text=payload, source=payload_source),)
+    )
+    return LowerableDirective(
+        name=token.name,
+        arguments=token.arguments,
+        source=token.source,
+        payload_tokens=payload_tokens,
     )
 
 

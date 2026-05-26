@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 133 is accepted.
+Milestone 134 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -160,6 +160,37 @@ verdict is `Accept With Follow-Ups` only because architecture recorded a
 nonblocking follow-up: add explicit selected `@self` primitive-call diagnostic
 coverage in a later nearby lowering test slice, although the implementation
 already rejects it by construction.
+
+The M134 execution-review loop returned `Accept` after one write-capable
+executor and read-only architecture, boundary, documentation, and validation
+audits. M134 added a narrow payload-token boundary to `LowerableDirective`.
+The original opaque directive `arguments` are preserved for diagnostics, while
+`emit_return(...)` directives from parser-recognized quoted TSIL payloads now
+also expose source-owned payload tokens. Exact M132
+`call<primitive=...>(...)` islands inside `emit_return` payloads become
+payload call tokens; selector and call payload text remain opaque.
+
+M134 lowered only an `emit_return(...)` directive whose payload-token stream
+contains exactly one token that already lowers through the M133 exact
+`call<primitive=add>(left, right)` boundary. It did not hardcode the combined
+`emit_return(call<primitive=add>(left, right));` source string. Unsupported
+recognized primitive-call payload tokens now produce
+`TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL`; raw-only or mixed raw payloads still
+produce `TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION`.
+
+M134 preserved M126-M133 behavior, diagnostics, source locations, and artifact
+bytes except for the deliberately added payload-token boundary, exact composed
+add-call return lowering, and narrowed diagnostics for recognized unsupported
+primitive-call payload tokens. It did not add general directive-payload
+segmentation, recursive payload parsing, expression parsing, dependency
+closure, `@self` interpretation, argument splitting, helper/operator lowering,
+assignment or array-access lowering, backend call rendering, source repair,
+runtime `tsldata` lookup, `frozen` or `tslgenold` runtime dependencies, or new
+request/result/worklist machinery.
+
+M134 review verdicts were: architecture `Accept`, boundary `Accept`,
+documentation `Accept`, and validation `Accept`. There were no blocking
+findings or recorded follow-ups.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -1754,48 +1785,43 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 134.
+Execute Milestone 135.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m134-execution-review-loop-prompt.md
+docs/agent/runs/m135-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 134: Exact Lowerable Directive Payload Token Boundary Slice
+Milestone 135: Exact Emit-Return Parameter Payload Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-M133 execution-review returned Accept With Follow-Ups after one write-capable
+M134 execution-review returned Accept after one write-capable
 executor and read-only architecture, boundary, documentation, and validation
 audits. Architecture, boundary, documentation, and validation all returned
-Accept. There were no blocking findings. The only recorded follow-up is to add
-explicit selected `@self` primitive-call diagnostic coverage in a later nearby
-lowering test slice.
+Accept. There were no blocking findings or recorded follow-ups.
 ```
 
 Next expected action:
 
 ```text
-Run the active M134 execution-review-loop prompt. M134 should introduce a
-narrow source-owned payload-token boundary for selected lowerable directives,
-first only for `emit_return(...)` payloads, so an already recognized
-`call<primitive=...>(...)` payload island can remain a lowerable call token
-instead of an opaque string. It may lower `emit_return(...)` only when the
-payload token stream contains exactly one payload token that is already
-lowerable through the M133 exact `call<primitive=add>(left, right)` boundary.
-It must not lower by hardcoding the combined
-`emit_return(call<primitive=add>(left, right));` source string, and it must not
-add general directive-payload segmentation, general primitive resolution,
-dependency closure, `@self` interpretation, argument splitting, expression
-parsing, assignment/array-access lowering, backend call rendering, source
-repair, runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
+Run the active M135 execution-review-loop prompt. M135 should lower only an
+exact selected `emit_return(...)` body whose M134 payload-token stream contains
+one raw token that exactly names a selected primitive parameter, such as
+`emit_return(left);`. It should add the smallest typed lowered value-reference
+expression needed for C++ and Rust backends to render that parameter return.
+It must keep unknown identifiers such as `result`, non-identifier raw payloads,
+mixed raw/call payloads, unsupported primitive-call payloads, assignment/array
+access, variables, general expression parsing, dependency closure, backend
+call rendering, source repair, runtime `tsldata`, `frozen`, and `tslgenold`
+out of scope.
 ```
 
 Accepted planning prompt:

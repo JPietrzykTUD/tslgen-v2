@@ -338,6 +338,14 @@ Invariants:
   `TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL`; no general primitive resolution,
   dependency closure, `@self` interpretation, argument splitting, or backend
   call rendering is implied.
+- M134 lets selected lowerable directives retain opaque source-text arguments
+  while also exposing source-owned payload tokens for exact lowerable islands.
+  The first accepted payload-token producer is `emit_return(...)`, and the
+  first accepted payload island is the existing M132
+  `call<primitive=...>(...)` token shape. Non-`emit_return` directive payloads
+  remain opaque, and the payload-token boundary does not imply general
+  expression parsing, recursive directive-payload parsing, dependency closure,
+  `@self` interpretation, argument splitting, or backend call rendering.
 - `requires_value` remains structurally preserved for the existing flag and
   selector normalization rules.
 - Unknown extra fields remain preserved as `extra_fields` so future milestones

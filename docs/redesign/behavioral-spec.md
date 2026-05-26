@@ -632,6 +632,32 @@ primitive-looking calls such as `sub(left, right)`, raw-only bodies, and
 non-call directives preserve their existing unsupported-body or
 unsupported-return diagnostics.
 
+### M134 Exact Lowerable Directive Payload Token Boundary
+
+Milestone 134 gives selected lowerable directives a narrow payload-token
+boundary, first only for `emit_return(...)`. The directive keeps its original
+opaque payload argument for diagnostics and also exposes ordered payload tokens
+for exact lowerable islands inside that payload. Raw payload text remains raw
+payload-token data.
+
+For M134, only exact M132 `call<primitive=...>(...)` islands are classified
+inside an `emit_return(...)` payload. The primitive-call selector and payload
+text stay opaque, and non-`emit_return` directive payloads such as `var`,
+`let`, `loop`, `if`, `switch`, and `else` remain opaque.
+
+An `emit_return(...)` directive lowers only when its payload-token stream
+contains exactly one token that already lowers through the M133 exact
+`call<primitive=add>(left, right)` boundary for the accepted scalar add shape.
+Recognized but unsupported primitive-call payload tokens produce
+`TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL` at the call source. Raw-only or mixed
+raw payloads continue to produce `TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION`.
+
+M134 does not add a general `emit_return` expression parser, recursive
+directive-payload parser, dependency closure, `@self` interpretation, argument
+splitting, helper/operator lowering, assignment or array-access lowering,
+backend call rendering, source repair, runtime `tsldata` lookup, or `frozen` /
+`tslgenold` runtime dependency.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:
