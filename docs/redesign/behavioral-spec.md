@@ -601,6 +601,37 @@ dependency closure, repair source, or render backend code. Calls inside
 already classified `emit_return`, `var`, `let`, `loop`, `if`, `switch`, or
 `else` directive payloads remain opaque.
 
+### M133 Exact TSIL Primitive-Call Lowering Boundary
+
+Milestone 133 lowers only one self-contained primitive-call token shape:
+
+```text
+LowerableDirective(name="call", arguments=("primitive", "add", "left, right"))
+```
+
+When that token is the entire selected implementation body for the already
+supported scalar `add(left, right)` primitive shape, lowering routes it through
+the same typed add-operation path as the accepted synthetic
+`body add(left, right)` source form. The generated C++ and Rust artifact bytes
+match the existing scalar add artifacts.
+
+Every other selected M132 primitive-call token produces
+`TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL` at the call token source. The diagnostic
+may include the selector and payload as opaque source context, but lowering
+does not interpret them. This includes primitive calls embedded in raw
+assignment-like text, calls with zero arguments, multiple recognized call
+tokens in one selected body, `@self` selectors, and calls to primitives other
+than the exact self-contained `add(left, right)` case.
+
+M133 does not compute dependency closure, interpret `@self`, split arbitrary
+call arguments, parse assignments, array access, expressions, helpers,
+operators, or directive payloads, evaluate backend/generation queries, repair
+source, render new backend call syntax, or use runtime `tsldata`, `frozen`, or
+`tslgenold` as dependencies. Malformed nearby call-like source, direct
+primitive-looking calls such as `sub(left, right)`, raw-only bodies, and
+non-call directives preserve their existing unsupported-body or
+unsupported-return diagnostics.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

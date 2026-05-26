@@ -59,6 +59,11 @@ _SUPPORTED_EXTENSION = "scalar"
 _SUPPORTED_BINARY_PARAMETERS = ("left", "right")
 _SUPPORTED_UNARY_PARAMETERS = ("value",)
 _SUPPORTED_COMPARISON_PARAMETERS = ("left", "right")
+_SUPPORTED_EXACT_PRIMITIVE_CALL_ARGUMENTS = (
+    "primitive",
+    "add",
+    "left, right",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,7 +102,7 @@ class Lowerer:
     def lower(self, selected: SelectedImplementation) -> LoweringResult:
         scalar_type = lookup_scalar_type_descriptor(selected.implementation.type_tag)
         body = selected.implementation.body
-        fragment = _operation_fragment_from_body(body)
+        fragment = _operation_fragment_from_selected_body(selected, body)
         if selected.primitive.template == _SUPPORTED_COMPARISON_TEMPLATE:
             operation = lookup_comparison_operation_descriptor(selected.primitive.name)
             diagnostics = tuple(
@@ -301,6 +306,10 @@ def _unsupported_binary_diagnostics(
         directive = _emit_return_directive_from_body(body)
         if directive is not None:
             diagnostics.append(_unsupported_return_expression_diagnostic(directive))
+        elif primitive_call_diagnostics := _unsupported_primitive_call_diagnostics(
+            body
+        ):
+            diagnostics.extend(primitive_call_diagnostics)
         else:
             diagnostics.append(
                 _unsupported_body_shape_diagnostic(
@@ -425,6 +434,10 @@ def _unsupported_comparison_diagnostics(
         directive = _emit_return_directive_from_body(body)
         if directive is not None:
             diagnostics.append(_unsupported_return_expression_diagnostic(directive))
+        elif primitive_call_diagnostics := _unsupported_primitive_call_diagnostics(
+            body
+        ):
+            diagnostics.extend(primitive_call_diagnostics)
         else:
             diagnostics.append(
                 _unsupported_body_shape_diagnostic(
@@ -568,6 +581,10 @@ def _unsupported_unary_diagnostics(
         directive = _emit_return_directive_from_body(body)
         if directive is not None:
             diagnostics.append(_unsupported_return_expression_diagnostic(directive))
+        elif primitive_call_diagnostics := _unsupported_primitive_call_diagnostics(
+            body
+        ):
+            diagnostics.extend(primitive_call_diagnostics)
         else:
             diagnostics.append(
                 _unsupported_body_shape_diagnostic(
@@ -609,6 +626,16 @@ def _unsupported_unary_diagnostics(
     return tuple(diagnostics)
 
 
+def _operation_fragment_from_selected_body(
+    selected: SelectedImplementation,
+    body: ImplementationBody,
+) -> LowerableOperationFragment | None:
+    fragment = _operation_fragment_from_body(body)
+    if fragment is not None:
+        return fragment
+    return _exact_add_primitive_call_fragment_from_body(selected, body)
+
+
 def _operation_fragment_from_body(
     body: ImplementationBody,
 ) -> LowerableOperationFragment | None:
@@ -618,6 +645,32 @@ def _operation_fragment_from_body(
     if not isinstance(segment, LowerableOperationFragment):
         return None
     return segment
+
+
+def _exact_add_primitive_call_fragment_from_body(
+    selected: SelectedImplementation,
+    body: ImplementationBody,
+) -> LowerableOperationFragment | None:
+    if selected.primitive.name != "add":
+        return None
+    if selected.primitive.template != _SUPPORTED_BINARY_TEMPLATE:
+        return None
+    if len(body.tokens) != 1:
+        return None
+
+    segment = body.tokens[0]
+    if not isinstance(segment, LowerableDirective):
+        return None
+    if segment.name != "call":
+        return None
+    if segment.arguments != _SUPPORTED_EXACT_PRIMITIVE_CALL_ARGUMENTS:
+        return None
+
+    return LowerableOperationFragment(
+        operation="add",
+        arguments=_SUPPORTED_BINARY_PARAMETERS,
+        source=segment.source,
+    )
 
 
 def _emit_return_directive_from_body(
@@ -631,6 +684,37 @@ def _emit_return_directive_from_body(
     if segment.name != "emit_return":
         return None
     return segment
+
+
+def _primitive_call_directives_from_body(
+    body: ImplementationBody,
+) -> tuple[LowerableDirective, ...]:
+    return tuple(
+        token
+        for token in body.tokens
+        if isinstance(token, LowerableDirective)
+        and token.name == "call"
+        and len(token.arguments) == 3
+        and token.arguments[0] == "primitive"
+    )
+
+
+def _unsupported_primitive_call_diagnostics(
+    body: ImplementationBody,
+) -> tuple[Diagnostic, ...]:
+    return tuple(
+        Diagnostic(
+            severity="error",
+            code="TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL",
+            message=(
+                "primitive call cannot be lowered by this exact boundary; "
+                f"selector remains opaque: {directive.arguments[1]!r}; "
+                f"payload remains opaque: {directive.arguments[2]!r}"
+            ),
+            location=directive.source,
+        )
+        for directive in _primitive_call_directives_from_body(body)
+    )
 
 
 def _unsupported_return_expression_diagnostic(

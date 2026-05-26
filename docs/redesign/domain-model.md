@@ -330,6 +330,14 @@ Invariants:
   `RawStringToken` data. The call boundary does not imply primitive
   resolution, dependency closure, `@self` interpretation, argument splitting,
   directive-payload segmentation, expression parsing, or backend rendering.
+- M133 lowers only the exact self-contained
+  `LowerableDirective(name="call", arguments=("primitive", "add", "left, right"))`
+  body token for the already supported scalar `add(left, right)` shape by
+  reusing the existing typed add-operation lowering path. Other selected
+  primitive-call tokens remain opaque and produce
+  `TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL`; no general primitive resolution,
+  dependency closure, `@self` interpretation, argument splitting, or backend
+  call rendering is implied.
 - `requires_value` remains structurally preserved for the existing flag and
   selector normalization rules.
 - Unknown extra fields remain preserved as `extra_fields` so future milestones

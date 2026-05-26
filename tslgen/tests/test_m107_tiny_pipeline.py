@@ -2943,7 +2943,73 @@ def test_m132_direct_primitive_looking_call_remains_unsupported(
     assert "one lowerable operation token" in diagnostic.message
 
 
-def test_m128_selected_raw_tsil_body_is_unsupported_lowering_boundary(
+def test_m133_exact_add_primitive_call_lowers_to_existing_add_artifacts(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_exact_primitive_call.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "call<primitive=add>(left, right)"',
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths((source,), _targets())
+
+    assert result.diagnostics == ()
+    assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
+        "include/tsl/add_scalar_si32.hpp",
+        "src/add_scalar_si32.rs",
+    ]
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        CPP_CONTENT,
+        RUST_CONTENT,
+    ]
+
+
+def test_m133_assignment_like_primitive_call_reports_precise_diagnostic(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_assignment_primitive_call.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "result[i] = call<primitive=add>(left, right);"',
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 23)
+    assert "add" in diagnostic.message
+    assert "left, right" in diagnostic.message
+    assert "opaque" in diagnostic.message
+
+
+def test_m133_selected_zero_argument_primitive_call_reports_precise_diagnostic(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "tiny_add_raw_tsil.tsl"
@@ -2973,11 +3039,51 @@ def test_m128_selected_raw_tsil_body_is_unsupported_lowering_boundary(
     assert result.artifacts.artifacts == ()
     assert len(result.diagnostics) == 1
     diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-BODY"
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
     assert diagnostic.severity == "error"
-    assert diagnostic.location == SourceLocation(source.resolve(), 3, 5)
-    assert "one lowerable operation token" in diagnostic.message
-    assert "add(left, right)" in diagnostic.message
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+    assert "set_zero" in diagnostic.message
+    assert "opaque" in diagnostic.message
+
+
+def test_m133_multiple_primitive_calls_report_one_diagnostic_each(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_multiple_primitive_calls.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "call<primitive=sub>(left, right); call<primitive=mul>(left, right)"',
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL",
+        "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL",
+    ]
+    assert [diagnostic.location for diagnostic in result.diagnostics] == [
+        SourceLocation(source.resolve(), 3, 11),
+        SourceLocation(source.resolve(), 3, 45),
+    ]
+    assert "sub" in result.diagnostics[0].message
+    assert "mul" in result.diagnostics[1].message
 
 
 def test_m129_catalog_classifies_inline_emit_return_directive_opaque_payload(
@@ -3509,7 +3615,6 @@ def test_m130_malformed_or_unsupported_directive_envelopes_remain_unsupported(
         "if<generation>(condition);",
         "else<compile>();",
         "while<generation>(condition) {",
-        "call<primitive=add>(left, right)",
     )
 
     for index, payload_line in enumerate(payload_lines):

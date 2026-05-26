@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 132 is accepted.
+Milestone 133 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -135,6 +135,31 @@ category/request/result/worklist families.
 
 M132 review verdicts were: architecture `Accept`, boundary `Accept`,
 documentation `Accept` after handoff cleanup, and validation `Accept`.
+
+The M133 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, documentation,
+and validation audits. M133 lowered only the exact selected M132 primitive-call
+body token `call<primitive=add>(left, right)` for the accepted scalar
+`add(left, right)` shape through the existing typed add-operation path. Other
+selected M132 primitive-call tokens now produce
+`TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL` at the call token source while selector
+and payload text remain opaque diagnostic context.
+
+M133 preserved M126-M132 behavior, diagnostics, source locations, and artifact
+bytes except for the deliberately added exact add-call lowering and the
+narrowed diagnostic for unresolved recognized primitive-call tokens. It did
+not add dependency closure, `@self` interpretation, arbitrary argument
+splitting, expression parsing, helper/operator lowering, assignment or
+array-access lowering, directive-payload segmentation, backend call rendering,
+source repair, runtime `tsldata` lookup, `frozen` or `tslgenold` runtime
+dependencies, or new lowering IR category/request/result/worklist families.
+
+M133 review verdicts were: architecture `Accept`, boundary `Accept`,
+documentation `Accept`, and validation `Accept`. The consolidated workflow
+verdict is `Accept With Follow-Ups` only because architecture recorded a
+nonblocking follow-up: add explicit selected `@self` primitive-call diagnostic
+coverage in a later nearby lowering test slice, although the implementation
+already rejects it by construction.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -1729,44 +1754,45 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 133.
+Execute Milestone 134.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m133-execution-review-loop-prompt.md
+docs/agent/runs/m134-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 133: Exact TSIL Primitive-Call Lowering Boundary Slice
+Milestone 134: Exact Emit-Return Primitive-Call Payload Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-M132 execution-review returned Accept after one write-capable
+M133 execution-review returned Accept With Follow-Ups after one write-capable
 executor and read-only architecture, boundary, documentation, and validation
-audits. Architecture returned Accept, boundary returned Accept, documentation
-returned Accept after state/next-prompt cleanup, and validation returned
-Accept. There were no blocking findings.
+audits. Architecture, boundary, documentation, and validation all returned
+Accept. There were no blocking findings. The only recorded follow-up is to add
+explicit selected `@self` primitive-call diagnostic coverage in a later nearby
+lowering test slice.
 ```
 
 Next expected action:
 
 ```text
-Run the active M133 execution-review-loop prompt. M133 should make lowering
-detect selected bodies containing M132 primitive-call body tokens, emit a
-precise unsupported primitive-call diagnostic for unresolved calls, and lower
-only the tiny exact self-contained case `call<primitive=add>(left, right)`
-through the already accepted scalar `add(left, right)` operation path. It must
-not compute dependency closure, interpret `@self`, split arbitrary call
-arguments, parse assignments, array access, expressions, helper/operator
-forms, or directive payloads, evaluate backend/generation queries, render new
-backend call syntax, repair source, or use runtime `tsldata`, `frozen`, or
-`tslgenold` as dependencies.
+Run the active M134 execution-review-loop prompt. M134 should lower only the
+exact selected `emit_return(call<primitive=add>(left, right));` payload through
+the same typed add-operation path accepted by M126 and M133. It must preserve
+opaque `TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION` diagnostics for other
+`emit_return(...)` payloads, including non-add primitive calls and `@self`
+primitive-call payloads, and it must not add directive-payload segmentation,
+general primitive resolution, dependency closure, `@self` interpretation,
+argument splitting, expression parsing, assignment/array-access lowering,
+backend call rendering, source repair, runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
 ```
 
 Accepted planning prompt:
