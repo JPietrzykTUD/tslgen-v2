@@ -21,10 +21,41 @@ class RawStringToken:
 
 
 @dataclass(frozen=True, slots=True)
+class SelfPrimitiveReference:
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class NamedPrimitiveReference:
+    name: str
+    source: SourceLocation
+
+
+PrimitiveCallTarget = SelfPrimitiveReference | NamedPrimitiveReference
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallSelector:
+    target: PrimitiveCallTarget
+    specialization: str | None
+    attrs: str | None
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCall:
+    selector: PrimitiveCallSelector
+    payload: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
 class LowerableDirective:
     name: str
     arguments: tuple[str, ...]
     source: SourceLocation
+    primitive_call: PrimitiveCall | None = None
     payload_tokens: tuple[PayloadToken, ...] = ()
 
 

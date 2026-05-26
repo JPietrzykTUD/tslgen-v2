@@ -346,6 +346,15 @@ Invariants:
   remain opaque, and the payload-token boundary does not imply general
   expression parsing, recursive directive-payload parsing, dependency closure,
   `@self` interpretation, argument splitting, or backend call rendering.
+- M135 gives recognized `call<primitive=...>(...)` tokens a typed
+  source-owned selector representation while preserving the existing opaque
+  directive arguments. The selector distinguishes `@self` from named primitive
+  references and preserves optional specialization and `attrs[...]` payloads
+  as opaque source text. Call arguments remain opaque. The selector
+  representation does not imply primitive resolution, dependency closure,
+  `@self` expansion, specialization or attrs interpretation, argument
+  splitting, recursive call parsing, expression parsing, or backend call
+  rendering.
 - `requires_value` remains structurally preserved for the existing flag and
   selector normalization rules.
 - Unknown extra fields remain preserved as `extra_fields` so future milestones

@@ -17881,8 +17881,7 @@ Validation result:
 
 Status:
 
-Planned as the next clean restart implementation milestone after accepted
-M134. This supersedes the previously planned raw
+Accepted. This superseded the previously planned raw
 `emit_return(<selected-parameter>)` idea, because resolving raw payload
 identifiers would push the generator back toward target-language expression
 interpretation. M135 instead strengthens the representation of the explicit
@@ -17967,6 +17966,101 @@ Expected outputs:
 - No raw return-payload identifier resolution, primitive dependency closure,
   `@self` expansion, argument splitting, expression parser, or backend call
   rendering is introduced.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Execution notes:
+
+- `LowerableDirective` call tokens now preserve the existing opaque
+  `(primitive, selector, payload)` arguments and also carry a structured
+  `PrimitiveCall` value for recognized TSIL primitive calls.
+- The structured selector distinguishes `@self` from named primitive
+  references and preserves optional specialization and `attrs[...]` payloads
+  as opaque source text. The call argument payload remains opaque.
+- Structured selector values are populated for standalone M132 call tokens and
+  for M134 `emit_return(...)` payload call tokens.
+- M133/M134 exact `call<primitive=add>(left, right)` lowering now uses or
+  coexists with the structured selector while preserving the accepted exact
+  add-call boundary.
+- Malformed selector brackets and malformed `attrs[...]` forms remain raw
+  unsupported source text rather than being repaired.
+- Architecture review initially returned `Accept With Follow-Ups` requesting
+  explicit tests for `@self attrs[...]` and `@self[...] attrs[...]`; that
+  follow-up was addressed during execution. Boundary and documentation audits
+  returned `Accept`. Validation initially requested cache cleanup and then
+  returned `Accept` on focused re-review.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `152 passed in 8.79s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
+### Milestone 136: Structured Primitive Call Argument List Boundary Slice
+
+Status:
+
+Planned as the next clean restart implementation milestone after accepted
+M135. This is still representation-first lowering work over explicit TSIL
+`call<primitive=...>(...)` constructs, not primitive resolution or expression
+interpretation.
+
+Goal:
+
+Recognized primitive-call tokens should expose an ordered source-owned call
+argument list in addition to the opaque payload string accepted by M132-M135.
+Each argument remains raw source text with a source location; the argument list
+only records the top-level comma structure of the TSIL call payload.
+
+Scope:
+
+- Preserve the existing opaque `PrimitiveCall.payload` string and add the
+  smallest structured argument-list representation needed for later lowering.
+- Split only the top-level comma-separated payload of recognized
+  `call<primitive=...>(...)` tokens, respecting nested parentheses and square
+  brackets so nested TSIL calls or helper forms are not split internally.
+- Represent zero-argument calls as an empty argument tuple.
+- Populate argument lists for standalone M132 call tokens and M134
+  `emit_return(...)` payload call tokens.
+- Preserve M133/M134 exact add-call lowering and adapt its exact check to use
+  or coexist with the structured argument list without broadening semantics.
+- Add focused tests for zero arguments, two raw parameter-like arguments,
+  nested call arguments, helper/cast-like nested parentheses, source
+  locations, malformed argument delimiters, preserved unsupported-call
+  diagnostics, and existing M126-M135 artifact-byte stability.
+
+Out of scope:
+
+Primitive dependency closure; resolving named primitive references against the
+catalog; expanding `@self`; interpreting selector specialization or
+`attrs[...]`; resolving argument identifiers; parsing array access,
+assignment, operators, helpers, casts, or nested call semantics; recursively
+lowering argument expressions; backend call rendering; source repair; complete
+TSIL grammar; runtime `tsldata` semantic lookup; `frozen` or `tslgenold`
+runtime dependency; registries; dispatchers; hidden backfeeds; fixpoint
+mechanisms; or new request/result/worklist families.
+
+Expected outputs:
+
+- Recognized primitive-call tokens preserve the original opaque payload and
+  also expose deterministic source-owned argument payload values.
+- Existing exact add-call lowering, unsupported-call diagnostics, source
+  locations, and artifact bytes remain stable.
+- No primitive resolution, argument expression parsing, dependency closure, or
+  backend call rendering is introduced.
 
 Validation:
 

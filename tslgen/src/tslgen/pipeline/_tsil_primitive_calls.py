@@ -1,23 +1,41 @@
 """Exact TSIL primitive-call island classification for raw body tokens."""
 
+import re
 from dataclasses import dataclass
 
 from tslgen.core.diagnostics import SourceLocation
 from tslgen.domain.catalog import (
     BodyToken,
     LowerableDirective,
+    NamedPrimitiveReference,
+    PrimitiveCall,
+    PrimitiveCallSelector,
     RawStringToken,
+    SelfPrimitiveReference,
 )
 
 _CALL_PREFIX = "call<primitive="
+_SELF_SELECTOR = "@self"
+_ATTRS_PREFIX = "attrs["
+_PRIMITIVE_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 @dataclass(frozen=True, slots=True)
 class _PrimitiveCallMatch:
     selector: str
+    selector_parts: "_PrimitiveCallSelectorParts"
     payload: str
     start: int
+    selector_start: int
     end: int
+
+
+@dataclass(frozen=True, slots=True)
+class _PrimitiveCallSelectorParts:
+    target_kind: str
+    target_name: str | None
+    specialization: str | None
+    attrs: str | None
 
 
 def classify_tsil_primitive_call_tokens(
@@ -68,6 +86,7 @@ def _classify_raw_run(tokens: tuple[RawStringToken, ...]) -> tuple[BodyToken, ..
                 name="call",
                 arguments=("primitive", match.selector, match.payload),
                 source=joined.source_at(match.start),
+                primitive_call=_primitive_call_from_match(joined, match),
             )
         )
         position = match.end
@@ -103,6 +122,9 @@ def _match_primitive_call(text: str, start: int) -> _PrimitiveCallMatch | None:
     selector = text[selector_start:selector_end]
     if not selector:
         return None
+    selector_parts = _parse_primitive_call_selector(selector)
+    if selector_parts is None:
+        return None
 
     open_index = selector_end + 1
     if open_index >= len(text) or text[open_index] != "(":
@@ -114,8 +136,10 @@ def _match_primitive_call(text: str, start: int) -> _PrimitiveCallMatch | None:
 
     return _PrimitiveCallMatch(
         selector=selector,
+        selector_parts=selector_parts,
         payload=text[open_index + 1 : close_index],
         start=start,
+        selector_start=selector_start,
         end=close_index + 1,
     )
 
@@ -127,10 +151,110 @@ def _matching_call_selector_end(text: str, start: int) -> int | None:
         if char == "[":
             bracket_depth += 1
         elif char == "]":
-            bracket_depth = max(0, bracket_depth - 1)
+            if bracket_depth == 0:
+                return None
+            bracket_depth -= 1
         elif char == ">" and bracket_depth == 0:
             return index
     return None
+
+
+def _parse_primitive_call_selector(
+    selector: str,
+) -> _PrimitiveCallSelectorParts | None:
+    if selector != selector.strip():
+        return None
+
+    index = 0
+    if selector.startswith(_SELF_SELECTOR):
+        target_kind = "self"
+        target_name = None
+        index = len(_SELF_SELECTOR)
+    else:
+        name_match = _PRIMITIVE_NAME_RE.match(selector)
+        if name_match is None:
+            return None
+        target_kind = "named"
+        target_name = name_match.group(0)
+        index = name_match.end()
+
+    specialization: str | None = None
+    if index < len(selector) and selector[index] == "[":
+        close_index = _matching_close_bracket(selector, index)
+        if close_index is None:
+            return None
+        specialization = selector[index + 1 : close_index]
+        index = close_index + 1
+
+    attrs: str | None = None
+    if index < len(selector):
+        whitespace_start = index
+        while index < len(selector) and selector[index].isspace():
+            index += 1
+        if index == whitespace_start:
+            return None
+        if not selector.startswith(_ATTRS_PREFIX, index):
+            return None
+        attrs_open_index = index + len("attrs")
+        close_index = _matching_close_bracket(selector, attrs_open_index)
+        if close_index is None:
+            return None
+        attrs = selector[attrs_open_index + 1 : close_index]
+        index = close_index + 1
+
+    if index != len(selector):
+        return None
+
+    return _PrimitiveCallSelectorParts(
+        target_kind=target_kind,
+        target_name=target_name,
+        specialization=specialization,
+        attrs=attrs,
+    )
+
+
+def _matching_close_bracket(text: str, open_index: int) -> int | None:
+    if open_index >= len(text) or text[open_index] != "[":
+        return None
+
+    depth = 1
+    for index in range(open_index + 1, len(text)):
+        char = text[index]
+        if char == "[":
+            depth += 1
+        elif char == "]":
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
+def _primitive_call_from_match(
+    joined: "_JoinedRawTokens",
+    match: _PrimitiveCallMatch,
+) -> PrimitiveCall:
+    selector_source = joined.source_at(match.selector_start)
+    parts = match.selector_parts
+    if parts.target_kind == "self":
+        target = SelfPrimitiveReference(source=selector_source)
+    else:
+        assert parts.target_name is not None
+        target = NamedPrimitiveReference(
+            name=parts.target_name,
+            source=selector_source,
+        )
+
+    return PrimitiveCall(
+        selector=PrimitiveCallSelector(
+            target=target,
+            specialization=parts.specialization,
+            attrs=parts.attrs,
+            source_text=match.selector,
+            source=selector_source,
+        ),
+        payload=match.payload,
+        source=joined.source_at(match.start),
+    )
 
 
 def _matching_close_paren(text: str, open_index: int) -> int | None:

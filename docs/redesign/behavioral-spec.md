@@ -658,6 +658,47 @@ splitting, helper/operator lowering, assignment or array-access lowering,
 backend call rendering, source repair, runtime `tsldata` lookup, or `frozen` /
 `tslgenold` runtime dependency.
 
+### M135 Structured Primitive-Call Selector Representation Boundary
+
+Milestone 135 keeps the M132 primitive-call island boundary and adds typed
+source-owned selector representation to recognized `call<primitive=...>(...)`
+tokens. The directive still preserves its existing opaque arguments
+`(primitive, selector, payload)`, and the call payload remains opaque source
+text.
+
+The accepted selector forms are:
+
+```text
+call<primitive=@self>(...)
+call<primitive=@self[...]>(...)
+call<primitive=@self attrs[...]>(...)
+call<primitive=@self[...] attrs[...]>(...)
+call<primitive=<primitive-name>>(...)
+call<primitive=<primitive-name>[...]>(...)
+call<primitive=<primitive-name> attrs[...]>(...)
+call<primitive=<primitive-name>[...] attrs[...]>(...)
+```
+
+`<primitive-name>` is documentation notation for an arbitrary primitive name
+token. The source spelling `_NAME_` is not accepted literally. The selector
+representation distinguishes `@self` from named primitive references and
+stores optional specialization and `attrs[...]` payloads as opaque source
+text.
+
+The structured selector is populated for both standalone M132 call tokens and
+M134 `emit_return(...)` payload call tokens. The accepted M133/M134 exact
+`call<primitive=add>(left, right)` lowering remains stable, but no other call
+is resolved or executed. Unsupported recognized calls still produce
+`TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL` diagnostics.
+
+Malformed selector brackets, malformed `attrs[...]` forms, raw
+`emit_return(left)` / `emit_return(result)` payloads, primitive dependency
+closure, `@self` expansion, specialization interpretation, attrs
+interpretation, call argument splitting, recursive call trees, expression
+parsing, assignment or array-access lowering, backend call rendering, source
+repair, runtime `tsldata` lookup, and `frozen` / `tslgenold` runtime
+dependencies remain out of scope.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

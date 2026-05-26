@@ -20,8 +20,12 @@ from tslgen.domain.catalog import (
     ImplementationBody,
     LowerableDirective,
     LowerableOperationFragment,
+    NamedPrimitiveReference,
     Primitive,
+    PrimitiveCall,
+    PrimitiveCallSelector,
     RawStringToken,
+    SelfPrimitiveReference,
 )
 from tslgen.io.sources import SourceDocument
 from tslgen.lowering import (
@@ -2785,6 +2789,15 @@ def test_m132_catalog_classifies_primitive_call_with_raw_prefix_suffix(
                 "left[i], right[i]",
             ),
             source=SourceLocation(source.path, 3, 23),
+            primitive_call=_primitive_call(
+                source.path,
+                3,
+                23,
+                "@self[type<backend>(vector::as_extension(scalar))]",
+                "left[i], right[i]",
+                target_name=None,
+                specialization="type<backend>(vector::as_extension(scalar))",
+            ),
         ),
         RawStringToken(
             text=";",
@@ -2820,6 +2833,15 @@ def test_m132_catalog_classifies_zero_argument_primitive_call(
     assert directive.name == "call"
     assert directive.arguments == ("primitive", "set_zero[Vec]", "")
     assert directive.source == SourceLocation(source.path, 3, 11)
+    assert directive.primitive_call == _primitive_call(
+        source.path,
+        3,
+        11,
+        "set_zero[Vec]",
+        "",
+        target_name="set_zero",
+        specialization="Vec",
+    )
 
 
 def test_m132_catalog_classifies_primitive_call_across_raw_tokens(
@@ -2862,6 +2884,19 @@ def test_m132_catalog_classifies_primitive_call_across_raw_tokens(
                 "left,\n      right",
             ),
             source=SourceLocation(source.path, 4, 16),
+            primitive_call=_primitive_call(
+                source.path,
+                4,
+                16,
+                "@self[type<backend>\n"
+                "      (vector::as_extension(scalar))]",
+                "left,\n      right",
+                target_name=None,
+                specialization=(
+                    "type<backend>\n"
+                    "      (vector::as_extension(scalar))"
+                ),
+            ),
         ),
         RawStringToken(
             text=";",
@@ -3205,6 +3240,14 @@ def test_m129_catalog_preserves_nested_emit_return_payload(
             name="call",
             arguments=("primitive", "add", "left, right"),
             source=SourceLocation(source.path, 3, 23),
+            primitive_call=_primitive_call(
+                source.path,
+                3,
+                23,
+                "add",
+                "left, right",
+                target_name="add",
+            ),
         ),
     )
 
@@ -3382,6 +3425,211 @@ def test_m134_emit_return_raw_plus_call_payload_remains_return_diagnostic(
     assert diagnostic.severity == "error"
     assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
     assert "prefix call<primitive=add>(left, right)" in diagnostic.message
+
+
+def test_m135_catalog_structures_primitive_call_selectors(
+    tmp_path: Path,
+) -> None:
+    cases = (
+        (
+            "self",
+            "call<primitive=@self>(left, right)",
+            "@self",
+            "left, right",
+            None,
+            None,
+            None,
+        ),
+        (
+            "self_specialized",
+            (
+                "call<primitive=@self"
+                "[type<backend>(vector::as_extension(scalar))]>(left, right)"
+            ),
+            "@self[type<backend>(vector::as_extension(scalar))]",
+            "left, right",
+            None,
+            "type<backend>(vector::as_extension(scalar))",
+            None,
+        ),
+        (
+            "self_attrs",
+            "call<primitive=@self attrs[mask=zero]>(left, right)",
+            "@self attrs[mask=zero]",
+            "left, right",
+            None,
+            None,
+            "mask=zero",
+        ),
+        (
+            "self_specialized_attrs",
+            (
+                "call<primitive=@self[Vec] attrs[mask=pass_through]>"
+                "(left, right)"
+            ),
+            "@self[Vec] attrs[mask=pass_through]",
+            "left, right",
+            None,
+            "Vec",
+            "mask=pass_through",
+        ),
+        (
+            "named",
+            "call<primitive=add>(left, right)",
+            "add",
+            "left, right",
+            "add",
+            None,
+            None,
+        ),
+        (
+            "named_specialized",
+            "call<primitive=reinterpret[Vec, Vec<si64>]>(left)",
+            "reinterpret[Vec, Vec<si64>]",
+            "left",
+            "reinterpret",
+            "Vec, Vec<si64>",
+            None,
+        ),
+        (
+            "named_attrs",
+            "call<primitive=mov attrs[mask=zero]>(left, right)",
+            "mov attrs[mask=zero]",
+            "left, right",
+            "mov",
+            None,
+            "mask=zero",
+        ),
+        (
+            "named_specialized_attrs",
+            (
+                "call<primitive=mul[Vec] attrs[mask=pass_through]>"
+                "(left, right)"
+            ),
+            "mul[Vec] attrs[mask=pass_through]",
+            "left, right",
+            "mul",
+            "Vec",
+            "mask=pass_through",
+        ),
+    )
+
+    for name, call_text, selector, payload, target_name, specialization, attrs in cases:
+        source = _source_document(
+            tmp_path,
+            f"tiny_add_m135_{name}.tsl",
+            "\n".join(
+                (
+                    "prim<v:=(v,v)> add(left, right):",
+                    "  implementation scalar si32:",
+                    f'    tsil "{call_text}"',
+                )
+            ),
+        )
+
+        parse_result = TslParser().parse((source,))
+        catalog_result = CatalogBuilder().build(parse_result.documents)
+
+        assert parse_result.diagnostics == ()
+        assert catalog_result.diagnostics == ()
+        assert catalog_result.catalog is not None
+        directive = _body_directive(
+            catalog_result.catalog.primitives[0].implementations[0].body
+        )
+        assert directive.name == "call"
+        assert directive.arguments == ("primitive", selector, payload)
+        assert directive.source == SourceLocation(source.path, 3, 11)
+        assert directive.primitive_call == _primitive_call(
+            source.path,
+            3,
+            11,
+            selector,
+            payload,
+            target_name=target_name,
+            specialization=specialization,
+            attrs=attrs,
+        )
+
+
+def test_m135_emit_return_payload_call_has_structured_selector(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_m135_emit_return_call_selector.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                (
+                    '    tsil "emit_return('
+                    "call<primitive=mul[Vec] attrs[mask=pass_through]>"
+                    '(left, right));"'
+                ),
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    directive = _body_directive(
+        catalog_result.catalog.primitives[0].implementations[0].body
+    )
+    assert directive.name == "emit_return"
+    assert len(directive.payload_tokens) == 1
+    payload_token = directive.payload_tokens[0]
+    assert isinstance(payload_token, LowerableDirective)
+    assert payload_token.primitive_call == _primitive_call(
+        source.path,
+        3,
+        23,
+        "mul[Vec] attrs[mask=pass_through]",
+        "left, right",
+        target_name="mul",
+        specialization="Vec",
+        attrs="mask=pass_through",
+    )
+
+
+def test_m135_malformed_primitive_call_selectors_remain_raw(
+    tmp_path: Path,
+) -> None:
+    payloads = (
+        "call<primitive=add]>(left, right)",
+        "call<primitive=mov attrs(mask=zero)>(left, right)",
+        "call<primitive=mul[Vec attrs[mask=zero]>(left, right)",
+    )
+
+    for index, payload in enumerate(payloads):
+        source = _source_document(
+            tmp_path,
+            f"tiny_add_m135_bad_call_selector_{index}.tsl",
+            "\n".join(
+                (
+                    "prim<v:=(v,v)> add(left, right):",
+                    "  implementation scalar si32:",
+                    f'    tsil "{payload}"',
+                )
+            ),
+        )
+
+        parse_result = TslParser().parse((source,))
+        catalog_result = CatalogBuilder().build(parse_result.documents)
+
+        assert parse_result.diagnostics == ()
+        assert catalog_result.diagnostics == ()
+        assert catalog_result.catalog is not None
+        body = catalog_result.catalog.primitives[0].implementations[0].body
+        assert body.tokens == (
+            RawStringToken(
+                text=payload,
+                source=SourceLocation(source.path, 3, 11),
+            ),
+        )
 
 
 def test_m129_catalog_accepts_emit_return_space_before_semicolon(
@@ -4870,6 +5118,40 @@ def _single_directive_at(body: ImplementationBody, index: int) -> LowerableDirec
     segment = body.tokens[index]
     assert isinstance(segment, LowerableDirective)
     return segment
+
+
+def _primitive_call(
+    path: Path,
+    line: int,
+    call_column: int,
+    selector: str,
+    payload: str,
+    *,
+    target_name: str | None,
+    specialization: str | None = None,
+    attrs: str | None = None,
+) -> PrimitiveCall:
+    selector_source = SourceLocation(
+        path,
+        line,
+        call_column + len("call<primitive="),
+    )
+    target = (
+        SelfPrimitiveReference(source=selector_source)
+        if target_name is None
+        else NamedPrimitiveReference(name=target_name, source=selector_source)
+    )
+    return PrimitiveCall(
+        selector=PrimitiveCallSelector(
+            target=target,
+            specialization=specialization,
+            attrs=attrs,
+            source_text=selector,
+            source=selector_source,
+        ),
+        payload=payload,
+        source=SourceLocation(path, line, call_column),
+    )
 
 
 def _parsed_add_document(

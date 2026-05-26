@@ -9,6 +9,7 @@ from tslgen.domain.catalog import (
     ImplementationBody,
     LowerableDirective,
     LowerableOperationFragment,
+    NamedPrimitiveReference,
     PayloadToken,
 )
 from tslgen.lowering.binary_operations import (
@@ -60,11 +61,8 @@ _SUPPORTED_EXTENSION = "scalar"
 _SUPPORTED_BINARY_PARAMETERS = ("left", "right")
 _SUPPORTED_UNARY_PARAMETERS = ("value",)
 _SUPPORTED_COMPARISON_PARAMETERS = ("left", "right")
-_SUPPORTED_EXACT_PRIMITIVE_CALL_ARGUMENTS = (
-    "primitive",
-    "add",
-    "left, right",
-)
+_SUPPORTED_EXACT_PRIMITIVE_CALL_TARGET = "add"
+_SUPPORTED_EXACT_PRIMITIVE_CALL_PAYLOAD = "left, right"
 
 
 @dataclass(frozen=True, slots=True)
@@ -683,13 +681,35 @@ def _exact_add_primitive_call_fragment_from_directive(
         return None
     if directive.name != "call":
         return None
-    if directive.arguments != _SUPPORTED_EXACT_PRIMITIVE_CALL_ARGUMENTS:
+    if not _is_exact_add_primitive_call_directive(directive):
         return None
 
     return LowerableOperationFragment(
         operation="add",
         arguments=_SUPPORTED_BINARY_PARAMETERS,
         source=directive.source,
+    )
+
+
+def _is_exact_add_primitive_call_directive(
+    directive: LowerableDirective,
+) -> bool:
+    primitive_call = directive.primitive_call
+    if primitive_call is None:
+        return directive.arguments == (
+            "primitive",
+            _SUPPORTED_EXACT_PRIMITIVE_CALL_TARGET,
+            _SUPPORTED_EXACT_PRIMITIVE_CALL_PAYLOAD,
+        )
+
+    selector = primitive_call.selector
+    if not isinstance(selector.target, NamedPrimitiveReference):
+        return False
+    return (
+        selector.target.name == _SUPPORTED_EXACT_PRIMITIVE_CALL_TARGET
+        and selector.specialization is None
+        and selector.attrs is None
+        and primitive_call.payload == _SUPPORTED_EXACT_PRIMITIVE_CALL_PAYLOAD
     )
 
 
@@ -714,8 +734,7 @@ def _primitive_call_directives_from_body(
         for token in body.tokens
         if isinstance(token, LowerableDirective)
         and token.name == "call"
-        and len(token.arguments) == 3
-        and token.arguments[0] == "primitive"
+        and _has_primitive_call_shape(token)
     )
 
 
@@ -736,8 +755,7 @@ def _unsupported_primitive_call_diagnostics_from_directives(
             code="TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL",
             message=(
                 "primitive call cannot be lowered by this exact boundary; "
-                f"selector remains opaque: {directive.arguments[1]!r}; "
-                f"payload remains opaque: {directive.arguments[2]!r}"
+                f"{_primitive_call_context(directive)}"
             ),
             location=directive.source,
         )
@@ -768,9 +786,42 @@ def _primitive_call_directives_from_tokens(
         for token in tokens
         if isinstance(token, LowerableDirective)
         and token.name == "call"
-        and len(token.arguments) == 3
-        and token.arguments[0] == "primitive"
+        and _has_primitive_call_shape(token)
     )
+
+
+def _has_primitive_call_shape(directive: LowerableDirective) -> bool:
+    return directive.primitive_call is not None or (
+        len(directive.arguments) == 3 and directive.arguments[0] == "primitive"
+    )
+
+
+def _primitive_call_context(directive: LowerableDirective) -> str:
+    primitive_call = directive.primitive_call
+    if primitive_call is None:
+        return (
+            f"selector remains opaque: {directive.arguments[1]!r}; "
+            f"payload remains opaque: {directive.arguments[2]!r}"
+        )
+
+    selector = primitive_call.selector
+    if isinstance(selector.target, NamedPrimitiveReference):
+        target_text = f"named primitive {selector.target.name!r}"
+    else:
+        target_text = "'@self'"
+
+    details = [
+        f"selector target is {target_text}",
+        f"selector source is {selector.source_text!r}",
+    ]
+    if selector.specialization is not None:
+        details.append(
+            f"specialization remains opaque: {selector.specialization!r}"
+        )
+    if selector.attrs is not None:
+        details.append(f"attrs remain opaque: {selector.attrs!r}")
+    details.append(f"payload remains opaque: {primitive_call.payload!r}")
+    return "; ".join(details)
 
 
 def _unsupported_return_expression_diagnostic(

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 134 is accepted.
+Milestone 135 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -191,6 +191,30 @@ request/result/worklist machinery.
 M134 review verdicts were: architecture `Accept`, boundary `Accept`,
 documentation `Accept`, and validation `Accept`. There were no blocking
 findings or recorded follow-ups.
+
+The M135 execution-review loop returned `Accept` after one write-capable
+executor and read-only architecture, boundary, documentation, and validation
+audits. M135 added structured source-owned selector representation for
+recognized TSIL `call<primitive=...>(...)` tokens while preserving the
+existing opaque directive arguments and call payload text. The selector now
+distinguishes `@self` from named primitive references and preserves optional
+specialization and `attrs[...]` payloads as opaque strings.
+
+M135 populates structured selector values for standalone M132 call tokens and
+for M134 `emit_return(...)` payload call tokens. It preserves the M133/M134
+exact `call<primitive=add>(left, right)` lowering boundary and unsupported-call
+diagnostics. It did not resolve named primitive references against the
+catalog, expand `@self`, interpret specialization or attrs payloads, split
+call arguments, parse expressions, lower raw `emit_return(left)` /
+`emit_return(result)` name references, add dependency closure, add backend
+call rendering, repair source, or introduce runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
+
+M135 review verdicts were: architecture `Accept With Follow-Ups`, boundary
+`Accept`, documentation `Accept`, and validation `Accept` after focused cache
+cleanup re-review. The architecture follow-up requested explicit coverage for
+`@self attrs[...]` and `@self[...] attrs[...]`; that coverage was added during
+the loop, so there are no recorded follow-ups.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -1785,46 +1809,47 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 135.
+Execute Milestone 136.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m135-execution-review-loop-prompt.md
+docs/agent/runs/m136-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 135: Structured Primitive Call Representation Boundary Slice
+Milestone 136: Structured Primitive Call Argument List Boundary Slice
 ```
 
 Latest review verdict:
 
 ```text
-M134 execution-review returned Accept after one write-capable
-executor and read-only architecture, boundary, documentation, and validation
-audits. Architecture, boundary, documentation, and validation all returned
-Accept. There were no blocking findings or recorded follow-ups.
+M135 execution-review returned Accept after one write-capable executor,
+read-only architecture, boundary, documentation, and validation audits, one
+test-coverage follow-up addressed during execution, and a focused validation
+cache-cleanup re-review. There are no recorded follow-ups.
 ```
 
 Next expected action:
 
 ```text
-Run the active M135 execution-review-loop prompt. M135 should add structured
-source-owned representation for recognized TSIL `call<primitive=...>(...)`
-selectors. It should distinguish `@self` from named primitive references,
-record optional selector specialization payloads from `[...]`, record optional
-`attrs[...]` payloads, and preserve the original selector and opaque call
-argument payload text. It must populate this representation for standalone
-M132 call tokens and M134 `emit_return(...)` payload call tokens while
-preserving M133/M134 exact add-call lowering and unsupported-call diagnostics.
+Run the active M136 execution-review-loop prompt. M136 should add structured
+source-owned argument-list representation for recognized TSIL
+`call<primitive=...>(...)` tokens while preserving the opaque
+`PrimitiveCall.payload` string from M135. It should split only top-level comma
+arguments in the call payload, respect nested parentheses and square brackets,
+represent zero-argument calls as an empty argument tuple, and populate both
+standalone M132 call tokens and M134 `emit_return(...)` payload call tokens.
 
-M135 must not resolve named primitive references against the catalog, expand
-`@self`, interpret specialization or attrs payloads, split call arguments,
-parse expressions, lower raw `emit_return(left)` / `emit_return(result)` name
-references, add dependency closure, add backend call rendering, repair source,
+M136 must preserve M133/M134 exact add-call lowering and unsupported-call
+diagnostics. It must not resolve named primitive references against the
+catalog, expand `@self`, interpret selector specialization or attrs payloads,
+resolve argument identifiers, parse array access, assignment, operators,
+helpers, casts, or nested call semantics, recursively lower argument
+expressions, add dependency closure, add backend call rendering, repair source,
 or introduce runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
 ```
 
