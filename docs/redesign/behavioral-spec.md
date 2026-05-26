@@ -470,18 +470,18 @@ fallback, type groups, implementation ranking, broad TSL parsing, new operation
 or scalar type semantics, runtime `tsldata/` semantic reads, source repair, or
 renderer-side inference.
 
-### M126 Ordered Implementation Body Line Boundary
+### M126 Ordered Implementation Body Boundary
 
 Milestone 126 keeps the accepted source syntax unchanged but changes the body
 model underneath it. Each accepted `body <operation>(...)` line is promoted to
-an `ImplementationBody` containing one `SegmentedLine` with one
-`LowerableOperationFragment`. The fragment carries the operation name,
+an `ImplementationBody` containing one `LowerableOperationFragment` token. The
+fragment carries the operation name,
 argument names, and source location used by catalog diagnostics and lowering.
 
-Lowering consumes the typed body-line and segment values. It accepts only the
-current one-line / one-fragment body shape for the already supported binary,
-unary, and comparison templates. Malformed containers, raw-only body lines,
-multi-segment lines, missing fragments, or unsupported argument shapes produce
+Lowering consumes the typed body-token stream. It accepts only the current
+one-token operation-fragment body shape for the already supported binary,
+unary, and comparison templates. Malformed containers, raw-only body tokens,
+mixed token streams, missing fragments, or unsupported argument shapes produce
 structured diagnostics rather than raw passthrough, source repair, renderer
 inference, or TSIL parsing.
 
@@ -496,9 +496,9 @@ or backend-owned operator spellings in lowering.
 Milestone 128 adds source intake for exact quoted `tsil` payload envelopes in
 the current narrow clean primitive/implementation shape. Inline quoted payloads
 such as `tsil "emit_return(left + right);"` are promoted to an
-`ImplementationBody` with one `RawStringLine` containing the payload text inside
+`ImplementationBody` with one `RawStringToken` containing the payload text inside
 the quotes. Multiline quoted payloads opened by `tsil """` and closed by a line
-whose stripped text is `"""` are promoted to ordered `RawStringLine` values for
+whose stripped text is `"""` are promoted to ordered `RawStringToken` values for
 the intervening payload lines. Payload raw text and source locations are
 preserved; indentation, punctuation, comments, blank payload lines, and nearby
 malformed source are not repaired.
@@ -553,7 +553,7 @@ The recognized directive span becomes a `LowerableDirective` with opaque
 source-text arguments: `(selector, payload)` for call-shaped directives and
 `(selector,)` for `else`. Leading multiline indentation may be ignored only to
 find the directive. A leading `}` before `else<...>` and accepted trailing
-`;` or `{` text are preserved as `RawStringToken` segments rather than
+`;` or `{` text are preserved as `RawStringToken` tokens rather than
 interpreted.
 
 M130 performs only directive-envelope delimiter matching. It does not evaluate
@@ -564,19 +564,42 @@ source, or render backend code. Selected bodies containing these directives
 still produce unsupported lowering diagnostics until later milestones define
 complete body lowering.
 
-### M131 Planned Body Token Stream Consolidation
+### M131 Body Token Stream Consolidation
 
-Milestone 131 is planned as a behavior-preserving consolidation of the
-implementation-body model. The intended canonical domain shape is a
-source-owned token stream made of raw text tokens and lowerable tokens, not a
-line-primary `RawStringLine | SegmentedLine` structure. Raw text tokens may
-contain newlines and target-like text; lowerable tokens preserve the accepted
-M126-M130 operation/directive facts.
+Milestone 131 consolidates the implementation-body model. The canonical domain
+shape is a source-owned token stream made of raw text tokens and lowerable
+tokens, not a line-primary `RawStringLine | SegmentedLine` structure. Raw text
+tokens may contain newlines and target-like text; lowerable tokens preserve the
+accepted M126-M130 operation/directive facts.
 
-M131 must not add new TSIL syntax recognition or backend rendering. Its purpose
-is to keep accepted M126-M130 behavior stable while removing the single-line
-constraint that would otherwise make future lowerable islands awkward or push
-the generator toward a full TSIL parser.
+M131 does not add new TSIL syntax recognition or backend rendering. Its
+purpose is to keep accepted M126-M130 behavior stable while removing the
+canonical line-container boundary that would otherwise make future lowerable
+islands awkward or push the generator toward a full TSIL parser.
+
+### M132 Exact TSIL Primitive-Call Body-Token Island Boundary
+
+Milestone 132 recognizes exact TSIL primitive-call keyword islands in raw
+body-token text from parser-recognized quoted `tsil` payloads:
+
+```text
+call<primitive=selector>(opaque-payload)
+```
+
+Only the exact call span becomes a `LowerableDirective` token named `call` with
+source-owned opaque arguments `(primitive, selector, payload)`. Raw text before
+and after the island remains `RawStringToken` data, including assignments,
+array access, semicolons, braces, whitespace, and other target-like text.
+
+M132 performs only outer keyword-envelope delimiter matching. It may match
+primitive-call islands across contiguous raw body tokens so current parser
+line boundaries do not force a line-only design. It does not resolve
+primitive names, interpret `@self`, split call arguments, evaluate
+type/backend/generation queries, segment directive payloads, parse
+assignments, array access, expressions, helpers, or operators, compute
+dependency closure, repair source, or render backend code. Calls inside
+already classified `emit_return`, `var`, `let`, `loop`, `if`, `switch`, or
+`else` directive payloads remain opaque.
 
 ## Catalog Behavior
 

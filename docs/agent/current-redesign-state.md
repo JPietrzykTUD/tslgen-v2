@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 130 is accepted.
+Milestone 132 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -32,8 +32,8 @@ M127 review follow-ups are nonblocking:
 
 The M128 execution-review loop returned `Accept With Follow-Ups`. M128 added
 exact quoted `tsil` payload-envelope intake to the clean restart parser/body
-model. Inline quoted payloads become one source-owned `RawStringLine`;
-multiline quoted payloads become ordered source-owned `RawStringLine` values.
+model. Inline quoted payloads become one source-owned raw body token after
+M131; multiline quoted payloads become ordered source-owned raw body tokens.
 Catalog construction accepts only parser-recognized quoted-TSIL raw bodies as
 typed raw implementation bodies; arbitrary raw parsed body containers remain
 malformed catalog input. Selected raw TSIL bodies still produce
@@ -51,11 +51,11 @@ marker before it becomes a general downstream dispatch mechanism.
 
 The M129 execution-review loop returned `Accept With Follow-Ups`. M129 kept
 M128 parser output raw, then classified exact `emit_return(...)` payload lines
-from parser-recognized TSIL envelopes into `LowerableDirective` body segments
-with opaque source-text payloads. The classifier performs only outer directive
-delimiter matching, including nested parentheses needed to preserve payloads
-such as `call<primitive=add>(left, right)`. Selected bodies containing only an
-`emit_return` directive now stop at lowering with
+from parser-recognized TSIL envelopes into `LowerableDirective` body tokens
+after M131, with opaque source-text payloads. The classifier performs only
+outer directive delimiter matching, including nested parentheses needed to
+preserve payloads such as `call<primitive=add>(left, right)`. Selected bodies
+containing only an `emit_return` directive now stop at lowering with
 `TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION`; no operators, operands, helpers,
 primitive calls, intrinsics, casts, array access, generation/backend queries,
 raw TSIL rendering, runtime `tsldata` semantic lookup, `frozen` dependency, or
@@ -73,10 +73,10 @@ The M130 execution-review loop returned `Accept With Follow-Ups`. M130 added a
 focused private TSIL directive-envelope classifier and classifies exact
 selected directive envelopes `var<...>(...)`, `let<...>(...)`,
 `loop<...>(...)`, `if<...>(...)`, `switch<...>(...)`, and `else<...>` from
-parser-recognized quoted `tsil` payload lines into existing body segments. It
+parser-recognized quoted `tsil` payload lines into existing body tokens. It
 keeps selector and payload text opaque, preserves accepted raw prefix/suffix
 text such as `} ` before `else<...>`, ` {`, and `;` as `RawStringToken`
-segments, and leaves selected bodies containing these directives unsupported
+tokens, and leaves selected bodies containing these directives unsupported
 for backend rendering. It did not add expression parsing, helper/call/operator
 lowering, variable/type semantics, condition evaluation, loop execution, block
 matching, generation/backend query evaluation, runtime `tsldata` semantic
@@ -91,6 +91,50 @@ leading `}` scope, helper-payload opacity coverage, explicit `var` plus
 were addressed during the loop. The remaining follow-up is that M130 directive
 selector matching supports the current simple selector corpus only; future
 nested directive selector syntax must be explicitly selected and tested.
+
+The M131 execution-review loop returned `Accept` after focused documentation
+handoff cleanup. M131 consolidated the canonical domain implementation body
+from line containers into a source-owned body-token stream. `ImplementationBody` now carries
+`tokens: tuple[BodyToken, ...]`, where `BodyToken` is `RawStringToken`,
+`LowerableOperationFragment`, or `LowerableDirective`. Parser-owned
+`ParsedRawStringLine` and `ParsedSegmentedLine` remain parser/catalog adapter
+details only. Catalog promotion now flattens parser body lines into domain
+tokens, and lowering consumes only `body.tokens`.
+
+M131 preserved M126 synthetic `body <operation>(...)` lowering and artifact
+bytes, M128 quoted-TSIL raw intake, M129 opaque `emit_return(...)`
+classification and unsupported-return diagnostics, and M130 directive-envelope
+classification plus raw prefix/suffix preservation. It did not add new TSIL
+syntax recognition, `call<primitive=...>` matching, expression parsing,
+helper/operator lowering, assignment or array-access lowering,
+directive-payload segmentation, backend rendering, runtime `tsldata` lookup,
+`frozen` or `tslgenold` runtime dependencies, source repair, or new lowering
+IR category/request/result/worklist families.
+
+M131 review verdicts were: architecture `Accept`, boundary `Accept`,
+documentation `Accept` after handoff cleanup, and validation `Accept with
+note`. The validation note recorded that ignored `.pytest_cache` directories
+outside the M131 `tslgen/__pycache__` cleanup contract preexisted and were not
+blocking.
+
+The M132 execution-review loop returned `Accept` after one write-capable
+executor and read-only architecture, boundary, documentation, and validation
+audits. M132 added a focused primitive-call island classifier over contiguous
+raw body-token runs from parser-recognized TSIL payloads. Exact
+`call<primitive=...>(...)` islands now become existing `LowerableDirective`
+tokens named `call` with opaque arguments `(primitive, selector, payload)`,
+and raw prefix/suffix text remains `RawStringToken` data.
+
+M132 preserved M126-M131 behavior, diagnostics, source locations, and artifact
+bytes. It did not add primitive resolution, dependency closure, `@self`
+interpretation, argument splitting, expression parsing, helper/operator
+lowering, assignment or array-access lowering, directive-payload segmentation,
+backend rendering, source repair, runtime `tsldata` lookup, `frozen` or
+`tslgenold` runtime dependencies, or new lowering IR
+category/request/result/worklist families.
+
+M132 review verdicts were: architecture `Accept`, boundary `Accept`,
+documentation `Accept` after handoff cleanup, and validation `Accept`.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -1685,50 +1729,44 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 131.
+Execute Milestone 133.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m131-execution-review-loop-prompt.md
+docs/agent/runs/m133-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 131: Source-Owned Body Token Stream Consolidation Slice
+Milestone 133: Exact TSIL Primitive-Call Lowering Boundary Slice
 ```
 
 Latest review verdict:
 
 ```text
-M130 execution-review returned Accept With Follow-Ups after one write-capable
+M132 execution-review returned Accept after one write-capable
 executor and read-only architecture, boundary, documentation, and validation
-audits. Architecture, boundary, documentation, and validation all returned
-Accept With Follow-Ups. There were no blocking findings. Nonblocking review
-items about raw leading `}` scope, helper-payload opacity coverage, explicit
-`var` plus `emit_return` coexistence coverage, and generation-control
-inventory wording were addressed during the loop. The remaining follow-up is
-that M130 directive selector matching supports the current simple selector
-corpus only; future nested directive selector syntax must be explicitly
-selected and tested.
+audits. Architecture returned Accept, boundary returned Accept, documentation
+returned Accept after state/next-prompt cleanup, and validation returned
+Accept. There were no blocking findings.
 ```
 
 Next expected action:
 
 ```text
-Run the active M131 execution-review-loop prompt. M131 should consolidate the
-canonical domain implementation body from line containers into a source-owned
-token stream. It should preserve M126-M130 behavior, diagnostics, source
-locations, and artifact bytes while making `ImplementationBody` expose a
-deterministic sequence of raw text tokens and lowerable tokens. It should
-leave new TSIL syntax recognition, `call<primitive=...>` island matching,
-primitive resolution, dependency closure, `@self` resolution, type-argument
-parsing, argument splitting, expression parsing, helper/operator lowering,
-assignment lowering, array access lowering, directive-payload segmentation,
-multiline call matching, generation/backend query evaluation, backend
-rendering, source repair, and runtime `tsldata` semantic lookup out of scope.
+Run the active M133 execution-review-loop prompt. M133 should make lowering
+detect selected bodies containing M132 primitive-call body tokens, emit a
+precise unsupported primitive-call diagnostic for unresolved calls, and lower
+only the tiny exact self-contained case `call<primitive=add>(left, right)`
+through the already accepted scalar `add(left, right)` operation path. It must
+not compute dependency closure, interpret `@self`, split arbitrary call
+arguments, parse assignments, array access, expressions, helper/operator
+forms, or directive payloads, evaluate backend/generation queries, render new
+backend call syntax, repair source, or use runtime `tsldata`, `frozen`, or
+`tslgenold` as dependencies.
 ```
 
 Accepted planning prompt:

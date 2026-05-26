@@ -4,17 +4,19 @@ from dataclasses import dataclass
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
+    BodyToken,
     Catalog,
     ImplementationBody,
     Implementation,
     LowerableDirective,
     LowerableOperationFragment,
     Primitive,
-    RawStringLine,
     RawStringToken,
-    SegmentedLine,
 )
 from tslgen.pipeline._tsil_directives import classify_tsil_directive_line
+from tslgen.pipeline._tsil_primitive_calls import (
+    classify_tsil_primitive_call_tokens,
+)
 from tslgen.syntax.ast import (
     PARSED_TSIL_BODY_ENVELOPE,
     ParsedBodySegment,
@@ -218,8 +220,7 @@ class CatalogBuilder:
                         code="TSL-CATALOG-UNSUPPORTED-BODY",
                         message=(
                             "implementation body is unsupported; expected exactly "
-                            "one segmented line containing one lowerable operation "
-                            "fragment"
+                            "one lowerable operation token"
                         ),
                         location=parsed.body.source,
                     )
@@ -346,40 +347,40 @@ def _is_parsed_tsil_raw_body(body: ParsedImplementationBody) -> bool:
 
 
 def _build_implementation_body(body: ParsedImplementationBody) -> ImplementationBody:
+    tokens = tuple(
+        token
+        for line in body.lines
+        for token in _build_body_tokens(
+            line,
+            classify_tsil_directives=(
+                body.envelope == PARSED_TSIL_BODY_ENVELOPE
+            ),
+        )
+    )
+    if body.envelope == PARSED_TSIL_BODY_ENVELOPE:
+        tokens = classify_tsil_primitive_call_tokens(tokens)
+
     return ImplementationBody(
-        lines=tuple(
-            _build_body_line(
-                line,
-                classify_tsil_directives=(
-                    body.envelope == PARSED_TSIL_BODY_ENVELOPE
-                ),
-            )
-            for line in body.lines
-        ),
+        tokens=tokens,
         source=body.source,
     )
 
 
-def _build_body_line(
+def _build_body_tokens(
     line: ParsedRawStringLine | ParsedSegmentedLine,
     *,
     classify_tsil_directives: bool = False,
-) -> RawStringLine | SegmentedLine:
+) -> tuple[BodyToken, ...]:
     if isinstance(line, ParsedRawStringLine):
         if classify_tsil_directives:
-            directive_line = classify_tsil_directive_line(line)
-            if directive_line is not None:
-                return directive_line
-        return RawStringLine(text=line.text, source=line.source)
-    return SegmentedLine(
-        segments=tuple(_build_body_segment(segment) for segment in line.segments),
-        source=line.source,
-    )
+            directive_tokens = classify_tsil_directive_line(line)
+            if directive_tokens is not None:
+                return directive_tokens
+        return (RawStringToken(text=line.text, source=line.source),)
+    return tuple(_build_body_segment(segment) for segment in line.segments)
 
 
-def _build_body_segment(segment: ParsedBodySegment) -> (
-    RawStringToken | LowerableOperationFragment | LowerableDirective
-):
+def _build_body_segment(segment: ParsedBodySegment) -> BodyToken:
     if isinstance(segment, ParsedLowerableOperationFragment):
         return LowerableOperationFragment(
             operation=segment.operation,

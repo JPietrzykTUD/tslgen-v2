@@ -1828,18 +1828,18 @@ Consequences:
 - Future data-driven operation semantics require an explicit typed rule-loading
   milestone with diagnostics and tests; they must not be introduced through
   renderer inference, backend manifest shortcuts, or ad hoc dictionary maps.
-## ADR-036: Implementation Bodies Are Source-Owned Lines With Lowerable Segments
+## ADR-036: Implementation Bodies Are Source-Owned Token Streams
 
 Status: Accepted
 
 Context:
 
-Clean restart milestones M135-M137 introduced exact typed body values for
-specific indexed-assignment and loop-envelope TSIL forms. A product-owner
+Clean restart body-lowering planning briefly drifted toward exact typed values
+for specific indexed-assignment and loop-envelope TSIL forms. A product-owner
 review clarified that this is drifting toward a validator/compiler for TSIL
 instead of a generator that should primarily preserve `.tsl` implementation
 body text and lower only the pseudo-language islands that require generator or
-backend ownership. TSIL bodies can contain lines where raw target-like text and
+backend ownership. TSIL bodies can contain text where raw target-like text and
 lowerable pseudo-language fragments are mixed, such as helper calls embedded in
 assignments.
 
@@ -1896,7 +1896,7 @@ Consequences:
 - Unknown or unsupported source text should be preserved or diagnosed at the
   documented boundary; it must not be silently repaired, normalized, reordered,
   or guessed.
-- Exact M135/M137 body values remain accepted evidence, but future work should
+- Earlier exact whole-body prototypes remain evidence, but future work should
   avoid extending that shape-proliferation pattern without a clear product
   reason.
 - The generator still does not parse TSIL as a complete language: no general

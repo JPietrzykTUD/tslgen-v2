@@ -4,9 +4,9 @@ from dataclasses import dataclass
 
 from tslgen.core.diagnostics import SourceLocation
 from tslgen.domain.catalog import (
+    BodyToken,
     LowerableDirective,
     RawStringToken,
-    SegmentedLine,
 )
 from tslgen.syntax.ast import ParsedRawStringLine
 
@@ -26,7 +26,9 @@ class _DirectiveMatch:
     suffix: str
 
 
-def classify_tsil_directive_line(line: ParsedRawStringLine) -> SegmentedLine | None:
+def classify_tsil_directive_line(
+    line: ParsedRawStringLine,
+) -> tuple[BodyToken, ...] | None:
     """Classify one exact selected directive envelope in a raw TSIL line."""
 
     leading_columns = len(line.text) - len(line.text.lstrip(" "))
@@ -66,8 +68,7 @@ def classify_tsil_directive_line(line: ParsedRawStringLine) -> SegmentedLine | N
             )
         )
 
-    line_source = segments[0].source
-    return SegmentedLine(segments=tuple(segments), source=line_source)
+    return tuple(segments)
 
 
 def _match_emit_return(text: str) -> _DirectiveMatch | None:

@@ -25,27 +25,12 @@ class RawStringToken:
     source: SourceLocation
 
 
-BodySegment = RawStringToken | LowerableOperationFragment | LowerableDirective
-
-
-@dataclass(frozen=True, slots=True)
-class RawStringLine:
-    text: str
-    source: SourceLocation
-
-
-@dataclass(frozen=True, slots=True)
-class SegmentedLine:
-    segments: tuple[BodySegment, ...]
-    source: SourceLocation
-
-
-BodyLine = RawStringLine | SegmentedLine
+BodyToken = RawStringToken | LowerableOperationFragment | LowerableDirective
 
 
 @dataclass(frozen=True, slots=True)
 class ImplementationBody:
-    lines: tuple[BodyLine, ...]
+    tokens: tuple[BodyToken, ...]
     source: SourceLocation
 
 

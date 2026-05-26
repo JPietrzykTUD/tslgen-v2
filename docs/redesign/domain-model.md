@@ -324,6 +324,12 @@ Invariants:
   directive boundary does not imply block matching, branch evaluation, loop
   execution, type inference, expression parsing, helper/call lowering, or
   backend rendering semantics.
+- M132 classifies exact TSIL `call<primitive=...>(...)` islands in raw
+  body-token text as `LowerableDirective` tokens named `call` with opaque
+  arguments `(primitive, selector, payload)`. Raw prefix/suffix text remains
+  `RawStringToken` data. The call boundary does not imply primitive
+  resolution, dependency closure, `@self` interpretation, argument splitting,
+  directive-payload segmentation, expression parsing, or backend rendering.
 - `requires_value` remains structurally preserved for the existing flag and
   selector normalization rules.
 - Unknown extra fields remain preserved as `extra_fields` so future milestones

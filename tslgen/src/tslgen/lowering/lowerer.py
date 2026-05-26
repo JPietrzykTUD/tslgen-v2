@@ -9,7 +9,6 @@ from tslgen.domain.catalog import (
     ImplementationBody,
     LowerableDirective,
     LowerableOperationFragment,
-    SegmentedLine,
 )
 from tslgen.lowering.binary_operations import (
     BinaryOperationDescriptor,
@@ -613,14 +612,9 @@ def _unsupported_unary_diagnostics(
 def _operation_fragment_from_body(
     body: ImplementationBody,
 ) -> LowerableOperationFragment | None:
-    if len(body.lines) != 1:
+    if len(body.tokens) != 1:
         return None
-    line = body.lines[0]
-    if not isinstance(line, SegmentedLine):
-        return None
-    if len(line.segments) != 1:
-        return None
-    segment = line.segments[0]
+    segment = body.tokens[0]
     if not isinstance(segment, LowerableOperationFragment):
         return None
     return segment
@@ -629,14 +623,9 @@ def _operation_fragment_from_body(
 def _emit_return_directive_from_body(
     body: ImplementationBody,
 ) -> LowerableDirective | None:
-    if len(body.lines) != 1:
+    if len(body.tokens) != 1:
         return None
-    line = body.lines[0]
-    if not isinstance(line, SegmentedLine):
-        return None
-    if len(line.segments) != 1:
-        return None
-    segment = line.segments[0]
+    segment = body.tokens[0]
     if not isinstance(segment, LowerableDirective):
         return None
     if segment.name != "emit_return":
@@ -669,7 +658,7 @@ def _unsupported_body_shape_diagnostic(
         code="TSL-LOWER-UNSUPPORTED-BODY",
         message=(
             "implementation body cannot be lowered; expected exactly one "
-            "segmented line containing "
+            "lowerable operation token "
             f"'{operation_id}({', '.join(expected_arguments)})'"
         ),
         location=body.source,

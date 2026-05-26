@@ -21,9 +21,7 @@ from tslgen.domain.catalog import (
     LowerableDirective,
     LowerableOperationFragment,
     Primitive,
-    RawStringLine,
     RawStringToken,
-    SegmentedLine,
 )
 from tslgen.io.sources import SourceDocument
 from tslgen.lowering import (
@@ -2527,7 +2525,7 @@ def test_m125_selected_mismatched_body_reports_lowering_diagnostic(
     assert "sub" in diagnostic.message
 
 
-def test_m126_catalog_promotes_body_line_to_lowerable_operation_fragment(
+def test_m131_catalog_promotes_body_line_to_lowerable_operation_token(
     tmp_path: Path,
 ) -> None:
     source = _source_document(
@@ -2553,6 +2551,13 @@ def test_m126_catalog_promotes_body_line_to_lowerable_operation_fragment(
         "add",
         ("left", "right"),
         source=SourceLocation(source.path, 3, 5),
+    )
+    assert body.tokens == (
+        LowerableOperationFragment(
+            operation="add",
+            arguments=("left", "right"),
+            source=SourceLocation(source.path, 3, 5),
+        ),
     )
 
 
@@ -2681,7 +2686,7 @@ def test_m128_catalog_accepts_raw_tsil_payload_body(
             (
                 "prim<v:=(v,v)> add(left, right):",
                 "  implementation scalar si32:",
-                '    tsil "call<primitive=set_zero>()"',
+                '    tsil "left + right;"',
             )
         ),
     )
@@ -2694,14 +2699,248 @@ def test_m128_catalog_accepts_raw_tsil_payload_body(
     assert catalog_result.catalog is not None
     body = catalog_result.catalog.primitives[0].implementations[0].body
     assert body == ImplementationBody(
-        lines=(
-            RawStringLine(
-                text="call<primitive=set_zero>()",
+        tokens=(
+            RawStringToken(
+                text="left + right;",
                 source=SourceLocation(source.path, 3, 11),
             ),
         ),
         source=SourceLocation(source.path, 3, 5),
     )
+
+
+def test_m131_catalog_preserves_multiline_raw_tsil_token_order(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_catalog_multiline_raw_tsil.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil """',
+                "      left + right;",
+                "      result = left;",
+                '    """',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    assert body.tokens == (
+        RawStringToken(
+            text="      left + right;",
+            source=SourceLocation(source.path, 4, 1),
+        ),
+        RawStringToken(
+            text="      result = left;",
+            source=SourceLocation(source.path, 5, 1),
+        ),
+    )
+
+
+def test_m132_catalog_classifies_primitive_call_with_raw_prefix_suffix(
+    tmp_path: Path,
+) -> None:
+    call_text = (
+        "call<primitive=@self[type<backend>(vector::as_extension(scalar))]>"
+        "(left[i], right[i])"
+    )
+    source = _source_document(
+        tmp_path,
+        "tiny_add_primitive_call_prefix_suffix.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                f'    tsil "result[i] = {call_text};"',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    assert body.tokens == (
+        RawStringToken(
+            text="result[i] = ",
+            source=SourceLocation(source.path, 3, 11),
+        ),
+        LowerableDirective(
+            name="call",
+            arguments=(
+                "primitive",
+                "@self[type<backend>(vector::as_extension(scalar))]",
+                "left[i], right[i]",
+            ),
+            source=SourceLocation(source.path, 3, 23),
+        ),
+        RawStringToken(
+            text=";",
+            source=SourceLocation(source.path, 3, 23 + len(call_text)),
+        ),
+    )
+
+
+def test_m132_catalog_classifies_zero_argument_primitive_call(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_primitive_call_zero_argument.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "call<primitive=set_zero[Vec]>()"',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    directive = _body_directive(
+        catalog_result.catalog.primitives[0].implementations[0].body
+    )
+    assert directive.name == "call"
+    assert directive.arguments == ("primitive", "set_zero[Vec]", "")
+    assert directive.source == SourceLocation(source.path, 3, 11)
+
+
+def test_m132_catalog_classifies_primitive_call_across_raw_tokens(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_multiline_primitive_call.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil """',
+                "      result = call<primitive=@self[type<backend>",
+                "      (vector::as_extension(scalar))]>(left,",
+                "      right);",
+                '    """',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    assert body.tokens == (
+        RawStringToken(
+            text="      result = ",
+            source=SourceLocation(source.path, 4, 1),
+        ),
+        LowerableDirective(
+            name="call",
+            arguments=(
+                "primitive",
+                "@self[type<backend>\n"
+                "      (vector::as_extension(scalar))]",
+                "left,\n      right",
+            ),
+            source=SourceLocation(source.path, 4, 16),
+        ),
+        RawStringToken(
+            text=";",
+            source=SourceLocation(source.path, 6, 13),
+        ),
+    )
+
+
+def test_m132_catalog_leaves_malformed_and_nearby_calls_raw(
+    tmp_path: Path,
+) -> None:
+    payloads = (
+        "call<primitive=add(left, right)",
+        "call<intrin=add>(left, right)",
+        "recall<primitive=add>(left, right)",
+    )
+
+    for index, payload in enumerate(payloads):
+        source = _source_document(
+            tmp_path,
+            f"tiny_add_bad_primitive_call_{index}.tsl",
+            "\n".join(
+                (
+                    "prim<v:=(v,v)> add(left, right):",
+                    "  implementation scalar si32:",
+                    f'    tsil "{payload}"',
+                )
+            ),
+        )
+
+        parse_result = TslParser().parse((source,))
+        catalog_result = CatalogBuilder().build(parse_result.documents)
+
+        assert parse_result.diagnostics == ()
+        assert catalog_result.diagnostics == ()
+        assert catalog_result.catalog is not None
+        body = catalog_result.catalog.primitives[0].implementations[0].body
+        assert body.tokens == (
+            RawStringToken(
+                text=payload,
+                source=SourceLocation(source.path, 3, 11),
+            ),
+        )
+
+
+def test_m132_direct_primitive_looking_call_remains_unsupported(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_direct_primitive_call.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "sub(left, right)"',
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-BODY"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 5)
+    assert "one lowerable operation token" in diagnostic.message
 
 
 def test_m128_selected_raw_tsil_body_is_unsupported_lowering_boundary(
@@ -2737,7 +2976,7 @@ def test_m128_selected_raw_tsil_body_is_unsupported_lowering_boundary(
     assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-BODY"
     assert diagnostic.severity == "error"
     assert diagnostic.location == SourceLocation(source.resolve(), 3, 5)
-    assert "one segmented line" in diagnostic.message
+    assert "one lowerable operation token" in diagnostic.message
     assert "add(left, right)" in diagnostic.message
 
 
@@ -2768,15 +3007,10 @@ def test_m129_catalog_classifies_inline_emit_return_directive_opaque_payload(
     assert catalog_result.catalog is not None
     body = catalog_result.catalog.primitives[0].implementations[0].body
     assert body == ImplementationBody(
-        lines=(
-            SegmentedLine(
-                segments=(
-                    LowerableDirective(
-                        name="emit_return",
-                        arguments=("left + right",),
-                        source=SourceLocation(source.path, 3, 11),
-                    ),
-                ),
+        tokens=(
+            LowerableDirective(
+                name="emit_return",
+                arguments=("left + right",),
                 source=SourceLocation(source.path, 3, 11),
             ),
         ),
@@ -2809,19 +3043,14 @@ def test_m129_catalog_classifies_multiline_indented_emit_return_directive(
     assert catalog_result.diagnostics == ()
     assert catalog_result.catalog is not None
     body = catalog_result.catalog.primitives[0].implementations[0].body
-    assert body.lines == (
-        RawStringLine(
+    assert body.tokens == (
+        RawStringToken(
             text="      left + right;",
             source=SourceLocation(source.path, 4, 1),
         ),
-        SegmentedLine(
-            segments=(
-                LowerableDirective(
-                    name="emit_return",
-                    arguments=("result",),
-                    source=SourceLocation(source.path, 5, 7),
-                ),
-            ),
+        LowerableDirective(
+            name="emit_return",
+            arguments=("result",),
             source=SourceLocation(source.path, 5, 7),
         ),
     )
@@ -2934,8 +3163,7 @@ def test_m130_catalog_preserves_var_payload_and_semicolon_suffix(
     assert catalog_result.diagnostics == ()
     assert catalog_result.catalog is not None
     body = catalog_result.catalog.primitives[0].implementations[0].body
-    line = _body_segmented_line(body, 0)
-    assert line.segments == (
+    assert body.tokens == (
         LowerableDirective(
             name="var",
             arguments=(
@@ -2974,13 +3202,12 @@ def test_m130_catalog_preserves_helper_payload_opaque(
     assert catalog_result.diagnostics == ()
     assert catalog_result.catalog is not None
     body = catalog_result.catalog.primitives[0].implementations[0].body
-    line = _body_segmented_line(body, 0)
-    assert line.segments[0] == LowerableDirective(
+    assert body.tokens[0] == LowerableDirective(
         name="var",
         arguments=("const_infer", "tmp, details::arith_mul(left, right)"),
         source=SourceLocation(source.path, 3, 11),
     )
-    assert line.segments[1] == RawStringToken(
+    assert body.tokens[1] == RawStringToken(
         text=";",
         source=SourceLocation(source.path, 3, 11 + len(directive_text)),
     )
@@ -3026,7 +3253,7 @@ def test_m130_catalog_classifies_directive_headers_with_raw_tokens(
     assert catalog_result.diagnostics == ()
     assert catalog_result.catalog is not None
     body = catalog_result.catalog.primitives[0].implementations[0].body
-    assert len(body.lines) == 7
+    assert len(body.tokens) == 13
 
     let_directive = _single_directive_at(body, 0)
     assert let_directive.name == "let"
@@ -3044,8 +3271,7 @@ def test_m130_catalog_classifies_directive_headers_with_raw_tokens(
     )
     assert loop_unroll.source == SourceLocation(source.path, 5, 7)
 
-    loop_range = _body_segmented_line(body, 2)
-    assert loop_range.segments == (
+    assert body.tokens[2:4] == (
         LowerableDirective(
             name="loop",
             arguments=("range", "i, 0, value<generation>(vector::length), 1"),
@@ -3057,8 +3283,7 @@ def test_m130_catalog_classifies_directive_headers_with_raw_tokens(
         ),
     )
 
-    if_generation = _body_segmented_line(body, 3)
-    assert if_generation.segments == (
+    assert body.tokens[4:6] == (
         LowerableDirective(
             name="if",
             arguments=(
@@ -3073,8 +3298,7 @@ def test_m130_catalog_classifies_directive_headers_with_raw_tokens(
         ),
     )
 
-    if_compile = _body_segmented_line(body, 4)
-    assert if_compile.segments == (
+    assert body.tokens[6:8] == (
         LowerableDirective(
             name="if",
             arguments=("compile", "!PreserveSign"),
@@ -3086,8 +3310,7 @@ def test_m130_catalog_classifies_directive_headers_with_raw_tokens(
         ),
     )
 
-    switch = _body_segmented_line(body, 5)
-    assert switch.segments == (
+    assert body.tokens[8:10] == (
         LowerableDirective(
             name="switch",
             arguments=("compile", "scale"),
@@ -3099,8 +3322,7 @@ def test_m130_catalog_classifies_directive_headers_with_raw_tokens(
         ),
     )
 
-    else_line = _body_segmented_line(body, 6)
-    assert else_line.segments == (
+    assert body.tokens[10:13] == (
         RawStringToken(text="} ", source=SourceLocation(source.path, 10, 7)),
         LowerableDirective(
             name="else",
@@ -3136,25 +3358,15 @@ def test_m130_catalog_classifies_var_and_emit_return_in_order(
     assert catalog_result.diagnostics == ()
     assert catalog_result.catalog is not None
     body = catalog_result.catalog.primitives[0].implementations[0].body
-    assert body.lines == (
-        SegmentedLine(
-            segments=(
-                LowerableDirective(
-                    name="var",
-                    arguments=("init_register", "result"),
-                    source=SourceLocation(source.path, 4, 7),
-                ),
-            ),
+    assert body.tokens == (
+        LowerableDirective(
+            name="var",
+            arguments=("init_register", "result"),
             source=SourceLocation(source.path, 4, 7),
         ),
-        SegmentedLine(
-            segments=(
-                LowerableDirective(
-                    name="emit_return",
-                    arguments=("result",),
-                    source=SourceLocation(source.path, 5, 7),
-                ),
-            ),
+        LowerableDirective(
+            name="emit_return",
+            arguments=("result",),
             source=SourceLocation(source.path, 5, 7),
         ),
     )
@@ -3193,7 +3405,7 @@ def test_m130_selected_directive_body_is_unsupported_lowering_boundary(
     assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-BODY"
     assert diagnostic.severity == "error"
     assert diagnostic.location == SourceLocation(source.resolve(), 3, 5)
-    assert "one segmented line" in diagnostic.message
+    assert "one lowerable operation token" in diagnostic.message
 
 
 def test_m129_emit_return_payloads_remain_opaque_and_unsupported(
@@ -3282,7 +3494,7 @@ def test_m129_malformed_or_unsupported_directive_lines_remain_unsupported(
         assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-BODY"
         assert diagnostic.severity == "error"
         assert diagnostic.location == SourceLocation(source.resolve(), 3, 5)
-        assert "one segmented line" in diagnostic.message
+        assert "one lowerable operation token" in diagnostic.message
 
 
 def test_m130_malformed_or_unsupported_directive_envelopes_remain_unsupported(
@@ -3331,10 +3543,10 @@ def test_m130_malformed_or_unsupported_directive_envelopes_remain_unsupported(
         assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-BODY"
         assert diagnostic.severity == "error"
         assert diagnostic.location == SourceLocation(source.resolve(), 3, 5)
-        assert "one segmented line" in diagnostic.message
+        assert "one lowerable operation token" in diagnostic.message
 
 
-def test_m126_catalog_rejects_malformed_body_line_containers(
+def test_m126_catalog_rejects_malformed_body_token_inputs(
     tmp_path: Path,
 ) -> None:
     source = SourceLocation((tmp_path / "malformed_body_model.tsl").resolve(), 3, 5)
@@ -3387,13 +3599,14 @@ def test_m126_catalog_rejects_malformed_body_line_containers(
         assert diagnostic.code == "TSL-CATALOG-UNSUPPORTED-BODY"
         assert diagnostic.severity == "error"
         assert diagnostic.location == source
-        assert "one segmented line" in diagnostic.message
-        assert "one lowerable operation fragment" in diagnostic.message
+        assert "one lowerable operation token" in diagnostic.message
 
 
-def test_m126_lowerer_rejects_malformed_body_line_containers() -> None:
+def test_m126_lowerer_rejects_malformed_body_token_inputs() -> None:
     body = ImplementationBody(
-        lines=(RawStringLine(text="body add(left, right)", source=_location(3, 5)),),
+        tokens=(
+            RawStringToken(text="body add(left, right)", source=_location(3, 5)),
+        ),
         source=_location(3, 5),
     )
 
@@ -3405,11 +3618,11 @@ def test_m126_lowerer_rejects_malformed_body_line_containers() -> None:
     assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-BODY"
     assert diagnostic.severity == "error"
     assert diagnostic.location == _location(3, 5)
-    assert "one segmented line" in diagnostic.message
+    assert "one lowerable operation token" in diagnostic.message
     assert "add(left, right)" in diagnostic.message
 
 
-def test_m126_segmented_body_model_preserves_representative_artifact_bytes(
+def test_m131_body_token_model_preserves_representative_artifact_bytes(
     tmp_path: Path,
 ) -> None:
     cases = (
@@ -4318,15 +4531,10 @@ def _implementation_body(
 ) -> ImplementationBody:
     body_source = source or _location(3, 5)
     return ImplementationBody(
-        lines=(
-            SegmentedLine(
-                segments=(
-                    LowerableOperationFragment(
-                        operation=operation,
-                        arguments=arguments,
-                        source=body_source,
-                    ),
-                ),
+        tokens=(
+            LowerableOperationFragment(
+                operation=operation,
+                arguments=arguments,
                 source=body_source,
             ),
         ),
@@ -4335,35 +4543,21 @@ def _implementation_body(
 
 
 def _body_fragment(body: ImplementationBody) -> LowerableOperationFragment:
-    assert len(body.lines) == 1
-    line = body.lines[0]
-    assert isinstance(line, SegmentedLine)
-    assert len(line.segments) == 1
-    segment = line.segments[0]
+    assert len(body.tokens) == 1
+    segment = body.tokens[0]
     assert isinstance(segment, LowerableOperationFragment)
     return segment
 
 
 def _body_directive(body: ImplementationBody) -> LowerableDirective:
-    assert len(body.lines) == 1
-    line = body.lines[0]
-    assert isinstance(line, SegmentedLine)
-    assert len(line.segments) == 1
-    segment = line.segments[0]
+    assert len(body.tokens) == 1
+    segment = body.tokens[0]
     assert isinstance(segment, LowerableDirective)
     return segment
 
 
-def _body_segmented_line(body: ImplementationBody, index: int) -> SegmentedLine:
-    line = body.lines[index]
-    assert isinstance(line, SegmentedLine)
-    return line
-
-
 def _single_directive_at(body: ImplementationBody, index: int) -> LowerableDirective:
-    line = _body_segmented_line(body, index)
-    assert len(line.segments) == 1
-    segment = line.segments[0]
+    segment = body.tokens[index]
     assert isinstance(segment, LowerableDirective)
     return segment
 
