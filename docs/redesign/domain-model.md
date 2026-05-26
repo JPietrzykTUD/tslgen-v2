@@ -321,6 +321,10 @@ Invariants:
   outer fixture shape and promotes their payload content to ordered
   `RawStringLine` values. Those raw lines are catalog data only until a later
   milestone selects exact lowerable TSIL islands.
+- M129 classifies exact `emit_return(...)` payload lines as
+  `LowerableDirective` segments with opaque source-text arguments. The
+  directive boundary does not imply expression, operator, helper, call, or
+  backend rendering semantics.
 - `requires_value` remains structurally preserved for the existing flag and
   selector normalization rules.
 - Unknown extra fields remain preserved as `extra_fields` so future milestones

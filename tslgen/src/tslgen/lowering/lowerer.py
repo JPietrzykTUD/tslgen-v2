@@ -7,6 +7,7 @@ from tslgen.analysis.selection import SelectedImplementation
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.domain.catalog import (
     ImplementationBody,
+    LowerableDirective,
     LowerableOperationFragment,
     SegmentedLine,
 )
@@ -298,13 +299,17 @@ def _unsupported_binary_diagnostics(
         )
 
     if fragment is None:
-        diagnostics.append(
-            _unsupported_body_shape_diagnostic(
-                body,
-                _SUPPORTED_BINARY_PARAMETERS,
-                selected.primitive.name,
+        directive = _emit_return_directive_from_body(body)
+        if directive is not None:
+            diagnostics.append(_unsupported_return_expression_diagnostic(directive))
+        else:
+            diagnostics.append(
+                _unsupported_body_shape_diagnostic(
+                    body,
+                    _SUPPORTED_BINARY_PARAMETERS,
+                    selected.primitive.name,
+                )
             )
-        )
     elif (
         operation is not None
         and fragment.operation != operation.source_body_operation
@@ -418,13 +423,17 @@ def _unsupported_comparison_diagnostics(
         )
 
     if fragment is None:
-        diagnostics.append(
-            _unsupported_body_shape_diagnostic(
-                body,
-                _SUPPORTED_COMPARISON_PARAMETERS,
-                selected.primitive.name,
+        directive = _emit_return_directive_from_body(body)
+        if directive is not None:
+            diagnostics.append(_unsupported_return_expression_diagnostic(directive))
+        else:
+            diagnostics.append(
+                _unsupported_body_shape_diagnostic(
+                    body,
+                    _SUPPORTED_COMPARISON_PARAMETERS,
+                    selected.primitive.name,
+                )
             )
-        )
     elif (
         operation is not None
         and fragment.operation != operation.source_body_operation
@@ -557,13 +566,17 @@ def _unsupported_unary_diagnostics(
         )
 
     if fragment is None:
-        diagnostics.append(
-            _unsupported_body_shape_diagnostic(
-                body,
-                _SUPPORTED_UNARY_PARAMETERS,
-                selected.primitive.name,
+        directive = _emit_return_directive_from_body(body)
+        if directive is not None:
+            diagnostics.append(_unsupported_return_expression_diagnostic(directive))
+        else:
+            diagnostics.append(
+                _unsupported_body_shape_diagnostic(
+                    body,
+                    _SUPPORTED_UNARY_PARAMETERS,
+                    selected.primitive.name,
+                )
             )
-        )
     elif (
         operation is not None
         and fragment.operation != operation.source_body_operation
@@ -611,6 +624,39 @@ def _operation_fragment_from_body(
     if not isinstance(segment, LowerableOperationFragment):
         return None
     return segment
+
+
+def _emit_return_directive_from_body(
+    body: ImplementationBody,
+) -> LowerableDirective | None:
+    if len(body.lines) != 1:
+        return None
+    line = body.lines[0]
+    if not isinstance(line, SegmentedLine):
+        return None
+    if len(line.segments) != 1:
+        return None
+    segment = line.segments[0]
+    if not isinstance(segment, LowerableDirective):
+        return None
+    if segment.name != "emit_return":
+        return None
+    return segment
+
+
+def _unsupported_return_expression_diagnostic(
+    directive: LowerableDirective,
+) -> Diagnostic:
+    payload = directive.arguments[0] if directive.arguments else ""
+    return Diagnostic(
+        severity="error",
+        code="TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION",
+        message=(
+            "emit_return directive payload cannot be lowered yet; "
+            f"payload remains opaque: {payload!r}"
+        ),
+        location=directive.source,
+    )
 
 
 def _unsupported_body_shape_diagnostic(

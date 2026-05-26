@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 128 is accepted.
+Milestone 129 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -48,6 +48,26 @@ There were no blocking findings. The recorded nonblocking follow-up is to keep
 `ParsedImplementationBody.envelope` as a parser/catalog admission marker only;
 if future milestones add more source envelope forms, document or narrow that
 marker before it becomes a general downstream dispatch mechanism.
+
+The M129 execution-review loop returned `Accept With Follow-Ups`. M129 kept
+M128 parser output raw, then classified exact `emit_return(...)` payload lines
+from parser-recognized TSIL envelopes into `LowerableDirective` body segments
+with opaque source-text payloads. The classifier performs only outer directive
+delimiter matching, including nested parentheses needed to preserve payloads
+such as `call<primitive=add>(left, right)`. Selected bodies containing only an
+`emit_return` directive now stop at lowering with
+`TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION`; no operators, operands, helpers,
+primitive calls, intrinsics, casts, array access, generation/backend queries,
+raw TSIL rendering, runtime `tsldata` semantic lookup, `frozen` dependency, or
+`tslgenold` dependency was added.
+
+M129 review verdicts were: architecture `Accept With Follow-Ups`, boundary
+`Accept`, documentation `Accept With Follow-Ups`, and validation
+`Accept With Follow-Ups`. There were no blocking findings. Follow-ups are to
+keep the TSIL envelope marker as an admission guard only, to consider
+extracting the small directive-envelope matcher before adding more directive
+recognition, and to add explicit coverage for the `emit_return(payload) ;`
+space-before-semicolon variant.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -1642,45 +1662,45 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 129.
+Execute Milestone 130.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m129-execution-review-loop-prompt.md
+docs/agent/runs/m130-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 129: Exact Inline TSIL Emit-Return Operator Lowering Slice
+Milestone 130: Exact TSIL Var Directive Boundary Slice
 ```
 
 Latest review verdict:
 
 ```text
-M128 execution-review returned Accept With Follow-Ups after one write-capable
+M129 execution-review returned Accept With Follow-Ups after one write-capable
 executor and read-only architecture, boundary, documentation, and validation
-audits. Architecture and documentation returned Accept With Follow-Ups;
-boundary and validation returned Accept. There were no blocking findings. The
-nonblocking follow-up is to keep `ParsedImplementationBody.envelope` as a
-parser/catalog admission marker only unless a later milestone explicitly
-documents or narrows additional envelope forms.
+audits. Architecture, documentation, and validation returned
+Accept With Follow-Ups; boundary returned Accept. There were no blocking
+findings. Follow-ups are to keep the TSIL envelope marker as an admission
+guard only, to consider extracting the small directive matcher before adding
+more directive recognition, and to add explicit coverage for the
+`emit_return(payload) ;` space-before-semicolon variant.
 ```
 
 Next expected action:
 
 ```text
-Run the active M129 execution-review-loop prompt. M129 should focus on the
-lowering boundary by recognizing only exact single-line raw TSIL
-`emit_return(<identifier> <operator> <identifier>);` islands admitted by M128
-for scalar `add`, `sub`, and the six accepted comparison primitive ids. It
-should lower those islands to existing typed lowered expressions, preserve
-source-owned operand order, keep backend rendering driven by typed lowered
-values, and leave helpers, primitive calls, intrinsics, casts, loops,
-generation/backend control, multiline TSIL, unsupported operators, source
-repair, and raw TSIL rendering out of scope.
+Run the active M130 execution-review-loop prompt. M130 should focus on the
+keyword/directive lowering boundary by recognizing exact TSIL
+`var<...>(...)` directive envelopes in raw payload lines admitted by M128. It
+should preserve the modifier and payload as opaque source text in typed
+directive/body values, coexist with M129 `emit_return` directive
+classification, and leave variable semantics, type inference, operators,
+helpers, primitive calls, assignments, loops, generation/backend control,
+expression parsing, source repair, and raw TSIL rendering out of scope.
 ```
 
 Accepted planning prompt:

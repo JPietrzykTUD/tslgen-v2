@@ -18,6 +18,7 @@ from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
     Implementation,
     ImplementationBody,
+    LowerableDirective,
     LowerableOperationFragment,
     Primitive,
     RawStringLine,
@@ -2679,7 +2680,7 @@ def test_m128_catalog_accepts_raw_tsil_payload_body(
             (
                 "prim<v:=(v,v)> add(left, right):",
                 "  implementation scalar si32:",
-                '    tsil "emit_return(left + right);"',
+                '    tsil "var<init_register>(result)"',
             )
         ),
     )
@@ -2694,7 +2695,7 @@ def test_m128_catalog_accepts_raw_tsil_payload_body(
     assert body == ImplementationBody(
         lines=(
             RawStringLine(
-                text="emit_return(left + right);",
+                text="var<init_register>(result)",
                 source=SourceLocation(source.path, 3, 11),
             ),
         ),
@@ -2711,7 +2712,7 @@ def test_m128_selected_raw_tsil_body_is_unsupported_lowering_boundary(
             (
                 "prim<v:=(v,v)> add(left, right):",
                 "  implementation scalar si32:",
-                '    tsil "emit_return(left + right);"',
+                '    tsil "var<init_register>(result)"',
             )
         ),
         encoding="utf-8",
@@ -2737,6 +2738,209 @@ def test_m128_selected_raw_tsil_body_is_unsupported_lowering_boundary(
     assert diagnostic.location == SourceLocation(source.resolve(), 3, 5)
     assert "one segmented line" in diagnostic.message
     assert "add(left, right)" in diagnostic.message
+
+
+def test_m129_catalog_classifies_inline_emit_return_directive_opaque_payload(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_emit_return_directive.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(left + right);"',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    parsed_body = parse_result.documents[0].primitives[0].implementations[0].body
+    parsed_line = parsed_body.lines[0]
+    assert isinstance(parsed_line, ParsedRawStringLine)
+    assert parsed_line.text == "emit_return(left + right);"
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    assert body == ImplementationBody(
+        lines=(
+            SegmentedLine(
+                segments=(
+                    LowerableDirective(
+                        name="emit_return",
+                        arguments=("left + right",),
+                        source=SourceLocation(source.path, 3, 11),
+                    ),
+                ),
+                source=SourceLocation(source.path, 3, 11),
+            ),
+        ),
+        source=SourceLocation(source.path, 3, 5),
+    )
+
+
+def test_m129_catalog_classifies_multiline_indented_emit_return_directive(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_multiline_emit_return_directive.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil """',
+                "      var<init_register>(result)",
+                "      emit_return(result);",
+                '    """',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    assert body.lines == (
+        RawStringLine(
+            text="      var<init_register>(result)",
+            source=SourceLocation(source.path, 4, 1),
+        ),
+        SegmentedLine(
+            segments=(
+                LowerableDirective(
+                    name="emit_return",
+                    arguments=("result",),
+                    source=SourceLocation(source.path, 5, 7),
+                ),
+            ),
+            source=SourceLocation(source.path, 5, 7),
+        ),
+    )
+
+
+def test_m129_catalog_preserves_nested_emit_return_payload(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_nested_emit_return_directive.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil "emit_return(call<primitive=add>(left, right));"',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+    directive = _body_directive(body)
+    assert directive.name == "emit_return"
+    assert directive.arguments == ("call<primitive=add>(left, right)",)
+    assert directive.source == SourceLocation(source.path, 3, 11)
+
+
+def test_m129_emit_return_payloads_remain_opaque_and_unsupported(
+    tmp_path: Path,
+) -> None:
+    payloads = (
+        "left + right",
+        "details::arith_mul(left, right)",
+        "call<primitive=add>(left, right)",
+    )
+
+    for index, payload in enumerate(payloads):
+        source = tmp_path / f"tiny_add_emit_return_opaque_{index}.tsl"
+        source.write_text(
+            "\n".join(
+                (
+                    "prim<v:=(v,v)> add(left, right):",
+                    "  implementation scalar si32:",
+                    f'    tsil "emit_return({payload});"',
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.artifacts.artifacts == ()
+        assert len(result.diagnostics) == 1
+        diagnostic = result.diagnostics[0]
+        assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION"
+        assert diagnostic.severity == "error"
+        assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+        assert payload in diagnostic.message
+        assert "opaque" in diagnostic.message
+
+
+def test_m129_malformed_or_unsupported_directive_lines_remain_unsupported(
+    tmp_path: Path,
+) -> None:
+    payload_lines = (
+        "emit_return(left + right)",
+        "emit_return((left + right);",
+        "emit_return(left + right); emit_return(result);",
+        "emit_value(left + right);",
+        "left + right;",
+    )
+
+    for index, payload_line in enumerate(payload_lines):
+        source = tmp_path / f"tiny_add_bad_directive_{index}.tsl"
+        source.write_text(
+            "\n".join(
+                (
+                    "prim<v:=(v,v)> add(left, right):",
+                    "  implementation scalar si32:",
+                    f'    tsil "{payload_line}"',
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.artifacts.artifacts == ()
+        assert len(result.diagnostics) == 1
+        diagnostic = result.diagnostics[0]
+        assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-BODY"
+        assert diagnostic.severity == "error"
+        assert diagnostic.location == SourceLocation(source.resolve(), 3, 5)
+        assert "one segmented line" in diagnostic.message
 
 
 def test_m126_catalog_rejects_malformed_body_line_containers(
@@ -3746,6 +3950,16 @@ def _body_fragment(body: ImplementationBody) -> LowerableOperationFragment:
     assert len(line.segments) == 1
     segment = line.segments[0]
     assert isinstance(segment, LowerableOperationFragment)
+    return segment
+
+
+def _body_directive(body: ImplementationBody) -> LowerableDirective:
+    assert len(body.lines) == 1
+    line = body.lines[0]
+    assert isinstance(line, SegmentedLine)
+    assert len(line.segments) == 1
+    segment = line.segments[0]
+    assert isinstance(segment, LowerableDirective)
     return segment
 
 

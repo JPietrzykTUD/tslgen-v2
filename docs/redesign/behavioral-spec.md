@@ -516,6 +516,29 @@ generation/backend/runtime control, casts, memory helpers, I/O helpers,
 grammar. The existing exact `body <operation>(...)` fixture syntax and artifact
 bytes remain stable.
 
+### M129 Exact TSIL Emit-Return Directive Boundary
+
+Milestone 129 recognizes exact `emit_return(...)` TSIL statement envelopes
+inside M128 quoted-TSIL raw payload lines. The recognized line becomes a typed
+`LowerableDirective` named `emit_return` with one argument: the opaque source
+text between the outer `emit_return(` and its matching close parenthesis.
+Leading indentation on multiline payload lines may be ignored to find the
+directive keyword, but the directive argument is not normalized, parsed, or
+repaired.
+
+The directive recognizer performs only delimiter matching for the outer
+`emit_return` call. Nested parentheses are handled so payloads such as
+`call<primitive=add>(left, right)` remain intact. Operators, operands, helper
+calls, primitive calls, intrinsics, casts, array access, generation/backend
+queries, and other target-language-looking payload text remain opaque.
+
+Selected bodies containing only an `emit_return` directive with opaque payload
+produce `TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION` until a later milestone
+lowers that payload into a typed expression. Malformed directive envelopes,
+missing semicolons, extra statement text, unsupported directive names, and
+non-directive raw lines remain unsupported body/shape diagnostics. No raw TSIL
+payload text may be rendered as C++ or Rust.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

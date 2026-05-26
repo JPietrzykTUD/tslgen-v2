@@ -17062,15 +17062,16 @@ returned exit 0 with no output. The pytest command returned exit 0 with
 directories; after removal, the final cache check returned exit 0 with no
 output.
 
-### Milestone 129: Exact Inline TSIL Emit-Return Operator Lowering Slice
+### Milestone 129: Exact TSIL Emit-Return Directive Boundary Slice
 
 Status:
 
-Planned as the next clean restart implementation milestone after accepted
-M128. This is the first semantic lowering slice over real quoted TSIL payload
-content. It should recognize only exact single-line raw TSIL payloads that are
-already visible through M128 and lower a small corpus-grounded `emit_return`
-operator island into the existing backend-neutral lowered function model.
+Accepted after the M129 execution-review loop. This is the first keyword-level
+lowering slice over real quoted TSIL payload content. It recognizes the
+`emit_return` TSIL directive envelope and preserves its argument as opaque
+source text. It does not interpret the return expression, operators, operands,
+helper calls, primitive calls, casts, intrinsics, array access, assignments, or
+target-language-looking syntax.
 
 Corpus grounding:
 
@@ -17081,64 +17082,69 @@ Corpus grounding:
 - `tsldata/primitives/comparison/fundamental.tsl:33`,
   `:192`, `:344`, `:539`, `:734`, and `:900` use exact scalar comparison
   returns for `==`, `!=`, `<`, `>`, `<=`, and `>=`.
+- Many multiline payloads use indented `emit_return(...)` statements with
+  nontrivial payloads such as `result`, `call<primitive=...>(...)`,
+  `details::...`, `intrin_compose<...>(...)`, casts, array access, and
+  generation/backend queries. These are evidence that `emit_return` is a TSIL
+  directive boundary whose argument must remain opaque until separate
+  expression/call/helper/query milestones are selected.
 
 Goal:
 
-When the selected implementation body contains exactly one M128 raw TSIL line
-matching one of these exact forms:
+When an M128 raw TSIL body line contains an exact `emit_return` statement
+envelope:
 
 ```text
-emit_return(<identifier> + <identifier>);
-emit_return(<identifier> - <identifier>);
-emit_return(<identifier> == <identifier>);
-emit_return(<identifier> != <identifier>);
-emit_return(<identifier> < <identifier>);
-emit_return(<identifier> > <identifier>);
-emit_return(<identifier> <= <identifier>);
-emit_return(<identifier> >= <identifier>);
+emit_return(<opaque-source-payload>);
+emit_return(<opaque-source-payload>) ;
 ```
 
-lower it to the existing typed `LoweredBinaryOperationExpression` or
-`LoweredComparisonOperationExpression` for the selected primitive operation.
-The operation meaning comes from the selected primitive and the exact accepted
-operator spelling together, not from target-language passthrough. Operand names
-are source-owned identifier tokens and should be carried into
-`LoweredParameterRef` in the order written when they refer to declared
-primitive parameters.
+classify it as the existing typed directive concept
+`LowerableDirective(name="emit_return", arguments=(<opaque-source-payload>,))`
+or an equally narrow typed directive value if implementation evidence shows the
+existing domain value is insufficient. The payload text is source-owned and
+opaque. Do not split it into operands, parse operators, resolve helper calls,
+or map it to a backend expression in this milestone.
 
 Scope:
 
 - Preserve the accepted synthetic `body <operation>(...)` lowering path and
   existing generated artifact bytes.
-- Add exact raw-TSIL lowering for scalar `add` / `sub` and the accepted scalar
-  comparison primitive ids `equal`, `nequal`, `less_than`,
-  `greater_than`, `less_than_or_equal`, and `greater_than_or_equal`.
-- Use existing lowering-owned operation descriptors and backend-owned operator
-  rendering; do not move backend spellings into parsing or source intake.
-- Accept only one raw TSIL line containing exactly one `emit_return(...)`
-  statement with one supported operator and identifier operands.
-- Preserve operand order exactly. Do not normalize swapped operands, reject
-  duplicate operands merely because they are duplicated, or repair source text.
-- Diagnose unknown operands, primitive/operator mismatches, malformed return
-  syntax, multiline raw TSIL bodies, helper calls, primitive calls, intrinsics,
-  casts, generation/backend queries, assignments, loops, or unsupported
-  operators as unsupported lowering.
-- Keep the parser/catalog M128 raw-body intake unchanged except for tests
-  needed to exercise the new lowering path.
+- Recognize only the `emit_return` keyword/directive envelope from M128 raw
+  TSIL payload lines. Matching may ignore leading/trailing payload-line
+  indentation introduced by quoted multiline TSIL, but the directive payload
+  itself must remain unchanged source text.
+- Preserve the raw directive argument exactly as source text between the outer
+  `emit_return(` and its matching close parenthesis.
+- Handle nested parentheses while finding the matching close parenthesis for
+  the outer directive call; this is delimiter matching for the keyword
+  envelope, not expression parsing.
+- Promote exact `emit_return` directive lines into typed body/directive values
+  that later expression/call/helper/query milestones can consume.
+- Selected bodies containing only an `emit_return` directive with opaque
+  payload must still stop before backend rendering with an explicit unsupported
+  return-expression diagnostic unless the existing synthetic `body ...` path is
+  in use.
+- Diagnose malformed directive envelopes, missing semicolons, extra statements
+  on the same line, unsupported directives, and non-directive raw lines as
+  unsupported body/directive lowering. Do not repair source.
+- Keep the parser/catalog M128 quoted-TSIL intake unchanged except for the
+  exact directive classification needed by this milestone.
 
 Out of scope:
 
-- Full TSIL parsing, expression precedence, nested expressions, parentheses
-  beyond the exact envelope, literals, constants, member access, array access,
-  assignments, declarations, loops, block structure, comments inside
-  expressions, semicolon repair, or whitespace normalization beyond the exact
-  accepted forms.
+- Full TSIL parsing, expression precedence, operator/operand parsing,
+  expression semantic lowering, literals, constants, member access, array
+  access, assignments, declarations, loops, block structure, comments inside
+  expressions, semicolon repair, or whitespace normalization beyond exact
+  directive-envelope matching.
 - Lowering `details::arith_mul`, `details::arith_rem`,
-  `details::arith_add`, `call<primitive=...>`, `intrin`,
-  `intrin_compose`, `cast<...>`, `type<generation>`, `type<backend>`,
-  `value<generation>`, `value<backend>`, `if<generation>`,
-  `else if<generation>`, `else<generation>`, `if<compile>`,
-  `else<compile>`, `if<runtime>`, `else<runtime>`, `mem<...>`, or `io<...>`.
+  `details::arith_add`, operators such as `+`, `-`, `==`, `<`, `>`, `<=`,
+  `>=`, `!=`, `call<primitive=...>`, `intrin`, `intrin_compose`,
+  `cast<...>`, `type<generation>`, `type<backend>`, `value<generation>`,
+  `value<backend>`, `if<generation>`, `else if<generation>`,
+  `else<generation>`, `if<compile>`, `else<compile>`, `if<runtime>`,
+  `else<runtime>`, `mem<...>`, or `io<...>`.
 - Adding operation semantics from `tsldata/`, backend manifests, YAML,
   `frozen`, `tslgenold`, plugins, or environment configuration at runtime.
 - Adding a complete TSIL grammar, semantic validator, target-language parser,
@@ -17148,17 +17154,18 @@ Out of scope:
 
 Accepted outputs:
 
-- Exact inline raw TSIL `emit_return(left + right);` can generate the same
-  typed lowered function and C++/Rust artifacts as the accepted synthetic
-  `body add(left, right)` fixture path.
-- Exact inline raw TSIL `emit_return(left - right);` can generate the same
-  typed lowered function and C++/Rust artifacts as the accepted synthetic
-  `body sub(left, right)` fixture path.
-- Exact inline raw TSIL comparison returns for `==`, `!=`, `<`, `>`, `<=`,
-  and `>=` can generate the existing typed comparison lowered expressions and
-  backend artifacts for the matching comparison primitive ids.
-- Nearby raw TSIL payloads remain unsupported lowering diagnostics rather than
-  raw backend output or guessed semantic lowering.
+- Exact raw TSIL `emit_return(...)` statement envelopes become typed
+  `emit_return` directive/body values carrying opaque payload text.
+- `emit_return(left + right);`, `emit_return(result);`,
+  `emit_return(call<primitive=add>(left, right));`, and
+  `emit_return(details::arith_mul(left, right));` all classify the same outer
+  keyword/directive boundary while preserving different opaque payload text.
+- Selected `emit_return` directive bodies do not render backend code until a
+  later milestone lowers the opaque payload into a typed expression.
+- Existing synthetic `body <operation>(...)` fixture behavior and generated
+  artifacts remain stable.
+- Nearby malformed or unsupported raw TSIL payloads remain diagnostics rather
+  than raw backend output or guessed semantic lowering.
 
 Validation:
 
@@ -17171,11 +17178,154 @@ find tslgen -type d -name __pycache__ -print
 
 Review notes:
 
-- Reviewers should require M129 to remain exact raw-TSIL `emit_return`
-  operator-island lowering only. It should not become a general expression or
-  TSIL parser.
-- Reviewers should require operand order to remain source-owned and backend
-  rendering to remain driven by typed lowered expressions, not by raw TSIL
-  passthrough.
-- Reviewers should require helper substitution and generic/vector body lowering
-  to remain future milestones.
+- Reviewers should require M129 to remain exact TSIL `emit_return` directive
+  boundary lowering only. It should not become expression/operator/helper/call
+  lowering.
+- Reviewers should require the directive payload to remain source-owned opaque
+  text and backend rendering to remain blocked until typed expression lowering
+  exists.
+- Reviewers should require helper substitution, primitive-call lowering,
+  operator lowering, and generic/vector body lowering to remain future
+  milestones.
+
+Accepted result:
+
+- Parser output for quoted TSIL payloads remains raw as established by M128.
+- Catalog promotion classifies exact `emit_return(...)` payload lines from
+  parser-recognized TSIL envelopes into `LowerableDirective` segments carrying
+  opaque payload text.
+- The directive matcher performs only outer keyword-envelope delimiter
+  matching and preserves nested payloads such as
+  `call<primitive=add>(left, right)` without parsing them.
+- Lowering reports `TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION` for selected
+  bodies containing only an `emit_return` directive with opaque payload; no
+  raw TSIL payload text is rendered.
+- Malformed directive envelopes, unsupported directive keywords, and
+  non-directive raw lines remain unsupported body diagnostics.
+- Existing synthetic `body <operation>(...)` behavior and representative
+  artifact-byte tests remain stable.
+- Review returned `Accept With Follow-Ups`: architecture, documentation, and
+  validation returned `Accept With Follow-Ups`; boundary returned `Accept`; no
+  blocking findings were reported. Follow-ups are to keep the TSIL envelope
+  marker as an admission guard only, to consider extracting the small directive
+  matcher before adding more directive recognition, and to add explicit
+  coverage for the `emit_return(payload) ;` space-before-semicolon variant.
+
+Validation result:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The compileall command
+returned exit 0 with no output. The pytest command returned exit 0 with
+`127 passed in 9.94s`. The first cache check printed validation-created cache
+directories; after removal, the final cache check returned exit 0 with no
+output.
+
+### Milestone 130: Exact TSIL Var Directive Boundary Slice
+
+Status:
+
+Planned as the next clean restart implementation milestone after accepted
+M129. This is a keyword/directive boundary slice over M128 raw TSIL payload
+lines and the M129 directive-classification path. It recognizes exact
+`var<...>(...)` TSIL directive envelopes and preserves their payloads as
+opaque source text. It must not interpret initializer expressions, helper
+calls, primitive calls, operators, type queries, target-language-looking text,
+or storage semantics.
+
+Corpus grounding:
+
+- `tsldata/primitives/arithmetic/fundamental.tsl:36` uses
+  `var<init_register>(result)`.
+- `tsldata/primitives/bitwise/bit_ops.tsl:37-38` use
+  `var<const_infer>(ua, call<primitive=reinterpret[...]>(left));` and
+  `var<const_infer>(ub, call<primitive=reinterpret[...]>(right));`.
+- Many multiline bodies combine `var<...>(...)` directive lines with later
+  loops, assignments, and `emit_return(...)` directives.
+
+Goal:
+
+When an M128 raw TSIL body line contains an exact `var<modifier>(payload)`
+directive envelope, with an optional trailing semicolon:
+
+```text
+var<init_register>(result)
+var<const_infer>(ua, call<primitive=reinterpret[... ]>(left));
+```
+
+classify it as a typed directive value such as:
+
+```text
+LowerableDirective(name="var", arguments=(<modifier>, <opaque-payload>))
+```
+
+or an equally narrow typed directive value if implementation evidence shows the
+existing domain value is insufficient. The modifier and payload are
+source-owned opaque text. Do not split initializer arguments, parse operators,
+resolve helper calls, resolve primitive calls, infer storage semantics, or map
+the directive to backend code in this milestone.
+
+Scope:
+
+- Preserve M128 quoted-TSIL intake, M129 `emit_return` directive
+  classification, and existing synthetic `body <operation>(...)` generated
+  artifacts.
+- Recognize only `var<...>(...)` directive envelopes from parser-recognized
+  TSIL payload bodies.
+- Preserve the modifier text between `var<` and the matching `>` and the
+  payload text between the outer `(` and its matching `)`.
+- Use delimiter matching for the directive envelope only. Nested parentheses
+  and bracket/angle-like source text inside the payload remain opaque.
+- Classify indented multiline payload lines by ignoring indentation only to
+  find the directive keyword; do not normalize modifier or payload text.
+- Keep selected bodies containing var directives unsupported for backend
+  rendering unless a later milestone defines complete statement/body lowering.
+- Add tests for `var<init_register>(result)`,
+  `var<const_infer>(ua, call<primitive=...>(left));`, malformed envelopes,
+  unsupported nearby directives, and coexistence with an already classified
+  `emit_return` line in a multiline body.
+
+Out of scope:
+
+- Variable declaration semantics, storage initialization, type inference,
+  expression parsing, helper/call/operator lowering, assignment lowering,
+  loops, generation/backend control, backend rendering, source repair,
+  complete TSIL grammar, runtime `tsldata` semantic lookup, `frozen` or
+  `tslgenold` runtime dependency, registries, dispatchers, hidden backfeeds,
+  fixpoint mechanisms, or new lowering IR category/request/result/worklist
+  families.
+
+Accepted outputs:
+
+- Exact `var<...>(...)` directive envelopes become typed directive/body values
+  carrying opaque modifier and payload text.
+- `var` directive classification coexists with M129 `emit_return`
+  classification in ordered multiline bodies.
+- Selected bodies containing `var` directives do not render backend code or
+  infer semantics.
+- Existing M128/M129 behavior remains stable.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Review notes:
+
+- Reviewers should require M130 to remain exact `var` directive-boundary
+  classification only.
+- Reviewers should reject initializer expression parsing, helper/call/operator
+  lowering, variable lifetime/type inference, assignment lowering, and backend
+  rendering.
+- Reviewers should consider whether adding this second directive should extract
+  the small directive-envelope matcher from `catalog_builder.py` into a focused
+  syntax/catalog helper module without introducing a broad TSIL parser.
