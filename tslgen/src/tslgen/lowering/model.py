@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from tslgen.analysis.selection import SelectedImplementation, Target
-from tslgen.core.diagnostics import SourceLocation
+from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import Implementation, Primitive, PrimitiveAttribute
 from tslgen.lowering.binary_operations import BinaryOperationDescriptor
 from tslgen.lowering.comparison_operations import ComparisonOperationDescriptor
@@ -14,7 +14,7 @@ from tslgen.lowering.unary_operations import UnaryOperationDescriptor
 LoweredResultTypeKind = Literal["input_scalar", "scalar_comparison"]
 
 CURRENT_VECTOR_KEYWORD = "Vec"
-UNRESOLVED_IMPLEMENTATION_TYPE_ALIASES = ("MaskVec", "GenericVec")
+CURRENT_SCALAR_KEYWORD = "scalar"
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,7 +33,67 @@ class SelectedImplementationLoweringContext:
     primitive_source: SourceLocation
     implementation_source: SourceLocation
     current_vector_keyword: str = CURRENT_VECTOR_KEYWORD
-    unresolved_type_aliases: tuple[str, ...] = UNRESOLVED_IMPLEMENTATION_TYPE_ALIASES
+    current_scalar_keyword: str = CURRENT_SCALAR_KEYWORD
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredCurrentVectorType:
+    extension: str
+    type_tag: str
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredCurrentScalarType:
+    type_tag: str
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredVectorAsExtensionType:
+    scalar: LoweredCurrentScalarType
+    extension: str
+
+
+LoweredTypeValue = (
+    LoweredCurrentVectorType
+    | LoweredCurrentScalarType
+    | LoweredVectorAsExtensionType
+)
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredTypeAliasBinding:
+    alias_name: str
+    value: LoweredTypeValue
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class SelectedTypeEnvironment:
+    context: SelectedImplementationLoweringContext
+    context_symbols: tuple[str, ...]
+    alias_bindings: tuple[LoweredTypeAliasBinding, ...]
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TypeExpressionLoweringResult:
+    value: LoweredTypeValue | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class BackendTypeSpellingRequest:
+    backend: str
+    value: LoweredTypeValue
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendTypeQueryLoweringResult:
+    request: BackendTypeSpellingRequest | None
+    diagnostics: tuple[Diagnostic, ...]
 
 
 def build_selected_implementation_lowering_context(

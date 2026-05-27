@@ -35,12 +35,15 @@ from tslgen.domain.catalog import (
 from tslgen.io.sources import SourceDocument
 from tslgen.lowering import (
     BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
+    BackendTypeSpellingRequest,
     INPUT_SCALAR_RESULT_TYPE,
     SCALAR_COMPARISON_RESULT_TYPE,
     BinaryOperationDescriptor,
     ComparisonOperationDescriptor,
     LoweredBinaryOperationExpression,
     LoweredComparisonOperationExpression,
+    LoweredCurrentScalarType,
+    LoweredCurrentVectorType,
     LoweredFunction,
     LoweredFunctionBody,
     LoweredFunctionSet,
@@ -49,7 +52,9 @@ from tslgen.lowering import (
     LoweredParameterRef,
     LoweredReturnStatement,
     LoweredResultType,
+    LoweredTypeAliasBinding,
     LoweredUnaryOperationExpression,
+    LoweredVectorAsExtensionType,
     Lowerer,
     LoweringStageResult,
     SelectedImplementationLoweringContext,
@@ -3053,7 +3058,8 @@ def test_m141_context_from_no_attribute_selected_implementation() -> None:
     assert context.target is selected.target
     assert context.primitive_attributes is selected.primitive.attributes
     assert context.current_vector_keyword == "Vec"
-    assert context.unresolved_type_aliases == ("MaskVec", "GenericVec")
+    assert context.current_scalar_keyword == "scalar"
+    assert not hasattr(context, "unresolved_type_aliases")
 
 
 def test_m141_context_from_attribute_selected_implementation(
@@ -3201,9 +3207,10 @@ def test_m141_context_records_current_symbols_not_specialization_keys(
 
     assert selection_result.diagnostics == ()
     assert context.current_vector_keyword == "Vec"
+    assert context.current_scalar_keyword == "scalar"
     assert context.extension == "scalar"
     assert context.type_tag == "si32"
-    assert context.unresolved_type_aliases == ("MaskVec", "GenericVec")
+    assert not hasattr(context, "unresolved_type_aliases")
     assert context.signature == "v:=(v,v)"
     assert tuple(attribute.key for attribute in context.primitive_attributes) == (
         "mask",
@@ -3244,6 +3251,326 @@ def test_m141_lowerer_context_threading_preserves_generated_bytes(
         CPP_CONTENT,
         RUST_CONTENT,
     ]
+
+
+def test_m142_lowers_vec_and_scalar_context_type_facts() -> None:
+    selected = _selected_implementation(extension="sse", type_tag="ui32")
+    lowerer = Lowerer()
+
+    vec_result = lowerer.lower_type_expression(selected, "Vec", _location(4, 7))
+    scalar_result = lowerer.lower_type_expression(
+        selected,
+        "scalar",
+        _location(5, 7),
+    )
+
+    assert vec_result.diagnostics == ()
+    assert vec_result.value == LoweredCurrentVectorType(
+        extension="sse",
+        type_tag="ui32",
+    )
+    assert scalar_result.diagnostics == ()
+    assert scalar_result.value == LoweredCurrentScalarType(type_tag="ui32")
+
+
+def test_m142_lowers_ordered_let_type_alias_bindings() -> None:
+    body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="let",
+                arguments=("type", "MaskVec, vector::as_extension(scalar)"),
+                source=_location(4, 7),
+            ),
+            LowerableDirective(
+                name="let",
+                arguments=("type", "GenericVec, Vec"),
+                source=_location(5, 7),
+            ),
+            LowerableDirective(
+                name="let",
+                arguments=("type", "ArbitraryAlias, MaskVec"),
+                source=_location(6, 7),
+            ),
+        ),
+        source=_location(3, 5),
+    )
+    selected = _selected_implementation(body=body, extension="avx2", type_tag="si16")
+
+    environment = Lowerer().type_environment_for(selected)
+
+    vector_as_extension = LoweredVectorAsExtensionType(
+        scalar=LoweredCurrentScalarType(type_tag="si16"),
+        extension="avx2",
+    )
+    assert environment.diagnostics == ()
+    assert environment.context_symbols == ("Vec", "scalar")
+    assert environment.alias_bindings == (
+        LoweredTypeAliasBinding(
+            alias_name="MaskVec",
+            value=vector_as_extension,
+            source_text="vector::as_extension(scalar)",
+            source=_location(4, 7),
+        ),
+        LoweredTypeAliasBinding(
+            alias_name="GenericVec",
+            value=LoweredCurrentVectorType(extension="avx2", type_tag="si16"),
+            source_text="Vec",
+            source=_location(5, 7),
+        ),
+        LoweredTypeAliasBinding(
+            alias_name="ArbitraryAlias",
+            value=vector_as_extension,
+            source_text="MaskVec",
+            source=_location(6, 7),
+        ),
+    )
+
+
+def test_m142_lowers_exact_vector_as_extension_expression() -> None:
+    selected = _selected_implementation(extension="neon", type_tag="f32")
+
+    result = Lowerer().lower_type_expression(
+        selected,
+        "vector::as_extension(scalar)",
+        _location(4, 7),
+    )
+
+    assert result.diagnostics == ()
+    assert result.value == LoweredVectorAsExtensionType(
+        scalar=LoweredCurrentScalarType(type_tag="f32"),
+        extension="neon",
+    )
+
+
+def test_m142_lowers_backend_type_queries_without_rendering_text() -> None:
+    body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="let",
+                arguments=("type", "MaskVec, vector::as_extension(scalar)"),
+                source=_location(4, 7),
+            ),
+        ),
+        source=_location(3, 5),
+    )
+    selected = _selected_implementation(
+        body=body,
+        backend="rust",
+        extension="sve",
+        type_tag="si64",
+    )
+    lowerer = Lowerer()
+    environment = lowerer.type_environment_for(selected)
+
+    vec_result = lowerer.lower_backend_type_query(
+        selected,
+        "type<backend>(Vec)",
+        _location(5, 7),
+        environment=environment,
+    )
+    alias_result = lowerer.lower_backend_type_query(
+        selected,
+        "type<backend>(MaskVec)",
+        _location(6, 7),
+        environment=environment,
+    )
+    transform_result = lowerer.lower_backend_type_query(
+        selected,
+        "type<backend>(vector::as_extension(scalar))",
+        _location(7, 7),
+        environment=environment,
+    )
+
+    vector_as_extension = LoweredVectorAsExtensionType(
+        scalar=LoweredCurrentScalarType(type_tag="si64"),
+        extension="sve",
+    )
+    assert environment.diagnostics == ()
+    assert vec_result.diagnostics == ()
+    assert vec_result.request == BackendTypeSpellingRequest(
+        backend="rust",
+        value=LoweredCurrentVectorType(extension="sve", type_tag="si64"),
+        source_text="type<backend>(Vec)",
+        source=_location(5, 7),
+    )
+    assert alias_result.diagnostics == ()
+    assert alias_result.request == BackendTypeSpellingRequest(
+        backend="rust",
+        value=vector_as_extension,
+        source_text="type<backend>(MaskVec)",
+        source=_location(6, 7),
+    )
+    assert transform_result.diagnostics == ()
+    assert transform_result.request == BackendTypeSpellingRequest(
+        backend="rust",
+        value=vector_as_extension,
+        source_text="type<backend>(vector::as_extension(scalar))",
+        source=_location(7, 7),
+    )
+    assert "__" not in vec_result.request.source_text
+
+
+def test_m142_reports_unbound_alias_and_use_before_definition() -> None:
+    selected = _selected_implementation()
+    direct_result = Lowerer().lower_backend_type_query(
+        selected,
+        "type<backend>(MaskVec)",
+        _location(4, 7),
+    )
+
+    body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="let",
+                arguments=("type", "Before, After"),
+                source=_location(5, 7),
+            ),
+            LowerableDirective(
+                name="let",
+                arguments=("type", "After, Vec"),
+                source=_location(6, 7),
+            ),
+        ),
+        source=_location(3, 5),
+    )
+    use_before_definition = Lowerer().type_environment_for(
+        _selected_implementation(body=body),
+    )
+
+    assert direct_result.request is None
+    assert [diagnostic.code for diagnostic in direct_result.diagnostics] == [
+        "TSL-LOWER-UNBOUND-TYPE-ALIAS",
+    ]
+    assert "MaskVec" in direct_result.diagnostics[0].message
+    assert [diagnostic.code for diagnostic in use_before_definition.diagnostics] == [
+        "TSL-LOWER-UNBOUND-TYPE-ALIAS",
+    ]
+    assert tuple(
+        binding.alias_name for binding in use_before_definition.alias_bindings
+    ) == ("After",)
+
+
+def test_m142_backend_type_query_uses_only_preceding_alias_bindings() -> None:
+    body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="let",
+                arguments=("type", "MaskVec, Vec"),
+                source=_location(6, 7),
+            ),
+        ),
+        source=_location(3, 5),
+    )
+    selected = _selected_implementation(body=body)
+    lowerer = Lowerer()
+    environment = lowerer.type_environment_for(selected)
+
+    before_declaration = lowerer.lower_backend_type_query(
+        selected,
+        "type<backend>(MaskVec)",
+        _location(5, 7),
+        environment=environment,
+    )
+    after_declaration = lowerer.lower_backend_type_query(
+        selected,
+        "type<backend>(MaskVec)",
+        _location(7, 7),
+        environment=environment,
+    )
+
+    assert environment.diagnostics == ()
+    assert before_declaration.request is None
+    assert [diagnostic.code for diagnostic in before_declaration.diagnostics] == [
+        "TSL-LOWER-UNBOUND-TYPE-ALIAS",
+    ]
+    assert after_declaration.diagnostics == ()
+    assert after_declaration.request == BackendTypeSpellingRequest(
+        backend="cpp",
+        value=LoweredCurrentVectorType(extension="scalar", type_tag="si32"),
+        source_text="type<backend>(MaskVec)",
+        source=_location(7, 7),
+    )
+
+
+def test_m142_reports_malformed_alias_and_unsupported_queries() -> None:
+    body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="let",
+                arguments=("type", "BrokenAliasOnly"),
+                source=_location(4, 7),
+            ),
+        ),
+        source=_location(3, 5),
+    )
+    selected = _selected_implementation(body=body)
+    lowerer = Lowerer()
+
+    environment = lowerer.type_environment_for(selected)
+    unsupported = lowerer.lower_backend_type_query(
+        selected,
+        "type<backend>(type<generation>(base::in))",
+        _location(5, 7),
+        environment=environment,
+    )
+    malformed = lowerer.lower_backend_type_query(
+        selected,
+        "type<backend>(Vec",
+        _location(6, 7),
+        environment=environment,
+    )
+
+    assert [diagnostic.code for diagnostic in environment.diagnostics] == [
+        "TSL-LOWER-MALFORMED-TYPE-ALIAS",
+    ]
+    assert unsupported.request is None
+    assert [diagnostic.code for diagnostic in unsupported.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-TYPE-EXPRESSION",
+    ]
+    assert malformed.request is None
+    assert [diagnostic.code for diagnostic in malformed.diagnostics] == [
+        "TSL-LOWER-MALFORMED-BACKEND-TYPE-QUERY",
+    ]
+
+
+def test_m142_does_not_resolve_primitive_call_selector_targets(
+    tmp_path: Path,
+) -> None:
+    calls = (
+        "call<primitive=@self[Vec]>(left, right)",
+        "call<primitive=add[Vec] attrs[mask=zero]>(left, right)",
+    )
+
+    for index, call in enumerate(calls):
+        source = tmp_path / f"tiny_add_m142_call_selector_{index}.tsl"
+        source.write_text(
+            "\n".join(
+                (
+                    "prim<v:=(v,v)> add(left, right):",
+                    "  implementation scalar si32:",
+                    f'    tsil "{call}"',
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.artifacts.artifacts == ()
+        assert [diagnostic.code for diagnostic in result.diagnostics] == [
+            "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL",
+        ]
+        assert "specialization remains opaque: 'Vec'" in result.diagnostics[0].message
 
 
 def test_m125_selected_mismatched_body_reports_lowering_diagnostic(
@@ -6721,6 +7048,7 @@ def _selected_implementation(
     backend: str = "cpp",
     operation_id: str = "add",
     body_operation: str | None = None,
+    extension: str = "scalar",
     type_tag: str = "si32",
 ) -> SelectedImplementation:
     selected_body = body or _implementation_body(
@@ -6728,7 +7056,7 @@ def _selected_implementation(
         ("left", "right"),
     )
     implementation = Implementation(
-        extension="scalar",
+        extension=extension,
         type_tag=type_tag,
         body=selected_body,
         source=_location(2, 3),
@@ -6744,7 +7072,7 @@ def _selected_implementation(
     target = Target(
         backend=backend,
         primitive_name=operation_id,
-        extension="scalar",
+        extension=extension,
         type_tag=type_tag,
     )
     return SelectedImplementation(

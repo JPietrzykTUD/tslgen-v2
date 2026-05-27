@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from tslgen.analysis.selection import SelectedImplementation
-from tslgen.core.diagnostics import Diagnostic
+from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
     Catalog,
     ImplementationBody,
@@ -37,6 +37,9 @@ from tslgen.lowering.model import (
     LoweredResultType,
     LoweredUnaryOperationExpression,
     SelectedImplementationLoweringContext,
+    SelectedTypeEnvironment,
+    BackendTypeQueryLoweringResult,
+    TypeExpressionLoweringResult,
     build_selected_implementation_lowering_context,
 )
 from tslgen.lowering.operation_type_compatibility import (
@@ -49,6 +52,11 @@ from tslgen.lowering.scalar_types import (
     ScalarTypeDescriptor,
     lookup_scalar_type_descriptor,
     supported_scalar_type_tags,
+)
+from tslgen.lowering.type_queries import (
+    build_selected_type_environment,
+    lower_backend_type_query,
+    lower_type_expression,
 )
 from tslgen.lowering.primitive_call_diagnostics import (
     unsupported_primitive_call_diagnostics,
@@ -91,6 +99,45 @@ class Lowerer:
         selected: SelectedImplementation,
     ) -> SelectedImplementationLoweringContext:
         return build_selected_implementation_lowering_context(selected)
+
+    def type_environment_for(
+        self,
+        selected: SelectedImplementation,
+    ) -> SelectedTypeEnvironment:
+        context = self.context_for(selected)
+        return build_selected_type_environment(context)
+
+    def lower_type_expression(
+        self,
+        selected: SelectedImplementation,
+        expression: str,
+        source: SourceLocation,
+        *,
+        environment: SelectedTypeEnvironment | None = None,
+    ) -> TypeExpressionLoweringResult:
+        context = self.context_for(selected)
+        return lower_type_expression(
+            context,
+            expression,
+            source,
+            environment=environment,
+        )
+
+    def lower_backend_type_query(
+        self,
+        selected: SelectedImplementation,
+        query: str,
+        source: SourceLocation,
+        *,
+        environment: SelectedTypeEnvironment | None = None,
+    ) -> BackendTypeQueryLoweringResult:
+        context = self.context_for(selected)
+        return lower_backend_type_query(
+            context,
+            query,
+            source,
+            environment=environment,
+        )
 
     def lower_all(
         self,

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 141 is accepted.
+Milestone 142 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -423,8 +423,10 @@ and implementation source; and exposes those facts through
 
 M141 records current implementation symbols without resolving them. `Vec` is
 the current selected-context vector keyword for the selected extension and
-type tag. `MaskVec` and `GenericVec` are known unresolved implementation-body
-aliases for later lowering. Declaration provenance such as
+type tag, and `scalar` is the current selected-context scalar/base type
+keyword. Implementation-body aliases are not context facts; M142 resolves
+source-defined aliases through ordered `let<type>(...)` bindings in the
+selected body. Declaration provenance such as
 `Primitive.declared_attributes` and `PrimitiveAttribute.declared_value` is not
 placed on the context as a separate semantic selector.
 
@@ -446,6 +448,44 @@ M141 validation completed with:
   exit 0, no output.
 - `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
   exit 0, `189 passed in 8.35s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
+The M142 execution-review loop returned `Accept` after one write-capable
+executor, one focused revision executor, and read-only architecture,
+boundary, documentation, and validation audits plus focused re-review. M142
+added exact selected-context type/query lowering without backend rendering or
+primitive-call target resolution. It introduced typed current-context type
+facts for `Vec` and `scalar`, a body-local ordered `let<type>(AliasName,
+TypeExpr)` type environment, exact `vector::as_extension(scalar)` lowering,
+and exact `type<backend>(TypeExpr)` lowering to a typed backend
+type-spelling request.
+
+M142 treats alias names as source-defined only. `MaskVec`, `GenericVec`, and
+any other alias spelling are not built-in semantic aliases and resolve only
+through preceding exact `let<type>(...)` bindings in the same selected body.
+The focused revision fixed alias visibility so `type<backend>(AliasName)`
+cannot see aliases declared later in the selected body.
+
+M142 did not resolve primitive-call selector targets, expand dependency
+closure, lower dependency bodies, render backend type or call text, interpret
+selector attrs, parse arbitrary expressions, repair source, read runtime
+`tsldata`, or introduce runtime dependency on `frozen` / `tslgenold`.
+
+M142 initial review found a blocking alias-ordering issue and stale docs
+wording. The focused revision fixed both. Focused re-review verdicts were:
+architecture `Accept`, boundary `Accept`, documentation `Accept`, and
+validation `Accept`. There are no recorded M142 follow-ups.
+
+M142 post-revision validation completed with:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `197 passed in 8.48s`.
 - Initial `find tslgen -type d -name __pycache__ -print` listed validation
   cache directories; after removing those directories, the final required
   `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
@@ -2044,45 +2084,48 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 142.
+Execute Milestone 143.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m142-execution-review-loop-prompt.md
+docs/agent/runs/m143-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 142: Exact Type Alias And Backend-Type Query Lowering Slice
+Milestone 143: Primitive Call Selector Variant Resolution Slice
 ```
 
 Latest review verdict:
 
 ```text
-M141 execution-review returned Accept after one write-capable executor and
-read-only architecture, boundary, documentation, and validation audits. There
-are no recorded M141 follow-ups.
+M142 execution-review returned Accept after one write-capable executor, one
+focused revision executor, and read-only architecture, boundary,
+documentation, and validation audits plus focused re-review. There are no
+recorded M142 follow-ups.
 ```
 
 Next expected action:
 
 ```text
-Run the active M142 execution-review-loop prompt. M142 should add exact
-type-alias and backend-type query lowering against the M141 selected
-implementation context. It should handle the exact selected-context forms
-`Vec`, `MaskVec`, `GenericVec`, `type<backend>(...)`, and
-`vector::as_extension(scalar)` as typed lowering facts or typed backend
-type-spelling requests.
+Run the active M143 execution-review-loop prompt. M143 should resolve
+recognized `call<primitive=...>(...)` selector targets to typed primitive-call
+target references or precise diagnostics using the catalog, M140 concrete
+attributes, the M141 selected implementation context, and M142 typed
+specialization/type-query facts.
 
-M142 must preserve the distinction between selected-context type facts and
-primitive-call selector resolution. It must not resolve primitive-call
-selector targets, expand dependency closure, lower dependency bodies, render
-backend call text, interpret selector attrs, parse arbitrary expressions,
-repair source, or introduce runtime `tsldata`, `frozen`, or `tslgenold`
-dependencies. Primitive-call selector variant resolution remains M143.
+M143 should support the selector forms `@self`, `@self[...]`, named primitive
+references, named primitive references with specialization, and selector
+`attrs[...]` matching against concrete catalog attributes. It must keep call
+arguments opaque except for already accepted exact add-call behavior.
+
+M143 must not expand dependency closure, select or lower dependency bodies,
+render backend call text, recursively lower arguments, parse arbitrary
+expressions, repair source, or introduce runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
 ```
 
 Accepted planning prompt:

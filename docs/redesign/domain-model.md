@@ -493,7 +493,7 @@ class SelectedImplementationLoweringContext:
     primitive_source: SourceLocation
     implementation_source: SourceLocation
     current_vector_keyword: str
-    unresolved_type_aliases: tuple[str, ...]
+    current_scalar_keyword: str
 ```
 
 Invariants:
@@ -506,8 +506,71 @@ Invariants:
   `PrimitiveAttribute.declared_value` is not a separate semantic selector.
 - `Vec` is a current selected-context vector keyword derived from the selected
   extension plus type tag, not a primitive specialization key.
-- `MaskVec` and `GenericVec` are unresolved implementation-body aliases until
-  a later lowering milestone resolves them.
+- `scalar` is the current selected-context scalar/base type keyword derived
+  from the selected type tag.
+- `MaskVec`, `GenericVec`, and any other source identifier are not context
+  built-ins. They are aliases only after the selected body binds them with
+  exact `let<type>(...)` directives.
+
+## Type Query Lowering Model
+
+Milestone 142 adds a small selected-body type environment. It is built from
+`SelectedImplementationLoweringContext` and the selected implementation body,
+not from fresh source-file reads, `tsldata`, `frozen`, or `tslgenold`.
+
+```python
+@dataclass(frozen=True, slots=True)
+class LoweredCurrentVectorType:
+    extension: ExtensionName
+    type_tag: TypeTag
+
+@dataclass(frozen=True, slots=True)
+class LoweredCurrentScalarType:
+    type_tag: TypeTag
+
+@dataclass(frozen=True, slots=True)
+class LoweredVectorAsExtensionType:
+    scalar: LoweredCurrentScalarType
+    extension: ExtensionName
+
+LoweredTypeValue = (
+    LoweredCurrentVectorType
+    | LoweredCurrentScalarType
+    | LoweredVectorAsExtensionType
+)
+
+@dataclass(frozen=True, slots=True)
+class LoweredTypeAliasBinding:
+    alias_name: str
+    value: LoweredTypeValue
+    source_text: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class SelectedTypeEnvironment:
+    context: SelectedImplementationLoweringContext
+    context_symbols: tuple[str, ...]
+    alias_bindings: tuple[LoweredTypeAliasBinding, ...]
+    diagnostics: tuple[Diagnostic, ...]
+
+@dataclass(frozen=True, slots=True)
+class BackendTypeSpellingRequest:
+    backend: BackendId
+    value: LoweredTypeValue
+    source_text: str
+    source: SourceLocation
+```
+
+Invariants:
+
+- Context symbols are exactly the current `Vec` and `scalar` spellings for
+  the selected implementation.
+- Alias bindings are ordered by selected body token order.
+- Alias references resolve only to earlier bindings in the same selected body.
+- `type<backend>(...)` produces a `BackendTypeSpellingRequest`; it does not
+  render backend type text.
+- Raw source text is retained only as diagnostic/provenance context, not as a
+  semantic value consumed by renderers.
 
 ## Dependency Analysis Model
 

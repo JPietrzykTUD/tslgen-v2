@@ -861,13 +861,42 @@ variant facts. Provenance-only declaration fields such as
 `Primitive.declared_attributes` and `PrimitiveAttribute.declared_value` do not
 become separate semantic matching inputs.
 
-The context also records the current implementation type symbols without
-resolving them. `Vec` is the current vector keyword for the selected extension
-and type tag. `MaskVec` and `GenericVec` are known unresolved
-implementation-body aliases for a later lowering slice. M141 does not lower
-these names, resolve `type<backend>(...)`, resolve
+The context also records selected-context type symbols without resolving them
+to backend text. `Vec` is the current vector keyword for the selected
+extension and type tag. `scalar` is the current scalar/base type keyword for
+the selected type tag. Source spellings such as `MaskVec` or `GenericVec` are
+not built-ins; they become type aliases only when the selected body defines
+them with an exact `let<type>(AliasName, TypeExpr)` directive. M141 does not
+lower these names, resolve `type<backend>(...)`, resolve
 `vector::as_extension(scalar)`, match primitive-call selectors, lower
 dependency bodies, or change generated C++/Rust bytes.
+
+### M142 Exact Type Alias And Backend-Type Query Boundary
+
+Milestone 142 lowers only exact selected-context type islands. The lowerer can
+derive typed facts for `Vec`, `scalar`, and the exact
+`vector::as_extension(scalar)` transform from the selected implementation
+context. It can scan the selected body in token order for exact
+`let<type>(AliasName, TypeExpr)` directives and bind arbitrary source alias
+names to already lowered type values.
+
+Alias names are body-local and order-sensitive. A source alias reference such
+as `MaskVec`, `GenericVec`, or any other identifier resolves only through a
+preceding `let<type>(...)` binding in the same selected body. Unbound aliases
+and alias use before definition emit `TSL-LOWER-UNBOUND-TYPE-ALIAS`.
+Malformed alias directives emit `TSL-LOWER-MALFORMED-TYPE-ALIAS`.
+
+The exact `type<backend>(TypeExpr)` island lowers to a typed backend
+type-spelling request over an already lowered type value. M142 does not render
+backend type text. Unsupported type expressions emit
+`TSL-LOWER-UNSUPPORTED-TYPE-EXPRESSION`, and malformed backend type queries
+emit `TSL-LOWER-MALFORMED-BACKEND-TYPE-QUERY`.
+
+M142 does not resolve primitive-call selector targets, dependency closure,
+dependency body lowering, backend call rendering, selector `attrs[...]`,
+general generation/backend query grammar, assignment/indexing, expression
+parsing, cross-body aliases, source repair, runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
 
 ## Catalog Behavior
 

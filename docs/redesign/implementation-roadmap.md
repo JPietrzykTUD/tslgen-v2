@@ -18602,8 +18602,8 @@ Create the small typed lowering context for one selected implementation:
 - represent `Vec` as the current implementation vector keyword derived from
   selected extension plus datatype, not as a primitive specialization or
   catalog attribute;
-- record that `MaskVec` and `GenericVec` are implementation-body type aliases
-  to be resolved by lowering, not primitive declarations;
+- keep implementation-body type aliases out of selected-context facts so later
+  lowering resolves aliases from source-defined `let<type>(...)` bindings;
 - expose enough context for later lowering of `type<backend>(...)` and
   `vector::as_extension(scalar)` without letting renderers or primitive-call
   matching evaluate raw source text.
@@ -18620,8 +18620,8 @@ Out of scope:
 
 Primitive-call candidate matching; dependency closure; lowering dependency
 bodies; backend call rendering; interpreting call selector attrs; resolving
-`MaskVec`, `GenericVec`, `type<backend>(...)`, or
-`vector::as_extension(scalar)` into backend text; expression parsing;
+  source-defined type aliases, `type<backend>(...)`, or
+  `vector::as_extension(scalar)` into backend text; expression parsing;
 assignment/indexing; source repair; runtime `tsldata`, `frozen`, or
 `tslgenold` dependencies; broad IR/worklist machinery.
 
@@ -18630,7 +18630,8 @@ Expected outputs:
 - Later lowering can ask for the current selected implementation context
   without guessing from raw TSIL text.
 - Future type-query and call-selector milestones have an explicit source of
-  current primitive attributes, extension, datatype, and aliases.
+  M141 context facts such as current primitive attributes, extension, and
+  datatype, plus the M142 selected-body type environment for aliases.
 
 Validation:
 
@@ -18654,12 +18655,13 @@ Accepted result:
   context into current lowering output creation without changing generated
   C++/Rust bytes.
 - Recorded `Vec` as the current selected-context vector keyword.
-- Recorded `MaskVec` and `GenericVec` as known unresolved implementation-body
-  aliases for later lowering.
+- Left implementation-body aliases for a later source-defined
+  `let<type>(...)` alias binding slice rather than treating alias spellings as
+  context facts.
 - Kept declaration provenance such as `Primitive.declared_attributes` and
   `PrimitiveAttribute.declared_value` out of the context as separate semantic
   selectors.
-- No `Vec`, `MaskVec`, `GenericVec`, `type<backend>(...)`, or
+- No `Vec`, source-defined type aliases, `type<backend>(...)`, or
   `vector::as_extension(scalar)` backend-text resolution, primitive-call
   selector matching, dependency closure, dependency body lowering, backend
   call rendering, expression parsing, runtime `tsldata` shortcut, `frozen`
@@ -18688,10 +18690,12 @@ Validation result:
 
 Status:
 
-Planned as the next clean restart implementation milestone after accepted
-M141. This is the narrow type/query lowering prerequisite for attribute-aware
-primitive-call selector matching with specializations such as `[Vec]` or
-`[type<backend>(vector::as_extension(scalar))]`.
+Accepted. The M142 execution-review loop returned `Accept` after one
+write-capable executor, one focused revision executor, and read-only
+architecture, boundary, documentation, and validation audits plus focused
+re-review. This is the narrow type/query lowering prerequisite for
+attribute-aware primitive-call selector matching with specializations such as
+`[Vec]` or `[type<backend>(vector::as_extension(scalar))]`.
 
 Goal:
 
@@ -18700,12 +18704,16 @@ context:
 
 - resolve the `Vec` keyword to the current selected vector type from extension
   plus datatype;
-- resolve implementation-body aliases such as `MaskVec` and `GenericVec` as
-  typed aliases in the current lowering context;
+- seed a tiny selected-body type environment with exact context symbols such
+  as `Vec` and the current scalar/base type symbol;
+- lower exact `let<type>(AliasName, TypeExpr)` directives in body order and
+  bind arbitrary alias names to lowered typed type expressions;
+- resolve implementation-body aliases such as `MaskVec` and `GenericVec` only
+  through prior `let<type>(...)` bindings, never as hardcoded names;
 - represent `vector::as_extension(scalar)` as a typed vector-type transform
   request over the current scalar/base type and selected extension context;
 - represent `type<backend>(...)` as a backend type-spelling request over an
-  already typed semantic type value;
+  already lowered typed semantic type value or prior alias binding;
 - emit diagnostics for unsupported or malformed exact type/query islands
   rather than passing raw query text to renderers.
 
@@ -18714,26 +18722,35 @@ Scope:
 - Recognize only exact documented type/query islands already isolated by the
   selected TSIL token boundaries, such as call selector specializations or
   directive payload tokens.
+- Treat `MaskVec`, `GenericVec`, and any other alias name as source-defined
+  aliases that must come from an earlier exact `let<type>(...)` directive in
+  the selected body.
+- If the M141 context's recorded unresolved alias names would imply hardcoded
+  alias semantics, M142 may narrow or revise that field so alias resolution is
+  driven by source-defined `let<type>(...)` bindings instead.
 - Keep backend spelling as a typed request/result boundary; do not let backend
   rendering evaluate unresolved source text.
-- Add focused positive and negative tests for `Vec`, `MaskVec`, `GenericVec`,
-  `type<backend>(...)`, and `vector::as_extension(scalar)` in selected
-  contexts.
+- Add focused positive and negative tests for `Vec`, arbitrary
+  `let<type>(...)` alias binding and reference, `type<backend>(...)`, and
+  `vector::as_extension(scalar)` in selected contexts.
 
 Out of scope:
 
 Primitive-call candidate matching; dependency closure; lowering dependency
-bodies; rendering backend call text; interpreting selector attrs; broad
-generation/backend query grammar; expression parsing; arbitrary raw-line
-rewriting; assignment/indexing; source repair; runtime `tsldata`, `frozen`, or
-`tslgenold` dependencies; broad IR/worklist machinery.
+bodies; rendering backend call text; hardcoded `MaskVec` / `GenericVec`
+semantics; interpreting selector attrs; broad generation/backend query
+grammar; expression parsing; arbitrary raw-line rewriting;
+assignment/indexing; general block scoping, alias shadowing, or cross-body
+alias lookup; source repair; runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies; broad IR/worklist machinery.
 
 Expected outputs:
 
 - The lowerer has typed current-context type facts and backend type requests
   for the exact source forms needed by selected primitive-call selectors.
-- `Vec`, `MaskVec`, and `GenericVec` are no longer confused with primitive
-  catalog specialization keys.
+- `Vec` is no longer confused with primitive catalog specialization keys, and
+  source alias names such as `MaskVec` or `GenericVec` resolve only through
+  `let<type>(...)` bindings.
 
 Validation:
 
@@ -18744,13 +18761,54 @@ python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
 find tslgen -type d -name __pycache__ -print
 ```
 
+Accepted result:
+
+- Added typed selected-context type facts for `Vec` and `scalar`.
+- Added an ordered selected-body type environment that binds arbitrary source
+  alias names from exact `let<type>(AliasName, TypeExpr)` directives.
+- Lowered exact `vector::as_extension(scalar)` to a typed vector transform
+  fact over the current scalar/base type and selected extension.
+- Lowered exact `type<backend>(TypeExpr)` to a typed
+  `BackendTypeSpellingRequest` over an already lowered type value.
+- Kept alias names source-defined only: `MaskVec`, `GenericVec`, and any
+  other alias spelling are not hardcoded semantic aliases.
+- Fixed alias visibility so backend type queries resolve only aliases whose
+  `let<type>(...)` binding precedes the query in the same selected body.
+- Preserved primitive-call selector target resolution, dependency closure,
+  dependency body lowering, backend type/call rendering, arbitrary expression
+  parsing, runtime `tsldata`, `frozen`, and `tslgenold` as out of scope.
+
+Review verdicts:
+
+- Initial architecture reviewer: `Needs Revision` for alias visibility.
+- Initial boundary auditor: `Needs Revision` for alias visibility.
+- Initial documentation auditor: `Needs Revision` for stale alias wording.
+- Initial validation auditor: `Accept`.
+- Focused architecture re-review: `Accept`.
+- Focused boundary re-review: `Accept`.
+- Focused documentation re-review: `Accept`.
+- Focused validation re-review: `Accept`.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `197 passed in 8.48s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
 ### Milestone 143: Primitive Call Selector Variant Resolution Slice
 
 Status:
 
-Planned outline after M142. This is the first catalog-backed
-primitive-call-selector resolution milestone; it should resolve references and
-diagnostics only, not lower dependency bodies or render calls.
+Planned as the next clean restart implementation milestone after accepted
+M142. This is the first catalog-backed primitive-call-selector resolution
+milestone; it should resolve references and diagnostics only, not lower
+dependency bodies or render calls.
 
 Goal:
 
