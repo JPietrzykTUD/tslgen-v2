@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 136 is accepted.
+Milestone 137 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -239,6 +239,45 @@ rendering, repair source, or introduce runtime `tsldata`, `frozen`, or
 M136 review verdicts were: architecture `Accept`, boundary `Accept`,
 documentation `Accept`, and validation `Accept`. There were no blocking
 findings or recorded follow-ups.
+
+The M137 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, documentation,
+and validation audits. M137 refined unsupported recognized primitive-call
+diagnostics so they consume the existing M135/M136 structured `PrimitiveCall`
+selector and argument data. Diagnostics now report target kind, named target
+where applicable, selector source text, optional opaque specialization and
+attrs payloads, raw argument count, raw argument payload texts, opaque original
+call payload, and the explicit missing capability that primitive-call
+dependency resolution is not implemented yet.
+
+M137 applies the same diagnostic context to standalone M132 primitive-call
+body tokens and M134 `emit_return(...)` payload primitive-call tokens. It
+preserved M133/M134 exact `call<primitive=add>(left, right)` lowering and
+artifact bytes, and preserved existing diagnostics for raw `emit_return(left)`,
+raw-plus-call payloads, malformed call selectors, malformed call arguments,
+non-call raw bodies, and non-call directives. It did not resolve named
+primitive references against the catalog, expand `@self`, interpret
+specialization, attrs, arguments, or nested calls, add dependency closure,
+render backend call text, repair source, or introduce runtime `tsldata`,
+`frozen`, or `tslgenold` dependencies.
+
+M137 review verdicts were: architecture `Accept`, boundary `Accept`,
+documentation `Accept With Follow-Ups`, and validation `Accept`. The recorded
+follow-up is to update the older simplified implementation-body domain-model
+sketch so it shows the accepted M134-M136 `primitive_call` and
+`payload_tokens` fields.
+
+M137 validation completed with:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `164 passed in 12.06s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -1833,45 +1872,55 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 137.
+Execute Milestone 138.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m137-execution-review-loop-prompt.md
+docs/agent/runs/m138-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 137: Exact Primitive Call Dependency Diagnostic Boundary Slice
+Milestone 138: Primitive Call Target Reference Diagnostic Boundary Slice
 ```
 
 Latest review verdict:
 
 ```text
-M136 execution-review returned Accept after one write-capable executor and
-read-only architecture, boundary, documentation, and validation audits. There
-are no recorded follow-ups.
+M137 execution-review returned Accept With Follow-Ups after one write-capable
+executor and read-only architecture, boundary, documentation, and validation
+audits. The recorded follow-up is to update the older simplified
+implementation-body domain-model sketch so it shows the accepted M134-M136
+primitive_call and payload_tokens fields.
 ```
 
 Next expected action:
 
 ```text
-Run the active M137 execution-review-loop prompt. M137 should refine the
-unsupported primitive-call lowering diagnostic using the structured M135/M136
-call representation. Unsupported recognized primitive calls should report the
-target kind (`@self` or named primitive), selector source text, optional
-specialization and attrs payloads, raw argument count, and the fact that
-primitive-call dependency resolution is not implemented yet.
+Run the active M138 execution-review-loop prompt. M138 should perform only
+primitive-call target-reference classification for recognized
+`call<primitive=...>(...)` tokens: `@self` identifies the currently selected
+primitive as the base target, and named primitive base targets are checked by
+exact primitive name against the already built clean restart catalog.
+Specialization payloads and `attrs[...]` payloads are part of the target
+reference and must be reported as unresolved target-reference dimensions, not
+silently ignored. Missing named base targets should receive a precise
+diagnostic; known named base targets and `@self` should still stop at a
+diagnostic boundary because specialization/attribute target resolution and
+dependency implementation selection/lowering are not implemented yet.
 
-M137 must preserve M133/M134 exact add-call lowering and all M132-M136 token
-representation behavior. It must not resolve named primitive references
-against the catalog, expand `@self`, interpret selector specialization or
-attrs payloads, resolve argument identifiers, recursively lower arguments,
-add dependency closure, add backend call rendering, repair source, or
-introduce runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
+M138 must preserve M133/M134 exact add-call lowering and all M135-M137
+structured selector, argument, payload, and diagnostic behavior outside the
+deliberately refined target-reference diagnostic text. It must not select
+dependency implementations, lower dependency bodies, add dependency closure,
+expand `@self` beyond base target identity, interpret specialization or attrs
+payloads as successful specialization/attribute resolution, interpret argument
+identifiers or nested calls, parse expressions, render backend call text,
+repair source, or introduce runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies.
 ```
 
 Accepted planning prompt:

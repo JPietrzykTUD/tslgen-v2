@@ -18104,10 +18104,9 @@ Validation result:
 
 Status:
 
-Planned as the next clean restart implementation milestone after accepted
-M136. This is a lowering diagnostic boundary over the M135/M136 structured
-primitive-call representation. It still does not resolve or render primitive
-calls.
+Accepted. M137 was implemented after accepted M136. This is a lowering
+diagnostic boundary over the M135/M136 structured primitive-call
+representation. It still does not resolve or render primitive calls.
 
 Goal:
 
@@ -18154,6 +18153,130 @@ Expected outputs:
   stable.
 - The next semantic step, dependency resolution, is visible as an explicit
   unsupported boundary rather than an implicit opaque-string failure.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Execution notes:
+
+- Unsupported recognized primitive calls now report structured diagnostic
+  context from the existing `PrimitiveCall` value when available.
+- The diagnostic context names named primitive versus `@self` target kind,
+  named target where applicable, selector source text, optional opaque
+  specialization and attrs payloads, raw argument count, raw argument payload
+  texts, the opaque original payload, and the explicit missing capability:
+  primitive-call dependency resolution is not implemented yet.
+- The same context is used for standalone primitive-call body tokens and for
+  `emit_return(...)` payload primitive-call tokens.
+- Hand-constructed directive values that lack structured `PrimitiveCall` data
+  keep the legacy opaque selector/payload fallback context, now with the same
+  missing-capability statement.
+- M133/M134 exact `call<primitive=add>(left, right)` lowering and generated
+  artifact bytes remain stable.
+- Raw `emit_return(left)`, raw-plus-call payloads, malformed call selectors,
+  malformed call arguments, non-call raw bodies, and non-call directives remain
+  at their existing diagnostic boundaries.
+- Architecture, boundary, and validation audits returned `Accept`.
+  Documentation audit returned `Accept With Follow-Ups`; the recorded
+  follow-up is to update the older simplified implementation-body domain-model
+  sketch so it shows the accepted M134-M136 `primitive_call` and
+  `payload_tokens` fields.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `164 passed in 12.06s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
+### Milestone 138: Primitive Call Target Reference Diagnostic Boundary Slice
+
+Status:
+
+Planned as the next clean restart implementation milestone after accepted
+M137. This is a lowering diagnostic boundary over recognized TSIL
+`call<primitive=...>(...)` tokens. It should identify the source-declared base
+call target against the current catalog when possible and classify
+specialization / `attrs[...]` as unresolved target-reference dimensions, but
+it still must not select or lower dependency implementations.
+
+Goal:
+
+Move one step beyond M137's generic "dependency resolution is not implemented"
+diagnostic by checking only the primitive-call target reference boundary:
+
+- `call<primitive=@self>(...)` identifies the currently selected primitive as
+  the base dependency target;
+- `call<primitive=NAME>(...)` checks whether `NAME` exists as a primitive in
+  the catalog;
+- `call<primitive=@self[...]>(...)`, `call<primitive=NAME[...]>(...)`,
+  `call<primitive=@self attrs[...]>(...)`,
+  `call<primitive=NAME attrs[...]>(...)`, and combined
+  specialization-plus-attrs forms classify the base target and report that
+  specialization-specific and/or attribute-specific target reference
+  resolution is not implemented yet;
+- missing named base targets receive a precise diagnostic at the call source
+  while preserving specialization and attrs as opaque diagnostic context;
+- known base targets still stop at a diagnostic boundary that distinguishes
+  known base-target identity from unresolved specialization, unresolved attrs,
+  and missing dependency implementation selection/lowering.
+
+Scope:
+
+- Preserve M133/M134 exact `call<primitive=add>(left, right)` lowering and all
+  M135-M137 structured selector, argument, payload, and diagnostic behavior
+  outside the deliberately refined target-reference diagnostic text.
+- Use only the already built clean restart catalog and selected implementation
+  context. Keep base-target lookup exact by primitive name; do not interpret
+  specialization or attrs as successful specialization/attribute resolution.
+- Keep selector specialization, attrs payloads, argument payloads, nested call
+  payloads, and original payload text opaque, while reporting specialization
+  and attrs presence as unresolved target-reference dimensions.
+- Add focused tests for known named targets, unknown named targets, `@self`
+  base target identity, known named targets with specialization, known named
+  targets with `attrs[...]`, known named targets with both specialization and
+  `attrs[...]`, unknown named base targets with specialization and/or attrs,
+  `@self` with specialization and/or attrs, zero-argument calls, nested raw
+  argument payloads, `emit_return(...)` payload calls, source locations, and
+  exact add-call artifact stability.
+- Preserve raw `emit_return(...)`, malformed call selectors, malformed call
+  arguments, raw-plus-call payloads, non-call raw bodies, and non-call
+  directives as diagnostic boundaries.
+- Resolve the M137 documentation follow-up by updating the older
+  implementation-body domain-model sketch to show the accepted
+  `primitive_call` and `payload_tokens` fields if the milestone touches that
+  area of the docs.
+
+Out of scope:
+
+Primitive dependency closure; selecting dependency implementations; lowering
+dependency bodies; rendering backend call text; expanding `@self` beyond base
+target identity; interpreting specialization, attrs, arguments, or nested call
+semantics; expression parsing; assignment or array-access lowering; source
+repair; complete TSIL grammar; runtime `tsldata` semantic lookup; `frozen` or
+`tslgenold` runtime dependency; registries; dispatchers; hidden backfeeds;
+fixpoint mechanisms; or new request/result/worklist families.
+
+Expected outputs:
+
+- Unknown named primitive-call base targets fail with a precise
+  target-reference diagnostic grounded in source locations.
+- Known named primitive-call base targets and `@self` calls remain unsupported
+  until a later dependency-selection/lowering slice, but their diagnostics
+  clearly distinguish base target identity from unresolved specialization,
+  unresolved attrs, and the missing dependency implementation capability.
+- Existing exact add-call lowering and artifact bytes remain stable.
 
 Validation:
 

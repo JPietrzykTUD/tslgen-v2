@@ -63,6 +63,9 @@ _SUPPORTED_UNARY_PARAMETERS = ("value",)
 _SUPPORTED_COMPARISON_PARAMETERS = ("left", "right")
 _SUPPORTED_EXACT_PRIMITIVE_CALL_TARGET = "add"
 _SUPPORTED_EXACT_PRIMITIVE_CALL_PAYLOAD = "left, right"
+_MISSING_PRIMITIVE_CALL_CAPABILITY = (
+    "primitive-call dependency resolution is not implemented yet"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -803,18 +806,22 @@ def _primitive_call_context(directive: LowerableDirective) -> str:
     if primitive_call is None:
         return (
             f"selector remains opaque: {directive.arguments[1]!r}; "
-            f"payload remains opaque: {directive.arguments[2]!r}"
+            f"payload remains opaque: {directive.arguments[2]!r}; "
+            f"{_MISSING_PRIMITIVE_CALL_CAPABILITY}"
         )
 
     selector = primitive_call.selector
     if isinstance(selector.target, NamedPrimitiveReference):
-        target_text = f"named primitive {selector.target.name!r}"
+        target_details = (
+            "target kind is named primitive",
+            f"target name is {selector.target.name!r}",
+        )
     else:
-        target_text = "'@self'"
+        target_details = ("target kind is '@self'",)
 
     details = [
-        f"selector target is {target_text}",
-        f"selector source is {selector.source_text!r}",
+        *target_details,
+        f"selector source text is {selector.source_text!r}",
     ]
     if selector.specialization is not None:
         details.append(
@@ -822,8 +829,13 @@ def _primitive_call_context(directive: LowerableDirective) -> str:
         )
     if selector.attrs is not None:
         details.append(f"attrs remain opaque: {selector.attrs!r}")
-    details.append(f"argument count is {len(primitive_call.arguments)}")
+    details.append(f"raw argument count is {len(primitive_call.arguments)}")
+    details.append(
+        "raw argument payloads remain opaque: "
+        f"{tuple(argument.text for argument in primitive_call.arguments)!r}"
+    )
     details.append(f"payload remains opaque: {primitive_call.payload!r}")
+    details.append(_MISSING_PRIMITIVE_CALL_CAPABILITY)
     return "; ".join(details)
 
 

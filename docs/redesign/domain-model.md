@@ -363,6 +363,14 @@ Invariants:
   `@self` expansion, argument identifier resolution, nested call semantics,
   helper/cast/operator parsing, recursive argument lowering, or backend call
   rendering.
+- M137 keeps `PrimitiveCall` as source-owned structured call data and uses it
+  for unsupported-call diagnostics. The diagnostic context names the selector
+  target kind, selector source text, optional opaque specialization and attrs
+  payloads, raw argument count, raw argument payload texts, and the opaque call
+  payload while making primitive-call dependency resolution the explicit
+  missing capability. It still does not resolve primitive references, expand
+  `@self`, interpret arguments, lower nested calls, or render backend call
+  syntax.
 - `requires_value` remains structurally preserved for the existing flag and
   selector normalization rules.
 - Unknown extra fields remain preserved as `extra_fields` so future milestones

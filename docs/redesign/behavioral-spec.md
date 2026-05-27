@@ -732,6 +732,37 @@ identifiers, parse array access, assignment, operators, helpers, casts, or
 nested call semantics, recursively lower arguments, render backend call
 syntax, use runtime `tsldata`, or depend on `frozen` / `tslgenold`.
 
+### M137 Primitive-Call Dependency Diagnostic Boundary
+
+Milestone 137 keeps recognized `call<primitive=...>(...)` tokens as structured
+source-owned call data and clarifies the unsupported lowering diagnostic for
+all recognized calls outside the exact M133/M134 add-call boundary.
+
+Unsupported primitive-call diagnostics use code
+`TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL` and report structured context when
+available:
+
+- target kind: named primitive or `@self`;
+- target name for named primitive references;
+- selector source text;
+- opaque specialization payload, when present;
+- opaque `attrs[...]` payload, when present;
+- raw argument count and raw argument payload texts;
+- opaque original call payload text;
+- the missing semantic capability:
+  primitive-call dependency resolution is not implemented yet.
+
+The same diagnostic context applies to standalone M132 call tokens and to M134
+`emit_return(...)` payload call tokens. Hand-constructed call directives that
+lack `PrimitiveCall` data keep the legacy opaque selector/payload fallback
+context.
+
+M137 does not resolve named primitive references against the catalog, expand
+`@self`, interpret specialization or attrs payloads, resolve argument
+identifiers, lower nested call semantics, parse expressions, render backend
+call syntax, repair source text, use runtime `tsldata`, or depend on
+`frozen` / `tslgenold`.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

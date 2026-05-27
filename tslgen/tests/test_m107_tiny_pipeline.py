@@ -5,6 +5,7 @@ from tslgen import (
     Artifact,
     ArtifactSet,
     ArtifactWriteRecord,
+    GenerationResult,
     Generator,
     Target,
     TslProject,
@@ -3920,6 +3921,183 @@ def test_m136_malformed_primitive_call_arguments_remain_raw(
         )
 
 
+def test_m137_named_primitive_call_diagnostic_uses_structured_context(
+    tmp_path: Path,
+) -> None:
+    source, result = _generate_tiny_add_tsil_payload(
+        tmp_path,
+        "tiny_add_m137_named_call.tsl",
+        "call<primitive=sub>(left, right)",
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+    assert diagnostic.message == (
+        "primitive call cannot be lowered by this exact boundary; "
+        "target kind is named primitive; target name is 'sub'; "
+        "selector source text is 'sub'; raw argument count is 2; "
+        "raw argument payloads remain opaque: ('left', 'right'); "
+        "payload remains opaque: 'left, right'; "
+        "primitive-call dependency resolution is not implemented yet"
+    )
+
+
+def test_m137_self_call_diagnostic_uses_structured_selector_context(
+    tmp_path: Path,
+) -> None:
+    source, result = _generate_tiny_add_tsil_payload(
+        tmp_path,
+        "tiny_add_m137_self_call.tsl",
+        "call<primitive=@self[Vec] attrs[mask=pass_through]>(left, right)",
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+    assert diagnostic.message == (
+        "primitive call cannot be lowered by this exact boundary; "
+        "target kind is '@self'; "
+        "selector source text is '@self[Vec] attrs[mask=pass_through]'; "
+        "specialization remains opaque: 'Vec'; "
+        "attrs remain opaque: 'mask=pass_through'; "
+        "raw argument count is 2; "
+        "raw argument payloads remain opaque: ('left', 'right'); "
+        "payload remains opaque: 'left, right'; "
+        "primitive-call dependency resolution is not implemented yet"
+    )
+
+
+def test_m137_zero_argument_call_diagnostic_reports_raw_count(
+    tmp_path: Path,
+) -> None:
+    source, result = _generate_tiny_add_tsil_payload(
+        tmp_path,
+        "tiny_add_m137_zero_arg_call.tsl",
+        "call<primitive=set_zero[Vec]>()",
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+    assert diagnostic.message == (
+        "primitive call cannot be lowered by this exact boundary; "
+        "target kind is named primitive; target name is 'set_zero'; "
+        "selector source text is 'set_zero[Vec]'; "
+        "specialization remains opaque: 'Vec'; "
+        "raw argument count is 0; raw argument payloads remain opaque: (); "
+        "payload remains opaque: ''; "
+        "primitive-call dependency resolution is not implemented yet"
+    )
+
+
+def test_m137_nested_argument_call_diagnostic_keeps_arguments_raw(
+    tmp_path: Path,
+) -> None:
+    source, result = _generate_tiny_add_tsil_payload(
+        tmp_path,
+        "tiny_add_m137_nested_argument_call.tsl",
+        "call<primitive=mov>(call<primitive=set_zero[Vec]>(), left)",
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+    assert diagnostic.message == (
+        "primitive call cannot be lowered by this exact boundary; "
+        "target kind is named primitive; target name is 'mov'; "
+        "selector source text is 'mov'; raw argument count is 2; "
+        "raw argument payloads remain opaque: "
+        "('call<primitive=set_zero[Vec]>()', 'left'); "
+        "payload remains opaque: 'call<primitive=set_zero[Vec]>(), left'; "
+        "primitive-call dependency resolution is not implemented yet"
+    )
+
+
+def test_m137_emit_return_payload_call_diagnostic_uses_structured_context(
+    tmp_path: Path,
+) -> None:
+    source, result = _generate_tiny_add_tsil_payload(
+        tmp_path,
+        "tiny_add_m137_emit_return_payload_call.tsl",
+        "emit_return(call<primitive=mul>(left, right));",
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 23)
+    assert diagnostic.message == (
+        "primitive call cannot be lowered by this exact boundary; "
+        "target kind is named primitive; target name is 'mul'; "
+        "selector source text is 'mul'; raw argument count is 2; "
+        "raw argument payloads remain opaque: ('left', 'right'); "
+        "payload remains opaque: 'left, right'; "
+        "primitive-call dependency resolution is not implemented yet"
+    )
+
+
+def test_m137_exact_add_call_artifacts_remain_stable(
+    tmp_path: Path,
+) -> None:
+    _, result = _generate_tiny_add_tsil_payload(
+        tmp_path,
+        "tiny_add_m137_exact_add_call.tsl",
+        "call<primitive=add>(left, right)",
+        targets=_targets(),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        CPP_CONTENT,
+        RUST_CONTENT,
+    ]
+
+
+def test_m137_non_call_diagnostic_boundaries_remain_unchanged(
+    tmp_path: Path,
+) -> None:
+    payloads_and_codes = (
+        ("emit_return(left);", "TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION"),
+        (
+            "emit_return(prefix call<primitive=add>(left, right));",
+            "TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION",
+        ),
+        ("call<primitive=add]>(left, right)", "TSL-LOWER-UNSUPPORTED-BODY"),
+        ("call<primitive=add>(left,, right)", "TSL-LOWER-UNSUPPORTED-BODY"),
+        ("left + right;", "TSL-LOWER-UNSUPPORTED-BODY"),
+        ("var<init_register>(result)", "TSL-LOWER-UNSUPPORTED-BODY"),
+    )
+
+    for index, (payload, code) in enumerate(payloads_and_codes):
+        _, result = _generate_tiny_add_tsil_payload(
+            tmp_path,
+            f"tiny_add_m137_preserved_boundary_{index}.tsl",
+            payload,
+        )
+
+        assert result.artifacts.artifacts == ()
+        assert len(result.diagnostics) == 1
+        diagnostic = result.diagnostics[0]
+        assert diagnostic.code == code
+        assert diagnostic.severity == "error"
+        assert "primitive-call dependency resolution" not in diagnostic.message
+
+
 def test_m129_catalog_accepts_emit_return_space_before_semicolon(
     tmp_path: Path,
 ) -> None:
@@ -5783,6 +5961,38 @@ def _write_tiny_source_file(
         encoding="utf-8",
     )
     return source
+
+
+def _generate_tiny_add_tsil_payload(
+    tmp_path: Path,
+    file_name: str,
+    payload: str,
+    *,
+    targets: tuple[Target, ...] | None = None,
+) -> tuple[Path, GenerationResult]:
+    source = tmp_path / file_name
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                f'    tsil "{payload}"',
+            )
+        ),
+        encoding="utf-8",
+    )
+    return source, generate_from_paths(
+        (source,),
+        targets
+        or (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
 
 
 def _write_tiny_multi_implementation_source(
