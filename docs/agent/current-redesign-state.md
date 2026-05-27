@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 138 is accepted.
+Milestone 139 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -323,6 +323,49 @@ M138 validation completed with:
   exit 0, no output.
 - `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
   exit 0, `171 passed in 13.46s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
+The M139 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, documentation,
+and validation audits. M139 added a catalog-first primitive declaration
+attribute variant boundary. The clean restart parser now admits primitive
+declaration attribute lists for supported tiny source header shapes, and the
+catalog records typed source-owned primitive attributes.
+
+M139 materializes concrete primitive variants from declaration attributes.
+Literal attributes remain concrete source-owned facts. Boolean wildcard
+declaration attributes are source shorthand only: `aligned=*` and `packed=*`
+expand to deterministic `true` / `false` concrete variants, and wildcard
+values do not survive in `Primitive.attributes`. Source provenance remains
+available through `Primitive.declared_attributes` and
+`PrimitiveAttribute.declared_value`, including wildcard source values. Same
+name primitive declarations with different concrete attributes are represented
+as distinct concrete variants.
+
+M139 explicitly kept implementation body text irrelevant to declaration
+attribute expansion. It did not perform primitive-call candidate lookup,
+dependency closure, dependency body lowering, backend rendering, selector
+specialization resolution, selector `attrs[...]` resolution, runtime
+`tsldata` lookup, or runtime dependency on `frozen` / `tslgenold`.
+
+M139 review verdicts were: architecture `Accept`, boundary
+`Accept With Follow-Ups`, documentation `Accept With Follow-Ups`, and
+validation `Accept`. The recorded nonblocking follow-up is that the next
+selector-matching milestone must match only `Primitive.attributes` and ignore
+provenance fields such as `declared_attributes` and `declared_value`.
+Documentation follow-ups were the orchestrator-owned roadmap, state, and
+next-prompt updates completed in this handoff.
+
+M139 validation completed with:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `177 passed in 13.39s`.
 - Initial `find tslgen -type d -name __pycache__ -print` listed validation
   cache directories; after removing those directories, the final required
   `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
@@ -1921,50 +1964,63 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 139.
+Execute Milestone 140.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m139-execution-review-loop-prompt.md
+docs/agent/runs/m140-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 139: Primitive Declaration Attribute Variant Catalog Slice
+Milestone 140: Explicit Target Attribute Variant Selection Boundary Slice
 ```
 
 Latest review verdict:
 
 ```text
-M138 execution-review returned Accept With Follow-Ups after one write-capable
+M139 execution-review returned Accept With Follow-Ups after one write-capable
 executor and read-only architecture, boundary, documentation, and validation
-audits. A focused follow-up audit returned Accept after separate tests were
-added for known named specialization-only and attrs-only primitive-call target
-dimensions.
+audits. The recorded nonblocking follow-up is that selector matching must use
+only concrete Primitive.attributes and ignore provenance fields such as
+declared_attributes and declared_value.
 ```
 
 Next expected action:
 
 ```text
-Run the active M139 execution-review-loop prompt. M139 should be a
-catalog-first prerequisite for later primitive-call selector matching. It
-should parse/store primitive declaration attributes, materialize deterministic
-concrete catalog variants for wildcard declaration attributes such as
-`aligned=*` and `packed=*`, and preserve provenance from expanded variants
-back to the source declaration.
+Run the active M140 execution-review-loop prompt. M140 should make explicit
+target selection attribute-aware now that the catalog can contain same-name
+primitive variants distinguished by concrete attributes. Empty target
+attributes should match only variants whose concrete `Primitive.attributes`
+are empty. Nonempty target attributes should match only concrete
+`Primitive.attributes`; provenance-only fields such as
+`Primitive.declared_attributes` and `PrimitiveAttribute.declared_value` must be
+ignored for matching.
 
-M139 must not perform primitive-call candidate lookup. It must preserve
-M133/M134 exact add-call lowering and all M135-M138 structured
-selector/argument/payload/source-location diagnostics. Implementation body
-text is not relevant to declaration-attribute expansion and must not influence
-variant materialization. It must not expand dependency closure, lower
-dependency bodies, render dependency call text, interpret `call<primitive=...>`
-selector specialization or attrs payloads, resolve argument identifiers or
-nested calls, parse expressions, repair source, or introduce runtime
-`tsldata`, `frozen`, or `tslgenold` dependencies.
+M140 must preserve existing no-attribute target construction and generated
+artifact bytes. It must not perform primitive-call candidate lookup, expand
+dependency closure, lower dependency bodies, render dependency call text,
+interpret `call<primitive=...>` selector specialization or attrs payloads,
+parse expressions, repair source, or introduce runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
+
+Preserve the planned post-M140 lowering sequence recorded in
+`docs/redesign/implementation-roadmap.md`:
+
+- M141: selected implementation lowering context. `Vec` is the current vector
+  keyword derived from selected extension plus datatype; `MaskVec` and
+  `GenericVec` are implementation-body type aliases to be resolved by
+  lowering, not primitive catalog specializations.
+- M142: exact type alias and backend-type query lowering for `Vec`, `MaskVec`,
+  `GenericVec`, `type<backend>(...)`, and
+  `vector::as_extension(scalar)` in selected context.
+- M143: primitive-call selector variant resolution for `@self`, named
+  primitives, optional lowered specialization payloads, and selector
+  `attrs[...]`, matching only concrete catalog variants.
 ```
 
 Accepted planning prompt:

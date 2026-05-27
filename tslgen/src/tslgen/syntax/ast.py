@@ -68,12 +68,21 @@ class ParsedImplementation:
 
 
 @dataclass(frozen=True, slots=True)
+class ParsedPrimitiveAttribute:
+    key: str
+    value: str
+    source: SourceLocation
+    key_argument: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ParsedPrimitive:
     name: str
     signature: str
     parameters: tuple[str, ...]
     implementations: tuple[ParsedImplementation, ...]
     source: SourceLocation
+    attributes: tuple[ParsedPrimitiveAttribute, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

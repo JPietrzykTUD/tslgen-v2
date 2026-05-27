@@ -797,6 +797,36 @@ interpret specialization, interpret attrs, resolve argument identifiers, lower
 nested call semantics, parse expressions, render backend call syntax, repair
 source text, use runtime `tsldata`, or depend on `frozen` / `tslgenold`.
 
+### M139 Primitive Declaration Attribute Variant Catalog Boundary
+
+Milestone 139 makes primitive declaration attributes catalog facts before
+later lowering attempts primitive-call selector matching. Primitive headers
+with declaration attributes, such as
+`prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):`, are admitted by the
+clean restart parser for the supported tiny source shapes.
+
+Catalog construction records source-authored declaration attributes and
+materializes deterministic concrete primitive variants. Literal attributes
+such as `mask=zero`, `mask=pass_through`, `cast=reinterpret`,
+`direction=up`, and `arg_count(args)=return_vector_length` remain concrete
+source-owned attribute facts. Boolean wildcard declaration attributes are
+source shorthand only: `aligned=*` expands to concrete `aligned=true` and
+`aligned=false` variants, and independent wildcards such as
+`aligned=*, packed=*` expand as a deterministic product in source order.
+Wildcard values do not survive on concrete catalog variants, while declared
+attributes preserve provenance back to the wildcard source.
+
+M139 does not use implementation body text to decide attribute variants.
+Implementation bodies are still parsed and preserved through the accepted body
+token path, but body contents do not influence declaration-attribute
+expansion.
+
+M139 does not perform primitive-call candidate lookup, dependency closure,
+dependency body lowering, backend call rendering, selector specialization
+resolution, selector `attrs[...]` resolution, expression parsing, source
+repair, runtime `tsldata` lookup, or runtime dependency on `frozen` /
+`tslgenold`.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

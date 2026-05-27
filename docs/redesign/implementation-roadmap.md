@@ -18337,13 +18337,15 @@ Validation result:
 
 Status:
 
-Planned as the next clean restart implementation milestone after accepted
-M138. This is a catalog-first prerequisite for correct future primitive-call
-selector matching. Real `.tsl` primitive declarations carry semantic selector
-dimensions in their declaration headers, including attributes and wildcard
-attributes such as `aligned=*` and `packed=*`. The catalog should represent
-source declarations and deterministic concrete variants before lowering tries
-to match `call<primitive=...>` selectors against candidates.
+Accepted. The M139 execution-review loop returned `Accept With Follow-Ups`
+after one write-capable executor and read-only architecture, boundary,
+documentation, and validation audits. This is a catalog-first prerequisite for
+correct future primitive-call selector matching. Real `.tsl` primitive
+declarations carry semantic selector dimensions in their declaration headers,
+including attributes and wildcard attributes such as `aligned=*` and
+`packed=*`. The catalog now represents source declarations and deterministic
+concrete variants before lowering tries to match `call<primitive=...>`
+selectors against candidates.
 
 Goal:
 
@@ -18412,6 +18414,300 @@ Expected outputs:
   variant expansion.
 - Variant provenance remains tied to the original source declaration.
 - Implementation body text has no effect on declaration-attribute expansion.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted result:
+
+- The clean restart parser admits primitive declaration attribute lists for the
+  supported tiny source header shapes.
+- `ParsedPrimitive` and `Primitive` carry typed source-owned attribute facts.
+- Catalog construction materializes concrete primitive variants from
+  declaration attributes. Literal attributes remain concrete facts.
+- Boolean wildcard declaration attributes are source shorthand only:
+  `aligned=*` and `packed=*` expand to deterministic `true` / `false`
+  concrete variants. Wildcard values do not survive in `Primitive.attributes`.
+- `Primitive.declared_attributes` and `PrimitiveAttribute.declared_value`
+  preserve provenance back to the source declaration and wildcard value.
+- Same-name primitive declarations with different concrete attributes are
+  represented as distinct concrete variants.
+- Implementation body text does not participate in declaration-attribute
+  expansion.
+- No primitive-call candidate lookup, dependency closure, dependency body
+  lowering, backend rendering, selector specialization resolution, selector
+  `attrs[...]` resolution, runtime `tsldata` shortcut, `frozen` runtime
+  dependency, or `tslgenold` runtime dependency was added.
+
+Review verdicts:
+
+- Architecture reviewer: `Accept`.
+- Boundary auditor: `Accept With Follow-Ups`; recorded follow-up is that the
+  next selector-matching milestone must match only `Primitive.attributes` and
+  ignore provenance fields such as `declared_attributes` and
+  `declared_value`.
+- Documentation auditor: `Accept With Follow-Ups`; the only noted items were
+  the orchestrator-owned roadmap, state, and next-prompt updates.
+- Validation auditor: `Accept`.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `177 passed in 13.39s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
+### Milestone 140: Explicit Target Attribute Variant Selection Boundary Slice
+
+Status:
+
+Planned as the next clean restart implementation milestone after accepted
+M139. This is a selection prerequisite for correct lowering and future
+primitive-call selector matching. Now that the catalog can contain multiple
+same-name concrete primitive variants distinguished by attributes, explicit
+target selection must stop treating primitive name alone as sufficient.
+
+Goal:
+
+Select primitive variants by explicit concrete target attributes:
+
+- extend the explicit `Target` selection request with concrete primitive
+  attributes while preserving existing no-attribute target construction;
+- make empty target attributes match only catalog variants whose
+  `Primitive.attributes` are empty;
+- make nonempty target attributes match catalog variants by primitive name,
+  signature where applicable, and concrete `Primitive.attributes`;
+- ignore provenance-only fields such as `Primitive.declared_attributes` and
+  `PrimitiveAttribute.declared_value` during matching;
+- report precise diagnostics when a primitive name exists but no concrete
+  attribute variant matches;
+- preserve deterministic selection ordering and existing no-attribute
+  generation behavior.
+
+Scope:
+
+- Add small typed selection/target attribute values or reuse the existing
+  catalog attribute value type where that remains simple.
+- Update `Selector` to match concrete catalog variants by name plus concrete
+  attributes before implementation extension/type selection.
+- Preserve existing no-attribute targets and generated artifact bytes.
+- Add focused tests for no-attribute selection, explicit literal attribute
+  selection, wildcard-expanded concrete variants selected by concrete
+  attributes, empty-attribute target not matching attr-bearing variants,
+  missing-attribute variant diagnostics, and provenance fields being ignored
+  for matching.
+
+Out of scope:
+
+Primitive-call candidate lookup; dependency closure; lowering dependency
+bodies; rendering backend call text; resolving `call<primitive=...>`
+selectors; interpreting selector specialization or selector `attrs[...]`;
+resolving argument identifiers; expression parsing; assignment or array-access
+lowering; source repair; complete TSIL grammar; runtime `tsldata` semantic
+lookup; `frozen` or `tslgenold` runtime dependency; broad template/signature
+validation; full attribute validity checking; extension/type-group expansion;
+hardware/feature requirements; registries; dispatchers; hidden backfeeds;
+fixpoint mechanisms; or new request/result/worklist families.
+
+Expected outputs:
+
+- Target selection is explicit about concrete primitive attributes.
+- Same-name catalog variants are not accidentally selected by name alone.
+- The selected current primitive identity is ready for a later lowering slice
+  to match recognized `call<primitive=... attrs[...]>(...)` selectors against
+  concrete catalog variants.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+### Milestone 141: Selected Implementation Lowering Context Slice
+
+Status:
+
+Planned outline after M140. This is the context boundary needed before
+primitive-call selector matching starts interpreting type-related selector
+payloads.
+
+Goal:
+
+Create the small typed lowering context for one selected implementation:
+
+- carry the selected primitive identity, including concrete catalog attributes
+  chosen by M140;
+- carry selected backend, extension, datatype/base type, signature, parameter
+  names, and implementation source provenance;
+- represent `Vec` as the current implementation vector keyword derived from
+  selected extension plus datatype, not as a primitive specialization or
+  catalog attribute;
+- record that `MaskVec` and `GenericVec` are implementation-body type aliases
+  to be resolved by lowering, not primitive declarations;
+- expose enough context for later lowering of `type<backend>(...)` and
+  `vector::as_extension(scalar)` without letting renderers or primitive-call
+  matching evaluate raw source text.
+
+Scope:
+
+- Add or extend one small context object owned by the lowering/selection
+  boundary, using existing selected primitive and target data where possible.
+- Preserve existing M126-M140 body-token classification and generated bytes.
+- Add tests proving the context distinguishes catalog attributes from
+  implementation type aliases and preserves selected extension/datatype facts.
+
+Out of scope:
+
+Primitive-call candidate matching; dependency closure; lowering dependency
+bodies; backend call rendering; interpreting call selector attrs; resolving
+`MaskVec`, `GenericVec`, `type<backend>(...)`, or
+`vector::as_extension(scalar)` into backend text; expression parsing;
+assignment/indexing; source repair; runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies; broad IR/worklist machinery.
+
+Expected outputs:
+
+- Later lowering can ask for the current selected implementation context
+  without guessing from raw TSIL text.
+- Future type-query and call-selector milestones have an explicit source of
+  current primitive attributes, extension, datatype, and aliases.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+### Milestone 142: Exact Type Alias And Backend-Type Query Lowering Slice
+
+Status:
+
+Planned outline after M141. This is the narrow type/query lowering prerequisite
+for attribute-aware primitive-call selector matching with specializations such
+as `[Vec]` or `[type<backend>(vector::as_extension(scalar))]`.
+
+Goal:
+
+Lower exact type-related TSIL islands against the M141 selected implementation
+context:
+
+- resolve the `Vec` keyword to the current selected vector type from extension
+  plus datatype;
+- resolve implementation-body aliases such as `MaskVec` and `GenericVec` as
+  typed aliases in the current lowering context;
+- represent `vector::as_extension(scalar)` as a typed vector-type transform
+  request over the current scalar/base type and selected extension context;
+- represent `type<backend>(...)` as a backend type-spelling request over an
+  already typed semantic type value;
+- emit diagnostics for unsupported or malformed exact type/query islands
+  rather than passing raw query text to renderers.
+
+Scope:
+
+- Recognize only exact documented type/query islands already isolated by the
+  selected TSIL token boundaries, such as call selector specializations or
+  directive payload tokens.
+- Keep backend spelling as a typed request/result boundary; do not let backend
+  rendering evaluate unresolved source text.
+- Add focused positive and negative tests for `Vec`, `MaskVec`, `GenericVec`,
+  `type<backend>(...)`, and `vector::as_extension(scalar)` in selected
+  contexts.
+
+Out of scope:
+
+Primitive-call candidate matching; dependency closure; lowering dependency
+bodies; rendering backend call text; interpreting selector attrs; broad
+generation/backend query grammar; expression parsing; arbitrary raw-line
+rewriting; assignment/indexing; source repair; runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies; broad IR/worklist machinery.
+
+Expected outputs:
+
+- The lowerer has typed current-context type facts and backend type requests
+  for the exact source forms needed by selected primitive-call selectors.
+- `Vec`, `MaskVec`, and `GenericVec` are no longer confused with primitive
+  catalog specialization keys.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+### Milestone 143: Primitive Call Selector Variant Resolution Slice
+
+Status:
+
+Planned outline after M142. This is the first catalog-backed
+primitive-call-selector resolution milestone; it should resolve references and
+diagnostics only, not lower dependency bodies or render calls.
+
+Goal:
+
+Resolve recognized `call<primitive=...>(...)` selector targets against the
+catalog and selected implementation context:
+
+- support `call<primitive=@self>(...)` as a reference to the current selected
+  concrete primitive variant;
+- support `call<primitive=@self[...]>(...)` where the specialization payload is
+  lowered through the M142 type/query boundary;
+- support `call<primitive=NAME>(...)` and `call<primitive=NAME[...]>(...)`
+  for arbitrary primitive names present in the catalog;
+- support selector attrs such as `call<primitive=NAME attrs[...]>(...)` by
+  matching only concrete `Primitive.attributes` from the catalog;
+- check that the requested name, concrete attributes, and lowered
+  specialization identify an available primitive variant or produce a precise
+  unsupported/unknown diagnostic.
+
+Scope:
+
+- Consume M135 structured call selectors, M136 argument lists, M140
+  attribute-aware primitive variants, and M141/M142 selected-context type
+  facts.
+- Preserve original selector, specialization, attrs, and payload strings as
+  diagnostic context.
+- Produce a typed primitive-call target reference or diagnostic; keep call
+  arguments opaque unless already supported by earlier exact add-call tests.
+- Add tests for `@self`, `@self[...]`, named primitive, named primitive with
+  specialization, named primitive with attrs, missing attribute variant, and
+  missing specialization/target diagnostics.
+
+Out of scope:
+
+Dependency closure; selecting or lowering dependency implementation bodies;
+recursive argument lowering; backend call rendering; wrapper rendering;
+complete specialization grammar; broad expression parsing; assignment/indexing;
+source repair; runtime `tsldata`, `frozen`, or `tslgenold` dependencies;
+registries, dispatchers, fixpoint mechanisms, or new request/result/worklist
+families.
+
+Expected outputs:
+
+- Primitive-call lowering can distinguish unknown names, known names with no
+  matching concrete attribute variant, and known targets whose dependency body
+  lowering/rendering remains unsupported.
+- Later milestones can add dependency closure or backend call rendering from a
+  typed reference instead of reparsing raw selector text.
 
 Validation:
 

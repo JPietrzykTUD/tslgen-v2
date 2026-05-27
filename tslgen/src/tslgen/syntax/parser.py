@@ -11,6 +11,7 @@ from tslgen.syntax.ast import (
     ParsedImplementationBody,
     ParsedLowerableOperationFragment,
     ParsedPrimitive,
+    ParsedPrimitiveAttribute,
     ParsedRawStringLine,
     ParseResult,
     ParsedSegmentedLine,
@@ -31,10 +32,28 @@ _UNARY_HEADER_PATTERN = re.compile(
     r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
     r"\((?P<params>value)\):$"
 )
+_BINARY_ATTR_HEADER_PATTERN = re.compile(
+    r"^prim<(?P<signature>v:=\(v,v\))>(?P<attrs>\[[^]]*\]) "
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+    r"\((?P<params>left, right)\):$"
+)
+_COMPARE_ATTR_HEADER_PATTERN = re.compile(
+    r"^prim<(?P<signature>m:=\(v,v\))>(?P<attrs>\[[^]]*\]) "
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+    r"\((?P<params>left, right)\):$"
+)
+_UNARY_ATTR_HEADER_PATTERN = re.compile(
+    r"^prim<(?P<signature>v:=\(v\))>(?P<attrs>\[[^]]*\]) "
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+    r"\((?P<params>value)\):$"
+)
 _HEADER_PATTERNS = (
     _BINARY_HEADER_PATTERN,
     _COMPARE_HEADER_PATTERN,
     _UNARY_HEADER_PATTERN,
+    _BINARY_ATTR_HEADER_PATTERN,
+    _COMPARE_ATTR_HEADER_PATTERN,
+    _UNARY_ATTR_HEADER_PATTERN,
 )
 _IMPLEMENTATION_PATTERN = re.compile(
     r"^  implementation "
@@ -50,6 +69,12 @@ _TSIL_INLINE_PATTERN = re.compile(r'^    tsil "(?P<payload>.*)"$')
 _TSIL_MULTILINE_START = '    tsil """'
 _TSIL_MULTILINE_END = '"""'
 _NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_ATTRIBUTE_PATTERN = re.compile(
+    r"^(?P<key>[A-Za-z_][A-Za-z0-9_]*)"
+    r"(?:\((?P<key_argument>[A-Za-z_][A-Za-z0-9_]*)\))?"
+    r"\s*=\s*"
+    r"(?P<value>[A-Za-z_][A-Za-z0-9_]*|\*)$"
+)
 
 
 class TslParser:
@@ -93,6 +118,16 @@ class TslParser:
         header = _match_header(header_line)
         if header is None:
             diagnostics.append(_unsupported_line(document, header_line_no, 1, header_line))
+            return None
+
+        attributes = _parse_attributes(
+            document,
+            header_line_no,
+            header_line,
+            header,
+            diagnostics,
+        )
+        if attributes is None:
             return None
 
         parameters = _split_names(header.group("params"))
@@ -193,6 +228,7 @@ class TslParser:
             parameters=parameters,
             implementations=tuple(parsed_implementations),
             source=SourceLocation(document.path, header_line_no, 1),
+            attributes=attributes,
         )
         return ParsedDocument(
             path=document.path.as_posix(),
@@ -221,6 +257,56 @@ def _match_header(line: str) -> re.Match[str] | None:
         if match is not None:
             return match
     return None
+
+
+def _parse_attributes(
+    document: SourceDocument,
+    line_no: int,
+    line: str,
+    header: re.Match[str],
+    diagnostics: list[Diagnostic],
+) -> tuple[ParsedPrimitiveAttribute, ...] | None:
+    attrs = header.groupdict().get("attrs")
+    if attrs is None:
+        return ()
+
+    inner = attrs[1:-1]
+    if not inner.strip():
+        return ()
+
+    attributes: list[ParsedPrimitiveAttribute] = []
+    attrs_column = header.start("attrs") + 1
+    offset = 0
+    for raw_part in inner.split(","):
+        leading = len(raw_part) - len(raw_part.lstrip())
+        text = raw_part.strip()
+        attribute = _ATTRIBUTE_PATTERN.match(text)
+        if attribute is None:
+            diagnostics.append(
+                _unsupported_line(
+                    document,
+                    line_no,
+                    attrs_column + 1 + offset + leading,
+                    line,
+                )
+            )
+            return None
+
+        attributes.append(
+            ParsedPrimitiveAttribute(
+                key=attribute.group("key"),
+                key_argument=attribute.group("key_argument"),
+                value=attribute.group("value"),
+                source=SourceLocation(
+                    document.path,
+                    line_no,
+                    attrs_column + 1 + offset + leading,
+                ),
+            )
+        )
+        offset += len(raw_part) + 1
+
+    return tuple(attributes)
 
 
 def _parse_implementation_body(

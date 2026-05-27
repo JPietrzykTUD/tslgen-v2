@@ -24,6 +24,7 @@ from tslgen.domain.catalog import (
     LowerableOperationFragment,
     NamedPrimitiveReference,
     Primitive,
+    PrimitiveAttribute,
     PrimitiveCall,
     PrimitiveCallArgument,
     PrimitiveCallSelector,
@@ -2495,6 +2496,210 @@ def test_m125_duplicate_implementation_keys_stop_before_selection(
     assert "scalar" in diagnostic.message
     assert "si32" in diagnostic.message
     assert f"{source.resolve()}:2:3" in diagnostic.message
+
+
+def test_m139_no_attribute_declaration_produces_one_concrete_variant(
+    tmp_path: Path,
+) -> None:
+    source, catalog = _catalog_from_text(
+        tmp_path,
+        "tiny_add_m139_no_attrs.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                "    body add(left, right)",
+            )
+        ),
+    )
+
+    assert len(catalog.primitives) == 1
+    primitive = catalog.primitives[0]
+    assert primitive.name == "add"
+    assert primitive.attributes == ()
+    assert primitive.declared_attributes == ()
+    assert primitive.source == SourceLocation(source.path, 1, 1)
+
+
+def test_m139_literal_attribute_declaration_produces_one_concrete_variant(
+    tmp_path: Path,
+) -> None:
+    source, catalog = _catalog_from_text(
+        tmp_path,
+        "tiny_add_m139_literal_attrs.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)>[mask=zero] add(left, right):",
+                "  implementation scalar si32:",
+                "    body add(left, right)",
+            )
+        ),
+    )
+
+    assert len(catalog.primitives) == 1
+    primitive = catalog.primitives[0]
+    attribute = PrimitiveAttribute(
+        key="mask",
+        value="zero",
+        declared_value="zero",
+        source=SourceLocation(source.path, 1, 16),
+    )
+    assert primitive.attributes == (attribute,)
+    assert primitive.declared_attributes == (attribute,)
+
+
+def test_m139_aligned_wildcard_expands_to_concrete_boolean_variants(
+    tmp_path: Path,
+) -> None:
+    source, catalog = _catalog_from_text(
+        tmp_path,
+        "tiny_load_m139_aligned_wildcard.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)>[aligned=*] load(left, right):",
+                "  implementation scalar si32:",
+                "    body sub(left, right)",
+            )
+        ),
+    )
+
+    assert _catalog_attribute_values(catalog) == (
+        (("aligned", None, "true", "*"),),
+        (("aligned", None, "false", "*"),),
+    )
+    assert all(
+        attribute.value != "*"
+        for primitive in catalog.primitives
+        for attribute in primitive.attributes
+    )
+    assert {
+        primitive.implementations[0].body.tokens[0].operation
+        for primitive in catalog.primitives
+        if isinstance(primitive.implementations[0].body.tokens[0], LowerableOperationFragment)
+    } == {"sub"}
+    assert all(
+        primitive.attributes[0].source == SourceLocation(source.path, 1, 16)
+        for primitive in catalog.primitives
+    )
+
+
+def test_m139_independent_wildcards_expand_in_deterministic_order(
+    tmp_path: Path,
+) -> None:
+    source, catalog = _catalog_from_text(
+        tmp_path,
+        "tiny_store_mask_m139_wildcards.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)>[aligned=*, packed=*] store_mask(left, right):",
+                "  implementation scalar si32:",
+                "    body store_mask(left, right)",
+            )
+        ),
+    )
+
+    assert _catalog_attribute_values(catalog) == (
+        (
+            ("aligned", None, "true", "*"),
+            ("packed", None, "true", "*"),
+        ),
+        (
+            ("aligned", None, "true", "*"),
+            ("packed", None, "false", "*"),
+        ),
+        (
+            ("aligned", None, "false", "*"),
+            ("packed", None, "true", "*"),
+        ),
+        (
+            ("aligned", None, "false", "*"),
+            ("packed", None, "false", "*"),
+        ),
+    )
+    assert all(
+        primitive.declared_attributes
+        == (
+            PrimitiveAttribute(
+                key="aligned",
+                value="*",
+                declared_value="*",
+                source=SourceLocation(source.path, 1, 16),
+            ),
+            PrimitiveAttribute(
+                key="packed",
+                value="*",
+                declared_value="*",
+                source=SourceLocation(source.path, 1, 27),
+            ),
+        )
+        for primitive in catalog.primitives
+    )
+
+
+def test_m139_same_name_distinct_attributes_are_distinct_variants(
+    tmp_path: Path,
+) -> None:
+    zero = _source_document(
+        tmp_path,
+        "tiny_add_m139_mask_zero.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)>[mask=zero] add(left, right):",
+                "  implementation scalar si32:",
+                "    body add(left, right)",
+            )
+        ),
+    )
+    pass_through = _source_document(
+        tmp_path,
+        "tiny_add_m139_mask_pass.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)>[mask=pass_through] add(left, right):",
+                "  implementation scalar si32:",
+                "    body add(left, right)",
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((pass_through, zero))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    assert tuple(
+        (primitive.name, primitive.attributes[0].value)
+        for primitive in catalog_result.catalog.primitives
+    ) == (
+        ("add", "pass_through"),
+        ("add", "zero"),
+    )
+
+
+def test_m139_attribute_key_argument_is_preserved_as_concrete_fact(
+    tmp_path: Path,
+) -> None:
+    source, catalog = _catalog_from_text(
+        tmp_path,
+        "tiny_set_m139_key_argument.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)>[arg_count(args)=return_vector_length] set(left, right):",
+                "  implementation scalar si32:",
+                "    body set(left, right)",
+            )
+        ),
+    )
+
+    assert _catalog_attribute_values(catalog) == (
+        (("arg_count", "args", "return_vector_length", "return_vector_length"),),
+    )
+    assert catalog.primitives[0].attributes[0].source == SourceLocation(
+        source.path,
+        1,
+        16,
+    )
 
 
 def test_m125_selected_mismatched_body_reports_lowering_diagnostic(
@@ -5931,6 +6136,38 @@ def _parsed_add_document(
                 source=SourceLocation(Path(path), 1, 1),
             ),
         ),
+    )
+
+
+def _catalog_from_text(
+    tmp_path: Path,
+    name: str,
+    text: str,
+) -> tuple[SourceDocument, Catalog]:
+    source = _source_document(tmp_path, name, text)
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    return source, catalog_result.catalog
+
+
+def _catalog_attribute_values(
+    catalog: Catalog,
+) -> tuple[tuple[tuple[str, str | None, str, str | None], ...], ...]:
+    return tuple(
+        tuple(
+            (
+                attribute.key,
+                attribute.key_argument,
+                attribute.value,
+                attribute.declared_value,
+            )
+            for attribute in primitive.attributes
+        )
+        for primitive in catalog.primitives
     )
 
 

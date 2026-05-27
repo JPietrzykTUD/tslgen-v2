@@ -85,6 +85,15 @@ class Implementation:
 
 
 @dataclass(frozen=True, slots=True)
+class PrimitiveAttribute:
+    key: str
+    value: str
+    source: SourceLocation
+    key_argument: str | None = None
+    declared_value: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Primitive:
     name: str
     signature: str
@@ -92,6 +101,8 @@ class Primitive:
     template: str
     implementations: tuple[Implementation, ...]
     source: SourceLocation
+    attributes: tuple[PrimitiveAttribute, ...] = ()
+    declared_attributes: tuple[PrimitiveAttribute, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

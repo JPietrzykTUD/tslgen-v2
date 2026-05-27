@@ -413,6 +413,12 @@ Invariants:
   does not select dependency implementations, lower dependency bodies,
   interpret specialization or attrs, expand dependency closure, or render
   backend call syntax.
+- M139 records primitive declaration attributes as source-owned catalog facts
+  and expands boolean wildcard declaration attributes into deterministic
+  concrete primitive variants. Concrete variants must not carry wildcard
+  attribute values; provenance remains tied to the source declaration and
+  wildcard attribute location. Implementation body text does not participate
+  in declaration-attribute expansion.
 - `requires_value` remains structurally preserved for the existing flag and
   selector normalization rules.
 - Unknown extra fields remain preserved as `extra_fields` so future milestones

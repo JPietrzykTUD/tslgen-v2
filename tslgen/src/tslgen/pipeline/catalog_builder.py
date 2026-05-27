@@ -11,6 +11,7 @@ from tslgen.domain.catalog import (
     LowerableDirective,
     LowerableOperationFragment,
     Primitive,
+    PrimitiveAttribute,
     RawStringToken,
 )
 from tslgen.pipeline._tsil_directives import classify_tsil_directive_line
@@ -26,6 +27,7 @@ from tslgen.syntax.ast import (
     ParsedLowerableDirective,
     ParsedLowerableOperationFragment,
     ParsedPrimitive,
+    ParsedPrimitiveAttribute,
     ParsedRawStringLine,
     ParsedRawStringToken,
     ParsedSegmentedLine,
@@ -43,6 +45,8 @@ M118_TEMPLATE = "unary"
 SUPPORTED_EXTENSION = "scalar"
 _EMIT_RETURN_DIRECTIVE = "emit_return"
 _EMIT_RETURN_PREFIX = f"{_EMIT_RETURN_DIRECTIVE}("
+_BOOLEAN_WILDCARD_ATTRIBUTE_VALUES = ("true", "false")
+_SUPPORTED_BOOLEAN_WILDCARD_ATTRIBUTES = frozenset(("aligned", "packed"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +79,13 @@ _SUPPORTED_SOURCE_SHAPES: tuple[_SourceShape, ...] = (
 class CatalogBuildResult:
     catalog: Catalog | None
     diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _ConcretePrimitiveVariant:
+    parsed: ParsedPrimitive
+    attributes: tuple[PrimitiveAttribute, ...]
+    declared_attributes: tuple[PrimitiveAttribute, ...]
 
 
 class CatalogBuilder:
@@ -116,11 +127,17 @@ class CatalogBuilder:
             )
             return CatalogBuildResult(catalog=None, diagnostics=tuple(diagnostics))
 
-        diagnostics.extend(_duplicate_primitive_name_diagnostics(parsed_primitives))
+        concrete_variants = tuple(
+            variant
+            for parsed in parsed_primitives
+            for variant in _concrete_primitive_variants(parsed, diagnostics)
+        )
+
+        diagnostics.extend(_duplicate_primitive_name_diagnostics(concrete_variants))
 
         primitives = tuple(
-            self._build_primitive(parsed, diagnostics)
-            for parsed in parsed_primitives
+            self._build_primitive(variant, diagnostics)
+            for variant in concrete_variants
         )
         if diagnostics:
             return CatalogBuildResult(catalog=None, diagnostics=tuple(diagnostics))
@@ -131,9 +148,10 @@ class CatalogBuilder:
 
     def _build_primitive(
         self,
-        parsed: ParsedPrimitive,
+        variant: _ConcretePrimitiveVariant,
         diagnostics: list[Diagnostic],
     ) -> Primitive:
+        parsed = variant.parsed
         signature_shape = _shape_for_signature(parsed.signature)
         if signature_shape is None:
             diagnostics.append(
@@ -190,6 +208,8 @@ class CatalogBuilder:
             template=shape.template,
             implementations=implementations,
             source=parsed.source,
+            attributes=variant.attributes,
+            declared_attributes=variant.declared_attributes,
         )
 
     def _build_implementation(
@@ -262,17 +282,24 @@ def _expected_body_text(
 
 
 def _duplicate_primitive_name_diagnostics(
-    parsed_primitives: list[ParsedPrimitive],
+    variants: tuple[_ConcretePrimitiveVariant, ...],
 ) -> tuple[Diagnostic, ...]:
-    first_by_name: dict[str, ParsedPrimitive] = {}
+    first_by_key: dict[tuple[str, str, tuple[tuple[str, str | None, str], ...]], ParsedPrimitive] = {}
     diagnostics: list[Diagnostic] = []
-    for primitive in sorted(
-        parsed_primitives,
-        key=lambda item: (item.name, item.source.path.as_posix()),
+    for variant in sorted(
+        variants,
+        key=lambda item: (
+            item.parsed.name,
+            item.parsed.signature,
+            _attribute_key(item.attributes),
+            item.parsed.source.path.as_posix(),
+        ),
     ):
-        first = first_by_name.get(primitive.name)
+        primitive = variant.parsed
+        key = (primitive.name, primitive.signature, _attribute_key(variant.attributes))
+        first = first_by_key.get(key)
         if first is None:
-            first_by_name[primitive.name] = primitive
+            first_by_key[key] = primitive
             continue
         diagnostics.append(
             Diagnostic(
@@ -287,6 +314,94 @@ def _duplicate_primitive_name_diagnostics(
             )
         )
     return tuple(diagnostics)
+
+
+def _concrete_primitive_variants(
+    parsed: ParsedPrimitive,
+    diagnostics: list[Diagnostic],
+) -> tuple[_ConcretePrimitiveVariant, ...]:
+    declared_attributes = tuple(
+        _domain_attribute(
+            attribute,
+            attribute.value,
+            declared_value=attribute.value,
+        )
+        for attribute in parsed.attributes
+    )
+    if not parsed.attributes:
+        return (
+            _ConcretePrimitiveVariant(
+                parsed=parsed,
+                attributes=(),
+                declared_attributes=(),
+            ),
+        )
+
+    variants: tuple[tuple[PrimitiveAttribute, ...], ...] = ((),)
+    for attribute in parsed.attributes:
+        concrete_values = _concrete_attribute_values(attribute, diagnostics)
+        variants = tuple(
+            (*variant, _domain_attribute(attribute, concrete_value))
+            for variant in variants
+            for concrete_value in concrete_values
+        )
+
+    return tuple(
+        _ConcretePrimitiveVariant(
+            parsed=parsed,
+            attributes=variant,
+            declared_attributes=declared_attributes,
+        )
+        for variant in variants
+    )
+
+
+def _concrete_attribute_values(
+    attribute: ParsedPrimitiveAttribute,
+    diagnostics: list[Diagnostic],
+) -> tuple[str, ...]:
+    if attribute.value != "*":
+        return (attribute.value,)
+
+    if attribute.key in _SUPPORTED_BOOLEAN_WILDCARD_ATTRIBUTES:
+        return _BOOLEAN_WILDCARD_ATTRIBUTE_VALUES
+
+    diagnostics.append(
+        Diagnostic(
+            severity="error",
+            code="TSL-CATALOG-UNSUPPORTED-WILDCARD-ATTRIBUTE",
+            message=(
+                f"attribute {attribute.key!r} uses wildcard value '*'; "
+                "supported wildcard attributes are: aligned, packed"
+            ),
+            location=attribute.source,
+        )
+    )
+    return ()
+
+
+def _domain_attribute(
+    attribute: ParsedPrimitiveAttribute,
+    value: str,
+    *,
+    declared_value: str | None = None,
+) -> PrimitiveAttribute:
+    return PrimitiveAttribute(
+        key=attribute.key,
+        key_argument=attribute.key_argument,
+        value=value,
+        source=attribute.source,
+        declared_value=declared_value or attribute.value,
+    )
+
+
+def _attribute_key(
+    attributes: tuple[PrimitiveAttribute, ...],
+) -> tuple[tuple[str, str | None, str], ...]:
+    return tuple(
+        (attribute.key, attribute.key_argument, attribute.value)
+        for attribute in attributes
+    )
 
 
 def _duplicate_implementation_key_diagnostics(
