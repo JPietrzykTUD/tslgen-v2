@@ -514,7 +514,8 @@ Invariants:
 
 ## Type Query Lowering Model
 
-Milestone 142 adds a small selected-body type environment. It is built from
+Milestones 142 and 143 add a selected-body type environment and an
+observed-corpus type value model. It is built from
 `SelectedImplementationLoweringContext` and the selected implementation body,
 not from fresh source-file reads, `tsldata`, `frozen`, or `tslgenold`.
 
@@ -529,14 +530,91 @@ class LoweredCurrentScalarType:
     type_tag: TypeTag
 
 @dataclass(frozen=True, slots=True)
-class LoweredVectorAsExtensionType:
-    scalar: LoweredCurrentScalarType
+class LoweredScalarTypeIdentity:
+    type_tag: TypeTag
+
+@dataclass(frozen=True, slots=True)
+class LoweredSizeType:
+    pass
+
+@dataclass(frozen=True, slots=True)
+class LoweredIntrinsicVectorImaskType:
+    pass
+
+@dataclass(frozen=True, slots=True)
+class LoweredSpecializationTypeSymbol:
+    name: str
+
+@dataclass(frozen=True, slots=True)
+class LoweredVectorMemberType:
+    member: Literal[
+        "register",
+        "mask",
+        "imask",
+        "mask_underlying",
+        "offset_base",
+    ]
+    extension: ExtensionName
+    type_tag: TypeTag
+
+@dataclass(frozen=True, slots=True)
+class LoweredBaseTransformType:
+    transform: Literal["signed_of", "unsigned_of", "generic", "id"]
+    value: LoweredTypeValue
+
+@dataclass(frozen=True, slots=True)
+class LoweredGenericRegisterType:
+    vector_type: LoweredTypeValue
+
+@dataclass(frozen=True, slots=True)
+class LoweredVectorTransformType:
+    transform: Literal["transform", "transform_extension"]
+    base_type: LoweredTypeValue
     extension: ExtensionName
 
+@dataclass(frozen=True, slots=True)
+class LoweredVectorAsExtensionType:
+    base_type: LoweredTypeValue
+    extension: ExtensionName
+
+@dataclass(frozen=True, slots=True)
+class LoweredTypeIsSamePredicate:
+    left: LoweredTypeValue
+    right: LoweredTypeValue
+
+LoweredTypePredicate = LoweredTypeIsSamePredicate
+
+@dataclass(frozen=True, slots=True)
+class LoweredTypeSelectType:
+    condition: LoweredTypePredicate
+    then_type: LoweredTypeValue
+    else_type: LoweredTypeValue
+
+@dataclass(frozen=True, slots=True)
+class BackendTypeSpellingRequest:
+    backend: BackendId
+    value: LoweredTypeValue
+    source_text: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class LoweredBackendTypeReference:
+    request: BackendTypeSpellingRequest
+
 LoweredTypeValue = (
-    LoweredCurrentVectorType
+    LoweredBackendTypeReference
+    | LoweredBaseTransformType
+    | LoweredCurrentVectorType
     | LoweredCurrentScalarType
+    | LoweredGenericRegisterType
+    | LoweredIntrinsicVectorImaskType
+    | LoweredScalarTypeIdentity
+    | LoweredSizeType
+    | LoweredSpecializationTypeSymbol
+    | LoweredTypeSelectType
     | LoweredVectorAsExtensionType
+    | LoweredVectorMemberType
+    | LoweredVectorTransformType
 )
 
 @dataclass(frozen=True, slots=True)
@@ -553,12 +631,6 @@ class SelectedTypeEnvironment:
     alias_bindings: tuple[LoweredTypeAliasBinding, ...]
     diagnostics: tuple[Diagnostic, ...]
 
-@dataclass(frozen=True, slots=True)
-class BackendTypeSpellingRequest:
-    backend: BackendId
-    value: LoweredTypeValue
-    source_text: str
-    source: SourceLocation
 ```
 
 Invariants:
@@ -567,8 +639,15 @@ Invariants:
   the selected implementation.
 - Alias bindings are ordered by selected body token order.
 - Alias references resolve only to earlier bindings in the same selected body.
+- `type<generation>(...)` produces semantic type values, never backend text.
 - `type<backend>(...)` produces a `BackendTypeSpellingRequest`; it does not
   render backend type text.
+- A `type<backend>(...)` expression nested inside a generation type transform
+  is represented as `LoweredBackendTypeReference`, preserving the request as a
+  semantic input to that type transform without rendering it.
+- Observed specialization names such as `ToBase`, `ToType`, and
+  `ToExtension` are `LoweredSpecializationTypeSymbol` values only when they
+  appear inside supported observed type transforms.
 - Raw source text is retained only as diagnostic/provenance context, not as a
   semantic value consumed by renderers.
 

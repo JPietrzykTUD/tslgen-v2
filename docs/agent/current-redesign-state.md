@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 142 is accepted.
+Milestone 143 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -490,6 +490,55 @@ M142 post-revision validation completed with:
   cache directories; after removing those directories, the final required
   `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
   output.
+
+The M143 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor, read-only architecture, boundary, evidence,
+documentation, and validation audits, one focused documentation/evidence
+revision executor, and focused re-review. M143 completed the observed TSIL
+type lowering model for the current `tsldata/**/*.tsl` corpus. It added
+`docs/redesign/tsil-type-query-inventory.md`, recording 41 current `.tsl`
+files, `let<type>(...)` at 382 occurrences / 39 unique forms,
+`type<generation>(...)` at 1787 occurrences / 34 unique forms, and
+`type<backend>(...)` at 212 occurrences / 11 unique forms.
+
+M143 extended the type model with typed semantic values for current
+context vector/scalar facts, independent scalar/size/intrinsic identities,
+specialization type symbols, context vector-member projections, base
+transforms, generic-register projections, vector transforms,
+`vector::as_extension(...)`, nested backend type references, and the observed
+type `select(value<generation>(type::is_same(...)), ...)` form. It added
+`lower_generation_type_query(...)` and broadened `lower_type_expression(...)`
+and `lower_backend_type_query(...)` so `type<generation>(...)` produces
+semantic type identity values and `type<backend>(...)` produces
+`BackendTypeSpellingRequest` values over semantic type values.
+
+M143 preserved M142 ordered alias behavior: aliases are arbitrary source
+names and are visible only after their `let<type>(...)` binding in the same
+selected body. M143 did not add primitive-call selector target resolution,
+dependency closure, dependency body lowering, recursive call argument
+lowering, backend call rendering, backend type text rendering, broad non-type
+expression parsing, runtime `tsldata`, runtime `frozen`, or runtime
+`tslgenold` dependencies.
+
+M143 review verdicts were: architecture `Accept With Follow-Ups`, boundary
+`Accept With Follow-Ups`, evidence initially `Needs Revision` for nested
+`type<generation>(...)` count underreporting, documentation initially
+`Needs Revision` for stale value-query out-of-scope wording, validation
+`Accept With Follow-Ups`, and focused re-review `Accept`.
+
+M143 validation completed with:
+
+- Executor `git diff --check`: exit 0, no output.
+- Executor `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- Executor `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `203 passed in 21.21s`.
+- Executor initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final cache check returned exit 0 with no output.
+- Focused documentation/evidence revision `git diff --check`: exit 0, no
+  output.
+- Focused re-review `git diff --check`: exit 0, no output.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -2084,52 +2133,52 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 143.
+Execute Milestone 144.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m143-execution-review-loop-prompt.md
+docs/agent/runs/m144-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 143: Complete Observed TSIL Type Lowering Model
+Milestone 144: Typed Primitive-Call Selector Payload Lowering Boundary
 ```
 
 Latest review verdict:
 
 ```text
-M142 execution-review returned Accept after one write-capable executor, one
-focused revision executor, and read-only architecture, boundary,
-documentation, and validation audits plus focused re-review. There are no
-recorded M142 follow-ups.
+M143 execution-review returned Accept With Follow-Ups after one write-capable
+executor, read-only architecture, boundary, evidence, documentation, and
+validation audits, one focused documentation/evidence revision executor, and
+focused re-review. The focused re-review accepted the nested type-query count
+and value-query wording fixes.
 ```
 
 Next expected action:
 
 ```text
-Run the active M143 execution-review-loop prompt. M143 should stop before
-primitive-call selector resolution and first complete the observed TSIL type
-lowering model for the current `tsldata/**/*.tsl` corpus.
+Run the active M144 execution-review-loop prompt. M144 should use the M143
+type model to lower already recognized primitive-call selector specialization
+and `attrs[...]` payloads into typed selector payload values.
 
-M143 should inventory and lower the observed `let<type>(...)`,
-`type<generation>(...)`, and `type<backend>(...)` forms as typed semantic
-type values and backend type-spelling requests. It should cover the observed
-families: context-given types such as `base::in` and vector metadata types;
-type transforms such as `base::signed_of`, `base::unsigned_of`,
-`base::generic`, `register::generic`, `vector::transform`,
-`vector::transform_extension`, and `vector::as_extension`; independent
-backend/scalar types such as `size_t` and `scalar::ui8`; and ordered
-source-defined aliases.
+M144 should preserve the existing `@self` versus named base target
+distinction, split specialization payloads by top-level commas, lower
+type-valued entries such as `Vec` and
+`type<backend>(vector::as_extension(scalar))` through the M143 type
+environment, preserve explicitly non-type selector entries as typed selector
+symbols or literals with provenance, and parse selector `attrs[...]` into
+typed concrete selector attributes.
 
-M143 must not continue primitive-call selector target resolution, expand
-dependency closure, select or lower dependency bodies, render backend call
-text, recursively lower call arguments, parse arbitrary non-type expressions,
-repair source, or introduce runtime `tsldata`, `frozen`, or `tslgenold`
-dependencies.
+M144 must not match primitive-call targets, select dependency
+implementations, expand dependency closure, lower dependency bodies, render
+backend call text or backend type text, assign semantic meaning to non-type
+selector symbols such as `shift`, `PreserveSign`, `sse`, or `index`, parse
+broad non-type expressions, repair source, or introduce runtime `tsldata`,
+`frozen`, or `tslgenold` dependencies.
 ```
 
 Accepted planning prompt:
@@ -4940,6 +4989,17 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M123 validation follow-up addressed during finalization:
   validation-created `__pycache__` directories under clean `tslgen/` were
   removed after read-only validation audits.
+- M143 architecture follow-up is carried into the active M144 prompt: before
+  primitive-call selector matching depends on `vector::as_extension` values,
+  split extension operands into typed selector/type operands or explicitly
+  document the current source-symbol string contract.
+- M143 boundary/validation follow-up is carried into the active M144 prompt:
+  add focused negative coverage for malformed `type<generation>(...)`, wrong
+  type-transform arity, unsupported type-call names, and bad nested predicate
+  forms.
+- M143 boundary follow-up for broader scalar/extension recognizers remains
+  nonblocking: document or narrow those recognizers before treating them as a
+  stable contract beyond the observed corpus.
 - Workflow follow-up addressed by post-M123 planning: the active M124 prompt
   keeps planning and execution integrated by requiring the next-run planning
   step to happen inside the M124 execution-review loop after M124 acceptance,
@@ -5964,8 +6024,8 @@ execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M126 execution, run the validation command listed in
-`docs/agent/runs/m126-execution-review-loop-prompt.md`.
+For active M144 execution, run the validation command listed in
+`docs/agent/runs/m144-execution-review-loop-prompt.md`.
 
 For M125 execution and review, validation completed with:
 

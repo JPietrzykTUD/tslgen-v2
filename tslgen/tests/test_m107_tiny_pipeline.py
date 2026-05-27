@@ -40,6 +40,8 @@ from tslgen.lowering import (
     SCALAR_COMPARISON_RESULT_TYPE,
     BinaryOperationDescriptor,
     ComparisonOperationDescriptor,
+    LoweredBackendTypeReference,
+    LoweredBaseTransformType,
     LoweredBinaryOperationExpression,
     LoweredComparisonOperationExpression,
     LoweredCurrentScalarType,
@@ -48,13 +50,22 @@ from tslgen.lowering import (
     LoweredFunctionBody,
     LoweredFunctionSet,
     LoweredFunctionSignature,
+    LoweredGenericRegisterType,
+    LoweredIntrinsicVectorImaskType,
     LoweredParameter,
     LoweredParameterRef,
     LoweredReturnStatement,
     LoweredResultType,
+    LoweredScalarTypeIdentity,
+    LoweredSizeType,
+    LoweredSpecializationTypeSymbol,
+    LoweredTypeIsSamePredicate,
+    LoweredTypeSelectType,
     LoweredTypeAliasBinding,
     LoweredUnaryOperationExpression,
     LoweredVectorAsExtensionType,
+    LoweredVectorMemberType,
+    LoweredVectorTransformType,
     Lowerer,
     LoweringStageResult,
     SelectedImplementationLoweringContext,
@@ -3299,8 +3310,8 @@ def test_m142_lowers_ordered_let_type_alias_bindings() -> None:
     environment = Lowerer().type_environment_for(selected)
 
     vector_as_extension = LoweredVectorAsExtensionType(
-        scalar=LoweredCurrentScalarType(type_tag="si16"),
-        extension="avx2",
+        base_type=LoweredCurrentScalarType(type_tag="si16"),
+        extension="scalar",
     )
     assert environment.diagnostics == ()
     assert environment.context_symbols == ("Vec", "scalar")
@@ -3337,8 +3348,8 @@ def test_m142_lowers_exact_vector_as_extension_expression() -> None:
 
     assert result.diagnostics == ()
     assert result.value == LoweredVectorAsExtensionType(
-        scalar=LoweredCurrentScalarType(type_tag="f32"),
-        extension="neon",
+        base_type=LoweredCurrentScalarType(type_tag="f32"),
+        extension="scalar",
     )
 
 
@@ -3382,8 +3393,8 @@ def test_m142_lowers_backend_type_queries_without_rendering_text() -> None:
     )
 
     vector_as_extension = LoweredVectorAsExtensionType(
-        scalar=LoweredCurrentScalarType(type_tag="si64"),
-        extension="sve",
+        base_type=LoweredCurrentScalarType(type_tag="si64"),
+        extension="scalar",
     )
     assert environment.diagnostics == ()
     assert vec_result.diagnostics == ()
@@ -3509,7 +3520,7 @@ def test_m142_reports_malformed_alias_and_unsupported_queries() -> None:
     environment = lowerer.type_environment_for(selected)
     unsupported = lowerer.lower_backend_type_query(
         selected,
-        "type<backend>(type<generation>(base::in))",
+        "type<backend>(unknown::type(Vec))",
         _location(5, 7),
         environment=environment,
     )
@@ -3531,6 +3542,289 @@ def test_m142_reports_malformed_alias_and_unsupported_queries() -> None:
     assert [diagnostic.code for diagnostic in malformed.diagnostics] == [
         "TSL-LOWER-MALFORMED-BACKEND-TYPE-QUERY",
     ]
+
+
+def test_m143_lowers_observed_context_generation_type_families() -> None:
+    selected = _selected_implementation(extension="avx2", type_tag="ui32")
+    lowerer = Lowerer()
+
+    base_result = lowerer.lower_generation_type_query(
+        selected,
+        "type<generation>(base::in)",
+        _location(4, 7),
+    )
+    register_result = lowerer.lower_generation_type_query(
+        selected,
+        "type<generation>(vector::register)",
+        _location(5, 7),
+    )
+    mask_result = lowerer.lower_generation_type_query(
+        selected,
+        "type<generation>(vector::mask)",
+        _location(6, 7),
+    )
+    imask_result = lowerer.lower_generation_type_query(
+        selected,
+        "type<generation>(vector::imask)",
+        _location(7, 7),
+    )
+    mask_underlying_result = lowerer.lower_generation_type_query(
+        selected,
+        "type<generation>(vector::mask_underlying_t)",
+        _location(8, 7),
+    )
+    offset_base_result = lowerer.lower_generation_type_query(
+        selected,
+        "type<generation>(vector::offset_base)",
+        _location(9, 7),
+    )
+
+    assert base_result.diagnostics == ()
+    assert base_result.value == LoweredCurrentScalarType(type_tag="ui32")
+    assert register_result.value == LoweredVectorMemberType(
+        member="register",
+        extension="avx2",
+        type_tag="ui32",
+    )
+    assert mask_result.value == LoweredVectorMemberType(
+        member="mask",
+        extension="avx2",
+        type_tag="ui32",
+    )
+    assert imask_result.value == LoweredVectorMemberType(
+        member="imask",
+        extension="avx2",
+        type_tag="ui32",
+    )
+    assert mask_underlying_result.value == LoweredVectorMemberType(
+        member="mask_underlying",
+        extension="avx2",
+        type_tag="ui32",
+    )
+    assert offset_base_result.value == LoweredVectorMemberType(
+        member="offset_base",
+        extension="avx2",
+        type_tag="ui32",
+    )
+
+
+def test_m143_lowers_observed_generation_type_transforms() -> None:
+    selected = _selected_implementation(extension="sse", type_tag="f32")
+    lowerer = Lowerer()
+
+    unsigned_result = lowerer.lower_generation_type_query(
+        selected,
+        "type<generation>(base::unsigned_of(type<generation>(base::in)))",
+        _location(4, 7),
+    )
+    signed_result = lowerer.lower_generation_type_query(
+        selected,
+        "type<generation>(base::signed_of(type<generation>(base::in)))",
+        _location(5, 7),
+    )
+    transform_result = lowerer.lower_generation_type_query(
+        selected,
+        "type<generation>(vector::transform_extension(ToBase))",
+        _location(6, 7),
+    )
+    as_extension_result = lowerer.lower_generation_type_query(
+        selected,
+        "type<generation>(vector::as_extension(sse, type<generation>(base::in)))",
+        _location(7, 7),
+    )
+
+    assert unsigned_result.diagnostics == ()
+    assert unsigned_result.value == LoweredScalarTypeIdentity(type_tag="ui32")
+    assert signed_result.diagnostics == ()
+    assert signed_result.value == LoweredScalarTypeIdentity(type_tag="si32")
+    assert transform_result.diagnostics == ()
+    assert transform_result.value == LoweredVectorTransformType(
+        transform="transform_extension",
+        base_type=LoweredSpecializationTypeSymbol(name="ToBase"),
+        extension="sse",
+    )
+    assert as_extension_result.diagnostics == ()
+    assert as_extension_result.value == LoweredVectorAsExtensionType(
+        base_type=LoweredCurrentScalarType(type_tag="f32"),
+        extension="sse",
+    )
+
+
+def test_m143_lowers_observed_select_generation_type() -> None:
+    selected = _selected_implementation(extension="sse", type_tag="f32")
+
+    result = Lowerer().lower_generation_type_query(
+        selected,
+        (
+            "type<generation>(select(value<generation>(type::is_same("
+            "type<generation>(base::in), f32)), ui32, ui64))"
+        ),
+        _location(4, 7),
+    )
+
+    assert result.diagnostics == ()
+    assert result.value == LoweredTypeSelectType(
+        condition=LoweredTypeIsSamePredicate(
+            left=LoweredCurrentScalarType(type_tag="f32"),
+            right=LoweredScalarTypeIdentity(type_tag="f32"),
+        ),
+        then_type=LoweredScalarTypeIdentity(type_tag="ui32"),
+        else_type=LoweredScalarTypeIdentity(type_tag="ui64"),
+    )
+
+
+def test_m143_lowers_alias_composed_register_and_generic_base_queries() -> None:
+    body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="let",
+                arguments=("type", "OutVec, type<generation>(vector::transform_extension(ToBase))"),
+                source=_location(4, 7),
+            ),
+        ),
+        source=_location(3, 5),
+    )
+    selected = _selected_implementation(body=body, extension="neon", type_tag="si16")
+    lowerer = Lowerer()
+    environment = lowerer.type_environment_for(selected)
+
+    register_result = lowerer.lower_generation_type_query(
+        selected,
+        "type<generation>(register::generic(OutVec))",
+        _location(5, 7),
+        environment=environment,
+    )
+    generic_base_result = lowerer.lower_generation_type_query(
+        selected,
+        "type<generation>(base::generic(OutVec))",
+        _location(6, 7),
+        environment=environment,
+    )
+    out_vec = LoweredVectorTransformType(
+        transform="transform_extension",
+        base_type=LoweredSpecializationTypeSymbol(name="ToBase"),
+        extension="neon",
+    )
+
+    assert environment.diagnostics == ()
+    assert environment.alias_bindings == (
+        LoweredTypeAliasBinding(
+            alias_name="OutVec",
+            value=out_vec,
+            source_text="type<generation>(vector::transform_extension(ToBase))",
+            source=_location(4, 7),
+        ),
+    )
+    assert register_result.diagnostics == ()
+    assert register_result.value == LoweredGenericRegisterType(vector_type=out_vec)
+    assert generic_base_result.diagnostics == ()
+    assert generic_base_result.value == LoweredBaseTransformType(
+        transform="generic",
+        value=out_vec,
+    )
+
+
+def test_m143_lowers_backend_type_query_families_without_rendering_text() -> None:
+    selected = _selected_implementation(backend="cpp", extension="avx2", type_tag="si64")
+    lowerer = Lowerer()
+
+    size_result = lowerer.lower_backend_type_query(
+        selected,
+        "type<backend>(size_t)",
+        _location(4, 7),
+    )
+    scalar_result = lowerer.lower_backend_type_query(
+        selected,
+        "type<backend>(scalar::ui8)",
+        _location(5, 7),
+    )
+    imask_result = lowerer.lower_backend_type_query(
+        selected,
+        "type<backend>(intrin::vector::imask)",
+        _location(6, 7),
+    )
+    vector_result = lowerer.lower_backend_type_query(
+        selected,
+        "type<backend>(vector::as_extension(generic))",
+        _location(7, 7),
+    )
+
+    assert size_result.request == BackendTypeSpellingRequest(
+        backend="cpp",
+        value=LoweredSizeType(),
+        source_text="type<backend>(size_t)",
+        source=_location(4, 7),
+    )
+    assert scalar_result.request == BackendTypeSpellingRequest(
+        backend="cpp",
+        value=LoweredScalarTypeIdentity(type_tag="ui8"),
+        source_text="type<backend>(scalar::ui8)",
+        source=_location(5, 7),
+    )
+    assert imask_result.request == BackendTypeSpellingRequest(
+        backend="cpp",
+        value=LoweredIntrinsicVectorImaskType(),
+        source_text="type<backend>(intrin::vector::imask)",
+        source=_location(6, 7),
+    )
+    assert vector_result.request == BackendTypeSpellingRequest(
+        backend="cpp",
+        value=LoweredVectorAsExtensionType(
+            base_type=LoweredCurrentScalarType(type_tag="si64"),
+            extension="generic",
+        ),
+        source_text="type<backend>(vector::as_extension(generic))",
+        source=_location(7, 7),
+    )
+    assert size_result.diagnostics == ()
+    assert scalar_result.diagnostics == ()
+    assert imask_result.diagnostics == ()
+    assert vector_result.diagnostics == ()
+    assert "std::" not in size_result.request.source_text
+
+
+def test_m143_lowers_backend_query_inside_generation_transform_alias() -> None:
+    body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="let",
+                arguments=(
+                    "type",
+                    "StepVec, type<generation>(vector::transform_extension(type<backend>(scalar::si16)))",
+                ),
+                source=_location(4, 7),
+            ),
+        ),
+        source=_location(3, 5),
+    )
+    selected = _selected_implementation(body=body, backend="rust", extension="sve")
+
+    environment = Lowerer().type_environment_for(selected)
+
+    nested_backend_request = BackendTypeSpellingRequest(
+        backend="rust",
+        value=LoweredScalarTypeIdentity(type_tag="si16"),
+        source_text="type<backend>(scalar::si16)",
+        source=_location(4, 7),
+    )
+    assert environment.diagnostics == ()
+    assert environment.alias_bindings == (
+        LoweredTypeAliasBinding(
+            alias_name="StepVec",
+            value=LoweredVectorTransformType(
+                transform="transform_extension",
+                base_type=LoweredBackendTypeReference(
+                    request=nested_backend_request,
+                ),
+                extension="sve",
+            ),
+            source_text=(
+                "type<generation>(vector::transform_extension("
+                "type<backend>(scalar::si16)))"
+            ),
+            source=_location(4, 7),
+        ),
+    )
 
 
 def test_m142_does_not_resolve_primitive_call_selector_targets(

@@ -898,6 +898,45 @@ general generation/backend query grammar, assignment/indexing, expression
 parsing, cross-body aliases, source repair, runtime `tsldata`, `frozen`, or
 `tslgenold` dependencies.
 
+### M143 Observed TSIL Type Lowering Boundary
+
+Milestone 143 extends the M142 type environment from a starter slice into a
+corpus-grounded type lowering model for every currently observed
+`let<type>(...)`, `type<generation>(...)`, and `type<backend>(...)` form in
+`tsldata/**/*.tsl`. The inventory is recorded in
+`docs/redesign/tsil-type-query-inventory.md`; `frozen/` is evidence for
+unclear semantics only and is not a runtime dependency.
+
+`type<generation>(...)` lowers to typed semantic type values. Supported
+context-given forms include `base::in`, `vector::register`, `vector::mask`,
+`vector::imask`, `vector::mask_underlying_t`,
+`vector::mask_underlying`, and `vector::offset_base`. Supported transforms
+include `base::signed_of(...)`, `base::unsigned_of(...)`,
+`base::generic(...)`, `register::generic(...)`, `base::id(...)`,
+`vector::transform(...)`, `vector::transform_extension(...)`,
+`vector::as_extension(...)`, and the observed type `select(...)` form with a
+`value<generation>(type::is_same(...))` condition.
+
+`type<backend>(...)` lowers to a `BackendTypeSpellingRequest` over an already
+lowered semantic type value. M143 adds independent type identities such as
+`size_t`, `intrin::vector::imask`, observed `scalar::...` names, and bare
+scalar tags used inside observed `select(...)` type branches. Backend type
+text is still not rendered.
+
+Aliases remain ordered and source-defined. `MaskVec`, `GenericVec`, `OutVec`,
+or any other identifier is not a built-in type; it resolves only through a
+preceding `let<type>(AliasName, TypeExpr)` binding in the same selected body.
+Observed specialization symbols such as `ToBase`, `ToType`, and
+`ToExtension` are lowered as typed specialization symbols when they appear as
+arguments to supported type transforms. They are not aliases, backend text, or
+primitive-call selector matches.
+
+M143 still does not resolve primitive-call selector targets, dependency
+closure, dependency body lowering, backend call rendering, backend type text
+rendering, recursive call argument lowering, non-type expression parsing,
+assignment/indexing, source repair, runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

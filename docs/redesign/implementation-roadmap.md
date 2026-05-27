@@ -18805,11 +18805,13 @@ Validation result:
 
 Status:
 
-Planned as the next clean restart implementation milestone after accepted
-M142. This is the type-system foundation milestone that must happen before
-primitive-call selector target resolution continues. It should complete the
-observed TSIL type-lowering model for the current `tsldata/**/*.tsl` corpus,
-not pick another tiny synthetic type slice.
+Accepted. The M143 execution-review loop returned `Accept With Follow-Ups`
+after one write-capable executor, read-only architecture, boundary, evidence,
+documentation, and validation audits, one focused documentation/evidence
+revision executor, and focused re-review. M143 is the type-system foundation
+milestone before primitive-call selector target resolution continues. It
+completed observed TSIL type lowering for the current `tsldata/**/*.tsl`
+corpus rather than selecting another tiny synthetic type slice.
 
 Goal:
 
@@ -18860,9 +18862,10 @@ Out of scope:
 
 Primitive-call selector target resolution; dependency closure; selecting or
 lowering dependency implementation bodies; recursive call argument lowering;
-backend call rendering; backend type text rendering; value query lowering
-except where needed as an opaque unsupported boundary inside observed type
-forms; non-type expression parsing; assignment/indexing; source repair;
+backend call rendering; backend type text rendering; general value query
+lowering beyond the exact observed type predicate
+`select(value<generation>(type::is_same(...)), ...)` supported as part of type
+lowering; non-type expression parsing; assignment/indexing; source repair;
 runtime `tsldata`, `frozen`, or `tslgenold` dependencies; registries,
 dispatchers, fixpoint mechanisms, or broad request/result/worklist families.
 
@@ -18874,6 +18877,142 @@ Expected outputs:
   type identities instead of reparsing raw specialization strings.
 - Backend rendering still happens later from typed backend type-spelling
   requests, not from raw `type<backend>(...)` text.
+
+Executor pass result:
+
+- Added `docs/redesign/tsil-type-query-inventory.md` with counts, unique
+  forms, categories, and representative source locations for every observed
+  `let<type>(...)`, `type<generation>(...)`, and `type<backend>(...)` form in
+  the current corpus.
+- Extended the type model with typed semantic values for current context
+  vector/scalar facts, independent scalar/size/intrinsic identities,
+  specialization type symbols, context vector-member projections, base
+  transforms, generic-register projections, vector transforms,
+  `vector::as_extension(...)`, nested backend type references, and the
+  observed type `select(...)` form.
+- Added `lower_generation_type_query(...)` and broadened
+  `lower_type_expression(...)` / `lower_backend_type_query(...)` so
+  `type<generation>(...)` produces semantic type identity values and
+  `type<backend>(...)` produces `BackendTypeSpellingRequest` values over
+  semantic type values.
+- Preserved M142 ordered alias behavior: aliases are arbitrary source names
+  and are visible only after their `let<type>(...)` binding in the same
+  selected body.
+- Preserved backend type rendering, primitive-call selector target
+  resolution, dependency closure, dependency body lowering, recursive call
+  argument lowering, broad non-type expression parsing, runtime `tsldata`,
+  runtime `frozen`, and runtime `tslgenold` as out of scope.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Review verdicts:
+
+- Architecture reviewer: `Accept With Follow-Ups`.
+- Boundary auditor: `Accept With Follow-Ups`.
+- Evidence auditor: initially `Needs Revision` for nested
+  `type<generation>(...)` count underreporting.
+- Documentation auditor: initially `Needs Revision` for stale value-query
+  out-of-scope wording.
+- Validation auditor: `Accept With Follow-Ups`.
+- Focused re-review after documentation/evidence revision: `Accept`.
+
+Validation result:
+
+- Executor `git diff --check`: exit 0, no output.
+- Executor `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- Executor `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `203 passed in 21.21s`.
+- Executor initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final cache check returned exit 0 with no output.
+- Focused documentation/evidence revision `git diff --check`: exit 0, no
+  output.
+- Focused re-review `git diff --check`: exit 0, no output.
+
+Recorded follow-ups:
+
+- Before primitive-call selector matching depends on `vector::as_extension`
+  values, split extension operands into typed selector/type operands or
+  explicitly document the string contract.
+- Add focused negative coverage for malformed `type<generation>(...)`, wrong
+  type-transform arity, unsupported type-call names, and bad nested predicate
+  forms.
+- Document or narrow the intentionally broader scalar/extension recognizers
+  before treating them as a stable contract beyond the observed corpus.
+
+### Milestone 144: Typed Primitive-Call Selector Payload Lowering Boundary
+
+Status:
+
+Planned as the next clean restart implementation milestone after accepted
+M143. This milestone should use the M143 type model to stop treating
+recognized primitive-call selector specializations and `attrs[...]` payloads
+as opaque strings, while still stopping before primitive-call target
+selection, dependency closure, dependency-body lowering, or backend call
+rendering.
+
+Goal:
+
+Lower the already recognized M135/M136 `call<primitive=...>(...)` selector
+payload data into typed selector payload values:
+
+- preserve the existing structured base target distinction between `@self`
+  and named primitive references;
+- split optional specialization payloads such as `[Vec]`,
+  `[type<backend>(vector::as_extension(scalar))]`, `[ChunkVec, avx2, index]`,
+  and `[type<backend>(vector::as_extension(scalar)), PreserveSign]` by
+  top-level commas while respecting nested parentheses and brackets;
+- lower type-valued specialization entries through the M143 selected type
+  environment, including source-defined aliases visible before the call;
+- preserve explicitly non-type selector entries as typed selector symbols or
+  literals with source/provenance, not as semantic matches;
+- parse `attrs[...]` payloads into typed concrete selector attributes using
+  the same key, optional key-argument, and value semantics as catalog/target
+  attributes;
+- add diagnostics for malformed specialization or attrs payloads and for
+  failed type-valued selector lowering.
+
+Scope:
+
+- Use only already selected implementations and already recognized
+  `PrimitiveCall` tokens.
+- Keep raw selector text only as provenance/diagnostic context.
+- Keep M143 type values backend-neutral; backend type text remains unrendered.
+- Address the M143 extension-operand follow-up by either introducing a typed
+  extension/specialization operand for `vector::as_extension(...)` and
+  selector entries, or explicitly documenting why the current source-symbol
+  string contract remains intentional for M144.
+- Add focused negative tests for the M143 malformed/wrong-arity type-query
+  paths that selector lowering now relies on.
+
+Out of scope:
+
+Primitive-call target candidate matching; selecting dependency
+implementations; dependency closure; dependency-body lowering; recursive call
+argument lowering; backend call rendering; backend type text rendering;
+semantic interpretation of non-type selector symbols such as `shift`,
+`PreserveSign`, `sse`, or `index`; broad TSIL expression parsing;
+assignment/indexing lowering; source repair; runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies; registries, dispatchers, fixpoint mechanisms, or
+broad worklist machinery.
+
+Expected outputs:
+
+- The lowerer can expose typed selector payload values for recognized
+  primitive calls without resolving the target.
+- Later primitive-call selector matching can consume typed specialization
+  type values and typed selector attributes instead of reparsing selector
+  strings.
+- Existing M126-M143 generated artifacts and unsupported-call diagnostics
+  remain stable unless deliberately narrowed by the typed selector diagnostics.
 
 Validation:
 

@@ -1,4 +1,6 @@
-"""Backend-neutral lowered function values for the tiny clean slice."""
+"""Backend-neutral lowered function and type values for the clean slice."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal
@@ -12,6 +14,15 @@ from tslgen.lowering.scalar_types import ScalarTypeDescriptor
 from tslgen.lowering.unary_operations import UnaryOperationDescriptor
 
 LoweredResultTypeKind = Literal["input_scalar", "scalar_comparison"]
+LoweredVectorMemberKind = Literal[
+    "register",
+    "mask",
+    "imask",
+    "mask_underlying",
+    "offset_base",
+]
+LoweredBaseTransformKind = Literal["signed_of", "unsigned_of", "generic", "id"]
+LoweredVectorTransformKind = Literal["transform", "transform_extension"]
 
 CURRENT_VECTOR_KEYWORD = "Vec"
 CURRENT_SCALAR_KEYWORD = "scalar"
@@ -48,15 +59,99 @@ class LoweredCurrentScalarType:
 
 
 @dataclass(frozen=True, slots=True)
-class LoweredVectorAsExtensionType:
-    scalar: LoweredCurrentScalarType
+class LoweredScalarTypeIdentity:
+    type_tag: str
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredSizeType:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredIntrinsicVectorImaskType:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredSpecializationTypeSymbol:
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredVectorMemberType:
+    member: LoweredVectorMemberKind
+    extension: str
+    type_tag: str
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredBaseTransformType:
+    transform: LoweredBaseTransformKind
+    value: LoweredTypeValue
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredGenericRegisterType:
+    vector_type: LoweredTypeValue
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredVectorTransformType:
+    transform: LoweredVectorTransformKind
+    base_type: LoweredTypeValue
     extension: str
 
 
+@dataclass(frozen=True, slots=True)
+class LoweredVectorAsExtensionType:
+    base_type: LoweredTypeValue
+    extension: str
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredTypeIsSamePredicate:
+    left: LoweredTypeValue
+    right: LoweredTypeValue
+
+
+LoweredTypePredicate = LoweredTypeIsSamePredicate
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredTypeSelectType:
+    condition: LoweredTypePredicate
+    then_type: LoweredTypeValue
+    else_type: LoweredTypeValue
+
+
+@dataclass(frozen=True, slots=True)
+class BackendTypeSpellingRequest:
+    backend: str
+    value: LoweredTypeValue
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredBackendTypeReference:
+    request: BackendTypeSpellingRequest
+
+
 LoweredTypeValue = (
-    LoweredCurrentVectorType
+    LoweredBackendTypeReference
+    | LoweredBaseTransformType
     | LoweredCurrentScalarType
+    | LoweredCurrentVectorType
+    | LoweredGenericRegisterType
+    | LoweredIntrinsicVectorImaskType
+    | LoweredScalarTypeIdentity
+    | LoweredSizeType
+    | LoweredSpecializationTypeSymbol
+    | LoweredTypeSelectType
     | LoweredVectorAsExtensionType
+    | LoweredVectorMemberType
+    | LoweredVectorTransformType
 )
 
 
@@ -80,14 +175,6 @@ class SelectedTypeEnvironment:
 class TypeExpressionLoweringResult:
     value: LoweredTypeValue | None
     diagnostics: tuple[Diagnostic, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class BackendTypeSpellingRequest:
-    backend: str
-    value: LoweredTypeValue
-    source_text: str
-    source: SourceLocation
 
 
 @dataclass(frozen=True, slots=True)

@@ -56,6 +56,7 @@ from tslgen.lowering.scalar_types import (
 from tslgen.lowering.type_queries import (
     build_selected_type_environment,
     lower_backend_type_query,
+    lower_generation_type_query,
     lower_type_expression,
 )
 from tslgen.lowering.primitive_call_diagnostics import (
@@ -133,6 +134,22 @@ class Lowerer:
     ) -> BackendTypeQueryLoweringResult:
         context = self.context_for(selected)
         return lower_backend_type_query(
+            context,
+            query,
+            source,
+            environment=environment,
+        )
+
+    def lower_generation_type_query(
+        self,
+        selected: SelectedImplementation,
+        query: str,
+        source: SourceLocation,
+        *,
+        environment: SelectedTypeEnvironment | None = None,
+    ) -> TypeExpressionLoweringResult:
+        context = self.context_for(selected)
+        return lower_generation_type_query(
             context,
             query,
             source,
