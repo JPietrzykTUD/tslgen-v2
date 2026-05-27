@@ -1933,7 +1933,7 @@ docs/agent/runs/m139-execution-review-loop-prompt.md
 Active executor milestone:
 
 ```text
-Milestone 139: Unspecialized Primitive Call Implementation Candidate Diagnostic Boundary Slice
+Milestone 139: Primitive Declaration Attribute Variant Catalog Slice
 ```
 
 Latest review verdict:
@@ -1949,23 +1949,22 @@ dimensions.
 Next expected action:
 
 ```text
-Run the active M139 execution-review-loop prompt. M139 should perform only an
-unspecialized primitive-call implementation-candidate diagnostic check for
-recognized `call<primitive=...>(...)` tokens whose base target is known and
-whose selector has no specialization and no `attrs[...]`. Named targets should
-check for a matching implementation candidate by exact base primitive name,
-current selected extension, and current selected implementation type tag.
-`@self` should identify the current selected implementation as the candidate
-boundary.
+Run the active M139 execution-review-loop prompt. M139 should be a
+catalog-first prerequisite for later primitive-call selector matching. It
+should parse/store primitive declaration attributes, materialize deterministic
+concrete catalog variants for wildcard declaration attributes such as
+`aligned=*` and `packed=*`, and preserve provenance from expanded variants
+back to the source declaration.
 
-M139 must preserve M133/M134 exact add-call lowering, all M135-M138 structured
-selector/argument/payload/source-location behavior, M138 unknown-target
-diagnostics, and M138 unresolved specialization/attrs diagnostics. It must not
-expand dependency closure, lower dependency bodies, render dependency call
-text, expand `@self` beyond current candidate identity, interpret
-specialization or attrs payloads, resolve argument identifiers or nested calls,
-parse expressions, repair source, or introduce runtime `tsldata`, `frozen`, or
-`tslgenold` dependencies.
+M139 must not perform primitive-call candidate lookup. It must preserve
+M133/M134 exact add-call lowering and all M135-M138 structured
+selector/argument/payload/source-location diagnostics. Implementation body
+text is not relevant to declaration-attribute expansion and must not influence
+variant materialization. It must not expand dependency closure, lower
+dependency bodies, render dependency call text, interpret `call<primitive=...>`
+selector specialization or attrs payloads, resolve argument identifiers or
+nested calls, parse expressions, repair source, or introduce runtime
+`tsldata`, `frozen`, or `tslgenold` dependencies.
 ```
 
 Accepted planning prompt:
