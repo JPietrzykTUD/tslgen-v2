@@ -95,6 +95,12 @@ from tslgen.lowering.operation_type_compatibility import (
     unary_operation_supports_scalar_type,
     unary_operation_scalar_type_compatibility_rules,
 )
+from tslgen.lowering.type_syntax import (
+    TypeCall,
+    TypeIdentifier,
+    TypeQuery,
+    parse_type_syntax,
+)
 from tslgen.pipeline.catalog_builder import CatalogBuilder
 from tslgen.syntax.ast import (
     ParsedDocument,
@@ -3542,6 +3548,34 @@ def test_m142_reports_malformed_alias_and_unsupported_queries() -> None:
     assert [diagnostic.code for diagnostic in malformed.diagnostics] == [
         "TSL-LOWER-MALFORMED-BACKEND-TYPE-QUERY",
     ]
+
+
+def test_m143_type_syntax_parser_builds_nested_query_nodes() -> None:
+    source = "type<generation>(vector::as_extension(sse, type<generation>(base::in)))"
+
+    parsed = parse_type_syntax(source)
+
+    assert parsed == TypeQuery(
+        kind="generation",
+        expression=TypeCall(
+            name="vector::as_extension",
+            arguments=(
+                TypeIdentifier(name="sse", source_text="sse"),
+                TypeQuery(
+                    kind="generation",
+                    expression=TypeIdentifier(
+                        name="base::in",
+                        source_text="base::in",
+                    ),
+                    source_text="type<generation>(base::in)",
+                ),
+            ),
+            source_text="vector::as_extension(sse, type<generation>(base::in))",
+        ),
+        source_text=source,
+    )
+    assert parse_type_syntax("type<generation>(base::in") is None
+    assert parse_type_syntax(" type<generation>(base::in)") is None
 
 
 def test_m143_lowers_observed_context_generation_type_families() -> None:

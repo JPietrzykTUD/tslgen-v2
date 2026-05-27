@@ -30,13 +30,18 @@ from tslgen.lowering.model import (
     SelectedTypeEnvironment,
     TypeExpressionLoweringResult,
 )
+from tslgen.lowering.type_syntax import (
+    TypeCall,
+    TypeIdentifier,
+    TypeQuery,
+    TypeSyntax,
+    parse_type_syntax,
+    split_top_level_arguments,
+)
 
 _ALIAS_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _BARE_SCALAR_TYPE_RE = re.compile(r"(?:si|ui)\d+|f\d+|[su]\d+")
 _SCALAR_TYPE_RE = re.compile(r"scalar::((?:si|ui)\d+|f\d+|[su]\d+)")
-_BACKEND_TYPE_PREFIX = "type<backend>("
-_GENERATION_TYPE_PREFIX = "type<generation>("
-_GENERATION_VALUE_PREFIX = "value<generation>("
 _CONTEXT_VECTOR_MEMBER_TYPES = {
     "vector::register": "register",
     "vector::mask": "mask",
@@ -112,6 +117,27 @@ def lower_type_expression(
     *,
     environment: SelectedTypeEnvironment | None = None,
 ) -> TypeExpressionLoweringResult:
+    parsed = parse_type_syntax(expression)
+    if parsed is None:
+        return TypeExpressionLoweringResult(
+            value=None,
+            diagnostics=(_unsupported_type_expression_diagnostic(expression, source),),
+        )
+    return _lower_type_syntax_result(
+        context,
+        parsed,
+        source,
+        environment=environment,
+    )
+
+
+def _lower_type_syntax_result(
+    context: SelectedImplementationLoweringContext,
+    syntax: TypeSyntax,
+    source: SourceLocation,
+    *,
+    environment: SelectedTypeEnvironment | None = None,
+) -> TypeExpressionLoweringResult:
     alias_bindings = (
         _visible_alias_bindings(environment.alias_bindings, source)
         if environment is not None
@@ -119,7 +145,7 @@ def lower_type_expression(
     )
     type_value = _lower_type_expression_value(
         context,
-        expression,
+        syntax,
         source,
         alias_bindings,
     )
@@ -135,30 +161,16 @@ def lower_backend_type_query(
     *,
     environment: SelectedTypeEnvironment | None = None,
 ) -> BackendTypeQueryLoweringResult:
-    if query != query.strip() or not query.startswith(_BACKEND_TYPE_PREFIX):
+    parsed = parse_type_syntax(query)
+    if not isinstance(parsed, TypeQuery) or parsed.kind != "backend":
         return BackendTypeQueryLoweringResult(
             request=None,
             diagnostics=(_malformed_backend_type_query_diagnostic(query, source),),
         )
 
-    open_index = len(_BACKEND_TYPE_PREFIX) - 1
-    close_index = _matching_close_paren(query, open_index)
-    if close_index is None or close_index != len(query) - 1:
-        return BackendTypeQueryLoweringResult(
-            request=None,
-            diagnostics=(_malformed_backend_type_query_diagnostic(query, source),),
-        )
-
-    expression = query[len(_BACKEND_TYPE_PREFIX) : close_index]
-    if not expression or expression != expression.strip():
-        return BackendTypeQueryLoweringResult(
-            request=None,
-            diagnostics=(_malformed_backend_type_query_diagnostic(query, source),),
-        )
-
-    expression_result = lower_type_expression(
+    expression_result = _lower_type_syntax_result(
         context,
-        expression,
+        parsed.expression,
         source,
         environment=environment,
     )
@@ -186,19 +198,16 @@ def lower_generation_type_query(
     *,
     environment: SelectedTypeEnvironment | None = None,
 ) -> TypeExpressionLoweringResult:
-    expression = _extract_query_payload(
-        query,
-        _GENERATION_TYPE_PREFIX,
-    )
-    if expression is None:
+    parsed = parse_type_syntax(query)
+    if not isinstance(parsed, TypeQuery) or parsed.kind != "generation":
         return TypeExpressionLoweringResult(
             value=None,
             diagnostics=(_malformed_generation_type_query_diagnostic(query, source),),
         )
 
-    return lower_type_expression(
+    return _lower_type_syntax_result(
         context,
-        expression,
+        parsed.expression,
         source,
         environment=environment,
     )
@@ -235,9 +244,16 @@ def _lower_type_alias_binding(
             (_malformed_type_alias_diagnostic(directive),),
         )
 
+    parsed_expression = parse_type_syntax(expression)
+    if parsed_expression is None:
+        return _TypeAliasBindingResult(
+            None,
+            (_unsupported_type_expression_diagnostic(expression, directive.source),),
+        )
+
     type_value = _lower_type_expression_value(
         context,
-        expression,
+        parsed_expression,
         directive.source,
         prior_bindings,
     )
@@ -257,14 +273,50 @@ def _lower_type_alias_binding(
 
 def _lower_type_expression_value(
     context: SelectedImplementationLoweringContext,
-    expression: str,
+    syntax: TypeSyntax,
     source: SourceLocation,
     alias_bindings: tuple[LoweredTypeAliasBinding, ...],
     *,
     allow_specialization_symbol: bool = False,
 ) -> LoweredTypeValue | Diagnostic:
-    if expression != expression.strip():
-        return _unsupported_type_expression_diagnostic(expression, source)
+    if isinstance(syntax, TypeQuery):
+        if syntax.kind == "generation":
+            return _lower_type_expression_value(
+                context,
+                syntax.expression,
+                source,
+                alias_bindings,
+                allow_specialization_symbol=allow_specialization_symbol,
+            )
+        if syntax.kind == "backend":
+            backend_value = _lower_type_expression_value(
+                context,
+                syntax.expression,
+                source,
+                alias_bindings,
+                allow_specialization_symbol=allow_specialization_symbol,
+            )
+            if isinstance(backend_value, Diagnostic):
+                return backend_value
+            return LoweredBackendTypeReference(
+                request=BackendTypeSpellingRequest(
+                    backend=context.backend,
+                    value=backend_value,
+                    source_text=syntax.source_text,
+                    source=source,
+                )
+            )
+        return _unsupported_type_expression_diagnostic(syntax.source_text, source)
+
+    if isinstance(syntax, TypeCall):
+        return _lower_type_call(
+            context,
+            syntax,
+            source,
+            alias_bindings,
+        )
+
+    expression = syntax.source_text
 
     if expression == context.current_vector_keyword:
         return LoweredCurrentVectorType(
@@ -298,47 +350,6 @@ def _lower_type_expression_value(
     if _BARE_SCALAR_TYPE_RE.fullmatch(expression) is not None:
         return LoweredScalarTypeIdentity(type_tag=expression)
 
-    generation_payload = _extract_query_payload(expression, _GENERATION_TYPE_PREFIX)
-    if generation_payload is not None:
-        return _lower_type_expression_value(
-            context,
-            generation_payload,
-            source,
-            alias_bindings,
-            allow_specialization_symbol=allow_specialization_symbol,
-        )
-
-    backend_payload = _extract_query_payload(expression, _BACKEND_TYPE_PREFIX)
-    if backend_payload is not None:
-        backend_value = _lower_type_expression_value(
-            context,
-            backend_payload,
-            source,
-            alias_bindings,
-            allow_specialization_symbol=allow_specialization_symbol,
-        )
-        if isinstance(backend_value, Diagnostic):
-            return backend_value
-        return LoweredBackendTypeReference(
-            request=BackendTypeSpellingRequest(
-                backend=context.backend,
-                value=backend_value,
-                source_text=expression,
-                source=source,
-            )
-        )
-
-    parsed_call = _parse_type_call(expression)
-    if parsed_call is not None:
-        return _lower_type_call(
-            context,
-            expression,
-            parsed_call[0],
-            parsed_call[1],
-            source,
-            alias_bindings,
-        )
-
     if _ALIAS_NAME_RE.fullmatch(expression) is not None:
         binding = _find_alias_binding(alias_bindings, expression)
         if binding is not None:
@@ -352,38 +363,18 @@ def _lower_type_expression_value(
 
 def _lower_type_call(
     context: SelectedImplementationLoweringContext,
-    expression: str,
-    name: str,
-    arguments: tuple[str, ...],
+    syntax: TypeCall,
     source: SourceLocation,
     alias_bindings: tuple[LoweredTypeAliasBinding, ...],
 ) -> LoweredTypeValue | Diagnostic:
+    name = syntax.name
+    arguments = syntax.arguments
+
     if name in {"base::signed_of", "base::unsigned_of"} and len(arguments) == 1:
-        value = _lower_type_expression_value(
-            context,
-            arguments[0],
-            source,
-            alias_bindings,
-            allow_specialization_symbol=True,
-        )
-        if isinstance(value, Diagnostic):
-            return value
-        return _lower_signedness_transform(
-            "signed_of" if name == "base::signed_of" else "unsigned_of",
-            value,
-        )
+        return _lower_signedness_type_call(context, syntax, source, alias_bindings)
 
     if name == "base::generic" and len(arguments) == 1:
-        value = _lower_type_expression_value(
-            context,
-            arguments[0],
-            source,
-            alias_bindings,
-            allow_specialization_symbol=True,
-        )
-        if isinstance(value, Diagnostic):
-            return value
-        return LoweredBaseTransformType(transform="generic", value=value)
+        return _lower_base_generic_type_call(context, syntax, source, alias_bindings)
 
     if name == "base::id" and len(arguments) == 1:
         return _lower_type_expression_value(
@@ -395,118 +386,207 @@ def _lower_type_call(
         )
 
     if name == "register::generic" and len(arguments) == 1:
-        value = _lower_type_expression_value(
+        return _lower_register_generic_type_call(
             context,
-            arguments[0],
+            syntax,
             source,
             alias_bindings,
-            allow_specialization_symbol=True,
         )
-        if isinstance(value, Diagnostic):
-            return value
-        return LoweredGenericRegisterType(vector_type=value)
 
     if name in {"vector::transform", "vector::transform_extension"} and len(
         arguments
     ) == 1:
+        return _lower_vector_transform_type_call(
+            context,
+            syntax,
+            source,
+            alias_bindings,
+        )
+
+    if name == "vector::as_extension" and len(arguments) in {1, 2}:
+        return _lower_vector_as_extension_type_call(
+            context,
+            syntax,
+            source,
+            alias_bindings,
+        )
+
+    if name == "select" and len(arguments) == 3:
+        return _lower_select_type_call(context, syntax, source, alias_bindings)
+
+    return _unsupported_type_expression_diagnostic(syntax.source_text, source)
+
+
+def _lower_signedness_type_call(
+    context: SelectedImplementationLoweringContext,
+    syntax: TypeCall,
+    source: SourceLocation,
+    alias_bindings: tuple[LoweredTypeAliasBinding, ...],
+) -> LoweredTypeValue | Diagnostic:
+    value = _lower_type_expression_value(
+        context,
+        syntax.arguments[0],
+        source,
+        alias_bindings,
+        allow_specialization_symbol=True,
+    )
+    if isinstance(value, Diagnostic):
+        return value
+    return _lower_signedness_transform(
+        "signed_of" if syntax.name == "base::signed_of" else "unsigned_of",
+        value,
+    )
+
+
+def _lower_base_generic_type_call(
+    context: SelectedImplementationLoweringContext,
+    syntax: TypeCall,
+    source: SourceLocation,
+    alias_bindings: tuple[LoweredTypeAliasBinding, ...],
+) -> LoweredTypeValue | Diagnostic:
+    value = _lower_type_expression_value(
+        context,
+        syntax.arguments[0],
+        source,
+        alias_bindings,
+        allow_specialization_symbol=True,
+    )
+    if isinstance(value, Diagnostic):
+        return value
+    return LoweredBaseTransformType(transform="generic", value=value)
+
+
+def _lower_register_generic_type_call(
+    context: SelectedImplementationLoweringContext,
+    syntax: TypeCall,
+    source: SourceLocation,
+    alias_bindings: tuple[LoweredTypeAliasBinding, ...],
+) -> LoweredTypeValue | Diagnostic:
+    value = _lower_type_expression_value(
+        context,
+        syntax.arguments[0],
+        source,
+        alias_bindings,
+        allow_specialization_symbol=True,
+    )
+    if isinstance(value, Diagnostic):
+        return value
+    return LoweredGenericRegisterType(vector_type=value)
+
+
+def _lower_vector_transform_type_call(
+    context: SelectedImplementationLoweringContext,
+    syntax: TypeCall,
+    source: SourceLocation,
+    alias_bindings: tuple[LoweredTypeAliasBinding, ...],
+) -> LoweredTypeValue | Diagnostic:
+    value = _lower_type_expression_value(
+        context,
+        syntax.arguments[0],
+        source,
+        alias_bindings,
+        allow_specialization_symbol=True,
+    )
+    if isinstance(value, Diagnostic):
+        return value
+    return LoweredVectorTransformType(
+        transform="transform"
+        if syntax.name == "vector::transform"
+        else "transform_extension",
+        base_type=value,
+        extension=context.extension,
+    )
+
+
+def _lower_vector_as_extension_type_call(
+    context: SelectedImplementationLoweringContext,
+    syntax: TypeCall,
+    source: SourceLocation,
+    alias_bindings: tuple[LoweredTypeAliasBinding, ...],
+) -> LoweredTypeValue | Diagnostic:
+    extension_name = _identifier_name(syntax.arguments[0])
+    if extension_name is None:
+        return _unsupported_type_expression_diagnostic(syntax.source_text, source)
+    if len(syntax.arguments) == 1:
+        base_type: LoweredTypeValue = LoweredCurrentScalarType(
+            type_tag=context.type_tag
+        )
+    else:
         value = _lower_type_expression_value(
             context,
-            arguments[0],
+            syntax.arguments[1],
             source,
             alias_bindings,
             allow_specialization_symbol=True,
         )
         if isinstance(value, Diagnostic):
             return value
-        return LoweredVectorTransformType(
-            transform="transform"
-            if name == "vector::transform"
-            else "transform_extension",
-            base_type=value,
-            extension=context.extension,
-        )
+        base_type = value
+    return LoweredVectorAsExtensionType(
+        base_type=base_type,
+        extension=extension_name,
+    )
 
-    if name == "vector::as_extension" and len(arguments) in {1, 2}:
-        extension_name = arguments[0].strip()
-        if _ALIAS_NAME_RE.fullmatch(extension_name) is None:
-            return _unsupported_type_expression_diagnostic(expression, source)
-        if len(arguments) == 1:
-            base_type: LoweredTypeValue = LoweredCurrentScalarType(
-                type_tag=context.type_tag
-            )
-        else:
-            value = _lower_type_expression_value(
-                context,
-                arguments[1],
-                source,
-                alias_bindings,
-                allow_specialization_symbol=True,
-            )
-            if isinstance(value, Diagnostic):
-                return value
-            base_type = value
-        return LoweredVectorAsExtensionType(
-            base_type=base_type,
-            extension=extension_name,
-        )
 
-    if name == "select" and len(arguments) == 3:
-        condition = _lower_generation_value_predicate(
-            context,
-            arguments[0],
-            source,
-            alias_bindings,
-        )
-        if isinstance(condition, Diagnostic):
-            return condition
-        then_type = _lower_type_expression_value(
-            context,
-            arguments[1],
-            source,
-            alias_bindings,
-            allow_specialization_symbol=True,
-        )
-        if isinstance(then_type, Diagnostic):
-            return then_type
-        else_type = _lower_type_expression_value(
-            context,
-            arguments[2],
-            source,
-            alias_bindings,
-            allow_specialization_symbol=True,
-        )
-        if isinstance(else_type, Diagnostic):
-            return else_type
-        return LoweredTypeSelectType(
-            condition=condition,
-            then_type=then_type,
-            else_type=else_type,
-        )
-
-    return _unsupported_type_expression_diagnostic(expression, source)
+def _lower_select_type_call(
+    context: SelectedImplementationLoweringContext,
+    syntax: TypeCall,
+    source: SourceLocation,
+    alias_bindings: tuple[LoweredTypeAliasBinding, ...],
+) -> LoweredTypeValue | Diagnostic:
+    condition = _lower_generation_value_predicate(
+        context,
+        syntax.arguments[0],
+        source,
+        alias_bindings,
+    )
+    if isinstance(condition, Diagnostic):
+        return condition
+    then_type = _lower_type_expression_value(
+        context,
+        syntax.arguments[1],
+        source,
+        alias_bindings,
+        allow_specialization_symbol=True,
+    )
+    if isinstance(then_type, Diagnostic):
+        return then_type
+    else_type = _lower_type_expression_value(
+        context,
+        syntax.arguments[2],
+        source,
+        alias_bindings,
+        allow_specialization_symbol=True,
+    )
+    if isinstance(else_type, Diagnostic):
+        return else_type
+    return LoweredTypeSelectType(
+        condition=condition,
+        then_type=then_type,
+        else_type=else_type,
+    )
 
 
 def _lower_generation_value_predicate(
     context: SelectedImplementationLoweringContext,
-    expression: str,
+    syntax: TypeSyntax,
     source: SourceLocation,
     alias_bindings: tuple[LoweredTypeAliasBinding, ...],
 ) -> LoweredTypePredicate | Diagnostic:
-    payload = _extract_query_payload(expression, _GENERATION_VALUE_PREFIX)
-    if payload is None:
-        return _unsupported_type_expression_diagnostic(expression, source)
+    if (
+        not isinstance(syntax, TypeQuery)
+        or syntax.kind != "generation_value"
+        or not isinstance(syntax.expression, TypeCall)
+    ):
+        return _unsupported_type_expression_diagnostic(syntax.source_text, source)
 
-    parsed_call = _parse_type_call(payload)
-    if parsed_call is None:
-        return _unsupported_type_expression_diagnostic(expression, source)
-
-    name, arguments = parsed_call
-    if name != "type::is_same" or len(arguments) != 2:
-        return _unsupported_type_expression_diagnostic(expression, source)
+    call = syntax.expression
+    if call.name != "type::is_same" or len(call.arguments) != 2:
+        return _unsupported_type_expression_diagnostic(syntax.source_text, source)
 
     left = _lower_type_expression_value(
         context,
-        arguments[0],
+        call.arguments[0],
         source,
         alias_bindings,
         allow_specialization_symbol=True,
@@ -515,7 +595,7 @@ def _lower_generation_value_predicate(
         return left
     right = _lower_type_expression_value(
         context,
-        arguments[1],
+        call.arguments[1],
         source,
         alias_bindings,
         allow_specialization_symbol=True,
@@ -543,6 +623,12 @@ def _lower_signedness_transform(
 def _scalar_type_tag(value: LoweredTypeValue) -> str | None:
     if isinstance(value, LoweredCurrentScalarType | LoweredScalarTypeIdentity):
         return value.type_tag
+    return None
+
+
+def _identifier_name(syntax: TypeSyntax) -> str | None:
+    if isinstance(syntax, TypeIdentifier):
+        return syntax.name
     return None
 
 
@@ -574,122 +660,10 @@ def _source_precedes(left: SourceLocation, right: SourceLocation) -> bool:
 
 
 def _split_top_level_comma(payload: str) -> tuple[str, str] | None:
-    comma_index: int | None = None
-    paren_depth = 0
-    bracket_depth = 0
-    for index, char in enumerate(payload):
-        if char == "(":
-            paren_depth += 1
-        elif char == ")":
-            if paren_depth == 0:
-                return None
-            paren_depth -= 1
-        elif char == "[":
-            bracket_depth += 1
-        elif char == "]":
-            if bracket_depth == 0:
-                return None
-            bracket_depth -= 1
-        elif char == "," and paren_depth == 0 and bracket_depth == 0:
-            if comma_index is not None:
-                return None
-            comma_index = index
-
-    if paren_depth != 0 or bracket_depth != 0 or comma_index is None:
+    parts = split_top_level_arguments(payload)
+    if parts is None or len(parts) != 2:
         return None
-
-    alias_name = payload[:comma_index].strip()
-    expression = payload[comma_index + 1 :].strip()
-    if not alias_name or not expression:
-        return None
-    return (alias_name, expression)
-
-
-def _extract_query_payload(query: str, prefix: str) -> str | None:
-    if query != query.strip() or not query.startswith(prefix):
-        return None
-
-    open_index = len(prefix) - 1
-    close_index = _matching_close_paren(query, open_index)
-    if close_index is None or close_index != len(query) - 1:
-        return None
-
-    expression = query[len(prefix) : close_index]
-    if not expression or expression != expression.strip():
-        return None
-    return expression
-
-
-def _parse_type_call(expression: str) -> tuple[str, tuple[str, ...]] | None:
-    open_index = expression.find("(")
-    if open_index == -1 or not expression.endswith(")"):
-        return None
-
-    close_index = _matching_close_paren(expression, open_index)
-    if close_index is None or close_index != len(expression) - 1:
-        return None
-
-    name = expression[:open_index].strip()
-    if not name:
-        return None
-    arguments = _split_top_level_arguments(expression[open_index + 1 : close_index])
-    if arguments is None:
-        return None
-    return name, arguments
-
-
-def _split_top_level_arguments(payload: str) -> tuple[str, ...] | None:
-    if not payload.strip():
-        return ()
-
-    arguments: list[str] = []
-    start = 0
-    paren_depth = 0
-    bracket_depth = 0
-    for index, char in enumerate(payload):
-        if char == "(":
-            paren_depth += 1
-        elif char == ")":
-            if paren_depth == 0:
-                return None
-            paren_depth -= 1
-        elif char == "[":
-            bracket_depth += 1
-        elif char == "]":
-            if bracket_depth == 0:
-                return None
-            bracket_depth -= 1
-        elif char == "," and paren_depth == 0 and bracket_depth == 0:
-            argument = payload[start:index].strip()
-            if not argument:
-                return None
-            arguments.append(argument)
-            start = index + 1
-
-    if paren_depth != 0 or bracket_depth != 0:
-        return None
-
-    argument = payload[start:].strip()
-    if not argument:
-        return None
-    arguments.append(argument)
-    return tuple(arguments)
-
-
-def _matching_close_paren(text: str, open_index: int) -> int | None:
-    if open_index >= len(text) or text[open_index] != "(":
-        return None
-
-    depth = 1
-    for index in range(open_index + 1, len(text)):
-        char = text[index]
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-            if depth == 0:
-                return index
-    return None
+    return (parts[0], parts[1])
 
 
 def _malformed_type_alias_diagnostic(
