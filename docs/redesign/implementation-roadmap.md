@@ -18948,12 +18948,79 @@ Recorded follow-ups:
 - Document or narrow the intentionally broader scalar/extension recognizers
   before treating them as a stable contract beyond the observed corpus.
 
-### Milestone 144: Typed Primitive-Call Selector Payload Lowering Boundary
+### Milestone 143.1: Extension Catalog And Register/Mask Type Facts Boundary
 
 Status:
 
 Planned as the next clean restart implementation milestone after accepted
-M143. This milestone should use the M143 type model to stop treating
+M143 and before M144 selector-payload lowering. This milestone should make
+`tsldata/extensions/extension.tsl` a typed source of extension facts before
+later lowering or selector matching relies on extension/type values.
+
+Goal:
+
+Parse and promote extension metadata into a typed extension catalog, including
+backend-aware vector register facts and separate mask/integral-mask policies:
+
+- existing extension metadata such as identity, inheritance, vector size,
+  backend support, flags, runtime-lane behavior, test metadata, signature
+  support, and filters;
+- x86 native register families for `sse`, `avx2`, and `avx512`, keyed by
+  integer/f32/f64 type selectors and backend spellings;
+- inherited register facts for `sse_vl` and `avx2_vl`;
+- NEON concrete per-type register facts;
+- SVE scalable concrete C++ register facts and native predicate mask facts;
+- scalar base-type register policy;
+- generic fixed-array register policy with a compile-time lane-count
+  parameter, not runtime Rust vectors;
+- lane-bitmask and native-predicate mask policies, with integral-mask policy
+  represented separately from vector mask policy.
+
+Scope:
+
+- Update `tsldata/extensions/extension.tsl` with the accepted register and mask
+  policy source-data shape.
+- Add typed domain/catalog ownership for extension facts.
+- Resolve type-tag or type-group keyed register entries deterministically where
+  the necessary type-group facts are available.
+- Preserve source locations and diagnostics for malformed policy data.
+- Keep backend-specific register spellings as catalog facts only; do not render
+  operation bodies or backend type text in this slice.
+
+Out of scope:
+
+Primitive-call selector payload lowering; primitive-call target matching;
+dependency closure; backend operation rendering; backend type rendering from
+the new facts; generated C++/Rust library layout changes; host CPU probing;
+automatic target discovery; broad TSIL parsing; runtime dependency on
+`frozen` or `tslgenold`; registries, dispatchers, fixpoint machinery, or broad
+worklist families.
+
+Expected outputs:
+
+- The clean catalog contains typed extension metadata and typed register/mask
+  type facts sourced from `tsldata/extensions/extension.tsl`.
+- Generic register policy is represented as compile-time fixed arrays with a
+  lane-count parameter, keeping Rust away from runtime-growing `Vec<T>` for
+  generic registers.
+- M144 can later consume extension/type facts without hardwiring extension
+  tables in selector or lowering code.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py
+find tslgen -type d -name __pycache__ -print
+```
+
+### Milestone 144: Typed Primitive-Call Selector Payload Lowering Boundary
+
+Status:
+
+Planned after M143.1. This milestone should use the M143 type model and the
+M143.1 extension catalog boundary to stop treating
 recognized primitive-call selector specializations and `attrs[...]` payloads
 as opaque strings, while still stopping before primitive-call target
 selection, dependency closure, dependency-body lowering, or backend call

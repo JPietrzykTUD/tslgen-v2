@@ -2133,19 +2133,19 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 144.
+Execute Milestone 143.1.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m144-execution-review-loop-prompt.md
+docs/agent/runs/m143.1-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 144: Typed Primitive-Call Selector Payload Lowering Boundary
+Milestone 143.1: Extension Catalog And Register/Mask Type Facts Boundary
 ```
 
 Latest review verdict:
@@ -2161,24 +2161,22 @@ and value-query wording fixes.
 Next expected action:
 
 ```text
-Run the active M144 execution-review-loop prompt. M144 should use the M143
-type model to lower already recognized primitive-call selector specialization
-and `attrs[...]` payloads into typed selector payload values.
+Run the active M143.1 execution-review-loop prompt. M143.1 should make
+`tsldata/extensions/extension.tsl` a typed source of extension metadata,
+native/generic/scalar vector register facts, and separate mask/integral-mask
+type policies before M144 primitive-call selector payload lowering resumes.
 
-M144 should preserve the existing `@self` versus named base target
-distinction, split specialization payloads by top-level commas, lower
-type-valued entries such as `Vec` and
-`type<backend>(vector::as_extension(scalar))` through the M143 type
-environment, preserve explicitly non-type selector entries as typed selector
-symbols or literals with provenance, and parse selector `attrs[...]` into
-typed concrete selector attributes.
+M143.1 should encode and catalog x86 native register maps, inherited
+`sse_vl`/`avx2_vl` register facts, NEON concrete per-type register facts, SVE
+scalable C++ register facts, scalar base-type register policy, generic
+compile-time fixed-array lane-count policy, lane-bitmask policies, and native
+predicate mask policies.
 
-M144 must not match primitive-call targets, select dependency
-implementations, expand dependency closure, lower dependency bodies, render
-backend call text or backend type text, assign semantic meaning to non-type
-selector symbols such as `shift`, `PreserveSign`, `sse`, or `index`, parse
-broad non-type expressions, repair source, or introduce runtime `tsldata`,
-`frozen`, or `tslgenold` dependencies.
+M143.1 must not lower primitive-call selector payloads, match primitive-call
+targets, select dependency implementations, expand dependency closure, lower
+implementation bodies, render backend call text or backend type text, repair
+source, or introduce runtime `frozen` or `tslgenold` dependencies. M144 is
+deferred until this extension catalog boundary is accepted.
 ```
 
 Accepted planning prompt:
@@ -4989,11 +4987,13 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M123 validation follow-up addressed during finalization:
   validation-created `__pycache__` directories under clean `tslgen/` were
   removed after read-only validation audits.
-- M143 architecture follow-up is carried into the active M144 prompt: before
-  primitive-call selector matching depends on `vector::as_extension` values,
-  split extension operands into typed selector/type operands or explicitly
-  document the current source-symbol string contract.
-- M143 boundary/validation follow-up is carried into the active M144 prompt:
+- M143 architecture follow-up is carried into the active M143.1 prompt:
+  before primitive-call selector matching depends on
+  `vector::as_extension` values, promote extension definitions from
+  `tsldata/extensions/extension.tsl` into typed extension/register/mask facts
+  instead of relying on source-symbol strings or hardwired extension tables.
+- M143 boundary/validation follow-up remains carried into the deferred M144
+  prompt:
   add focused negative coverage for malformed `type<generation>(...)`, wrong
   type-transform arity, unsupported type-call names, and bad nested predicate
   forms.
@@ -6019,13 +6019,13 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M126
+No stop condition is active. The workflow is ready to run the active M143.1
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M144 execution, run the validation command listed in
-`docs/agent/runs/m144-execution-review-loop-prompt.md`.
+For active M143.1 execution, run the validation command listed in
+`docs/agent/runs/m143.1-execution-review-loop-prompt.md`.
 
 For M125 execution and review, validation completed with:
 
