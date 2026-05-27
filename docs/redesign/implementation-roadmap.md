@@ -18801,61 +18801,79 @@ Validation result:
   `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
   output.
 
-### Milestone 143: Primitive Call Selector Variant Resolution Slice
+### Milestone 143: Complete Observed TSIL Type Lowering Model
 
 Status:
 
 Planned as the next clean restart implementation milestone after accepted
-M142. This is the first catalog-backed primitive-call-selector resolution
-milestone; it should resolve references and diagnostics only, not lower
-dependency bodies or render calls.
+M142. This is the type-system foundation milestone that must happen before
+primitive-call selector target resolution continues. It should complete the
+observed TSIL type-lowering model for the current `tsldata/**/*.tsl` corpus,
+not pick another tiny synthetic type slice.
 
 Goal:
 
-Resolve recognized `call<primitive=...>(...)` selector targets against the
-catalog and selected implementation context:
+Realize the observed TSIL type language as typed semantic type values and
+typed backend type-spelling requests:
 
-- support `call<primitive=@self>(...)` as a reference to the current selected
-  concrete primitive variant;
-- support `call<primitive=@self[...]>(...)` where the specialization payload is
-  lowered through the M142 type/query boundary;
-- support `call<primitive=NAME>(...)` and `call<primitive=NAME[...]>(...)`
-  for arbitrary primitive names present in the catalog;
-- support selector attrs such as `call<primitive=NAME attrs[...]>(...)` by
-  matching only concrete `Primitive.attributes` from the catalog;
-- check that the requested name, concrete attributes, and lowered
-  specialization identify an available primitive variant or produce a precise
-  unsupported/unknown diagnostic.
+- inventory every unique observed `let<type>(...)`,
+  `type<generation>(...)`, and `type<backend>(...)` form across
+  `tsldata/**/*.tsl` and record its category;
+- lower context-given generation types such as `base::in`,
+  `vector::register`, `vector::mask`, `vector::imask`,
+  `vector::mask_underlying_t`, and `vector::offset_base`;
+- lower type transforms such as `base::signed_of(...)`,
+  `base::unsigned_of(...)`, `base::generic(...)`,
+  `register::generic(...)`, `vector::transform(...)`,
+  `vector::transform_extension(...)`, and `vector::as_extension(...)`;
+- lower independent backend/scalar type identities such as `size_t`,
+  `intrin::vector::imask`, and `scalar::ui8` / `scalar::ui16` /
+  `scalar::ui32` / `scalar::ui64` / signed counterparts observed in the
+  corpus;
+- lower ordered source-defined aliases from `let<type>(AliasName, TypeExpr)`
+  through the same semantic type model;
+- keep `type<generation>(...)` as semantic type identity lowering and
+  `type<backend>(...)` as backend type-spelling requests over already lowered
+  semantic type values;
+- use `frozen/` only as evidence for unclear observed forms such as
+  `register::generic(...)`, never as a runtime dependency.
 
 Scope:
 
-- Consume M135 structured call selectors, M136 argument lists, M140
-  attribute-aware primitive variants, and M141/M142 selected-context type
-  facts.
-- Preserve original selector, specialization, attrs, and payload strings as
-  diagnostic context.
-- Produce a typed primitive-call target reference or diagnostic; keep call
-  arguments opaque unless already supported by earlier exact add-call tests.
-- Add tests for `@self`, `@self[...]`, named primitive, named primitive with
-  specialization, named primitive with attrs, missing attribute variant, and
-  missing specialization/target diagnostics.
+- Treat the current `tsldata/**/*.tsl` type-query corpus as ground truth for
+  supported type forms.
+- Preserve source text as provenance/diagnostic context only; downstream
+  matching/rendering must consume typed semantic type values or typed backend
+  type requests.
+- Preserve M142 alias ordering: aliases are visible only after their
+  `let<type>(...)` binding in the same selected body.
+- Add or update a documented type-query inventory under `docs/redesign/` with
+  counts, unique forms, categories, and any open questions.
+- Add tests for each observed type category, including nested forms such as
+  `type<generation>(base::unsigned_of(type<generation>(base::in)))`,
+  `type<generation>(register::generic(OutVec))`,
+  `type<generation>(vector::transform_extension(ToBase))`,
+  `type<backend>(vector::as_extension(generic))`, and source aliases that
+  compose those values.
 
 Out of scope:
 
-Dependency closure; selecting or lowering dependency implementation bodies;
-recursive argument lowering; backend call rendering; wrapper rendering;
-complete specialization grammar; broad expression parsing; assignment/indexing;
-source repair; runtime `tsldata`, `frozen`, or `tslgenold` dependencies;
-registries, dispatchers, fixpoint mechanisms, or new request/result/worklist
-families.
+Primitive-call selector target resolution; dependency closure; selecting or
+lowering dependency implementation bodies; recursive call argument lowering;
+backend call rendering; backend type text rendering; value query lowering
+except where needed as an opaque unsupported boundary inside observed type
+forms; non-type expression parsing; assignment/indexing; source repair;
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies; registries,
+dispatchers, fixpoint mechanisms, or broad request/result/worklist families.
 
 Expected outputs:
 
-- Primitive-call lowering can distinguish unknown names, known names with no
-  matching concrete attribute variant, and known targets whose dependency body
-  lowering/rendering remains unsupported.
-- Later milestones can add dependency closure or backend call rendering from a
-  typed reference instead of reparsing raw selector text.
+- The lowerer has a coherent semantic type model for all observed TSIL type
+  forms needed by current `.tsl` data.
+- Later primitive-call selector resolution can compare fully lowered semantic
+  type identities instead of reparsing raw specialization strings.
+- Backend rendering still happens later from typed backend type-spelling
+  requests, not from raw `type<backend>(...)` text.
 
 Validation:
 

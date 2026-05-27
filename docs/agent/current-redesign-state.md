@@ -2096,7 +2096,7 @@ docs/agent/runs/m143-execution-review-loop-prompt.md
 Active executor milestone:
 
 ```text
-Milestone 143: Primitive Call Selector Variant Resolution Slice
+Milestone 143: Complete Observed TSIL Type Lowering Model
 ```
 
 Latest review verdict:
@@ -2111,21 +2111,25 @@ recorded M142 follow-ups.
 Next expected action:
 
 ```text
-Run the active M143 execution-review-loop prompt. M143 should resolve
-recognized `call<primitive=...>(...)` selector targets to typed primitive-call
-target references or precise diagnostics using the catalog, M140 concrete
-attributes, the M141 selected implementation context, and M142 typed
-specialization/type-query facts.
+Run the active M143 execution-review-loop prompt. M143 should stop before
+primitive-call selector resolution and first complete the observed TSIL type
+lowering model for the current `tsldata/**/*.tsl` corpus.
 
-M143 should support the selector forms `@self`, `@self[...]`, named primitive
-references, named primitive references with specialization, and selector
-`attrs[...]` matching against concrete catalog attributes. It must keep call
-arguments opaque except for already accepted exact add-call behavior.
+M143 should inventory and lower the observed `let<type>(...)`,
+`type<generation>(...)`, and `type<backend>(...)` forms as typed semantic
+type values and backend type-spelling requests. It should cover the observed
+families: context-given types such as `base::in` and vector metadata types;
+type transforms such as `base::signed_of`, `base::unsigned_of`,
+`base::generic`, `register::generic`, `vector::transform`,
+`vector::transform_extension`, and `vector::as_extension`; independent
+backend/scalar types such as `size_t` and `scalar::ui8`; and ordered
+source-defined aliases.
 
-M143 must not expand dependency closure, select or lower dependency bodies,
-render backend call text, recursively lower arguments, parse arbitrary
-expressions, repair source, or introduce runtime `tsldata`, `frozen`, or
-`tslgenold` dependencies.
+M143 must not continue primitive-call selector target resolution, expand
+dependency closure, select or lower dependency bodies, render backend call
+text, recursively lower call arguments, parse arbitrary non-type expressions,
+repair source, or introduce runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies.
 ```
 
 Accepted planning prompt:
