@@ -36,6 +36,8 @@ from tslgen.lowering.model import (
     LoweredReturnStatement,
     LoweredResultType,
     LoweredUnaryOperationExpression,
+    SelectedImplementationLoweringContext,
+    build_selected_implementation_lowering_context,
 )
 from tslgen.lowering.operation_type_compatibility import (
     binary_operation_supports_scalar_type,
@@ -84,6 +86,12 @@ class LoweringStageResult:
 class Lowerer:
     """Lower only the selected scalar operation implementation shapes."""
 
+    def context_for(
+        self,
+        selected: SelectedImplementation,
+    ) -> SelectedImplementationLoweringContext:
+        return build_selected_implementation_lowering_context(selected)
+
     def lower_all(
         self,
         selected: Iterable[SelectedImplementation],
@@ -110,11 +118,12 @@ class Lowerer:
         *,
         catalog: Catalog | None = None,
     ) -> LoweringResult:
-        scalar_type = lookup_scalar_type_descriptor(selected.implementation.type_tag)
-        body = selected.implementation.body
+        context = self.context_for(selected)
+        scalar_type = lookup_scalar_type_descriptor(context.type_tag)
+        body = context.implementation.body
         fragment = _operation_fragment_from_selected_body(selected, body)
-        if selected.primitive.template == _SUPPORTED_COMPARISON_TEMPLATE:
-            operation = lookup_comparison_operation_descriptor(selected.primitive.name)
+        if context.template == _SUPPORTED_COMPARISON_TEMPLATE:
+            operation = lookup_comparison_operation_descriptor(context.primitive_name)
             diagnostics = tuple(
                 _unsupported_comparison_diagnostics(
                     selected,
@@ -134,7 +143,7 @@ class Lowerer:
                 return LoweringResult(function=None, diagnostics=diagnostics)
             return LoweringResult(
                 function=_lower_comparison_function(
-                    selected,
+                    context,
                     fragment,
                     scalar_type,
                     operation,
@@ -142,8 +151,8 @@ class Lowerer:
                 diagnostics=(),
             )
 
-        if selected.primitive.template == _SUPPORTED_UNARY_TEMPLATE:
-            operation = lookup_unary_operation_descriptor(selected.primitive.name)
+        if context.template == _SUPPORTED_UNARY_TEMPLATE:
+            operation = lookup_unary_operation_descriptor(context.primitive_name)
             diagnostics = tuple(
                 _unsupported_unary_diagnostics(
                     selected,
@@ -164,7 +173,7 @@ class Lowerer:
 
             return LoweringResult(
                 function=_lower_unary_function(
-                    selected,
+                    context,
                     fragment,
                     scalar_type,
                     operation,
@@ -172,8 +181,8 @@ class Lowerer:
                 diagnostics=(),
             )
 
-        if selected.primitive.template == _SUPPORTED_BINARY_TEMPLATE:
-            operation = lookup_binary_operation_descriptor(selected.primitive.name)
+        if context.template == _SUPPORTED_BINARY_TEMPLATE:
+            operation = lookup_binary_operation_descriptor(context.primitive_name)
             diagnostics = tuple(
                 _unsupported_binary_diagnostics(
                     selected,
@@ -193,7 +202,7 @@ class Lowerer:
                 return LoweringResult(function=None, diagnostics=diagnostics)
             return LoweringResult(
                 function=_lower_binary_function(
-                    selected,
+                    context,
                     fragment,
                     scalar_type,
                     operation,
@@ -206,12 +215,12 @@ class Lowerer:
                 severity="error",
                 code="TSL-LOWER-UNSUPPORTED-TEMPLATE",
                 message=(
-                    f"primitive {selected.primitive.name!r} uses template "
-                    f"{selected.primitive.template!r}; expected one of: "
+                    f"primitive {context.primitive_name!r} uses template "
+                    f"{context.template!r}; expected one of: "
                     f"{_SUPPORTED_BINARY_TEMPLATE}, {_SUPPORTED_UNARY_TEMPLATE}, "
                     f"{_SUPPORTED_COMPARISON_TEMPLATE}"
                 ),
-                location=selected.primitive.source,
+                location=context.primitive_source,
             )
         )
         return LoweringResult(function=None, diagnostics=diagnostics)
@@ -818,13 +827,13 @@ def _unsupported_body_shape_diagnostic(
 
 
 def _lower_binary_function(
-    selected: SelectedImplementation,
+    context: SelectedImplementationLoweringContext,
     fragment: LowerableOperationFragment,
     scalar_type: ScalarTypeDescriptor,
     operation: BinaryOperationDescriptor,
 ) -> LoweredFunction:
     return LoweredFunction(
-        signature=_signature(selected, scalar_type),
+        signature=_signature(context, scalar_type),
         body=LoweredFunctionBody(
             return_statement=LoweredReturnStatement(
                 expression=LoweredBinaryOperationExpression(
@@ -835,19 +844,19 @@ def _lower_binary_function(
                 source=fragment.source,
             ),
         ),
-        source=selected.implementation.source,
+        source=context.implementation_source,
     )
 
 
 def _lower_comparison_function(
-    selected: SelectedImplementation,
+    context: SelectedImplementationLoweringContext,
     fragment: LowerableOperationFragment,
     scalar_type: ScalarTypeDescriptor,
     operation: ComparisonOperationDescriptor,
 ) -> LoweredFunction:
     return LoweredFunction(
         signature=_signature(
-            selected,
+            context,
             scalar_type,
             result_type=SCALAR_COMPARISON_RESULT_TYPE,
         ),
@@ -861,18 +870,18 @@ def _lower_comparison_function(
                 source=fragment.source,
             ),
         ),
-        source=selected.implementation.source,
+        source=context.implementation_source,
     )
 
 
 def _lower_unary_function(
-    selected: SelectedImplementation,
+    context: SelectedImplementationLoweringContext,
     fragment: LowerableOperationFragment,
     scalar_type: ScalarTypeDescriptor,
     operation: UnaryOperationDescriptor,
 ) -> LoweredFunction:
     return LoweredFunction(
-        signature=_signature(selected, scalar_type),
+        signature=_signature(context, scalar_type),
         body=LoweredFunctionBody(
             return_statement=LoweredReturnStatement(
                 expression=LoweredUnaryOperationExpression(
@@ -882,30 +891,30 @@ def _lower_unary_function(
                 source=fragment.source,
             ),
         ),
-        source=selected.implementation.source,
+        source=context.implementation_source,
     )
 
 
 def _signature(
-    selected: SelectedImplementation,
+    context: SelectedImplementationLoweringContext,
     scalar_type: ScalarTypeDescriptor,
     *,
     result_type: LoweredResultType = INPUT_SCALAR_RESULT_TYPE,
 ) -> LoweredFunctionSignature:
     return LoweredFunctionSignature(
-        name=_function_name(selected),
-        primitive_name=selected.primitive.name,
+        name=_function_name(context),
+        primitive_name=context.primitive_name,
         parameters=tuple(
-            LoweredParameter(name=name) for name in selected.primitive.parameters
+            LoweredParameter(name=name) for name in context.parameter_names
         ),
         scalar_type=scalar_type,
         result_type=result_type,
     )
 
 
-def _function_name(selected: SelectedImplementation) -> str:
+def _function_name(context: SelectedImplementationLoweringContext) -> str:
     return (
-        f"{selected.primitive.name}_"
-        f"{selected.implementation.extension}_"
-        f"{selected.implementation.type_tag}"
+        f"{context.primitive_name}_"
+        f"{context.extension}_"
+        f"{context.type_tag}"
     )

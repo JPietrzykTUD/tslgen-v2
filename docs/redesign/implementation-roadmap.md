@@ -18585,9 +18585,11 @@ Validation result:
 
 Status:
 
-Planned as the next clean restart implementation milestone after accepted
-M140. This is the context boundary needed before primitive-call selector
-matching starts interpreting type-related selector payloads.
+Accepted. The M141 execution-review loop returned `Accept` after one
+write-capable executor and read-only architecture, boundary, documentation,
+and validation audits. This is the context boundary needed before
+primitive-call selector matching starts interpreting type-related selector
+payloads.
 
 Goal:
 
@@ -18639,13 +18641,57 @@ python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
 find tslgen -type d -name __pycache__ -print
 ```
 
+Accepted result:
+
+- Added `SelectedImplementationLoweringContext`, built only from an already
+  selected `SelectedImplementation`.
+- Preserved selected `Target`, `Primitive`, and `Implementation` object
+  identity for diagnostics and traceability.
+- Carried selected primitive name, concrete M140 `Primitive.attributes`,
+  backend, extension, type tag, signature, template, parameter names,
+  primitive source, and implementation source.
+- Exposed context construction through `Lowerer.context_for(...)` and threaded
+  context into current lowering output creation without changing generated
+  C++/Rust bytes.
+- Recorded `Vec` as the current selected-context vector keyword.
+- Recorded `MaskVec` and `GenericVec` as known unresolved implementation-body
+  aliases for later lowering.
+- Kept declaration provenance such as `Primitive.declared_attributes` and
+  `PrimitiveAttribute.declared_value` out of the context as separate semantic
+  selectors.
+- No `Vec`, `MaskVec`, `GenericVec`, `type<backend>(...)`, or
+  `vector::as_extension(scalar)` backend-text resolution, primitive-call
+  selector matching, dependency closure, dependency body lowering, backend
+  call rendering, expression parsing, runtime `tsldata` shortcut, `frozen`
+  runtime dependency, or `tslgenold` runtime dependency was added.
+
+Review verdicts:
+
+- Architecture reviewer: `Accept`.
+- Boundary auditor: `Accept`.
+- Documentation auditor: `Accept`.
+- Validation auditor: `Accept`.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `189 passed in 8.35s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
 ### Milestone 142: Exact Type Alias And Backend-Type Query Lowering Slice
 
 Status:
 
-Planned outline after M141. This is the narrow type/query lowering prerequisite
-for attribute-aware primitive-call selector matching with specializations such
-as `[Vec]` or `[type<backend>(vector::as_extension(scalar))]`.
+Planned as the next clean restart implementation milestone after accepted
+M141. This is the narrow type/query lowering prerequisite for attribute-aware
+primitive-call selector matching with specializations such as `[Vec]` or
+`[type<backend>(vector::as_extension(scalar))]`.
 
 Goal:
 

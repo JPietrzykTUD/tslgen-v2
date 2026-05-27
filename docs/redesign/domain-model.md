@@ -470,6 +470,45 @@ Invariants:
   source spans, `Primitive.declared_attributes`, and
   `PrimitiveAttribute.declared_value`.
 
+## Lowering Context Model
+
+Milestone 141 introduces a small selected implementation lowering context owned
+by the lowering boundary. It is constructed from an already selected
+`SelectedImplementation`, not from source-file reads or legacy evidence.
+
+```python
+@dataclass(frozen=True, slots=True)
+class SelectedImplementationLoweringContext:
+    target: Target
+    primitive: Primitive
+    implementation: Implementation
+    primitive_name: PrimitiveName
+    primitive_attributes: tuple[PrimitiveAttribute, ...]
+    backend: BackendId
+    extension: ExtensionName
+    type_tag: TypeTag
+    signature: Signature
+    template: TemplateName
+    parameter_names: tuple[ParameterName, ...]
+    primitive_source: SourceLocation
+    implementation_source: SourceLocation
+    current_vector_keyword: str
+    unresolved_type_aliases: tuple[str, ...]
+```
+
+Invariants:
+
+- `primitive` and `implementation` preserve the selected catalog object
+  identity for diagnostics and traceability.
+- `primitive_attributes` is the selected concrete `Primitive.attributes` tuple
+  chosen by target selection.
+- Declaration provenance such as `Primitive.declared_attributes` and
+  `PrimitiveAttribute.declared_value` is not a separate semantic selector.
+- `Vec` is a current selected-context vector keyword derived from the selected
+  extension plus type tag, not a primitive specialization key.
+- `MaskVec` and `GenericVec` are unresolved implementation-body aliases until
+  a later lowering milestone resolves them.
+
 ## Dependency Analysis Model
 
 Milestone 9 keeps the required dependency closure at primitive-name granularity.

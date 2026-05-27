@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 140 is accepted.
+Milestone 141 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -406,6 +406,46 @@ M140 validation completed with:
   exit 0, no output.
 - `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
   exit 0, `184 passed in 10.09s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
+The M141 execution-review loop returned `Accept` after one write-capable
+executor and read-only architecture, boundary, documentation, and validation
+audits. M141 added a small selected implementation lowering context built
+only from an already selected `SelectedImplementation`. The context preserves
+selected target, primitive, and implementation object identity; carries the
+selected primitive name, concrete M140 `Primitive.attributes`, backend,
+extension, type tag, signature, template, parameter names, primitive source,
+and implementation source; and exposes those facts through
+`Lowerer.context_for(...)`.
+
+M141 records current implementation symbols without resolving them. `Vec` is
+the current selected-context vector keyword for the selected extension and
+type tag. `MaskVec` and `GenericVec` are known unresolved implementation-body
+aliases for later lowering. Declaration provenance such as
+`Primitive.declared_attributes` and `PrimitiveAttribute.declared_value` is not
+placed on the context as a separate semantic selector.
+
+M141 did not resolve `Vec`, `MaskVec`, `GenericVec`, `type<backend>(...)`, or
+`vector::as_extension(scalar)` into backend text; perform primitive-call
+selector matching; expand dependency closure; lower dependency bodies; render
+backend call text; interpret selector attrs; parse expressions; repair source;
+read runtime `tsldata`; or introduce runtime dependency on `frozen` /
+`tslgenold`.
+
+M141 review verdicts were: architecture `Accept`, boundary `Accept`,
+documentation `Accept`, and validation `Accept`. There are no recorded M141
+follow-ups.
+
+M141 validation completed with:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `189 passed in 8.35s`.
 - Initial `find tslgen -type d -name __pycache__ -print` listed validation
   cache directories; after removing those directories, the final required
   `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
@@ -2004,52 +2044,45 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 141.
+Execute Milestone 142.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m141-execution-review-loop-prompt.md
+docs/agent/runs/m142-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 141: Selected Implementation Lowering Context Slice
+Milestone 142: Exact Type Alias And Backend-Type Query Lowering Slice
 ```
 
 Latest review verdict:
 
 ```text
-M140 execution-review returned Accept after one write-capable executor,
-read-only architecture, boundary, documentation, and validation audits, and a
-focused documentation revision/re-review. There are no recorded M140
-follow-ups.
+M141 execution-review returned Accept after one write-capable executor and
+read-only architecture, boundary, documentation, and validation audits. There
+are no recorded M141 follow-ups.
 ```
 
 Next expected action:
 
 ```text
-Run the active M141 execution-review-loop prompt. M141 should create the small
-typed selected implementation lowering context needed before type-query and
-primitive-call selector matching work continues. The context should carry the
-selected primitive identity, selected concrete catalog attributes, backend,
-extension, datatype/type tag, signature, parameters, and implementation source
-provenance.
+Run the active M142 execution-review-loop prompt. M142 should add exact
+type-alias and backend-type query lowering against the M141 selected
+implementation context. It should handle the exact selected-context forms
+`Vec`, `MaskVec`, `GenericVec`, `type<backend>(...)`, and
+`vector::as_extension(scalar)` as typed lowering facts or typed backend
+type-spelling requests.
 
-M141 must preserve the distinction between catalog attributes and
-implementation type aliases. `Vec` is the current implementation vector
-keyword derived from selected extension plus datatype. `MaskVec` and
-`GenericVec` are implementation-body type aliases to be resolved by lowering,
-not primitive catalog specializations.
-
-M141 must not resolve `MaskVec`, `GenericVec`, `type<backend>(...)`, or
-`vector::as_extension(scalar)` into backend text; that is M142. It must not
-perform primitive-call selector matching, dependency closure, dependency body
-lowering, backend call rendering, selector attrs interpretation, expression
-parsing, assignment/indexing, source repair, or introduce runtime `tsldata`,
-`frozen`, or `tslgenold` dependencies.
+M142 must preserve the distinction between selected-context type facts and
+primitive-call selector resolution. It must not resolve primitive-call
+selector targets, expand dependency closure, lower dependency bodies, render
+backend call text, interpret selector attrs, parse arbitrary expressions,
+repair source, or introduce runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies. Primitive-call selector variant resolution remains M143.
 ```
 
 Accepted planning prompt:

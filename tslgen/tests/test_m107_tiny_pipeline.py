@@ -52,6 +52,7 @@ from tslgen.lowering import (
     LoweredUnaryOperationExpression,
     Lowerer,
     LoweringStageResult,
+    SelectedImplementationLoweringContext,
     SUPPORTED_BINARY_OPERATION_DESCRIPTORS,
     SUPPORTED_COMPARISON_OPERATION_DESCRIPTORS,
     SUPPORTED_UNARY_OPERATION_DESCRIPTORS,
@@ -62,6 +63,7 @@ from tslgen.lowering import (
     lookup_comparison_operation_descriptor,
     lookup_scalar_type_descriptor,
     lookup_unary_operation_descriptor,
+    build_selected_implementation_lowering_context,
     supported_binary_operation_ids,
     supported_comparison_operation_ids,
     supported_scalar_type_tags,
@@ -3023,6 +3025,224 @@ def test_m140_attribute_selection_is_deterministic_across_source_and_target_orde
     assert first.artifacts.digest_manifest() == second.artifacts.digest_manifest()
     assert [artifact.content for artifact in first.artifacts.artifacts] == [
         artifact.content for artifact in second.artifacts.artifacts
+    ]
+
+
+def test_m141_context_from_no_attribute_selected_implementation() -> None:
+    selected = _selected_implementation(backend="rust", type_tag="ui32")
+
+    context = build_selected_implementation_lowering_context(selected)
+
+    assert context == SelectedImplementationLoweringContext(
+        target=selected.target,
+        primitive=selected.primitive,
+        implementation=selected.implementation,
+        primitive_name="add",
+        primitive_attributes=(),
+        backend="rust",
+        extension="scalar",
+        type_tag="ui32",
+        signature="v:=(v,v)",
+        template="binary",
+        parameter_names=("left", "right"),
+        primitive_source=_location(1, 1),
+        implementation_source=_location(2, 3),
+    )
+    assert context.primitive is selected.primitive
+    assert context.implementation is selected.implementation
+    assert context.target is selected.target
+    assert context.primitive_attributes is selected.primitive.attributes
+    assert context.current_vector_keyword == "Vec"
+    assert context.unresolved_type_aliases == ("MaskVec", "GenericVec")
+
+
+def test_m141_context_from_attribute_selected_implementation(
+    tmp_path: Path,
+) -> None:
+    source, catalog = _catalog_from_text(
+        tmp_path,
+        "tiny_add_m141_aligned_packed.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)>[aligned=*, packed=*] add(left, right):",
+                "  implementation scalar si32:",
+                "    body add(left, right)",
+            )
+        ),
+    )
+    selection_result = Selector().select(
+        catalog,
+        Target(
+            backend="cpp",
+            primitive_name="add",
+            extension="scalar",
+            type_tag="si32",
+            attributes=(
+                TargetAttribute(key="packed", value="false"),
+                TargetAttribute(key="aligned", value="true"),
+            ),
+        ),
+    )
+    selected = selection_result.selected[0]
+
+    context = Lowerer().context_for(selected)
+
+    assert selection_result.diagnostics == ()
+    assert context.backend == "cpp"
+    assert context.extension == "scalar"
+    assert context.type_tag == "si32"
+    assert context.signature == "v:=(v,v)"
+    assert context.template == "binary"
+    assert context.parameter_names == ("left", "right")
+    assert context.primitive_source == SourceLocation(source.path, 1, 1)
+    assert context.implementation_source == SourceLocation(source.path, 2, 3)
+    assert context.primitive_attributes is selected.primitive.attributes
+    assert tuple(
+        (attribute.key, attribute.value, attribute.declared_value)
+        for attribute in context.primitive_attributes
+    ) == (
+        ("aligned", "true", "*"),
+        ("packed", "false", "*"),
+    )
+
+
+def test_m141_context_keeps_attribute_provenance_non_semantic(
+    tmp_path: Path,
+) -> None:
+    primitive_source = SourceLocation(
+        (tmp_path / "tiny_add_m141_provenance.tsl").resolve(),
+        1,
+        1,
+    )
+    attribute_source = SourceLocation(
+        (tmp_path / "tiny_add_m141_attrs.tsl").resolve(),
+        4,
+        7,
+    )
+    implementation = Implementation(
+        extension="scalar",
+        type_tag="si32",
+        body=_implementation_body("add", ("left", "right")),
+        source=_location(2, 3),
+    )
+    concrete_attribute = PrimitiveAttribute(
+        key="mask",
+        value="zero",
+        declared_value="*",
+        source=attribute_source,
+    )
+    declared_attribute = PrimitiveAttribute(
+        key="mask",
+        value="*",
+        declared_value="*",
+        source=SourceLocation(attribute_source.path, 5, 11),
+    )
+    primitive = Primitive(
+        name="add",
+        signature="v:=(v,v)",
+        parameters=("left", "right"),
+        template="binary",
+        implementations=(implementation,),
+        source=primitive_source,
+        attributes=(concrete_attribute,),
+        declared_attributes=(declared_attribute,),
+    )
+    selected = SelectedImplementation(
+        target=Target(
+            backend="cpp",
+            primitive_name="add",
+            extension="scalar",
+            type_tag="si32",
+            attributes=(TargetAttribute(key="mask", value="zero"),),
+        ),
+        primitive=primitive,
+        implementation=implementation,
+    )
+
+    context = Lowerer().context_for(selected)
+
+    assert context.primitive is primitive
+    assert context.primitive_attributes is primitive.attributes
+    assert context.primitive_attributes == (concrete_attribute,)
+    assert not hasattr(context, "declared_attributes")
+    assert tuple(
+        (attribute.key, attribute.value)
+        for attribute in context.primitive_attributes
+    ) == (("mask", "zero"),)
+
+
+def test_m141_context_records_current_symbols_not_specialization_keys(
+    tmp_path: Path,
+) -> None:
+    source, catalog = _catalog_from_text(
+        tmp_path,
+        "tiny_add_m141_alias_boundary.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)>[mask=zero] add(left, right):",
+                "  implementation scalar si32:",
+                "    body add(left, right)",
+            )
+        ),
+    )
+    selection_result = Selector().select(
+        catalog,
+        Target(
+            backend="cpp",
+            primitive_name="add",
+            extension="scalar",
+            type_tag="si32",
+            attributes=(TargetAttribute(key="mask", value="zero"),),
+        ),
+    )
+    selected = selection_result.selected[0]
+
+    context = Lowerer().context_for(selected)
+
+    assert selection_result.diagnostics == ()
+    assert context.current_vector_keyword == "Vec"
+    assert context.extension == "scalar"
+    assert context.type_tag == "si32"
+    assert context.unresolved_type_aliases == ("MaskVec", "GenericVec")
+    assert context.signature == "v:=(v,v)"
+    assert tuple(attribute.key for attribute in context.primitive_attributes) == (
+        "mask",
+    )
+    assert "Vec" not in tuple(
+        value
+        for attribute in context.primitive_attributes
+        for value in (attribute.key, attribute.value)
+    )
+    assert context.primitive_source == SourceLocation(source.path, 1, 1)
+
+
+def test_m141_lowerer_context_threading_preserves_generated_bytes(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_source(tmp_path, "add", "si32")
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+            Target(
+                backend="rust",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        CPP_CONTENT,
+        RUST_CONTENT,
     ]
 
 

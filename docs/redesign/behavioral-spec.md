@@ -846,6 +846,29 @@ selection boundary only; M140 still does not resolve
 select dependency implementations, lower dependency bodies, or render backend
 call syntax.
 
+### M141 Selected Implementation Lowering Context Boundary
+
+Milestone 141 makes the already selected implementation facts available to
+lowering as one typed context. The context is built only from a
+`SelectedImplementation`; lowering does not reread `.tsl` files, `tsldata`,
+`frozen`, or `tslgenold` to build it.
+
+The context carries the selected target, primitive object, implementation
+object, primitive name, concrete `Primitive.attributes`, backend, extension,
+type tag, signature, template, parameter names, primitive source, and
+implementation source. Concrete primitive attributes are the selected M140
+variant facts. Provenance-only declaration fields such as
+`Primitive.declared_attributes` and `PrimitiveAttribute.declared_value` do not
+become separate semantic matching inputs.
+
+The context also records the current implementation type symbols without
+resolving them. `Vec` is the current vector keyword for the selected extension
+and type tag. `MaskVec` and `GenericVec` are known unresolved
+implementation-body aliases for a later lowering slice. M141 does not lower
+these names, resolve `type<backend>(...)`, resolve
+`vector::as_extension(scalar)`, match primitive-call selectors, lower
+dependency bodies, or change generated C++/Rust bytes.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

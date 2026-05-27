@@ -16,6 +16,8 @@ from tslgen.lowering.model import (
     LoweredReturnStatement,
     LoweredResultType,
     LoweredUnaryOperationExpression,
+    SelectedImplementationLoweringContext,
+    build_selected_implementation_lowering_context,
 )
 from tslgen.lowering.binary_operations import (
     SUPPORTED_BINARY_OPERATION_DESCRIPTORS,
@@ -62,10 +64,12 @@ __all__ = [
     "LoweredReturnStatement",
     "LoweredResultType",
     "LoweredUnaryOperationExpression",
+    "SelectedImplementationLoweringContext",
     "Lowerer",
     "LoweringResult",
     "LoweringStageResult",
     "SCALAR_COMPARISON_RESULT_TYPE",
+    "build_selected_implementation_lowering_context",
     "SUPPORTED_BINARY_OPERATION_DESCRIPTORS",
     "BinaryOperationDescriptor",
     "lookup_binary_operation_descriptor",
