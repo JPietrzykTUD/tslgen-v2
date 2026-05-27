@@ -419,6 +419,11 @@ Invariants:
   attribute values; provenance remains tied to the source declaration and
   wildcard attribute location. Implementation body text does not participate
   in declaration-attribute expansion.
+- M140 extends explicit target selection with concrete primitive attributes.
+  Matching compares only the requested target attribute key, optional key
+  argument, and value against concrete `Primitive.attributes`. It ignores
+  provenance-only catalog fields such as source spans,
+  `Primitive.declared_attributes`, and `PrimitiveAttribute.declared_value`.
 - `requires_value` remains structurally preserved for the existing flag and
   selector normalization rules.
 - Unknown extra fields remain preserved as `extra_fields` so future milestones
@@ -431,26 +436,23 @@ Invariants:
 
 ```python
 @dataclass(frozen=True, slots=True)
-class SelectionRequest:
+class TargetAttribute:
+    key: str
+    value: str
+    key_argument: str | None = None
+
+@dataclass(frozen=True, slots=True)
+class Target:
     backend: BackendId
-    input_paths: tuple[Path, ...]
-    explicit_extensions: tuple[ExtensionName, ...]
-    cpu_flags: frozenset[FeatureFlag]
-    generated_for_flags: frozenset[FeatureFlag]
-    templates: frozenset[TemplateName]
-    primitives: frozenset[PrimitiveName]
-    include_support_extensions: bool = True
+    primitive_name: PrimitiveName
+    extension: ExtensionName
+    type_tag: TypeTag
+    attributes: tuple[TargetAttribute, ...] = ()
 
 @dataclass(frozen=True, slots=True)
 class SelectedImplementation:
-    emitted_name: str
-    source_primitive: PrimitiveName
-    template: TemplateName
-    backend: BackendId
-    target_extension: ExtensionName
-    source_extension: ExtensionName
-    type_tag: TypeTag
-    required_flags: tuple[FeatureFlag, ...]
+    target: Target
+    primitive: Primitive
     implementation: ImplementationSpec
 ```
 
@@ -459,6 +461,14 @@ Invariants:
 - Selected implementations are sorted by stable identity.
 - Each selected implementation has a resolved template and concrete type tag.
 - Unsupported backend or missing language maps are diagnostics, not renderer surprises.
+- Concrete primitive attribute selection is part of the explicit `Target`, not
+  a separate `SelectionRequest` dimension.
+- Attribute-variant matching compares only `TargetAttribute.key`,
+  `TargetAttribute.key_argument`, and `TargetAttribute.value` against concrete
+  `Primitive.attributes`.
+- Attribute-variant matching ignores provenance-only catalog fields, including
+  source spans, `Primitive.declared_attributes`, and
+  `PrimitiveAttribute.declared_value`.
 
 ## Dependency Analysis Model
 

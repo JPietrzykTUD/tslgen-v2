@@ -827,6 +827,25 @@ resolution, selector `attrs[...]` resolution, expression parsing, source
 repair, runtime `tsldata` lookup, or runtime dependency on `frozen` /
 `tslgenold`.
 
+### M140 Explicit Target Attribute Variant Selection Boundary
+
+Milestone 140 makes explicit target selection attribute-aware. A target with
+no requested attributes matches only catalog primitive variants whose concrete
+`Primitive.attributes` tuple is empty. A target with requested concrete
+attributes matches only the concrete catalog variant with the same attribute
+keys, optional key arguments, and values; source locations, declared wildcard
+values, `Primitive.declared_attributes`, and other provenance fields do not
+participate in matching.
+
+When a requested primitive name exists but none of its concrete variants match
+the requested target attributes, selection emits
+`TSL-SELECT-NO-ATTRIBUTE-VARIANT` and reports the requested concrete
+attributes plus the available concrete variants. This diagnostic is a
+selection boundary only; M140 still does not resolve
+`call<primitive=... attrs[...]>(...)`, interpret selector specialization,
+select dependency implementations, lower dependency bodies, or render backend
+call syntax.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

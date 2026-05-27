@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 139 is accepted.
+Milestone 140 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -366,6 +366,46 @@ M139 validation completed with:
   exit 0, no output.
 - `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
   exit 0, `177 passed in 13.39s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
+The M140 execution-review loop returned `Accept` after one write-capable
+executor, read-only architecture, boundary, documentation, and validation
+audits, and one focused documentation revision/re-review. M140 added explicit
+target concrete attributes to selection. Existing no-attribute `Target`
+construction remains valid, and empty target attributes now match only catalog
+primitive variants whose concrete `Primitive.attributes` are empty. Nonempty
+target attributes match only concrete catalog attributes by key, optional key
+argument, and value.
+
+M140 selection ignores provenance-only fields including source spans,
+`Primitive.declared_attributes`, and `PrimitiveAttribute.declared_value`.
+When a requested primitive name exists but no concrete attribute variant
+matches, selection emits `TSL-SELECT-NO-ATTRIBUTE-VARIANT` with the requested
+attributes and available concrete variants. Existing unsupported-backend,
+unknown-primitive, no-implementation, no-attribute generation, and M126-M139
+lowering/body-token behavior remain stable.
+
+M140 did not add primitive-call candidate lookup, dependency closure,
+dependency body lowering, backend call rendering, `call<primitive=...>`
+selector specialization or attrs interpretation, expression parsing, source
+repair, runtime `tsldata` lookup, or runtime dependency on `frozen` /
+`tslgenold`.
+
+M140 review verdicts were: architecture `Accept`, boundary `Accept`,
+documentation initially `Needs Revision` for a domain-model wording mismatch
+and then focused re-review `Accept`, and validation `Accept`. There are no
+recorded M140 follow-ups.
+
+M140 validation completed with:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `184 passed in 10.09s`.
 - Initial `find tslgen -type d -name __pycache__ -print` listed validation
   cache directories; after removing those directories, the final required
   `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
@@ -1964,63 +2004,52 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 140.
+Execute Milestone 141.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m140-execution-review-loop-prompt.md
+docs/agent/runs/m141-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 140: Explicit Target Attribute Variant Selection Boundary Slice
+Milestone 141: Selected Implementation Lowering Context Slice
 ```
 
 Latest review verdict:
 
 ```text
-M139 execution-review returned Accept With Follow-Ups after one write-capable
-executor and read-only architecture, boundary, documentation, and validation
-audits. The recorded nonblocking follow-up is that selector matching must use
-only concrete Primitive.attributes and ignore provenance fields such as
-declared_attributes and declared_value.
+M140 execution-review returned Accept after one write-capable executor,
+read-only architecture, boundary, documentation, and validation audits, and a
+focused documentation revision/re-review. There are no recorded M140
+follow-ups.
 ```
 
 Next expected action:
 
 ```text
-Run the active M140 execution-review-loop prompt. M140 should make explicit
-target selection attribute-aware now that the catalog can contain same-name
-primitive variants distinguished by concrete attributes. Empty target
-attributes should match only variants whose concrete `Primitive.attributes`
-are empty. Nonempty target attributes should match only concrete
-`Primitive.attributes`; provenance-only fields such as
-`Primitive.declared_attributes` and `PrimitiveAttribute.declared_value` must be
-ignored for matching.
+Run the active M141 execution-review-loop prompt. M141 should create the small
+typed selected implementation lowering context needed before type-query and
+primitive-call selector matching work continues. The context should carry the
+selected primitive identity, selected concrete catalog attributes, backend,
+extension, datatype/type tag, signature, parameters, and implementation source
+provenance.
 
-M140 must preserve existing no-attribute target construction and generated
-artifact bytes. It must not perform primitive-call candidate lookup, expand
-dependency closure, lower dependency bodies, render dependency call text,
-interpret `call<primitive=...>` selector specialization or attrs payloads,
-parse expressions, repair source, or introduce runtime `tsldata`, `frozen`, or
-`tslgenold` dependencies.
+M141 must preserve the distinction between catalog attributes and
+implementation type aliases. `Vec` is the current implementation vector
+keyword derived from selected extension plus datatype. `MaskVec` and
+`GenericVec` are implementation-body type aliases to be resolved by lowering,
+not primitive catalog specializations.
 
-Preserve the planned post-M140 lowering sequence recorded in
-`docs/redesign/implementation-roadmap.md`:
-
-- M141: selected implementation lowering context. `Vec` is the current vector
-  keyword derived from selected extension plus datatype; `MaskVec` and
-  `GenericVec` are implementation-body type aliases to be resolved by
-  lowering, not primitive catalog specializations.
-- M142: exact type alias and backend-type query lowering for `Vec`, `MaskVec`,
-  `GenericVec`, `type<backend>(...)`, and
-  `vector::as_extension(scalar)` in selected context.
-- M143: primitive-call selector variant resolution for `@self`, named
-  primitives, optional lowered specialization payloads, and selector
-  `attrs[...]`, matching only concrete catalog variants.
+M141 must not resolve `MaskVec`, `GenericVec`, `type<backend>(...)`, or
+`vector::as_extension(scalar)` into backend text; that is M142. It must not
+perform primitive-call selector matching, dependency closure, dependency body
+lowering, backend call rendering, selector attrs interpretation, expression
+parsing, assignment/indexing, source repair, or introduce runtime `tsldata`,
+`frozen`, or `tslgenold` dependencies.
 ```
 
 Accepted planning prompt:

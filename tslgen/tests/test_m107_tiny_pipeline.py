@@ -8,11 +8,12 @@ from tslgen import (
     GenerationResult,
     Generator,
     Target,
+    TargetAttribute,
     TslProject,
     generate_from_paths,
     write_artifacts,
 )
-from tslgen.analysis.selection import SelectedImplementation
+from tslgen.analysis.selection import SelectedImplementation, Selector
 from tslgen.backends.cpp import CppBackend
 from tslgen.backends.rust import RustBackend
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
@@ -2700,6 +2701,329 @@ def test_m139_attribute_key_argument_is_preserved_as_concrete_fact(
         1,
         16,
     )
+
+
+def test_m140_no_attribute_target_selects_no_attribute_variant(
+    tmp_path: Path,
+) -> None:
+    source = _write_tiny_source(tmp_path, "add", "si32")
+    lowerer = _StageOutputOnlyLowerer(
+        LoweringStageResult(
+            lowered_functions=LoweredFunctionSet((_lowered_function(),)),
+            diagnostics=(),
+        )
+    )
+
+    result = Generator(lowerer=lowerer, backends=(CppBackend(),)).generate(
+        TslProject(
+            source_paths=(source,),
+            targets=(
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+    )
+
+    assert result.diagnostics == ()
+    assert len(lowerer.selected) == 1
+    assert lowerer.selected[0].primitive.attributes == ()
+    assert [artifact.content for artifact in result.artifacts.artifacts] == [
+        CPP_CONTENT,
+    ]
+
+
+def test_m140_empty_target_attributes_do_not_match_attr_bearing_variant(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_m140_mask_zero.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)>[mask=zero] add(left, right):",
+                "  implementation scalar si32:",
+                "    body add(left, right)",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="cpp",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-SELECT-NO-ATTRIBUTE-VARIANT"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 1, 1)
+    assert diagnostic.message == (
+        "primitive 'add' has no concrete attribute variant matching requested "
+        "attributes <empty>; available concrete variants are: [mask=zero]"
+    )
+
+
+def test_m140_explicit_literal_target_attribute_selects_variant(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_m140_explicit_mask_zero.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)>[mask=zero] add(left, right):",
+                "  implementation scalar si32:",
+                "    body add(left, right)",
+            )
+        ),
+        encoding="utf-8",
+    )
+    lowerer = _StageOutputOnlyLowerer(
+        LoweringStageResult(
+            lowered_functions=LoweredFunctionSet((_lowered_function(),)),
+            diagnostics=(),
+        )
+    )
+
+    result = Generator(lowerer=lowerer, backends=(CppBackend(),)).generate(
+        TslProject(
+            source_paths=(source,),
+            targets=(
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                    attributes=(TargetAttribute(key="mask", value="zero"),),
+                ),
+            ),
+        )
+    )
+
+    assert result.diagnostics == ()
+    assert len(lowerer.selected) == 1
+    assert lowerer.selected[0].primitive.attributes == (
+        PrimitiveAttribute(
+            key="mask",
+            value="zero",
+            declared_value="zero",
+            source=SourceLocation(source.resolve(), 1, 16),
+        ),
+    )
+
+
+def test_m140_wildcard_expanded_variant_is_selected_by_concrete_attributes(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_m140_aligned_packed.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)>[aligned=*, packed=*] add(left, right):",
+                "  implementation scalar si32:",
+                "    body add(left, right)",
+            )
+        ),
+        encoding="utf-8",
+    )
+    lowerer = _StageOutputOnlyLowerer(
+        LoweringStageResult(
+            lowered_functions=LoweredFunctionSet((_lowered_function(),)),
+            diagnostics=(),
+        )
+    )
+
+    result = Generator(lowerer=lowerer, backends=(CppBackend(),)).generate(
+        TslProject(
+            source_paths=(source,),
+            targets=(
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                    attributes=(
+                        TargetAttribute(key="packed", value="false"),
+                        TargetAttribute(key="aligned", value="true"),
+                    ),
+                ),
+            ),
+        )
+    )
+
+    assert result.diagnostics == ()
+    assert len(lowerer.selected) == 1
+    assert tuple(
+        (attribute.key, attribute.value, attribute.declared_value)
+        for attribute in lowerer.selected[0].primitive.attributes
+    ) == (
+        ("aligned", "true", "*"),
+        ("packed", "false", "*"),
+    )
+
+
+def test_m140_missing_concrete_attribute_variant_reports_available_variants(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tiny_add_m140_missing_mask.tsl"
+    source.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)>[mask=zero] add(left, right):",
+                "  implementation scalar si32:",
+                "    body add(left, right)",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    result = generate_from_paths(
+        (source,),
+        (
+            Target(
+                backend="rust",
+                primitive_name="add",
+                extension="scalar",
+                type_tag="si32",
+                attributes=(TargetAttribute(key="mask", value="pass_through"),),
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-SELECT-NO-ATTRIBUTE-VARIANT"
+    assert diagnostic.location == SourceLocation(source.resolve(), 1, 1)
+    assert diagnostic.message == (
+        "primitive 'add' has no concrete attribute variant matching requested "
+        "attributes [mask=pass_through]; available concrete variants are: "
+        "[mask=zero]"
+    )
+
+
+def test_m140_attribute_selection_ignores_provenance_fields(tmp_path: Path) -> None:
+    primitive_source = SourceLocation(
+        (tmp_path / "tiny_add_m140_provenance.tsl").resolve(),
+        1,
+        1,
+    )
+    attribute_source = SourceLocation(
+        (tmp_path / "tiny_add_m140_other_attrs.tsl").resolve(),
+        5,
+        9,
+    )
+    implementation = Implementation(
+        extension="scalar",
+        type_tag="si32",
+        body=_implementation_body("add", ("left", "right")),
+        source=_location(2, 3),
+    )
+    primitive = Primitive(
+        name="add",
+        signature="v:=(v,v)",
+        parameters=("left", "right"),
+        template="binary",
+        implementations=(implementation,),
+        source=primitive_source,
+        attributes=(
+            PrimitiveAttribute(
+                key="mask",
+                value="zero",
+                declared_value="*",
+                source=attribute_source,
+            ),
+        ),
+        declared_attributes=(
+            PrimitiveAttribute(
+                key="mask",
+                value="*",
+                declared_value="*",
+                source=SourceLocation(attribute_source.path, 6, 11),
+            ),
+        ),
+    )
+
+    result = Selector().select(
+        Catalog(primitives=(primitive,)),
+        Target(
+            backend="cpp",
+            primitive_name="add",
+            extension="scalar",
+            type_tag="si32",
+            attributes=(TargetAttribute(key="mask", value="zero"),),
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert len(result.selected) == 1
+    assert result.selected[0].primitive is primitive
+
+
+def test_m140_attribute_selection_is_deterministic_across_source_and_target_order(
+    tmp_path: Path,
+) -> None:
+    mask_zero = tmp_path / "tiny_add_m140_mask_zero.tsl"
+    mask_zero.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)>[mask=zero] add(left, right):",
+                "  implementation scalar si32:",
+                "    body add(left, right)",
+            )
+        ),
+        encoding="utf-8",
+    )
+    mask_pass = tmp_path / "tiny_add_m140_mask_pass.tsl"
+    mask_pass.write_text(
+        "\n".join(
+            (
+                "prim<v:=(v,v)>[mask=pass_through] add(left, right):",
+                "  implementation scalar si32:",
+                "    body add(left, right)",
+            )
+        ),
+        encoding="utf-8",
+    )
+    targets = (
+        Target(
+            backend="cpp",
+            primitive_name="add",
+            extension="scalar",
+            type_tag="si32",
+            attributes=(TargetAttribute(key="mask", value="zero"),),
+        ),
+        Target(
+            backend="cpp",
+            primitive_name="add",
+            extension="scalar",
+            type_tag="si32",
+            attributes=(TargetAttribute(key="mask", value="pass_through"),),
+        ),
+    )
+
+    first = generate_from_paths((mask_zero, mask_pass), targets)
+    second = generate_from_paths(
+        (mask_pass, mask_zero),
+        tuple(reversed(targets)),
+    )
+
+    assert first.diagnostics == second.diagnostics == ()
+    assert first.artifacts.digest_manifest() == second.artifacts.digest_manifest()
+    assert [artifact.content for artifact in first.artifacts.artifacts] == [
+        artifact.content for artifact in second.artifacts.artifacts
+    ]
 
 
 def test_m125_selected_mismatched_body_reports_lowering_diagnostic(

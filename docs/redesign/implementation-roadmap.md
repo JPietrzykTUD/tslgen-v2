@@ -18472,11 +18472,13 @@ Validation result:
 
 Status:
 
-Planned as the next clean restart implementation milestone after accepted
-M139. This is a selection prerequisite for correct lowering and future
-primitive-call selector matching. Now that the catalog can contain multiple
-same-name concrete primitive variants distinguished by attributes, explicit
-target selection must stop treating primitive name alone as sufficient.
+Accepted. The M140 execution-review loop returned `Accept` after one
+write-capable executor, read-only architecture, boundary, documentation, and
+validation audits, and one focused documentation revision/re-review. This is a
+selection prerequisite for correct lowering and future primitive-call selector
+matching. Now that the catalog can contain multiple same-name concrete
+primitive variants distinguished by attributes, explicit target selection no
+longer treats primitive name alone as sufficient.
 
 Goal:
 
@@ -18537,13 +18539,55 @@ python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
 find tslgen -type d -name __pycache__ -print
 ```
 
+Accepted result:
+
+- `Target` now accepts concrete `TargetAttribute` values while existing
+  no-attribute target construction remains valid.
+- Empty target attributes match only catalog primitive variants whose concrete
+  `Primitive.attributes` are empty.
+- Nonempty target attributes match only concrete `Primitive.attributes` by
+  key, optional key argument, and value.
+- Attribute-variant matching ignores provenance-only fields such as source
+  spans, `Primitive.declared_attributes`, and
+  `PrimitiveAttribute.declared_value`.
+- When a requested primitive name exists but no concrete attribute variant
+  matches, selection emits `TSL-SELECT-NO-ATTRIBUTE-VARIANT` with the
+  requested attributes and available concrete variants.
+- Existing unsupported-backend, unknown-primitive, no-implementation,
+  no-attribute generation, and M126-M139 lowering/body-token behavior remain
+  stable.
+- No primitive-call candidate lookup, dependency closure, dependency body
+  lowering, backend call rendering, selector specialization or attrs
+  interpretation, expression parsing, runtime `tsldata` shortcut, `frozen`
+  runtime dependency, or `tslgenold` runtime dependency was added.
+
+Review verdicts:
+
+- Architecture reviewer: `Accept`.
+- Boundary auditor: `Accept`.
+- Documentation auditor: initial `Needs Revision` for a domain-model wording
+  mismatch; focused documentation re-review returned `Accept`.
+- Validation auditor: `Accept`.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `184 passed in 10.09s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
 ### Milestone 141: Selected Implementation Lowering Context Slice
 
 Status:
 
-Planned outline after M140. This is the context boundary needed before
-primitive-call selector matching starts interpreting type-related selector
-payloads.
+Planned as the next clean restart implementation milestone after accepted
+M140. This is the context boundary needed before primitive-call selector
+matching starts interpreting type-related selector payloads.
 
 Goal:
 
