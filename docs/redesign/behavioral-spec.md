@@ -763,6 +763,40 @@ identifiers, lower nested call semantics, parse expressions, render backend
 call syntax, repair source text, use runtime `tsldata`, or depend on
 `frozen` / `tslgenold`.
 
+### M138 Primitive-Call Target Reference Diagnostic Boundary
+
+Milestone 138 keeps recognized `call<primitive=...>(...)` tokens structured
+and adds catalog-aware target-reference diagnostics for selected bodies. The
+lowerer receives the already built clean restart catalog from the generator
+when running in the normal source-to-artifact pipeline. Direct lowerer calls
+without catalog context keep the M137 diagnostic fallback.
+
+M138 classifies only the base target reference:
+
+- `call<primitive=@self>(...)` identifies the currently selected primitive as
+  the base target.
+- `call<primitive=NAME>(...)` checks whether `NAME` exists as a primitive in
+  the already built catalog.
+- Missing named base targets produce
+  `TSL-LOWER-UNKNOWN-PRIMITIVE-CALL-TARGET` at the primitive-call source and
+  include the known primitive names.
+- Known named base targets and `@self` targets still produce
+  `TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL` because dependency implementation
+  selection/lowering is not implemented yet.
+
+Specialization payloads such as `[type<backend>(...)]` and `attrs[...]`
+payloads are part of the source target reference, but M138 does not evaluate
+them. When the base target is known, diagnostics report specialization-specific
+and/or attribute-specific target-reference resolution as not implemented yet.
+When the base target is unknown, specialization and attrs remain opaque
+diagnostic context.
+
+M138 does not select dependency implementations, lower dependency bodies,
+expand dependency closure, expand `@self` beyond base target identity,
+interpret specialization, interpret attrs, resolve argument identifiers, lower
+nested call semantics, parse expressions, render backend call syntax, repair
+source text, use runtime `tsldata`, or depend on `frozen` / `tslgenold`.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

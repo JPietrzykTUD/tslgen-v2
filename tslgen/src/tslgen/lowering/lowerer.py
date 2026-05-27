@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from tslgen.analysis.selection import SelectedImplementation
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.domain.catalog import (
+    Catalog,
     ImplementationBody,
     LowerableDirective,
     LowerableOperationFragment,
     NamedPrimitiveReference,
-    PayloadToken,
 )
 from tslgen.lowering.binary_operations import (
     BinaryOperationDescriptor,
@@ -48,6 +48,10 @@ from tslgen.lowering.scalar_types import (
     lookup_scalar_type_descriptor,
     supported_scalar_type_tags,
 )
+from tslgen.lowering.primitive_call_diagnostics import (
+    unsupported_primitive_call_diagnostics,
+    unsupported_primitive_call_diagnostics_from_payload_tokens,
+)
 from tslgen.lowering.unary_operations import (
     UnaryOperationDescriptor,
     lookup_unary_operation_descriptor,
@@ -63,9 +67,6 @@ _SUPPORTED_UNARY_PARAMETERS = ("value",)
 _SUPPORTED_COMPARISON_PARAMETERS = ("left", "right")
 _SUPPORTED_EXACT_PRIMITIVE_CALL_TARGET = "add"
 _SUPPORTED_EXACT_PRIMITIVE_CALL_PAYLOAD = "left, right"
-_MISSING_PRIMITIVE_CALL_CAPABILITY = (
-    "primitive-call dependency resolution is not implemented yet"
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,12 +87,14 @@ class Lowerer:
     def lower_all(
         self,
         selected: Iterable[SelectedImplementation],
+        *,
+        catalog: Catalog | None = None,
     ) -> LoweringStageResult:
         functions: list[LoweredFunction] = []
         diagnostics: list[Diagnostic] = []
 
         for item in selected:
-            result = self.lower(item)
+            result = self.lower(item, catalog=catalog)
             diagnostics.extend(result.diagnostics)
             if result.function is not None:
                 functions.append(result.function)
@@ -101,7 +104,12 @@ class Lowerer:
             diagnostics=tuple(diagnostics),
         )
 
-    def lower(self, selected: SelectedImplementation) -> LoweringResult:
+    def lower(
+        self,
+        selected: SelectedImplementation,
+        *,
+        catalog: Catalog | None = None,
+    ) -> LoweringResult:
         scalar_type = lookup_scalar_type_descriptor(selected.implementation.type_tag)
         body = selected.implementation.body
         fragment = _operation_fragment_from_selected_body(selected, body)
@@ -114,6 +122,7 @@ class Lowerer:
                     fragment,
                     scalar_type,
                     operation,
+                    catalog,
                 )
             )
             if (
@@ -142,6 +151,7 @@ class Lowerer:
                     fragment,
                     scalar_type,
                     operation,
+                    catalog,
                 )
             )
             if (
@@ -171,6 +181,7 @@ class Lowerer:
                     fragment,
                     scalar_type,
                     operation,
+                    catalog,
                 )
             )
             if (
@@ -212,6 +223,7 @@ def _unsupported_binary_diagnostics(
     fragment: LowerableOperationFragment | None,
     scalar_type: ScalarTypeDescriptor | None,
     operation: BinaryOperationDescriptor | None,
+    catalog: Catalog | None,
 ) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
 
@@ -307,9 +319,17 @@ def _unsupported_binary_diagnostics(
     if fragment is None:
         directive = _emit_return_directive_from_body(body)
         if directive is not None:
-            diagnostics.extend(_unsupported_emit_return_diagnostics(directive))
-        elif primitive_call_diagnostics := _unsupported_primitive_call_diagnostics(
-            body
+            diagnostics.extend(
+                _unsupported_emit_return_diagnostics(
+                    directive,
+                    selected=selected,
+                    catalog=catalog,
+                )
+            )
+        elif primitive_call_diagnostics := unsupported_primitive_call_diagnostics(
+            body,
+            selected=selected,
+            catalog=catalog,
         ):
             diagnostics.extend(primitive_call_diagnostics)
         else:
@@ -359,6 +379,7 @@ def _unsupported_comparison_diagnostics(
     fragment: LowerableOperationFragment | None,
     scalar_type: ScalarTypeDescriptor | None,
     operation: ComparisonOperationDescriptor | None,
+    catalog: Catalog | None,
 ) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
 
@@ -435,9 +456,17 @@ def _unsupported_comparison_diagnostics(
     if fragment is None:
         directive = _emit_return_directive_from_body(body)
         if directive is not None:
-            diagnostics.extend(_unsupported_emit_return_diagnostics(directive))
-        elif primitive_call_diagnostics := _unsupported_primitive_call_diagnostics(
-            body
+            diagnostics.extend(
+                _unsupported_emit_return_diagnostics(
+                    directive,
+                    selected=selected,
+                    catalog=catalog,
+                )
+            )
+        elif primitive_call_diagnostics := unsupported_primitive_call_diagnostics(
+            body,
+            selected=selected,
+            catalog=catalog,
         ):
             diagnostics.extend(primitive_call_diagnostics)
         else:
@@ -487,6 +516,7 @@ def _unsupported_unary_diagnostics(
     fragment: LowerableOperationFragment | None,
     scalar_type: ScalarTypeDescriptor | None,
     operation: UnaryOperationDescriptor | None,
+    catalog: Catalog | None,
 ) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
 
@@ -582,9 +612,17 @@ def _unsupported_unary_diagnostics(
     if fragment is None:
         directive = _emit_return_directive_from_body(body)
         if directive is not None:
-            diagnostics.extend(_unsupported_emit_return_diagnostics(directive))
-        elif primitive_call_diagnostics := _unsupported_primitive_call_diagnostics(
-            body
+            diagnostics.extend(
+                _unsupported_emit_return_diagnostics(
+                    directive,
+                    selected=selected,
+                    catalog=catalog,
+                )
+            )
+        elif primitive_call_diagnostics := unsupported_primitive_call_diagnostics(
+            body,
+            selected=selected,
+            catalog=catalog,
         ):
             diagnostics.extend(primitive_call_diagnostics)
         else:
@@ -731,112 +769,20 @@ def _emit_return_directive_from_body(
     return segment
 
 
-def _primitive_call_directives_from_body(
-    body: ImplementationBody,
-) -> tuple[LowerableDirective, ...]:
-    return tuple(
-        token
-        for token in body.tokens
-        if isinstance(token, LowerableDirective)
-        and token.name == "call"
-        and _has_primitive_call_shape(token)
-    )
-
-
-def _unsupported_primitive_call_diagnostics(
-    body: ImplementationBody,
-) -> tuple[Diagnostic, ...]:
-    return _unsupported_primitive_call_diagnostics_from_directives(
-        _primitive_call_directives_from_body(body)
-    )
-
-
-def _unsupported_primitive_call_diagnostics_from_directives(
-    directives: tuple[LowerableDirective, ...],
-) -> tuple[Diagnostic, ...]:
-    return tuple(
-        Diagnostic(
-            severity="error",
-            code="TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL",
-            message=(
-                "primitive call cannot be lowered by this exact boundary; "
-                f"{_primitive_call_context(directive)}"
-            ),
-            location=directive.source,
-        )
-        for directive in directives
-    )
-
-
 def _unsupported_emit_return_diagnostics(
     directive: LowerableDirective,
+    *,
+    selected: SelectedImplementation,
+    catalog: Catalog | None,
 ) -> tuple[Diagnostic, ...]:
-    primitive_call_tokens = _primitive_call_directives_from_tokens(
-        directive.payload_tokens
+    primitive_call_diagnostics = unsupported_primitive_call_diagnostics_from_payload_tokens(
+        directive.payload_tokens,
+        selected=selected,
+        catalog=catalog,
     )
-    if primitive_call_tokens and len(primitive_call_tokens) == len(
-        directive.payload_tokens
-    ):
-        return _unsupported_primitive_call_diagnostics_from_directives(
-            primitive_call_tokens
-        )
+    if primitive_call_diagnostics:
+        return primitive_call_diagnostics
     return (_unsupported_return_expression_diagnostic(directive),)
-
-
-def _primitive_call_directives_from_tokens(
-    tokens: tuple[PayloadToken, ...],
-) -> tuple[LowerableDirective, ...]:
-    return tuple(
-        token
-        for token in tokens
-        if isinstance(token, LowerableDirective)
-        and token.name == "call"
-        and _has_primitive_call_shape(token)
-    )
-
-
-def _has_primitive_call_shape(directive: LowerableDirective) -> bool:
-    return directive.primitive_call is not None or (
-        len(directive.arguments) == 3 and directive.arguments[0] == "primitive"
-    )
-
-
-def _primitive_call_context(directive: LowerableDirective) -> str:
-    primitive_call = directive.primitive_call
-    if primitive_call is None:
-        return (
-            f"selector remains opaque: {directive.arguments[1]!r}; "
-            f"payload remains opaque: {directive.arguments[2]!r}; "
-            f"{_MISSING_PRIMITIVE_CALL_CAPABILITY}"
-        )
-
-    selector = primitive_call.selector
-    if isinstance(selector.target, NamedPrimitiveReference):
-        target_details = (
-            "target kind is named primitive",
-            f"target name is {selector.target.name!r}",
-        )
-    else:
-        target_details = ("target kind is '@self'",)
-
-    details = [
-        *target_details,
-        f"selector source text is {selector.source_text!r}",
-    ]
-    if selector.specialization is not None:
-        details.append(
-            f"specialization remains opaque: {selector.specialization!r}"
-        )
-    if selector.attrs is not None:
-        details.append(f"attrs remain opaque: {selector.attrs!r}")
-    details.append(f"raw argument count is {len(primitive_call.arguments)}")
-    details.append(
-        "raw argument payloads remain opaque: "
-        f"{tuple(argument.text for argument in primitive_call.arguments)!r}"
-    )
-    details.append(f"payload remains opaque: {primitive_call.payload!r}")
-    details.append(_MISSING_PRIMITIVE_CALL_CAPABILITY)
-    return "; ".join(details)
 
 
 def _unsupported_return_expression_diagnostic(

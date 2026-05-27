@@ -18204,8 +18204,10 @@ Validation result:
 
 Status:
 
-Planned as the next clean restart implementation milestone after accepted
-M137. This is a lowering diagnostic boundary over recognized TSIL
+Accepted. The M138 execution-review loop returned `Accept With Follow-Ups`,
+and a focused follow-up audit returned `Accept` after adding the missing
+separate specialization-only and attrs-only tests. This is a lowering
+diagnostic boundary over recognized TSIL
 `call<primitive=...>(...)` tokens. It should identify the source-declared base
 call target against the current catalog when possible and classify
 specialization / `attrs[...]` as unresolved target-reference dimensions, but
@@ -18277,6 +18279,131 @@ Expected outputs:
   clearly distinguish base target identity from unresolved specialization,
   unresolved attrs, and the missing dependency implementation capability.
 - Existing exact add-call lowering and artifact bytes remain stable.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted result:
+
+- The normal generator pipeline now passes the already built clean restart
+  catalog into lowering so recognized primitive-call diagnostics can classify
+  target references against selected implementation context.
+- Named call targets use exact primitive-name membership only. Unknown named
+  base targets produce `TSL-LOWER-UNKNOWN-PRIMITIVE-CALL-TARGET` at the call
+  source and include the known primitive names.
+- Known named base targets and `@self` targets still stop at
+  `TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL`. Diagnostics distinguish known base
+  target identity from unresolved specialization, unresolved attrs, and the
+  missing dependency implementation selection/lowering capability.
+- Specialization payloads, attrs payloads, raw arguments, nested calls, and
+  original payload text remain opaque diagnostic context. No dependency
+  implementation is selected, no dependency body is lowered, no dependency
+  closure is expanded, and no backend call text is rendered.
+- Direct lowerer calls without catalog context preserve the M137 diagnostic
+  fallback.
+- The older implementation-body domain-model sketch now shows the accepted
+  `PrimitiveCall`, `primitive_call`, and `payload_tokens` fields, resolving
+  the M137 documentation follow-up.
+
+Review verdicts:
+
+- Architecture reviewer: `Accept`.
+- Boundary auditor: `Accept With Follow-Ups`; the noted missing separate
+  specialization-only and attrs-only tests were added during the loop.
+- Documentation auditor: `Accept With Follow-Ups`; the only noted items were
+  the orchestrator-owned roadmap, state, and next-prompt updates.
+- Validation auditor: `Accept`.
+- Focused follow-up audit after the test additions: `Accept`.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `171 passed in 13.46s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
+### Milestone 139: Unspecialized Primitive Call Implementation Candidate Diagnostic Boundary Slice
+
+Status:
+
+Planned as the next clean restart implementation milestone after accepted
+M138. This is still a lowering diagnostic boundary over recognized TSIL
+`call<primitive=...>(...)` tokens. It should check only whether an
+unspecialized, no-attrs primitive-call target has a matching implementation
+candidate in the already built catalog for the current selected implementation
+context.
+
+Goal:
+
+Move one step beyond M138's base-target reference classification without
+starting dependency closure:
+
+- for `call<primitive=NAME>(...)` with no specialization and no `attrs[...]`,
+  if `NAME` exists in the catalog, check whether that primitive has an
+  implementation matching the currently selected implementation's extension
+  and type tag;
+- for `call<primitive=@self>(...)` with no specialization and no `attrs[...]`,
+  identify the current selected implementation as the candidate boundary;
+- if the candidate exists, keep
+  `TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL` but report that the dependency
+  implementation candidate exists and that dependency call lowering/rendering
+  is not implemented yet;
+- if the base target exists but no matching implementation candidate exists,
+  report a precise diagnostic at the primitive-call source;
+- preserve M138 behavior for unknown named targets and for all calls that
+  carry specialization and/or `attrs[...]` dimensions.
+
+Scope:
+
+- Use only the existing clean restart catalog and selected implementation
+  context. Candidate lookup is exact by base primitive name, current selected
+  extension, and current selected implementation type tag.
+- Apply the candidate check to standalone primitive-call body tokens and to
+  `emit_return(...)` payload primitive-call tokens.
+- Preserve M133/M134 exact `call<primitive=add>(left, right)` lowering and
+  artifact bytes.
+- Preserve M135-M138 structured selector, argument, payload, source-location,
+  and diagnostic behavior outside the deliberately refined candidate
+  diagnostics.
+- Keep specialization payloads, attrs payloads, raw arguments, nested calls,
+  and original payload text opaque.
+- Add focused positive and negative tests for named unspecialized candidate
+  existence, named unspecialized missing candidate, `@self` candidate identity,
+  emit-return payload calls, source locations, and preservation of M138
+  unknown/specialized/attrs diagnostics.
+
+Out of scope:
+
+Primitive dependency closure; lowering dependency bodies; rendering dependency
+call text; expanding `@self` beyond current candidate identity; interpreting
+specialization or `attrs[...]`; resolving argument identifiers; recursively
+lowering argument expressions; expression parsing; assignment or array-access
+lowering; source repair; complete TSIL grammar; runtime `tsldata` semantic
+lookup; `frozen` or `tslgenold` runtime dependency; registries; dispatchers;
+hidden backfeeds; fixpoint mechanisms; or new request/result/worklist
+families.
+
+Expected outputs:
+
+- Known unspecialized primitive-call targets distinguish "candidate
+  implementation exists" from "target primitive exists but no candidate
+  implementation exists".
+- The candidate-exists path remains an unsupported-call diagnostic boundary;
+  it does not generate code for dependency calls.
+- Specialized and attrs-bearing calls continue to report unresolved
+  target-reference dimensions rather than pretending those dimensions have
+  been evaluated.
 
 Validation:
 

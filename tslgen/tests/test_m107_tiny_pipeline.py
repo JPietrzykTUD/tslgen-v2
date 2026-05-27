@@ -17,6 +17,7 @@ from tslgen.backends.cpp import CppBackend
 from tslgen.backends.rust import RustBackend
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
+    Catalog,
     Implementation,
     ImplementationBody,
     LowerableDirective,
@@ -1308,6 +1309,8 @@ def test_m114_generator_emits_only_from_lowering_stage_output() -> None:
 
     assert len(lowerer.selected) == 1
     assert lowerer.selected[0].primitive.name == "add"
+    assert lowerer.catalog is not None
+    assert tuple(primitive.name for primitive in lowerer.catalog.primitives) == ("add",)
     assert result.diagnostics == ()
     assert [artifact.logical_path for artifact in result.artifacts.artifacts] == [
         "include/tsl/mul_scalar_f64.hpp",
@@ -3086,10 +3089,11 @@ def test_m133_selected_zero_argument_primitive_call_reports_precise_diagnostic(
     assert result.artifacts.artifacts == ()
     assert len(result.diagnostics) == 1
     diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.code == "TSL-LOWER-UNKNOWN-PRIMITIVE-CALL-TARGET"
     assert diagnostic.severity == "error"
     assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
     assert "set_zero" in diagnostic.message
+    assert "not in catalog" in diagnostic.message
     assert "opaque" in diagnostic.message
 
 
@@ -3122,8 +3126,8 @@ def test_m133_multiple_primitive_calls_report_one_diagnostic_each(
 
     assert result.artifacts.artifacts == ()
     assert [diagnostic.code for diagnostic in result.diagnostics] == [
-        "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL",
-        "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL",
+        "TSL-LOWER-UNKNOWN-PRIMITIVE-CALL-TARGET",
+        "TSL-LOWER-UNKNOWN-PRIMITIVE-CALL-TARGET",
     ]
     assert [diagnostic.location for diagnostic in result.diagnostics] == [
         SourceLocation(source.resolve(), 3, 11),
@@ -3322,10 +3326,11 @@ def test_m134_emit_return_sub_call_reports_primitive_call_diagnostic(
     assert result.artifacts.artifacts == ()
     assert len(result.diagnostics) == 1
     diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.code == "TSL-LOWER-UNKNOWN-PRIMITIVE-CALL-TARGET"
     assert diagnostic.severity == "error"
     assert diagnostic.location == SourceLocation(source.resolve(), 3, 23)
     assert "sub" in diagnostic.message
+    assert "not in catalog" in diagnostic.message
     assert "left, right" in diagnostic.message
 
 
@@ -3933,16 +3938,17 @@ def test_m137_named_primitive_call_diagnostic_uses_structured_context(
     assert result.artifacts.artifacts == ()
     assert len(result.diagnostics) == 1
     diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.code == "TSL-LOWER-UNKNOWN-PRIMITIVE-CALL-TARGET"
     assert diagnostic.severity == "error"
     assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
     assert diagnostic.message == (
-        "primitive call cannot be lowered by this exact boundary; "
+        "primitive call target is not in the catalog; "
         "target kind is named primitive; target name is 'sub'; "
-        "selector source text is 'sub'; raw argument count is 2; "
+        "selector source text is 'sub'; "
+        "base target lookup failed: primitive 'sub' is not in catalog; "
+        "known primitive names are: add; raw argument count is 2; "
         "raw argument payloads remain opaque: ('left', 'right'); "
-        "payload remains opaque: 'left, right'; "
-        "primitive-call dependency resolution is not implemented yet"
+        "payload remains opaque: 'left, right'"
     )
 
 
@@ -3965,12 +3971,15 @@ def test_m137_self_call_diagnostic_uses_structured_selector_context(
         "primitive call cannot be lowered by this exact boundary; "
         "target kind is '@self'; "
         "selector source text is '@self[Vec] attrs[mask=pass_through]'; "
+        "base target lookup succeeded: '@self' identifies current primitive 'add'; "
         "specialization remains opaque: 'Vec'; "
+        "specialization-specific target reference resolution is not implemented yet; "
         "attrs remain opaque: 'mask=pass_through'; "
+        "attribute-specific target reference resolution is not implemented yet; "
         "raw argument count is 2; "
         "raw argument payloads remain opaque: ('left', 'right'); "
         "payload remains opaque: 'left, right'; "
-        "primitive-call dependency resolution is not implemented yet"
+        "dependency implementation selection/lowering is not implemented yet"
     )
 
 
@@ -3986,17 +3995,18 @@ def test_m137_zero_argument_call_diagnostic_reports_raw_count(
     assert result.artifacts.artifacts == ()
     assert len(result.diagnostics) == 1
     diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.code == "TSL-LOWER-UNKNOWN-PRIMITIVE-CALL-TARGET"
     assert diagnostic.severity == "error"
     assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
     assert diagnostic.message == (
-        "primitive call cannot be lowered by this exact boundary; "
+        "primitive call target is not in the catalog; "
         "target kind is named primitive; target name is 'set_zero'; "
         "selector source text is 'set_zero[Vec]'; "
+        "base target lookup failed: primitive 'set_zero' is not in catalog; "
+        "known primitive names are: add; "
         "specialization remains opaque: 'Vec'; "
         "raw argument count is 0; raw argument payloads remain opaque: (); "
-        "payload remains opaque: ''; "
-        "primitive-call dependency resolution is not implemented yet"
+        "payload remains opaque: ''"
     )
 
 
@@ -4012,17 +4022,18 @@ def test_m137_nested_argument_call_diagnostic_keeps_arguments_raw(
     assert result.artifacts.artifacts == ()
     assert len(result.diagnostics) == 1
     diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.code == "TSL-LOWER-UNKNOWN-PRIMITIVE-CALL-TARGET"
     assert diagnostic.severity == "error"
     assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
     assert diagnostic.message == (
-        "primitive call cannot be lowered by this exact boundary; "
+        "primitive call target is not in the catalog; "
         "target kind is named primitive; target name is 'mov'; "
-        "selector source text is 'mov'; raw argument count is 2; "
+        "selector source text is 'mov'; "
+        "base target lookup failed: primitive 'mov' is not in catalog; "
+        "known primitive names are: add; raw argument count is 2; "
         "raw argument payloads remain opaque: "
         "('call<primitive=set_zero[Vec]>()', 'left'); "
-        "payload remains opaque: 'call<primitive=set_zero[Vec]>(), left'; "
-        "primitive-call dependency resolution is not implemented yet"
+        "payload remains opaque: 'call<primitive=set_zero[Vec]>(), left'"
     )
 
 
@@ -4038,16 +4049,17 @@ def test_m137_emit_return_payload_call_diagnostic_uses_structured_context(
     assert result.artifacts.artifacts == ()
     assert len(result.diagnostics) == 1
     diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.code == "TSL-LOWER-UNKNOWN-PRIMITIVE-CALL-TARGET"
     assert diagnostic.severity == "error"
     assert diagnostic.location == SourceLocation(source.resolve(), 3, 23)
     assert diagnostic.message == (
-        "primitive call cannot be lowered by this exact boundary; "
+        "primitive call target is not in the catalog; "
         "target kind is named primitive; target name is 'mul'; "
-        "selector source text is 'mul'; raw argument count is 2; "
+        "selector source text is 'mul'; "
+        "base target lookup failed: primitive 'mul' is not in catalog; "
+        "known primitive names are: add; raw argument count is 2; "
         "raw argument payloads remain opaque: ('left', 'right'); "
-        "payload remains opaque: 'left, right'; "
-        "primitive-call dependency resolution is not implemented yet"
+        "payload remains opaque: 'left, right'"
     )
 
 
@@ -4066,6 +4078,242 @@ def test_m137_exact_add_call_artifacts_remain_stable(
         CPP_CONTENT,
         RUST_CONTENT,
     ]
+
+
+def test_m138_known_named_target_reference_reports_missing_dependency_selection(
+    tmp_path: Path,
+) -> None:
+    sub_source = _write_tiny_source_file(
+        tmp_path,
+        "tiny_sub_for_m138_known_target.tsl",
+        "sub",
+        "si32",
+    )
+    source, result = _generate_tiny_add_tsil_payload(
+        tmp_path,
+        "tiny_add_m138_known_named_call.tsl",
+        "call<primitive=sub>(left, right)",
+        extra_source_paths=(sub_source,),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+    assert diagnostic.message == (
+        "primitive call cannot be lowered by this exact boundary; "
+        "target kind is named primitive; target name is 'sub'; "
+        "selector source text is 'sub'; "
+        "base target lookup succeeded: primitive 'sub' exists in catalog; "
+        "raw argument count is 2; "
+        "raw argument payloads remain opaque: ('left', 'right'); "
+        "payload remains opaque: 'left, right'; "
+        "dependency implementation selection/lowering is not implemented yet"
+    )
+
+
+def test_m138_known_specialized_target_reference_reports_unresolved_dimension(
+    tmp_path: Path,
+) -> None:
+    sub_source = _write_tiny_source_file(
+        tmp_path,
+        "tiny_sub_for_m138_specialized.tsl",
+        "sub",
+        "si32",
+    )
+    source, result = _generate_tiny_add_tsil_payload(
+        tmp_path,
+        "tiny_add_m138_known_specialized_call.tsl",
+        "call<primitive=sub[Vec]>(left, right)",
+        extra_source_paths=(sub_source,),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+    assert diagnostic.message == (
+        "primitive call cannot be lowered by this exact boundary; "
+        "target kind is named primitive; target name is 'sub'; "
+        "selector source text is 'sub[Vec]'; "
+        "base target lookup succeeded: primitive 'sub' exists in catalog; "
+        "specialization remains opaque: 'Vec'; "
+        "specialization-specific target reference resolution is not implemented yet; "
+        "raw argument count is 2; "
+        "raw argument payloads remain opaque: ('left', 'right'); "
+        "payload remains opaque: 'left, right'; "
+        "dependency implementation selection/lowering is not implemented yet"
+    )
+
+
+def test_m138_known_attrs_target_reference_reports_unresolved_dimension(
+    tmp_path: Path,
+) -> None:
+    sub_source = _write_tiny_source_file(
+        tmp_path,
+        "tiny_sub_for_m138_attrs.tsl",
+        "sub",
+        "si32",
+    )
+    source, result = _generate_tiny_add_tsil_payload(
+        tmp_path,
+        "tiny_add_m138_known_attrs_call.tsl",
+        "call<primitive=sub attrs[mask=zero]>(left, right)",
+        extra_source_paths=(sub_source,),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+    assert diagnostic.message == (
+        "primitive call cannot be lowered by this exact boundary; "
+        "target kind is named primitive; target name is 'sub'; "
+        "selector source text is 'sub attrs[mask=zero]'; "
+        "base target lookup succeeded: primitive 'sub' exists in catalog; "
+        "attrs remain opaque: 'mask=zero'; "
+        "attribute-specific target reference resolution is not implemented yet; "
+        "raw argument count is 2; "
+        "raw argument payloads remain opaque: ('left', 'right'); "
+        "payload remains opaque: 'left, right'; "
+        "dependency implementation selection/lowering is not implemented yet"
+    )
+
+
+def test_m138_known_specialized_attrs_target_reference_reports_unresolved_dimensions(
+    tmp_path: Path,
+) -> None:
+    sub_source = _write_tiny_source_file(
+        tmp_path,
+        "tiny_sub_for_m138_specialized_attrs.tsl",
+        "sub",
+        "si32",
+    )
+    source, result = _generate_tiny_add_tsil_payload(
+        tmp_path,
+        "tiny_add_m138_known_specialized_attrs_call.tsl",
+        "call<primitive=sub[Vec] attrs[mask=zero]>(left, right)",
+        extra_source_paths=(sub_source,),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+    assert diagnostic.message == (
+        "primitive call cannot be lowered by this exact boundary; "
+        "target kind is named primitive; target name is 'sub'; "
+        "selector source text is 'sub[Vec] attrs[mask=zero]'; "
+        "base target lookup succeeded: primitive 'sub' exists in catalog; "
+        "specialization remains opaque: 'Vec'; "
+        "specialization-specific target reference resolution is not implemented yet; "
+        "attrs remain opaque: 'mask=zero'; "
+        "attribute-specific target reference resolution is not implemented yet; "
+        "raw argument count is 2; "
+        "raw argument payloads remain opaque: ('left', 'right'); "
+        "payload remains opaque: 'left, right'; "
+        "dependency implementation selection/lowering is not implemented yet"
+    )
+
+
+def test_m138_unknown_specialized_attrs_target_reference_preserves_context(
+    tmp_path: Path,
+) -> None:
+    source, result = _generate_tiny_add_tsil_payload(
+        tmp_path,
+        "tiny_add_m138_unknown_specialized_attrs_call.tsl",
+        "call<primitive=missing[Vec] attrs[mask=zero]>(left, right)",
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNKNOWN-PRIMITIVE-CALL-TARGET"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+    assert diagnostic.message == (
+        "primitive call target is not in the catalog; "
+        "target kind is named primitive; target name is 'missing'; "
+        "selector source text is 'missing[Vec] attrs[mask=zero]'; "
+        "base target lookup failed: primitive 'missing' is not in catalog; "
+        "known primitive names are: add; "
+        "specialization remains opaque: 'Vec'; "
+        "attrs remain opaque: 'mask=zero'; "
+        "raw argument count is 2; "
+        "raw argument payloads remain opaque: ('left', 'right'); "
+        "payload remains opaque: 'left, right'"
+    )
+    assert "target reference resolution is not implemented yet" not in (
+        diagnostic.message
+    )
+
+
+def test_m138_self_base_target_reference_reports_current_primitive(
+    tmp_path: Path,
+) -> None:
+    source, result = _generate_tiny_add_tsil_payload(
+        tmp_path,
+        "tiny_add_m138_self_base_call.tsl",
+        "call<primitive=@self>(left, right)",
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.severity == "error"
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+    assert diagnostic.message == (
+        "primitive call cannot be lowered by this exact boundary; "
+        "target kind is '@self'; selector source text is '@self'; "
+        "base target lookup succeeded: '@self' identifies current primitive 'add'; "
+        "raw argument count is 2; "
+        "raw argument payloads remain opaque: ('left', 'right'); "
+        "payload remains opaque: 'left, right'; "
+        "dependency implementation selection/lowering is not implemented yet"
+    )
+
+
+def test_m138_lowerer_without_catalog_preserves_m137_fallback_context() -> None:
+    source = VALID_TINY_ADD.resolve()
+    directive = LowerableDirective(
+        name="call",
+        arguments=("primitive", "sub", "left, right"),
+        source=SourceLocation(source, 3, 11),
+        primitive_call=_primitive_call(
+            source,
+            3,
+            11,
+            "sub",
+            "left, right",
+            target_name="sub",
+        ),
+    )
+    body = ImplementationBody(tokens=(directive,), source=SourceLocation(source, 3, 5))
+
+    result = Lowerer().lower(_selected_implementation(body=body))
+
+    assert result.function is None
+    assert len(result.diagnostics) == 1
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.message == (
+        "primitive call cannot be lowered by this exact boundary; "
+        "target kind is named primitive; target name is 'sub'; "
+        "selector source text is 'sub'; raw argument count is 2; "
+        "raw argument payloads remain opaque: ('left', 'right'); "
+        "payload remains opaque: 'left, right'; "
+        "primitive-call dependency resolution is not implemented yet"
+    )
+    assert "base target lookup" not in diagnostic.message
 
 
 def test_m137_non_call_diagnostic_boundaries_remain_unchanged(
@@ -5535,12 +5783,16 @@ class _StageOutputOnlyLowerer:
     def __init__(self, result: LoweringStageResult) -> None:
         self._result = result
         self.selected: tuple[SelectedImplementation, ...] = ()
+        self.catalog: Catalog | None = None
 
     def lower_all(
         self,
         selected: tuple[SelectedImplementation, ...],
+        *,
+        catalog: Catalog | None = None,
     ) -> LoweringStageResult:
         self.selected = tuple(selected)
+        self.catalog = catalog
         return self._result
 
     def lower(self, selected: SelectedImplementation) -> None:
@@ -5969,6 +6221,7 @@ def _generate_tiny_add_tsil_payload(
     payload: str,
     *,
     targets: tuple[Target, ...] | None = None,
+    extra_source_paths: tuple[Path, ...] = (),
 ) -> tuple[Path, GenerationResult]:
     source = tmp_path / file_name
     source.write_text(
@@ -5982,7 +6235,7 @@ def _generate_tiny_add_tsil_payload(
         encoding="utf-8",
     )
     return source, generate_from_paths(
-        (source,),
+        (source, *extra_source_paths),
         targets
         or (
             Target(

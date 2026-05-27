@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 137 is accepted.
+Milestone 138 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -274,6 +274,55 @@ M137 validation completed with:
   exit 0, no output.
 - `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
   exit 0, `164 passed in 12.06s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  cache directories; after removing those directories, the final required
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
+The M138 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, documentation,
+and validation audits. A focused follow-up audit returned `Accept` after the
+loop added separate tests for known named specialization-only and attrs-only
+primitive-call target dimensions.
+
+M138 refined recognized primitive-call diagnostics so lowering can classify
+base target references using the already built clean restart catalog and the
+selected implementation context. Named calls look up only the structured base
+primitive name in the catalog. Unknown named base targets now produce
+`TSL-LOWER-UNKNOWN-PRIMITIVE-CALL-TARGET` at the call source and include the
+known primitive names. Known named base targets and `@self` targets still
+produce `TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL`, but diagnostics now
+distinguish base target identity from unresolved specialization,
+unresolved attrs, and the missing dependency implementation
+selection/lowering capability.
+
+M138 applies the same target-reference diagnostics to standalone M132
+primitive-call body tokens and M134 `emit_return(...)` payload primitive-call
+tokens. It preserved M133/M134 exact `call<primitive=add>(left, right)`
+lowering and artifact bytes, and preserved the M137 fallback when the lowerer
+is called without catalog context. It did not select dependency
+implementations, lower dependency bodies, expand dependency closure, expand
+`@self` beyond base target identity, interpret specialization, attrs,
+arguments, or nested calls, parse expressions, render backend call text,
+repair source, or introduce runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies.
+
+M138 review verdicts were: architecture `Accept`, boundary
+`Accept With Follow-Ups`, documentation `Accept With Follow-Ups`, validation
+`Accept`, and focused follow-up audit `Accept`. The boundary follow-up was
+resolved during the loop by adding separate specialization-only and attrs-only
+tests. The documentation follow-ups were the orchestrator-owned roadmap,
+state, and next-prompt updates completed in this handoff.
+
+M138 validation completed with:
+
+- Focused follow-up `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py -k "m138"`:
+  exit 0, `7 passed, 164 deselected in 2.13s`.
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `171 passed in 13.46s`.
 - Initial `find tslgen -type d -name __pycache__ -print` listed validation
   cache directories; after removing those directories, the final required
   `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
@@ -1872,55 +1921,51 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 138.
+Execute Milestone 139.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m138-execution-review-loop-prompt.md
+docs/agent/runs/m139-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 138: Primitive Call Target Reference Diagnostic Boundary Slice
+Milestone 139: Unspecialized Primitive Call Implementation Candidate Diagnostic Boundary Slice
 ```
 
 Latest review verdict:
 
 ```text
-M137 execution-review returned Accept With Follow-Ups after one write-capable
+M138 execution-review returned Accept With Follow-Ups after one write-capable
 executor and read-only architecture, boundary, documentation, and validation
-audits. The recorded follow-up is to update the older simplified
-implementation-body domain-model sketch so it shows the accepted M134-M136
-primitive_call and payload_tokens fields.
+audits. A focused follow-up audit returned Accept after separate tests were
+added for known named specialization-only and attrs-only primitive-call target
+dimensions.
 ```
 
 Next expected action:
 
 ```text
-Run the active M138 execution-review-loop prompt. M138 should perform only
-primitive-call target-reference classification for recognized
-`call<primitive=...>(...)` tokens: `@self` identifies the currently selected
-primitive as the base target, and named primitive base targets are checked by
-exact primitive name against the already built clean restart catalog.
-Specialization payloads and `attrs[...]` payloads are part of the target
-reference and must be reported as unresolved target-reference dimensions, not
-silently ignored. Missing named base targets should receive a precise
-diagnostic; known named base targets and `@self` should still stop at a
-diagnostic boundary because specialization/attribute target resolution and
-dependency implementation selection/lowering are not implemented yet.
+Run the active M139 execution-review-loop prompt. M139 should perform only an
+unspecialized primitive-call implementation-candidate diagnostic check for
+recognized `call<primitive=...>(...)` tokens whose base target is known and
+whose selector has no specialization and no `attrs[...]`. Named targets should
+check for a matching implementation candidate by exact base primitive name,
+current selected extension, and current selected implementation type tag.
+`@self` should identify the current selected implementation as the candidate
+boundary.
 
-M138 must preserve M133/M134 exact add-call lowering and all M135-M137
-structured selector, argument, payload, and diagnostic behavior outside the
-deliberately refined target-reference diagnostic text. It must not select
-dependency implementations, lower dependency bodies, add dependency closure,
-expand `@self` beyond base target identity, interpret specialization or attrs
-payloads as successful specialization/attribute resolution, interpret argument
-identifiers or nested calls, parse expressions, render backend call text,
-repair source, or introduce runtime `tsldata`, `frozen`, or `tslgenold`
-dependencies.
+M139 must preserve M133/M134 exact add-call lowering, all M135-M138 structured
+selector/argument/payload/source-location behavior, M138 unknown-target
+diagnostics, and M138 unresolved specialization/attrs diagnostics. It must not
+expand dependency closure, lower dependency bodies, render dependency call
+text, expand `@self` beyond current candidate identity, interpret
+specialization or attrs payloads, resolve argument identifiers or nested calls,
+parse expressions, repair source, or introduce runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
 ```
 
 Accepted planning prompt:

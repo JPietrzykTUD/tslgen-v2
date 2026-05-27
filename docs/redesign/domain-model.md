@@ -264,16 +264,50 @@ class LowerableOperationFragment:
     source_span: SourceSpan
 
 @dataclass(frozen=True, slots=True)
-class LowerableDirective:
-    name: str
-    arguments: tuple[str, ...]
-    source_span: SourceSpan
-
-@dataclass(frozen=True, slots=True)
 class RawStringToken:
     text: str
     source_span: SourceSpan
 
+@dataclass(frozen=True, slots=True)
+class SelfPrimitiveReference:
+    source_span: SourceSpan
+
+@dataclass(frozen=True, slots=True)
+class NamedPrimitiveReference:
+    name: str
+    source_span: SourceSpan
+
+PrimitiveCallTarget = SelfPrimitiveReference | NamedPrimitiveReference
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallSelector:
+    target: PrimitiveCallTarget
+    specialization: str | None
+    attrs: str | None
+    source_text: str
+    source_span: SourceSpan
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallArgument:
+    text: str
+    source_span: SourceSpan
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCall:
+    selector: PrimitiveCallSelector
+    payload: str
+    source_span: SourceSpan
+    arguments: tuple[PrimitiveCallArgument, ...] = ()
+
+@dataclass(frozen=True, slots=True)
+class LowerableDirective:
+    name: str
+    arguments: tuple[str, ...]
+    source_span: SourceSpan
+    primitive_call: PrimitiveCall | None = None
+    payload_tokens: tuple["PayloadToken", ...] = ()
+
+PayloadToken = RawStringToken | LowerableDirective
 BodyToken = RawStringToken | LowerableOperationFragment | LowerableDirective
 
 @dataclass(frozen=True, slots=True)
@@ -371,6 +405,14 @@ Invariants:
   missing capability. It still does not resolve primitive references, expand
   `@self`, interpret arguments, lower nested calls, or render backend call
   syntax.
+- M138 classifies primitive-call target references using the already built
+  catalog and selected implementation context. Named calls look up only the
+  base primitive name; `@self` identifies the currently selected primitive as
+  the base target. Specialization and `attrs[...]` payloads stay opaque and
+  are reported as unresolved target-reference dimensions. The boundary still
+  does not select dependency implementations, lower dependency bodies,
+  interpret specialization or attrs, expand dependency closure, or render
+  backend call syntax.
 - `requires_value` remains structurally preserved for the existing flag and
   selector normalization rules.
 - Unknown extra fields remain preserved as `extra_fields` so future milestones

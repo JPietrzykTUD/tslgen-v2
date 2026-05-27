@@ -83,7 +83,10 @@ class Generator:
                 )
                 continue
 
-            lowering_result = self._lowerer.lower_all(selection_result.selected)
+            lowering_result = self._lowerer.lower_all(
+                selection_result.selected,
+                catalog=catalog_result.catalog,
+            )
             diagnostics.extend(lowering_result.diagnostics)
 
             for function in lowering_result.lowered_functions.functions:
