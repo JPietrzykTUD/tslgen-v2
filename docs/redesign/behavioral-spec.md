@@ -1005,6 +1005,33 @@ arguments, render backend call text, render backend type text, parse broad TSIL
 expressions, repair source, or introduce runtime `tsldata`, `frozen`, or
 `tslgenold` dependencies.
 
+### M145 Primitive-Call Target Candidate Matching Boundary
+
+Milestone 145 consumes an M144 `PrimitiveCallSelectorPayload` and identifies
+the one catalog primitive implementation candidate for exact supported
+selectors. `@self` resolves to the current selected primitive name, while a
+named selector resolves to that named primitive. If no specialization is
+present, the current selected vector `(extension, type_tag)` is used.
+
+A single concrete vector-valued specialization may choose the target
+extension/type when the value is already typed by M144, such as
+`CurrentVector`, an alias that preserved `CurrentVector`, or a backend type
+reference whose underlying lowered value is a concrete vector. Backend type
+text is not rendered during matching.
+
+Concrete selector attrs match catalog primitive attribute variants using the
+same key, optional key-argument, and value semantics as explicit target
+selection. Missing primitive names, missing attribute variants, missing
+extension/type implementations, unsupported selector dimensions, and
+non-concrete specialization values produce diagnostics at the call-selector
+source.
+
+M145 does not lower call arguments, recursively lower nested calls, select
+transitive dependency closure, lower dependency bodies, render backend call
+text, render backend type text, interpret symbols or literals such as `shift`,
+`PreserveSign`, or `index`, parse broad TSIL expressions, repair source, or
+introduce runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

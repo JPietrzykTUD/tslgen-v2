@@ -19134,10 +19134,12 @@ The accepted validation result after the focused revision was:
 
 Status:
 
-Planned after M144. This milestone should consume typed
+Accepted. The M145 execution-review loop returned `Accept` after one
+write-capable executor and read-only architecture, boundary, evidence,
+documentation, and validation audits. M145 consumes typed
 `PrimitiveCallSelectorPayload` values and selected implementation context to
 identify the exact candidate primitive implementation for supported
-primitive-call selectors. It must remain a matching boundary only; it must not
+primitive-call selectors. It remains a matching boundary only; it does not
 lower call arguments, recursively lower nested calls, lower dependency bodies,
 select dependency closure, or render backend call text.
 
@@ -19197,5 +19199,75 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py
 python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py`:
+  exit 0, `239 passed in 9.81s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+- Final post-cleanup `git diff --check`: exit 0, no output.
+
+### Milestone 146: Primitive-Call Argument Binding Boundary
+
+Status:
+
+Planned after M145. This milestone should consume an already recognized
+primitive-call token, the M144 typed selector payload, and the M145 target
+match to bind ordered raw source arguments positionally to the matched
+primitive implementation's formal parameters.
+
+Goal:
+
+Produce a small typed primitive-call reference/binding result that records:
+
+- the M145 target match;
+- the matched primitive's formal parameters in deterministic order;
+- the corresponding raw source argument text and source provenance from the
+  recognized `PrimitiveCall` token;
+- explicit diagnostics when the source argument count does not match the
+  matched primitive's formal parameter count.
+
+Scope:
+
+- Use only the recognized primitive-call token, M144 selector payload, M145
+  target match, selected implementation context, and catalog facts already
+  needed by the M145 matcher.
+- Preserve raw argument text as source truth.
+- Bind arguments positionally; do not infer names or semantics.
+- Prove nested call-looking argument text stays raw when the arity is valid.
+- Add focused positives for matched `@self[Vec]`, named `sub[Vec]`, naked
+  current-context named calls, and attrs/specialization cases already matched
+  by M145.
+- Add focused negatives for too few and too many arguments.
+
+Out of scope:
+
+Argument expression parsing; recursive nested-call lowering; identifier
+resolution; array/index/operator/helper/cast semantics; dependency closure;
+dependency-body lowering; backend call rendering; backend type text rendering;
+source repair; runtime `tsldata`, `frozen`, or `tslgenold` dependencies;
+registries, dispatchers, fixpoint mechanisms, or broad worklist machinery.
+
+Expected outputs:
+
+- A typed argument-binding result can be consumed later by dependency-call
+  planning without reparsing selector strings or argument text.
+- Arity diagnostics point at the primitive-call source and name the expected
+  and actual argument counts.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py
 find tslgen -type d -name __pycache__ -print
 ```

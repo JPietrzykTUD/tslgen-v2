@@ -224,6 +224,19 @@ class PrimitiveCallSelectorPayloadLoweringResult:
 
 
 @dataclass(frozen=True, slots=True)
+class PrimitiveCallTargetMatch:
+    selected: SelectedImplementation
+    selector_payload: PrimitiveCallSelectorPayload
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallTargetMatchingResult:
+    match: PrimitiveCallTargetMatch | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class TypeExpressionLoweringResult:
     value: LoweredTypeValue | None
     diagnostics: tuple[Diagnostic, ...]

@@ -755,6 +755,17 @@ class PrimitiveCallSelectorPayload:
     attributes: tuple[SelectorAttribute, ...]
     source_text: str
     source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallTargetMatch:
+    selected: SelectedImplementation
+    selector_payload: PrimitiveCallSelectorPayload
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallTargetMatchingResult:
+    match: PrimitiveCallTargetMatch | None
+    diagnostics: tuple[Diagnostic, ...]
 ```
 
 Invariants:
@@ -770,6 +781,10 @@ Invariants:
 - `type<generation>(...)` produces semantic type values, never backend text.
 - `type<backend>(...)` produces a `BackendTypeSpellingRequest`; it does not
   render backend type text.
+- Primitive-call target matching consumes typed selector payloads and catalog
+  facts only. It produces one selected implementation candidate or diagnostics;
+  it does not lower arguments, dependency bodies, dependency closure, or
+  backend call text.
 - A `type<backend>(...)` expression nested inside a generation type transform
   is represented as `LoweredBackendTypeReference`, preserving the request as a
   semantic input to that type transform without rendering it.
