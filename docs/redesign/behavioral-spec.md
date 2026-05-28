@@ -1259,6 +1259,47 @@ constants, generic vector lengths, backend rendering, raw text replacement,
 source repair, or runtime `tsldata`, `frozen`, or `tslgenold` dependencies
 remain out of scope.
 
+### M156 Exact Generation-Control Branch Region Lowering Boundary
+
+Milestone 156 adds the first generation-control consumer of accepted M155
+boolean generation values. It lowers only exact selected body-token regions
+shaped as:
+
+```text
+if<generation>(VALUE_QUERY) {
+  BODY_TOKENS
+} else<generation> {
+  BODY_TOKENS
+}
+```
+
+The condition must lower through M155 to a boolean generation value for one of
+these isolated query families:
+
+- `value<generation>(primitive::attribute(KEY))`;
+- `value<generation>(type::is_signed(TYPE_EXPR))`;
+- `value<generation>(type::is_same(TYPE_EXPR, TYPE_EXPR))`.
+
+The result records the lowered condition and source-owned token slices for the
+selected and unselected branches. Branch body tokens are preserved exactly:
+raw helper calls, nested raw braces, adjacent raw tokens, and already
+classified directives remain body tokens for later milestones. M156 does not
+render, rewrite, normalize, or recursively lower the selected branch body.
+
+Malformed regions, unmatched braces, missing `else<generation>` branches,
+unsupported `else if<generation>` branch-chain regions, plain target-language
+`else` variants, unsupported M155 condition families, non-boolean generation
+values, and M155 missing-fact diagnostics produce deterministic lowering
+diagnostics.
+
+M156 does not add loop execution, declaration lowering, raw expression
+parsing, arithmetic or comparison folding around generation values,
+selector-attribute substitution, mask constants, generic lengths,
+backend-control `if<compile>` / `switch<compile>` lowering, backend rendering,
+body-token rendering, source repair, raw text replacement, primitive-call
+rendering, dependency scheduling, or runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

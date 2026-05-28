@@ -8,6 +8,7 @@ from typing import Literal
 from tslgen.analysis.selection import SelectedImplementation, Target
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
+    BodyToken,
     Implementation,
     Primitive,
     PrimitiveAttribute,
@@ -314,6 +315,26 @@ class LoweredGenerationValue:
 @dataclass(frozen=True, slots=True)
 class GenerationValueQueryLoweringResult:
     value: LoweredGenerationValue | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationControlBranch:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationControlRegion:
+    condition: LoweredGenerationValue
+    selected_branch: LoweredGenerationControlBranch
+    unselected_branch: LoweredGenerationControlBranch
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationControlRegionLoweringResult:
+    region: LoweredGenerationControlRegion | None
     diagnostics: tuple[Diagnostic, ...]
 
 

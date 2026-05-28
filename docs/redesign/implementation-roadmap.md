@@ -20113,8 +20113,8 @@ Accepted validation result:
 
 Status:
 
-Selected after M155 acceptance. Active next prompt:
-`docs/agent/runs/m156-execution-review-loop-prompt.md`.
+Accepted. Active next prompt after M156:
+`docs/agent/runs/m157-execution-review-loop-prompt.md`.
 
 Goal:
 
@@ -20145,6 +20145,101 @@ comparison folding around generation values; selector-attribute substitution;
 mask constants; generic lengths; backend-control `if<compile>` /
 `switch<compile>` lowering; backend rendering; body-token rendering; source
 repair; raw text replacement; primitive-call rendering; dependency scheduling;
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad registries,
+dispatchers, worklists, or fixpoint machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted result:
+
+- Recorded current `else if<generation>` corpus evidence in
+  `docs/redesign/tsil-surface-inventory.md` before adding
+  generation-control behavior, and also recorded representative plain-else
+  evidence as an unsupported shape.
+- Added `LoweredGenerationControlBranch`,
+  `LoweredGenerationControlRegion`, and
+  `GenerationControlRegionLoweringResult` as the small typed branch-region
+  result boundary.
+- Lowered only exact full-body source-owned regions shaped as
+  `if<generation>(VALUE_QUERY) { ... } else<generation> { ... }`.
+- Evaluated only M155 boolean condition queries for primitive attributes,
+  scalar signedness, and scalar type sameness.
+- Preserved selected and unselected branch body tokens exactly. Raw branch
+  text containing target-language `else { ... }` or comment-like
+  `else if<generation>` remains branch content, not structural syntax.
+- Produced deterministic diagnostics for malformed regions, unmatched braces,
+  missing else branches, unsupported structural `else if<generation>` and
+  plain `else` variants, unsupported/non-boolean conditions, and propagated
+  M155 missing-fact diagnostics.
+- Kept branch body lowering, body rendering, backend rendering, loops,
+  declarations, expression parsing, selector substitution, generic lengths,
+  dependency scheduling, source repair, runtime `tsldata`, `frozen`, and
+  `tslgenold` dependencies out of scope.
+
+Review verdicts:
+
+- Architecture reviewer: `Accept` after focused revision and re-review.
+- Boundary auditor: `Accept` after focused revision and re-review.
+- Evidence auditor: `Accept With Follow-Ups`; the representative plain-else
+  evidence follow-up was addressed during finalization.
+- Test auditor: `Accept` after focused revision and re-review.
+- Documentation auditor: `Accept` after focused revision and re-review.
+- Validation auditor: `Accept` before revision; final validation was rerun by
+  the orchestrator after the accepted revision and cache cleanup.
+
+Accepted validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `218 passed`.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and listed
+  validation-created cache directories under `tslgen/src/tslgen` and
+  `tslgen/tests`; after cleanup, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+### Milestone 157: Generation-Control Selected-Branch Body Handoff
+
+Status:
+
+Selected after M156 acceptance. Active next prompt:
+`docs/agent/runs/m157-execution-review-loop-prompt.md`.
+
+Goal:
+
+Make the accepted M156 branch-region result useful to the existing lowering
+entry point by handing the selected branch token slice to the already accepted
+body lowering path.
+
+Scope:
+
+- Detect when a selected implementation body is an exact M156
+  generation-control region.
+- Evaluate the M156 condition and build a temporary source-owned
+  `ImplementationBody` from the selected branch tokens only.
+- Lower that selected branch body through the existing `Lowerer.lower(...)`
+  body capabilities: accepted synthetic operation fragments and accepted exact
+  `emit_return(call<primitive=add>(left, right))` / primitive-call paths.
+- Preserve unselected branch body opacity: unsupported calls, malformed
+  directives, raw helpers, or other unsupported forms in the unselected branch
+  must not be diagnosed.
+- Propagate M156 region/condition diagnostics and existing selected-branch
+  lowering diagnostics deterministically.
+
+Out of scope:
+
+Recursive or nested generation-control lowering; branch-chain
+`else if<generation>`; plain `else`; loops; declarations; backend-control
+lowering; body-token rendering; backend rendering; raw expression parsing;
+primitive-call rendering beyond already accepted exact paths; source repair;
 runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad registries,
 dispatchers, worklists, or fixpoint machinery.
 

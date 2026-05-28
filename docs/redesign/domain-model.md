@@ -775,6 +775,48 @@ Invariants:
   selector-attribute substitution engine, backend renderer, or raw text
   replacement mechanism.
 
+## Generation-Control Region Lowering Model
+
+Milestone 156 adds a narrow result boundary for exact selected
+`if<generation>(...) { ... } else<generation> { ... }` body-token regions.
+It consumes an M155 boolean `LoweredGenerationValue` and preserves
+source-owned token slices for the selected and unselected branches. Branch
+contents are not parsed or rendered by this model.
+
+```python
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationControlBranch:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationControlRegion:
+    condition: LoweredGenerationValue
+    selected_branch: LoweredGenerationControlBranch
+    unselected_branch: LoweredGenerationControlBranch
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class GenerationControlRegionLoweringResult:
+    region: LoweredGenerationControlRegion | None
+    diagnostics: tuple[Diagnostic, ...]
+```
+
+Invariants:
+
+- The accepted region shape is exactly a generation `if` directive, raw `{`
+  opener, true-branch token slice, raw `}` close, generation `else`
+  directive, raw `{` opener, false-branch token slice, and raw `}` close.
+- The condition must be an accepted M155 boolean query for primitive
+  attributes, scalar signedness, or scalar type sameness.
+- Integer generation values such as vector length, vector alignment, or scalar
+  size bytes are valid M155 facts but invalid branch conditions.
+- Branch token slices are source-owned body tokens. Raw helper text,
+  classified directives, nested raw braces, and adjacent raw tokens remain
+  untouched for later lowering/rendering milestones.
+- Unsupported branch-chain or plain-else shapes are diagnostic boundaries, not
+  source repair targets.
+
 Milestone 144 adds selector-payload values:
 
 ```python

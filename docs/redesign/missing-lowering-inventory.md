@@ -12,7 +12,7 @@ typed redesign contracts, explicit evidence, diagnostics, and tests.
 
 ## Current Baseline
 
-Accepted through M155:
+Accepted through M156:
 
 - Generation-time lowering handles only the accepted typed helper/predicate
   forms from M38, M41-M43, M48, M51-M59, and M67-M72.
@@ -29,7 +29,7 @@ Accepted through M155:
   generated output, dependency closure, Rust uninit translation, and broad TSIL
   semantics remain deferred unless a milestone explicitly selects a narrow
   slice.
-- The clean restart M127-M155 line has accepted real TSIL payload intake,
+- The clean restart M127-M156 line has accepted real TSIL payload intake,
   source-owned body tokens, directive-envelope classification, primitive-call
   island classification, selected implementation context/type-query lowering,
   extension/register/mask facts, primitive-call selector payload lowering,
@@ -38,9 +38,11 @@ Accepted through M155:
   resolver/collector consolidation, helper raw preservation, and
   generation-value query inventory plus isolated selected-context
   generation-value query lowering for the M155 scalar/current-vector/
-  primitive-attribute subset. That path deliberately still does not render
-  primitive-call expressions, prune generation-control regions, or parse broad
-  TSIL expressions/statements.
+  primitive-attribute subset, and exact M156 selected-branch token selection
+  for two-arm `if<generation>` / `else<generation>` regions. That path
+  deliberately still does not render primitive-call expressions, lower branch
+  body contents, support `else if<generation>` chains, or parse broad TSIL
+  expressions/statements.
 
 ## Post-M152 Clean Restart Lowering Paths
 
@@ -51,7 +53,7 @@ to implement several lanes in one milestone.
 | Path | TSIL surface | Why it matters | Boundary |
 | --- | --- | --- | --- |
 | Generation value/query lowering | `value<generation>(...)` forms from the current corpus | Generation-time conditions, loop bounds, declarations, type predicates, vector metadata, primitive attributes, and selected source regions depend on typed values rather than raw helper text. | M155 accepts isolated selected-context evaluators for vector length/alignment, scalar type facts, and concrete boolean primitive attributes. Remaining value families should still be selected explicitly and must not add a general expression parser. |
-| Generation control lowering | `if<generation>(...)`, `else if<generation>(...)`, `else<generation>` | Real bodies need selected-branch pruning before backend rendering. | Match directive regions over source-owned tokens, evaluate only accepted generation-value predicates, preserve branch provenance, and diagnose unsupported conditions. |
+| Generation control lowering | `if<generation>(...)`, `else if<generation>(...)`, `else<generation>` | Real bodies need selected-branch pruning before backend rendering. | M156 accepts exact two-arm `if<generation>(VALUE_QUERY) { ... } else<generation> { ... }` token regions for M155 boolean conditions and preserves selected/unselected branch token slices. Branch-chain `else if<generation>`, plain `else`, selected-body lowering, and rendering remain deferred. |
 | Generation declaration/iteration lowering | `loop<unroll>(...)`, `loop<range>(...)`, `var<...>(...)`, non-type `let<...>(...)` | Generic/vector fallback bodies use TSIL directives for repeated statements, declarations, temporaries, and aliases. | Lower directives over token regions with explicit symbol/type/value facts. `let<type>(...)` alias facts already feed the type environment; do not parse all surrounding target-language statements. |
 | Backend query lowering | `value<backend>(...)`, accepted `type<backend>(...)` requests | Backend spellings, suffixes, uninit values, and type spellings must be derived from typed semantic values before rendering. | Produce typed backend translation requests/results. Renderers must not evaluate raw query text. |
 | Backend control lowering | `if<compile>(...)`, `else<compile>`, `switch<compile>(...)` | Backend-specific compile-time control appears in current `tsldata` bodies. | Treat as backend-owned control directives. `if<runtime>` / `else<runtime>` are absent from the current corpus and should remain future/diagnostic unless new source data adds them. |

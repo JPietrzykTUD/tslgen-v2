@@ -53,6 +53,8 @@ from tslgen.lowering import (
     LoweredFunctionBody,
     LoweredFunctionSet,
     LoweredFunctionSignature,
+    LoweredGenerationControlBranch,
+    LoweredGenerationControlRegion,
     LoweredGenerationValue,
     LoweredGenericRegisterType,
     LoweredIntrinsicVectorImaskType,
@@ -4222,6 +4224,421 @@ def test_m155_reports_unknown_and_non_boolean_primitive_attributes() -> None:
     assert non_boolean.diagnostics == repeated.diagnostics
 
 
+def test_m156_selects_true_generation_branch_and_preserves_tokens() -> None:
+    true_tokens = (
+        RawStringToken(
+            text="result = details::arith_mul(left, right);",
+            source=_location(5, 9),
+        ),
+        RawStringToken(
+            text=(
+                "if (mask) { result = details::arith_mul(result, right); } "
+                "else { result = left; }"
+            ),
+            source=_location(6, 9),
+        ),
+        RawStringToken(
+            text='comment_like_text("else if<generation>(ignored)");',
+            source=_location(6, 83),
+        ),
+        LowerableDirective(
+            name="emit_return",
+            arguments=("result",),
+            source=_location(6, 136),
+            payload_tokens=(
+                RawStringToken(text="result", source=_location(6, 148)),
+            ),
+        ),
+    )
+    false_tokens = (
+        RawStringToken(text="result = left;", source=_location(8, 9)),
+        RawStringToken(text="result = right;", source=_location(9, 9)),
+    )
+    body = _generation_if_body(
+        "value<generation>(primitive::attribute(aligned))",
+        true_tokens=true_tokens,
+        false_tokens=false_tokens,
+    )
+    selected = _selected_implementation(
+        body=body,
+        attributes=(
+            PrimitiveAttribute(
+                key="aligned",
+                value="true",
+                declared_value="*",
+                source=_location(1, 16),
+            ),
+        ),
+    )
+
+    result = Lowerer().lower_generation_control_region(selected)
+
+    assert result.diagnostics == ()
+    assert result.region == LoweredGenerationControlRegion(
+        condition=LoweredGenerationValue(
+            kind="primitive.attribute",
+            value=True,
+            source_text="value<generation>(primitive::attribute(aligned))",
+            source=_location(4, 7),
+        ),
+        selected_branch=LoweredGenerationControlBranch(
+            tokens=true_tokens,
+            source=_location(5, 9),
+        ),
+        unselected_branch=LoweredGenerationControlBranch(
+            tokens=false_tokens,
+            source=_location(8, 9),
+        ),
+        source=_location(4, 7),
+    )
+    assert result.region.selected_branch.tokens == true_tokens
+    assert "details::arith_mul" in result.region.selected_branch.tokens[0].text
+    assert "if (mask)" in result.region.selected_branch.tokens[1].text
+    assert "else { result = left; }" in result.region.selected_branch.tokens[1].text
+    assert "else if<generation>" in result.region.selected_branch.tokens[2].text
+
+
+def test_m156_selects_false_generation_branch_from_type_predicate() -> None:
+    true_tokens = (RawStringToken(text="signed_path();", source=_location(5, 9)),)
+    false_tokens = (RawStringToken(text="unsigned_path();", source=_location(8, 9)),)
+    body = _generation_if_body(
+        "value<generation>(type::is_signed(type<generation>(base::in)))",
+        true_tokens=true_tokens,
+        false_tokens=false_tokens,
+    )
+    selected = _selected_implementation(body=body, type_tag="ui32")
+
+    result = Lowerer().lower_generation_control_region(selected)
+
+    assert result.diagnostics == ()
+    assert result.region == LoweredGenerationControlRegion(
+        condition=LoweredGenerationValue(
+            kind="type.is_signed",
+            value=False,
+            source_text=(
+                "value<generation>(type::is_signed(type<generation>(base::in)))"
+            ),
+            source=_location(4, 7),
+        ),
+        selected_branch=LoweredGenerationControlBranch(
+            tokens=false_tokens,
+            source=_location(8, 9),
+        ),
+        unselected_branch=LoweredGenerationControlBranch(
+            tokens=true_tokens,
+            source=_location(5, 9),
+        ),
+        source=_location(4, 7),
+    )
+
+
+def test_m156_selects_type_sameness_generation_branch() -> None:
+    true_tokens = (RawStringToken(text="same_path();", source=_location(5, 9)),)
+    false_tokens = (RawStringToken(text="other_path();", source=_location(8, 9)),)
+    body = _generation_if_body(
+        (
+            "value<generation>(type::is_same(type<generation>(base::in), "
+            "scalar::ui32))"
+        ),
+        true_tokens=true_tokens,
+        false_tokens=false_tokens,
+    )
+    selected = _selected_implementation(body=body, type_tag="ui32")
+
+    result = Lowerer().lower_generation_control_region(selected)
+
+    assert result.diagnostics == ()
+    assert result.region.selected_branch == LoweredGenerationControlBranch(
+        tokens=true_tokens,
+        source=_location(5, 9),
+    )
+    assert result.region.condition == LoweredGenerationValue(
+        kind="type.is_same",
+        value=True,
+        source_text=(
+            "value<generation>(type::is_same(type<generation>(base::in), "
+            "scalar::ui32))"
+        ),
+        source=_location(4, 7),
+    )
+
+
+def test_m156_reports_nonboolean_and_unsupported_generation_conditions() -> None:
+    lowerer = Lowerer()
+    nonboolean = lowerer.lower_generation_control_region(
+        _selected_implementation(
+            body=_generation_if_body(
+                "value<generation>(type::size_bytes(type<generation>(base::in)))",
+                true_tokens=(RawStringToken(text="size_path();", source=_location(5, 9)),),
+                false_tokens=(RawStringToken(text="other_path();", source=_location(8, 9)),),
+            ),
+        ),
+    )
+    unsupported = lowerer.lower_generation_control_region(
+        _selected_implementation(
+            body=_generation_if_body(
+                "value<generation>(generic::length(OutVec))",
+                true_tokens=(RawStringToken(text="generic_path();", source=_location(5, 9)),),
+                false_tokens=(RawStringToken(text="other_path();", source=_location(8, 9)),),
+            ),
+        ),
+    )
+
+    assert [diagnostic.code for diagnostic in nonboolean.diagnostics] == [
+        "TSL-LOWER-NONBOOLEAN-GENERATION-CONTROL-CONDITION",
+    ]
+    assert [diagnostic.location for diagnostic in nonboolean.diagnostics] == [
+        _location(4, 7),
+    ]
+    assert [diagnostic.code for diagnostic in unsupported.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
+    ]
+    assert [diagnostic.location for diagnostic in unsupported.diagnostics] == [
+        _location(4, 7),
+    ]
+    assert nonboolean.region is None
+    assert unsupported.region is None
+
+
+def test_m156_propagates_m155_missing_fact_diagnostics() -> None:
+    body = _generation_if_body(
+        "value<generation>(type::is_signed(type<generation>(base::in)))",
+        true_tokens=(RawStringToken(text="signed_path();", source=_location(5, 9)),),
+        false_tokens=(RawStringToken(text="other_path();", source=_location(8, 9)),),
+    )
+
+    result = Lowerer().lower_generation_control_region(
+        _selected_implementation(body=body, type_tag="f32"),
+    )
+
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-LOWER-MISSING-SCALAR-FACT",
+    ]
+    assert [diagnostic.location for diagnostic in result.diagnostics] == [
+        _location(4, 7),
+    ]
+    assert result.region is None
+
+
+def test_m156_reports_malformed_generation_control_regions() -> None:
+    lowerer = Lowerer()
+    missing_if_open_body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="if",
+                arguments=(
+                    "generation",
+                    "value<generation>(primitive::attribute(aligned))",
+                ),
+                source=_location(4, 7),
+            ),
+            RawStringToken(text="selected_path();", source=_location(4, 62)),
+            RawStringToken(text="}", source=_location(6, 7)),
+            LowerableDirective(
+                name="else",
+                arguments=("generation",),
+                source=_location(6, 9),
+            ),
+            RawStringToken(text=" {", source=_location(6, 25)),
+            RawStringToken(text="fallback_path();", source=_location(7, 9)),
+            RawStringToken(text="}", source=_location(8, 7)),
+        ),
+        source=_location(3, 5),
+    )
+    missing_else_body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="if",
+                arguments=(
+                    "generation",
+                    "value<generation>(primitive::attribute(aligned))",
+                ),
+                source=_location(4, 7),
+            ),
+            RawStringToken(text=" {", source=_location(4, 62)),
+            RawStringToken(text="selected_path();", source=_location(5, 9)),
+            RawStringToken(text="}", source=_location(6, 7)),
+        ),
+        source=_location(3, 5),
+    )
+    unmatched_body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="if",
+                arguments=(
+                    "generation",
+                    "value<generation>(primitive::attribute(aligned))",
+                ),
+                source=_location(4, 7),
+            ),
+            RawStringToken(text=" {", source=_location(4, 62)),
+            RawStringToken(text="selected_path();", source=_location(5, 9)),
+        ),
+        source=_location(3, 5),
+    )
+    missing_else_open_body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="if",
+                arguments=(
+                    "generation",
+                    "value<generation>(primitive::attribute(aligned))",
+                ),
+                source=_location(4, 7),
+            ),
+            RawStringToken(text=" {", source=_location(4, 62)),
+            RawStringToken(text="selected_path();", source=_location(5, 9)),
+            RawStringToken(text="}", source=_location(6, 7)),
+            LowerableDirective(
+                name="else",
+                arguments=("generation",),
+                source=_location(6, 9),
+            ),
+            RawStringToken(text="fallback_path();", source=_location(6, 25)),
+            RawStringToken(text="}", source=_location(8, 7)),
+        ),
+        source=_location(3, 5),
+    )
+    trailing_body_base = _generation_if_body(
+        "value<generation>(primitive::attribute(aligned))",
+        true_tokens=(RawStringToken(text="selected_path();", source=_location(5, 9)),),
+        false_tokens=(RawStringToken(text="fallback_path();", source=_location(8, 9)),),
+    )
+    trailing_body = ImplementationBody(
+        tokens=trailing_body_base.tokens
+        + (RawStringToken(text="trailing_path();", source=_location(11, 7)),),
+        source=trailing_body_base.source,
+    )
+
+    missing_if_open = lowerer.lower_generation_control_region(
+        _selected_implementation(body=missing_if_open_body),
+    )
+    missing_else = lowerer.lower_generation_control_region(
+        _selected_implementation(body=missing_else_body),
+    )
+    missing_else_repeat = lowerer.lower_generation_control_region(
+        _selected_implementation(body=missing_else_body),
+    )
+    unmatched = lowerer.lower_generation_control_region(
+        _selected_implementation(body=unmatched_body),
+    )
+    missing_else_open = lowerer.lower_generation_control_region(
+        _selected_implementation(body=missing_else_open_body),
+    )
+    trailing = lowerer.lower_generation_control_region(
+        _selected_implementation(body=trailing_body),
+    )
+
+    assert [diagnostic.code for diagnostic in missing_if_open.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-CONTROL-REGION",
+    ]
+    assert [diagnostic.location for diagnostic in missing_if_open.diagnostics] == [
+        _location(4, 62),
+    ]
+    assert [diagnostic.code for diagnostic in missing_else.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-CONTROL-REGION",
+    ]
+    assert [diagnostic.location for diagnostic in missing_else.diagnostics] == [
+        _location(4, 7),
+    ]
+    assert missing_else.diagnostics == missing_else_repeat.diagnostics
+    assert [diagnostic.code for diagnostic in unmatched.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-CONTROL-REGION",
+    ]
+    assert [diagnostic.location for diagnostic in unmatched.diagnostics] == [
+        _location(4, 7),
+    ]
+    assert [diagnostic.code for diagnostic in missing_else_open.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-CONTROL-REGION",
+    ]
+    assert [diagnostic.location for diagnostic in missing_else_open.diagnostics] == [
+        _location(6, 9),
+    ]
+    assert [diagnostic.code for diagnostic in trailing.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-CONTROL-REGION",
+    ]
+    assert [diagnostic.location for diagnostic in trailing.diagnostics] == [
+        _location(11, 7),
+    ]
+
+
+def test_m156_reports_unsupported_else_if_and_plain_else_regions() -> None:
+    lowerer = Lowerer()
+    else_if_body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="if",
+                arguments=(
+                    "generation",
+                    "value<generation>(primitive::attribute(aligned))",
+                ),
+                source=_location(4, 7),
+            ),
+            RawStringToken(text=" {", source=_location(4, 62)),
+            RawStringToken(text="selected_path();", source=_location(5, 9)),
+            RawStringToken(
+                text="} else ",
+                source=_location(6, 7),
+            ),
+            LowerableDirective(
+                name="if",
+                arguments=(
+                    "generation",
+                    (
+                        "value<generation>(type::is_same("
+                        "type<generation>(base::in), scalar::si32))"
+                    ),
+                ),
+                source=_location(6, 14),
+            ),
+            RawStringToken(text=" {", source=_location(6, 89)),
+            RawStringToken(text="branch_path();", source=_location(7, 9)),
+            RawStringToken(text="}", source=_location(8, 7)),
+        ),
+        source=_location(3, 5),
+    )
+    plain_else_body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="if",
+                arguments=(
+                    "generation",
+                    "value<generation>(primitive::attribute(aligned))",
+                ),
+                source=_location(4, 7),
+            ),
+            RawStringToken(text=" {", source=_location(4, 62)),
+            RawStringToken(text="selected_path();", source=_location(5, 9)),
+            RawStringToken(text="} else {", source=_location(6, 7)),
+            RawStringToken(text="fallback_path();", source=_location(7, 9)),
+            RawStringToken(text="}", source=_location(8, 7)),
+        ),
+        source=_location(3, 5),
+    )
+
+    else_if = lowerer.lower_generation_control_region(
+        _selected_implementation(body=else_if_body),
+    )
+    plain_else = lowerer.lower_generation_control_region(
+        _selected_implementation(body=plain_else_body),
+    )
+
+    assert [diagnostic.code for diagnostic in else_if.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-GENERATION-CONTROL-REGION",
+    ]
+    assert [diagnostic.location for diagnostic in else_if.diagnostics] == [
+        _location(6, 7),
+    ]
+    assert [diagnostic.code for diagnostic in plain_else.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-GENERATION-CONTROL-REGION",
+    ]
+    assert [diagnostic.location for diagnostic in plain_else.diagnostics] == [
+        _location(6, 7),
+    ]
+    assert "else if<generation>" in else_if.diagnostics[0].message
+    assert "plain else" in plain_else.diagnostics[0].message
+
+
 def test_m142_does_not_resolve_primitive_call_selector_targets(
     tmp_path: Path,
 ) -> None:
@@ -7762,6 +8179,39 @@ def _catalog_attribute_values(
             for attribute in primitive.attributes
         )
         for primitive in catalog.primitives
+    )
+
+
+def _generation_if_body(
+    condition: str,
+    *,
+    true_tokens: tuple[RawStringToken | LowerableDirective, ...],
+    false_tokens: tuple[RawStringToken | LowerableDirective, ...],
+) -> ImplementationBody:
+    if_text = f"if<generation>({condition})"
+    return ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="if",
+                arguments=("generation", condition),
+                source=_location(4, 7),
+            ),
+            RawStringToken(
+                text=" {",
+                source=_location(4, 7 + len(if_text)),
+            ),
+            *true_tokens,
+            RawStringToken(text="} ", source=_location(7, 7)),
+            LowerableDirective(
+                name="else",
+                arguments=("generation",),
+                source=_location(7, 9),
+            ),
+            RawStringToken(text=" {", source=_location(7, 25)),
+            *false_tokens,
+            RawStringToken(text="}", source=_location(10, 7)),
+        ),
+        source=_location(3, 5),
     )
 
 

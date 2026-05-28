@@ -65,6 +65,15 @@ syntax. For example, `prim<v:=(v,v)> sub(left, right):` is a declaration in
   operators inside `emit_return(...)`.
 - `tsldata/primitives/bitwise/shifts.tsl:625` shows nested
   `if<generation>` and `if<compile>` directives.
+- `tsldata/primitives/load_store/array.tsl:108` and
+  `tsldata/primitives/load_store/array.tsl:109` show the current
+  `else if<generation>(...)` corpus form. M156 records this as branch-chain
+  evidence only; the selected executable form remains the exact two-arm
+  `if<generation>(...) { ... } else<generation> { ... }` region.
+- `tsldata/primitives/conversion/repr_change.tsl:1213` shows a
+  generation-control-looking `} else {` form without `else<generation>`.
+  M156 treats this as plain-else evidence outside the selected executable
+  shape.
 - `tsldata/primitives/arithmetic/complex.tsl:689` shows
   `details::arith_mul(...)` embedded inside indexed assignment.
 - `tsldata/primitives/bitwise/bit_counts.tsl:79`,
