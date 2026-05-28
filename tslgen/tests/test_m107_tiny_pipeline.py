@@ -19,6 +19,9 @@ from tslgen.backends.rust import RustBackend
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
     Catalog,
+    Extension,
+    ExtensionBackendMetadata,
+    ExtensionCatalog,
     Implementation,
     ImplementationBody,
     LowerableDirective,
@@ -50,6 +53,7 @@ from tslgen.lowering import (
     LoweredFunctionBody,
     LoweredFunctionSet,
     LoweredFunctionSignature,
+    LoweredGenerationValue,
     LoweredGenericRegisterType,
     LoweredIntrinsicVectorImaskType,
     LoweredParameter,
@@ -3861,6 +3865,363 @@ def test_m143_lowers_backend_query_inside_generation_transform_alias() -> None:
     )
 
 
+def test_m155_lowers_vector_metadata_generation_values_from_catalog() -> None:
+    selected = _selected_implementation(extension="avx2", type_tag="si32")
+    catalog = Catalog(
+        primitives=(),
+        extensions=ExtensionCatalog(
+            (_extension_fact("avx2", vector_bits=256),),
+        ),
+    )
+    lowerer = Lowerer()
+
+    length = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(vector::length)",
+        _location(4, 7),
+        catalog=catalog,
+    )
+    alignment = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(vector::alignment)",
+        _location(5, 7),
+        catalog=catalog,
+    )
+
+    assert length.diagnostics == ()
+    assert length.value == LoweredGenerationValue(
+        kind="vector.length",
+        value=8,
+        source_text="value<generation>(vector::length)",
+        source=_location(4, 7),
+    )
+    assert alignment.diagnostics == ()
+    assert alignment.value == LoweredGenerationValue(
+        kind="vector.alignment",
+        value=32,
+        source_text="value<generation>(vector::alignment)",
+        source=_location(5, 7),
+    )
+
+
+def test_m155_lowers_scalar_type_generation_values_after_type_lowering() -> None:
+    body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="let",
+                arguments=("type", "CurrentScalar, type<generation>(base::in)"),
+                source=_location(4, 7),
+            ),
+        ),
+        source=_location(3, 5),
+    )
+    selected = _selected_implementation(body=body, type_tag="ui32")
+    lowerer = Lowerer()
+    environment = lowerer.type_environment_for(selected)
+
+    size_bytes = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(type::size_bytes(CurrentScalar))",
+        _location(5, 7),
+        environment=environment,
+    )
+    is_signed = lowerer.lower_generation_value_query(
+        selected,
+        (
+            "value<generation>(type::is_signed(type<generation>("
+            "base::signed_of(type<generation>(base::in)))))"
+        ),
+        _location(6, 7),
+        environment=environment,
+    )
+    is_same = lowerer.lower_generation_value_query(
+        selected,
+        (
+            "value<generation>(type::is_same(type<generation>(base::in), "
+            "scalar::ui32))"
+        ),
+        _location(7, 7),
+        environment=environment,
+    )
+    is_signed_false = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(type::is_signed(type<generation>(base::in)))",
+        _location(8, 7),
+        environment=environment,
+    )
+    is_same_false = lowerer.lower_generation_value_query(
+        selected,
+        (
+            "value<generation>(type::is_same(type<generation>(base::in), "
+            "scalar::si32))"
+        ),
+        _location(9, 7),
+        environment=environment,
+    )
+
+    assert environment.diagnostics == ()
+    assert size_bytes.diagnostics == ()
+    assert size_bytes.value == LoweredGenerationValue(
+        kind="type.size_bytes",
+        value=4,
+        source_text="value<generation>(type::size_bytes(CurrentScalar))",
+        source=_location(5, 7),
+    )
+    assert is_signed.diagnostics == ()
+    assert is_signed.value == LoweredGenerationValue(
+        kind="type.is_signed",
+        value=True,
+        source_text=(
+            "value<generation>(type::is_signed(type<generation>("
+            "base::signed_of(type<generation>(base::in)))))"
+        ),
+        source=_location(6, 7),
+    )
+    assert is_same.diagnostics == ()
+    assert is_same.value == LoweredGenerationValue(
+        kind="type.is_same",
+        value=True,
+        source_text=(
+            "value<generation>(type::is_same(type<generation>(base::in), "
+            "scalar::ui32))"
+        ),
+        source=_location(7, 7),
+    )
+    assert is_signed_false.diagnostics == ()
+    assert is_signed_false.value == LoweredGenerationValue(
+        kind="type.is_signed",
+        value=False,
+        source_text="value<generation>(type::is_signed(type<generation>(base::in)))",
+        source=_location(8, 7),
+    )
+    assert is_same_false.diagnostics == ()
+    assert is_same_false.value == LoweredGenerationValue(
+        kind="type.is_same",
+        value=False,
+        source_text=(
+            "value<generation>(type::is_same(type<generation>(base::in), "
+            "scalar::si32))"
+        ),
+        source=_location(9, 7),
+    )
+
+
+def test_m155_lowers_boolean_primitive_attributes_only() -> None:
+    selected = _selected_implementation(
+        attributes=(
+            PrimitiveAttribute(
+                key="aligned",
+                value="true",
+                declared_value="*",
+                source=_location(1, 16),
+            ),
+            PrimitiveAttribute(
+                key="packed",
+                value="false",
+                declared_value="*",
+                source=_location(1, 27),
+            ),
+        ),
+    )
+    lowerer = Lowerer()
+
+    aligned = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(primitive::attribute(aligned))",
+        _location(4, 7),
+    )
+    packed = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(primitive::attribute(packed))",
+        _location(5, 7),
+    )
+
+    assert aligned.diagnostics == ()
+    assert aligned.value == LoweredGenerationValue(
+        kind="primitive.attribute",
+        value=True,
+        source_text="value<generation>(primitive::attribute(aligned))",
+        source=_location(4, 7),
+    )
+    assert packed.diagnostics == ()
+    assert packed.value == LoweredGenerationValue(
+        kind="primitive.attribute",
+        value=False,
+        source_text="value<generation>(primitive::attribute(packed))",
+        source=_location(5, 7),
+    )
+
+
+def test_m155_reports_malformed_unsupported_and_surrounding_contexts() -> None:
+    selected = _selected_implementation()
+    lowerer = Lowerer()
+
+    malformed = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(type::size_bytes(type<generation>(base::in))",
+        _location(4, 7),
+    )
+    unsupported_generic = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(generic::length(OutVec))",
+        _location(5, 7),
+    )
+    unsupported_generic_runtime = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(generic::runtime_length(ToType))",
+        _location(6, 7),
+    )
+    unsupported_mask = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(mask::lane::all_true)",
+        _location(7, 7),
+    )
+    unsupported_mask_false = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(mask::lane::all_false)",
+        _location(8, 7),
+    )
+    surrounding = lowerer.lower_generation_value_query(
+        selected,
+        "loop<range>(i, 0, value<generation>(vector::length), 1)",
+        _location(9, 7),
+    )
+    malformed_size_arity = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(type::size_bytes(scalar::ui32, scalar::si32))",
+        _location(10, 7),
+    )
+    malformed_same_arity = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(type::is_same(scalar::ui32))",
+        _location(11, 7),
+    )
+    malformed_attribute_empty = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(primitive::attribute())",
+        _location(12, 7),
+    )
+    malformed_attribute_key = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(primitive::attribute(type<generation>(base::in)))",
+        _location(13, 7),
+    )
+
+    assert [diagnostic.code for diagnostic in malformed.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-VALUE-QUERY",
+    ]
+    assert [diagnostic.code for diagnostic in unsupported_generic.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
+    ]
+    assert [
+        diagnostic.code for diagnostic in unsupported_generic_runtime.diagnostics
+    ] == [
+        "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
+    ]
+    assert [diagnostic.code for diagnostic in unsupported_mask.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
+    ]
+    assert [diagnostic.code for diagnostic in unsupported_mask_false.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
+    ]
+    assert [diagnostic.code for diagnostic in surrounding.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-VALUE-QUERY",
+    ]
+    assert [diagnostic.code for diagnostic in malformed_size_arity.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-VALUE-QUERY",
+    ]
+    assert [diagnostic.code for diagnostic in malformed_same_arity.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-VALUE-QUERY",
+    ]
+    assert [
+        diagnostic.code for diagnostic in malformed_attribute_empty.diagnostics
+    ] == [
+        "TSL-LOWER-MALFORMED-GENERATION-VALUE-QUERY",
+    ]
+    assert [diagnostic.code for diagnostic in malformed_attribute_key.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-VALUE-QUERY",
+    ]
+    assert malformed.value is None
+    assert unsupported_generic.value is None
+    assert unsupported_generic_runtime.value is None
+    assert unsupported_mask.value is None
+    assert unsupported_mask_false.value is None
+    assert surrounding.value is None
+    assert malformed_size_arity.value is None
+    assert malformed_same_arity.value is None
+    assert malformed_attribute_empty.value is None
+    assert malformed_attribute_key.value is None
+
+
+def test_m155_reports_missing_facts_and_unsupported_lowered_type_values() -> None:
+    lowerer = Lowerer()
+    selected = _selected_implementation(extension="avx2", type_tag="si32")
+
+    missing_vector_metadata = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(vector::length)",
+        _location(4, 7),
+    )
+    unsupported_vector_type = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(type::size_bytes(type<generation>(vector::imask)))",
+        _location(5, 7),
+    )
+    missing_scalar_fact = lowerer.lower_generation_value_query(
+        _selected_implementation(type_tag="si64"),
+        "value<generation>(type::size_bytes(type<generation>(base::in)))",
+        _location(6, 7),
+    )
+
+    assert [diagnostic.code for diagnostic in missing_vector_metadata.diagnostics] == [
+        "TSL-LOWER-MISSING-VECTOR-METADATA",
+    ]
+    assert [diagnostic.code for diagnostic in unsupported_vector_type.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-TYPE",
+    ]
+    assert [diagnostic.code for diagnostic in missing_scalar_fact.diagnostics] == [
+        "TSL-LOWER-MISSING-SCALAR-FACT",
+    ]
+
+
+def test_m155_reports_unknown_and_non_boolean_primitive_attributes() -> None:
+    lowerer = Lowerer()
+    selected = _selected_implementation(
+        attributes=(
+            PrimitiveAttribute(
+                key="mask",
+                value="zero",
+                declared_value="zero",
+                source=_location(1, 16),
+            ),
+        ),
+    )
+
+    unknown = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(primitive::attribute(aligned))",
+        _location(4, 7),
+    )
+    non_boolean = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(primitive::attribute(mask))",
+        _location(5, 7),
+    )
+    repeated = lowerer.lower_generation_value_query(
+        selected,
+        "value<generation>(primitive::attribute(mask))",
+        _location(5, 7),
+    )
+
+    assert [diagnostic.code for diagnostic in unknown.diagnostics] == [
+        "TSL-LOWER-UNKNOWN-PRIMITIVE-ATTRIBUTE",
+    ]
+    assert [diagnostic.code for diagnostic in non_boolean.diagnostics] == [
+        "TSL-LOWER-NONCONCRETE-PRIMITIVE-ATTRIBUTE",
+    ]
+    assert non_boolean.diagnostics == repeated.diagnostics
+
+
 def test_m142_does_not_resolve_primitive_call_selector_targets(
     tmp_path: Path,
 ) -> None:
@@ -7412,6 +7773,7 @@ def _selected_implementation(
     body_operation: str | None = None,
     extension: str = "scalar",
     type_tag: str = "si32",
+    attributes: tuple[PrimitiveAttribute, ...] = (),
 ) -> SelectedImplementation:
     selected_body = body or _implementation_body(
         body_operation or operation_id,
@@ -7430,17 +7792,64 @@ def _selected_implementation(
         template="binary",
         implementations=(implementation,),
         source=_location(1, 1),
+        attributes=attributes,
     )
     target = Target(
         backend=backend,
         primitive_name=operation_id,
         extension=extension,
         type_tag=type_tag,
+        attributes=tuple(
+            TargetAttribute(key=attribute.key, value=attribute.value)
+            for attribute in attributes
+        ),
     )
     return SelectedImplementation(
         target=target,
         primitive=primitive,
         implementation=implementation,
+    )
+
+
+def _extension_fact(name: str, *, vector_bits: int | str | None) -> Extension:
+    metadata = ExtensionBackendMetadata(
+        supported=True,
+        type_name=None,
+        generation_support=(),
+        headers=(),
+        header_guard=None,
+        test_suite_name=None,
+        test_support_header=None,
+        source=_location(1, 1),
+    )
+    return Extension(
+        name=name,
+        extension_name=name,
+        vendor=None,
+        inherits=None,
+        family=None,
+        intrinsic_style=None,
+        vector_bits=vector_bits,
+        native_sort_order=None,
+        autodetect=None,
+        lscpu_flags=(),
+        mask_repr=None,
+        mask_width=None,
+        mask_vector_loadable=None,
+        runtime_lanes=None,
+        default_test_target=None,
+        cpp=metadata,
+        rust=metadata,
+        signature_support_exclude=(),
+        test_filter_exclude_templates=(),
+        test_sizes_bits=(),
+        vector_register_types=(),
+        resolved_vector_register_types=(),
+        vector_register_type_policy=None,
+        size_parameter=None,
+        mask_type_policy=None,
+        integral_mask_type_policy=None,
+        source=_location(1, 1),
     )
 
 

@@ -31,6 +31,15 @@ LoweredVectorMemberKind = Literal[
 ]
 LoweredBaseTransformKind = Literal["signed_of", "unsigned_of", "generic", "id"]
 LoweredVectorTransformKind = Literal["transform", "transform_extension"]
+LoweredGenerationValueKind = Literal[
+    "vector.length",
+    "vector.alignment",
+    "type.size_bytes",
+    "type.is_signed",
+    "type.is_same",
+    "primitive.attribute",
+]
+LoweredGenerationValuePayload = int | bool
 
 CURRENT_VECTOR_KEYWORD = "Vec"
 CURRENT_SCALAR_KEYWORD = "scalar"
@@ -291,6 +300,20 @@ class TypeExpressionLoweringResult:
 @dataclass(frozen=True, slots=True)
 class BackendTypeQueryLoweringResult:
     request: BackendTypeSpellingRequest | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationValue:
+    kind: LoweredGenerationValueKind
+    value: LoweredGenerationValuePayload
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationValueQueryLoweringResult:
+    value: LoweredGenerationValue | None
     diagnostics: tuple[Diagnostic, ...]
 
 

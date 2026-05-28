@@ -20014,8 +20014,8 @@ Accepted validation result:
 
 Status:
 
-Selected after M154 acceptance. Active next prompt:
-`docs/agent/runs/m155-execution-review-loop-prompt.md`.
+Accepted. Active next prompt after M155:
+`docs/agent/runs/m156-execution-review-loop-prompt.md`.
 
 Goal:
 
@@ -20063,3 +20063,96 @@ find tslgen -type d -name __pycache__ -print
 
 If M155 adds focused generation-value test files, include them in the
 compileall command and the targeted pytest command.
+
+Accepted result:
+
+- Added `LoweredGenerationValue` and `GenerationValueQueryLoweringResult` as
+  the small typed generation-value result boundary.
+- Added isolated selected-context `value<generation>(...)` lowering for:
+  `vector::length`, `vector::alignment`,
+  `type::size_bytes(TYPE_EXPR)`, `type::is_signed(TYPE_EXPR)`,
+  `type::is_same(TYPE_EXPR, TYPE_EXPR)`, and
+  `primitive::attribute(KEY)`.
+- Reused the accepted type syntax/type lowering path for `TYPE_EXPR`
+  arguments instead of exact raw nested string matching.
+- Produced deterministic diagnostics for malformed queries, unsupported
+  query families, unsupported lowered type values, missing vector metadata,
+  missing scalar facts, unknown primitive attributes, and non-boolean or
+  non-concrete primitive attributes.
+- Kept generation-control branch pruning, loop execution, declaration
+  lowering, surrounding arithmetic/comparisons, selector-attribute
+  substitution, mask constants, generic lengths, backend rendering, raw text
+  replacement, source repair, broad expression parsing, registries,
+  dispatchers, worklists, runtime `tsldata`, `frozen`, and `tslgenold`
+  dependencies out of scope.
+
+Review verdicts:
+
+- Architecture reviewer: `Accept`.
+- Boundary auditor: `Accept`.
+- Evidence auditor: `Accept With Follow-Up`; the untracked new module process
+  note is addressed by including `generation_values.py` in the final changed
+  file set.
+- Test auditor: `Accept` after focused test-coverage re-review.
+- Documentation auditor: `Accept` after focused domain-model re-review.
+- Validation auditor: `Accept`.
+
+Accepted validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `211 passed in 13.07s`.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and listed
+  validation-created cache directories under `tslgen/src/tslgen` and
+  `tslgen/tests`; after cleanup, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+### Milestone 156: Exact Generation-Control Branch Region Lowering Boundary
+
+Status:
+
+Selected after M155 acceptance. Active next prompt:
+`docs/agent/runs/m156-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the first generation-control consumer for accepted M155 boolean
+generation values by lowering exact source-owned `if<generation>` branch
+regions into selected body-token slices.
+
+Scope:
+
+- Record current `else if<generation>` corpus evidence before implementing
+  any generation-control lowering behavior.
+- Match exact generation-control regions over existing source-owned body
+  tokens:
+  `if<generation>(VALUE_QUERY) { ... } else<generation> { ... }`.
+- Evaluate only isolated M155 boolean generation value queries as conditions:
+  `primitive::attribute(KEY)`, `type::is_signed(TYPE_EXPR)`, and
+  `type::is_same(TYPE_EXPR, TYPE_EXPR)`.
+- Preserve selected branch body tokens exactly and preserve source provenance
+  for the region, condition, selected branch, and unselected branch.
+- Emit deterministic diagnostics for malformed regions, unsupported
+  conditions, non-boolean value results, missing facts, unmatched braces, and
+  unsupported `else if<generation>` or plain `else` variants.
+
+Out of scope:
+
+Loop execution; declaration lowering; raw expression parsing; arithmetic or
+comparison folding around generation values; selector-attribute substitution;
+mask constants; generic lengths; backend-control `if<compile>` /
+`switch<compile>` lowering; backend rendering; body-token rendering; source
+repair; raw text replacement; primitive-call rendering; dependency scheduling;
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad registries,
+dispatchers, worklists, or fixpoint machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```

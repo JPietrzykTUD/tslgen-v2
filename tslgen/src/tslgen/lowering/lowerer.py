@@ -40,11 +40,13 @@ from tslgen.lowering.model import (
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
     BackendTypeQueryLoweringResult,
+    GenerationValueQueryLoweringResult,
     PrimitiveCallClosureLoweringPackage,
     PrimitiveCallExpressionLoweringResult,
     TypeExpressionLoweringResult,
     build_selected_implementation_lowering_context,
 )
+from tslgen.lowering.generation_values import lower_generation_value_query
 from tslgen.lowering.operation_type_compatibility import (
     binary_operation_supports_scalar_type,
     supported_scalar_type_tags_for_binary_operation,
@@ -158,6 +160,24 @@ class Lowerer:
             context,
             query,
             source,
+            environment=environment,
+        )
+
+    def lower_generation_value_query(
+        self,
+        selected: SelectedImplementation,
+        query: str,
+        source: SourceLocation,
+        *,
+        catalog: Catalog | None = None,
+        environment: SelectedTypeEnvironment | None = None,
+    ) -> GenerationValueQueryLoweringResult:
+        context = self.context_for(selected)
+        return lower_generation_value_query(
+            context,
+            query,
+            source,
+            catalog=catalog,
             environment=environment,
         )
 

@@ -12,7 +12,7 @@ typed redesign contracts, explicit evidence, diagnostics, and tests.
 
 ## Current Baseline
 
-Accepted through M154:
+Accepted through M155:
 
 - Generation-time lowering handles only the accepted typed helper/predicate
   forms from M38, M41-M43, M48, M51-M59, and M67-M72.
@@ -29,15 +29,17 @@ Accepted through M154:
   generated output, dependency closure, Rust uninit translation, and broad TSIL
   semantics remain deferred unless a milestone explicitly selects a narrow
   slice.
-- The clean restart M127-M154 line has accepted real TSIL payload intake,
+- The clean restart M127-M155 line has accepted real TSIL payload intake,
   source-owned body tokens, directive-envelope classification, primitive-call
   island classification, selected implementation context/type-query lowering,
   extension/register/mask facts, primitive-call selector payload lowering,
   target matching, raw argument binding, reference inventory, dependency
   closure, exact return-call expression lowering, and primitive-call
   resolver/collector consolidation, helper raw preservation, and
-  generation-value query inventory. That path deliberately still does not
-  render primitive-call expressions, evaluate generation values, or parse broad
+  generation-value query inventory plus isolated selected-context
+  generation-value query lowering for the M155 scalar/current-vector/
+  primitive-attribute subset. That path deliberately still does not render
+  primitive-call expressions, prune generation-control regions, or parse broad
   TSIL expressions/statements.
 
 ## Post-M152 Clean Restart Lowering Paths
@@ -48,7 +50,7 @@ to implement several lanes in one milestone.
 
 | Path | TSIL surface | Why it matters | Boundary |
 | --- | --- | --- | --- |
-| Generation value/query lowering | `value<generation>(...)` forms from the current corpus | Generation-time conditions, loop bounds, declarations, type predicates, vector metadata, primitive attributes, and selected source regions depend on typed values rather than raw helper text. | Inventory all observed forms first, then add typed evaluator functions over explicit context. Do not add a general expression parser. |
+| Generation value/query lowering | `value<generation>(...)` forms from the current corpus | Generation-time conditions, loop bounds, declarations, type predicates, vector metadata, primitive attributes, and selected source regions depend on typed values rather than raw helper text. | M155 accepts isolated selected-context evaluators for vector length/alignment, scalar type facts, and concrete boolean primitive attributes. Remaining value families should still be selected explicitly and must not add a general expression parser. |
 | Generation control lowering | `if<generation>(...)`, `else if<generation>(...)`, `else<generation>` | Real bodies need selected-branch pruning before backend rendering. | Match directive regions over source-owned tokens, evaluate only accepted generation-value predicates, preserve branch provenance, and diagnose unsupported conditions. |
 | Generation declaration/iteration lowering | `loop<unroll>(...)`, `loop<range>(...)`, `var<...>(...)`, non-type `let<...>(...)` | Generic/vector fallback bodies use TSIL directives for repeated statements, declarations, temporaries, and aliases. | Lower directives over token regions with explicit symbol/type/value facts. `let<type>(...)` alias facts already feed the type environment; do not parse all surrounding target-language statements. |
 | Backend query lowering | `value<backend>(...)`, accepted `type<backend>(...)` requests | Backend spellings, suffixes, uninit values, and type spellings must be derived from typed semantic values before rendering. | Produce typed backend translation requests/results. Renderers must not evaluate raw query text. |
@@ -65,7 +67,7 @@ Not a lowering path by default: `details::arith_add`,
 unless a future milestone explicitly introduces typed support-helper
 availability facts for backend output integration.
 
-## Post-M154 Generation Value Query Inventory
+## Post-M155 Generation Value Query Boundary
 
 M154 records the current `value<generation>(...)` corpus in
 `docs/redesign/generation-value-query-inventory.md`: 597 query islands across
@@ -73,8 +75,8 @@ M154 records the current `value<generation>(...)` corpus in
 exact observed forms. All prompt-listed families are present, and the
 additional observed exact form is `value<generation>(mask::lane::all_false)`.
 
-The selected largest-safe next executable slice is selected-context generation
-value query lowering for isolated query islands:
+M155 implements the selected largest-safe executable slice as selected-context
+generation value query lowering for isolated query islands:
 
 - `value<generation>(vector::length)`;
 - `value<generation>(vector::alignment)`;
@@ -85,11 +87,10 @@ value query lowering for isolated query islands:
 
 This subset covers 474 current query islands and shares one explicit typed
 input boundary: selected implementation context, `CurrentVector`
-extension/type facts, selected scalar `TypeTag`, extension metadata, and
-concrete selected primitive attributes. It should be implemented as isolated
-query-island lowering only. For `type::*` value families, `TYPE_EXPR`
-arguments should be lowered through the accepted type lowering path first and
-only supported lowered scalar type values should be evaluated; exact raw
+extension/type facts, selected scalar `TypeTag`, extension metadata, selected
+type aliases, and concrete selected primitive attributes. For `type::*` value
+families, `TYPE_EXPR` arguments lower through the accepted type lowering path
+first and only supported lowered scalar type values are evaluated; exact raw
 nested strings such as `type<generation>(base::in)` are evidence, not the
 matching boundary. Surrounding consumers remain separate work:
 `if<generation>` branch pruning, `loop<...>` execution, declarations,
@@ -97,7 +98,7 @@ selector-attribute substitution, arithmetic/comparison folding, raw expression
 parsing, primitive-call rendering, backend rendering, and source replacement
 are not part of the selected value-query slice.
 
-Deferred generation-value sublanes after M154:
+Deferred generation-value sublanes after M155:
 
 | Sublane | Evidence | Missing prerequisite |
 | --- | --- | --- |

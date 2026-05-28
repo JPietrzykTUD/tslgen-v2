@@ -727,6 +727,54 @@ a backend spelling, target-language alias, or general type hierarchy. M144
 renames the accepted M143 `LoweredCurrentVectorType` concept to this domain
 name rather than keeping a second class for the same concept.
 
+## Generation Value Query Lowering Model
+
+Milestone 155 adds a selected-context generation-value result boundary for
+isolated `value<generation>(...)` query islands. It is built from the already
+selected implementation context, optional selected type environment, catalog
+extension metadata supplied by the caller, scalar type facts, and selected
+primitive attributes. It does not read source files, `tsldata`, `frozen`, or
+`tslgenold` at lowering time.
+
+```python
+LoweredGenerationValueKind = Literal[
+    "vector.length",
+    "vector.alignment",
+    "type.size_bytes",
+    "type.is_signed",
+    "type.is_same",
+    "primitive.attribute",
+]
+LoweredGenerationValuePayload = int | bool
+
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationValue:
+    kind: LoweredGenerationValueKind
+    value: LoweredGenerationValuePayload
+    source_text: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class GenerationValueQueryLoweringResult:
+    value: LoweredGenerationValue | None
+    diagnostics: tuple[Diagnostic, ...]
+```
+
+Invariants:
+
+- `vector.length` and `vector.alignment` consume only selected extension/type
+  facts plus catalog extension metadata and scalar size facts.
+- `type.size_bytes`, `type.is_signed`, and `type.is_same` lower each
+  `TYPE_EXPR` argument through the accepted type-query lowering model before
+  evaluating supported scalar type values.
+- `primitive.attribute` consumes only selected concrete boolean primitive
+  attributes.
+- Unsupported query families, unsupported lowered type values, missing facts,
+  malformed query shapes, and non-concrete attributes produce diagnostics.
+- This model is not a branch pruner, loop executor, expression parser,
+  selector-attribute substitution engine, backend renderer, or raw text
+  replacement mechanism.
+
 Milestone 144 adds selector-payload values:
 
 ```python

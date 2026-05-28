@@ -1232,6 +1232,33 @@ constants, generic lengths, backend rendering, broad expression parsing, raw
 text replacement, source repair, or runtime `tsldata`, `frozen`, or
 `tslgenold` dependencies.
 
+### M155 Selected-Context Generation Value Query Lowering Boundary
+
+Milestone 155 adds isolated `value<generation>(...)` query-island lowering for
+the largest safe subset selected by M154:
+`vector::length`, `vector::alignment`, `type::size_bytes(TYPE_EXPR)`,
+`type::is_signed(TYPE_EXPR)`, `type::is_same(TYPE_EXPR, TYPE_EXPR)`, and
+`primitive::attribute(KEY)`.
+
+The lowering boundary consumes only explicit selected-context facts. Vector
+length and alignment use the selected extension/type plus catalog extension
+metadata and scalar size facts. The `type::*` value families lower each
+`TYPE_EXPR` argument through the accepted type-lowering path first, then
+evaluate only supported lowered scalar type values. Concrete boolean primitive
+attributes lower from the selected primitive attributes.
+
+Unsupported or missing cases produce deterministic diagnostics for malformed
+queries, unsupported value families, unsupported lowered type values such as
+`vector::imask`, missing vector metadata, missing scalar facts, unknown
+primitive attributes, and non-boolean/non-concrete primitive attributes.
+
+M155 does not evaluate surrounding TSIL or raw target-language syntax. Branch
+pruning, loop execution, declaration lowering, arithmetic or comparison
+folding around generation values, selector-attribute substitution, mask lane
+constants, generic vector lengths, backend rendering, raw text replacement,
+source repair, or runtime `tsldata`, `frozen`, or `tslgenold` dependencies
+remain out of scope.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:
