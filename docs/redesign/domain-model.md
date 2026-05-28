@@ -794,6 +794,12 @@ class PrimitiveCallDependencyClosure:
     selected: tuple[SelectedImplementation, ...]
     references: tuple[PrimitiveCallReference, ...]
     diagnostics: tuple[Diagnostic, ...]
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallClosureLoweringPackage:
+    closure: PrimitiveCallDependencyClosure
+    lowered_functions: LoweredFunctionSet
+    diagnostics: tuple[Diagnostic, ...]
 ```
 
 Invariants:
@@ -826,6 +832,11 @@ Invariants:
   implementations by stable target identity and accumulates references and
   diagnostics without scheduling, dependency-body lowering, or backend
   rendering.
+- Primitive-call closure lowering packages preserve the accepted closure and
+  run existing selected-function lowering in closure selected order. They
+  accumulate closure diagnostics and selected-function lowering diagnostics
+  without scheduling, rendering primitive-call invocations, backend rendering,
+  or parsing argument expressions.
 - A `type<backend>(...)` expression nested inside a generation type transform
   is represented as `LoweredBackendTypeReference`, preserving the request as a
   semantic input to that type transform without rendering it.

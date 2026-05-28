@@ -41,6 +41,7 @@ from tslgen.lowering.model import (
     SelectedTypeEnvironment,
     BackendTypeQueryLoweringResult,
     PrimitiveCallArgumentBindingResult,
+    PrimitiveCallClosureLoweringPackage,
     PrimitiveCallDependencyClosure,
     PrimitiveCallReferenceInventory,
     PrimitiveCallSelectorPayloadLoweringResult,
@@ -234,6 +235,26 @@ class Lowerer:
         catalog: Catalog,
     ) -> PrimitiveCallDependencyClosure:
         return lower_primitive_call_dependency_closure(root, catalog)
+
+    def lower_primitive_call_closure_lowering_package(
+        self,
+        root: SelectedImplementation,
+        *,
+        catalog: Catalog,
+    ) -> PrimitiveCallClosureLoweringPackage:
+        closure = self.lower_primitive_call_dependency_closure(
+            root,
+            catalog=catalog,
+        )
+        lowering_result = self.lower_all(
+            closure.selected,
+            catalog=catalog,
+        )
+        return PrimitiveCallClosureLoweringPackage(
+            closure=closure,
+            lowered_functions=lowering_result.lowered_functions,
+            diagnostics=closure.diagnostics + lowering_result.diagnostics,
+        )
 
     def lower_all(
         self,

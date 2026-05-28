@@ -386,3 +386,10 @@ class LoweredFunction:
 @dataclass(frozen=True, slots=True)
 class LoweredFunctionSet:
     functions: tuple[LoweredFunction, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallClosureLoweringPackage:
+    closure: PrimitiveCallDependencyClosure
+    lowered_functions: LoweredFunctionSet
+    diagnostics: tuple[Diagnostic, ...]

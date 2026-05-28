@@ -19448,9 +19448,11 @@ Accepted validation result:
 
 Status:
 
-Planned after M148. This milestone should compose the accepted M148
-dependency closure with the existing selected-function lowering for the
-selected implementations in that closure. It should produce one compact typed
+Accepted. The M149 execution-review loop returned `Accept With Follow-Ups`
+after one write-capable executor and read-only architecture, boundary,
+evidence, documentation, and validation audits. M149 composes the accepted
+M148 dependency closure with the existing selected-function lowering for the
+selected implementations in that closure. It produces one compact typed
 package containing the closure, lowered functions that the existing tiny
 lowerer can already produce, and accumulated diagnostics from both closure
 discovery and selected-function lowering.
@@ -19503,5 +19505,93 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py
 python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py`:
+  exit 0, `268 passed in 28.15s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+- Final post-cleanup `git diff --check`: exit 0, no output.
+
+Follow-up:
+
+- Documentation audit follow-up addressed during finalization by mirroring the
+  backend-rendering deferral in the domain-model invariant.
+
+### Milestone 150: Primitive-Call Expression Lowering Boundary With Exact Emit-Return Consumer
+
+Status:
+
+Planned after M149. This milestone should lower an already recognized
+`PrimitiveCall` token into a reusable typed primitive-call expression value,
+then prove that expression through the first exact selected body consumer:
+`emit_return(call<primitive=...>(...));`.
+
+Goal:
+
+Produce one reusable typed primitive-call expression value and consume it only
+through the exact return form:
+
+- accept only a selected implementation body with exactly one `emit_return`
+  directive token;
+- accept only an `emit_return` payload token stream containing exactly one
+  recognized `PrimitiveCall` token;
+- preserve the accepted `PrimitiveCallReference`, including target match, raw
+  source arguments, bindings, and source provenance;
+- allow `Lowerer.lower(...)` and the M149 package to include a function whose
+  return expression is that typed primitive-call expression.
+
+Scope:
+
+- Compose existing M144-M147 primitive-call reference behavior; do not
+  duplicate selector parsing, target matching, argument binding, or inventory
+  walking.
+- Keep primitive-call expression lowering reusable; do not implement separate
+  per-context call lowering for `emit_return`, `var`, `let`, assignments,
+  loops, or conditions.
+- Preserve raw argument text as source truth; do not parse, validate,
+  normalize, or repair argument expressions.
+- Keep standalone `call<...>(...)` bodies, raw `emit_return(left)`, mixed
+  raw-plus-call payloads, malformed calls, multi-token payloads, and primitive
+  calls embedded in unselected surrounding contexts as explicit unsupported
+  diagnostics.
+
+Out of scope:
+
+Standalone primitive-call statement semantics; primitive-call consumers other
+than the exact `emit_return(...)` form selected above; dependency scheduling;
+topological sorting for rendering; backend call rendering; backend type
+rendering; resolving call arguments into backend expressions; recursively
+lowering nested calls inside arguments; parsing raw argument expressions;
+array/index/operator/helper/cast semantics; lowering arbitrary
+`emit_return(...)` expressions; lowering var/let/loop/if payload semantics;
+source repair; runtime `tsldata`, `frozen`, or `tslgenold` dependencies;
+public dependency graphs, schedulers, registries, dispatchers, fixpoint
+mechanisms, or broad worklist machinery.
+
+Expected outputs:
+
+- Primitive-call expression lowering has one reusable typed representation
+  instead of separate per-context call lowering.
+- The first exact primitive-call return body can become backend-neutral
+  lowered function state.
+- The M149 package becomes more useful because root functions with exact
+  return-call bodies can join the lowered-function set without renderer
+  semantics.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py
 find tslgen -type d -name __pycache__ -print
 ```

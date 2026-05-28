@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 148 is accepted.
+Milestone 149 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -780,6 +780,41 @@ M148 validation completed with:
   exit 0, no output.
 - `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py`:
   exit 0, `264 passed in 11.89s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+- Final post-cleanup `git diff --check`: exit 0, no output.
+
+The M149 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, evidence,
+documentation, and validation audits. M149 added a compact typed primitive-call
+closure lowering package that preserves the M148 closure, runs existing
+selected-function lowering over closure-selected implementations in
+deterministic order, includes successful lowered functions, and accumulates
+diagnostics from both closure discovery and selected-function lowering.
+
+M149 composes the existing M148 closure and `Lowerer.lower_all(...)` behavior.
+It did not duplicate M144 selector-payload lowering, M145 target matching, M146
+argument binding, M147 inventory walking, or M148 closure traversal. It did
+not schedule dependencies, topologically sort output, render backend call
+text, lower primitive-call references into invocation text, resolve call
+arguments into backend expressions, parse raw argument expressions, render
+backend type text, repair source, or introduce runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
+
+M149 review verdicts were: architecture `Accept`, boundary `Accept`, evidence
+`Accept`, documentation `Accept With Follow-Ups`, and validation `Accept`.
+The documentation follow-up was addressed during finalization by mirroring the
+backend-rendering deferral in the domain-model invariant.
+
+M149 validation completed with:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py`:
+  exit 0, `268 passed in 28.15s`.
 - Initial `find tslgen -type d -name __pycache__ -print` listed
   validation-created cache directories; after removing those directories, the
   final required `find tslgen -type d -name __pycache__ -print` returned exit
@@ -2379,43 +2414,53 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 149.
+Execute Milestone 150.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m149-execution-review-loop-prompt.md
+docs/agent/runs/m150-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 149: Primitive-Call Closure Function Lowering Package Boundary
+Milestone 150: Primitive-Call Expression Lowering Boundary With Exact Emit-Return Consumer
 ```
 
 Latest review verdict:
+
+```text
+M149 execution-review returned Accept With Follow-Ups after one write-capable
+executor and read-only architecture, boundary, evidence, documentation, and
+validation audits. M149 added a compact primitive-call closure lowering
+package that composes the M148 closure with existing selected-function
+lowering. The documentation follow-up was addressed during finalization.
+```
+
+Next expected action:
+
+```text
+Run the active M150 execution-review-loop prompt. M150 should lower an already
+recognized `PrimitiveCall` token into a reusable typed primitive-call
+expression value, then prove that expression through the exact selected body
+consumer `emit_return(call<primitive=...>(...));`.
+
+M150 may add one typed primitive-call expression value and one exact
+`emit_return(...)` consumer. It must not add separate per-context call lowering,
+standalone call semantics, dependency scheduling, backend call rendering,
+backend type rendering, nested expression parsing, argument expression
+resolution, source repair, or broad graph/scheduler/worklist machinery.
+```
+
+Previous review verdict:
 
 ```text
 M148 execution-review returned Accept after one write-capable executor and
 read-only architecture, boundary, evidence, documentation, and validation
 audits. M148 added a compact typed primitive-call dependency closure that
 discovers transitive selected implementations by composing M147 inventories.
-```
-
-Next expected action:
-
-```text
-Run the active M149 execution-review-loop prompt. M149 should compose the
-accepted M148 dependency closure with the existing selected-function lowering
-for the selected implementations in that closure, producing a compact package
-of the closure, lowered functions, and accumulated diagnostics.
-
-M149 may show which selected dependency bodies are lowerable by the existing
-tiny lowerer, but it must not schedule dependencies for rendering,
-topologically sort, render backend call text, lower primitive-call references
-into invocation text, parse raw argument expressions, or introduce public
-graph/scheduler/worklist machinery.
 ```
 
 Accepted planning prompt:
@@ -6263,13 +6308,13 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M149
+No stop condition is active. The workflow is ready to run the active M150
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M149 execution, run the validation command listed in
-`docs/agent/runs/m149-execution-review-loop-prompt.md`.
+For active M150 execution, run the validation command listed in
+`docs/agent/runs/m150-execution-review-loop-prompt.md`.
 
 For M125 execution and review, validation completed with:
 

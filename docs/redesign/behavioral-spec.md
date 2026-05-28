@@ -1100,6 +1100,27 @@ argument text, parse argument expressions, render backend call text, render
 backend type text, repair source, or introduce runtime `tsldata`, `frozen`, or
 `tslgenold` dependencies.
 
+### M149 Primitive-Call Closure Function Lowering Package Boundary
+
+Milestone 149 starts from one selected implementation, computes the accepted
+M148 primitive-call dependency closure, and then runs the existing
+selected-function lowerer for each selected implementation in closure selected
+order. The package preserves the closure, successful lowered functions, and
+diagnostics from both closure discovery and selected-function lowering.
+
+M149 does not make dependency calls renderable by itself. If the root or a
+dependency body is not supported by the existing selected-function lowerer,
+that selected implementation contributes diagnostics and the package continues
+with later selected implementations. Successfully lowered functions retain the
+same deterministic order as their selected implementations in the closure.
+
+M149 does not schedule dependencies, topologically sort output, render backend
+call text, lower primitive-call references into invocation text, resolve call
+arguments into backend expressions, recursively lower nested call-looking
+argument text, parse argument expressions, render backend type text, repair
+source, or introduce runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:
