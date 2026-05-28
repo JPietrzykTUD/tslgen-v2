@@ -11,6 +11,7 @@ from tslgen.domain.catalog import (
     LowerableDirective,
     LowerableOperationFragment,
     NamedPrimitiveReference,
+    PrimitiveCall,
 )
 from tslgen.lowering.binary_operations import (
     BinaryOperationDescriptor,
@@ -39,6 +40,7 @@ from tslgen.lowering.model import (
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
     BackendTypeQueryLoweringResult,
+    PrimitiveCallSelectorPayloadLoweringResult,
     TypeExpressionLoweringResult,
     build_selected_implementation_lowering_context,
 )
@@ -63,6 +65,7 @@ from tslgen.lowering.primitive_call_diagnostics import (
     unsupported_primitive_call_diagnostics,
     unsupported_primitive_call_diagnostics_from_payload_tokens,
 )
+from tslgen.lowering.selector_payload import lower_primitive_call_selector_payload
 from tslgen.lowering.unary_operations import (
     UnaryOperationDescriptor,
     lookup_unary_operation_descriptor,
@@ -154,6 +157,27 @@ class Lowerer:
             query,
             source,
             environment=environment,
+        )
+
+    def lower_primitive_call_selector_payload(
+        self,
+        selected: SelectedImplementation,
+        primitive_call: PrimitiveCall,
+        *,
+        catalog: Catalog,
+        environment: SelectedTypeEnvironment | None = None,
+    ) -> PrimitiveCallSelectorPayloadLoweringResult:
+        context = self.context_for(selected)
+        selected_environment = (
+            environment
+            if environment is not None
+            else build_selected_type_environment(context)
+        )
+        return lower_primitive_call_selector_payload(
+            context,
+            catalog,
+            primitive_call,
+            selected_environment,
         )
 
     def lower_all(

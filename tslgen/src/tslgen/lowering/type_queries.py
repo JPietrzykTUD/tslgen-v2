@@ -5,14 +5,15 @@ from dataclasses import dataclass
 from typing import Literal
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
+from tslgen.domain.catalog import ExtensionName, TypeTag
 from tslgen.domain.catalog import LowerableDirective
 from tslgen.lowering.model import (
     BackendTypeQueryLoweringResult,
     BackendTypeSpellingRequest,
+    CurrentVector,
     LoweredBackendTypeReference,
     LoweredBaseTransformType,
     LoweredCurrentScalarType,
-    LoweredCurrentVectorType,
     LoweredGenericRegisterType,
     LoweredIntrinsicVectorImaskType,
     LoweredScalarTypeIdentity,
@@ -319,7 +320,7 @@ def _lower_type_expression_value(
     expression = syntax.source_text
 
     if expression == context.current_vector_keyword:
-        return LoweredCurrentVectorType(
+        return CurrentVector(
             extension=context.extension,
             type_tag=context.type_tag,
         )
@@ -345,10 +346,10 @@ def _lower_type_expression_value(
 
     scalar_match = _SCALAR_TYPE_RE.fullmatch(expression)
     if scalar_match is not None:
-        return LoweredScalarTypeIdentity(type_tag=scalar_match.group(1))
+        return LoweredScalarTypeIdentity(type_tag=TypeTag(scalar_match.group(1)))
 
     if _BARE_SCALAR_TYPE_RE.fullmatch(expression) is not None:
-        return LoweredScalarTypeIdentity(type_tag=expression)
+        return LoweredScalarTypeIdentity(type_tag=TypeTag(expression))
 
     if _ALIAS_NAME_RE.fullmatch(expression) is not None:
         binding = _find_alias_binding(alias_bindings, expression)
@@ -616,7 +617,7 @@ def _lower_signedness_transform(
         else _UNSIGNED_TYPE_COUNTERPARTS
     )
     if type_tag in counterparts:
-        return LoweredScalarTypeIdentity(type_tag=counterparts[type_tag])
+        return LoweredScalarTypeIdentity(type_tag=TypeTag(counterparts[type_tag]))
     return LoweredBaseTransformType(transform=transform, value=value)
 
 
@@ -626,9 +627,9 @@ def _scalar_type_tag(value: LoweredTypeValue) -> str | None:
     return None
 
 
-def _identifier_name(syntax: TypeSyntax) -> str | None:
+def _identifier_name(syntax: TypeSyntax) -> ExtensionName | None:
     if isinstance(syntax, TypeIdentifier):
-        return syntax.name
+        return ExtensionName(syntax.name)
     return None
 
 

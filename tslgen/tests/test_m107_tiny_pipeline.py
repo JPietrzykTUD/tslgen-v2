@@ -45,7 +45,7 @@ from tslgen.lowering import (
     LoweredBinaryOperationExpression,
     LoweredComparisonOperationExpression,
     LoweredCurrentScalarType,
-    LoweredCurrentVectorType,
+    CurrentVector,
     LoweredFunction,
     LoweredFunctionBody,
     LoweredFunctionSet,
@@ -3282,7 +3282,7 @@ def test_m142_lowers_vec_and_scalar_context_type_facts() -> None:
     )
 
     assert vec_result.diagnostics == ()
-    assert vec_result.value == LoweredCurrentVectorType(
+    assert vec_result.value == CurrentVector(
         extension="sse",
         type_tag="ui32",
     )
@@ -3330,7 +3330,7 @@ def test_m142_lowers_ordered_let_type_alias_bindings() -> None:
         ),
         LoweredTypeAliasBinding(
             alias_name="GenericVec",
-            value=LoweredCurrentVectorType(extension="avx2", type_tag="si16"),
+            value=CurrentVector(extension="avx2", type_tag="si16"),
             source_text="Vec",
             source=_location(5, 7),
         ),
@@ -3406,7 +3406,7 @@ def test_m142_lowers_backend_type_queries_without_rendering_text() -> None:
     assert vec_result.diagnostics == ()
     assert vec_result.request == BackendTypeSpellingRequest(
         backend="rust",
-        value=LoweredCurrentVectorType(extension="sve", type_tag="si64"),
+        value=CurrentVector(extension="sve", type_tag="si64"),
         source_text="type<backend>(Vec)",
         source=_location(5, 7),
     )
@@ -3503,7 +3503,7 @@ def test_m142_backend_type_query_uses_only_preceding_alias_bindings() -> None:
     assert after_declaration.diagnostics == ()
     assert after_declaration.request == BackendTypeSpellingRequest(
         backend="cpp",
-        value=LoweredCurrentVectorType(extension="scalar", type_tag="si32"),
+        value=CurrentVector(extension="scalar", type_tag="si32"),
         source_text="type<backend>(MaskVec)",
         source=_location(7, 7),
     )

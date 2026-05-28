@@ -7,7 +7,13 @@ from typing import Literal
 
 from tslgen.analysis.selection import SelectedImplementation, Target
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
-from tslgen.domain.catalog import Implementation, Primitive, PrimitiveAttribute
+from tslgen.domain.catalog import (
+    Implementation,
+    Primitive,
+    PrimitiveAttribute,
+    PrimitiveCallTarget,
+)
+from tslgen.domain.catalog import ExtensionName, TypeTag
 from tslgen.lowering.binary_operations import BinaryOperationDescriptor
 from tslgen.lowering.comparison_operations import ComparisonOperationDescriptor
 from tslgen.lowering.scalar_types import ScalarTypeDescriptor
@@ -36,8 +42,8 @@ class SelectedImplementationLoweringContext:
     primitive_name: str
     primitive_attributes: tuple[PrimitiveAttribute, ...]
     backend: str
-    extension: str
-    type_tag: str
+    extension: ExtensionName
+    type_tag: TypeTag
     signature: str
     template: str
     parameter_names: tuple[str, ...]
@@ -48,19 +54,19 @@ class SelectedImplementationLoweringContext:
 
 
 @dataclass(frozen=True, slots=True)
-class LoweredCurrentVectorType:
-    extension: str
-    type_tag: str
+class CurrentVector:
+    extension: ExtensionName
+    type_tag: TypeTag
 
 
 @dataclass(frozen=True, slots=True)
 class LoweredCurrentScalarType:
-    type_tag: str
+    type_tag: TypeTag
 
 
 @dataclass(frozen=True, slots=True)
 class LoweredScalarTypeIdentity:
-    type_tag: str
+    type_tag: TypeTag
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,8 +87,8 @@ class LoweredSpecializationTypeSymbol:
 @dataclass(frozen=True, slots=True)
 class LoweredVectorMemberType:
     member: LoweredVectorMemberKind
-    extension: str
-    type_tag: str
+    extension: ExtensionName
+    type_tag: TypeTag
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,13 +106,13 @@ class LoweredGenericRegisterType:
 class LoweredVectorTransformType:
     transform: LoweredVectorTransformKind
     base_type: LoweredTypeValue
-    extension: str
+    extension: ExtensionName
 
 
 @dataclass(frozen=True, slots=True)
 class LoweredVectorAsExtensionType:
     base_type: LoweredTypeValue
-    extension: str
+    extension: ExtensionName
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,7 +148,7 @@ LoweredTypeValue = (
     LoweredBackendTypeReference
     | LoweredBaseTransformType
     | LoweredCurrentScalarType
-    | LoweredCurrentVectorType
+    | CurrentVector
     | LoweredGenericRegisterType
     | LoweredIntrinsicVectorImaskType
     | LoweredScalarTypeIdentity
@@ -172,6 +178,52 @@ class SelectedTypeEnvironment:
 
 
 @dataclass(frozen=True, slots=True)
+class ExtensionOperand:
+    name: ExtensionName
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class SelectorSymbol:
+    name: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class SelectorLiteral:
+    text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class SelectorAttribute:
+    key: str
+    value: str
+    source: SourceLocation
+    key_argument: str | None = None
+
+
+SelectorSpecializationValue = (
+    LoweredTypeValue | ExtensionOperand | SelectorLiteral | SelectorSymbol
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallSelectorPayload:
+    target: PrimitiveCallTarget
+    specializations: tuple[SelectorSpecializationValue, ...]
+    attributes: tuple[SelectorAttribute, ...]
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallSelectorPayloadLoweringResult:
+    payload: PrimitiveCallSelectorPayload | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class TypeExpressionLoweringResult:
     value: LoweredTypeValue | None
     diagnostics: tuple[Diagnostic, ...]
@@ -193,8 +245,8 @@ def build_selected_implementation_lowering_context(
         primitive_name=selected.primitive.name,
         primitive_attributes=selected.primitive.attributes,
         backend=selected.target.backend,
-        extension=selected.implementation.extension,
-        type_tag=selected.implementation.type_tag,
+        extension=ExtensionName(selected.implementation.extension),
+        type_tag=TypeTag(selected.implementation.type_tag),
         signature=selected.primitive.signature,
         template=selected.primitive.template,
         parameter_names=selected.primitive.parameters,
