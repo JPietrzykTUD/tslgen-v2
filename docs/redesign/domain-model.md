@@ -783,6 +783,17 @@ class PrimitiveCallReference:
 class PrimitiveCallArgumentBindingResult:
     reference: PrimitiveCallReference | None
     diagnostics: tuple[Diagnostic, ...]
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallReferenceInventory:
+    references: tuple[PrimitiveCallReference, ...]
+    diagnostics: tuple[Diagnostic, ...]
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallDependencyClosure:
+    selected: tuple[SelectedImplementation, ...]
+    references: tuple[PrimitiveCallReference, ...]
+    diagnostics: tuple[Diagnostic, ...]
 ```
 
 Invariants:
@@ -806,6 +817,15 @@ Invariants:
   already matched target. It binds raw source arguments positionally to the
   matched primitive's formal parameter names, preserving raw argument text and
   source provenance without parsing or validating argument semantics.
+- Primitive-call reference inventory walks selected body tokens in source
+  order, composes selector-payload lowering, target matching, and argument
+  binding for already recognized primitive calls, and accumulates diagnostics
+  without performing dependency closure or backend rendering.
+- Primitive-call dependency closure repeatedly applies the reference inventory
+  to newly discovered selected implementations. It de-duplicates selected
+  implementations by stable target identity and accumulates references and
+  diagnostics without scheduling, dependency-body lowering, or backend
+  rendering.
 - A `type<backend>(...)` expression nested inside a generation type transform
   is represented as `LoweredBackendTypeReference`, preserving the request as a
   semantic input to that type transform without rendering it.

@@ -259,6 +259,19 @@ class PrimitiveCallArgumentBindingResult:
 
 
 @dataclass(frozen=True, slots=True)
+class PrimitiveCallReferenceInventory:
+    references: tuple[PrimitiveCallReference, ...]
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallDependencyClosure:
+    selected: tuple[SelectedImplementation, ...]
+    references: tuple[PrimitiveCallReference, ...]
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class TypeExpressionLoweringResult:
     value: LoweredTypeValue | None
     diagnostics: tuple[Diagnostic, ...]

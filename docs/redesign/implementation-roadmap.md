@@ -19298,8 +19298,10 @@ Follow-up:
 
 Status:
 
-Planned after M146. This milestone should walk a selected implementation body
-in source order and compose the accepted M144 selector-payload, M145
+Accepted. The M147 execution-review loop returned `Accept` after one
+write-capable executor and read-only architecture, boundary, evidence,
+documentation, and validation audits. M147 walks a selected implementation
+body in source order and composes the accepted M144 selector-payload, M145
 target-match, and M146 argument-binding boundaries into a typed inventory of
 already recognized primitive-call references.
 
@@ -19351,5 +19353,155 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py
 python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py`:
+  exit 0, `257 passed in 11.45s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+- Final post-cleanup `git diff --check`: exit 0, no output.
+
+### Milestone 148: Primitive-Call Dependency Closure Boundary
+
+Status:
+
+Accepted. The M148 execution-review loop returned `Accept` after one
+write-capable executor and read-only architecture, boundary, evidence,
+documentation, and validation audits. M148 computes the small dependency
+closure over selected implementations by repeatedly applying the accepted M147
+primitive-call reference inventory to a root selected implementation and any
+newly discovered target implementations.
+
+Goal:
+
+Produce a deterministic primitive-call dependency closure for one root
+selected implementation:
+
+- include the root selected implementation;
+- discover direct dependencies from M147 `PrimitiveCallReference` values;
+- recursively inspect newly discovered selected implementations with M147;
+- de-duplicate already seen selected implementation identities;
+- preserve first-discovery order for selected implementations and references;
+- accumulate diagnostics from each M147 inventory.
+
+Scope:
+
+- Use only selected implementation facts, catalog facts, and M147 reference
+  inventories.
+- Treat `PrimitiveCallReference.target_match.selected` as the dependency
+  target selected implementation.
+- Handle self-recursion and cycles by deterministic de-duplication, not by a
+  public graph or scheduler abstraction.
+- Continue collecting successful references and later dependencies when one
+  selected implementation inventory reports diagnostics.
+- Add focused tests for one-hop dependency closure, transitive closure, shared
+  dependency de-duplication, self/cycle no-infinite-recursion behavior, and
+  diagnostic accumulation.
+
+Out of scope:
+
+Dependency scheduling; topological sorting for rendering; lowering dependency
+bodies into renderable code; recursively lowering nested call-looking argument
+text; parsing raw argument expressions; rendering backend call text; rendering
+backend type text; replacing existing scalar operation lowering; source
+repair; runtime `tsldata`, `frozen`, or `tslgenold` dependencies; public
+dependency graphs, schedulers, registries, dispatchers, fixpoint mechanisms,
+or broad worklist machinery.
+
+Expected outputs:
+
+- Later generation planning can ask which selected implementations and
+  primitive-call references are required by a root selected implementation.
+- The closure remains a compact typed result, not a scheduler or renderer.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py`:
+  exit 0, `264 passed in 11.89s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+- Final post-cleanup `git diff --check`: exit 0, no output.
+
+### Milestone 149: Primitive-Call Closure Function Lowering Package Boundary
+
+Status:
+
+Planned after M148. This milestone should compose the accepted M148
+dependency closure with the existing selected-function lowering for the
+selected implementations in that closure. It should produce one compact typed
+package containing the closure, lowered functions that the existing tiny
+lowerer can already produce, and accumulated diagnostics from both closure
+discovery and selected-function lowering.
+
+Goal:
+
+Produce a deterministic primitive-call closure lowering package for one root
+selected implementation:
+
+- compute the M148 dependency closure;
+- lower the selected implementations in closure selected order with the
+  existing selected-function lowerer;
+- include successfully lowered functions in deterministic closure order;
+- accumulate closure diagnostics and function-lowering diagnostics;
+- preserve the closure references and selected implementation set for later
+  planning.
+
+Scope:
+
+- Use only M148 closure facts, the existing `Lowerer.lower(...)` /
+  `lower_all(...)` selected-function lowering behavior, and catalog facts
+  already accepted by those boundaries.
+- Keep the result a compact package/stage-envelope value, not a graph,
+  scheduler, renderer, dispatcher, registry, or worklist family.
+- Add focused tests for a root plus one lowerable dependency, unsupported
+  dependency body diagnostics, combined closure and function-lowering
+  diagnostics, and deterministic function order matching closure selected
+  order.
+
+Out of scope:
+
+Dependency scheduling; topological sorting for rendering; backend call
+rendering; lowering primitive-call references into invocation text; recursive
+nested-call lowering; parsing raw argument expressions; rendering backend type
+text; source repair; runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies; public dependency graphs, schedulers, registries, dispatchers,
+fixpoint mechanisms, or broad worklist machinery.
+
+Expected outputs:
+
+- Later generation planning can inspect one package to see the dependency
+  closure, references, lowerable functions, and diagnostics for a selected
+  root.
+- The package makes current body-lowering gaps visible without inventing
+  scheduling or renderer semantics.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py
 find tslgen -type d -name __pycache__ -print
 ```

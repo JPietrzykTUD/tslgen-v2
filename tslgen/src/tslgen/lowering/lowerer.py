@@ -41,6 +41,8 @@ from tslgen.lowering.model import (
     SelectedTypeEnvironment,
     BackendTypeQueryLoweringResult,
     PrimitiveCallArgumentBindingResult,
+    PrimitiveCallDependencyClosure,
+    PrimitiveCallReferenceInventory,
     PrimitiveCallSelectorPayloadLoweringResult,
     PrimitiveCallSelectorPayload,
     PrimitiveCallTargetMatch,
@@ -71,6 +73,12 @@ from tslgen.lowering.primitive_call_diagnostics import (
 )
 from tslgen.lowering.primitive_call_arguments import (
     lower_primitive_call_argument_bindings,
+)
+from tslgen.lowering.primitive_call_closure import (
+    lower_primitive_call_dependency_closure,
+)
+from tslgen.lowering.primitive_call_inventory import (
+    lower_primitive_call_reference_inventory,
 )
 from tslgen.lowering.primitive_call_targets import lower_primitive_call_target_match
 from tslgen.lowering.selector_payload import lower_primitive_call_selector_payload
@@ -203,18 +211,29 @@ class Lowerer:
 
     def lower_primitive_call_argument_bindings(
         self,
-        selected: SelectedImplementation,
         primitive_call: PrimitiveCall,
-        selector_payload: PrimitiveCallSelectorPayload,
         target_match: PrimitiveCallTargetMatch,
-        *,
-        catalog: Catalog,
     ) -> PrimitiveCallArgumentBindingResult:
-        _ = (selected, selector_payload, catalog)
         return lower_primitive_call_argument_bindings(
             primitive_call,
             target_match,
         )
+
+    def lower_primitive_call_reference_inventory(
+        self,
+        selected: SelectedImplementation,
+        *,
+        catalog: Catalog,
+    ) -> PrimitiveCallReferenceInventory:
+        return lower_primitive_call_reference_inventory(selected, catalog)
+
+    def lower_primitive_call_dependency_closure(
+        self,
+        root: SelectedImplementation,
+        *,
+        catalog: Catalog,
+    ) -> PrimitiveCallDependencyClosure:
+        return lower_primitive_call_dependency_closure(root, catalog)
 
     def lower_all(
         self,

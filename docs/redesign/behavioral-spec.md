@@ -1058,6 +1058,48 @@ select dependency closure, lower dependency bodies, render backend call text,
 render backend type text, repair source, or introduce runtime `tsldata`,
 `frozen`, or `tslgenold` dependencies.
 
+### M147 Primitive-Call Reference Inventory Boundary
+
+Milestone 147 walks a selected implementation body in source order and
+composes the accepted primitive-call boundaries for already recognized
+primitive-call tokens. For each recognized `PrimitiveCall`, it lowers the
+selector payload, matches the target primitive implementation, and binds raw
+arguments to formal parameters. Successful calls produce source-ordered
+`PrimitiveCallReference` values.
+
+The inventory includes standalone primitive-call directive tokens and
+primitive-call payload tokens already recognized inside directive payload token
+streams such as `emit_return(...)`. It accumulates diagnostics from selector
+payload lowering, target matching, and argument binding, and continues with
+later recognized calls after a failed call.
+
+M147 does not select dependency closure, schedule dependencies, lower
+dependency bodies, recursively lower nested call-looking argument text, parse
+argument expressions, render backend call text, render backend type text,
+repair source, or introduce runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies.
+
+### M148 Primitive-Call Dependency Closure Boundary
+
+Milestone 148 starts from one selected implementation and repeatedly applies
+the M147 primitive-call reference inventory to discover transitively required
+selected implementations. Each successful `PrimitiveCallReference` contributes
+its `target_match.selected` implementation as a dependency candidate.
+
+The closure preserves deterministic first-discovery order for selected
+implementations and primitive-call references. Selected implementations are
+de-duplicated by stable target identity, so self-recursive calls, cycles, and
+shared dependencies terminate without adding duplicate selected
+implementations. Diagnostics from each inspected M147 inventory are
+accumulated, and successful references may still discover later dependencies
+when another call in the same inventory fails.
+
+M148 does not schedule dependencies, topologically sort output, lower
+dependency bodies into renderable code, recursively lower nested call-looking
+argument text, parse argument expressions, render backend call text, render
+backend type text, repair source, or introduce runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

@@ -27,11 +27,8 @@ def test_argument_binding_binds_self_call_positionally(tmp_path: Path) -> None:
     )
 
     result = Lowerer().lower_primitive_call_argument_bindings(
-        selected,
         call,
-        payload,
         match,
-        catalog=catalog,
     )
 
     assert result.diagnostics == ()
@@ -66,11 +63,8 @@ def test_argument_binding_uses_matched_named_primitive_parameters(
     )
 
     result = Lowerer().lower_primitive_call_argument_bindings(
-        selected,
         call,
-        payload,
         match,
-        catalog=catalog,
     )
 
     assert result.diagnostics == ()
@@ -94,11 +88,8 @@ def test_argument_binding_binds_naked_named_call_as_current_vector(
     )
 
     result = Lowerer().lower_primitive_call_argument_bindings(
-        selected,
         call,
-        payload,
         match,
-        catalog=catalog,
     )
 
     assert result.diagnostics == ()
@@ -121,11 +112,8 @@ def test_argument_binding_preserves_attrs_only_call_arguments(
     )
 
     result = Lowerer().lower_primitive_call_argument_bindings(
-        selected,
         call,
-        payload,
         match,
-        catalog=catalog,
     )
 
     assert result.diagnostics == ()
@@ -148,11 +136,8 @@ def test_argument_binding_preserves_specialization_plus_attrs_arguments(
     )
 
     result = Lowerer().lower_primitive_call_argument_bindings(
-        selected,
         call,
-        payload,
         match,
-        catalog=catalog,
     )
 
     assert result.diagnostics == ()
@@ -178,11 +163,8 @@ def test_argument_binding_keeps_nested_call_argument_raw(
     )
 
     result = Lowerer().lower_primitive_call_argument_bindings(
-        selected,
         call,
-        payload,
         match,
-        catalog=catalog,
     )
 
     assert result.diagnostics == ()
@@ -203,11 +185,8 @@ def test_argument_binding_reports_too_few_arguments(tmp_path: Path) -> None:
     )
 
     result = Lowerer().lower_primitive_call_argument_bindings(
-        selected,
         call,
-        payload,
         match,
-        catalog=catalog,
     )
 
     assert result.reference is None
@@ -230,11 +209,8 @@ def test_argument_binding_reports_too_many_arguments(tmp_path: Path) -> None:
     )
 
     result = Lowerer().lower_primitive_call_argument_bindings(
-        selected,
         call,
-        payload,
         match,
-        catalog=catalog,
     )
 
     assert result.reference is None
@@ -258,11 +234,8 @@ def test_argument_binding_reports_no_arguments_for_required_parameters(
     )
 
     result = Lowerer().lower_primitive_call_argument_bindings(
-        selected,
         call,
-        payload,
         match,
-        catalog=catalog,
     )
 
     assert result.reference is None
