@@ -824,28 +824,20 @@ Invariants:
 - `type<generation>(...)` produces semantic type values, never backend text.
 - `type<backend>(...)` produces a `BackendTypeSpellingRequest`; it does not
   render backend type text.
-- Primitive-call target matching consumes typed selector payloads and catalog
-  facts only. It produces one selected implementation candidate or diagnostics;
-  it does not lower arguments, dependency bodies, dependency closure, or
-  backend call text.
-- Primitive-call argument binding consumes a recognized primitive call and an
-  already matched target. It binds raw source arguments positionally to the
-  matched primitive's formal parameter names, preserving raw argument text and
-  source provenance without parsing or validating argument semantics.
-- Primitive-call expression lowering consumes one already recognized
-  primitive call and composes selector-payload lowering, target matching, and
-  argument binding into a reusable `LoweredPrimitiveCallExpression`. It does
-  not depend on the surrounding TSIL construct and does not render backend call
-  text.
-- Primitive-call reference inventory walks selected body tokens in source
-  order and reuses primitive-call expression lowering for already recognized
-  primitive calls, then records the expression reference. It accumulates
-  diagnostics without performing dependency closure or backend rendering.
-- Primitive-call dependency closure repeatedly applies the reference inventory
-  to newly discovered selected implementations. It de-duplicates selected
-  implementations by stable target identity and accumulates references and
-  diagnostics without scheduling, dependency-body lowering, or backend
-  rendering.
+- M151 consolidates primitive-call lowering ownership in a cohesive resolver
+  and dependency collector. Selector payloads, target matches, argument
+  bindings, expression results, inventories, and closures remain typed facts
+  and result envelopes, not separate durable middleware stages.
+- The primitive-call resolver consumes one recognized primitive call and
+  composes selector-payload lowering, target matching, raw argument binding,
+  and optional expression creation. It preserves raw argument text and source
+  provenance without parsing, validating, normalizing, or repairing argument
+  expressions.
+- The primitive-call dependency collector walks selected body tokens in source
+  order, records resolved primitive-call references, and computes closure by
+  stable selected-target identity. It does not schedule dependencies, lower
+  dependency bodies beyond the accepted selected-function lowerer, render
+  backend call text, or render backend type text.
 - Primitive-call closure lowering packages preserve the accepted closure and
   run existing selected-function lowering in closure selected order. They
   accumulate closure diagnostics and selected-function lowering diagnostics

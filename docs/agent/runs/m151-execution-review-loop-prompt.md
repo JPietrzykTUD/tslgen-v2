@@ -42,12 +42,7 @@ making the primitive-call lowering concept smaller and easier to reason about.
 - `tslgen/src/tslgen/domain/catalog.py`
 - `tslgen/src/tslgen/lowering/model.py`
 - `tslgen/src/tslgen/lowering/lowerer.py`
-- `tslgen/src/tslgen/lowering/primitive_call_arguments.py`
-- `tslgen/src/tslgen/lowering/primitive_call_closure.py`
-- `tslgen/src/tslgen/lowering/primitive_call_diagnostics.py`
-- `tslgen/src/tslgen/lowering/primitive_call_expression.py`
-- `tslgen/src/tslgen/lowering/primitive_call_inventory.py`
-- `tslgen/src/tslgen/lowering/primitive_call_targets.py`
+- `tslgen/src/tslgen/lowering/primitive_calls.py`
 - `tslgen/src/tslgen/lowering/selector_payload.py`
 - `tslgen/tests/test_m107_tiny_pipeline.py`
 - `tslgen/tests/test_m144_selector_payload.py`

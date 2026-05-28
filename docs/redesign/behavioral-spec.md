@@ -1149,6 +1149,26 @@ nested-call lowering, raw argument expression parsing, arbitrary
 `emit_return(...)` expression lowering, var/let/loop/if payload semantics,
 source repair, or runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
 
+### M151 Primitive-Call Lowering Consolidation Boundary
+
+Milestone 151 consolidates the accepted primitive-call lowering path into a
+cohesive ownership surface. The resolver orchestrates selector-payload
+lowering, target matching, raw argument binding, and primitive-call expression
+creation. The dependency collector owns source-ordered reference inventory and
+closure collection. The accepted typed facts and result envelopes remain
+available, but they are not treated as a durable chain of milestone
+middleware.
+
+M151 is behavior-preserving. M144 selector payload behavior, M145 target
+matching, M146 raw argument binding, M147 reference inventory, M148 closure,
+M149 closure-lowering packages, and M150 primitive-call expressions keep their
+accepted diagnostics, ordering, and raw-argument preservation.
+
+M151 does not add recursive primitive-call scanning, new surrounding-context
+consumers, expression trees, backend call rendering, backend type rendering,
+dependency scheduling, topological sorting, argument expression parsing,
+source repair, or runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

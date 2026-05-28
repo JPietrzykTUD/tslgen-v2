@@ -70,23 +70,12 @@ from tslgen.lowering.type_queries import (
     lower_generation_type_query,
     lower_type_expression,
 )
-from tslgen.lowering.primitive_call_diagnostics import (
+from tslgen.lowering.primitive_calls import (
+    PrimitiveCallDependencyCollector,
+    PrimitiveCallResolver,
     unsupported_primitive_call_diagnostics,
     unsupported_primitive_call_diagnostics_from_payload_tokens,
 )
-from tslgen.lowering.primitive_call_arguments import (
-    lower_primitive_call_argument_bindings,
-)
-from tslgen.lowering.primitive_call_closure import (
-    lower_primitive_call_dependency_closure,
-)
-from tslgen.lowering.primitive_call_expression import (
-    lower_primitive_call_expression,
-)
-from tslgen.lowering.primitive_call_inventory import (
-    lower_primitive_call_reference_inventory,
-)
-from tslgen.lowering.primitive_call_targets import lower_primitive_call_target_match
 from tslgen.lowering.selector_payload import lower_primitive_call_selector_payload
 from tslgen.lowering.unary_operations import (
     UnaryOperationDescriptor,
@@ -209,9 +198,8 @@ class Lowerer:
         *,
         catalog: Catalog,
     ) -> PrimitiveCallTargetMatchingResult:
-        return lower_primitive_call_target_match(
+        return PrimitiveCallResolver(catalog).match_target(
             self.context_for(selected),
-            catalog,
             selector_payload,
         )
 
@@ -220,7 +208,7 @@ class Lowerer:
         primitive_call: PrimitiveCall,
         target_match: PrimitiveCallTargetMatch,
     ) -> PrimitiveCallArgumentBindingResult:
-        return lower_primitive_call_argument_bindings(
+        return PrimitiveCallResolver.bind_arguments(
             primitive_call,
             target_match,
         )
@@ -233,9 +221,8 @@ class Lowerer:
         catalog: Catalog,
         environment: SelectedTypeEnvironment | None = None,
     ) -> PrimitiveCallExpressionLoweringResult:
-        return lower_primitive_call_expression(
+        return PrimitiveCallResolver(catalog).lower_expression(
             selected,
-            catalog,
             primitive_call,
             environment=environment,
         )
@@ -246,7 +233,7 @@ class Lowerer:
         *,
         catalog: Catalog,
     ) -> PrimitiveCallReferenceInventory:
-        return lower_primitive_call_reference_inventory(selected, catalog)
+        return PrimitiveCallDependencyCollector(catalog).reference_inventory(selected)
 
     def lower_primitive_call_dependency_closure(
         self,
@@ -254,7 +241,7 @@ class Lowerer:
         *,
         catalog: Catalog,
     ) -> PrimitiveCallDependencyClosure:
-        return lower_primitive_call_dependency_closure(root, catalog)
+        return PrimitiveCallDependencyCollector(catalog).dependency_closure(root)
 
     def lower_primitive_call_closure_lowering_package(
         self,
@@ -1096,9 +1083,8 @@ def _primitive_call_expression_result_from_exact_emit_return_body(
     if payload_token.name != "call" or payload_token.primitive_call is None:
         return None
 
-    return lower_primitive_call_expression(
+    return PrimitiveCallResolver(catalog).lower_expression(
         selected,
-        catalog,
         payload_token.primitive_call,
     )
 

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 150 is accepted.
+Milestone 151 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -859,6 +859,47 @@ M150 validation completed with:
   final required `find tslgen -type d -name __pycache__ -print` returned exit
   0 with no output.
 - Final post-cleanup `git diff --check`: exit 0, no output.
+
+The M151 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, simplification,
+documentation, and validation audits. M151 consolidated the primitive-call
+lowering path by deleting the old `primitive_call_arguments.py`,
+`primitive_call_targets.py`, `primitive_call_expression.py`,
+`primitive_call_inventory.py`, `primitive_call_closure.py`, and
+`primitive_call_diagnostics.py` middleware modules. The accepted behavior now
+centers on `PrimitiveCallResolver` for selector-payload orchestration, target
+matching, raw argument binding, and expression creation, plus
+`PrimitiveCallDependencyCollector` for source-ordered reference inventory and
+dependency closure.
+
+M151 preserved M144-M150 behavior, diagnostics, source locations, deterministic
+order, raw argument preservation, and the exact M150
+`emit_return(call<primitive=...>(...));` consumer. It did not add recursive
+primitive-call scanning, new surrounding-context consumers, expression trees,
+dependency scheduling, backend call rendering, backend type rendering, source
+repair, or runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
+
+M151 review verdicts were: architecture `Accept With Follow-Ups`, boundary
+`Accept`, simplification `Accept With Follow-Ups`, documentation `Accept`, and
+validation `Accept`. Documentation wording follow-ups about resolver ownership
+were addressed during finalization. Remaining follow-ups are that future
+primitive-call work should not keep appending semantics to the 645-line
+`primitive_calls.py` file, and that the still-visible `Lowerer`
+primitive-call facade methods should be reduced once tests are moved to the
+resolver/collector ownership surface. M152 is selected for the latter cleanup.
+
+M151 validation completed with:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py`:
+  exit 0, `273 passed in 11.34s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+- Final post-review `git diff --check`: exit 0, no output.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -2453,42 +2494,42 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 151.
+Execute Milestone 152.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m151-execution-review-loop-prompt.md
+docs/agent/runs/m152-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 151: Primitive-Call Lowering Consolidation Boundary
+Milestone 152: Lowerer Primitive-Call Facade Reduction Boundary
 ```
 
 Latest review verdict:
 
 ```text
-M150 execution-review returned Accept With Follow-Ups after one write-capable
-executor and read-only architecture, boundary, evidence, documentation, and
-validation audits. M150 added a reusable primitive-call expression value and
-one exact `emit_return(call<primitive=...>(...));` consumer. Nonblocking test
-and documentation follow-ups were addressed during finalization.
+M151 execution-review returned Accept With Follow-Ups after one write-capable
+executor and read-only architecture, boundary, simplification, documentation,
+and validation audits. M151 deleted the old primitive_call_* middleware
+modules and centered accepted primitive-call lowering on
+PrimitiveCallResolver plus PrimitiveCallDependencyCollector. Documentation
+wording follow-ups were addressed during finalization.
 ```
 
 Next expected action:
 
 ```text
-Run the active M151 execution-review-loop prompt. M151 should consolidate the
-accepted primitive-call lowering path before adding more behavior. The goal is
-to collapse milestone-shaped middleware around selector payloads, target
-matching, argument binding, expression creation, inventory, closure, package
-assembly, and diagnostics into a smaller cohesive resolver/collector shape
-while preserving all accepted M144-M150 behavior.
+Run the active M152 execution-review-loop prompt. M152 should shrink the
+remaining `Lowerer` primitive-call facade methods that were preserved during
+M151 only because accepted tests used them. Tests that intentionally exercise
+primitive-call internals should call the M151 resolver/collector or
+selector-payload helpers directly.
 
-M151 must not add new primitive-call semantics, recursive scanning, additional
+M152 must not add new primitive-call semantics, recursive scanning, additional
 surrounding-context consumers, expression trees, dependency scheduling, backend
 call rendering, backend type rendering, source repair, or broad
 graph/scheduler/worklist machinery.
@@ -5326,6 +5367,12 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M146 architecture follow-up addressed by M147: the public
   `Lowerer.lower_primitive_call_argument_bindings` API now consumes only the
   recognized primitive call and target match it actually needs.
+- M151 simplification follow-up selected as M152: shrink the remaining
+  `Lowerer` primitive-call facade methods that exist mainly because earlier
+  accepted tests used milestone-shaped entry points.
+- M151 architecture watchpoint: future primitive-call semantics should not be
+  appended indefinitely to the consolidated `primitive_calls.py`; split only
+  for cohesive ownership if the file grows again.
 - M143 boundary follow-up for broader scalar/extension recognizers remains
   nonblocking: document or narrow those recognizers before treating them as a
   stable contract beyond the observed corpus.
@@ -6348,13 +6395,13 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M151
+No stop condition is active. The workflow is ready to run the active M152
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M151 execution, run the validation command listed in
-`docs/agent/runs/m151-execution-review-loop-prompt.md`.
+For active M152 execution, run the validation command listed in
+`docs/agent/runs/m152-execution-review-loop-prompt.md`.
 
 For M125 execution and review, validation completed with:
 
