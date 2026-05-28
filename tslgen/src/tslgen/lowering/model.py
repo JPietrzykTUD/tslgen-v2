@@ -39,6 +39,7 @@ LoweredGenerationValueKind = Literal[
     "type.is_signed",
     "type.is_same",
     "primitive.attribute",
+    "generation.integer_comparison",
 ]
 LoweredGenerationValuePayload = int | bool
 

@@ -52,7 +52,7 @@ to implement several lanes in one milestone.
 
 | Path | TSIL surface | Why it matters | Boundary |
 | --- | --- | --- | --- |
-| Generation value/query lowering | `value<generation>(...)` forms from the current corpus | Generation-time conditions, loop bounds, declarations, type predicates, vector metadata, primitive attributes, and selected source regions depend on typed values rather than raw helper text. | M155 accepts isolated selected-context evaluators for vector length/alignment, scalar type facts, and concrete boolean primitive attributes. M158 is the active implementation-review slice for exact integer equality over an isolated M155 integer query. Remaining value families should still be selected explicitly and must not add a general expression parser. |
+| Generation value/query lowering | `value<generation>(...)` forms from the current corpus plus explicit future generation-value functions | Generation-time conditions, loop bounds, declarations, type predicates, vector metadata, primitive attributes, and selected source regions depend on typed values rather than raw helper text. | M155 accepts isolated selected-context evaluators for vector length/alignment, scalar type facts, and concrete boolean primitive attributes. M158 accepts exact integer comparisons over isolated M155 integer queries. M159 is the active implementation-review slice for explicit function-shaped generation arithmetic via `arith<generation>::add/sub/mul/div/rem(...)` inside `value<generation>(...)`. Remaining value families should still be selected explicitly and must not add a general expression parser or raw operator parser. |
 | Generation control lowering | `if<generation>(...)`, `else if<generation>(...)`, `else<generation>` | Real bodies need selected-branch pruning before backend rendering. | M156 accepts exact two-arm `if<generation>(VALUE_QUERY) { ... } else<generation> { ... }` token regions for M155 boolean conditions and preserves selected/unselected branch token slices. M157 hands selected branch tokens to existing direct body lowering. Branch-chain `else if<generation>`, plain `else`, recursive branch lowering, and rendering remain deferred. |
 | Generation declaration/iteration lowering | `loop<unroll>(...)`, `loop<range>(...)`, `var<...>(...)`, non-type `let<...>(...)` | Generic/vector fallback bodies use TSIL directives for repeated statements, declarations, temporaries, and aliases. | Lower directives over token regions with explicit symbol/type/value facts. `let<type>(...)` alias facts already feed the type environment; do not parse all surrounding target-language statements. |
 | Backend query lowering | `value<backend>(...)`, accepted `type<backend>(...)` requests | Backend spellings, suffixes, uninit values, and type spellings must be derived from typed semantic values before rendering. | Produce typed backend translation requests/results. Renderers must not evaluate raw query text. |
@@ -68,6 +68,11 @@ Not a lowering path by default: `details::arith_add`,
 `details::mask_test`. They are source-authored/backend-support helper calls
 unless a future milestone explicitly introduces typed support-helper
 availability facts for backend output integration.
+
+Generation-time arithmetic must be explicit TSIL, not guessed from raw target
+syntax. The active M159 shape is `arith<generation>::...` inside
+`value<generation>(...)`; raw `+`, `-`, `*`, `/`, and `%` remain source text
+unless a later milestone explicitly accepts a narrower source form with tests.
 
 ## Post-M155 Generation Value Query Boundary
 
@@ -96,8 +101,9 @@ first and only supported lowered scalar type values are evaluated; exact raw
 nested strings such as `type<generation>(base::in)` are evidence, not the
 matching boundary. Surrounding consumers remain separate work:
 `if<generation>` branch pruning, `loop<...>` execution, declarations,
-selector-attribute substitution, arithmetic/comparison folding, raw expression
-parsing, primitive-call rendering, backend rendering, and source replacement
+selector-attribute substitution, comparison predicates, explicit generation
+arithmetic functions, raw expression parsing, primitive-call rendering,
+backend rendering, and source replacement
 are not part of the selected value-query slice.
 
 Deferred generation-value sublanes after M155:

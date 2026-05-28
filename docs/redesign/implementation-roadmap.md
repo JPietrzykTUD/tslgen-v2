@@ -20293,39 +20293,128 @@ Accepted validation result:
   `tslgen/tests`; after cleanup, final
   `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
 
-### Milestone 158: Exact Generation Integer Equality Condition Boundary
+### Milestone 158: Exact Generation Integer Comparison Condition Boundary
 
 Status:
 
-Selected after M157 acceptance. Active next prompt:
-`docs/agent/runs/m158-execution-review-loop-prompt.md`.
+Accepted. Active next prompt after M158:
+`docs/agent/runs/m159-execution-review-loop-prompt.md`.
 
 Goal:
 
 Add the next narrow condition-lowering boundary needed by current
-generation-control corpus forms: exact integer equality over an isolated M155
-integer `value<generation>(...)` query.
+generation-control corpus forms: exact integer comparisons over isolated M155
+integer `value<generation>(...)` queries.
 
 Scope:
 
 - Accept exact generation-control condition text shaped as
-  `value<generation>(QUERY) == INTEGER_LITERAL`, where `QUERY` is already
+  `value<generation>(QUERY) COMPARISON INTEGER_LITERAL`, where `COMPARISON`
+  is one of `==`, `!=`, `<`, `<=`, `>`, or `>=`, and `QUERY` is already
   lowerable by M155 to an integer generation value.
 - Lower the left query through M155 first; compare the typed integer value to
-  the integer literal and produce a boolean condition result for M156/M157.
+  the integer literal with the accepted comparison operator and produce a
+  boolean condition result for M156/M157.
 - Preserve existing M155 boolean condition behavior.
 - Emit deterministic diagnostics for malformed predicates, unsupported
-  operators, unsupported/non-integer left values, non-integer literals, and
-  missing M155 facts.
-- Add focused tests using `type::size_bytes(TYPE_EXPR) == INTEGER_LITERAL`
-  because that exact family appears in current `else if<generation>` corpus
-  evidence and is a prerequisite for later branch-chain selection.
+  neighboring expression text, unsupported/non-integer left values,
+  non-integer literals, multiple/ambiguous top-level comparison operators,
+  raw arithmetic operator text, and missing M155 facts.
+- Add focused tests using
+  `type::size_bytes(TYPE_EXPR) COMPARISON INTEGER_LITERAL`. Current corpus
+  evidence is size-byte equality in generation branch chains; the full six-op
+  comparison family is selected as a compact typed predicate boundary, not
+  because every operator appears in current source.
 
 Out of scope:
 
 Branch-chain `else if<generation>` selection; plain `else`; general
-expression parsing; precedence; arithmetic; inequality/range comparisons;
-right-hand value queries; boolean equality; loop/declaration/backend-control
+expression parsing; precedence; raw arithmetic operators; generation-time
+arithmetic functions; right-hand value queries; boolean equality;
+loop/declaration/backend-control lowering; body-token rendering; backend
+rendering; source repair; runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies; broad registries, dispatchers, worklists, or fixpoint
+machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted result:
+
+- Added exact generation-control integer comparison conditions shaped as
+  `value<generation>(QUERY) COMPARISON INTEGER_LITERAL`, with `COMPARISON` in
+  `==`, `!=`, `<`, `<=`, `>`, or `>=`.
+- Lowered the left `value<generation>(...)` query through M155 before
+  validating the comparison suffix or right side, so M155 missing-fact
+  diagnostics propagate unchanged.
+- Required the comparison left side to be an integer generation value and the
+  right side to be a base-10 integer literal.
+- Added `generation.integer_comparison` as the boolean
+  `LoweredGenerationValue` kind consumed by existing M156/M157 branch
+  selection and selected-branch handoff.
+- Preserved direct M155 boolean generation-control conditions and rejected
+  raw arithmetic operator text for `+`, `-`, `*`, `/`, and `%`.
+- Kept branch-chain `else if<generation>` selection, raw arithmetic parsing,
+  `arith<generation>::...` functions, right-hand value queries, general
+  expression parsing, loop/declaration/backend-control lowering, body-token
+  rendering, backend rendering, source repair, runtime `tsldata`, `frozen`,
+  and `tslgenold` dependencies, registries, dispatchers, worklists, and
+  fixpoint machinery out of scope.
+
+Review verdicts:
+
+- Architecture reviewer: `Accept`.
+- Boundary auditor: `Accept` after focused re-review.
+- Evidence auditor: `Accept With Follow-Up`; the wording follow-up was
+  addressed during finalization by clarifying that current corpus evidence is
+  size-byte equality, while the six-operator family is a compact typed
+  predicate boundary.
+- Test auditor: `Accept` after focused re-review.
+- Documentation auditor: `Accept`.
+- Validation auditor: `Accept With Follow-Up`; the raw-arithmetic test
+  coverage follow-up was addressed during finalization.
+
+### Milestone 159: Generation Arithmetic Value Function Boundary
+
+Status:
+
+Selected after M158 acceptance. Active next prompt:
+`docs/agent/runs/m159-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add explicit function-shaped generation-time integer arithmetic inside
+`value<generation>(...)`, using `arith<generation>::...` calls. This gives
+future `.tsl` files a source-of-truth way to request generation arithmetic
+without asking the generator to parse raw target-language operators.
+
+Scope:
+
+- Accept exact generation-value function calls shaped as
+  `arith<generation>::OP(ARG, ARG)` inside `value<generation>(...)`, where
+  `OP` is one of `add`, `sub`, `mul`, `div`, or `rem`.
+- Lower arguments recursively through the accepted generation-value lowering
+  boundary, including integer literals, already accepted integer queries such
+  as `vector::length` and `type::size_bytes(TYPE_EXPR)`, and nested accepted
+  `arith<generation>::...` calls.
+- Require integer operands and emit deterministic diagnostics for unsupported
+  operand kinds, wrong arity, malformed function syntax, division/remainder by
+  zero, and unsupported arithmetic function names.
+- Preserve M155 query behavior and M158 comparison predicate behavior.
+
+Out of scope:
+
+Raw `+`, `-`, `*`, `/`, or `%` parsing; precedence or associativity;
+right-hand value queries in M158 predicates; boolean arithmetic; floating
+arithmetic; target-language runtime arithmetic semantics; rewriting or
+substituting backend helper calls such as `details::arith_add`,
+`details::arith_mul`, or `details::arith_rem`; loop/declaration/backend-control
 lowering; body-token rendering; backend rendering; source repair; runtime
 `tsldata`, `frozen`, or `tslgenold` dependencies; broad registries,
 dispatchers, worklists, or fixpoint machinery.

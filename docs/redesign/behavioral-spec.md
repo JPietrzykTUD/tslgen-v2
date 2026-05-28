@@ -1326,6 +1326,38 @@ expression parsing, source repair, dependency scheduling, runtime `tsldata`,
 `frozen`, or `tslgenold` dependencies, registries, dispatchers, worklists, or
 fixpoint machinery.
 
+### M158 Exact Generation Integer Comparison Condition Boundary
+
+Milestone 158 extends generation-control condition lowering with one exact
+typed predicate family:
+
+```text
+value<generation>(QUERY) COMPARISON INTEGER_LITERAL
+```
+
+`COMPARISON` is one of `==`, `!=`, `<`, `<=`, `>`, or `>=`. The left side must
+be a leading isolated `value<generation>(...)` query that lowers through M155
+to an integer generation value. The right side must be a base-10 integer
+literal. The resulting boolean condition is consumed by the existing M156/M157
+two-arm branch selection and selected-branch handoff.
+
+M158 lowers the left query first through the existing M155 boundary; it does
+not raw-string match nested query text such as
+`type::size_bytes(type<generation>(base::in))`. Missing left-side facts
+propagate with their original M155 diagnostics. Boolean M155 conditions remain
+accepted direct generation-control conditions.
+
+Malformed predicates, non-integer left values, non-integer literals, multiple
+or ambiguous top-level comparison operators, raw arithmetic operator text, and
+unsupported neighboring expression text produce deterministic diagnostics.
+
+M158 does not add branch-chain `else if<generation>` selection, plain `else`,
+raw arithmetic operator parsing, `arith<generation>::...` functions, right-hand
+value queries, boolean equality, precedence, broad expression parsing,
+loop/declaration/backend-control lowering, body-token rendering, backend
+rendering, source repair, runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies, registries, dispatchers, worklists, or fixpoint machinery.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

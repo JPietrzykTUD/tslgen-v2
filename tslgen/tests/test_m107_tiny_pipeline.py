@@ -4838,6 +4838,280 @@ def test_m157_non_generation_control_bodies_still_lower_directly() -> None:
     assert result.function == _lowered_function()
 
 
+def test_m158_selects_generation_branch_from_integer_comparisons() -> None:
+    true_tokens = (RawStringToken(text="true_path();", source=_location(5, 9)),)
+    false_tokens = (RawStringToken(text="false_path();", source=_location(8, 9)),)
+    cases = (
+        ("==", 4, True),
+        ("==", 8, False),
+        ("!=", 8, True),
+        ("!=", 4, False),
+        ("<", 8, True),
+        ("<", 4, False),
+        ("<=", 4, True),
+        ("<=", 2, False),
+        (">", 2, True),
+        (">", 4, False),
+        (">=", 4, True),
+        (">=", 8, False),
+    )
+
+    for operator, literal, expected in cases:
+        condition = (
+            "value<generation>(type::size_bytes(type<generation>(base::in))) "
+            f"{operator} {literal}"
+        )
+        body = _generation_if_body(
+            condition,
+            true_tokens=true_tokens,
+            false_tokens=false_tokens,
+        )
+
+        result = Lowerer().lower_generation_control_region(
+            _selected_implementation(body=body, type_tag="ui32"),
+        )
+
+        assert result.diagnostics == ()
+        assert result.region is not None
+        assert result.region.condition == LoweredGenerationValue(
+            kind="generation.integer_comparison",
+            value=expected,
+            source_text=condition,
+            source=_location(4, 7),
+        )
+        assert result.region.selected_branch == LoweredGenerationControlBranch(
+            tokens=true_tokens if expected else false_tokens,
+            source=_location(5 if expected else 8, 9),
+        )
+
+
+def test_m158_lowers_selected_branch_body_from_integer_comparison() -> None:
+    body = _generation_if_body(
+        (
+            "value<generation>(type::size_bytes(type<generation>(base::in))) "
+            ">= 4"
+        ),
+        true_tokens=(
+            LowerableOperationFragment(
+                operation="add",
+                arguments=("left", "right"),
+                source=_location(5, 9),
+            ),
+        ),
+        false_tokens=(
+            RawStringToken(
+                text="unselected_raw_path();",
+                source=_location(8, 9),
+            ),
+        ),
+    )
+
+    result = Lowerer().lower(_selected_implementation(body=body))
+
+    assert result.diagnostics == ()
+    assert result.function is not None
+    assert result.function.signature == _lowered_function().signature
+    assert result.function.body.return_statement.expression == (
+        _lowered_function().body.return_statement.expression
+    )
+    assert result.function.body.return_statement.source == _location(5, 9)
+
+
+def test_m158_reports_noninteger_malformed_and_raw_arithmetic_conditions() -> None:
+    lowerer = Lowerer()
+    base = "value<generation>(type::size_bytes(type<generation>(base::in)))"
+    selected = _selected_implementation(
+        attributes=(
+            PrimitiveAttribute(
+                key="aligned",
+                value="true",
+                declared_value="*",
+                source=_location(1, 16),
+            ),
+        ),
+    )
+    noninteger = lowerer.lower_generation_control_region(
+        _selected_implementation(
+            body=_generation_if_body(
+                "value<generation>(primitive::attribute(aligned)) == 1",
+                true_tokens=(
+                    RawStringToken(text="true_path();", source=_location(5, 9)),
+                ),
+                false_tokens=(
+                    RawStringToken(text="false_path();", source=_location(8, 9)),
+                ),
+            ),
+            attributes=selected.primitive.attributes,
+        ),
+    )
+    nonliteral = lowerer.lower_generation_control_region(
+        _selected_implementation(
+            body=_generation_if_body(
+                f"{base} == four",
+                true_tokens=(
+                    RawStringToken(text="true_path();", source=_location(5, 9)),
+                ),
+                false_tokens=(
+                    RawStringToken(text="false_path();", source=_location(8, 9)),
+                ),
+            ),
+        ),
+    )
+    ambiguous = lowerer.lower_generation_control_region(
+        _selected_implementation(
+            body=_generation_if_body(
+                f"{base} == 4 == 4",
+                true_tokens=(
+                    RawStringToken(text="true_path();", source=_location(5, 9)),
+                ),
+                false_tokens=(
+                    RawStringToken(text="false_path();", source=_location(8, 9)),
+                ),
+            ),
+        ),
+    )
+    raw_arithmetic_results = tuple(
+        lowerer.lower_generation_control_region(
+            _selected_implementation(
+                body=_generation_if_body(
+                    f"{base} {operator} 8",
+                    true_tokens=(
+                        RawStringToken(text="true_path();", source=_location(5, 9)),
+                    ),
+                    false_tokens=(
+                        RawStringToken(text="false_path();", source=_location(8, 9)),
+                    ),
+                ),
+            ),
+        )
+        for operator in ("+", "-", "*", "/", "%")
+    )
+
+    assert [diagnostic.code for diagnostic in noninteger.diagnostics] == [
+        "TSL-LOWER-NONINTEGER-GENERATION-CONTROL-CONDITION",
+    ]
+    assert [diagnostic.code for diagnostic in nonliteral.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-CONTROL-CONDITION",
+    ]
+    assert [diagnostic.code for diagnostic in ambiguous.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-CONTROL-CONDITION",
+    ]
+    assert [
+        diagnostic.code
+        for result in raw_arithmetic_results
+        for diagnostic in result.diagnostics
+    ] == ["TSL-LOWER-UNSUPPORTED-GENERATION-CONTROL-CONDITION"] * 5
+    assert "integer generation value" in noninteger.diagnostics[0].message
+    assert "base-10 integer literal" in nonliteral.diagnostics[0].message
+    assert "exactly one top-level comparison" in ambiguous.diagnostics[0].message
+    assert all(
+        "raw arithmetic operator text" in result.diagnostics[0].message
+        for result in raw_arithmetic_results
+    )
+
+
+def test_m158_propagates_left_generation_value_diagnostics_and_preserves_booleans() -> None:
+    lowerer = Lowerer()
+    comparison_missing_fact = lowerer.lower_generation_control_region(
+        _selected_implementation(
+            body=_generation_if_body(
+                (
+                    "value<generation>("
+                    "type::size_bytes(type<generation>(base::in))) == 4"
+                ),
+                true_tokens=(
+                    RawStringToken(text="true_path();", source=_location(5, 9)),
+                ),
+                false_tokens=(
+                    RawStringToken(text="false_path();", source=_location(8, 9)),
+                ),
+            ),
+            type_tag="si64",
+        ),
+    )
+    missing_fact_with_bad_right = lowerer.lower_generation_control_region(
+        _selected_implementation(
+            body=_generation_if_body(
+                (
+                    "value<generation>("
+                    "type::size_bytes(type<generation>(base::in))) == four"
+                ),
+                true_tokens=(
+                    RawStringToken(text="true_path();", source=_location(5, 9)),
+                ),
+                false_tokens=(
+                    RawStringToken(text="false_path();", source=_location(8, 9)),
+                ),
+            ),
+            type_tag="si64",
+        ),
+    )
+    boolean_condition = lowerer.lower_generation_control_region(
+        _selected_implementation(
+            body=_generation_if_body(
+                "value<generation>(type::is_same(type<generation>(base::in), si32))",
+                true_tokens=(
+                    RawStringToken(text="true_path();", source=_location(5, 9)),
+                ),
+                false_tokens=(
+                    RawStringToken(text="false_path();", source=_location(8, 9)),
+                ),
+            ),
+        ),
+    )
+
+    assert [diagnostic.code for diagnostic in comparison_missing_fact.diagnostics] == [
+        "TSL-LOWER-MISSING-SCALAR-FACT",
+    ]
+    assert [diagnostic.code for diagnostic in missing_fact_with_bad_right.diagnostics] == [
+        "TSL-LOWER-MISSING-SCALAR-FACT",
+    ]
+    assert comparison_missing_fact.region is None
+    assert missing_fact_with_bad_right.region is None
+    assert boolean_condition.diagnostics == ()
+    assert boolean_condition.region is not None
+    assert boolean_condition.region.condition == LoweredGenerationValue(
+        kind="type.is_same",
+        value=True,
+        source_text="value<generation>(type::is_same(type<generation>(base::in), si32))",
+        source=_location(4, 7),
+    )
+
+
+def test_m158_generation_comparison_lowering_is_deterministic() -> None:
+    condition = (
+        "value<generation>(type::size_bytes(type<generation>(base::in))) "
+        "<= 4"
+    )
+    body = _generation_if_body(
+        condition,
+        true_tokens=(RawStringToken(text="true_path();", source=_location(5, 9)),),
+        false_tokens=(RawStringToken(text="false_path();", source=_location(8, 9)),),
+    )
+    malformed_body = _generation_if_body(
+        f"{condition} == 4",
+        true_tokens=(RawStringToken(text="true_path();", source=_location(5, 9)),),
+        false_tokens=(RawStringToken(text="false_path();", source=_location(8, 9)),),
+    )
+    lowerer = Lowerer()
+
+    first_region = lowerer.lower_generation_control_region(
+        _selected_implementation(body=body),
+    )
+    second_region = lowerer.lower_generation_control_region(
+        _selected_implementation(body=body),
+    )
+    first_diagnostics = lowerer.lower_generation_control_region(
+        _selected_implementation(body=malformed_body),
+    )
+    second_diagnostics = lowerer.lower_generation_control_region(
+        _selected_implementation(body=malformed_body),
+    )
+
+    assert first_region == second_region
+    assert first_diagnostics == second_diagnostics
+
+
 def test_m142_does_not_resolve_primitive_call_selector_targets(
     tmp_path: Path,
 ) -> None:

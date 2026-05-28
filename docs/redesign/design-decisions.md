@@ -2019,3 +2019,45 @@ Consequences:
 - The missing-lowering backlog should focus on TSIL keyword families such as
   generation values, generation/backend control, backend queries, intrinsics,
   primitive calls, and body-token rendering.
+
+## ADR-040: Generation Arithmetic Uses Explicit TSIL Functions
+
+Status: Accepted
+
+Context:
+
+Generation-control conditions and loop/declaration bounds need integer
+arithmetic over generation values. Raw target-language spellings such as `* 8`
+or `value<generation>(vector::length) - 1` appear near TSIL islands, but
+parsing those spellings would pull the generator toward a broad C/C++/Rust
+expression parser. Product review also clarified that backend support helpers
+such as `details::arith_mul(...)` remain raw source-authored helper calls, not
+semantic generation arithmetic.
+
+Decision:
+
+Generation-time arithmetic must be explicit TSIL. The accepted source shape is
+function-like and phase-marked:
+
+```text
+arith<generation>::add(ARG, ARG)
+arith<generation>::sub(ARG, ARG)
+arith<generation>::mul(ARG, ARG)
+arith<generation>::div(ARG, ARG)
+arith<generation>::rem(ARG, ARG)
+```
+
+These functions are lowered only inside generation-value lowering, such as
+`value<generation>(arith<generation>::mul(type::size_bytes(...), 8))`. Their
+arguments are recursively lowered generation values. Raw `+`, `-`, `*`, `/`,
+and `%` remain source text unless a future milestone explicitly accepts a
+narrow source form with tests.
+
+Consequences:
+
+- M158 can broaden from equality to typed integer comparisons without adding
+  raw arithmetic parsing.
+- M159 can add generation arithmetic as a compact generation-value function
+  family rather than as operator precedence machinery.
+- Backend helper calls named `details::arith_*` continue to be governed by
+  ADR-039 and are not rewritten to operators or generation arithmetic facts.

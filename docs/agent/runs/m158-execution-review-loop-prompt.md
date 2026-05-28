@@ -3,7 +3,7 @@
 You are executing and reviewing the accepted next milestone after M157:
 
 ```text
-Milestone 158: Exact Generation Integer Equality Condition Boundary
+Milestone 158: Exact Generation Integer Comparison Condition Boundary
 ```
 
 Milestones 1 through 157 are accepted. M155 added isolated selected-context
@@ -13,7 +13,7 @@ selected M156 branch tokens into the existing direct body lowerer.
 
 M158 is an implementation milestone. It should add only the next narrow
 condition-lowering boundary needed by current generation-control corpus forms:
-exact integer equality over an isolated M155 integer generation value query.
+exact integer comparisons over isolated M155 integer generation value queries.
 
 ## Read First
 
@@ -44,13 +44,14 @@ exact integer equality over an isolated M155 integer generation value query.
 Allow exact generation-control conditions shaped as:
 
 ```text
-value<generation>(QUERY) == INTEGER_LITERAL
+value<generation>(QUERY) COMPARISON INTEGER_LITERAL
 ```
 
-where `QUERY` already lowers through M155 to an integer generation value. The
-result is a boolean condition that M156/M157 can consume.
+where `COMPARISON` is exactly one of `==`, `!=`, `<`, `<=`, `>`, or `>=`, and
+`QUERY` already lowers through M155 to an integer generation value. The result
+is a boolean condition that M156/M157 can consume.
 
-This is not a general expression parser. It is a single exact predicate form
+This is not a general expression parser. It is a single exact predicate family
 over typed M155 generation values.
 
 ## Required Executor Task
@@ -59,8 +60,9 @@ Run exactly one write-capable executor for M158. The executor should:
 
 1. Inspect dirty worktree state before editing and preserve unrelated changes.
 2. Add the smallest condition-lowering boundary needed so M156
-   generation-control regions accept exact integer equality predicates of the
-   form `value<generation>(QUERY) == INTEGER_LITERAL`.
+   generation-control regions accept exact integer comparison predicates of
+   the form `value<generation>(QUERY) COMPARISON INTEGER_LITERAL`, where
+   `COMPARISON` is one of `==`, `!=`, `<`, `<=`, `>`, or `>=`.
 3. Lower the left side through M155 first; do not raw-string match nested query
    text such as `type::size_bytes(type<generation>(base::in))`.
 4. Require the left lowered value to be an integer generation value and require
@@ -70,16 +72,18 @@ Run exactly one write-capable executor for M158. The executor should:
    `type::is_same(TYPE_EXPR, TYPE_EXPR)`.
 6. Propagate M155 missing-fact diagnostics unchanged when the left query cannot
    be lowered.
-7. Emit deterministic diagnostics for malformed equality predicates,
-   unsupported operators, unsupported/non-integer left values, non-integer
-   literals, and unsupported neighboring expression text.
+7. Emit deterministic diagnostics for malformed comparison predicates,
+   unsupported/non-integer left values, non-integer literals, multiple or
+   ambiguous top-level comparison operators, raw arithmetic operator text, and
+   unsupported neighboring expression text.
 8. Add focused tests for:
-   - true and false outcomes for
-     `value<generation>(type::size_bytes(TYPE_EXPR)) == INTEGER_LITERAL`;
-   - M156/M157 branch selection using this equality condition;
+   - true and false outcomes for representative
+     `value<generation>(type::size_bytes(TYPE_EXPR)) COMPARISON INTEGER_LITERAL`
+     conditions across all six accepted comparison operators;
+   - M156/M157 branch selection using this comparison condition;
    - non-integer left values, such as boolean primitive attributes;
-   - malformed predicates and unsupported operators such as `!=`, `<`, `<=`,
-     `>`, and `>=`;
+   - malformed predicates and unsupported raw arithmetic operator text such as
+     `+`, `-`, `*`, `/`, and `%`;
    - propagation of M155 missing-fact diagnostics;
    - preservation of existing boolean condition behavior.
 9. Update docs that describe the accepted M158 behavior and any newly
@@ -89,12 +93,18 @@ Run exactly one write-capable executor for M158. The executor should:
 
 ## Design Guardrails
 
-- Treat `==` here as an exact generation predicate boundary, not as a C/C++/Rust
-  target-language operator model.
-- Do not add precedence, associativity, arithmetic, nested expressions,
-  right-hand value queries, boolean equality, or broad expression parsing.
+- Treat comparison spellings here as exact generation predicate delimiters,
+  not as a C/C++/Rust target-language operator model.
+- Do not add precedence, associativity, raw arithmetic operators, nested
+  expressions, right-hand value queries, boolean equality, or broad expression
+  parsing.
+- Do not add generation-time arithmetic functions in M158. The planned M159
+  direction is function-shaped `arith<generation>::add/sub/mul/div/rem(...)`
+  inside `value<generation>(...)`, deliberately separate from raw `+`, `-`,
+  `*`, `/`, or `%` parsing and from backend helper calls such as
+  `details::arith_mul(...)`.
 - Do not add branch-chain `else if<generation>` support in M158. This
-  milestone only makes an exact integer equality condition available to the
+  milestone only makes exact integer comparison conditions available to the
   already accepted two-arm branch-region lowering.
 - Do not add registries, dispatchers, worklists, fixpoint mechanisms, backend
   rendering, body-token rendering, source repair, or runtime reads from
@@ -116,9 +126,10 @@ Branch-chain `else if<generation>` selection; plain `else`; recursive or
 nested generation-control lowering; loop execution; `loop<unroll>` or
 `loop<range>` lowering; declaration lowering; non-type `let<...>` lowering;
 body-token rendering; raw text replacement; source repair; general expression
-parsing; arithmetic; precedence; right-hand value queries; boolean equality;
-inequality/range comparisons; selector-attribute substitution; mask lane
-constants; generic vector lengths/runtime lengths; backend-control
+parsing; raw arithmetic operators; generation-time arithmetic functions;
+precedence; right-hand value queries; boolean equality; selector-attribute
+substitution; mask lane constants; generic vector lengths/runtime lengths;
+backend-control
 `if<compile>`, `else<compile>`, or `switch<compile>` lowering; casts, memory,
 I/O, intrinsics, primitive-call rendering beyond already accepted exact paths,
 backend rendering, dependency scheduling, runtime `tsldata`, `frozen`, or
@@ -129,20 +140,21 @@ maps, hidden backfeeds, or fixpoint mechanisms.
 
 After the executor finishes, use read-only subagents:
 
-1. Architecture reviewer: verify M158 adds only the exact integer equality
+1. Architecture reviewer: verify M158 adds only the exact integer comparison
    condition boundary over M155 integer generation values and avoids general
-   expression parsing, registries, dispatchers, worklists, backend rendering,
-   and runtime data reads.
+   expression parsing, raw arithmetic operators, generation-time arithmetic
+   functions, registries, dispatchers, worklists, backend rendering, and
+   runtime data reads.
 2. Boundary auditor: verify existing M155 boolean conditions, M156 exact region
    behavior, M157 selected-branch handoff, helper raw preservation, and
    unselected-branch opacity remain intact.
-3. Evidence auditor: verify the selected exact condition is justified by
-   current corpus evidence such as the SVE array size-byte equality branch
-   chain, while branch-chain support itself remains out of scope.
-4. Test auditor: verify tests cover true/false equality outcomes, M156/M157
-   consumption, unsupported operators, malformed predicates, non-integer left
-   values, M155 diagnostic propagation, determinism, and preservation of
-   boolean conditions.
+3. Evidence auditor: verify the selected exact condition family is a compact
+   typed predicate boundary motivated by current size-byte equality branch
+   evidence, while branch-chain support itself remains out of scope.
+4. Test auditor: verify tests cover true/false comparison outcomes across all
+   accepted comparison operators, M156/M157 consumption, malformed predicates,
+   raw arithmetic operator rejection, non-integer left values, M155 diagnostic
+   propagation, determinism, and preservation of boolean conditions.
 5. Documentation auditor: verify roadmap, behavioral/domain docs, missing
    inventory, and current state are coherent.
 6. Validation auditor: verify required validation ran and report exact command
@@ -172,7 +184,10 @@ If M158 review returns `Accept` or `Accept With Follow-Ups`:
 - update `docs/agent/current-redesign-state.md`;
 - mark M158 accepted in `docs/redesign/implementation-roadmap.md`;
 - record follow-ups in state if any;
-- create the next concrete run prompt under `docs/agent/runs/`.
+- create or update the next concrete run prompt under `docs/agent/runs/`.
+  The expected next prompt is M159 for generation arithmetic value functions
+  shaped as `arith<generation>::add/sub/mul/div/rem(...)` inside
+  `value<generation>(...)`, not raw operator parsing.
 
 To keep planning and execution integrated, do the next-run planning inside
 this prompt after M158 is accepted. Do not start M159 until the next prompt

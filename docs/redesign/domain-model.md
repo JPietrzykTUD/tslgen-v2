@@ -744,6 +744,7 @@ LoweredGenerationValueKind = Literal[
     "type.is_signed",
     "type.is_same",
     "primitive.attribute",
+    "generation.integer_comparison",
 ]
 LoweredGenerationValuePayload = int | bool
 
@@ -769,6 +770,11 @@ Invariants:
   evaluating supported scalar type values.
 - `primitive.attribute` consumes only selected concrete boolean primitive
   attributes.
+- `generation.integer_comparison` is produced only by generation-control
+  condition lowering for exact
+  `value<generation>(QUERY) COMPARISON INTEGER_LITERAL` predicates over M155
+  integer values. It is a boolean generation value consumed by branch
+  selection, not a general expression node.
 - Unsupported query families, unsupported lowered type values, missing facts,
   malformed query shapes, and non-concrete attributes produce diagnostics.
 - This model is not a branch pruner, loop executor, expression parser,
@@ -808,14 +814,20 @@ Invariants:
   opener, true-branch token slice, raw `}` close, generation `else`
   directive, raw `{` opener, false-branch token slice, and raw `}` close.
 - The condition must be an accepted M155 boolean query for primitive
-  attributes, scalar signedness, or scalar type sameness.
+  attributes, scalar signedness, or scalar type sameness, or an M158 exact
+  integer comparison predicate over a left-side M155 integer query and a
+  base-10 integer literal.
 - Integer generation values such as vector length, vector alignment, or scalar
-  size bytes are valid M155 facts but invalid branch conditions.
+  size bytes remain invalid branch conditions unless consumed by an accepted
+  M158 comparison predicate.
 - Branch token slices are source-owned body tokens. Raw helper text,
   classified directives, nested raw braces, and adjacent raw tokens remain
   untouched for later lowering/rendering milestones.
 - Unsupported branch-chain or plain-else shapes are diagnostic boundaries, not
   source repair targets.
+- M158 comparison predicates are a condition boundary only. They do not add raw
+  operator parsing, right-hand value queries, generation arithmetic functions,
+  precedence, or a TSIL expression AST.
 
 Milestone 157 does not add another IR model. It uses
 `LoweredGenerationControlRegion.selected_branch` as a source-owned token slice
