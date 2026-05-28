@@ -10,11 +10,7 @@ from tslgen.lowering.model import (
     PrimitiveCallReferenceInventory,
     build_selected_implementation_lowering_context,
 )
-from tslgen.lowering.primitive_call_arguments import (
-    lower_primitive_call_argument_bindings,
-)
-from tslgen.lowering.primitive_call_targets import lower_primitive_call_target_match
-from tslgen.lowering.selector_payload import lower_primitive_call_selector_payload
+from tslgen.lowering.primitive_call_expression import lower_primitive_call_expression
 from tslgen.lowering.type_queries import build_selected_type_environment
 
 
@@ -30,34 +26,17 @@ def lower_primitive_call_reference_inventory(
     diagnostics: list[Diagnostic] = []
 
     for primitive_call in _primitive_calls_in_source_order(selected):
-        selector_result = lower_primitive_call_selector_payload(
-            context,
+        expression_result = lower_primitive_call_expression(
+            selected,
             catalog,
             primitive_call,
-            environment,
+            environment=environment,
         )
-        if selector_result.payload is None:
-            diagnostics.extend(selector_result.diagnostics)
+        if expression_result.expression is None:
+            diagnostics.extend(expression_result.diagnostics)
             continue
 
-        match_result = lower_primitive_call_target_match(
-            context,
-            catalog,
-            selector_result.payload,
-        )
-        if match_result.match is None:
-            diagnostics.extend(match_result.diagnostics)
-            continue
-
-        binding_result = lower_primitive_call_argument_bindings(
-            primitive_call,
-            match_result.match,
-        )
-        if binding_result.reference is None:
-            diagnostics.extend(binding_result.diagnostics)
-            continue
-
-        references.append(binding_result.reference)
+        references.append(expression_result.expression.reference)
 
     return PrimitiveCallReferenceInventory(
         references=tuple(references),

@@ -259,6 +259,17 @@ class PrimitiveCallArgumentBindingResult:
 
 
 @dataclass(frozen=True, slots=True)
+class LoweredPrimitiveCallExpression:
+    reference: PrimitiveCallReference
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallExpressionLoweringResult:
+    expression: LoweredPrimitiveCallExpression | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class PrimitiveCallReferenceInventory:
     references: tuple[PrimitiveCallReference, ...]
     diagnostics: tuple[Diagnostic, ...]
@@ -353,6 +364,7 @@ LoweredExpression = (
     LoweredBinaryOperationExpression
     | LoweredUnaryOperationExpression
     | LoweredComparisonOperationExpression
+    | LoweredPrimitiveCallExpression
 )
 
 

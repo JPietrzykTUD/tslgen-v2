@@ -19530,9 +19530,9 @@ Follow-up:
 
 Status:
 
-Planned after M149. This milestone should lower an already recognized
-`PrimitiveCall` token into a reusable typed primitive-call expression value,
-then prove that expression through the first exact selected body consumer:
+Accepted. M150 lowered an already recognized `PrimitiveCall` token into a
+reusable typed primitive-call expression value, then proved that expression
+through the first exact selected body consumer:
 `emit_return(call<primitive=...>(...));`.
 
 Goal:
@@ -19593,5 +19593,90 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py
 python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py`:
+  exit 0, `281 passed in 11.39s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+- Final post-cleanup `git diff --check`: exit 0, no output.
+
+Follow-up:
+
+- Architecture and evidence follow-ups about explicit unselected-context and
+  argument-count boundary coverage were addressed during finalization.
+- Documentation follow-up about inventory reusing expression lowering was
+  addressed during finalization.
+
+### Milestone 151: Primitive-Call Lowering Consolidation Boundary
+
+Status:
+
+Planned after M150. This milestone should stop primitive-call feature growth
+and consolidate the accepted M144-M150 lowering path before adding recursive
+call scanning, additional consumers, backend call rendering, or dependency
+scheduling.
+
+Goal:
+
+Reduce primitive-call lowering complexity while preserving accepted behavior:
+
+- collapse milestone-shaped pass-through layers around selector payloads,
+  target matching, argument binding, expression creation, inventory, closure,
+  package assembly, and diagnostics where they do not carry independent
+  ownership;
+- keep a small cohesive resolver/collector concept for the real domain facts:
+  source `PrimitiveCall`, matched selected implementation, raw argument
+  bindings, source/provenance, diagnostics, deterministic reference order, and
+  lowered primitive-call expression values;
+- preserve public clean-restart behavior and accepted tests;
+- update docs so primitive-call lowering is described as one cohesive concept,
+  not as a durable mini-pipeline.
+
+Scope:
+
+- Refactor and simplify the current primitive-call lowering modules.
+- Remove or collapse private modules whose only purpose is forwarding between
+  adjacent primitive-call layers.
+- Preserve `tslgen.lowering` public imports and `Lowerer` methods where
+  accepted tests rely on them, unless the exposed surface is clearly internal
+  milestone scaffolding and tests/docs are updated accordingly.
+- Add consolidation-focused tests only where existing M144-M150 tests do not
+  make the preserved behavior obvious.
+
+Out of scope:
+
+New primitive-call semantics; recursive primitive-call scanning; primitive-call
+discovery in additional surrounding contexts; `var`, `let`, assignment, loop,
+`if`, `switch`, cast, intrinsic, operator, helper, array/index, or
+name-reference lowering; expression trees; replacing raw argument text with
+lowered argument expressions; backend call rendering; backend type rendering;
+dependency scheduling or topological output sorting; source repair; runtime
+`tsldata`, `frozen`, or `tslgenold` dependencies; public dependency graphs,
+schedulers, registries, dispatchers, fixpoint mechanisms, broad
+request/result/worklist families, or source-data repair.
+
+Expected outputs:
+
+- Primitive-call lowering has fewer moving parts and clearer ownership.
+- Accepted M144-M150 behavior, diagnostics, deterministic order, and raw
+  argument preservation remain stable.
+- The next feature milestone can build on a simpler call boundary instead of
+  carrying accumulated middleware.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py
 find tslgen -type d -name __pycache__ -print
 ```

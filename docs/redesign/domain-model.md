@@ -785,6 +785,15 @@ class PrimitiveCallArgumentBindingResult:
     diagnostics: tuple[Diagnostic, ...]
 
 @dataclass(frozen=True, slots=True)
+class LoweredPrimitiveCallExpression:
+    reference: PrimitiveCallReference
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallExpressionLoweringResult:
+    expression: LoweredPrimitiveCallExpression | None
+    diagnostics: tuple[Diagnostic, ...]
+
+@dataclass(frozen=True, slots=True)
 class PrimitiveCallReferenceInventory:
     references: tuple[PrimitiveCallReference, ...]
     diagnostics: tuple[Diagnostic, ...]
@@ -823,10 +832,15 @@ Invariants:
   already matched target. It binds raw source arguments positionally to the
   matched primitive's formal parameter names, preserving raw argument text and
   source provenance without parsing or validating argument semantics.
+- Primitive-call expression lowering consumes one already recognized
+  primitive call and composes selector-payload lowering, target matching, and
+  argument binding into a reusable `LoweredPrimitiveCallExpression`. It does
+  not depend on the surrounding TSIL construct and does not render backend call
+  text.
 - Primitive-call reference inventory walks selected body tokens in source
-  order, composes selector-payload lowering, target matching, and argument
-  binding for already recognized primitive calls, and accumulates diagnostics
-  without performing dependency closure or backend rendering.
+  order and reuses primitive-call expression lowering for already recognized
+  primitive calls, then records the expression reference. It accumulates
+  diagnostics without performing dependency closure or backend rendering.
 - Primitive-call dependency closure repeatedly applies the reference inventory
   to newly discovered selected implementations. It de-duplicates selected
   implementations by stable target identity and accumulates references and

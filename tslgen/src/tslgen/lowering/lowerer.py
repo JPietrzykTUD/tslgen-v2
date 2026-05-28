@@ -34,6 +34,7 @@ from tslgen.lowering.model import (
     LoweredFunctionSignature,
     LoweredParameter,
     LoweredParameterRef,
+    LoweredPrimitiveCallExpression,
     LoweredReturnStatement,
     LoweredResultType,
     LoweredUnaryOperationExpression,
@@ -43,6 +44,7 @@ from tslgen.lowering.model import (
     PrimitiveCallArgumentBindingResult,
     PrimitiveCallClosureLoweringPackage,
     PrimitiveCallDependencyClosure,
+    PrimitiveCallExpressionLoweringResult,
     PrimitiveCallReferenceInventory,
     PrimitiveCallSelectorPayloadLoweringResult,
     PrimitiveCallSelectorPayload,
@@ -77,6 +79,9 @@ from tslgen.lowering.primitive_call_arguments import (
 )
 from tslgen.lowering.primitive_call_closure import (
     lower_primitive_call_dependency_closure,
+)
+from tslgen.lowering.primitive_call_expression import (
+    lower_primitive_call_expression,
 )
 from tslgen.lowering.primitive_call_inventory import (
     lower_primitive_call_reference_inventory,
@@ -220,6 +225,21 @@ class Lowerer:
             target_match,
         )
 
+    def lower_primitive_call_expression(
+        self,
+        selected: SelectedImplementation,
+        primitive_call: PrimitiveCall,
+        *,
+        catalog: Catalog,
+        environment: SelectedTypeEnvironment | None = None,
+    ) -> PrimitiveCallExpressionLoweringResult:
+        return lower_primitive_call_expression(
+            selected,
+            catalog,
+            primitive_call,
+            environment=environment,
+        )
+
     def lower_primitive_call_reference_inventory(
         self,
         selected: SelectedImplementation,
@@ -286,8 +306,40 @@ class Lowerer:
         scalar_type = lookup_scalar_type_descriptor(context.type_tag)
         body = context.implementation.body
         fragment = _operation_fragment_from_selected_body(selected, body)
+        call_expression_result = (
+            _primitive_call_expression_result_from_exact_emit_return_body(
+                selected,
+                body,
+                catalog,
+            )
+        )
         if context.template == _SUPPORTED_COMPARISON_TEMPLATE:
             operation = lookup_comparison_operation_descriptor(context.primitive_name)
+            if fragment is None and call_expression_result is not None:
+                diagnostics = (
+                    _unsupported_comparison_capability_diagnostics(
+                        selected,
+                        scalar_type,
+                        operation,
+                    )
+                    + call_expression_result.diagnostics
+                )
+                if (
+                    diagnostics
+                    or scalar_type is None
+                    or operation is None
+                    or call_expression_result.expression is None
+                ):
+                    return LoweringResult(function=None, diagnostics=diagnostics)
+                return LoweringResult(
+                    function=_lower_function_with_expression(
+                        context,
+                        scalar_type,
+                        call_expression_result.expression,
+                        result_type=SCALAR_COMPARISON_RESULT_TYPE,
+                    ),
+                    diagnostics=(),
+                )
             diagnostics = tuple(
                 _unsupported_comparison_diagnostics(
                     selected,
@@ -317,6 +369,31 @@ class Lowerer:
 
         if context.template == _SUPPORTED_UNARY_TEMPLATE:
             operation = lookup_unary_operation_descriptor(context.primitive_name)
+            if fragment is None and call_expression_result is not None:
+                diagnostics = (
+                    _unsupported_unary_capability_diagnostics(
+                        selected,
+                        scalar_type,
+                        operation,
+                    )
+                    + call_expression_result.diagnostics
+                )
+                if (
+                    diagnostics
+                    or scalar_type is None
+                    or operation is None
+                    or call_expression_result.expression is None
+                ):
+                    return LoweringResult(function=None, diagnostics=diagnostics)
+
+                return LoweringResult(
+                    function=_lower_function_with_expression(
+                        context,
+                        scalar_type,
+                        call_expression_result.expression,
+                    ),
+                    diagnostics=(),
+                )
             diagnostics = tuple(
                 _unsupported_unary_diagnostics(
                     selected,
@@ -347,6 +424,30 @@ class Lowerer:
 
         if context.template == _SUPPORTED_BINARY_TEMPLATE:
             operation = lookup_binary_operation_descriptor(context.primitive_name)
+            if fragment is None and call_expression_result is not None:
+                diagnostics = (
+                    _unsupported_binary_capability_diagnostics(
+                        selected,
+                        scalar_type,
+                        operation,
+                    )
+                    + call_expression_result.diagnostics
+                )
+                if (
+                    diagnostics
+                    or scalar_type is None
+                    or operation is None
+                    or call_expression_result.expression is None
+                ):
+                    return LoweringResult(function=None, diagnostics=diagnostics)
+                return LoweringResult(
+                    function=_lower_function_with_expression(
+                        context,
+                        scalar_type,
+                        call_expression_result.expression,
+                    ),
+                    diagnostics=(),
+                )
             diagnostics = tuple(
                 _unsupported_binary_diagnostics(
                     selected,
@@ -397,6 +498,76 @@ def _unsupported_binary_diagnostics(
     scalar_type: ScalarTypeDescriptor | None,
     operation: BinaryOperationDescriptor | None,
     catalog: Catalog | None,
+) -> tuple[Diagnostic, ...]:
+    diagnostics = list(
+        _unsupported_binary_capability_diagnostics(
+            selected,
+            scalar_type,
+            operation,
+        )
+    )
+
+    if fragment is None:
+        directive = _emit_return_directive_from_body(body)
+        if directive is not None:
+            diagnostics.extend(
+                _unsupported_emit_return_diagnostics(
+                    directive,
+                    selected=selected,
+                    catalog=catalog,
+                )
+            )
+        elif primitive_call_diagnostics := unsupported_primitive_call_diagnostics(
+            body,
+            selected=selected,
+            catalog=catalog,
+        ):
+            diagnostics.extend(primitive_call_diagnostics)
+        else:
+            diagnostics.append(
+                _unsupported_body_shape_diagnostic(
+                    body,
+                    _SUPPORTED_BINARY_PARAMETERS,
+                    selected.primitive.name,
+                )
+            )
+    elif (
+        operation is not None
+        and fragment.operation != operation.source_body_operation
+    ):
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-LOWER-OPERATION-MISMATCH",
+                message=(
+                    f"primitive operation {selected.primitive.name!r} expects "
+                    f"body operation {operation.source_body_operation!r}; got "
+                    f"{fragment.operation!r}"
+                ),
+                location=fragment.source,
+            )
+        )
+
+    if fragment is not None and fragment.arguments != _SUPPORTED_BINARY_PARAMETERS:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-LOWER-UNSUPPORTED-BODY",
+                message=(
+                    "implementation body cannot be lowered; expected exactly "
+                    f"'{fragment.operation}(left, right)'"
+                ),
+                location=fragment.source,
+            )
+        )
+
+    return tuple(diagnostics)
+
+
+def _unsupported_binary_capability_diagnostics(
+    selected: SelectedImplementation,
+    scalar_type: ScalarTypeDescriptor | None,
+    operation: BinaryOperationDescriptor | None,
 ) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
 
@@ -489,6 +660,25 @@ def _unsupported_binary_diagnostics(
             )
         )
 
+    return tuple(diagnostics)
+
+
+def _unsupported_comparison_diagnostics(
+    selected: SelectedImplementation,
+    body: ImplementationBody,
+    fragment: LowerableOperationFragment | None,
+    scalar_type: ScalarTypeDescriptor | None,
+    operation: ComparisonOperationDescriptor | None,
+    catalog: Catalog | None,
+) -> tuple[Diagnostic, ...]:
+    diagnostics = list(
+        _unsupported_comparison_capability_diagnostics(
+            selected,
+            scalar_type,
+            operation,
+        )
+    )
+
     if fragment is None:
         directive = _emit_return_directive_from_body(body)
         if directive is not None:
@@ -509,7 +699,7 @@ def _unsupported_binary_diagnostics(
             diagnostics.append(
                 _unsupported_body_shape_diagnostic(
                     body,
-                    _SUPPORTED_BINARY_PARAMETERS,
+                    _SUPPORTED_COMPARISON_PARAMETERS,
                     selected.primitive.name,
                 )
             )
@@ -530,7 +720,7 @@ def _unsupported_binary_diagnostics(
             )
         )
 
-    if fragment is not None and fragment.arguments != _SUPPORTED_BINARY_PARAMETERS:
+    if fragment is not None and fragment.arguments != _SUPPORTED_COMPARISON_PARAMETERS:
         diagnostics.append(
             Diagnostic(
                 severity="error",
@@ -546,13 +736,10 @@ def _unsupported_binary_diagnostics(
     return tuple(diagnostics)
 
 
-def _unsupported_comparison_diagnostics(
+def _unsupported_comparison_capability_diagnostics(
     selected: SelectedImplementation,
-    body: ImplementationBody,
-    fragment: LowerableOperationFragment | None,
     scalar_type: ScalarTypeDescriptor | None,
     operation: ComparisonOperationDescriptor | None,
-    catalog: Catalog | None,
 ) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
 
@@ -626,6 +813,25 @@ def _unsupported_comparison_diagnostics(
             )
         )
 
+    return tuple(diagnostics)
+
+
+def _unsupported_unary_diagnostics(
+    selected: SelectedImplementation,
+    body: ImplementationBody,
+    fragment: LowerableOperationFragment | None,
+    scalar_type: ScalarTypeDescriptor | None,
+    operation: UnaryOperationDescriptor | None,
+    catalog: Catalog | None,
+) -> tuple[Diagnostic, ...]:
+    diagnostics = list(
+        _unsupported_unary_capability_diagnostics(
+            selected,
+            scalar_type,
+            operation,
+        )
+    )
+
     if fragment is None:
         directive = _emit_return_directive_from_body(body)
         if directive is not None:
@@ -646,7 +852,7 @@ def _unsupported_comparison_diagnostics(
             diagnostics.append(
                 _unsupported_body_shape_diagnostic(
                     body,
-                    _SUPPORTED_COMPARISON_PARAMETERS,
+                    _SUPPORTED_UNARY_PARAMETERS,
                     selected.primitive.name,
                 )
             )
@@ -667,14 +873,14 @@ def _unsupported_comparison_diagnostics(
             )
         )
 
-    if fragment is not None and fragment.arguments != _SUPPORTED_COMPARISON_PARAMETERS:
+    if fragment is not None and fragment.arguments != _SUPPORTED_UNARY_PARAMETERS:
         diagnostics.append(
             Diagnostic(
                 severity="error",
                 code="TSL-LOWER-UNSUPPORTED-BODY",
                 message=(
                     "implementation body cannot be lowered; expected exactly "
-                    f"'{fragment.operation}(left, right)'"
+                    f"'{fragment.operation}(value)'"
                 ),
                 location=fragment.source,
             )
@@ -683,13 +889,10 @@ def _unsupported_comparison_diagnostics(
     return tuple(diagnostics)
 
 
-def _unsupported_unary_diagnostics(
+def _unsupported_unary_capability_diagnostics(
     selected: SelectedImplementation,
-    body: ImplementationBody,
-    fragment: LowerableOperationFragment | None,
     scalar_type: ScalarTypeDescriptor | None,
     operation: UnaryOperationDescriptor | None,
-    catalog: Catalog | None,
 ) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
 
@@ -779,60 +982,6 @@ def _unsupported_unary_diagnostics(
                     f"{', '.join(supported_type_tags)}"
                 ),
                 location=selected.implementation.source,
-            )
-        )
-
-    if fragment is None:
-        directive = _emit_return_directive_from_body(body)
-        if directive is not None:
-            diagnostics.extend(
-                _unsupported_emit_return_diagnostics(
-                    directive,
-                    selected=selected,
-                    catalog=catalog,
-                )
-            )
-        elif primitive_call_diagnostics := unsupported_primitive_call_diagnostics(
-            body,
-            selected=selected,
-            catalog=catalog,
-        ):
-            diagnostics.extend(primitive_call_diagnostics)
-        else:
-            diagnostics.append(
-                _unsupported_body_shape_diagnostic(
-                    body,
-                    _SUPPORTED_UNARY_PARAMETERS,
-                    selected.primitive.name,
-                )
-            )
-    elif (
-        operation is not None
-        and fragment.operation != operation.source_body_operation
-    ):
-        diagnostics.append(
-            Diagnostic(
-                severity="error",
-                code="TSL-LOWER-OPERATION-MISMATCH",
-                message=(
-                    f"primitive operation {selected.primitive.name!r} expects "
-                    f"body operation {operation.source_body_operation!r}; got "
-                    f"{fragment.operation!r}"
-                ),
-                location=fragment.source,
-            )
-        )
-
-    if fragment is not None and fragment.arguments != _SUPPORTED_UNARY_PARAMETERS:
-        diagnostics.append(
-            Diagnostic(
-                severity="error",
-                code="TSL-LOWER-UNSUPPORTED-BODY",
-                message=(
-                    "implementation body cannot be lowered; expected exactly "
-                    f"'{fragment.operation}(value)'"
-                ),
-                location=fragment.source,
             )
         )
 
@@ -926,6 +1075,31 @@ def _is_exact_add_primitive_call_directive(
         and selector.attrs is None
         and primitive_call.payload == _SUPPORTED_EXACT_PRIMITIVE_CALL_PAYLOAD
         and argument_texts == _SUPPORTED_BINARY_PARAMETERS
+    )
+
+
+def _primitive_call_expression_result_from_exact_emit_return_body(
+    selected: SelectedImplementation,
+    body: ImplementationBody,
+    catalog: Catalog | None,
+) -> PrimitiveCallExpressionLoweringResult | None:
+    if catalog is None:
+        return None
+
+    directive = _emit_return_directive_from_body(body)
+    if directive is None or len(directive.payload_tokens) != 1:
+        return None
+
+    payload_token = directive.payload_tokens[0]
+    if not isinstance(payload_token, LowerableDirective):
+        return None
+    if payload_token.name != "call" or payload_token.primitive_call is None:
+        return None
+
+    return lower_primitive_call_expression(
+        selected,
+        catalog,
+        payload_token.primitive_call,
     )
 
 
@@ -1053,6 +1227,25 @@ def _lower_unary_function(
                     value=LoweredParameterRef(fragment.arguments[0]),
                 ),
                 source=fragment.source,
+            ),
+        ),
+        source=context.implementation_source,
+    )
+
+
+def _lower_function_with_expression(
+    context: SelectedImplementationLoweringContext,
+    scalar_type: ScalarTypeDescriptor,
+    expression: LoweredPrimitiveCallExpression,
+    *,
+    result_type: LoweredResultType = INPUT_SCALAR_RESULT_TYPE,
+) -> LoweredFunction:
+    return LoweredFunction(
+        signature=_signature(context, scalar_type, result_type=result_type),
+        body=LoweredFunctionBody(
+            return_statement=LoweredReturnStatement(
+                expression=expression,
+                source=expression.reference.source,
             ),
         ),
         source=context.implementation_source,

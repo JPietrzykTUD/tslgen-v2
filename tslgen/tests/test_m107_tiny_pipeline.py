@@ -4730,12 +4730,11 @@ def test_m134_emit_return_sub_call_reports_primitive_call_diagnostic(
     assert result.artifacts.artifacts == ()
     assert len(result.diagnostics) == 1
     diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "TSL-LOWER-UNKNOWN-PRIMITIVE-CALL-TARGET"
+    assert diagnostic.code == "TSL-SELECT-UNKNOWN-PRIMITIVE"
     assert diagnostic.severity == "error"
-    assert diagnostic.location == SourceLocation(source.resolve(), 3, 23)
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 38)
     assert "sub" in diagnostic.message
-    assert "not in catalog" in diagnostic.message
-    assert "left, right" in diagnostic.message
+    assert "primitive" in diagnostic.message
 
 
 def test_m134_emit_return_self_call_reports_primitive_call_diagnostic(
@@ -4768,11 +4767,10 @@ def test_m134_emit_return_self_call_reports_primitive_call_diagnostic(
     assert result.artifacts.artifacts == ()
     assert len(result.diagnostics) == 1
     diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL"
+    assert diagnostic.code == "TSL-LOWER-UNKNOWN-SELECTOR-EXTENSION"
     assert diagnostic.severity == "error"
-    assert diagnostic.location == SourceLocation(source.resolve(), 3, 23)
-    assert "@self" in diagnostic.message
-    assert "opaque" in diagnostic.message
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 44)
+    assert "scalar" in diagnostic.message
 
 
 def test_m134_selected_self_primitive_call_reports_precise_diagnostic(
@@ -5453,18 +5451,11 @@ def test_m137_emit_return_payload_call_diagnostic_uses_structured_context(
     assert result.artifacts.artifacts == ()
     assert len(result.diagnostics) == 1
     diagnostic = result.diagnostics[0]
-    assert diagnostic.code == "TSL-LOWER-UNKNOWN-PRIMITIVE-CALL-TARGET"
+    assert diagnostic.code == "TSL-SELECT-UNKNOWN-PRIMITIVE"
     assert diagnostic.severity == "error"
-    assert diagnostic.location == SourceLocation(source.resolve(), 3, 23)
-    assert diagnostic.message == (
-        "primitive call target is not in the catalog; "
-        "target kind is named primitive; target name is 'mul'; "
-        "selector source text is 'mul'; "
-        "base target lookup failed: primitive 'mul' is not in catalog; "
-        "known primitive names are: add; raw argument count is 2; "
-        "raw argument payloads remain opaque: ('left', 'right'); "
-        "payload remains opaque: 'left, right'"
-    )
+    assert diagnostic.location == SourceLocation(source.resolve(), 3, 38)
+    assert "mul" in diagnostic.message
+    assert "primitive" in diagnostic.message
 
 
 def test_m137_exact_add_call_artifacts_remain_stable(

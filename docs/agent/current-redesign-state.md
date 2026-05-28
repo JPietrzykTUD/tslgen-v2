@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 149 is accepted.
+Milestone 150 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -815,6 +815,45 @@ M149 validation completed with:
   exit 0, no output.
 - `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py`:
   exit 0, `268 passed in 28.15s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+- Final post-cleanup `git diff --check`: exit 0, no output.
+
+The M150 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, evidence,
+documentation, and validation audits. M150 added a reusable typed
+`LoweredPrimitiveCallExpression` value for already recognized `PrimitiveCall`
+tokens, implemented a focused primitive-call expression helper that composes
+the accepted M144 selector-payload, M145 target matching, and M146 argument
+binding path, and consumed that expression only for the exact selected
+`emit_return(call<primitive=...>(...));` body form.
+
+M150 preserved parent argument text and provenance as source truth. It kept
+standalone `call<...>` bodies, calls in unselected `var` / `let` / assignment
+/ loop / condition contexts, raw-only return payloads, mixed raw-plus-call
+return payloads, malformed calls, nested argument expression parsing,
+dependency scheduling, backend call rendering, source repair, and runtime
+`tsldata`, `frozen`, or `tslgenold` dependencies out of scope. M149 closure
+packages can now include a root function whose exact return-call body lowers,
+but renderers still reject primitive-call expressions until a later backend
+milestone explicitly selects call rendering.
+
+M150 review verdicts were: architecture `Accept With Follow-Ups`, boundary
+`Accept`, evidence `Accept With Follow-Ups`, documentation `Accept`, and
+validation `Accept`. The architecture/evidence follow-ups about explicit
+unselected-context and argument-count boundary coverage were addressed during
+finalization. The documentation follow-up about inventory reusing expression
+lowering was addressed during finalization.
+
+M150 validation completed with:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py`:
+  exit 0, `281 passed in 11.39s`.
 - Initial `find tslgen -type d -name __pycache__ -print` listed
   validation-created cache directories; after removing those directories, the
   final required `find tslgen -type d -name __pycache__ -print` returned exit
@@ -2414,44 +2453,45 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 150.
+Execute Milestone 151.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m150-execution-review-loop-prompt.md
+docs/agent/runs/m151-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 150: Primitive-Call Expression Lowering Boundary With Exact Emit-Return Consumer
+Milestone 151: Primitive-Call Lowering Consolidation Boundary
 ```
 
 Latest review verdict:
 
 ```text
-M149 execution-review returned Accept With Follow-Ups after one write-capable
+M150 execution-review returned Accept With Follow-Ups after one write-capable
 executor and read-only architecture, boundary, evidence, documentation, and
-validation audits. M149 added a compact primitive-call closure lowering
-package that composes the M148 closure with existing selected-function
-lowering. The documentation follow-up was addressed during finalization.
+validation audits. M150 added a reusable primitive-call expression value and
+one exact `emit_return(call<primitive=...>(...));` consumer. Nonblocking test
+and documentation follow-ups were addressed during finalization.
 ```
 
 Next expected action:
 
 ```text
-Run the active M150 execution-review-loop prompt. M150 should lower an already
-recognized `PrimitiveCall` token into a reusable typed primitive-call
-expression value, then prove that expression through the exact selected body
-consumer `emit_return(call<primitive=...>(...));`.
+Run the active M151 execution-review-loop prompt. M151 should consolidate the
+accepted primitive-call lowering path before adding more behavior. The goal is
+to collapse milestone-shaped middleware around selector payloads, target
+matching, argument binding, expression creation, inventory, closure, package
+assembly, and diagnostics into a smaller cohesive resolver/collector shape
+while preserving all accepted M144-M150 behavior.
 
-M150 may add one typed primitive-call expression value and one exact
-`emit_return(...)` consumer. It must not add separate per-context call lowering,
-standalone call semantics, dependency scheduling, backend call rendering,
-backend type rendering, nested expression parsing, argument expression
-resolution, source repair, or broad graph/scheduler/worklist machinery.
+M151 must not add new primitive-call semantics, recursive scanning, additional
+surrounding-context consumers, expression trees, dependency scheduling, backend
+call rendering, backend type rendering, source repair, or broad
+graph/scheduler/worklist machinery.
 ```
 
 Previous review verdict:
@@ -6308,13 +6348,13 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M150
+No stop condition is active. The workflow is ready to run the active M151
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M150 execution, run the validation command listed in
-`docs/agent/runs/m150-execution-review-loop-prompt.md`.
+For active M151 execution, run the validation command listed in
+`docs/agent/runs/m151-execution-review-loop-prompt.md`.
 
 For M125 execution and review, validation completed with:
 

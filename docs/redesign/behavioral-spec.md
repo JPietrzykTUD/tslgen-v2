@@ -1121,6 +1121,34 @@ argument text, parse argument expressions, render backend type text, repair
 source, or introduce runtime `tsldata`, `frozen`, or `tslgenold`
 dependencies.
 
+### M150 Primitive-Call Expression Lowering Boundary With Exact Emit-Return Consumer
+
+Milestone 150 lowers an already recognized `PrimitiveCall` token into a
+reusable typed primitive-call expression. The expression preserves the
+accepted `PrimitiveCallReference`, including target match, raw source
+arguments, positional bindings, and source provenance.
+
+M150 also adds the first exact consumer for that expression: a selected
+implementation body containing exactly one `emit_return` directive whose
+payload token stream contains exactly one recognized primitive-call token. In
+that case, selected-function lowering may produce a `LoweredFunction` whose
+return expression is the primitive-call expression. The M149 package then
+includes that function if the selected implementation otherwise satisfies the
+existing tiny lowerer capability checks.
+
+Diagnostics for unsupported selector payloads, missing targets, and argument
+count mismatches come from the accepted primitive-call expression/reference
+boundaries. Surrounding contexts that have not been selected as expression
+consumers, such as standalone call bodies, `var`, `let`, assignment, loop, or
+condition payloads, remain unsupported by their surrounding-context lowering.
+
+M150 does not implement separate per-context primitive-call lowering,
+standalone primitive-call statement semantics, backend call rendering,
+backend type rendering, dependency scheduling, topological sorting, recursive
+nested-call lowering, raw argument expression parsing, arbitrary
+`emit_return(...)` expression lowering, var/let/loop/if payload semantics,
+source repair, or runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:
