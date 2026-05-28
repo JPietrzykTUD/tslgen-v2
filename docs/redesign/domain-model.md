@@ -738,6 +738,7 @@ primitive attributes. It does not read source files, `tsldata`, `frozen`, or
 
 ```python
 LoweredGenerationValueKind = Literal[
+    "generation.integer_literal",
     "vector.length",
     "vector.alignment",
     "type.size_bytes",
@@ -745,6 +746,11 @@ LoweredGenerationValueKind = Literal[
     "type.is_same",
     "primitive.attribute",
     "generation.integer_comparison",
+    "generation.arithmetic.add",
+    "generation.arithmetic.sub",
+    "generation.arithmetic.mul",
+    "generation.arithmetic.div",
+    "generation.arithmetic.rem",
 ]
 LoweredGenerationValuePayload = int | bool
 
@@ -770,11 +776,21 @@ Invariants:
   evaluating supported scalar type values.
 - `primitive.attribute` consumes only selected concrete boolean primitive
   attributes.
+- `generation.integer_literal` is a base-10 integer literal accepted only as
+  an operand inside an explicit generation arithmetic call.
+- `generation.arithmetic.add`, `generation.arithmetic.sub`,
+  `generation.arithmetic.mul`, `generation.arithmetic.div`, and
+  `generation.arithmetic.rem` are produced only by explicit
+  `arith<generation>::OP(ARG, ARG)` calls. Their operands recursively lower
+  through this generation-value model and must be integers. Division and
+  remainder use deterministic truncating integer division; zero right operands
+  are diagnostics.
 - `generation.integer_comparison` is produced only by generation-control
   condition lowering for exact
-  `value<generation>(QUERY) COMPARISON INTEGER_LITERAL` predicates over M155
-  integer values. It is a boolean generation value consumed by branch
-  selection, not a general expression node.
+  `value<generation>(QUERY) COMPARISON INTEGER_LITERAL` predicates over
+  accepted integer generation values, including M159 arithmetic results. It is
+  a boolean generation value consumed by branch selection, not a general
+  expression node.
 - Unsupported query families, unsupported lowered type values, missing facts,
   malformed query shapes, and non-concrete attributes produce diagnostics.
 - This model is not a branch pruner, loop executor, expression parser,
@@ -815,8 +831,8 @@ Invariants:
   directive, raw `{` opener, false-branch token slice, and raw `}` close.
 - The condition must be an accepted M155 boolean query for primitive
   attributes, scalar signedness, or scalar type sameness, or an M158 exact
-  integer comparison predicate over a left-side M155 integer query and a
-  base-10 integer literal.
+  integer comparison predicate over a left-side accepted integer generation
+  value query and a base-10 integer literal.
 - Integer generation values such as vector length, vector alignment, or scalar
   size bytes remain invalid branch conditions unless consumed by an accepted
   M158 comparison predicate.
@@ -825,9 +841,10 @@ Invariants:
   untouched for later lowering/rendering milestones.
 - Unsupported branch-chain or plain-else shapes are diagnostic boundaries, not
   source repair targets.
-- M158 comparison predicates are a condition boundary only. They do not add raw
-  operator parsing, right-hand value queries, generation arithmetic functions,
-  precedence, or a TSIL expression AST.
+- M158 comparison predicates are a condition boundary only. M159 can supply
+  explicit `arith<generation>::...` integer values on the left side, but raw
+  operator parsing, right-hand value queries, precedence, and a TSIL
+  expression AST remain out of scope.
 
 Milestone 157 does not add another IR model. It uses
 `LoweredGenerationControlRegion.selected_branch` as a source-owned token slice

@@ -19,10 +19,14 @@ from tslgen.lowering.type_queries import lower_type_expression
 from tslgen.lowering.type_syntax import (
     TypeCall,
     TypeIdentifier,
+    TypeIntegerLiteral,
     TypeQuery,
     TypeSyntax,
     parse_type_syntax,
 )
+
+_GENERATION_ARITHMETIC_PREFIX = "arith<generation>::"
+_GENERATION_ARITHMETIC_OPERATIONS = frozenset(("add", "sub", "mul", "div", "rem"))
 
 
 def lower_generation_value_query(
@@ -40,43 +44,90 @@ def lower_generation_value_query(
             diagnostics=(_malformed_generation_value_query_diagnostic(query, source),),
         )
 
-    expression = parsed.expression
+    return _lower_generation_value_expression(
+        context,
+        parsed.expression,
+        parsed.source_text,
+        source,
+        catalog=catalog,
+        environment=environment,
+        allow_integer_literal=False,
+    )
+
+
+def _lower_generation_value_expression(
+    context: SelectedImplementationLoweringContext,
+    expression: TypeSyntax,
+    source_text: str,
+    source: SourceLocation,
+    *,
+    catalog: Catalog | None,
+    environment: SelectedTypeEnvironment | None,
+    allow_integer_literal: bool,
+) -> GenerationValueQueryLoweringResult:
+    if isinstance(expression, TypeIntegerLiteral):
+        if not allow_integer_literal:
+            return GenerationValueQueryLoweringResult(
+                value=None,
+                diagnostics=(
+                    _unsupported_generation_value_query_diagnostic(
+                        source_text,
+                        source,
+                    ),
+                ),
+            )
+        return GenerationValueQueryLoweringResult(
+            value=LoweredGenerationValue(
+                kind="generation.integer_literal",
+                value=expression.value,
+                source_text=source_text,
+                source=source,
+            ),
+            diagnostics=(),
+        )
     if isinstance(expression, TypeIdentifier):
-        return _lower_identifier_value(context, parsed, expression, source, catalog)
+        return _lower_identifier_value(
+            context,
+            source_text,
+            expression,
+            source,
+            catalog,
+        )
     if isinstance(expression, TypeCall):
         return _lower_call_value(
             context,
-            parsed,
+            source_text,
             expression,
             source,
             catalog=catalog,
             environment=environment,
+            allow_integer_literal=allow_integer_literal,
         )
 
     return GenerationValueQueryLoweringResult(
         value=None,
         diagnostics=(
-            _unsupported_generation_value_query_diagnostic(query, source),
+            _unsupported_generation_value_query_diagnostic(source_text, source),
         ),
     )
 
 
 def _lower_identifier_value(
     context: SelectedImplementationLoweringContext,
-    query: TypeQuery,
+    source_text: str,
     expression: TypeIdentifier,
     source: SourceLocation,
     catalog: Catalog | None,
 ) -> GenerationValueQueryLoweringResult:
     if expression.name == "vector::length":
-        return _lower_vector_length(context, query.source_text, source, catalog)
+        return _lower_vector_length(context, source_text, source, catalog)
     if expression.name == "vector::alignment":
-        return _lower_vector_alignment(context, query.source_text, source, catalog)
+        return _lower_vector_alignment(context, source_text, source, catalog)
     return GenerationValueQueryLoweringResult(
         value=None,
         diagnostics=(
             _unsupported_generation_value_query_diagnostic(
-                query.source_text,
+                source_text,
                 source,
             ),
         ),
@@ -85,42 +136,194 @@ def _lower_identifier_value(
 
 def _lower_call_value(
     context: SelectedImplementationLoweringContext,
-    query: TypeQuery,
+    source_text: str,
+    call: TypeCall,
+    source: SourceLocation,
+    *,
+    catalog: Catalog | None,
+    environment: SelectedTypeEnvironment | None,
+    allow_integer_literal: bool,
+) -> GenerationValueQueryLoweringResult:
+    arithmetic_operation = _generation_arithmetic_operation(call.name)
+    if arithmetic_operation is not None:
+        return _lower_generation_arithmetic_value(
+            context,
+            source_text,
+            arithmetic_operation,
+            call,
+            source,
+            catalog=catalog,
+            environment=environment,
+        )
+
+    if call.name.startswith(_GENERATION_ARITHMETIC_PREFIX):
+        return GenerationValueQueryLoweringResult(
+            value=None,
+            diagnostics=(
+                _unsupported_generation_arithmetic_diagnostic(
+                    call.name.removeprefix(_GENERATION_ARITHMETIC_PREFIX),
+                    source,
+                ),
+            ),
+        )
+
+    if call.name == "type::size_bytes":
+        if len(call.arguments) != 1:
+            return _malformed_generation_value_query_result(source_text, source)
+        return _lower_type_size_bytes(context, source_text, call, source, environment)
+
+    if call.name == "type::is_signed":
+        if len(call.arguments) != 1:
+            return _malformed_generation_value_query_result(source_text, source)
+        return _lower_type_is_signed(context, source_text, call, source, environment)
+
+    if call.name == "type::is_same":
+        if len(call.arguments) != 2:
+            return _malformed_generation_value_query_result(source_text, source)
+        return _lower_type_is_same(context, source_text, call, source, environment)
+
+    if call.name == "primitive::attribute":
+        if len(call.arguments) != 1:
+            return _malformed_generation_value_query_result(source_text, source)
+        return _lower_primitive_attribute(context, source_text, call, source)
+
+    return GenerationValueQueryLoweringResult(
+        value=None,
+        diagnostics=(
+            _unsupported_generation_value_query_diagnostic(
+                source_text,
+                source,
+            ),
+        ),
+    )
+
+
+def _generation_arithmetic_operation(call_name: str) -> str | None:
+    if not call_name.startswith(_GENERATION_ARITHMETIC_PREFIX):
+        return None
+    operation = call_name.removeprefix(_GENERATION_ARITHMETIC_PREFIX)
+    if operation in _GENERATION_ARITHMETIC_OPERATIONS:
+        return operation
+    return None
+
+
+def _lower_generation_arithmetic_value(
+    context: SelectedImplementationLoweringContext,
+    source_text: str,
+    operation: str,
     call: TypeCall,
     source: SourceLocation,
     *,
     catalog: Catalog | None,
     environment: SelectedTypeEnvironment | None,
 ) -> GenerationValueQueryLoweringResult:
-    if call.name == "type::size_bytes":
-        if len(call.arguments) != 1:
-            return _malformed_generation_value_query_result(query.source_text, source)
-        return _lower_type_size_bytes(context, query.source_text, call, source, environment)
+    if len(call.arguments) != 2:
+        return GenerationValueQueryLoweringResult(
+            value=None,
+            diagnostics=(
+                _malformed_generation_arithmetic_diagnostic(
+                    call.source_text,
+                    source,
+                    "expected exactly two arguments",
+                ),
+            ),
+        )
 
-    if call.name == "type::is_signed":
-        if len(call.arguments) != 1:
-            return _malformed_generation_value_query_result(query.source_text, source)
-        return _lower_type_is_signed(context, query.source_text, call, source, environment)
+    left_result = _lower_generation_value_expression(
+        context,
+        call.arguments[0],
+        call.arguments[0].source_text,
+        source,
+        catalog=catalog,
+        environment=environment,
+        allow_integer_literal=True,
+    )
+    if left_result.value is None:
+        return left_result
+    right_result = _lower_generation_value_expression(
+        context,
+        call.arguments[1],
+        call.arguments[1].source_text,
+        source,
+        catalog=catalog,
+        environment=environment,
+        allow_integer_literal=True,
+    )
+    if right_result.value is None:
+        return right_result
 
-    if call.name == "type::is_same":
-        if len(call.arguments) != 2:
-            return _malformed_generation_value_query_result(query.source_text, source)
-        return _lower_type_is_same(context, query.source_text, call, source, environment)
-
-    if call.name == "primitive::attribute":
-        if len(call.arguments) != 1:
-            return _malformed_generation_value_query_result(query.source_text, source)
-        return _lower_primitive_attribute(context, query.source_text, call, source)
+    left = left_result.value
+    right = right_result.value
+    if type(left.value) is not int:
+        return GenerationValueQueryLoweringResult(
+            value=None,
+            diagnostics=(
+                _noninteger_generation_arithmetic_operand_diagnostic(
+                    left.source_text,
+                    source,
+                ),
+            ),
+        )
+    if type(right.value) is not int:
+        return GenerationValueQueryLoweringResult(
+            value=None,
+            diagnostics=(
+                _noninteger_generation_arithmetic_operand_diagnostic(
+                    right.source_text,
+                    source,
+                ),
+            ),
+        )
+    if operation in {"div", "rem"} and right.value == 0:
+        return GenerationValueQueryLoweringResult(
+            value=None,
+            diagnostics=(
+                _zero_divisor_generation_arithmetic_diagnostic(
+                    call.source_text,
+                    source,
+                    operation,
+                ),
+            ),
+        )
 
     return GenerationValueQueryLoweringResult(
-        value=None,
-        diagnostics=(
-            _unsupported_generation_value_query_diagnostic(
-                query.source_text,
-                source,
+        value=LoweredGenerationValue(
+            kind=f"generation.arithmetic.{operation}",
+            value=_evaluate_generation_arithmetic(
+                operation,
+                left.value,
+                right.value,
             ),
+            source_text=source_text,
+            source=source,
         ),
+        diagnostics=(),
     )
+
+
+def _evaluate_generation_arithmetic(
+    operation: str,
+    left: int,
+    right: int,
+) -> int:
+    if operation == "add":
+        return left + right
+    if operation == "sub":
+        return left - right
+    if operation == "mul":
+        return left * right
+    if operation == "div":
+        return _truncating_integer_division(left, right)
+    if operation == "rem":
+        return left - (_truncating_integer_division(left, right) * right)
+    raise AssertionError(f"unsupported generation arithmetic operation {operation!r}")
+
+
+def _truncating_integer_division(left: int, right: int) -> int:
+    quotient = abs(left) // abs(right)
+    if (left < 0) != (right < 0):
+        return -quotient
+    return quotient
 
 
 def _lower_vector_length(
@@ -486,7 +689,8 @@ def _unsupported_generation_value_query_diagnostic(
             "generation value query family is not supported by the M155 "
             "isolated value-query boundary; expected vector::length, "
             "vector::alignment, type::size_bytes(...), type::is_signed(...), "
-            "type::is_same(...), or primitive::attribute(...), got "
+            "type::is_same(...), primitive::attribute(...), or an M159 "
+            "arith<generation>::add/sub/mul/div/rem(...) call, got "
             f"{query!r}"
         ),
         location=source,
@@ -504,6 +708,69 @@ def _unsupported_generation_value_type_diagnostic(
             "generation value query type argument lowered to an unsupported "
             "type value; M155 evaluates only scalar type values, got "
             f"{expression!r}"
+        ),
+        location=source,
+    )
+
+
+def _malformed_generation_arithmetic_diagnostic(
+    expression: str,
+    source: SourceLocation,
+    reason: str,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-LOWER-MALFORMED-GENERATION-ARITHMETIC",
+        message=(
+            "generation arithmetic value call cannot be lowered; "
+            f"{reason}; got {expression!r}"
+        ),
+        location=source,
+    )
+
+
+def _unsupported_generation_arithmetic_diagnostic(
+    operation: str,
+    source: SourceLocation,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-LOWER-UNSUPPORTED-GENERATION-ARITHMETIC",
+        message=(
+            "generation arithmetic operation is not supported by M159; "
+            "expected one of add, sub, mul, div, or rem, got "
+            f"{operation!r}"
+        ),
+        location=source,
+    )
+
+
+def _noninteger_generation_arithmetic_operand_diagnostic(
+    expression: str,
+    source: SourceLocation,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-LOWER-NONINTEGER-GENERATION-ARITHMETIC-OPERAND",
+        message=(
+            "generation arithmetic operands must lower to integer generation "
+            f"values; got {expression!r}"
+        ),
+        location=source,
+    )
+
+
+def _zero_divisor_generation_arithmetic_diagnostic(
+    expression: str,
+    source: SourceLocation,
+    operation: str,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-LOWER-ZERO-DIVISOR-GENERATION-ARITHMETIC",
+        message=(
+            "generation arithmetic division and remainder require a non-zero "
+            f"right operand; operation {operation!r} got {expression!r}"
         ),
         location=source,
     )

@@ -16,6 +16,12 @@ class TypeIdentifier:
 
 
 @dataclass(frozen=True, slots=True)
+class TypeIntegerLiteral:
+    value: int
+    source_text: str
+
+
+@dataclass(frozen=True, slots=True)
 class TypeCall:
     name: str
     arguments: tuple[TypeSyntax, ...]
@@ -29,10 +35,16 @@ class TypeQuery:
     source_text: str
 
 
-TypeSyntax = TypeIdentifier | TypeCall | TypeQuery
+TypeSyntax = TypeIdentifier | TypeIntegerLiteral | TypeCall | TypeQuery
 
 _IDENTIFIER_RE = re.compile(
     r"[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*"
+)
+_CALL_NAME_RE = re.compile(
+    r"(?:"
+    r"[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*"
+    r"|arith<generation>::[A-Za-z_][A-Za-z0-9_]*"
+    r")"
 )
 _QUERY_PREFIXES: tuple[tuple[str, TypeQueryKind], ...] = (
     ("type<backend>(", "backend"),
@@ -54,6 +66,9 @@ def parse_type_syntax(expression: str) -> TypeSyntax | None:
     call = _parse_call(expression)
     if call is not None:
         return call
+
+    if _is_base_10_integer_literal(expression):
+        return TypeIntegerLiteral(value=int(expression), source_text=expression)
 
     if _IDENTIFIER_RE.fullmatch(expression) is not None:
         return TypeIdentifier(name=expression, source_text=expression)
@@ -125,7 +140,7 @@ def _parse_call(expression: str) -> TypeCall | None:
         return None
 
     name = expression[:open_index].strip()
-    if _IDENTIFIER_RE.fullmatch(name) is None:
+    if _CALL_NAME_RE.fullmatch(name) is None:
         return None
 
     raw_arguments = split_top_level_arguments(
@@ -146,6 +161,12 @@ def _parse_call(expression: str) -> TypeCall | None:
         arguments=tuple(arguments),
         source_text=expression,
     )
+
+
+def _is_base_10_integer_literal(text: str) -> bool:
+    if text == "0":
+        return True
+    return text.isdecimal() and not text.startswith("0")
 
 
 def _extract_query_payload(query: str, prefix: str) -> str | None:

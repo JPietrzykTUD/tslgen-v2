@@ -104,6 +104,7 @@ from tslgen.lowering.operation_type_compatibility import (
 from tslgen.lowering.type_syntax import (
     TypeCall,
     TypeIdentifier,
+    TypeIntegerLiteral,
     TypeQuery,
     parse_type_syntax,
 )
@@ -3584,6 +3585,28 @@ def test_m143_type_syntax_parser_builds_nested_query_nodes() -> None:
     assert parse_type_syntax(" type<generation>(base::in)") is None
 
 
+def test_m159_type_syntax_parser_builds_generation_arithmetic_nodes() -> None:
+    source = "value<generation>(arith<generation>::mul(vector::length, 8))"
+
+    parsed = parse_type_syntax(source)
+
+    assert parsed == TypeQuery(
+        kind="generation_value",
+        expression=TypeCall(
+            name="arith<generation>::mul",
+            arguments=(
+                TypeIdentifier(name="vector::length", source_text="vector::length"),
+                TypeIntegerLiteral(value=8, source_text="8"),
+            ),
+            source_text="arith<generation>::mul(vector::length, 8)",
+        ),
+        source_text=source,
+    )
+    assert parse_type_syntax("value<generation>(arith<backend>::mul(1, 2))") is None
+    assert parse_type_syntax("value<generation>(foo<generation>::bar(1, 2))") is None
+    assert parse_type_syntax("value<generation>(01)") is None
+
+
 def test_m143_lowers_observed_context_generation_type_families() -> None:
     selected = _selected_implementation(extension="avx2", type_tag="ui32")
     lowerer = Lowerer()
@@ -5109,6 +5132,297 @@ def test_m158_generation_comparison_lowering_is_deterministic() -> None:
     )
 
     assert first_region == second_region
+    assert first_diagnostics == second_diagnostics
+
+
+def test_m159_lowers_generation_integer_arithmetic_operations() -> None:
+    lowerer = Lowerer()
+    selected = _selected_implementation(type_tag="ui32")
+    cases = (
+        ("add", "type::size_bytes(type<generation>(base::in))", "8", 12),
+        ("sub", "8", "type::size_bytes(type<generation>(base::in))", 4),
+        ("mul", "type::size_bytes(type<generation>(base::in))", "8", 32),
+        ("div", "8", "type::size_bytes(type<generation>(base::in))", 2),
+        ("rem", "10", "type::size_bytes(type<generation>(base::in))", 2),
+    )
+
+    for line, (operation, left, right, expected) in enumerate(cases, start=4):
+        query = f"value<generation>(arith<generation>::{operation}({left}, {right}))"
+        result = lowerer.lower_generation_value_query(
+            selected,
+            query,
+            _location(line, 7),
+        )
+
+        assert result.diagnostics == ()
+        assert result.value == LoweredGenerationValue(
+            kind=f"generation.arithmetic.{operation}",
+            value=expected,
+            source_text=query,
+            source=_location(line, 7),
+        )
+
+
+def test_m159_lowers_nested_generation_arithmetic_recursively() -> None:
+    lowerer = Lowerer()
+    selected = _selected_implementation(extension="avx2", type_tag="ui32")
+    catalog = Catalog(
+        primitives=(),
+        extensions=ExtensionCatalog(
+            (_extension_fact("avx2", vector_bits=256),),
+        ),
+    )
+    query = (
+        "value<generation>(arith<generation>::mul("
+        "arith<generation>::add(type::size_bytes(type<generation>(base::in)), 4), "
+        "arith<generation>::sub(vector::length, 6)))"
+    )
+
+    result = lowerer.lower_generation_value_query(
+        selected,
+        query,
+        _location(4, 7),
+        catalog=catalog,
+    )
+
+    assert result.diagnostics == ()
+    assert result.value == LoweredGenerationValue(
+        kind="generation.arithmetic.mul",
+        value=16,
+        source_text=query,
+        source=_location(4, 7),
+    )
+
+
+def test_m159_lowers_negative_intermediate_division_and_remainder() -> None:
+    lowerer = Lowerer()
+    selected = _selected_implementation()
+    cases = (
+        ("div", -2),
+        ("rem", -1),
+    )
+
+    for line, (operation, expected) in enumerate(cases, start=4):
+        query = (
+            "value<generation>(arith<generation>::"
+            f"{operation}(arith<generation>::sub(0, 5), 2))"
+        )
+        result = lowerer.lower_generation_value_query(
+            selected,
+            query,
+            _location(line, 7),
+        )
+
+        assert result.diagnostics == ()
+        assert result.value == LoweredGenerationValue(
+            kind=f"generation.arithmetic.{operation}",
+            value=expected,
+            source_text=query,
+            source=_location(line, 7),
+        )
+
+
+def test_m159_generation_arithmetic_feeds_integer_comparisons() -> None:
+    condition = (
+        "value<generation>(arith<generation>::mul("
+        "type::size_bytes(type<generation>(base::in)), 8)) == 32"
+    )
+    true_tokens = (RawStringToken(text="true_path();", source=_location(5, 9)),)
+    false_tokens = (RawStringToken(text="false_path();", source=_location(8, 9)),)
+
+    result = Lowerer().lower_generation_control_region(
+        _selected_implementation(
+            body=_generation_if_body(
+                condition,
+                true_tokens=true_tokens,
+                false_tokens=false_tokens,
+            ),
+            type_tag="ui32",
+        ),
+    )
+
+    assert result.diagnostics == ()
+    assert result.region is not None
+    assert result.region.condition == LoweredGenerationValue(
+        kind="generation.integer_comparison",
+        value=True,
+        source_text=condition,
+        source=_location(4, 7),
+    )
+    assert result.region.selected_branch == LoweredGenerationControlBranch(
+        tokens=true_tokens,
+        source=_location(5, 9),
+    )
+
+
+def test_m159_reports_generation_arithmetic_diagnostics() -> None:
+    lowerer = Lowerer()
+    selected = _selected_implementation(
+        attributes=(
+            PrimitiveAttribute(
+                key="aligned",
+                value="true",
+                declared_value="*",
+                source=_location(1, 16),
+            ),
+        ),
+    )
+    diagnostics = (
+        (
+            lowerer.lower_generation_value_query(
+                selected,
+                "value<generation>(arith<generation>::add(1))",
+                _location(4, 7),
+            ),
+            "TSL-LOWER-MALFORMED-GENERATION-ARITHMETIC",
+        ),
+        (
+            lowerer.lower_generation_value_query(
+                selected,
+                "value<generation>(arith<generation>::pow(1, 2))",
+                _location(5, 7),
+            ),
+            "TSL-LOWER-UNSUPPORTED-GENERATION-ARITHMETIC",
+        ),
+        (
+            lowerer.lower_generation_value_query(
+                selected,
+                "value<generation>(arith<generation>::add(1,, 2))",
+                _location(6, 7),
+            ),
+            "TSL-LOWER-MALFORMED-GENERATION-VALUE-QUERY",
+        ),
+        (
+            lowerer.lower_generation_value_query(
+                selected,
+                (
+                    "value<generation>(arith<generation>::add("
+                    "primitive::attribute(aligned), 1))"
+                ),
+                _location(7, 7),
+            ),
+            "TSL-LOWER-NONINTEGER-GENERATION-ARITHMETIC-OPERAND",
+        ),
+        (
+            lowerer.lower_generation_value_query(
+                selected,
+                (
+                    "value<generation>(arith<generation>::add("
+                    "1, primitive::attribute(aligned)))"
+                ),
+                _location(8, 7),
+            ),
+            "TSL-LOWER-NONINTEGER-GENERATION-ARITHMETIC-OPERAND",
+        ),
+        (
+            lowerer.lower_generation_value_query(
+                selected,
+                "value<generation>(arith<generation>::div(8, 0))",
+                _location(9, 7),
+            ),
+            "TSL-LOWER-ZERO-DIVISOR-GENERATION-ARITHMETIC",
+        ),
+        (
+            lowerer.lower_generation_value_query(
+                selected,
+                "value<generation>(arith<generation>::rem(8, 0))",
+                _location(10, 7),
+            ),
+            "TSL-LOWER-ZERO-DIVISOR-GENERATION-ARITHMETIC",
+        ),
+        (
+            lowerer.lower_generation_value_query(
+                selected,
+                (
+                    "value<generation>(arith<generation>::add("
+                    "generic::length(OutVec), 1))"
+                ),
+                _location(11, 7),
+            ),
+            "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
+        ),
+        (
+            lowerer.lower_generation_value_query(
+                selected,
+                "value<generation>(8)",
+                _location(12, 7),
+            ),
+            "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
+        ),
+    )
+
+    assert [
+        (result.value, tuple(diagnostic.code for diagnostic in result.diagnostics))
+        for result, _ in diagnostics
+    ] == [(None, (expected,)) for _, expected in diagnostics]
+    assert "two arguments" in diagnostics[0][0].diagnostics[0].message
+    assert "pow" in diagnostics[1][0].diagnostics[0].message
+    assert "integer generation values" in diagnostics[3][0].diagnostics[0].message
+    assert "non-zero" in diagnostics[5][0].diagnostics[0].message
+
+
+def test_m159_rejects_raw_arithmetic_and_preserves_backend_helpers() -> None:
+    lowerer = Lowerer()
+    selected = _selected_implementation(type_tag="ui32")
+
+    raw_operator = lowerer.lower_generation_value_query(
+        selected,
+        (
+            "value<generation>(type::size_bytes(type<generation>(base::in)) "
+            "* 8)"
+        ),
+        _location(4, 7),
+    )
+    helper = lowerer.lower_generation_value_query(
+        selected,
+        (
+            "value<generation>(details::arith_mul("
+            "type::size_bytes(type<generation>(base::in)), 8))"
+        ),
+        _location(5, 7),
+    )
+
+    assert raw_operator.value is None
+    assert [diagnostic.code for diagnostic in raw_operator.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-VALUE-QUERY",
+    ]
+    assert helper.value is None
+    assert [diagnostic.code for diagnostic in helper.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
+    ]
+    assert "details::arith_mul" in helper.diagnostics[0].message
+
+
+def test_m159_generation_arithmetic_lowering_is_deterministic() -> None:
+    query = (
+        "value<generation>(arith<generation>::div("
+        "arith<generation>::sub(16, 4), 3))"
+    )
+    malformed = "value<generation>(arith<generation>::div(8, 0))"
+    lowerer = Lowerer()
+
+    first_value = lowerer.lower_generation_value_query(
+        _selected_implementation(),
+        query,
+        _location(4, 7),
+    )
+    second_value = lowerer.lower_generation_value_query(
+        _selected_implementation(),
+        query,
+        _location(4, 7),
+    )
+    first_diagnostics = lowerer.lower_generation_value_query(
+        _selected_implementation(),
+        malformed,
+        _location(5, 7),
+    )
+    second_diagnostics = lowerer.lower_generation_value_query(
+        _selected_implementation(),
+        malformed,
+        _location(5, 7),
+    )
+
+    assert first_value == second_value
     assert first_diagnostics == second_diagnostics
 
 

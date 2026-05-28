@@ -33,6 +33,7 @@ LoweredVectorMemberKind = Literal[
 LoweredBaseTransformKind = Literal["signed_of", "unsigned_of", "generic", "id"]
 LoweredVectorTransformKind = Literal["transform", "transform_extension"]
 LoweredGenerationValueKind = Literal[
+    "generation.integer_literal",
     "vector.length",
     "vector.alignment",
     "type.size_bytes",
@@ -40,6 +41,11 @@ LoweredGenerationValueKind = Literal[
     "type.is_same",
     "primitive.attribute",
     "generation.integer_comparison",
+    "generation.arithmetic.add",
+    "generation.arithmetic.sub",
+    "generation.arithmetic.mul",
+    "generation.arithmetic.div",
+    "generation.arithmetic.rem",
 ]
 LoweredGenerationValuePayload = int | bool
 

@@ -20384,8 +20384,8 @@ Review verdicts:
 
 Status:
 
-Selected after M158 acceptance. Active next prompt:
-`docs/agent/runs/m159-execution-review-loop-prompt.md`.
+Accepted. Active next prompt after M159:
+`docs/agent/runs/m160-execution-review-loop-prompt.md`.
 
 Goal:
 
@@ -20418,6 +20418,93 @@ substituting backend helper calls such as `details::arith_add`,
 lowering; body-token rendering; backend rendering; source repair; runtime
 `tsldata`, `frozen`, or `tslgenold` dependencies; broad registries,
 dispatchers, worklists, or fixpoint machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted result:
+
+- Added explicit generation-time integer arithmetic calls shaped as
+  `value<generation>(arith<generation>::add/sub/mul/div/rem(ARG, ARG))`.
+- Lowered arithmetic arguments recursively through the accepted
+  generation-value boundary. Accepted integer operands include integer
+  literals inside arithmetic calls only, accepted integer queries such as
+  `vector::length` and `type::size_bytes(TYPE_EXPR)`, and nested accepted
+  arithmetic calls.
+- Added deterministic diagnostics for malformed arithmetic calls, unsupported
+  operation names, unsupported/non-integer operands, and division or remainder
+  by zero.
+- Kept raw `+`, `-`, `*`, `/`, and `%` text rejected by the existing
+  malformed/unsupported boundaries and preserved `details::arith_*` helper
+  calls as raw backend/support-helper text.
+- Allowed M158 integer comparisons to consume M159 arithmetic values through
+  the existing left-side `value<generation>(...)` path.
+- Added no branch-chain selection, loop/declaration/backend-control lowering,
+  backend rendering, body-token rendering, source repair, runtime `tsldata`,
+  `frozen`, or `tslgenold` dependency, registry, dispatcher, worklist, or
+  fixpoint machinery.
+
+Review verdicts:
+
+- Architecture reviewer: `Accept With Follow-Ups`.
+- Boundary auditor: `Accept With Follow-Ups`.
+- Evidence auditor: `Accept`.
+- Test auditor: `Accept With Follow-Ups`.
+- Documentation auditor: `Accept With Follow-Ups`.
+- Validation auditor: `Accept`.
+
+The nonblocking architecture/boundary/test follow-ups were addressed before
+finalization by narrowing phase-marked call parsing to
+`arith<generation>::...`, adding right-operand non-integer coverage, and
+adding negative-intermediate division/remainder coverage.
+
+### Milestone 160: Exact Generation Branch-Chain Region Selection
+
+Status:
+
+Selected after M159 acceptance. Active next prompt:
+`docs/agent/runs/m160-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add exact selected-body `else if<generation>` branch-chain selection over
+source-owned body tokens. This reuses the accepted M155/M158/M159 condition
+lowering path and moves another TSIL control keyword shape forward without
+introducing a broad expression parser or branch-body renderer.
+
+Scope:
+
+- Recognize exact selected generation-control branch chains shaped as a
+  leading `if<generation>(COND) { ... }` arm followed by one or more
+  `else if<generation>(COND) { ... }` arms in the body-token stream produced
+  by the accepted TSIL directive classifier.
+- Evaluate branch conditions in source order through the already accepted
+  generation-control condition boundary, including M155 boolean queries, M158
+  integer comparisons, and M159 arithmetic values consumed by M158
+  comparisons.
+- Select the first true branch and hand only that branch's source-owned token
+  slice to the existing body-lowering path.
+- Keep all unselected branch bodies opaque and silent, including unsupported
+  calls, raw helpers, malformed directives, or unsupported branch contents.
+- Emit deterministic diagnostics for malformed branch-chain structure,
+  condition diagnostics, ambiguous or missing braces, no matching true arm in
+  no-final-else chains, and unsupported adjacent plain/final `else` forms.
+
+Out of scope:
+
+Plain `else`; final `else<generation>` in a chain; recursive or nested
+generation-control lowering; broad `if`/`else if` syntax beyond the accepted
+body-token chain shape; raw expression parsing; raw operator parsing;
+right-hand value queries; loop/declaration/backend-control lowering;
+branch-body rendering; backend rendering; source repair; dependency
+scheduling; runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad
+registries, dispatchers, worklists, or fixpoint machinery.
 
 Validation:
 

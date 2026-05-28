@@ -1358,6 +1358,38 @@ loop/declaration/backend-control lowering, body-token rendering, backend
 rendering, source repair, runtime `tsldata`, `frozen`, or `tslgenold`
 dependencies, registries, dispatchers, worklists, or fixpoint machinery.
 
+### M159 Generation Arithmetic Value Function Boundary
+
+Milestone 159 extends isolated generation-value lowering with explicit
+function-shaped integer arithmetic:
+
+```text
+value<generation>(arith<generation>::OP(ARG, ARG))
+```
+
+`OP` is one of `add`, `sub`, `mul`, `div`, or `rem`. Each `ARG` lowers
+recursively through the same generation-value boundary. Accepted integer
+operands are base-10 integer literals, already accepted integer generation
+queries such as `vector::length` and `type::size_bytes(TYPE_EXPR)`, and nested
+accepted `arith<generation>::...` calls.
+
+Arithmetic operands must lower to integer generation values. Malformed calls,
+wrong arity, unsupported arithmetic operation names, unsupported operand
+families, non-integer operands such as boolean primitive attributes, and
+division or remainder by zero produce deterministic diagnostics. Accepted
+`div` and `rem` calls use deterministic truncating integer division for
+generation-time values.
+
+M159 arithmetic values can be consumed by the existing M158 comparison
+condition boundary because the left side remains a leading
+`value<generation>(...)` query that lowers to an integer value.
+
+M159 does not parse raw `+`, `-`, `*`, `/`, or `%` syntax, add precedence or
+associativity, evaluate boolean or floating arithmetic, rewrite
+`details::arith_add`, `details::arith_mul`, or `details::arith_rem`, render
+backend code, lower loops/declarations/backend-control directives, repair
+source text, or read `tsldata`, `frozen`, or `tslgenold` at runtime.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:
