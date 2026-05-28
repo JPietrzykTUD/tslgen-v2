@@ -11,6 +11,7 @@ from tslgen.lowering import (
     Lowerer,
     PrimitiveCallClosureLoweringPackage,
 )
+from tslgen.lowering.primitive_calls import PrimitiveCallResolver
 from tslgen.pipeline.catalog_builder import CatalogBuilder
 from tslgen.syntax.parser import TslParser
 
@@ -28,10 +29,9 @@ def test_primitive_call_expression_lowers_recognized_call_token(
         extra_primitives=(_primitive_source("sub", "sub"),),
     )
 
-    result = Lowerer().lower_primitive_call_expression(
+    result = PrimitiveCallResolver(catalog).lower_expression(
         selected,
         _single_body_call(selected),
-        catalog=catalog,
     )
 
     assert result.diagnostics == ()

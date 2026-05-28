@@ -1169,6 +1169,49 @@ consumers, expression trees, backend call rendering, backend type rendering,
 dependency scheduling, topological sorting, argument expression parsing,
 source repair, or runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
 
+### M152 Lowerer Primitive-Call Facade Reduction Boundary
+
+Milestone 152 removes the remaining primitive-call substep facade methods from
+`Lowerer` when those methods only delegated to the M151 ownership surface.
+Focused primitive-call tests now exercise selector-payload lowering through
+the selector-payload helper, call resolution through `PrimitiveCallResolver`,
+and inventory/closure collection through `PrimitiveCallDependencyCollector`.
+
+M152 is behavior-preserving for primitive-call semantics. Selected-function
+lowering, exact `emit_return(call<primitive=...>(...));` consumption, raw
+argument preservation, diagnostics, source locations, deterministic reference
+and closure ordering, and closure-lowering package behavior remain stable.
+`Lowerer` still owns selected-function/type lowering and the package
+composition point that combines primitive-call closure collection with
+`lower_all(...)`.
+
+M152 does not add primitive-call semantics, recursive primitive-call scanning,
+new surrounding-context consumers, expression trees, dependency scheduling,
+backend call rendering, backend type rendering, source repair, or runtime
+`tsldata`, `frozen`, or `tslgenold` dependencies.
+
+### M153 Backend Helper Raw Preservation Boundary
+
+Milestone 153 locks down that `details::arith_add`,
+`details::arith_mul`, and `details::arith_rem` are source-authored calls to
+predefined backend/language support helpers. Lowering preserves them as raw
+implementation-body text and does not rewrite them to typed `add`, `mul`,
+`mod`, `+`, `*`, or `%` operations.
+
+An `emit_return(details::arith_*(...));` payload remains an opaque unsupported
+return expression unless a future milestone explicitly selects support-helper
+availability or backend rendering policy. This matches the existing treatment
+of `details::popcount`, `details::clz`, `details::clz_recursive`,
+`details::ctz`, and `details::mask_test`.
+
+M153 also records the post-M152 missing lowering lanes in
+`docs/redesign/missing-lowering-inventory.md`: generation values, generation
+control, loops/declarations, backend queries, backend control, intrinsics,
+primitive-call completion, cast/memory/I/O, and body-token rendering. It does
+not implement those lanes, parse helper expressions, add helper IR, render raw
+body text, repair source, or introduce runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

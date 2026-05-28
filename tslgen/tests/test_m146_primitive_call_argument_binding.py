@@ -7,11 +7,14 @@ from tslgen.core.diagnostics import SourceLocation
 from tslgen.domain.catalog import Catalog, LowerableDirective, PrimitiveCall
 from tslgen.io.sources import SourceDocument
 from tslgen.lowering import (
-    Lowerer,
     PrimitiveCallArgumentBinding,
     PrimitiveCallSelectorPayload,
     PrimitiveCallTargetMatch,
+    build_selected_implementation_lowering_context,
+    build_selected_type_environment,
 )
+from tslgen.lowering.primitive_calls import PrimitiveCallResolver
+from tslgen.lowering.selector_payload import lower_primitive_call_selector_payload
 from tslgen.pipeline.catalog_builder import CatalogBuilder
 from tslgen.syntax.parser import TslParser
 
@@ -26,10 +29,7 @@ def test_argument_binding_binds_self_call_positionally(tmp_path: Path) -> None:
         "call<primitive=@self[Vec]>(right, left)",
     )
 
-    result = Lowerer().lower_primitive_call_argument_bindings(
-        call,
-        match,
-    )
+    result = PrimitiveCallResolver.bind_arguments(call, match)
 
     assert result.diagnostics == ()
     assert result.reference is not None
@@ -62,10 +62,7 @@ def test_argument_binding_uses_matched_named_primitive_parameters(
         selected=replace(match.selected, primitive=renamed_primitive),
     )
 
-    result = Lowerer().lower_primitive_call_argument_bindings(
-        call,
-        match,
-    )
+    result = PrimitiveCallResolver.bind_arguments(call, match)
 
     assert result.diagnostics == ()
     assert result.reference is not None
@@ -87,10 +84,7 @@ def test_argument_binding_binds_naked_named_call_as_current_vector(
         ),
     )
 
-    result = Lowerer().lower_primitive_call_argument_bindings(
-        call,
-        match,
-    )
+    result = PrimitiveCallResolver.bind_arguments(call, match)
 
     assert result.diagnostics == ()
     assert result.reference is not None
@@ -111,10 +105,7 @@ def test_argument_binding_preserves_attrs_only_call_arguments(
         ),
     )
 
-    result = Lowerer().lower_primitive_call_argument_bindings(
-        call,
-        match,
-    )
+    result = PrimitiveCallResolver.bind_arguments(call, match)
 
     assert result.diagnostics == ()
     assert result.reference is not None
@@ -135,10 +126,7 @@ def test_argument_binding_preserves_specialization_plus_attrs_arguments(
         ),
     )
 
-    result = Lowerer().lower_primitive_call_argument_bindings(
-        call,
-        match,
-    )
+    result = PrimitiveCallResolver.bind_arguments(call, match)
 
     assert result.diagnostics == ()
     assert result.reference is not None
@@ -162,10 +150,7 @@ def test_argument_binding_keeps_nested_call_argument_raw(
         ),
     )
 
-    result = Lowerer().lower_primitive_call_argument_bindings(
-        call,
-        match,
-    )
+    result = PrimitiveCallResolver.bind_arguments(call, match)
 
     assert result.diagnostics == ()
     assert result.reference is not None
@@ -184,10 +169,7 @@ def test_argument_binding_reports_too_few_arguments(tmp_path: Path) -> None:
         ),
     )
 
-    result = Lowerer().lower_primitive_call_argument_bindings(
-        call,
-        match,
-    )
+    result = PrimitiveCallResolver.bind_arguments(call, match)
 
     assert result.reference is None
     assert len(result.diagnostics) == 1
@@ -208,10 +190,7 @@ def test_argument_binding_reports_too_many_arguments(tmp_path: Path) -> None:
         ),
     )
 
-    result = Lowerer().lower_primitive_call_argument_bindings(
-        call,
-        match,
-    )
+    result = PrimitiveCallResolver.bind_arguments(call, match)
 
     assert result.reference is None
     assert len(result.diagnostics) == 1
@@ -233,10 +212,7 @@ def test_argument_binding_reports_no_arguments_for_required_parameters(
         ),
     )
 
-    result = Lowerer().lower_primitive_call_argument_bindings(
-        call,
-        match,
-    )
+    result = PrimitiveCallResolver.bind_arguments(call, match)
 
     assert result.reference is None
     assert len(result.diagnostics) == 1
@@ -307,18 +283,20 @@ def _selected_match(
     selected = selection.selected[0]
 
     call = _single_primitive_call(selected)
-    payload_result = Lowerer().lower_primitive_call_selector_payload(
-        selected,
+    context = build_selected_implementation_lowering_context(selected)
+    environment = build_selected_type_environment(context)
+    payload_result = lower_primitive_call_selector_payload(
+        context,
+        catalog_result.catalog,
         call,
-        catalog=catalog_result.catalog,
+        environment,
     )
     assert payload_result.diagnostics == ()
     assert payload_result.payload is not None
 
-    match_result = Lowerer().lower_primitive_call_target_match(
-        selected,
+    match_result = PrimitiveCallResolver(catalog_result.catalog).match_target(
+        context,
         payload_result.payload,
-        catalog=catalog_result.catalog,
     )
     assert match_result.diagnostics == ()
     assert match_result.match is not None

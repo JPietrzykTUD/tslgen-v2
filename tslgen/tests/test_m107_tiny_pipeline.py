@@ -6120,6 +6120,49 @@ def test_m129_emit_return_payloads_remain_opaque_and_unsupported(
         assert "opaque" in diagnostic.message
 
 
+def test_m153_arithmetic_support_helpers_remain_opaque_return_payloads(
+    tmp_path: Path,
+) -> None:
+    for helper_name in (
+        "details::arith_add",
+        "details::arith_mul",
+        "details::arith_rem",
+    ):
+        payload = f"{helper_name}(left, right)"
+        source = tmp_path / f"tiny_add_{helper_name.split('::')[-1]}.tsl"
+        source.write_text(
+            "\n".join(
+                (
+                    "prim<v:=(v,v)> add(left, right):",
+                    "  implementation scalar si32:",
+                    f'    tsil "emit_return({payload});"',
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        result = generate_from_paths(
+            (source,),
+            (
+                Target(
+                    backend="cpp",
+                    primitive_name="add",
+                    extension="scalar",
+                    type_tag="si32",
+                ),
+            ),
+        )
+
+        assert result.artifacts.artifacts == ()
+        assert len(result.diagnostics) == 1
+        diagnostic = result.diagnostics[0]
+        assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION"
+        assert diagnostic.severity == "error"
+        assert diagnostic.location == SourceLocation(source.resolve(), 3, 11)
+        assert payload in diagnostic.message
+        assert "opaque" in diagnostic.message
+
+
 def test_m129_malformed_or_unsupported_directive_lines_remain_unsupported(
     tmp_path: Path,
 ) -> None:

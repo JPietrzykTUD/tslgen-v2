@@ -16811,7 +16811,7 @@ Scope:
     assignments, declarations, array indexing, operators, loops, and braces.
 - For each bucket, state whether the likely generator treatment is `raw`,
   `lowerable directive`, `lowerable semantic operation`, `backend-owned`,
-  `helper substitution candidate`, or `defer/diagnose`.
+  `backend/support helper`, or `defer/diagnose`.
 - Recommend exactly one next M128 implementation milestone grounded in the
   inventory. Prefer a small construct family that moves the source-to-artifact
   path toward real `.tsl` bodies without requiring a complete TSIL compiler.
@@ -19289,10 +19289,10 @@ Accepted validation result:
 
 Follow-up:
 
-- Before broader primitive-call lowering depends on
-  `Lowerer.lower_primitive_call_argument_bindings`, either remove the
-  redundant public `selected`, `selector_payload`, and `catalog` parameters or
-  validate their relationship to the supplied target match.
+- Addressed by M152: the historical
+  `Lowerer.lower_primitive_call_argument_bindings` facade was removed, and
+  focused argument-binding tests now call `PrimitiveCallResolver.bind_arguments`
+  directly.
 
 ### Milestone 147: Primitive-Call Reference Inventory Boundary
 
@@ -19698,16 +19698,17 @@ Follow-ups:
 - Future primitive-call work should not keep appending semantics to the
   consolidated `primitive_calls.py` file; split only for cohesive ownership if
   the file grows again.
-- M152 is selected to shrink the remaining `Lowerer` primitive-call facade
-  methods that were preserved for accepted tests during M151.
+- Addressed by M152: the remaining `Lowerer` primitive-call substep facade
+  methods were removed, and tests now use the resolver/collector ownership
+  surface directly.
 
 ### Milestone 152: Lowerer Primitive-Call Facade Reduction Boundary
 
 Status:
 
-Planned after M151. This milestone should remove the remaining visible
-primitive-call milestone scaffolding from `Lowerer` where it is only a facade
-over the M151 resolver/collector ownership.
+Accepted. M152 removed the remaining visible primitive-call milestone
+scaffolding from `Lowerer` where those methods were only facades over the M151
+resolver/collector ownership.
 
 Goal:
 
@@ -19741,6 +19742,9 @@ Expected outputs:
   resolver/collector owner instead of old milestone entry points on `Lowerer`.
 - `Lowerer` exposes fewer primitive-call substep facades while preserving its
   selected-function lowering role.
+- `Lowerer.lower_primitive_call_closure_lowering_package(...)` remains as the
+  compact composition point that combines primitive-call closure collection
+  with `lower_all(...)`.
 
 Validation:
 
@@ -19748,5 +19752,206 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py
 python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted result:
+
+- Removed `Lowerer` primitive-call substep facade methods for selector-payload
+  lowering, target matching, argument binding, primitive-call expression
+  lowering, reference inventory, and dependency closure.
+- Updated focused M144-M150 tests so primitive-call internals are exercised
+  through `lower_primitive_call_selector_payload(...)`,
+  `PrimitiveCallResolver`, and `PrimitiveCallDependencyCollector` directly.
+- Kept selected-function lowering, exact M150 return-call consumption,
+  closure-package behavior, diagnostics, raw argument preservation, and
+  deterministic reference/closure ordering stable.
+- Added regression coverage proving the removed `Lowerer.lower_primitive_call_*`
+  substep facades are no longer exposed.
+- Updated behavioral/domain docs to describe the smaller `Lowerer` surface and
+  resolver/collector ownership.
+- Added no new primitive-call semantics, recursive scanning,
+  surrounding-context consumers, expression trees, scheduling, backend call
+  rendering, backend type rendering, source repair, or runtime `tsldata`,
+  `frozen`, or `tslgenold` dependencies.
+
+Review verdicts:
+
+- Architecture reviewer: `Accept`.
+- Boundary auditor: `Accept`.
+- Simplification auditor: `Accept`.
+- Documentation auditor: `Accept`.
+- Validation auditor: `Accept`.
+
+Accepted validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py`:
+  exit 0, `274 passed in 23.28s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+- Validation auditor reran `git diff --check` and the final cache check; both
+  returned exit 0 with no output.
+
+Follow-ups:
+
+- None.
+
+### Milestone 153: Backend Helper Raw Preservation Boundary
+
+Status:
+
+Accepted. M153 corrected the helper-substitution direction:
+`details::arith_add`, `details::arith_mul`, and `details::arith_rem` are
+source-authored calls to predefined backend/language support helpers, not
+semantic operation-lowering islands.
+
+Goal:
+
+Lock down helper preservation:
+
+- classify `details::arith_add(...)`, `details::arith_mul(...)`, and
+  `details::arith_rem(...)` as raw/predefined backend support helper calls;
+- preserve those calls as source-authored text in implementation bodies;
+- ensure lowering does not rewrite them to typed `add`, `mul`, `mod`, or
+  backend operator spellings;
+- keep future backend support-library/rendering work separate from semantic
+  lowering.
+
+Scope:
+
+- Update docs and tests to reflect the raw-helper boundary.
+- Add regression coverage, if not already present, proving
+  `emit_return(details::arith_mul(...));` remains an opaque/unsupported return
+  expression at lowering rather than being lowered as a semantic operation.
+- Preserve raw source locations, raw payload text, deterministic token order,
+  and existing diagnostics.
+- Treat helper calls inside assignments, loop bodies, declarations, mixed
+  expressions, or other surrounding raw text as source-authored text.
+- Record the post-M152 missing lowering paths in
+  `docs/redesign/missing-lowering-inventory.md` so future milestones choose
+  from explicit TSIL keyword lanes: `value<generation>`, generation control,
+  loops/declarations, backend queries, backend control, intrinsics,
+  primitive-call completion, cast/memory/I/O, and body-token rendering.
+
+Out of scope:
+
+Lowering `details::arith_add`, `details::arith_mul`, or
+`details::arith_rem` to semantic operations or operators; general helper-call
+lowering; support helper lowering; primitive-call semantics; recursive
+expression parsing; operator precedence; implementing the recorded backlog
+paths; assignment, array/index, loop, `var`, `let`, `if`, `switch`, cast,
+intrinsic, memory, or I/O lowering; backend call rendering; backend type
+rendering; raw source rewriting; source repair; runtime `tsldata`, `frozen`,
+or `tslgenold` dependencies; registries, dispatchers, fixpoint mechanisms,
+broad request/result/worklist families, or source-data repair.
+
+Expected outputs:
+
+- The design no longer marks arithmetic support helpers as future operation
+  substitution candidates.
+- A regression prevents accidental lowering of `details::arith_*` support
+  calls into typed binary operations.
+- The next feature milestone can choose a real lowerable TSIL construct
+  without carrying a mistaken helper-substitution premise.
+- The missing lowering paths are captured as a compact backlog for M154 and
+  later prompts, while M153 remains a preservation/documentation boundary.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py -k "emit_return or unsupported_return or m129 or m153"
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted result:
+
+- Added regression coverage proving `details::arith_add`,
+  `details::arith_mul`, and `details::arith_rem` remain opaque unsupported
+  `emit_return(...)` payloads and do not produce artifacts.
+- Updated behavioral, domain, design-decision, TSIL surface, missing-lowering,
+  roadmap, and prompt docs to preserve `details::*` support helpers as raw
+  backend/language helper calls by default.
+- Recorded the post-M152 missing lowering paths as explicit future lanes:
+  generation values, generation control, loops/declarations, backend queries,
+  backend control, intrinsics, primitive-call completion, cast/memory/I/O, and
+  body-token rendering.
+- Removed the old historical helper-substitution treatment wording from the
+  M127 inventory-planning treatment bucket.
+- Added no helper classifier, semantic helper IR, helper operation table,
+  helper lowering, expression parser, backend rendering, source repair, or
+  runtime `tsldata`, `frozen`, or `tslgenold` dependency.
+
+Review verdicts:
+
+- Architecture reviewer: `Accept`.
+- Boundary auditor: `Accept` after focused validation-filter re-review.
+- Evidence auditor: `Accept`.
+- Documentation auditor: `Accept` after focused wording re-review.
+- Validation auditor: `Accept` after focused re-review.
+
+Accepted validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py -k "emit_return or unsupported_return or m129 or m153"`:
+  exit 0, `15 passed, 190 deselected in 1.37s`.
+- Initial post-validation `find tslgen -type d -name __pycache__ -print`
+  listed validation-created cache directories; after removing them, the final
+  required `find tslgen -type d -name __pycache__ -print` returned exit 0
+  with no output.
+- Final post-review `git diff --check`: exit 0, no output.
+
+Follow-ups:
+
+- None.
+
+### Milestone 154: Generation Value Query Corpus Inventory Boundary
+
+Status:
+
+Planned after M153. M154 selects the first recorded post-M152 lowering lane:
+`value<generation>(...)` inventory.
+
+Goal:
+
+Create a corpus-grounded inventory of every generation-value query family used
+by current `tsldata/**/*.tsl` sources before implementing any evaluator.
+
+Scope:
+
+- Survey all current `tsldata/**/*.tsl` files for `value<generation>(...)`
+  occurrences.
+- Classify observed families by required context: type facts,
+  vector/extension facts, primitive attributes, generic-vector aliases,
+  mask/lane constants, and nested TSIL queries.
+- Separate standalone query families from surrounding raw syntax such as
+  loops, assignments, casts, calls, array indexes, `if<generation>`, and
+  `if<compile>`.
+- Recommend exactly one next executable generation-value lowering slice.
+
+Out of scope:
+
+Implementing generation-value evaluators; resolving new
+`value<generation>(...)` forms; branch pruning; loop execution; `var`, `let`,
+`cast`, `mem`, `io`, `intrin`, `intrin_compose`, primitive-call, helper-call,
+assignment, array-index, operator, backend-query, or rendering semantics;
+source repair; runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad
+request/result/worklist families; registries; dispatchers; or fixpoint
+mechanisms.
+
+Validation:
+
+```bash
+git diff --check
+rg -n "value<generation>\\(" tsldata -g "*.tsl"
+rg --count-matches "value<generation>\\(" tsldata -g "*.tsl"
 find tslgen -type d -name __pycache__ -print
 ```

@@ -12,7 +12,7 @@ typed redesign contracts, explicit evidence, diagnostics, and tests.
 
 ## Current Baseline
 
-Accepted through M102:
+Accepted through M152:
 
 - Generation-time lowering handles only the accepted typed helper/predicate
   forms from M38, M41-M43, M48, M51-M59, and M67-M72.
@@ -29,6 +29,39 @@ Accepted through M102:
   generated output, dependency closure, Rust uninit translation, and broad TSIL
   semantics remain deferred unless a milestone explicitly selects a narrow
   slice.
+- The clean restart M127-M152 line has accepted real TSIL payload intake,
+  source-owned body tokens, directive-envelope classification, primitive-call
+  island classification, selected implementation context/type-query lowering,
+  extension/register/mask facts, primitive-call selector payload lowering,
+  target matching, raw argument binding, reference inventory, dependency
+  closure, exact return-call expression lowering, and primitive-call
+  resolver/collector consolidation. That path deliberately still does not
+  render primitive-call expressions or parse broad TSIL expressions/statements.
+
+## Post-M152 Clean Restart Lowering Paths
+
+The next clean restart milestones should choose from these generation-relevant
+TSIL keyword lanes. This list records the missing paths; it is not permission
+to implement several lanes in one milestone.
+
+| Path | TSIL surface | Why it matters | Boundary |
+| --- | --- | --- | --- |
+| Generation value/query lowering | `value<generation>(...)` forms from the current corpus | Generation-time conditions, loop bounds, declarations, type predicates, vector metadata, primitive attributes, and selected source regions depend on typed values rather than raw helper text. | Inventory all observed forms first, then add typed evaluator functions over explicit context. Do not add a general expression parser. |
+| Generation control lowering | `if<generation>(...)`, `else if<generation>(...)`, `else<generation>` | Real bodies need selected-branch pruning before backend rendering. | Match directive regions over source-owned tokens, evaluate only accepted generation-value predicates, preserve branch provenance, and diagnose unsupported conditions. |
+| Generation declaration/iteration lowering | `loop<unroll>(...)`, `loop<range>(...)`, `var<...>(...)`, non-type `let<...>(...)` | Generic/vector fallback bodies use TSIL directives for repeated statements, declarations, temporaries, and aliases. | Lower directives over token regions with explicit symbol/type/value facts. `let<type>(...)` alias facts already feed the type environment; do not parse all surrounding target-language statements. |
+| Backend query lowering | `value<backend>(...)`, accepted `type<backend>(...)` requests | Backend spellings, suffixes, uninit values, and type spellings must be derived from typed semantic values before rendering. | Produce typed backend translation requests/results. Renderers must not evaluate raw query text. |
+| Backend control lowering | `if<compile>(...)`, `else<compile>`, `switch<compile>(...)` | Backend-specific compile-time control appears in current `tsldata` bodies. | Treat as backend-owned control directives. `if<runtime>` / `else<runtime>` are absent from the current corpus and should remain future/diagnostic unless new source data adds them. |
+| Backend-owned operation lowering | `intrin_compose<...>(...)`, `intrin<...>(...)` | Intrinsic calls are generation relevant but backend-owned, not portable primitive semantics by themselves. | Lower to typed backend intrinsic requests from explicit metadata and selected context; do not infer semantics in renderers. |
+| Primitive-call completion | Nested and surrounding `call<primitive=...>(...)` islands | M144-M152 can classify, match, bind, and collect primitive-call dependencies, but complete generation needs recursive token-stream use, backend rendering, and deterministic output scheduling. | Extend the existing call boundary only when a selected milestone needs recursive/nested calls or rendering. Avoid context-specific consumers for every possible surrounding syntax. |
+| Cast/memory/I/O keyword families | `cast<...>`, `mem<...>`, `io<...>` | These are likely generation-relevant backend/source directives but are not yet accepted lowering families. | Inventory them across all `tsldata/**/*.tsl` before implementation and select exact forms with diagnostics. |
+| Body-token rendering policy | Raw target-language text plus accepted lowerable TSIL islands | Generated artifacts need a way to emit raw source text around lowered islands without turning lowering into a C++/Rust parser. | Backend rendering/output integration consumes typed lowering results and source-owned raw tokens. This is not helper-call substitution or source repair. |
+
+Not a lowering path by default: `details::arith_add`,
+`details::arith_mul`, `details::arith_rem`, `details::popcount`,
+`details::clz`, `details::clz_recursive`, `details::ctz`, and
+`details::mask_test`. They are source-authored/backend-support helper calls
+unless a future milestone explicitly introduces typed support-helper
+availability facts for backend output integration.
 
 M99 is accepted:
 
@@ -117,6 +150,7 @@ path starts: old `tslgen/` state now lives under `tslgenold/`, and fresh
 | Direct intrinsics | `tsldata/primitives/load_store/array.tsl`, `load_store/store.tsl`, accepted M62/M63/M76/M95 facts | M62/M63/M95 preserve only selected assignment direct-intrinsic facts; M76 preserves one exact post-branch call-site structural request; M99 inventories accepted selected-body direct-intrinsic handoffs as backend-scoped requests; M103 classifies selected-body handoff as deferred; M104 accepts explicit-rule selected-body direct-intrinsic translation expansion. | Typed direct-intrinsic call/body request records and diagnostics. | Later direct-intrinsic broadening over typed context/rules | No SVE hardwiring, byte-size-to-token inference, intrinsic-text dispatch, extension-id dispatch, primitive-name dispatch, or resolver choice. M104 uses explicit typed rule input and produces typed deferred/unsupported state when no rule applies. |
 | Intrinsic modifiers | `tsldata/primitives/bitwise/shifts.tsl`, `conversion/repr_change.tsl`, `frozen/tsl-gen/tsl_gen/tsil.lark` | M38 and M45 cover selected compose/suffix behavior for narrow add output paths. | Typed modifier records for prefix, suffix, infix, post, and immediate fields. | Later modifier slice | Translation consumes typed records; renderers do not infer modifiers. |
 | Primitive calls and dependencies | `frozen/tsl-gen/tsl_gen/tsil_engine/dependencies.py`, `tsldata/primitives/**.tsl` | Candidate fallback visibility exists; semantic TSIL call AST and dependency closure remain deferred. | Typed primitive-call IR, dependency request records, and closure policy. | Later call/dependency slice | No dependency closure hidden inside lowering inventories. |
+| Backend/support helper calls | `tsldata/primitives/arithmetic/complex.tsl`, `tsldata/primitives/arithmetic/horizontal.tsl`, `tsldata/primitives/load_store/sequence.tsl`, `tsldata/detail/lang/translate_rust.tsl`, `docs/redesign/tsil-surface-inventory.md` | M127 inventories `details::arith_add`, `details::arith_mul`, and `details::arith_rem`; product review classifies them with other predefined backend/language support helpers, not as semantic lowering islands. | No lowering fact is required for these helper names by default. Future backend rendering/support-library work may need typed support-helper availability facts, but lowering should preserve the calls as source-authored text. | M153 backend-helper raw preservation boundary | Lock down that `details::arith_add`, `details::arith_mul`, and `details::arith_rem` are raw/predefined helper calls. Do not rewrite them to operators, parse surrounding assignments, loops, array indexing, or expressions, or sweep support helpers into semantic operation lowering. |
 | Body structure | `frozen/tsl-gen/tsl_gen/tsil.lark`, `tsldata/primitives/load_store/*.tsl` | M64-M76 and M87 cover only named exact array-body slots and trailing `emit_return(tmp);` request structure. | Typed body model for loops, variables, scopes, assignments, indexing, declarations, arrays, stores, returns, and casts. | Later body-model slices | Introduce real TSIL/body models when needed; do not grow regex-like recognition. |
 | Generation expressions | `tsldata/primitives/bitwise/shifts.tsl`, `conversion/repr_change.tsl`, `load_store/*.tsl` | M55-M59 cover size-byte value, selected arithmetic, equality predicates, and one exact branch-chain form. M48/M51/M52 cover selected signedness forms. | Typed evaluator functions for selected comparison, boolean, arithmetic, nested expression, and branch families. | Later generation-expression slices | Preserve selected-branch-only diagnostics; no renderer evaluation. |
 | Vector/register metadata | `tsldata/primitives/load_store/load.tsl`, `store.tsl`, `conversion/repr_change.tsl` | M70/M71 resolve only exact array-initialization vector length/alignment requests from explicit metadata. | Typed vector/register/generic metadata facts and validation. | Later vector-metadata slices | Metadata must be supplied before lowering evaluation; no host CPU or token inference. |

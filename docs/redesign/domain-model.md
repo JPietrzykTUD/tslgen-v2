@@ -490,6 +490,14 @@ Invariants:
   selector-payload boundary only: it does not match primitive-call targets,
   select dependency implementations, lower dependency bodies, recursively lower
   call arguments, or render backend call syntax.
+- M153 confirms that `details::arith_add`, `details::arith_mul`,
+  `details::arith_rem`, `details::popcount`, `details::clz`,
+  `details::clz_recursive`, `details::ctz`, and `details::mask_test` are
+  source-authored/backend-support helper calls by default. They are represented
+  as raw body text or raw directive payload text unless a future milestone
+  explicitly introduces typed support-helper availability facts. They must not
+  be modeled as semantic operation fragments or rewritten to backend operators
+  during lowering.
 - M139 records primitive declaration attributes as source-owned catalog facts
   and expands boolean wildcard declaration attributes into deterministic
   concrete primitive variants. Concrete variants must not carry wildcard
@@ -843,6 +851,12 @@ Invariants:
   accumulate closure diagnostics and selected-function lowering diagnostics
   without scheduling, rendering primitive-call invocations, backend rendering,
   or parsing argument expressions.
+- M152 keeps primitive-call substep ownership on the focused
+  selector-payload helper, `PrimitiveCallResolver`, and
+  `PrimitiveCallDependencyCollector` instead of exposing compatibility-shaped
+  `Lowerer.lower_primitive_call_*` facade methods. `Lowerer` remains the
+  selected-function/type lowering owner and may compose a closure-lowering
+  package by combining the dependency collector with `lower_all(...)`.
 - A `type<backend>(...)` expression nested inside a generation type transform
   is represented as `LoweredBackendTypeReference`, preserving the request as a
   semantic input to that type transform without rendering it.

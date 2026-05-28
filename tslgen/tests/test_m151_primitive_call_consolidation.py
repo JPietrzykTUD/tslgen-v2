@@ -4,6 +4,7 @@ from pathlib import Path
 from tslgen.analysis.selection import SelectedImplementation, Selector, Target
 from tslgen.domain.catalog import Catalog, LowerableDirective, PrimitiveCall
 from tslgen.io.sources import SourceDocument
+from tslgen.lowering import Lowerer
 from tslgen.lowering.primitive_calls import (
     PrimitiveCallDependencyCollector,
     PrimitiveCallResolver,
@@ -29,6 +30,19 @@ def test_primitive_call_consolidation_has_single_resolver_module() -> None:
 
     assert (LOWERING_DIR / "primitive_calls.py").is_file()
     assert not any((LOWERING_DIR / name).exists() for name in old_modules)
+
+
+def test_lowerer_does_not_expose_primitive_call_substep_facades() -> None:
+    facade_names = (
+        "lower_primitive_call_selector_payload",
+        "lower_primitive_call_target_match",
+        "lower_primitive_call_argument_bindings",
+        "lower_primitive_call_expression",
+        "lower_primitive_call_reference_inventory",
+        "lower_primitive_call_dependency_closure",
+    )
+
+    assert not any(hasattr(Lowerer, name) for name in facade_names)
 
 
 def test_consolidated_resolver_and_collector_preserve_accepted_behavior(

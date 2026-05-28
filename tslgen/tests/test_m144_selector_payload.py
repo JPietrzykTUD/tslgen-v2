@@ -22,11 +22,13 @@ from tslgen.lowering import (
     LoweredBackendTypeReference,
     LoweredCurrentScalarType,
     LoweredVectorAsExtensionType,
-    Lowerer,
     SelectorAttribute,
     SelectorLiteral,
     SelectorSymbol,
+    build_selected_implementation_lowering_context,
+    build_selected_type_environment,
 )
+from tslgen.lowering.selector_payload import lower_primitive_call_selector_payload
 from tslgen.pipeline.catalog_builder import CatalogBuilder
 from tslgen.syntax.parser import TslParser
 
@@ -60,11 +62,7 @@ prim<v:=(v,v)> add(left, right):
     )
     call = _single_primitive_call(selected)
 
-    result = Lowerer().lower_primitive_call_selector_payload(
-        selected,
-        call,
-        catalog=catalog,
-    )
+    result = _lower_selector_payload(selected, call, catalog)
 
     assert result.diagnostics == ()
     assert result.payload is not None
@@ -87,11 +85,7 @@ prim<v:=(v,v)> add(left, right):
     )
     call = _single_primitive_call(selected)
 
-    result = Lowerer().lower_primitive_call_selector_payload(
-        selected,
-        call,
-        catalog=catalog,
-    )
+    result = _lower_selector_payload(selected, call, catalog)
 
     assert result.diagnostics == ()
     assert result.payload is not None
@@ -118,11 +112,7 @@ prim<v:=(v,v)> add(left, right):
     )
     call = _single_primitive_call(selected)
 
-    result = Lowerer().lower_primitive_call_selector_payload(
-        selected,
-        call,
-        catalog=catalog,
-    )
+    result = _lower_selector_payload(selected, call, catalog)
 
     assert result.diagnostics == ()
     assert result.payload is not None
@@ -157,11 +147,7 @@ prim<v:=(v,v)> add(left, right):
     )
     call = _single_primitive_call(selected)
 
-    result = Lowerer().lower_primitive_call_selector_payload(
-        selected,
-        call,
-        catalog=catalog,
-    )
+    result = _lower_selector_payload(selected, call, catalog)
 
     assert result.diagnostics == ()
     assert result.payload is not None
@@ -209,11 +195,7 @@ prim<v:=(v,v)> add(left, right):
     )
     call = _single_primitive_call(selected)
 
-    result = Lowerer().lower_primitive_call_selector_payload(
-        selected,
-        call,
-        catalog=catalog,
-    )
+    result = _lower_selector_payload(selected, call, catalog)
 
     assert result.diagnostics == ()
     assert result.payload is not None
@@ -242,11 +224,7 @@ prim<v:=(v,v)> add(left, right):
     )
     call = _single_primitive_call(selected)
 
-    result = Lowerer().lower_primitive_call_selector_payload(
-        selected,
-        call,
-        catalog=catalog,
-    )
+    result = _lower_selector_payload(selected, call, catalog)
 
     assert result.diagnostics == ()
     assert result.payload is not None
@@ -273,10 +251,10 @@ prim<v:=(v,v)> add(left, right):
 """.strip(),
     )
 
-    result = Lowerer().lower_primitive_call_selector_payload(
+    result = _lower_selector_payload(
         selected,
         _single_primitive_call(selected),
-        catalog=catalog,
+        catalog,
     )
 
     assert result.payload is None
@@ -295,10 +273,10 @@ prim<v:=(v,v)> add(left, right):
 """.strip(),
     )
 
-    result = Lowerer().lower_primitive_call_selector_payload(
+    result = _lower_selector_payload(
         selected,
         _single_primitive_call(selected),
-        catalog=catalog,
+        catalog,
     )
 
     assert result.payload is None
@@ -317,10 +295,10 @@ prim<v:=(v,v)> add(left, right):
 """.strip(),
     )
 
-    result = Lowerer().lower_primitive_call_selector_payload(
+    result = _lower_selector_payload(
         selected,
         _single_primitive_call(selected),
-        catalog=catalog,
+        catalog,
     )
 
     assert result.payload is None
@@ -341,10 +319,10 @@ prim<v:=(v,v)> add(left, right):
 """.strip(),
     )
 
-    result = Lowerer().lower_primitive_call_selector_payload(
+    result = _lower_selector_payload(
         selected,
         _single_primitive_call(selected),
-        catalog=catalog,
+        catalog,
     )
 
     assert result.payload is None
@@ -365,10 +343,10 @@ prim<v:=(v,v)> add(left, right):
 """.strip(),
     )
 
-    result = Lowerer().lower_primitive_call_selector_payload(
+    result = _lower_selector_payload(
         selected,
         _single_primitive_call(selected),
-        catalog=catalog,
+        catalog,
     )
 
     assert result.payload is None
@@ -390,16 +368,31 @@ prim<v:=(v,v)> add(left, right):
 """.strip(),
     )
 
-    result = Lowerer().lower_primitive_call_selector_payload(
+    result = _lower_selector_payload(
         selected,
         _single_primitive_call(selected),
-        catalog=catalog,
+        catalog,
     )
 
     assert result.payload is None
     assert [diagnostic.code for diagnostic in result.diagnostics] == [
         "TSL-LOWER-UNSUPPORTED-TYPE-EXPRESSION",
     ]
+
+
+def _lower_selector_payload(
+    selected: SelectedImplementation,
+    call: PrimitiveCall,
+    catalog: Catalog,
+):
+    context = build_selected_implementation_lowering_context(selected)
+    environment = build_selected_type_environment(context)
+    return lower_primitive_call_selector_payload(
+        context,
+        catalog,
+        call,
+        environment,
+    )
 
 
 def _selected_call(

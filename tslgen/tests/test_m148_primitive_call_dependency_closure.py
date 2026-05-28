@@ -4,7 +4,8 @@ from pathlib import Path
 from tslgen.analysis.selection import SelectedImplementation, Selector, Target
 from tslgen.domain.catalog import Catalog
 from tslgen.io.sources import SourceDocument
-from tslgen.lowering import Lowerer, PrimitiveCallDependencyClosure
+from tslgen.lowering import PrimitiveCallDependencyClosure
+from tslgen.lowering.primitive_calls import PrimitiveCallDependencyCollector
 from tslgen.pipeline.catalog_builder import CatalogBuilder
 from tslgen.syntax.parser import TslParser
 
@@ -155,10 +156,7 @@ def _selected_closure(
         root_payload,
         extra_primitives=extra_primitives,
     )
-    return Lowerer().lower_primitive_call_dependency_closure(
-        selected,
-        catalog=catalog,
-    )
+    return PrimitiveCallDependencyCollector(catalog).dependency_closure(selected)
 
 
 def _selected_root(

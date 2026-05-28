@@ -5,7 +5,13 @@ from tslgen.analysis.selection import SelectedImplementation, Selector, Target
 from tslgen.core.diagnostics import SourceLocation
 from tslgen.domain.catalog import Catalog, LowerableDirective, PrimitiveCall
 from tslgen.io.sources import SourceDocument
-from tslgen.lowering import Lowerer, PrimitiveCallSelectorPayload
+from tslgen.lowering import (
+    PrimitiveCallSelectorPayload,
+    build_selected_implementation_lowering_context,
+    build_selected_type_environment,
+)
+from tslgen.lowering.primitive_calls import PrimitiveCallResolver
+from tslgen.lowering.selector_payload import lower_primitive_call_selector_payload
 from tslgen.pipeline.catalog_builder import CatalogBuilder
 from tslgen.syntax.parser import TslParser
 
@@ -22,11 +28,7 @@ def test_target_match_resolves_self_vec_to_current_implementation(
         'call<primitive=@self[Vec]>(left, right)',
     )
 
-    result = Lowerer().lower_primitive_call_target_match(
-        selected,
-        payload,
-        catalog=_catalog_for(selected),
-    )
+    result = _match_target(selected, payload, _catalog_for(selected))
 
     assert result.diagnostics == ()
     assert result.match is not None
@@ -47,11 +49,7 @@ def test_target_match_resolves_named_vec_specialization(tmp_path: Path) -> None:
         ),
     )
 
-    result = Lowerer().lower_primitive_call_target_match(
-        selected,
-        payload,
-        catalog=catalog,
-    )
+    result = _match_target(selected, payload, catalog)
 
     assert result.diagnostics == ()
     assert result.match is not None
@@ -71,11 +69,7 @@ def test_target_match_resolves_naked_named_call_as_current_vector(
         ),
     )
 
-    result = Lowerer().lower_primitive_call_target_match(
-        selected,
-        payload,
-        catalog=catalog,
-    )
+    result = _match_target(selected, payload, catalog)
 
     assert result.diagnostics == ()
     assert result.match is not None
@@ -93,11 +87,7 @@ def test_target_match_resolves_attrs_only_named_call(tmp_path: Path) -> None:
         ),
     )
 
-    result = Lowerer().lower_primitive_call_target_match(
-        selected,
-        payload,
-        catalog=catalog,
-    )
+    result = _match_target(selected, payload, catalog)
 
     assert result.diagnostics == ()
     assert result.match is not None
@@ -115,11 +105,7 @@ def test_target_match_resolves_specialization_plus_attrs(tmp_path: Path) -> None
         ),
     )
 
-    result = Lowerer().lower_primitive_call_target_match(
-        selected,
-        payload,
-        catalog=catalog,
-    )
+    result = _match_target(selected, payload, catalog)
 
     assert result.diagnostics == ()
     assert result.match is not None
@@ -142,11 +128,7 @@ def test_target_match_resolves_vec_alias(tmp_path: Path) -> None:
         ),
     )
 
-    result = Lowerer().lower_primitive_call_target_match(
-        selected,
-        payload,
-        catalog=catalog,
-    )
+    result = _match_target(selected, payload, catalog)
 
     assert result.diagnostics == ()
     assert result.match is not None
@@ -167,11 +149,7 @@ def test_target_match_resolves_concrete_backend_type_vector(
         ),
     )
 
-    result = Lowerer().lower_primitive_call_target_match(
-        selected,
-        payload,
-        catalog=catalog,
-    )
+    result = _match_target(selected, payload, catalog)
 
     assert result.diagnostics == ()
     assert result.match is not None
@@ -188,11 +166,7 @@ def test_target_match_reports_unknown_primitive_at_selector_source(
         'call<primitive=missing[Vec]>(left, right)',
     )
 
-    result = Lowerer().lower_primitive_call_target_match(
-        selected,
-        payload,
-        catalog=catalog,
-    )
+    result = _match_target(selected, payload, catalog)
 
     assert result.match is None
     assert len(result.diagnostics) == 1
@@ -213,11 +187,7 @@ def test_target_match_reports_missing_attribute_variant_at_selector_source(
         ),
     )
 
-    result = Lowerer().lower_primitive_call_target_match(
-        selected,
-        payload,
-        catalog=catalog,
-    )
+    result = _match_target(selected, payload, catalog)
 
     assert result.match is None
     assert len(result.diagnostics) == 1
@@ -239,11 +209,7 @@ def test_target_match_reports_missing_implementation_at_selector_source(
         ),
     )
 
-    result = Lowerer().lower_primitive_call_target_match(
-        selected,
-        payload,
-        catalog=catalog,
-    )
+    result = _match_target(selected, payload, catalog)
 
     assert result.match is None
     assert len(result.diagnostics) == 1
@@ -264,11 +230,7 @@ def test_target_match_reports_unsupported_selector_symbol(
         ),
     )
 
-    result = Lowerer().lower_primitive_call_target_match(
-        selected,
-        payload,
-        catalog=catalog,
-    )
+    result = _match_target(selected, payload, catalog)
 
     assert result.match is None
     assert len(result.diagnostics) == 1
@@ -290,11 +252,7 @@ def test_target_match_reports_non_concrete_backend_type_value(
         ),
     )
 
-    result = Lowerer().lower_primitive_call_target_match(
-        selected,
-        payload,
-        catalog=catalog,
-    )
+    result = _match_target(selected, payload, catalog)
 
     assert result.match is None
     assert len(result.diagnostics) == 1
@@ -302,6 +260,30 @@ def test_target_match_reports_non_concrete_backend_type_value(
     assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL-SELECTOR"
     assert diagnostic.location == SourceLocation(source, 4, 26)
     assert "type<backend>(scalar)" in diagnostic.message
+
+
+def _match_target(
+    selected: SelectedImplementation,
+    payload: PrimitiveCallSelectorPayload,
+    catalog: Catalog,
+):
+    context = build_selected_implementation_lowering_context(selected)
+    return PrimitiveCallResolver(catalog).match_target(context, payload)
+
+
+def _lower_selector_payload(
+    selected: SelectedImplementation,
+    call: PrimitiveCall,
+    catalog: Catalog,
+):
+    context = build_selected_implementation_lowering_context(selected)
+    environment = build_selected_type_environment(context)
+    return lower_primitive_call_selector_payload(
+        context,
+        catalog,
+        call,
+        environment,
+    )
 
 
 def _selected_payload(
@@ -358,10 +340,10 @@ def _selected_payload(
     selected = selection.selected[0]
 
     call = _single_primitive_call(selected)
-    payload_result = Lowerer().lower_primitive_call_selector_payload(
+    payload_result = _lower_selector_payload(
         selected,
         call,
-        catalog=catalog_result.catalog,
+        catalog_result.catalog,
     )
     assert payload_result.diagnostics == ()
     assert payload_result.payload is not None

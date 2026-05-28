@@ -1984,3 +1984,38 @@ Consequences:
   diagnostics, not raw string fallbacks.
 - Future naming cleanup should preserve the single-value rule rather than
   adding aliases that behave like parallel domain concepts.
+
+## ADR-039: Backend Support Helper Calls Are Raw By Default
+
+Status: Accepted
+
+Context:
+
+The TSIL surface inventory found `details::arith_add`,
+`details::arith_mul`, and `details::arith_rem` in implementation bodies. It
+was tempting to treat those helper-looking calls as semantic arithmetic
+lowering islands and rewrite them to `+`, `*`, or `%`. Product review
+clarified that these names are source-authored calls to predefined
+backend/language support helpers, just like `details::popcount`,
+`details::clz`, `details::clz_recursive`, `details::ctz`, and
+`details::mask_test`.
+
+Decision:
+
+Lowering preserves backend support helper calls as raw source-authored text by
+default. The generator must not lower `details::arith_add`,
+`details::arith_mul`, or `details::arith_rem` to typed arithmetic operations
+or backend operator spellings. Any future support-helper work must be selected
+explicitly as backend support-library or rendering policy, not smuggled into
+semantic operation lowering.
+
+Consequences:
+
+- `emit_return(details::arith_*(...));` remains an opaque unsupported return
+  payload until a future milestone selects a backend support-helper rendering
+  boundary.
+- Helper calls inside assignments, loops, declarations, or mixed expressions
+  do not force the generator to parse the surrounding target-language text.
+- The missing-lowering backlog should focus on TSIL keyword families such as
+  generation values, generation/backend control, backend queries, intrinsics,
+  primitive calls, and body-token rendering.

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 151 is accepted.
+Milestone 153 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -886,7 +886,7 @@ were addressed during finalization. Remaining follow-ups are that future
 primitive-call work should not keep appending semantics to the 645-line
 `primitive_calls.py` file, and that the still-visible `Lowerer`
 primitive-call facade methods should be reduced once tests are moved to the
-resolver/collector ownership surface. M152 is selected for the latter cleanup.
+resolver/collector ownership surface. M152 addressed the latter cleanup.
 
 M151 validation completed with:
 
@@ -899,6 +899,84 @@ M151 validation completed with:
   validation-created cache directories; after removing those directories, the
   final required `find tslgen -type d -name __pycache__ -print` returned exit
   0 with no output.
+- Final post-review `git diff --check`: exit 0, no output.
+
+The M152 execution-review loop returned `Accept` after one write-capable
+executor and read-only architecture, boundary, simplification, documentation,
+and validation audits. M152 removed the remaining `Lowerer` primitive-call
+substep facade methods for selector-payload lowering, target matching,
+argument binding, primitive-call expression lowering, reference inventory, and
+dependency closure. Focused tests now call the selector-payload helper,
+`PrimitiveCallResolver`, and `PrimitiveCallDependencyCollector` directly for
+primitive-call internals.
+
+M152 preserved selected-function lowering, exact M150
+`emit_return(call<primitive=...>(...));` consumption, the closure-lowering
+package composition point on `Lowerer`, diagnostics, source locations, raw
+argument preservation, deterministic reference/closure ordering, and public
+generator behavior. It did not add primitive-call semantics, recursive
+scanning, new surrounding-context consumers, expression trees, dependency
+scheduling, backend call rendering, backend type rendering, source repair, or
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
+
+M152 review verdicts were: architecture `Accept`, boundary `Accept`,
+simplification `Accept`, documentation `Accept`, and validation `Accept`.
+There are no M152 follow-ups. Integrated next-run planning initially selected
+an arithmetic-helper lowering island, but product review corrected that
+direction: `details::arith_add`, `details::arith_mul`, and
+`details::arith_rem` are source-authored calls to predefined backend/language
+support helpers, not semantic lowering islands. M153 was selected to lock
+down backend-helper raw preservation instead.
+
+M152 validation completed with:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py`:
+  exit 0, `274 passed in 23.28s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+- Validation auditor reran `git diff --check` and the final cache check; both
+  returned exit 0 with no output.
+
+The M153 execution-review loop returned `Accept` after one write-capable
+executor, read-only architecture/evidence audits, and focused boundary,
+documentation, and validation re-reviews. M153 locked down
+`details::arith_add`, `details::arith_mul`, and `details::arith_rem` as
+source-authored calls to predefined backend/language support helpers, not
+semantic lowering islands. It added regression coverage proving the arithmetic
+support helpers remain opaque unsupported `emit_return(...)` payloads and do
+not produce artifacts.
+
+M153 updated behavioral, domain, design-decision, TSIL surface,
+missing-lowering, roadmap, and prompt docs to preserve `details::*` support
+helpers as raw/backend support calls by default. It also recorded the
+post-M152 missing lowering paths as future lanes: generation values,
+generation control, loops/declarations, backend queries, backend control,
+intrinsics, primitive-call completion, cast/memory/I/O, and body-token
+rendering. M153 did not add helper classification, semantic helper IR, helper
+operation tables, helper lowering, expression parsing, backend rendering,
+source repair, or runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
+
+M153 review verdicts were: architecture `Accept`, evidence `Accept`,
+boundary `Accept` after focused validation-filter re-review, documentation
+`Accept` after focused wording re-review, and validation `Accept` after
+focused re-review. There are no M153 follow-ups.
+
+M153 validation completed with:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py -k "emit_return or unsupported_return or m129 or m153"`:
+  exit 0, `15 passed, 190 deselected in 1.37s`.
+- Initial post-validation `find tslgen -type d -name __pycache__ -print`
+  listed validation-created cache directories; after removing them, the final
+  required `find tslgen -type d -name __pycache__ -print` returned exit 0
+  with no output.
 - Final post-review `git diff --check`: exit 0, no output.
 
 Post-M98 planning is accepted. It selected
@@ -2494,45 +2572,40 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 152.
+Execute Milestone 154.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m152-execution-review-loop-prompt.md
+docs/agent/runs/m154-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 152: Lowerer Primitive-Call Facade Reduction Boundary
+Milestone 154: Generation Value Query Corpus Inventory Boundary
 ```
 
 Latest review verdict:
 
 ```text
-M151 execution-review returned Accept With Follow-Ups after one write-capable
-executor and read-only architecture, boundary, simplification, documentation,
-and validation audits. M151 deleted the old primitive_call_* middleware
-modules and centered accepted primitive-call lowering on
-PrimitiveCallResolver plus PrimitiveCallDependencyCollector. Documentation
-wording follow-ups were addressed during finalization.
+M153 execution-review returned Accept after one write-capable executor,
+read-only architecture/evidence audits, and focused boundary, documentation,
+and validation re-reviews. M153 locked down arithmetic support helpers as raw
+backend/language helper calls and recorded the post-M152 lowering backlog.
 ```
 
 Next expected action:
 
 ```text
-Run the active M152 execution-review-loop prompt. M152 should shrink the
-remaining `Lowerer` primitive-call facade methods that were preserved during
-M151 only because accepted tests used them. Tests that intentionally exercise
-primitive-call internals should call the M151 resolver/collector or
-selector-payload helpers directly.
+Run the active M154 execution-review-loop prompt. M154 should inventory all
+current `value<generation>(...)` query families across `tsldata/**/*.tsl` and
+recommend exactly one next executable generation-value lowering slice.
 
-M152 must not add new primitive-call semantics, recursive scanning, additional
-surrounding-context consumers, expression trees, dependency scheduling, backend
-call rendering, backend type rendering, source repair, or broad
-graph/scheduler/worklist machinery.
+M154 must not implement generation-value evaluators, branch pruning, loop
+execution, expression parsing, backend rendering, helper lowering, source
+repair, or broad registry/dispatcher/worklist machinery.
 ```
 
 Previous review verdict:
@@ -5367,9 +5440,10 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M146 architecture follow-up addressed by M147: the public
   `Lowerer.lower_primitive_call_argument_bindings` API now consumes only the
   recognized primitive call and target match it actually needs.
-- M151 simplification follow-up selected as M152: shrink the remaining
-  `Lowerer` primitive-call facade methods that exist mainly because earlier
-  accepted tests used milestone-shaped entry points.
+- M151 simplification follow-up addressed by M152: the remaining
+  `Lowerer` primitive-call substep facade methods were removed, and focused
+  tests now use the selector-payload helper, `PrimitiveCallResolver`, and
+  `PrimitiveCallDependencyCollector` directly.
 - M151 architecture watchpoint: future primitive-call semantics should not be
   appended indefinitely to the consolidated `primitive_calls.py`; split only
   for cohesive ownership if the file grows again.
@@ -6395,13 +6469,13 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M152
+No stop condition is active. The workflow is ready to run the active M154
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M152 execution, run the validation command listed in
-`docs/agent/runs/m152-execution-review-loop-prompt.md`.
+For active M154 execution, run the validation command listed in
+`docs/agent/runs/m154-execution-review-loop-prompt.md`.
 
 For M125 execution and review, validation completed with:
 

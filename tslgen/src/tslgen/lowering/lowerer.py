@@ -11,7 +11,6 @@ from tslgen.domain.catalog import (
     LowerableDirective,
     LowerableOperationFragment,
     NamedPrimitiveReference,
-    PrimitiveCall,
 )
 from tslgen.lowering.binary_operations import (
     BinaryOperationDescriptor,
@@ -41,15 +40,8 @@ from tslgen.lowering.model import (
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
     BackendTypeQueryLoweringResult,
-    PrimitiveCallArgumentBindingResult,
     PrimitiveCallClosureLoweringPackage,
-    PrimitiveCallDependencyClosure,
     PrimitiveCallExpressionLoweringResult,
-    PrimitiveCallReferenceInventory,
-    PrimitiveCallSelectorPayloadLoweringResult,
-    PrimitiveCallSelectorPayload,
-    PrimitiveCallTargetMatch,
-    PrimitiveCallTargetMatchingResult,
     TypeExpressionLoweringResult,
     build_selected_implementation_lowering_context,
 )
@@ -76,7 +68,6 @@ from tslgen.lowering.primitive_calls import (
     unsupported_primitive_call_diagnostics,
     unsupported_primitive_call_diagnostics_from_payload_tokens,
 )
-from tslgen.lowering.selector_payload import lower_primitive_call_selector_payload
 from tslgen.lowering.unary_operations import (
     UnaryOperationDescriptor,
     lookup_unary_operation_descriptor,
@@ -170,89 +161,13 @@ class Lowerer:
             environment=environment,
         )
 
-    def lower_primitive_call_selector_payload(
-        self,
-        selected: SelectedImplementation,
-        primitive_call: PrimitiveCall,
-        *,
-        catalog: Catalog,
-        environment: SelectedTypeEnvironment | None = None,
-    ) -> PrimitiveCallSelectorPayloadLoweringResult:
-        context = self.context_for(selected)
-        selected_environment = (
-            environment
-            if environment is not None
-            else build_selected_type_environment(context)
-        )
-        return lower_primitive_call_selector_payload(
-            context,
-            catalog,
-            primitive_call,
-            selected_environment,
-        )
-
-    def lower_primitive_call_target_match(
-        self,
-        selected: SelectedImplementation,
-        selector_payload: PrimitiveCallSelectorPayload,
-        *,
-        catalog: Catalog,
-    ) -> PrimitiveCallTargetMatchingResult:
-        return PrimitiveCallResolver(catalog).match_target(
-            self.context_for(selected),
-            selector_payload,
-        )
-
-    def lower_primitive_call_argument_bindings(
-        self,
-        primitive_call: PrimitiveCall,
-        target_match: PrimitiveCallTargetMatch,
-    ) -> PrimitiveCallArgumentBindingResult:
-        return PrimitiveCallResolver.bind_arguments(
-            primitive_call,
-            target_match,
-        )
-
-    def lower_primitive_call_expression(
-        self,
-        selected: SelectedImplementation,
-        primitive_call: PrimitiveCall,
-        *,
-        catalog: Catalog,
-        environment: SelectedTypeEnvironment | None = None,
-    ) -> PrimitiveCallExpressionLoweringResult:
-        return PrimitiveCallResolver(catalog).lower_expression(
-            selected,
-            primitive_call,
-            environment=environment,
-        )
-
-    def lower_primitive_call_reference_inventory(
-        self,
-        selected: SelectedImplementation,
-        *,
-        catalog: Catalog,
-    ) -> PrimitiveCallReferenceInventory:
-        return PrimitiveCallDependencyCollector(catalog).reference_inventory(selected)
-
-    def lower_primitive_call_dependency_closure(
-        self,
-        root: SelectedImplementation,
-        *,
-        catalog: Catalog,
-    ) -> PrimitiveCallDependencyClosure:
-        return PrimitiveCallDependencyCollector(catalog).dependency_closure(root)
-
     def lower_primitive_call_closure_lowering_package(
         self,
         root: SelectedImplementation,
         *,
         catalog: Catalog,
     ) -> PrimitiveCallClosureLoweringPackage:
-        closure = self.lower_primitive_call_dependency_closure(
-            root,
-            catalog=catalog,
-        )
+        closure = PrimitiveCallDependencyCollector(catalog).dependency_closure(root)
         lowering_result = self.lower_all(
             closure.selected,
             catalog=catalog,

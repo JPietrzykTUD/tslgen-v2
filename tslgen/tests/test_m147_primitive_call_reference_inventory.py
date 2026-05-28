@@ -4,7 +4,8 @@ from pathlib import Path
 from tslgen.analysis.selection import SelectedImplementation, Selector, Target
 from tslgen.domain.catalog import Catalog
 from tslgen.io.sources import SourceDocument
-from tslgen.lowering import Lowerer, PrimitiveCallReferenceInventory
+from tslgen.lowering import PrimitiveCallReferenceInventory
+from tslgen.lowering.primitive_calls import PrimitiveCallDependencyCollector
 from tslgen.pipeline.catalog_builder import CatalogBuilder
 from tslgen.syntax.parser import TslParser
 
@@ -175,10 +176,7 @@ def _selected_inventory(
         call_payload,
         extra_primitives=extra_primitives,
     )
-    return Lowerer().lower_primitive_call_reference_inventory(
-        selected,
-        catalog=catalog,
-    )
+    return PrimitiveCallDependencyCollector(catalog).reference_inventory(selected)
 
 
 def _selected_call(
