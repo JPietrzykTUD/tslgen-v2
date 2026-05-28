@@ -78,16 +78,20 @@ value query lowering for isolated query islands:
 
 - `value<generation>(vector::length)`;
 - `value<generation>(vector::alignment)`;
-- `value<generation>(type::size_bytes(type<generation>(base::in)))`;
-- `value<generation>(type::is_signed(type<generation>(base::in)))`;
-- `value<generation>(type::is_same(type<generation>(base::in), TYPE_TAG))`;
+- `value<generation>(type::size_bytes(TYPE_EXPR))`;
+- `value<generation>(type::is_signed(TYPE_EXPR))`;
+- `value<generation>(type::is_same(TYPE_EXPR, TYPE_EXPR))`;
 - `value<generation>(primitive::attribute(KEY))`.
 
 This subset covers 474 current query islands and shares one explicit typed
 input boundary: selected implementation context, `CurrentVector`
 extension/type facts, selected scalar `TypeTag`, extension metadata, and
 concrete selected primitive attributes. It should be implemented as isolated
-query-island lowering only. Surrounding consumers remain separate work:
+query-island lowering only. For `type::*` value families, `TYPE_EXPR`
+arguments should be lowered through the accepted type lowering path first and
+only supported lowered scalar type values should be evaluated; exact raw
+nested strings such as `type<generation>(base::in)` are evidence, not the
+matching boundary. Surrounding consumers remain separate work:
 `if<generation>` branch pruning, `loop<...>` execution, declarations,
 selector-attribute substitution, arithmetic/comparison folding, raw expression
 parsing, primitive-call rendering, backend rendering, and source replacement

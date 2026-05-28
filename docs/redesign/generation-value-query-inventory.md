@@ -77,9 +77,9 @@ M154 selects this next executor subset:
 Selected-context generation value query lowering:
 - value<generation>(vector::length)
 - value<generation>(vector::alignment)
-- value<generation>(type::size_bytes(type<generation>(base::in)))
-- value<generation>(type::is_signed(type<generation>(base::in)))
-- value<generation>(type::is_same(type<generation>(base::in), TYPE_TAG))
+- value<generation>(type::size_bytes(TYPE_EXPR))
+- value<generation>(type::is_signed(TYPE_EXPR))
+- value<generation>(type::is_same(TYPE_EXPR, TYPE_EXPR))
 - value<generation>(primitive::attribute(KEY))
 ```
 
@@ -90,6 +90,14 @@ extension metadata, and concrete primitive attributes. They can be lowered as
 isolated query islands and tested through one focused generation-value owner
 without parsing surrounding loops, assignments, casts, primitive calls,
 operators, branch regions, or backend render syntax.
+
+For the `type::*` families, the selected boundary is the outer value query
+family plus typed argument lowering. M155 should lower each `TYPE_EXPR`
+through the accepted type-lowering path first, then evaluate only supported
+lowered scalar type values. The current corpus evidence is dominated by
+`type<generation>(base::in)`, but M155 should not raw-string match that exact
+nested spelling. Lowered vector/mask/generic type values remain deferred
+diagnostics for this milestone.
 
 The selected subset is deliberately not a promise that every current source
 line containing those queries becomes renderable. For example,

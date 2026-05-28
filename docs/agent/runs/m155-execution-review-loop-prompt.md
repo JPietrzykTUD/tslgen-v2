@@ -51,14 +51,23 @@ these isolated query forms:
 
 - `value<generation>(vector::length)`
 - `value<generation>(vector::alignment)`
-- `value<generation>(type::size_bytes(type<generation>(base::in)))`
-- `value<generation>(type::is_signed(type<generation>(base::in)))`
-- `value<generation>(type::is_same(type<generation>(base::in), TYPE_TAG))`
+- `value<generation>(type::size_bytes(TYPE_EXPR))`
+- `value<generation>(type::is_signed(TYPE_EXPR))`
+- `value<generation>(type::is_same(TYPE_EXPR, TYPE_EXPR))`
 - `value<generation>(primitive::attribute(KEY))`
 
 The implementation should consume only explicit accepted facts: selected
 implementation context, `CurrentVector` extension/type facts, selected scalar
 `TypeTag`, extension metadata, and concrete selected primitive attributes.
+For the type-query value families, M155 must recognize the outer
+`type::size_bytes(...)`, `type::is_signed(...)`, and `type::is_same(...)`
+families, lower each `TYPE_EXPR` argument through the already accepted type
+lowering path first, and evaluate only supported lowered scalar type values.
+It must not depend on exact raw nested strings such as
+`type::size_bytes(type<generation>(base::in))`. Lowered vector/mask/generic
+type values, including the observed `vector::imask` cases, remain precise
+unsupported diagnostics unless M155 explicitly and narrowly supports a scalar
+lowered value.
 
 ## Required Executor Task
 
@@ -68,12 +77,13 @@ Run exactly one write-capable executor for M155. The executor should:
 2. Add a small typed generation-value result boundary for isolated
    `value<generation>(...)` queries.
 3. Reuse the existing TSIL/type syntax parsing utilities where practical; do
-   not introduce a second parser for the same query syntax.
+   not introduce a second parser for the same query syntax and do not
+   raw-string match exact nested type-query text.
 4. Resolve the selected forms only from explicit typed context and catalog
    facts.
 5. Emit deterministic diagnostics for malformed queries, unsupported query
-   families, missing vector metadata, missing scalar facts, and unknown or
-   non-concrete primitive attributes.
+   families, unsupported lowered type values, missing vector metadata, missing
+   scalar facts, and unknown or non-concrete primitive attributes.
 6. Add focused tests that cover positive cases, malformed forms, unsupported
    families from the M154 inventory, missing context/facts, deterministic
    diagnostics, and no surrounding-context evaluation.

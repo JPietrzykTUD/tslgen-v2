@@ -19973,9 +19973,8 @@ Accepted result:
 - The selected largest-safe next subset is isolated selected-context
   generation value query lowering for:
   `vector::length`, `vector::alignment`,
-  `type::size_bytes(type<generation>(base::in))`,
-  `type::is_signed(type<generation>(base::in))`,
-  `type::is_same(type<generation>(base::in), TYPE_TAG)`, and
+  `type::size_bytes(TYPE_EXPR)`, `type::is_signed(TYPE_EXPR)`,
+  `type::is_same(TYPE_EXPR, TYPE_EXPR)`, and
   `primitive::attribute(KEY)`.
 - The selected subset covers 474 current query islands and shares one typed
   input boundary: selected implementation context, `CurrentVector`
@@ -20028,10 +20027,13 @@ Scope:
 
 - Recognize or consume isolated `value<generation>(...)` query islands for:
   `vector::length`, `vector::alignment`,
-  `type::size_bytes(type<generation>(base::in))`,
-  `type::is_signed(type<generation>(base::in))`,
-  `type::is_same(type<generation>(base::in), TYPE_TAG)`, and
+  `type::size_bytes(TYPE_EXPR)`, `type::is_signed(TYPE_EXPR)`,
+  `type::is_same(TYPE_EXPR, TYPE_EXPR)`, and
   `primitive::attribute(KEY)`.
+- For `type::*` value families, lower `TYPE_EXPR` arguments through the
+  accepted type lowering path first and evaluate only supported lowered scalar
+  type values; do not raw-string match exact nested text such as
+  `type<generation>(base::in)`.
 - Produce small typed generation value results with source provenance and
   deterministic diagnostics for unsupported query families.
 - Resolve only from explicit accepted facts: selected implementation context,

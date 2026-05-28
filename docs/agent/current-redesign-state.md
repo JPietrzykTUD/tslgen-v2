@@ -990,9 +990,8 @@ form is `value<generation>(mask::lane::all_false)`.
 M154 selected the largest safe next executable subset as isolated
 selected-context generation value query lowering for `vector::length`,
 `vector::alignment`,
-`type::size_bytes(type<generation>(base::in))`,
-`type::is_signed(type<generation>(base::in))`,
-`type::is_same(type<generation>(base::in), TYPE_TAG)`, and
+`type::size_bytes(TYPE_EXPR)`, `type::is_signed(TYPE_EXPR)`,
+`type::is_same(TYPE_EXPR, TYPE_EXPR)`, and
 `primitive::attribute(KEY)`. That subset covers 474 current query islands and
 shares one typed context boundary: selected implementation context,
 `CurrentVector` extension/type facts, selected scalar `TypeTag`, extension
@@ -2644,10 +2643,14 @@ Next expected action:
 Run the active M155 execution-review-loop prompt. M155 should implement only
 isolated selected-context generation value query lowering for:
 `vector::length`, `vector::alignment`,
-`type::size_bytes(type<generation>(base::in))`,
-`type::is_signed(type<generation>(base::in))`,
-`type::is_same(type<generation>(base::in), TYPE_TAG)`, and
+`type::size_bytes(TYPE_EXPR)`, `type::is_signed(TYPE_EXPR)`,
+`type::is_same(TYPE_EXPR, TYPE_EXPR)`, and
 `primitive::attribute(KEY)`.
+
+For the `type::*` value families, M155 should lower `TYPE_EXPR` arguments
+through the already accepted type lowering path first and evaluate only
+supported lowered scalar type values. It must not raw-string match exact nested
+type-query text such as `type<generation>(base::in)`.
 
 M155 must not implement branch pruning, loop execution, declaration lowering,
 selector-attribute substitution, mask constants, generic lengths, backend
