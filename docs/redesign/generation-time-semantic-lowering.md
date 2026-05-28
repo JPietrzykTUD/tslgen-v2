@@ -64,6 +64,12 @@ Inventory method: search the current corpus with
 Repeated forms are grouped by helper family so future slices can choose one
 behavior without treating the whole corpus as implemented.
 
+M154 adds the focused current-corpus inventory for
+`value<generation>(...)` in
+`docs/redesign/generation-value-query-inventory.md`. That inventory is the
+source of truth for the post-M153 generation-value query backlog and the M155
+largest-safe selected subset.
+
 | Observed form | Evidence | Apparent semantics | Required context | Candidate lowered IR concept | Backend/data dependency | Priority | Future status | Validation strategy |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `if<generation>(value<generation>(primitive::attribute(aligned)))` | `tsldata/primitives/load_store/load.tsl:55-70`, `load.tsl:79-91`, `store.tsl:54-64`, `store.tsl:75-85` | Select aligned or unaligned branch for load/store bodies. | Primitive attributes, candidate id, source location. | Boolean primitive-attribute condition plus pruned branch provenance. | No backend data for the condition itself; branch bodies may contain backend requests. | required-now | Implemented by Milestone 42. | Unit tests cover true/false pruning, missing/non-bool/unknown attributes, selected-branch-only diagnostics, and deterministic output. |

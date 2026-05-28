@@ -1212,6 +1212,26 @@ not implement those lanes, parse helper expressions, add helper IR, render raw
 body text, repair source, or introduce runtime `tsldata`, `frozen`, or
 `tslgenold` dependencies.
 
+### M154 Generation Value Query Inventory Boundary
+
+Milestone 154 is documentation and planning only. It inventories every current
+`value<generation>(...)` query island in `tsldata/**/*.tsl` and records the
+result in `docs/redesign/generation-value-query-inventory.md`.
+
+The current corpus contains 597 query islands across 24 `.tsl` files. The
+observed families are current vector length/alignment, scalar and vector-mask
+type size/signedness/sameness predicates, primitive attributes, mask lane
+constants, and generic vector length/runtime-length queries. M154 selects the
+largest safe next executable subset as isolated selected-context value-query
+lowering for current vector length/alignment, selected base scalar
+size/signedness/sameness, and concrete primitive attributes.
+
+M154 does not implement generation-value evaluation, branch pruning, loop
+execution, declaration lowering, selector-attribute substitution, mask
+constants, generic lengths, backend rendering, broad expression parsing, raw
+text replacement, source repair, or runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

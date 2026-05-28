@@ -12,7 +12,7 @@ typed redesign contracts, explicit evidence, diagnostics, and tests.
 
 ## Current Baseline
 
-Accepted through M152:
+Accepted through M154:
 
 - Generation-time lowering handles only the accepted typed helper/predicate
   forms from M38, M41-M43, M48, M51-M59, and M67-M72.
@@ -29,14 +29,16 @@ Accepted through M152:
   generated output, dependency closure, Rust uninit translation, and broad TSIL
   semantics remain deferred unless a milestone explicitly selects a narrow
   slice.
-- The clean restart M127-M152 line has accepted real TSIL payload intake,
+- The clean restart M127-M154 line has accepted real TSIL payload intake,
   source-owned body tokens, directive-envelope classification, primitive-call
   island classification, selected implementation context/type-query lowering,
   extension/register/mask facts, primitive-call selector payload lowering,
   target matching, raw argument binding, reference inventory, dependency
   closure, exact return-call expression lowering, and primitive-call
-  resolver/collector consolidation. That path deliberately still does not
-  render primitive-call expressions or parse broad TSIL expressions/statements.
+  resolver/collector consolidation, helper raw preservation, and
+  generation-value query inventory. That path deliberately still does not
+  render primitive-call expressions, evaluate generation values, or parse broad
+  TSIL expressions/statements.
 
 ## Post-M152 Clean Restart Lowering Paths
 
@@ -62,6 +64,42 @@ Not a lowering path by default: `details::arith_add`,
 `details::mask_test`. They are source-authored/backend-support helper calls
 unless a future milestone explicitly introduces typed support-helper
 availability facts for backend output integration.
+
+## Post-M154 Generation Value Query Inventory
+
+M154 records the current `value<generation>(...)` corpus in
+`docs/redesign/generation-value-query-inventory.md`: 597 query islands across
+24 `tsldata/**/*.tsl` files, grouped into 10 semantic query families and 13
+exact observed forms. All prompt-listed families are present, and the
+additional observed exact form is `value<generation>(mask::lane::all_false)`.
+
+The selected largest-safe next executable slice is selected-context generation
+value query lowering for isolated query islands:
+
+- `value<generation>(vector::length)`;
+- `value<generation>(vector::alignment)`;
+- `value<generation>(type::size_bytes(type<generation>(base::in)))`;
+- `value<generation>(type::is_signed(type<generation>(base::in)))`;
+- `value<generation>(type::is_same(type<generation>(base::in), TYPE_TAG))`;
+- `value<generation>(primitive::attribute(KEY))`.
+
+This subset covers 474 current query islands and shares one explicit typed
+input boundary: selected implementation context, `CurrentVector`
+extension/type facts, selected scalar `TypeTag`, extension metadata, and
+concrete selected primitive attributes. It should be implemented as isolated
+query-island lowering only. Surrounding consumers remain separate work:
+`if<generation>` branch pruning, `loop<...>` execution, declarations,
+selector-attribute substitution, arithmetic/comparison folding, raw expression
+parsing, primitive-call rendering, backend rendering, and source replacement
+are not part of the selected value-query slice.
+
+Deferred generation-value sublanes after M154:
+
+| Sublane | Evidence | Missing prerequisite |
+| --- | --- | --- |
+| Vector mask type values | `type::size_bytes(type<generation>(vector::imask))`, `type::is_signed(type<generation>(vector::imask))` | Mask/integral-mask type policy as generation-value size/signedness facts. |
+| Mask lane constants | `mask::lane::all_true`, `mask::lane::all_false` | Mask lane literal policy tied to the selected mask representation. |
+| Generic vector lengths | `generic::length(OutVec)`, `generic::runtime_length(ToType)` | Resolved generic-vector alias facts and runtime/scalable length policy. |
 
 M99 is accepted:
 

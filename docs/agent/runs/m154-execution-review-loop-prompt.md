@@ -16,6 +16,13 @@ is an inventory and planning boundary only. It must not implement generation
 value evaluators, branch pruning, loop execution, backend rendering, or broad
 expression parsing.
 
+The planning output must identify the biggest cohesive subset of
+generation-value queries that can be implemented safely in one follow-up
+executor milestone. "Biggest" means the largest set that shares one typed
+context/evaluator boundary and can be tested together without parsing
+surrounding target-language expressions or mixing unrelated TSIL keyword
+families.
+
 ## Read First
 
 - `docs/agent/current-redesign-state.md`
@@ -48,8 +55,9 @@ by current `tsldata/**/*.tsl` sources:
 - separate standalone query families from surrounding raw syntax such as
   loops, assignments, casts, calls, array indexes, `if<generation>`, and
   `if<compile>`;
-- recommend exactly one next executable lowering slice for generation-value
-  work.
+- recommend the largest safe cohesive subset of generation-value query
+  families to implement in one next executable lowering slice, with explicit
+  justification for included and excluded families.
 
 ## Required Executor Task
 
@@ -61,7 +69,7 @@ Run exactly one write-capable executor for M154. The executor should:
    equivalently focused section if that file already exists.
 4. Update `docs/redesign/missing-lowering-inventory.md` and
    `docs/redesign/implementation-roadmap.md` to point to the inventory and the
-   selected next slice.
+   selected largest-safe next slice.
 5. Keep `docs/agent/current-redesign-state.md` ready for M154 finalization
    only after review acceptance.
 6. Do not modify production code or tests unless the executor discovers that a
@@ -84,6 +92,31 @@ current corpus:
 
 If additional families are observed, record them explicitly. If any listed
 family is absent, say so with the evidence command result.
+
+## Largest-Safe Subset Selection Criteria
+
+The inventory must rank candidate subsets and choose one follow-up executor
+scope. The chosen subset should be as broad as possible while satisfying all
+of these constraints:
+
+- all included families share the same explicit typed inputs, such as selected
+  scalar/type facts, selected vector/extension facts, primitive attributes, or
+  alias facts already available from accepted lowering;
+- every included family can lower an isolated `value<generation>(...)` query
+  island without requiring branch pruning, loop expansion, assignment parsing,
+  operator precedence, raw expression evaluation, backend rendering, or source
+  repair;
+- the implementation can have one coherent owner/API and one coherent test
+  fixture family;
+- unsupported neighboring syntax remains raw or diagnostic at the documented
+  boundary;
+- excluded families are listed with the specific missing prerequisite, not
+  just marked "later."
+
+Prefer a larger cohesive subset over a single tiny query when the additional
+families use the same facts and diagnostics. Reject a larger subset if it
+would require a second independent semantic context or a general expression
+parser.
 
 ## Must Preserve
 
@@ -153,7 +186,9 @@ If M154 review returns `Accept` or `Accept With Follow-Ups`:
 To keep planning and execution integrated, do the next-run planning inside
 this prompt after M154 is accepted. Do not implement generation-value
 evaluator code until M154 is accepted and the next prompt explicitly selects
-that work.
+that work. The next prompt should select the largest-safe subset identified by
+the M154 inventory, unless review records a stop condition or a blocking
+design issue.
 
 If review returns `Needs Revision`, run one focused revision executor and then
 a focused re-review. If review returns `Return To Planner` or `Reject`, stop

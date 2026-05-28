@@ -19917,13 +19917,15 @@ Follow-ups:
 
 Status:
 
-Planned after M153. M154 selects the first recorded post-M152 lowering lane:
+Accepted. M154 selects the first recorded post-M152 lowering lane:
 `value<generation>(...)` inventory.
 
 Goal:
 
 Create a corpus-grounded inventory of every generation-value query family used
-by current `tsldata/**/*.tsl` sources before implementing any evaluator.
+by current `tsldata/**/*.tsl` sources before implementing any evaluator, then
+identify the largest cohesive subset that can be implemented safely in one
+follow-up executor milestone.
 
 Scope:
 
@@ -19935,7 +19937,10 @@ Scope:
 - Separate standalone query families from surrounding raw syntax such as
   loops, assignments, casts, calls, array indexes, `if<generation>`, and
   `if<compile>`.
-- Recommend exactly one next executable generation-value lowering slice.
+- Rank candidate implementation subsets and recommend the largest safe
+  cohesive subset for the next executable generation-value lowering slice.
+- Justify included and excluded families by shared typed inputs, diagnostics,
+  ownership, and prerequisites.
 
 Out of scope:
 
@@ -19955,3 +19960,104 @@ rg -n "value<generation>\\(" tsldata -g "*.tsl"
 rg --count-matches "value<generation>\\(" tsldata -g "*.tsl"
 find tslgen -type d -name __pycache__ -print
 ```
+
+Accepted result:
+
+- Added `docs/redesign/generation-value-query-inventory.md` as the focused
+  corpus inventory.
+- The inventory records 597 `value<generation>(...)` islands across 24
+  `tsldata/**/*.tsl` files, grouped into 10 semantic query families and 13
+  exact observed forms.
+- All likely prompt-listed families are present. The additional observed exact
+  form is `value<generation>(mask::lane::all_false)`.
+- The selected largest-safe next subset is isolated selected-context
+  generation value query lowering for:
+  `vector::length`, `vector::alignment`,
+  `type::size_bytes(type<generation>(base::in))`,
+  `type::is_signed(type<generation>(base::in))`,
+  `type::is_same(type<generation>(base::in), TYPE_TAG)`, and
+  `primitive::attribute(KEY)`.
+- The selected subset covers 474 current query islands and shares one typed
+  input boundary: selected implementation context, `CurrentVector`
+  extension/type facts, selected scalar `TypeTag`, extension metadata, and
+  concrete selected primitive attributes.
+- Deferred sublanes are vector mask type values, mask lane constants, generic
+  vector lengths/runtime lengths, and all surrounding consumers such as
+  branch pruning, loop execution, declaration lowering, selector-attribute
+  substitution, arithmetic/comparison folding, backend rendering, and source
+  text replacement.
+- Added no production code, tests, generation-value evaluator, expression
+  parser, branch pruning, loop execution, backend rendering, source repair, or
+  runtime `tsldata`, `frozen`, or `tslgenold` dependency.
+
+Review verdicts:
+
+- Evidence auditor: `Accept` after focused re-review.
+- Architecture reviewer: `Accept With Follow-Ups`; the wording follow-up was
+  addressed during finalization by distinguishing 10 semantic families from
+  13 exact observed forms.
+- Boundary auditor: `Accept`.
+- Documentation auditor: `Accept With Follow-Ups`; the stale accepted-through
+  baseline in `missing-lowering-inventory.md` was refreshed during
+  finalization.
+- Validation auditor: `Accept`.
+
+Accepted validation result:
+
+- `git diff --check`: exit 0, no output.
+- `rg -n "value<generation>\\(" tsldata -g "*.tsl"`: exit 0, 576 matching
+  source lines.
+- `rg --count-matches "value<generation>\\(" tsldata -g "*.tsl"`: exit 0,
+  597 matches across 24 files.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+### Milestone 155: Selected-Context Generation Value Query Lowering Boundary
+
+Status:
+
+Selected after M154 acceptance. Active next prompt:
+`docs/agent/runs/m155-execution-review-loop-prompt.md`.
+
+Goal:
+
+Implement the largest safe executable slice identified by M154: isolated
+selected-context generation value query lowering for the scalar/current-vector
+and primitive-attribute families that share one explicit context boundary.
+
+Scope:
+
+- Recognize or consume isolated `value<generation>(...)` query islands for:
+  `vector::length`, `vector::alignment`,
+  `type::size_bytes(type<generation>(base::in))`,
+  `type::is_signed(type<generation>(base::in))`,
+  `type::is_same(type<generation>(base::in), TYPE_TAG)`, and
+  `primitive::attribute(KEY)`.
+- Produce small typed generation value results with source provenance and
+  deterministic diagnostics for unsupported query families.
+- Resolve only from explicit accepted facts: selected implementation context,
+  `CurrentVector`, selected scalar `TypeTag`, extension metadata, and concrete
+  primitive attributes.
+- Preserve the source-owned body-token model and keep unsupported neighboring
+  syntax raw or diagnostic at the documented boundary.
+
+Out of scope:
+
+Branch pruning; loop expansion; declaration lowering; expression arithmetic;
+comparison folding outside the exact query; selector-attribute substitution;
+mask lane constants; vector mask type values; generic vector lengths/runtime
+lengths; casts, memory, I/O, intrinsics, primitive-call rendering, backend
+rendering, source repair, runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies; broad registries, dispatchers, request/result/worklist
+families, or fixpoint mechanisms.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+If M155 adds focused generation-value test files, include them in the
+compileall command and the targeted pytest command.

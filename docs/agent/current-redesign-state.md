@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 153 is accepted.
+Milestone 154 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -978,6 +978,46 @@ M153 validation completed with:
   required `find tslgen -type d -name __pycache__ -print` returned exit 0
   with no output.
 - Final post-review `git diff --check`: exit 0, no output.
+
+The M154 execution-review loop returned `Accept` after a focused evidence
+re-review. M154 added `docs/redesign/generation-value-query-inventory.md`, a
+corpus-grounded inventory of every current `value<generation>(...)` query
+island in `tsldata/**/*.tsl`. The inventory records 597 query islands across
+24 files, grouped into 10 semantic query families and 13 exact observed forms.
+All likely prompt-listed families are present; the additional observed exact
+form is `value<generation>(mask::lane::all_false)`.
+
+M154 selected the largest safe next executable subset as isolated
+selected-context generation value query lowering for `vector::length`,
+`vector::alignment`,
+`type::size_bytes(type<generation>(base::in))`,
+`type::is_signed(type<generation>(base::in))`,
+`type::is_same(type<generation>(base::in), TYPE_TAG)`, and
+`primitive::attribute(KEY)`. That subset covers 474 current query islands and
+shares one typed context boundary: selected implementation context,
+`CurrentVector` extension/type facts, selected scalar `TypeTag`, extension
+metadata, and concrete selected primitive attributes.
+
+M154 was docs/inventory-only. It did not add production code, tests,
+generation-value evaluators, branch pruning, loop execution, declaration
+lowering, selector-attribute substitution, mask constants, generic lengths,
+backend rendering, expression parsing, raw text replacement, source repair, or
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
+
+M154 review verdicts were: evidence `Accept` after focused re-review,
+architecture `Accept With Follow-Ups`, boundary `Accept`, documentation
+`Accept With Follow-Ups`, and validation `Accept`. The nonblocking
+architecture wording follow-up and documentation baseline follow-up were
+addressed during finalization, so there are no recorded M154 follow-ups.
+
+M154 validation completed with:
+
+- `git diff --check`: exit 0, no output.
+- `rg -n "value<generation>\\(" tsldata -g "*.tsl"`: exit 0, 576 matching
+  source lines.
+- `rg --count-matches "value<generation>\\(" tsldata -g "*.tsl"`: exit 0,
+  597 matches across 24 files.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -2572,40 +2612,47 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 154.
+Execute Milestone 155.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m154-execution-review-loop-prompt.md
+docs/agent/runs/m155-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 154: Generation Value Query Corpus Inventory Boundary
+Milestone 155: Selected-Context Generation Value Query Lowering Boundary
 ```
 
 Latest review verdict:
 
 ```text
-M153 execution-review returned Accept after one write-capable executor,
-read-only architecture/evidence audits, and focused boundary, documentation,
-and validation re-reviews. M153 locked down arithmetic support helpers as raw
-backend/language helper calls and recorded the post-M152 lowering backlog.
+M154 execution-review returned Accept after one write-capable docs executor,
+read-only architecture, boundary, documentation, validation, and evidence
+audits, plus a focused evidence re-review. M154 inventoried all current
+`value<generation>(...)` query islands and selected the largest safe next
+executable subset for isolated selected-context generation value query
+lowering.
 ```
 
 Next expected action:
 
 ```text
-Run the active M154 execution-review-loop prompt. M154 should inventory all
-current `value<generation>(...)` query families across `tsldata/**/*.tsl` and
-recommend exactly one next executable generation-value lowering slice.
+Run the active M155 execution-review-loop prompt. M155 should implement only
+isolated selected-context generation value query lowering for:
+`vector::length`, `vector::alignment`,
+`type::size_bytes(type<generation>(base::in))`,
+`type::is_signed(type<generation>(base::in))`,
+`type::is_same(type<generation>(base::in), TYPE_TAG)`, and
+`primitive::attribute(KEY)`.
 
-M154 must not implement generation-value evaluators, branch pruning, loop
-execution, expression parsing, backend rendering, helper lowering, source
-repair, or broad registry/dispatcher/worklist machinery.
+M155 must not implement branch pruning, loop execution, declaration lowering,
+selector-attribute substitution, mask constants, generic lengths, backend
+rendering, raw text replacement, source repair, expression parsing, helper
+lowering, or broad registry/dispatcher/worklist machinery.
 ```
 
 Previous review verdict:
@@ -6469,13 +6516,13 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M154
+No stop condition is active. The workflow is ready to run the active M155
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M154 execution, run the validation command listed in
-`docs/agent/runs/m154-execution-review-loop-prompt.md`.
+For active M155 execution, run the validation command listed in
+`docs/agent/runs/m155-execution-review-loop-prompt.md`.
 
 For M125 execution and review, validation completed with:
 
