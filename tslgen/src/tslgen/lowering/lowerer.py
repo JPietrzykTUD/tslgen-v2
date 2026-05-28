@@ -40,8 +40,10 @@ from tslgen.lowering.model import (
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
     BackendTypeQueryLoweringResult,
+    PrimitiveCallArgumentBindingResult,
     PrimitiveCallSelectorPayloadLoweringResult,
     PrimitiveCallSelectorPayload,
+    PrimitiveCallTargetMatch,
     PrimitiveCallTargetMatchingResult,
     TypeExpressionLoweringResult,
     build_selected_implementation_lowering_context,
@@ -66,6 +68,9 @@ from tslgen.lowering.type_queries import (
 from tslgen.lowering.primitive_call_diagnostics import (
     unsupported_primitive_call_diagnostics,
     unsupported_primitive_call_diagnostics_from_payload_tokens,
+)
+from tslgen.lowering.primitive_call_arguments import (
+    lower_primitive_call_argument_bindings,
 )
 from tslgen.lowering.primitive_call_targets import lower_primitive_call_target_match
 from tslgen.lowering.selector_payload import lower_primitive_call_selector_payload
@@ -194,6 +199,21 @@ class Lowerer:
             self.context_for(selected),
             catalog,
             selector_payload,
+        )
+
+    def lower_primitive_call_argument_bindings(
+        self,
+        selected: SelectedImplementation,
+        primitive_call: PrimitiveCall,
+        selector_payload: PrimitiveCallSelectorPayload,
+        target_match: PrimitiveCallTargetMatch,
+        *,
+        catalog: Catalog,
+    ) -> PrimitiveCallArgumentBindingResult:
+        _ = (selected, selector_payload, catalog)
+        return lower_primitive_call_argument_bindings(
+            primitive_call,
+            target_match,
         )
 
     def lower_all(

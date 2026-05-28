@@ -11,6 +11,8 @@ from tslgen.domain.catalog import (
     Implementation,
     Primitive,
     PrimitiveAttribute,
+    PrimitiveCall,
+    PrimitiveCallArgument,
     PrimitiveCallTarget,
 )
 from tslgen.domain.catalog import ExtensionName, TypeTag
@@ -233,6 +235,26 @@ class PrimitiveCallTargetMatch:
 @dataclass(frozen=True, slots=True)
 class PrimitiveCallTargetMatchingResult:
     match: PrimitiveCallTargetMatch | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallArgumentBinding:
+    parameter_name: str
+    argument: PrimitiveCallArgument
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallReference:
+    primitive_call: PrimitiveCall
+    target_match: PrimitiveCallTargetMatch
+    bindings: tuple[PrimitiveCallArgumentBinding, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallArgumentBindingResult:
+    reference: PrimitiveCallReference | None
     diagnostics: tuple[Diagnostic, ...]
 
 

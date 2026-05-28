@@ -1032,6 +1032,32 @@ text, render backend type text, interpret symbols or literals such as `shift`,
 `PreserveSign`, or `index`, parse broad TSIL expressions, repair source, or
 introduce runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
 
+### M146 Primitive-Call Argument Binding Boundary
+
+Milestone 146 consumes an already recognized `PrimitiveCall`, the M144
+selector payload, and the M145 target match, then binds the call's ordered raw
+arguments positionally to the matched primitive's formal parameters. Formal
+parameter names come from the matched selected primitive, not from hardcoded
+spellings such as `left`, `right`, `lhs`, or `rhs`.
+
+The binding preserves each `PrimitiveCallArgument` raw text and source
+location. Argument text remains source truth: identifier-looking arguments,
+swapped argument names, duplicate argument names, array-looking text,
+operator-looking text, helper-call text, and nested `call<primitive=...>(...)`
+text are accepted as raw arguments when the arity matches.
+
+If the number of source arguments differs from the matched primitive's
+parameter count, M146 reports
+`TSL-LOWER-PRIMITIVE-CALL-ARGUMENT-COUNT-MISMATCH` at the primitive-call
+source. The diagnostic names the target primitive, expected parameter count,
+formal parameter names, and actual argument count.
+
+M146 does not parse argument expressions, recursively lower nested calls,
+resolve argument identifiers, validate swapped or duplicate argument names,
+select dependency closure, lower dependency bodies, render backend call text,
+render backend type text, repair source, or introduce runtime `tsldata`,
+`frozen`, or `tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

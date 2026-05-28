@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 145 is accepted.
+Milestone 146 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -667,6 +667,48 @@ M145 validation completed with:
   exit 0, no output.
 - `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py`:
   exit 0, `239 passed in 9.81s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+- Final post-cleanup `git diff --check`: exit 0, no output.
+
+The M146 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, evidence,
+documentation, and validation audits. M146 added a typed primitive-call
+argument-binding boundary that consumes a recognized `PrimitiveCall` and an
+M145 target match, then binds ordered raw `PrimitiveCallArgument` objects
+positionally to the matched primitive's formal parameter names.
+
+M146 preserves the original primitive call, target match, raw argument text,
+argument source locations, and call source provenance. It accepts arbitrary
+raw argument text, including swapped identifiers, duplicate identifiers,
+array-looking text, helper/operator-looking text, and nested
+`call<primitive=...>(...)` text when the arity matches. It reports
+`TSL-LOWER-PRIMITIVE-CALL-ARGUMENT-COUNT-MISMATCH` at the primitive-call
+source when the argument count differs from the matched primitive's parameter
+count.
+
+M146 did not parse argument expressions, recursively lower nested calls,
+resolve argument identifiers, validate swapped or duplicate argument names,
+select dependency closure, lower dependency bodies, render backend call text
+or backend type text, repair source, or introduce runtime `tsldata`,
+`frozen`, or `tslgenold` dependencies.
+
+M146 review verdicts were: architecture `Accept With Follow-Ups`, boundary
+`Accept`, evidence `Accept`, documentation `Accept`, and validation `Accept`.
+The recorded nonblocking M146 follow-up is to tighten the public lowerer
+argument-binding API later: either remove redundant `selected`,
+`selector_payload`, and `catalog` parameters or validate their relationship to
+the supplied target match before broader call-lowering work builds on it.
+
+M146 validation completed with:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py`:
+  exit 0, `248 passed in 9.82s`.
 - Initial `find tslgen -type d -name __pycache__ -print` listed
   validation-created cache directories; after removing those directories, the
   final required `find tslgen -type d -name __pycache__ -print` returned exit
@@ -2266,45 +2308,46 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 146.
+Execute Milestone 147.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m146-execution-review-loop-prompt.md
+docs/agent/runs/m147-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 146: Primitive-Call Argument Binding Boundary
+Milestone 147: Primitive-Call Reference Inventory Boundary
 ```
 
 Latest review verdict:
 
 ```text
-M145 execution-review returned Accept after one write-capable executor and
-read-only architecture, boundary, evidence, documentation, and validation
-audits. M145 added typed primitive-call target-candidate matching from M144
-selector payloads, selected implementation context, and catalog facts while
-leaving call-argument binding, dependency closure, dependency-body lowering,
-and backend rendering out of scope.
+M146 execution-review returned Accept With Follow-Ups after one write-capable
+executor and read-only architecture, boundary, evidence, documentation, and
+validation audits. M146 added typed primitive-call argument binding from
+recognized `PrimitiveCall` objects and M145 target matches while leaving
+argument expression parsing, recursive nested-call lowering, dependency
+closure, dependency-body lowering, and backend rendering out of scope.
 ```
 
 Next expected action:
 
 ```text
-Run the active M146 execution-review-loop prompt. M146 should consume an
-already recognized primitive-call token, the M144 selector payload, and the
-M145 target match to bind ordered raw source arguments positionally to the
-matched primitive's formal parameters.
+Run the active M147 execution-review-loop prompt. M147 should walk a selected
+implementation body in source order, find already recognized primitive-call
+tokens, and compose the accepted M144 selector-payload, M145 target-match, and
+M146 argument-binding boundaries into a typed primitive-call reference
+inventory.
 
-M146 should verify only the argument-count boundary and preserve argument text
-plus source provenance. It must not parse argument expressions, recursively
-lower nested calls, interpret identifiers, select dependency closure, lower
-dependency bodies, render backend call text or backend type text, repair
-source, or introduce runtime `tsldata`, `frozen`, or `tslgenold`
+M147 is an inventory boundary only. It should accumulate references and
+diagnostics for recognized calls, but must not select dependency closure,
+lower dependency bodies, parse raw argument expressions, recursively lower
+nested calls inside arguments, render backend call text or backend type text,
+repair source, or introduce runtime `tsldata`, `frozen`, or `tslgenold`
 dependencies.
 ```
 
@@ -5128,6 +5171,10 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   `TSL-LOWER-UNSUPPORTED-SELECTOR-ATTRS`, direct typed payload tests cover
   `@self[Vec]`, attrs-only calls, specialization-plus-attrs calls, and
   wildcard attrs diagnostics, and the roadmap validation block was corrected.
+- M146 architecture follow-up: before broader primitive-call lowering depends
+  on `Lowerer.lower_primitive_call_argument_bindings`, either remove the
+  redundant public `selected`, `selector_payload`, and `catalog` parameters or
+  validate their relationship to the supplied target match.
 - M143 boundary follow-up for broader scalar/extension recognizers remains
   nonblocking: document or narrow those recognizers before treating them as a
   stable contract beyond the observed corpus.
@@ -6150,13 +6197,13 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M146
+No stop condition is active. The workflow is ready to run the active M147
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M146 execution, run the validation command listed in
-`docs/agent/runs/m146-execution-review-loop-prompt.md`.
+For active M147 execution, run the validation command listed in
+`docs/agent/runs/m147-execution-review-loop-prompt.md`.
 
 For M125 execution and review, validation completed with:
 

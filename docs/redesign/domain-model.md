@@ -766,6 +766,23 @@ class PrimitiveCallTargetMatch:
 class PrimitiveCallTargetMatchingResult:
     match: PrimitiveCallTargetMatch | None
     diagnostics: tuple[Diagnostic, ...]
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallArgumentBinding:
+    parameter_name: str
+    argument: PrimitiveCallArgument
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallReference:
+    primitive_call: PrimitiveCall
+    target_match: PrimitiveCallTargetMatch
+    bindings: tuple[PrimitiveCallArgumentBinding, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallArgumentBindingResult:
+    reference: PrimitiveCallReference | None
+    diagnostics: tuple[Diagnostic, ...]
 ```
 
 Invariants:
@@ -785,6 +802,10 @@ Invariants:
   facts only. It produces one selected implementation candidate or diagnostics;
   it does not lower arguments, dependency bodies, dependency closure, or
   backend call text.
+- Primitive-call argument binding consumes a recognized primitive call and an
+  already matched target. It binds raw source arguments positionally to the
+  matched primitive's formal parameter names, preserving raw argument text and
+  source provenance without parsing or validating argument semantics.
 - A `type<backend>(...)` expression nested inside a generation type transform
   is represented as `LoweredBackendTypeReference`, preserving the request as a
   semantic input to that type transform without rendering it.

@@ -19219,9 +19219,11 @@ Accepted validation result:
 
 Status:
 
-Planned after M145. This milestone should consume an already recognized
-primitive-call token, the M144 typed selector payload, and the M145 target
-match to bind ordered raw source arguments positionally to the matched
+Accepted. The M146 execution-review loop returned `Accept With Follow-Ups`
+after one write-capable executor and read-only architecture, boundary,
+evidence, documentation, and validation audits. M146 consumes an already
+recognized primitive-call token, the M144 typed selector payload, and the M145
+target match to bind ordered raw source arguments positionally to the matched
 primitive implementation's formal parameters.
 
 Goal:
@@ -19269,5 +19271,85 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py
 python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py`:
+  exit 0, `248 passed in 9.82s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+- Final post-cleanup `git diff --check`: exit 0, no output.
+
+Follow-up:
+
+- Before broader primitive-call lowering depends on
+  `Lowerer.lower_primitive_call_argument_bindings`, either remove the
+  redundant public `selected`, `selector_payload`, and `catalog` parameters or
+  validate their relationship to the supplied target match.
+
+### Milestone 147: Primitive-Call Reference Inventory Boundary
+
+Status:
+
+Planned after M146. This milestone should walk a selected implementation body
+in source order and compose the accepted M144 selector-payload, M145
+target-match, and M146 argument-binding boundaries into a typed inventory of
+already recognized primitive-call references.
+
+Goal:
+
+Produce a small typed primitive-call reference inventory for one selected
+implementation:
+
+- collect recognized `PrimitiveCall` tokens in deterministic source order from
+  selected body tokens and already recognized directive payload tokens;
+- lower each call through M144 selector-payload lowering, M145 target
+  matching, and M146 argument binding;
+- accumulate successful `PrimitiveCallReference` values;
+- accumulate explicit diagnostics from the composed boundaries without
+  silently dropping later recognized calls.
+
+Scope:
+
+- Use only selected implementation context, the selected implementation body,
+  catalog facts, M144 selector-payload lowering, M145 target matching, and
+  M146 argument binding.
+- Preserve raw argument text and call provenance from the existing
+  `PrimitiveCall` objects.
+- Keep inventory ordering deterministic by source/body-token order.
+- Add focused tests for one standalone primitive-call token, one
+  `emit_return(...)` payload primitive-call token, multiple calls in source
+  order, and mixed success/diagnostic cases.
+
+Out of scope:
+
+Dependency closure; dependency scheduling; selecting transitive dependency
+sets; lowering dependency bodies; recursively lowering nested calls inside
+arguments; parsing raw argument expressions; rendering backend call text;
+rendering backend type text; replacing existing scalar operation lowering;
+source repair; runtime `tsldata`, `frozen`, or `tslgenold` dependencies;
+registries, dispatchers, dependency graphs, fixpoint mechanisms, or broad
+worklist machinery.
+
+Expected outputs:
+
+- Later dependency planning can consume a source-ordered inventory of typed
+  primitive-call references without scanning raw body text again.
+- Unsupported selectors, missing targets, and arity mismatches remain
+  diagnostics at the call sites that produced them.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py
 find tslgen -type d -name __pycache__ -print
 ```
