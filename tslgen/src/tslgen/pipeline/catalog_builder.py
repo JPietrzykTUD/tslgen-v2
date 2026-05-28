@@ -14,6 +14,7 @@ from tslgen.domain.catalog import (
     PrimitiveAttribute,
     RawStringToken,
 )
+from tslgen.pipeline.extension_catalog import build_extension_catalog, build_type_groups
 from tslgen.pipeline._tsil_directives import classify_tsil_directive_line
 from tslgen.pipeline._tsil_primitive_calls import (
     classify_tsil_primitive_call_tokens,
@@ -31,6 +32,7 @@ from tslgen.syntax.ast import (
     ParsedRawStringLine,
     ParsedRawStringToken,
     ParsedSegmentedLine,
+    ParsedTypeGroup,
 )
 
 M107_SIGNATURE = "v:=(v,v)"
@@ -94,8 +96,14 @@ class CatalogBuilder:
     def build(self, documents: tuple[ParsedDocument, ...]) -> CatalogBuildResult:
         diagnostics: list[Diagnostic] = []
         parsed_primitives: list[ParsedPrimitive] = []
+        parsed_extensions: list[ParsedExtension] = []
+        parsed_type_groups: list[ParsedTypeGroup] = []
 
         for document in sorted(documents, key=lambda item: item.path):
+            parsed_extensions.extend(document.extensions)
+            parsed_type_groups.extend(document.type_groups)
+            if not document.primitives:
+                continue
             if len(document.primitives) != 1:
                 location = (
                     document.primitives[0].source
@@ -117,15 +125,22 @@ class CatalogBuilder:
                 continue
             parsed_primitives.append(document.primitives[0])
 
-        if not parsed_primitives:
+        if not parsed_primitives and not parsed_extensions and not parsed_type_groups:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
                     code="TSL-CATALOG-UNSUPPORTED-PRIMITIVE-COUNT",
-                    message="source set contains no parsed primitives",
+                    message="source set contains no parsed catalog declarations",
                 )
             )
             return CatalogBuildResult(catalog=None, diagnostics=tuple(diagnostics))
+
+        type_groups = build_type_groups(tuple(parsed_type_groups), diagnostics)
+        extension_catalog = build_extension_catalog(
+            tuple(parsed_extensions),
+            type_groups,
+            diagnostics,
+        )
 
         concrete_variants = tuple(
             variant
@@ -142,7 +157,11 @@ class CatalogBuilder:
         if diagnostics:
             return CatalogBuildResult(catalog=None, diagnostics=tuple(diagnostics))
         return CatalogBuildResult(
-            catalog=Catalog(primitives=primitives),
+            catalog=Catalog(
+                primitives=primitives,
+                type_groups=type_groups,
+                extensions=extension_catalog,
+            ),
             diagnostics=(),
         )
 

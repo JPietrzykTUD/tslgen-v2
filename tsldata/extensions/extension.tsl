@@ -21,6 +21,30 @@ extension avx512:
     supported true
     type_name "Avx512"
     generation_support ["avx2"]
+  vector_register_types:
+    ?i?:
+      cpp "__m512i"
+      rust "core::arch::x86_64::__m512i"
+    f32:
+      cpp "__m512"
+      rust "core::arch::x86_64::__m512"
+    f64:
+      cpp "__m512d"
+      rust "core::arch::x86_64::__m512d"
+  mask_type_policy:
+    kind "native_predicate_by_lanes"
+    cpp_by_lanes:
+      8 "__mmask8"
+      16 "__mmask16"
+      32 "__mmask32"
+      64 "__mmask64"
+    rust_by_lanes:
+      8 "core::arch::x86_64::__mmask8"
+      16 "core::arch::x86_64::__mmask16"
+      32 "core::arch::x86_64::__mmask32"
+      64 "core::arch::x86_64::__mmask64"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
 
 extension avx2:
   vendor "intel"
@@ -31,9 +55,9 @@ extension avx2:
   native_sort_order 300
   autodetect true
   lscpu_flags ["avx2"]
-  mask_repr "vector"
-  mask_width 32
-  mask_vector_loadable true
+  mask_repr "lane_bitmask"
+  mask_width "lanes"
+  mask_vector_loadable false
   runtime_lanes false
   default_test_target true
   cpp:
@@ -45,6 +69,22 @@ extension avx2:
     supported true
     type_name "Avx2"
     generation_support ["sse"]
+  vector_register_types:
+    ?i?:
+      cpp "__m256i"
+      rust "core::arch::x86_64::__m256i"
+    f32:
+      cpp "__m256"
+      rust "core::arch::x86_64::__m256"
+    f64:
+      cpp "__m256d"
+      rust "core::arch::x86_64::__m256d"
+  mask_type_policy:
+    kind "lane_bitmask"
+    width "lanes"
+  integral_mask_type_policy:
+    kind "lane_bitmask"
+    width "lanes"
   signature_support:
     exclude ["void:=(ptr,vidx,v,sImm)", "void:=(m,ptr,vidx,v,sImm)"]
   test_filter:
@@ -68,6 +108,18 @@ extension avx2_vl:
     supported true
     type_name "Avx2Vl"
     generation_support ["avx2", "sse_vl"]
+  mask_type_policy:
+    kind "native_predicate_by_lanes"
+    cpp_by_lanes:
+      8 "__mmask8"
+      16 "__mmask16"
+      32 "__mmask32"
+    rust_by_lanes:
+      8 "core::arch::x86_64::__mmask8"
+      16 "core::arch::x86_64::__mmask16"
+      32 "core::arch::x86_64::__mmask32"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
   signature_support:
     exclude ["void:=(ptr,vidx,v,sImm)", "void:=(m,ptr,vidx,v,sImm)"]
   test_filter:
@@ -82,9 +134,9 @@ extension sse:
   native_sort_order 100
   autodetect true
   lscpu_flags ["sse2"]
-  mask_repr "vector"
-  mask_width 32
-  mask_vector_loadable true
+  mask_repr "lane_bitmask"
+  mask_width "lanes"
+  mask_vector_loadable false
   runtime_lanes false
   default_test_target true
   cpp:
@@ -96,6 +148,22 @@ extension sse:
     supported true
     type_name "Sse"
     generation_support []
+  vector_register_types:
+    ?i?:
+      cpp "__m128i"
+      rust "core::arch::x86_64::__m128i"
+    f32:
+      cpp "__m128"
+      rust "core::arch::x86_64::__m128"
+    f64:
+      cpp "__m128d"
+      rust "core::arch::x86_64::__m128d"
+  mask_type_policy:
+    kind "lane_bitmask"
+    width "lanes"
+  integral_mask_type_policy:
+    kind "lane_bitmask"
+    width "lanes"
   signature_support:
     exclude ["void:=(ptr,vidx,v,sImm)", "void:=(m,ptr,vidx,v,sImm)"]
   test_filter:
@@ -119,6 +187,16 @@ extension sse_vl:
     supported true
     type_name "SseVl"
     generation_support ["sse"]
+  mask_type_policy:
+    kind "native_predicate_by_lanes"
+    cpp_by_lanes:
+      8 "__mmask8"
+      16 "__mmask16"
+    rust_by_lanes:
+      8 "core::arch::x86_64::__mmask8"
+      16 "core::arch::x86_64::__mmask16"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
   signature_support:
     exclude ["void:=(ptr,vidx,v,sImm)", "void:=(m,ptr,vidx,v,sImm)"]
   test_filter:
@@ -151,8 +229,8 @@ extension oneAPIfpga:
   native_sort_order 0
   autodetect false
   lscpu_flags ["oneAPIfpgaDev"]
-  mask_repr "vector"
-  mask_width 32
+  mask_repr "lane_bitmask"
+  mask_width "lanes"
   mask_vector_loadable false
   runtime_lanes false
   default_test_target false
@@ -184,9 +262,9 @@ extension neon:
   native_sort_order 600
   autodetect true
   lscpu_flags ["neon"]
-  mask_repr "vector"
-  mask_width 32
-  mask_vector_loadable true
+  mask_repr "lane_bitmask"
+  mask_width "lanes"
+  mask_vector_loadable false
   runtime_lanes false
   default_test_target true
   cpp:
@@ -199,6 +277,43 @@ extension neon:
     supported true
     type_name "Neon"
     generation_support []
+  vector_register_types:
+    si8:
+      cpp "int8x16_t"
+      rust "core::arch::aarch64::int8x16_t"
+    ui8:
+      cpp "uint8x16_t"
+      rust "core::arch::aarch64::uint8x16_t"
+    si16:
+      cpp "int16x8_t"
+      rust "core::arch::aarch64::int16x8_t"
+    ui16:
+      cpp "uint16x8_t"
+      rust "core::arch::aarch64::uint16x8_t"
+    si32:
+      cpp "int32x4_t"
+      rust "core::arch::aarch64::int32x4_t"
+    ui32:
+      cpp "uint32x4_t"
+      rust "core::arch::aarch64::uint32x4_t"
+    si64:
+      cpp "int64x2_t"
+      rust "core::arch::aarch64::int64x2_t"
+    ui64:
+      cpp "uint64x2_t"
+      rust "core::arch::aarch64::uint64x2_t"
+    f32:
+      cpp "float32x4_t"
+      rust "core::arch::aarch64::float32x4_t"
+    f64:
+      cpp "float64x2_t"
+      rust "core::arch::aarch64::float64x2_t"
+  mask_type_policy:
+    kind "lane_bitmask"
+    width "lanes"
+  integral_mask_type_policy:
+    kind "lane_bitmask"
+    width "lanes"
   signature_support:
     exclude ["void:=(ptr,vidx,v,sImm)", "void:=(m,ptr,vidx,v,sImm)"]
   test_filter:
@@ -226,6 +341,32 @@ extension sve:
     test_support_header "tests/scalar_support.hpp"
   rust:
     supported false
+  vector_register_types:
+    si8:
+      cpp "svint8_t"
+    ui8:
+      cpp "svuint8_t"
+    si16:
+      cpp "svint16_t"
+    ui16:
+      cpp "svuint16_t"
+    si32:
+      cpp "svint32_t"
+    ui32:
+      cpp "svuint32_t"
+    si64:
+      cpp "svint64_t"
+    ui64:
+      cpp "svuint64_t"
+    f32:
+      cpp "svfloat32_t"
+    f64:
+      cpp "svfloat64_t"
+  mask_type_policy:
+    kind "native_predicate"
+    cpp "svbool_t"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
 
 extension scalar:
   vendor ""
@@ -249,6 +390,14 @@ extension scalar:
     supported true
     type_name "Scalar"
     generation_support []
+  vector_register_type_policy:
+    kind "base_type"
+  mask_type_policy:
+    kind "bool"
+  integral_mask_type_policy:
+    kind "unsigned_scalar"
+    cpp "std::uint64_t"
+    rust "u64"
   signature_support:
     exclude ["void:=(ptr,vidx,v,sImm)", "void:=(m,ptr,vidx,v,sImm)"]
   test_filter:
@@ -263,7 +412,7 @@ extension generic:
   native_sort_order 0
   autodetect false
   lscpu_flags []
-  mask_repr "bitset_array"
+  mask_repr "lane_bitmask"
   mask_width "lanes"
   mask_vector_loadable false
   runtime_lanes false
@@ -276,6 +425,19 @@ extension generic:
     supported true
     type_name "Generic"
     generation_support []
+  size_parameter:
+    kind "lanes"
+    name "LANES"
+  vector_register_type_policy:
+    kind "fixed_array"
+    element "base_type"
+    length "LANES"
+  mask_type_policy:
+    kind "lane_bitmask"
+    width "lanes"
+  integral_mask_type_policy:
+    kind "lane_bitmask"
+    width "lanes"
   signature_support:
     exclude ["void:=(ptr,vidx,v,sImm)", "void:=(m,ptr,vidx,v,sImm)"]
   test_sizes_bits [128]

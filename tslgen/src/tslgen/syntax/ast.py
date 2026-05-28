@@ -86,9 +86,33 @@ class ParsedPrimitive:
 
 
 @dataclass(frozen=True, slots=True)
+class ParsedExtensionField:
+    key: str
+    raw_value: str | None
+    children: tuple["ParsedExtensionField", ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedExtension:
+    name: str
+    fields: tuple[ParsedExtensionField, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedTypeGroup:
+    name: str
+    type_tags: tuple[str, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
 class ParsedDocument:
     path: str
-    primitives: tuple[ParsedPrimitive, ...]
+    primitives: tuple[ParsedPrimitive, ...] = ()
+    extensions: tuple[ParsedExtension, ...] = ()
+    type_groups: tuple[ParsedTypeGroup, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 143 is accepted.
+Milestone 144 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -539,6 +539,99 @@ M143 validation completed with:
 - Focused documentation/evidence revision `git diff --check`: exit 0, no
   output.
 - Focused re-review `git diff --check`: exit 0, no output.
+
+The M143.1 execution-review loop returned `Accept` after one write-capable
+executor, read-only architecture, boundary, evidence, documentation, and
+validation audits, one focused evidence revision, and focused re-review.
+M143.1 made `tsldata/extensions/extension.tsl` a typed source of extension
+metadata, vector-register facts, and separate mask/integral-mask policies
+before primitive-call selector payload lowering resumes.
+
+M143.1 added typed syntax/catalog support for extension documents and type
+groups, an `ExtensionCatalog` owned by the clean catalog, deterministic
+type-group expansion for vector-register entries such as `?i?`, inherited
+register facts for `sse_vl` and `avx2_vl`, explicit diagnostics for unknown
+register selectors, unknown inheritance parents, inheritance cycles, missing
+policy kinds, and unsupported policy kinds, and focused tests over the real
+`tsldata/detail/types.tsl` plus `tsldata/extensions/extension.tsl` source
+data. It also moved extension-catalog promotion into a focused pipeline
+module rather than growing `catalog_builder.py`.
+
+M143.1 updated extension source data with x86, NEON, SVE, scalar, and generic
+register/mask facts. Generic Rust-facing register initialization is now a
+fixed array over `LANES`, not a runtime `alloc::vec!`, and the test suite
+guards that source shape. M143.1 did not lower primitive-call selector
+payloads, match primitive-call targets, select dependency implementations,
+expand dependency closure, lower implementation bodies, render backend call
+text or backend type text, repair source, or introduce runtime `frozen` or
+`tslgenold` dependencies.
+
+M143.1 review verdicts were: architecture `Accept`, boundary `Accept`,
+documentation `Accept`, validation `Accept`, evidence initially
+`Needs Revision` for a remaining Rust generic runtime-vector source shape,
+and focused evidence re-review `Accept`. There are no recorded M143.1
+follow-ups.
+
+M143.1 validation completed with:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py`:
+  exit 0, `214 passed in 10.83s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+
+The M144 execution-review loop returned `Accept` after one write-capable
+executor, read-only architecture, boundary, evidence, documentation, and
+validation audits, one focused selector-attrs revision, and focused
+architecture, boundary, and evidence re-reviews. M144 made recognized
+primitive-call selector payloads typed lowering inputs without matching
+primitive-call targets.
+
+M144 refined the previous current-vector type value into one
+`CurrentVector(extension: ExtensionName, type_tag: TypeTag)` semantic value.
+`Vec` and source-defined aliases that preserve `Vec` now carry the selected
+implementation extension and type tag with domain-typed identities. Selector
+specialization payloads are split by top-level commas, exact supported
+type-valued entries lower through the selected M143 type environment, known
+extension names become typed extension operands, and other non-type selector
+entries remain typed source-owned symbols or literals. Concrete `attrs[...]`
+selector payloads lower to typed selector attributes with key, optional
+key-argument, value, and source provenance. Wildcard selector attr values such
+as `*` or `?` are unsupported diagnostics, not concrete attrs.
+
+M144 added a lowerer entry point for typed selector-payload lowering over an
+already recognized `PrimitiveCall`. Raw selector text remains diagnostic and
+source-offset provenance only. M144 did not match primitive-call targets,
+select dependency implementations, expand dependency closure, lower dependency
+bodies, recursively lower call arguments, render backend call text or backend
+type text, parse broad TSIL expressions, repair source, or introduce runtime
+`tsldata`, `frozen`, or `tslgenold` dependencies.
+
+M144 review verdicts were: architecture initially `Needs Revision` for
+wildcard selector attrs and missing direct required-shape coverage, boundary
+initially `Needs Revision` for wildcard selector attrs, evidence
+`Accept With Follow-Ups`, documentation `Accept With Follow-Ups`, validation
+`Accept`, and focused architecture, boundary, and evidence re-reviews
+`Accept`. The evidence coverage and documentation validation-block follow-ups
+were addressed during the loop/finalization, so there are no recorded M144
+follow-ups.
+
+M144 validation completed after the focused revision with:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py`:
+  exit 0, `227 passed in 11.52s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+- Final post-cleanup `git diff --check`: exit 0, no output.
 
 Post-M98 planning is accepted. It selected
 `Milestone 99: Operation Package Backend-Translation Request Inventory Slice`,
@@ -2133,50 +2226,55 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 143.1.
+Execute Milestone 145.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m143.1-execution-review-loop-prompt.md
+docs/agent/runs/m145-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 143.1: Extension Catalog And Register/Mask Type Facts Boundary
+Milestone 145: Primitive-Call Target Candidate Matching Boundary
 ```
 
 Latest review verdict:
 
 ```text
-M143 execution-review returned Accept With Follow-Ups after one write-capable
-executor, read-only architecture, boundary, evidence, documentation, and
-validation audits, one focused documentation/evidence revision executor, and
-focused re-review. The focused re-review accepted the nested type-query count
-and value-query wording fixes.
+M144 execution-review returned Accept after one write-capable executor,
+read-only architecture, boundary, evidence, documentation, and validation
+audits, one focused selector-attrs revision, and focused architecture,
+boundary, and evidence re-reviews. The focused revision rejected wildcard
+selector attrs and added direct M144 coverage for `@self[Vec]`,
+attrs-only calls, specialization-plus-attrs calls, and wildcard attrs
+diagnostics.
 ```
 
 Next expected action:
 
 ```text
-Run the active M143.1 execution-review-loop prompt. M143.1 should make
-`tsldata/extensions/extension.tsl` a typed source of extension metadata,
-native/generic/scalar vector register facts, and separate mask/integral-mask
-type policies before M144 primitive-call selector payload lowering resumes.
+Run the active M145 execution-review-loop prompt. M145 should consume M144
+`PrimitiveCallSelectorPayload` values and the selected implementation context
+to produce a typed candidate-match result for exact supported primitive-call
+targets.
 
-M143.1 should encode and catalog x86 native register maps, inherited
-`sse_vl`/`avx2_vl` register facts, NEON concrete per-type register facts, SVE
-scalable C++ register facts, scalar base-type register policy, generic
-compile-time fixed-array lane-count policy, lane-bitmask policies, and native
-predicate mask policies.
+M145 should resolve only the target identity and candidate implementation:
+`@self` means the current primitive name, named selectors mean that primitive
+name, no specialization means the current selected vector, and exact
+vector-valued specializations that already lower to a concrete extension and
+type tag may select that extension/type. Concrete selector attrs should match
+catalog primitive attribute variants using the same key, optional key-argument,
+and value semantics as target selection.
 
-M143.1 must not lower primitive-call selector payloads, match primitive-call
-targets, select dependency implementations, expand dependency closure, lower
-implementation bodies, render backend call text or backend type text, repair
-source, or introduce runtime `frozen` or `tslgenold` dependencies. M144 is
-deferred until this extension catalog boundary is accepted.
+M145 must stay a target-candidate matching boundary. It must not lower call
+arguments, recursively lower nested calls, select dependency closure, lower
+dependency bodies, render backend call text or backend type text, interpret
+non-type selector symbols such as `shift` or `PreserveSign`, parse broad TSIL
+expressions, repair source, or introduce runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
 ```
 
 Accepted planning prompt:
@@ -4987,16 +5085,18 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M123 validation follow-up addressed during finalization:
   validation-created `__pycache__` directories under clean `tslgen/` were
   removed after read-only validation audits.
-- M143 architecture follow-up is carried into the active M143.1 prompt:
-  before primitive-call selector matching depends on
-  `vector::as_extension` values, promote extension definitions from
-  `tsldata/extensions/extension.tsl` into typed extension/register/mask facts
-  instead of relying on source-symbol strings or hardwired extension tables.
-- M143 boundary/validation follow-up remains carried into the deferred M144
-  prompt:
-  add focused negative coverage for malformed `type<generation>(...)`, wrong
-  type-transform arity, unsupported type-call names, and bad nested predicate
-  forms.
+- M143 architecture follow-up addressed by M143.1: extension definitions from
+  `tsldata/extensions/extension.tsl` now promote into typed
+  extension/register/mask facts instead of relying on hardwired extension
+  tables.
+- M143 boundary/validation follow-up addressed by M144: selector-payload
+  tests include malformed/wrong-arity type-query and type-transform diagnostics
+  at the new consumer boundary.
+- M144 review follow-ups addressed during the M144 loop/finalization:
+  selector attrs with wildcard values now produce
+  `TSL-LOWER-UNSUPPORTED-SELECTOR-ATTRS`, direct typed payload tests cover
+  `@self[Vec]`, attrs-only calls, specialization-plus-attrs calls, and
+  wildcard attrs diagnostics, and the roadmap validation block was corrected.
 - M143 boundary follow-up for broader scalar/extension recognizers remains
   nonblocking: document or narrow those recognizers before treating them as a
   stable contract beyond the observed corpus.
@@ -6019,13 +6119,13 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M143.1
+No stop condition is active. The workflow is ready to run the active M145
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M143.1 execution, run the validation command listed in
-`docs/agent/runs/m143.1-execution-review-loop-prompt.md`.
+For active M145 execution, run the validation command listed in
+`docs/agent/runs/m145-execution-review-loop-prompt.md`.
 
 For M125 execution and review, validation completed with:
 

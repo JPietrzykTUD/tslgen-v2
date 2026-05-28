@@ -18952,10 +18952,12 @@ Recorded follow-ups:
 
 Status:
 
-Planned as the next clean restart implementation milestone after accepted
-M143 and before M144 selector-payload lowering. This milestone should make
-`tsldata/extensions/extension.tsl` a typed source of extension facts before
-later lowering or selector matching relies on extension/type values.
+Accepted. The M143.1 execution-review loop returned `Accept` after one
+write-capable executor, read-only architecture, boundary, evidence,
+documentation, and validation audits, one focused evidence revision, and
+focused re-review. M143.1 made `tsldata/extensions/extension.tsl` a typed
+source of extension facts before later lowering or selector matching relies on
+extension/type values.
 
 Goal:
 
@@ -19015,12 +19017,27 @@ python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py 
 find tslgen -type d -name __pycache__ -print
 ```
 
+The accepted validation result was:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py`:
+  exit 0, `214 passed in 10.83s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+
 ### Milestone 144: Typed Primitive-Call Selector Payload Lowering Boundary
 
 Status:
 
-Planned after M143.1. This milestone should use the M143 type model and the
-M143.1 extension catalog boundary to stop treating
+Accepted. The M144 execution-review loop returned `Accept` after one
+write-capable executor, read-only architecture, boundary, evidence,
+documentation, and validation audits, one focused selector-attrs revision, and
+focused architecture, boundary, and evidence re-reviews. M144 uses the M143
+type model and the M143.1 extension catalog boundary to stop treating
 recognized primitive-call selector specializations and `attrs[...]` payloads
 as opaque strings, while still stopping before primitive-call target
 selection, dependency closure, dependency-body lowering, or backend call
@@ -19039,6 +19056,13 @@ payload data into typed selector payload values:
   top-level commas while respecting nested parentheses and brackets;
 - lower type-valued specialization entries through the M143 selected type
   environment, including source-defined aliases visible before the call;
+- treat `Vec` as the current selected vector value: exactly the selected
+  implementation extension plus current type tag, with the extension identity
+  resolved from the M143.1 extension catalog. Prefer refining/renaming the
+  existing `LoweredCurrentVectorType` concept into one `CurrentVector` value
+  with domain-typed `ExtensionName` and `TypeTag` fields. Do not add a
+  parallel selector-vector class for the same `extension + type_tag` concept;
+  source-defined aliases preserve that same value;
 - preserve explicitly non-type selector entries as typed selector symbols or
   literals with source/provenance, not as semantic matches;
 - parse `attrs[...]` payloads into typed concrete selector attributes using
@@ -19053,10 +19077,13 @@ Scope:
   `PrimitiveCall` tokens.
 - Keep raw selector text only as provenance/diagnostic context.
 - Keep M143 type values backend-neutral; backend type text remains unrendered.
-- Address the M143 extension-operand follow-up by either introducing a typed
-  extension/specialization operand for `vector::as_extension(...)` and
-  selector entries, or explicitly documenting why the current source-symbol
-  string contract remains intentional for M144.
+- Keep the implementation deliberately small: no general type system, backend
+  spelling renderer, expression AST, resolver registry, dispatcher, worklist,
+  dependency solver, or vector-type hierarchy.
+- Address the M143 extension-operand follow-up by introducing a typed
+  extension/specialization operand for `Vec`, source-defined vector value
+  aliases, `vector::as_extension(...)`, and selector entries. Unknown
+  extension operands in type-valued selector expressions must be diagnostics.
 - Add focused negative tests for the M143 malformed/wrong-arity type-query
   paths that selector lowering now relies on.
 
@@ -19085,7 +19112,90 @@ Validation:
 
 ```bash
 git diff --check
-python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
-python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The accepted validation result after the focused revision was:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py`:
+  exit 0, `227 passed in 11.52s`.
+- Initial `find tslgen -type d -name __pycache__ -print` listed
+  validation-created cache directories; after removing those directories, the
+  final required `find tslgen -type d -name __pycache__ -print` returned exit
+  0 with no output.
+- Final post-cleanup `git diff --check`: exit 0, no output.
+
+### Milestone 145: Primitive-Call Target Candidate Matching Boundary
+
+Status:
+
+Planned after M144. This milestone should consume typed
+`PrimitiveCallSelectorPayload` values and selected implementation context to
+identify the exact candidate primitive implementation for supported
+primitive-call selectors. It must remain a matching boundary only; it must not
+lower call arguments, recursively lower nested calls, lower dependency bodies,
+select dependency closure, or render backend call text.
+
+Goal:
+
+Produce a typed primitive-call target candidate match from the M144 selector
+payload:
+
+- preserve `@self` as the current primitive name and named selectors as the
+  referenced primitive name;
+- treat absent specialization as the current selected vector
+  `(extension, type_tag)` for observed current-context calls such as
+  `call<primitive=add>(left, right)`;
+- accept exact vector-valued specializations that already lower to a concrete
+  extension and type tag without backend rendering, including `CurrentVector`,
+  aliases that preserve that value, and backend-type references only by
+  inspecting their already-lowered underlying type value;
+- match concrete selector attrs against catalog primitive attribute variants
+  using key, optional key-argument, and value semantics;
+- return explicit diagnostics for unknown primitive names, missing attribute
+  variants, missing implementation for the requested extension/type, and
+  unsupported selector dimensions or non-concrete vector specializations.
+
+Scope:
+
+- Use only selected context, the catalog, and an M144
+  `PrimitiveCallSelectorPayload`.
+- Reuse the existing catalog/selection attribute matching semantics where
+  practical instead of creating a second ad hoc attribute matcher.
+- Keep raw selector text as provenance only.
+- Add focused tests for `@self[Vec]`, named `sub[Vec]`, naked named
+  current-context calls such as `sub`, attrs-only calls such as
+  `sub attrs[mask=zero]`, specialization-plus-attrs calls such as
+  `load[Vec] attrs[aligned=false]`, and negative diagnostics.
+
+Out of scope:
+
+Dependency closure; dependency-body lowering; recursive call argument
+lowering; matching nested calls by payload arguments; backend call rendering;
+backend type text rendering; interpretation of non-type selector symbols such
+as `shift`, `PreserveSign`, `index`, or numeric selector dimensions; broad
+TSIL expression parsing; assignment/indexing lowering; source repair; runtime
+`tsldata`, `frozen`, or `tslgenold` dependencies; registries, dispatchers,
+fixpoint mechanisms, or broad worklist machinery.
+
+Expected outputs:
+
+- A typed match/result value can represent the target primitive, selected
+  primitive variant, selected implementation, source/provenance, and
+  diagnostics for unsupported or missing matches.
+- Later primitive-call lowering can consume a matched candidate without
+  reparsing selector strings or reimplementing catalog attribute matching.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py
 find tslgen -type d -name __pycache__ -print
 ```

@@ -937,6 +937,74 @@ rendering, recursive call argument lowering, non-type expression parsing,
 assignment/indexing, source repair, runtime `tsldata`, `frozen`, or
 `tslgenold` dependencies.
 
+### M143.1 Extension Catalog And Register/Mask Type Facts Boundary
+
+Milestone 143.1 makes `tsldata/extensions/extension.tsl` a typed catalog
+source for extension metadata and selected type facts that future lowering and
+selection stages can consume without hardwired extension tables. The clean
+parser recognizes extension blocks and type-group blocks needed to expand
+extension register selectors such as `?i?`.
+
+The extension catalog records existing extension metadata, backend support
+metadata, inheritance, signature support, test filters, vector register type
+entries, resolved vector register facts, scalar/generic register policies, and
+separate vector-mask and integral-mask policies.
+
+Register facts are backend-aware catalog facts, not rendered backend type text.
+X86 fixed-width register entries may use grouped selectors for integer lanes;
+NEON and SVE use concrete per-type entries. `sse_vl` and `avx2_vl` inherit
+their register type maps from `sse` and `avx2`. SVE remains Rust-unsupported
+unless its extension metadata changes.
+
+`generic` is modeled as a compile-time lane-count fixed-array policy. The
+catalog must not model Rust generic registers as runtime-growing vectors and
+must not require unstable Rust generic const expressions such as an array size
+computed from `BITS / size_of::<T>()`.
+
+Mask policies are explicit. `lane_bitmask` means the valid semantic bit count
+is exactly the lane count, although backend storage may use the smallest
+available unsigned type that can hold those bits. Predicate-mask extensions use
+native predicate policies, and `integral_mask_type_policy` is represented
+separately from `mask_type_policy`.
+
+M143.1 does not lower primitive-call selector payloads, match primitive-call
+targets, select dependencies, lower implementation bodies, render backend call
+text, render backend type text from these facts, run host CPU probing, discover
+targets automatically, or introduce runtime `frozen`/`tslgenold` dependencies.
+
+### M144 Primitive-Call Selector Payload Lowering Boundary
+
+Milestone 144 lowers the already recognized `call<primitive=...>(...)`
+selector payload into typed values without matching the call target. The
+selector target remains the existing structured `@self` or named primitive
+reference. Optional specialization payloads are split by top-level commas while
+respecting nested parentheses and brackets.
+
+`Vec` lowers to a single `CurrentVector(extension: ExtensionName,
+type_tag: TypeTag)` value. The extension is the selected implementation
+extension resolved through the extension catalog, and aliases bound through
+earlier `let<type>(...)` directives preserve that same value. M144 does not
+keep a parallel `LoweredCurrentVectorType`/selector-vector class for the same
+concept.
+
+Type-valued selector entries lower through the accepted M143 type model.
+Known extension names in selector entries become typed extension operands.
+Other non-type selector entries remain typed symbols or literals with source
+locations, not semantic matches. `attrs[...]` payloads lower to concrete typed
+selector attributes with the same `key=value` or `key(argument)=value` shape as
+catalog/target attributes.
+
+Malformed specialization payloads, malformed attrs payloads, unbound aliases in
+type-valued selector positions, unsupported type expressions, and unknown
+extension operands in type-valued selector expressions produce diagnostics.
+Raw selector text is kept only as diagnostic/provenance context.
+
+M144 does not match primitive-call targets, select dependency implementations,
+expand dependency closure, lower dependency bodies, recursively lower call
+arguments, render backend call text, render backend type text, parse broad TSIL
+expressions, repair source, or introduce runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

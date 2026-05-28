@@ -7,6 +7,8 @@ from tslgen.io.sources import SourceDocument
 from tslgen.syntax.ast import (
     PARSED_TSIL_BODY_ENVELOPE,
     ParsedDocument,
+    ParsedExtension,
+    ParsedExtensionField,
     ParsedImplementation,
     ParsedImplementationBody,
     ParsedLowerableOperationFragment,
@@ -15,6 +17,7 @@ from tslgen.syntax.ast import (
     ParsedRawStringLine,
     ParseResult,
     ParsedSegmentedLine,
+    ParsedTypeGroup,
 )
 
 _BINARY_HEADER_PATTERN = re.compile(
@@ -59,6 +62,12 @@ _IMPLEMENTATION_PATTERN = re.compile(
     r"^  implementation "
     r"(?P<extension>scalar) "
     r"(?P<type_tag>[A-Za-z_][A-Za-z0-9_]*):$"
+)
+_EXTENSION_HEADER_PATTERN = re.compile(
+    r"^extension (?P<name>[A-Za-z_][A-Za-z0-9_]*):$"
+)
+_TYPE_GROUP_LINE_PATTERN = re.compile(
+    r"^  (?P<name>[A-Za-z0-9_?]+) \{types (?P<types>\[[^]]*\])\}$"
 )
 _BODY_PATTERN = re.compile(
     r"^    body "
@@ -114,6 +123,12 @@ class TslParser:
             return None
 
         header_line_no, header_line = source_lines[header_index]
+
+        if _EXTENSION_HEADER_PATTERN.match(header_line) is not None:
+            return _parse_extension_document(document, source_lines, diagnostics)
+
+        if header_line == "types:":
+            return _parse_type_group_document(document, source_lines, diagnostics)
 
         header = _match_header(header_line)
         if header is None:
@@ -234,6 +249,234 @@ class TslParser:
             path=document.path.as_posix(),
             primitives=(parsed_primitive,),
         )
+
+
+def _parse_extension_document(
+    document: SourceDocument,
+    source_lines: tuple[tuple[int, str], ...],
+    diagnostics: list[Diagnostic],
+) -> ParsedDocument | None:
+    extensions: list[ParsedExtension] = []
+    index = 0
+    while True:
+        extension_index = _next_meaningful_index(source_lines, index)
+        if extension_index is None:
+            break
+
+        line_no, line = source_lines[extension_index]
+        match = _EXTENSION_HEADER_PATTERN.match(line)
+        if match is None:
+            diagnostics.append(
+                _unsupported_line(
+                    document,
+                    line_no,
+                    _first_content_column(line),
+                    line,
+                )
+            )
+            return None
+
+        block_end = extension_index + 1
+        while block_end < len(source_lines):
+            _, candidate = source_lines[block_end]
+            if not _is_ignored_line(candidate) and not candidate.startswith(" "):
+                break
+            block_end += 1
+
+        parsed_fields = _parse_field_block(
+            document,
+            source_lines,
+            extension_index + 1,
+            block_end,
+            2,
+            diagnostics,
+        )
+        if parsed_fields is None:
+            return None
+
+        extensions.append(
+            ParsedExtension(
+                name=match.group("name"),
+                fields=parsed_fields,
+                source=SourceLocation(document.path, line_no, 1),
+            )
+        )
+        index = block_end
+
+    if not extensions:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-PARSE-UNSUPPORTED-FORM",
+                message="extension source document contains no extension blocks",
+                location=SourceLocation(document.path, 1, 1),
+            )
+        )
+        return None
+
+    return ParsedDocument(
+        path=document.path.as_posix(),
+        extensions=tuple(extensions),
+    )
+
+
+def _parse_type_group_document(
+    document: SourceDocument,
+    source_lines: tuple[tuple[int, str], ...],
+    diagnostics: list[Diagnostic],
+) -> ParsedDocument | None:
+    type_groups: list[ParsedTypeGroup] = []
+    index = 1
+    while True:
+        group_index = _next_meaningful_index(source_lines, index)
+        if group_index is None:
+            break
+
+        line_no, line = source_lines[group_index]
+        match = _TYPE_GROUP_LINE_PATTERN.match(line)
+        if match is None:
+            diagnostics.append(
+                _unsupported_line(
+                    document,
+                    line_no,
+                    _first_content_column(line),
+                    line,
+                )
+            )
+            return None
+
+        type_tags = _parse_list_value(match.group("types"))
+        if type_tags is None:
+            diagnostics.append(
+                _unsupported_line(
+                    document,
+                    line_no,
+                    match.start("types") + 1,
+                    line,
+                )
+            )
+            return None
+        type_groups.append(
+            ParsedTypeGroup(
+                name=match.group("name"),
+                type_tags=type_tags,
+                source=SourceLocation(document.path, line_no, 3),
+            )
+        )
+        index = group_index + 1
+
+    if not type_groups:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-PARSE-UNSUPPORTED-FORM",
+                message="types source document contains no type groups",
+                location=SourceLocation(document.path, 1, 1),
+            )
+        )
+        return None
+
+    return ParsedDocument(
+        path=document.path.as_posix(),
+        type_groups=tuple(type_groups),
+    )
+
+
+def _parse_field_block(
+    document: SourceDocument,
+    source_lines: tuple[tuple[int, str], ...],
+    start: int,
+    end: int,
+    indent: int,
+    diagnostics: list[Diagnostic],
+) -> tuple[ParsedExtensionField, ...] | None:
+    fields: list[ParsedExtensionField] = []
+    index = start
+    while index < end:
+        line_no, line = source_lines[index]
+        if _is_ignored_line(line):
+            index += 1
+            continue
+
+        actual_indent = len(line) - len(line.lstrip(" "))
+        if actual_indent < indent:
+            break
+        if actual_indent > indent:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-PARSE-UNSUPPORTED-FORM",
+                    message=(
+                        f"unsupported extension metadata indentation; expected "
+                        f"{indent} leading spaces"
+                    ),
+                    location=SourceLocation(document.path, line_no, actual_indent + 1),
+                )
+            )
+            return None
+
+        stripped = line.strip()
+        source = SourceLocation(document.path, line_no, indent + 1)
+        if stripped.endswith(":"):
+            key = stripped[:-1].strip()
+            children = _parse_field_block(
+                document,
+                source_lines,
+                index + 1,
+                end,
+                indent + 2,
+                diagnostics,
+            )
+            if children is None:
+                return None
+            fields.append(
+                ParsedExtensionField(
+                    key=key,
+                    raw_value=None,
+                    children=children,
+                    source=source,
+                )
+            )
+            index = _next_sibling_or_end(source_lines, index + 1, end, indent)
+            continue
+
+        parts = stripped.split(maxsplit=1)
+        if len(parts) != 2:
+            diagnostics.append(_unsupported_line(document, line_no, indent + 1, line))
+            return None
+        fields.append(
+            ParsedExtensionField(
+                key=parts[0],
+                raw_value=parts[1],
+                children=(),
+                source=source,
+            )
+        )
+        index += 1
+    return tuple(fields)
+
+
+def _next_sibling_or_end(
+    source_lines: tuple[tuple[int, str], ...],
+    start: int,
+    end: int,
+    sibling_indent: int,
+) -> int:
+    index = start
+    child_indent = sibling_indent + 2
+    while index < end:
+        _, line = source_lines[index]
+        if _is_ignored_line(line):
+            index += 1
+            continue
+        actual_indent = len(line) - len(line.lstrip(" "))
+        if actual_indent <= sibling_indent:
+            return index
+        if actual_indent == child_indent or actual_indent > child_indent:
+            index += 1
+            continue
+        return index
+    return end
 
 
 def _next_meaningful_index(
@@ -421,6 +664,47 @@ def _split_names(raw: str) -> tuple[str, ...]:
     if not raw.strip():
         return ()
     return tuple(part.strip() for part in raw.split(","))
+
+
+def _parse_list_value(raw: str) -> tuple[str, ...] | None:
+    text = raw.strip()
+    if not text.startswith("[") or not text.endswith("]"):
+        return None
+    inner = text[1:-1].strip()
+    if not inner:
+        return ()
+    items = _split_list_items(inner)
+    if items is None:
+        return None
+    values: list[str] = []
+    for item in items:
+        value = item.strip()
+        if value.startswith('"') and value.endswith('"'):
+            value = value[1:-1]
+        if not value:
+            return None
+        values.append(value)
+    return tuple(values)
+
+
+def _split_list_items(inner: str) -> tuple[str, ...] | None:
+    items: list[str] = []
+    current: list[str] = []
+    in_string = False
+    for char in inner:
+        if char == '"':
+            in_string = not in_string
+            current.append(char)
+            continue
+        if char == "," and not in_string:
+            items.append("".join(current).strip())
+            current = []
+            continue
+        current.append(char)
+    if in_string:
+        return None
+    items.append("".join(current).strip())
+    return tuple(items)
 
 
 def _valid_name(name: str) -> bool:

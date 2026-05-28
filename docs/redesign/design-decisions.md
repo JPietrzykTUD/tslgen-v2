@@ -1902,3 +1902,85 @@ Consequences:
 - The generator still does not parse TSIL as a complete language: no general
   precedence, associativity, statement-list, scope, loop, or expression model
   is implied by recognizing lowerable islands inside the token stream.
+
+## ADR-037: Extension Register And Mask Type Facts Live In Source Data
+
+Status: Accepted
+
+Context:
+
+The clean restart type-lowering work reached `vector::register`,
+`vector::mask`, `vector::imask`, `vector::as_extension(...)`, and related type
+queries while the generator still treated extension names as strings. Product
+review clarified that `tsldata/extensions/extension.tsl` is the ground truth
+for supported extensions and must also carry extension-specific register and
+mask type facts. C++ and Rust both expose native SIMD register types for x86
+and ARM, while generic vectors should be fixed-size compile-time arrays rather
+than runtime-growing containers.
+
+Decision:
+
+Extension metadata owns vector register facts and mask policies as typed
+catalog data. Native fixed-width x86 extensions use backend-aware register
+spellings grouped by integer/f32/f64 selectors. NEON and SVE use concrete
+per-type register entries because the native spelling depends on signedness
+and scalar width. `sse_vl` and `avx2_vl` inherit register maps from `sse` and
+`avx2`.
+
+`generic` is modeled as a lane-count-parametric fixed-array policy. Rust
+generic registers are fixed arrays such as `[T; LANES]`, not `Vec<T>`, and the
+model avoids unstable generic const expressions that compute array length from
+bit width and element size.
+
+`mask_type_policy` and `integral_mask_type_policy` are separate facts.
+`lane_bitmask` has exactly one valid bit per lane, even when a backend stores
+the bits in the smallest wider unsigned type. Native predicate extensions use
+backend-specific predicate types, and integral mask may intentionally be the
+same native predicate type.
+
+Consequences:
+
+- Later selector/type lowering can consume extension facts from the catalog
+  instead of hardwiring extension tables.
+- Backend-specific register spellings are catalog facts, but backend rendering
+  remains a later boundary.
+- SVE Rust register facts are not introduced while SVE remains marked
+  unsupported for Rust in extension metadata.
+- Future changes to extension register or mask behavior should update
+  `tsldata/extensions/extension.tsl` first, then catalog validation/tests.
+
+## ADR-038: Current Vector Is A Domain-Typed Extension/Type Value
+
+Status: Accepted
+
+Context:
+
+Primitive-call selector payload lowering needs to understand source forms such
+as `@self[Vec]`, aliases bound to `Vec`, and selector entries that name
+extensions. Earlier type lowering used the milestone-shaped name
+`LoweredCurrentVectorType` with raw string fields. Product review clarified
+that the important semantic value is the current implementation's extension
+plus type tag, with the extension resolved against the extension catalog.
+
+Decision:
+
+`Vec` lowers to one small domain value named `CurrentVector`, with
+`extension: ExtensionName` and `type_tag: TypeTag`. Source-defined aliases
+preserve that same value. M144 refines the earlier
+`LoweredCurrentVectorType` concept instead of adding a second selector-local
+vector class.
+
+Selector payload lowering may also produce typed extension operands, selector
+symbols, selector literals, and selector attributes. These values describe the
+selector payload only; they do not match primitive-call targets, select
+dependency implementations, or render backend text.
+
+Consequences:
+
+- There is one semantic representation for the current `extension + type_tag`
+  pair.
+- Backend type spellings remain a later backend boundary.
+- Unknown extension operands in type-valued selector expressions are
+  diagnostics, not raw string fallbacks.
+- Future naming cleanup should preserve the single-value rule rather than
+  adding aliases that behave like parallel domain concepts.

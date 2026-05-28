@@ -214,30 +214,91 @@ Invariants:
 @dataclass(frozen=True, slots=True)
 class Extension:
     name: ExtensionName
-    vendor: str
-    family: str
-    intrinsic_style: str
-    vector_bits: VectorBits
-    native_sort_order: int
-    autodetect: bool
-    lscpu_flags: tuple[FeatureFlag, ...]
-    mask: MaskModel
-    runtime_lanes: bool
-    default_test_target: bool
-    backend_support: FrozenMap[BackendId, BackendExtensionSupport]
+    extension_name: str | None
+    vendor: str | None
     inherits: ExtensionName | None
-    signature_support: SignatureSupportPolicy
-    test_filter: TestFilterPolicy
+    family: str | None
+    intrinsic_style: str | None
+    vector_bits: VectorBits | None
+    native_sort_order: int | None
+    autodetect: bool | None
+    lscpu_flags: tuple[FeatureFlag, ...]
+    mask_repr: MaskRepresentation | None
+    mask_width: MaskWidth | None
+    mask_vector_loadable: bool | None
+    runtime_lanes: bool | None
+    default_test_target: bool | None
+    cpp: ExtensionBackendMetadata
+    rust: ExtensionBackendMetadata
+    signature_support_exclude: tuple[str, ...]
+    test_filter_exclude_templates: tuple[str, ...]
     test_sizes_bits: tuple[int, ...]
+    vector_register_types: tuple[VectorRegisterTypeEntry, ...]
+    resolved_vector_register_types: tuple[ResolvedVectorRegisterType, ...]
+    vector_register_type_policy: ExtensionTypePolicy | None
+    size_parameter: ExtensionSizeParameter | None
+    mask_type_policy: ExtensionTypePolicy | None
+    integral_mask_type_policy: ExtensionTypePolicy | None
     source: SourceSpan
+
+@dataclass(frozen=True, slots=True)
+class ExtensionCatalog:
+    extensions: tuple[Extension, ...]
 ```
 
 Supporting values:
 
 ```python
 VectorBits = FixedBits | SizedBits | ScalableBits
-MaskRepresentation = Literal["bitset", "vector", "scalar", "bitset_array"]
+MaskRepresentation = Literal["bitset", "vector", "scalar", "bitset_array", "lane_bitmask"]
 MaskWidth = Literal["lanes"] | int
+
+@dataclass(frozen=True, slots=True)
+class ExtensionBackendMetadata:
+    supported: bool | None
+    type_name: str | None
+    generation_support: tuple[ExtensionName, ...]
+    headers: tuple[str, ...]
+    header_guard: str | None
+    test_suite_name: str | None
+    test_support_header: str | None
+    source: SourceSpan | None
+
+@dataclass(frozen=True, slots=True)
+class VectorRegisterTypeEntry:
+    selector: TypeTag | TypeGroupName
+    backend_spellings: tuple[BackendTypeSpelling, ...]
+
+@dataclass(frozen=True, slots=True)
+class ResolvedVectorRegisterType:
+    extension: ExtensionName
+    type_tag: TypeTag
+    backend: BackendId
+    spelling: str
+
+@dataclass(frozen=True, slots=True)
+class ExtensionTypePolicy:
+    kind: Literal[
+        "base_type",
+        "fixed_array",
+        "lane_bitmask",
+        "native_predicate",
+        "native_predicate_by_lanes",
+        "same_as_mask_type",
+        "bool",
+        "unsigned_scalar",
+    ]
+    element: str | None
+    length: str | None
+    width: str | None
+    backend_spellings: tuple[BackendTypeSpelling, ...]
+    backend_lane_spellings: tuple[BackendLaneTypeSpelling, ...]
+
+@dataclass(frozen=True, slots=True)
+class ExtensionSizeParameter:
+    kind: str
+    name: str
+    source: SourceSpan
 ```
 
 Invariants:
@@ -247,6 +308,16 @@ Invariants:
 - `runtime_lanes=true` means test and generation planning cannot assume a fixed lane count from vector bits alone.
 - `vector_bits="sized"` requires a size parameter when concrete artifacts/tests are planned.
 - Backend support is explicit; lack of support filters candidates for that backend.
+- Vector register facts are source-data facts attached to extensions, not
+  renderer-side inference. Native fixed-width x86 extensions may use
+  type-group selectors such as `?i?`; NEON and SVE use concrete per-type
+  entries where signedness affects the native type spelling.
+- `generic` uses a compile-time lane-count fixed-array policy for register
+  storage. Rust generic registers must not be modeled as runtime-growing
+  vectors.
+- Vector mask type and integral mask type are separate policies. For
+  `lane_bitmask`, the valid semantic bit count is exactly the lane count even
+  when backend storage uses the smallest wider unsigned integer type.
 
 ## Implementation Model
 
@@ -413,6 +484,12 @@ Invariants:
   does not select dependency implementations, lower dependency bodies,
   interpret specialization or attrs, expand dependency closure, or render
   backend call syntax.
+- M144 lowers selector payloads for already recognized `PrimitiveCall` values.
+  Specialization entries become typed type values, extension operands, symbols,
+  or literals. `attrs[...]` entries become typed selector attributes. This is a
+  selector-payload boundary only: it does not match primitive-call targets,
+  select dependency implementations, lower dependency bodies, recursively lower
+  call arguments, or render backend call syntax.
 - M139 records primitive declaration attributes as source-owned catalog facts
   and expands boolean wildcard declaration attributes into deterministic
   concrete primitive variants. Concrete variants must not carry wildcard
@@ -504,8 +581,11 @@ Invariants:
   chosen by target selection.
 - Declaration provenance such as `Primitive.declared_attributes` and
   `PrimitiveAttribute.declared_value` is not a separate semantic selector.
-- `Vec` is a current selected-context vector keyword derived from the selected
-  extension plus type tag, not a primitive specialization key.
+- `Vec` is a current selected-context vector value: exactly the selected
+  extension plus type tag, not a primitive specialization key and not a
+  backend type spelling. The selected extension identity must resolve against
+  the M143.1 extension catalog before later call-selector lowering depends on
+  it.
 - `scalar` is the current selected-context scalar/base type keyword derived
   from the selected type tag.
 - `MaskVec`, `GenericVec`, and any other source identifier are not context
@@ -521,7 +601,7 @@ not from fresh source-file reads, `tsldata`, `frozen`, or `tslgenold`.
 
 ```python
 @dataclass(frozen=True, slots=True)
-class LoweredCurrentVectorType:
+class CurrentVector:
     extension: ExtensionName
     type_tag: TypeTag
 
@@ -604,7 +684,7 @@ class LoweredBackendTypeReference:
 LoweredTypeValue = (
     LoweredBackendTypeReference
     | LoweredBaseTransformType
-    | LoweredCurrentVectorType
+    | CurrentVector
     | LoweredCurrentScalarType
     | LoweredGenericRegisterType
     | LoweredIntrinsicVectorImaskType
@@ -633,12 +713,60 @@ class SelectedTypeEnvironment:
 
 ```
 
+`CurrentVector` is the concrete value behind the `Vec` keyword. It is the
+small `CurrentVector(extension: ExtensionName, type_tag: TypeTag)` value, not
+a backend spelling, target-language alias, or general type hierarchy. M144
+renames the accepted M143 `LoweredCurrentVectorType` concept to this domain
+name rather than keeping a second class for the same concept.
+
+Milestone 144 adds selector-payload values:
+
+```python
+@dataclass(frozen=True, slots=True)
+class ExtensionOperand:
+    name: ExtensionName
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class SelectorSymbol:
+    name: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class SelectorLiteral:
+    text: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class SelectorAttribute:
+    key: str
+    value: str
+    source: SourceLocation
+    key_argument: str | None = None
+
+SelectorSpecializationValue = (
+    LoweredTypeValue | ExtensionOperand | SelectorLiteral | SelectorSymbol
+)
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveCallSelectorPayload:
+    target: PrimitiveCallTarget
+    specializations: tuple[SelectorSpecializationValue, ...]
+    attributes: tuple[SelectorAttribute, ...]
+    source_text: str
+    source: SourceLocation
+```
+
 Invariants:
 
 - Context symbols are exactly the current `Vec` and `scalar` spellings for
   the selected implementation.
 - Alias bindings are ordered by selected body token order.
 - Alias references resolve only to earlier bindings in the same selected body.
+- Alias bindings preserve the full lowered type value, including any resolved
+  extension identity carried by `Vec` or vector type transforms. This is an
+  alias-preservation rule, not a general type-system or selector-matching
+  rule.
 - `type<generation>(...)` produces semantic type values, never backend text.
 - `type<backend>(...)` produces a `BackendTypeSpellingRequest`; it does not
   render backend type text.
