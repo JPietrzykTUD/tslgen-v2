@@ -1300,6 +1300,32 @@ body-token rendering, source repair, raw text replacement, primitive-call
 rendering, dependency scheduling, or runtime `tsldata`, `frozen`, or
 `tslgenold` dependencies.
 
+### M157 Generation-Control Selected-Branch Body Handoff
+
+Milestone 157 composes the M156 branch-region boundary with the existing body
+lowerer. When a selected implementation body is an exact M156
+generation-control region, the lowerer evaluates the M156 condition, wraps only
+the selected branch token slice in a temporary source-owned
+`ImplementationBody`, and lowers that body through the already accepted direct
+body lowering path.
+
+The unselected branch remains an opaque token slice. Unsupported primitive
+calls, malformed directives, raw helper text, or other unsupported body tokens
+inside the unselected branch do not produce diagnostics.
+
+M157 does not add a new branch-body parser or renderer. It reuses existing
+operation-fragment, exact primitive-call, and exact `emit_return(...)` lowering
+for the selected branch. Existing M156 region/condition diagnostics propagate
+unchanged, and existing selected-branch body diagnostics still surface when the
+selected branch itself is outside the accepted body-lowering surface.
+
+M157 does not add recursive generation-control lowering, branch-chain
+`else if<generation>`, plain `else`, loop execution, declaration lowering,
+backend-control lowering, body-token rendering, backend rendering, raw
+expression parsing, source repair, dependency scheduling, runtime `tsldata`,
+`frozen`, or `tslgenold` dependencies, registries, dispatchers, worklists, or
+fixpoint machinery.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

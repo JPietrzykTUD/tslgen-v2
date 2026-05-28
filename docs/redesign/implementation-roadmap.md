@@ -20210,8 +20210,8 @@ Accepted validation result:
 
 Status:
 
-Selected after M156 acceptance. Active next prompt:
-`docs/agent/runs/m157-execution-review-loop-prompt.md`.
+Accepted. Active next prompt after M157:
+`docs/agent/runs/m158-execution-review-loop-prompt.md`.
 
 Goal:
 
@@ -20241,6 +20241,93 @@ Recursive or nested generation-control lowering; branch-chain
 lowering; body-token rendering; backend rendering; raw expression parsing;
 primitive-call rendering beyond already accepted exact paths; source repair;
 runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad registries,
+dispatchers, worklists, or fixpoint machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted result:
+
+- Added a selected-branch handoff in `Lowerer.lower(...)` for exact M156
+  generation-control region candidates.
+- Evaluated the M156 condition, wrapped only the selected branch token slice in
+  a temporary source-owned `ImplementationBody`, and lowered that temporary
+  body through the existing direct body lowering path.
+- Preserved non-generation-control body lowering behavior.
+- Kept unselected branch content opaque and silent, including unsupported
+  primitive calls, malformed directives, raw helper text, and other
+  unsupported body tokens.
+- Propagated M156 region/condition diagnostics before handoff and preserved
+  selected-branch unsupported-body diagnostics from the selected branch source
+  location.
+- Added no recursive generation-control lowering, branch-chain support, plain
+  `else` support, loop/declaration/backend-control lowering, body rendering,
+  backend rendering, source repair, runtime `tsldata`, `frozen`, or
+  `tslgenold` dependencies, registries, dispatchers, worklists, or fixpoint
+  machinery.
+
+Review verdicts:
+
+- Architecture reviewer: `Accept With Follow-Ups`.
+- Boundary auditor: `Accept`.
+- Evidence auditor: `Accept`.
+- Test auditor: `Accept` after focused re-review.
+- Documentation auditor: `Accept With Follow-Ups`.
+- Validation auditor: `Accept` after focused re-review.
+
+Accepted validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `223 passed`.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and listed
+  validation-created cache directories under `tslgen/src/tslgen` and
+  `tslgen/tests`; after cleanup, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+### Milestone 158: Exact Generation Integer Equality Condition Boundary
+
+Status:
+
+Selected after M157 acceptance. Active next prompt:
+`docs/agent/runs/m158-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the next narrow condition-lowering boundary needed by current
+generation-control corpus forms: exact integer equality over an isolated M155
+integer `value<generation>(...)` query.
+
+Scope:
+
+- Accept exact generation-control condition text shaped as
+  `value<generation>(QUERY) == INTEGER_LITERAL`, where `QUERY` is already
+  lowerable by M155 to an integer generation value.
+- Lower the left query through M155 first; compare the typed integer value to
+  the integer literal and produce a boolean condition result for M156/M157.
+- Preserve existing M155 boolean condition behavior.
+- Emit deterministic diagnostics for malformed predicates, unsupported
+  operators, unsupported/non-integer left values, non-integer literals, and
+  missing M155 facts.
+- Add focused tests using `type::size_bytes(TYPE_EXPR) == INTEGER_LITERAL`
+  because that exact family appears in current `else if<generation>` corpus
+  evidence and is a prerequisite for later branch-chain selection.
+
+Out of scope:
+
+Branch-chain `else if<generation>` selection; plain `else`; general
+expression parsing; precedence; arithmetic; inequality/range comparisons;
+right-hand value queries; boolean equality; loop/declaration/backend-control
+lowering; body-token rendering; backend rendering; source repair; runtime
+`tsldata`, `frozen`, or `tslgenold` dependencies; broad registries,
 dispatchers, worklists, or fixpoint machinery.
 
 Validation:

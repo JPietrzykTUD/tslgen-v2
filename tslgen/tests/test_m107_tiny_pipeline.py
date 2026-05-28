@@ -4639,6 +4639,205 @@ def test_m156_reports_unsupported_else_if_and_plain_else_regions() -> None:
     assert "plain else" in plain_else.diagnostics[0].message
 
 
+def test_m157_lowers_true_generation_branch_body_only() -> None:
+    true_tokens = (
+        LowerableOperationFragment(
+            operation="add",
+            arguments=("left", "right"),
+            source=_location(5, 9),
+        ),
+    )
+    false_tokens = (
+        RawStringToken(
+            text="selected false branch must stay opaque;",
+            source=_location(8, 9),
+        ),
+        LowerableDirective(
+            name="call",
+            arguments=("primitive", "sub", "left, right"),
+            source=_location(9, 9),
+            primitive_call=_primitive_call(
+                VALID_TINY_ADD.resolve(),
+                9,
+                9,
+                "sub",
+                "left, right",
+                target_name="sub",
+            ),
+        ),
+        LowerableDirective(
+            name="emit_return",
+            arguments=(),
+            source=_location(10, 9),
+        ),
+    )
+    body = _generation_if_body(
+        "value<generation>(primitive::attribute(aligned))",
+        true_tokens=true_tokens,
+        false_tokens=false_tokens,
+    )
+    selected = _selected_implementation(
+        body=body,
+        attributes=(
+            PrimitiveAttribute(
+                key="aligned",
+                value="true",
+                declared_value="*",
+                source=_location(1, 16),
+            ),
+        ),
+    )
+
+    result = Lowerer().lower(selected)
+
+    assert result.diagnostics == ()
+    assert result.function == LoweredFunction(
+        signature=LoweredFunctionSignature(
+            name="add_scalar_si32",
+            primitive_name="add",
+            parameters=(LoweredParameter("left"), LoweredParameter("right")),
+            scalar_type=_descriptor("si32"),
+        ),
+        body=LoweredFunctionBody(
+            return_statement=LoweredReturnStatement(
+                expression=LoweredBinaryOperationExpression(
+                    operation=_operation("add"),
+                    left=LoweredParameterRef("left"),
+                    right=LoweredParameterRef("right"),
+                ),
+                source=_location(5, 9),
+            ),
+        ),
+        source=_location(2, 3),
+    )
+
+
+def test_m157_lowers_false_generation_branch_emit_return_body_only() -> None:
+    true_tokens = (
+        RawStringToken(
+            text="details::arith_mul(left, right);",
+            source=_location(5, 9),
+        ),
+        LowerableDirective(
+            name="call",
+            arguments=("primitive", "sub", "left, right"),
+            source=_location(6, 9),
+            primitive_call=_primitive_call(
+                VALID_TINY_ADD.resolve(),
+                6,
+                9,
+                "sub",
+                "left, right",
+                target_name="sub",
+            ),
+        ),
+    )
+    false_tokens = (_emit_return_add_call_directive(line=8, column=9),)
+    body = _generation_if_body(
+        "value<generation>(primitive::attribute(aligned))",
+        true_tokens=true_tokens,
+        false_tokens=false_tokens,
+    )
+    selected = _selected_implementation(
+        body=body,
+        attributes=(
+            PrimitiveAttribute(
+                key="aligned",
+                value="false",
+                declared_value="*",
+                source=_location(1, 16),
+            ),
+        ),
+    )
+
+    result = Lowerer().lower(selected)
+
+    assert result.diagnostics == ()
+    assert result.function is not None
+    return_statement = result.function.body.return_statement
+    assert isinstance(return_statement.expression, LoweredBinaryOperationExpression)
+    assert return_statement.expression.operation == _operation("add")
+    assert return_statement.source == _location(8, 21)
+
+
+def test_m157_selected_branch_unsupported_body_diagnostics_surface() -> None:
+    true_tokens = (
+        RawStringToken(text="unsupported_selected_path();", source=_location(5, 9)),
+    )
+    false_tokens = (
+        LowerableOperationFragment(
+            operation="add",
+            arguments=("left", "right"),
+            source=_location(8, 9),
+        ),
+    )
+    body = _generation_if_body(
+        "value<generation>(primitive::attribute(aligned))",
+        true_tokens=true_tokens,
+        false_tokens=false_tokens,
+    )
+    selected = _selected_implementation(
+        body=body,
+        attributes=(
+            PrimitiveAttribute(
+                key="aligned",
+                value="true",
+                declared_value="*",
+                source=_location(1, 16),
+            ),
+        ),
+    )
+
+    first = Lowerer().lower(selected)
+    second = Lowerer().lower(selected)
+
+    assert first.function is None
+    assert [diagnostic.code for diagnostic in first.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-BODY",
+    ]
+    assert [diagnostic.location for diagnostic in first.diagnostics] == [
+        _location(5, 9),
+    ]
+    assert first.diagnostics == second.diagnostics
+
+
+def test_m157_generation_control_condition_diagnostics_propagate() -> None:
+    body = _generation_if_body(
+        "value<generation>(type::size_bytes(type<generation>(base::in)))",
+        true_tokens=(
+            LowerableOperationFragment(
+                operation="add",
+                arguments=("left", "right"),
+                source=_location(5, 9),
+            ),
+        ),
+        false_tokens=(
+            LowerableOperationFragment(
+                operation="add",
+                arguments=("left", "right"),
+                source=_location(8, 9),
+            ),
+        ),
+    )
+
+    result = Lowerer().lower(_selected_implementation(body=body))
+
+    assert result.function is None
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-LOWER-NONBOOLEAN-GENERATION-CONTROL-CONDITION",
+    ]
+    assert [diagnostic.location for diagnostic in result.diagnostics] == [
+        _location(4, 7),
+    ]
+
+
+def test_m157_non_generation_control_bodies_still_lower_directly() -> None:
+    result = Lowerer().lower(_selected_implementation())
+
+    assert result.diagnostics == ()
+    assert result.function == _lowered_function()
+
+
 def test_m142_does_not_resolve_primitive_call_selector_targets(
     tmp_path: Path,
 ) -> None:
@@ -8185,8 +8384,14 @@ def _catalog_attribute_values(
 def _generation_if_body(
     condition: str,
     *,
-    true_tokens: tuple[RawStringToken | LowerableDirective, ...],
-    false_tokens: tuple[RawStringToken | LowerableDirective, ...],
+    true_tokens: tuple[
+        RawStringToken | LowerableDirective | LowerableOperationFragment,
+        ...,
+    ],
+    false_tokens: tuple[
+        RawStringToken | LowerableDirective | LowerableOperationFragment,
+        ...,
+    ],
 ) -> ImplementationBody:
     if_text = f"if<generation>({condition})"
     return ImplementationBody(
@@ -8212,6 +8417,34 @@ def _generation_if_body(
             RawStringToken(text="}", source=_location(10, 7)),
         ),
         source=_location(3, 5),
+    )
+
+
+def _emit_return_add_call_directive(
+    *,
+    line: int,
+    column: int,
+) -> LowerableDirective:
+    call_column = column + len("emit_return(")
+    return LowerableDirective(
+        name="emit_return",
+        arguments=("call<primitive=add>(left, right)",),
+        source=_location(line, column),
+        payload_tokens=(
+            LowerableDirective(
+                name="call",
+                arguments=("primitive", "add", "left, right"),
+                source=_location(line, call_column),
+                primitive_call=_primitive_call(
+                    VALID_TINY_ADD.resolve(),
+                    line,
+                    call_column,
+                    "add",
+                    "left, right",
+                    target_name="add",
+                ),
+            ),
+        ),
     )
 
 

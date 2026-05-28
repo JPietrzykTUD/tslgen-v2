@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 156 is accepted.
+Milestone 157 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -1096,6 +1096,49 @@ M156 validation completed with:
   exit 0, no output.
 - `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
   exit 0, `218 passed`.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and listed
+  validation-created cache directories under `tslgen/src/tslgen` and
+  `tslgen/tests`; after cleanup, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+The M157 execution-review loop returned `Accept` after one narrow test
+revision and focused test/validation re-review. M157 composes the accepted
+M156 branch-region boundary with the existing direct body lowerer: a selected
+full-body generation-control region now evaluates its M156 condition, wraps
+only the selected branch token slice in a temporary source-owned
+`ImplementationBody`, and lowers that temporary body through already accepted
+operation-fragment, exact primitive-call, and exact `emit_return(...)` body
+lowering.
+
+M157 keeps the unselected branch opaque. Unsupported primitive calls, malformed
+directives, raw helper text, or other unsupported content in an unselected
+branch do not produce diagnostics. Existing M156 region/condition diagnostics
+propagate before handoff, and selected-branch unsupported-body diagnostics
+still surface from the selected branch source location.
+
+M157 did not implement recursive generation-control lowering, branch-chain
+`else if<generation>`, plain `else`, loops, declarations, backend-control
+lowering, body-token rendering, backend rendering, raw expression parsing,
+source repair, dependency scheduling, runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies, registries, dispatchers, worklists, or fixpoint
+machinery.
+
+M157 review verdicts were: architecture `Accept With Follow-Ups`, boundary
+`Accept`, evidence `Accept`, test `Accept` after focused re-review,
+documentation `Accept With Follow-Ups`, and validation `Accept` after focused
+re-review. Nonblocking follow-ups are to remember that primitive-call
+dependency closure still scans original selected body tokens if future
+branch-aware closure is selected, and to consider compacting
+`docs/agent/current-redesign-state.md` because it has grown beyond its
+intended concise handoff shape.
+
+M157 validation completed with:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, no output.
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py`:
+  exit 0, `223 passed`.
 - Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and listed
   validation-created cache directories under `tslgen/src/tslgen` and
   `tslgen/tests`; after cleanup, final
@@ -2694,44 +2737,45 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 157.
+Execute Milestone 158.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m157-execution-review-loop-prompt.md
+docs/agent/runs/m158-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 157: Generation-Control Selected-Branch Body Handoff
+Milestone 158: Exact Generation Integer Equality Condition Boundary
 ```
 
 Latest review verdict:
 
 ```text
-M156 execution-review returned Accept after one write-capable executor,
+M157 execution-review returned Accept after one write-capable executor,
 read-only architecture, boundary, evidence, test, documentation, and
-validation audits, plus focused architecture, boundary, test, and
-documentation revisions and re-reviews. M156 implemented exact
-generation-control branch-region lowering into selected/unselected body-token
-slices without parsing or rendering branch bodies.
+validation audits, plus one focused test revision and test/validation
+re-reviews. M157 handed selected M156 branch tokens into existing direct body
+lowering while keeping unselected branches opaque.
 ```
 
 Next expected action:
 
 ```text
-Run the active M157 execution-review-loop prompt. M157 should make M156 useful
-to the existing lowering entry point by handing the selected branch token slice
-to already accepted body lowering capabilities.
+Run the active M158 execution-review-loop prompt. M158 should add the next
+small condition-lowering boundary needed by current generation-control corpus
+forms: exact integer equality over an isolated M155 integer
+`value<generation>(...)` query, such as
+`value<generation>(type::size_bytes(TYPE_EXPR)) == INTEGER_LITERAL`.
 
-M157 must not implement recursive/nested generation-control lowering,
-`else if<generation>` chains, plain `else`, loops, declarations,
-backend-control lowering, body-token rendering, backend rendering, raw
-expression parsing, source repair, runtime `tsldata`, `frozen`, or
-`tslgenold` dependencies, or broad registry/dispatcher/worklist machinery.
+M158 must not implement branch-chain `else if<generation>` selection, general
+expression parsing, precedence, arithmetic, inequality/range comparisons,
+loop/declaration/backend-control lowering, body-token rendering, backend
+rendering, source repair, runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies, or broad registry/dispatcher/worklist machinery.
 ```
 
 Previous review verdict:
@@ -6592,16 +6636,23 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M104 design follow-up: future Rust/type-context work should introduce
   explicit typed context instead of relying on M104's already-translated rule
   value.
+- M157 architecture follow-up: primitive-call dependency closure still scans
+  original selected body tokens directly; future branch-aware dependency
+  closure should explicitly decide whether to consume M156/M157 selected
+  branch handoff results.
+- M157 documentation follow-up: `docs/agent/current-redesign-state.md` has
+  grown far beyond its intended concise handoff shape and should be compacted
+  in a dedicated documentation maintenance slice.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M157
+No stop condition is active. The workflow is ready to run the active M158
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M157 execution, run the validation command listed in
-`docs/agent/runs/m157-execution-review-loop-prompt.md`.
+For active M158 execution, run the validation command listed in
+`docs/agent/runs/m158-execution-review-loop-prompt.md`.
 
 For M125 execution and review, validation completed with:
 

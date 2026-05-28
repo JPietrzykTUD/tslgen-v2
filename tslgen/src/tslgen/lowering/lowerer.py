@@ -1,7 +1,7 @@
 """Selected-implementation lowering for the exact tiny clean operation bodies."""
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from tslgen.analysis.selection import SelectedImplementation
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
@@ -236,6 +236,36 @@ class Lowerer:
         )
 
     def lower(
+        self,
+        selected: SelectedImplementation,
+        *,
+        catalog: Catalog | None = None,
+    ) -> LoweringResult:
+        body = selected.implementation.body
+        if _is_generation_control_region_candidate(body):
+            context = self.context_for(selected)
+            branch_result = lower_generation_control_region(
+                context,
+                body,
+                catalog=catalog,
+            )
+            if branch_result.region is None:
+                return LoweringResult(
+                    function=None,
+                    diagnostics=branch_result.diagnostics,
+                )
+            branch_body = ImplementationBody(
+                tokens=branch_result.region.selected_branch.tokens,
+                source=branch_result.region.selected_branch.source,
+            )
+            return self._lower_direct_body(
+                _selected_with_body(selected, branch_body),
+                catalog=catalog,
+            )
+
+        return self._lower_direct_body(selected, catalog=catalog)
+
+    def _lower_direct_body(
         self,
         selected: SelectedImplementation,
         *,
@@ -925,6 +955,26 @@ def _unsupported_unary_capability_diagnostics(
         )
 
     return tuple(diagnostics)
+
+
+def _is_generation_control_region_candidate(body: ImplementationBody) -> bool:
+    if not body.tokens:
+        return False
+    token = body.tokens[0]
+    return (
+        isinstance(token, LowerableDirective)
+        and token.name == "if"
+        and len(token.arguments) == 2
+        and token.arguments[0] == "generation"
+    )
+
+
+def _selected_with_body(
+    selected: SelectedImplementation,
+    body: ImplementationBody,
+) -> SelectedImplementation:
+    implementation = replace(selected.implementation, body=body)
+    return replace(selected, implementation=implementation)
 
 
 def _operation_fragment_from_selected_body(

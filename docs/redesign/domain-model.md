@@ -817,6 +817,14 @@ Invariants:
 - Unsupported branch-chain or plain-else shapes are diagnostic boundaries, not
   source repair targets.
 
+Milestone 157 does not add another IR model. It uses
+`LoweredGenerationControlRegion.selected_branch` as a source-owned token slice
+handoff into the existing direct body-lowering path. The temporary
+`ImplementationBody` built from selected branch tokens is a local adapter for
+composition; it is not a new stage envelope, renderer input, or recursive TSIL
+statement model. The unselected branch remains available as provenance in the
+M156 result but is not parsed or diagnosed by the handoff.
+
 Milestone 144 adds selector-payload values:
 
 ```python
