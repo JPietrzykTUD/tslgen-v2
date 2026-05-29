@@ -21253,7 +21253,7 @@ Recorded follow-ups:
 Status:
 
 Accepted. Active next prompt after M168:
-`docs/agent/runs/m169-execution-review-loop-prompt.md`.
+`docs/agent/runs/m168.5-execution-review-loop-prompt.md`.
 
 Goal:
 
@@ -21373,11 +21373,74 @@ output, exit 0 for compileall with no output, exit 0 for targeted pytest with
 `383 passed in 43.35s`, and exit 0 for the final cache check with no output
 after validation-created `__pycache__` directories were removed.
 
+### Milestone 168.5: Primitive Return-Type Binding Declaration Boundary
+
+Status:
+
+Selected after M168 acceptance and inserted before M169. Active next prompt:
+`docs/agent/runs/m168.5-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the primitive-local declaration boundary for optional `return_type`
+bindings observed in real `.tsl` data, such as:
+
+```text
+return_type:
+  base: ToBase
+```
+
+and:
+
+```text
+return_type:
+  extension: ToExtension
+```
+
+The binding identifier is arbitrary source data. `ToBase` and `ToExtension`
+are corpus examples, not generator keywords. If `return_type` is absent, the
+primitive has no return-type binding.
+
+Scope:
+
+- Inventory `return_type:` evidence across all `tsldata/**/*.tsl`.
+- Add parser/domain/catalog support for an optional primitive-level
+  `return_type` declaration in the clean restart source form.
+- Store a typed declaration on `Primitive` containing kind `base` or
+  `extension`, the exact user-defined identifier, and source location.
+- Preserve absence as no declaration.
+- Test arbitrary user-defined names, absent declarations, base declarations,
+  extension declarations, and malformed or unsupported forms where applicable.
+- Preserve existing primitive attributes, selection, lowering, and rendering
+  behavior.
+
+Out of scope:
+
+Concrete selected binding values; lowering declared identifiers in type or
+generation expressions; deriving `ToType`; parsing the full nested
+implementation selector tree; selecting all specialization manifestations;
+wildcard expansion; branch selection; loop execution; rendering; source
+replacement; type inference; expression/statement parsing; source repair;
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad registries,
+dispatchers, worklists, hidden backfeeds, or fixpoint machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py
+find tslgen -type d -name __pycache__ -print
+```
+
+If the executor adds focused M168.5 test files, include them in the compileall
+and targeted pytest commands.
+
 ### Milestone 169: Exact Selected Specialization Binding Boundary
 
 Status:
 
-Selected after M168 acceptance. Active next prompt:
+Deferred until M168.5 is accepted. Planned prompt:
 `docs/agent/runs/m169-execution-review-loop-prompt.md`.
 
 Goal:

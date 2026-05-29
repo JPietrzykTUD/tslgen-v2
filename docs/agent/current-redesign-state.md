@@ -2821,19 +2821,19 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 169.
+Execute Milestone 168.5.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m169-execution-review-loop-prompt.md
+docs/agent/runs/m168.5-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 169: Exact Selected Specialization Binding Boundary
+Milestone 168.5: Primitive Return-Type Binding Declaration Boundary
 ```
 
 Latest review verdict:
@@ -2857,20 +2857,22 @@ M168 review verdicts were: architecture `Accept With Follow-Ups`, boundary
 Next expected action:
 
 ```text
-Run the active M169 execution-review-loop prompt. M169 should add the next
-typed lowering boundary for explicit selected specialization bindings, so
-symbols such as `ToBase`, `ToType`, and `ToExtension` can resolve only when
-the selected context supplies concrete typed facts.
+Run the active M168.5 execution-review-loop prompt. M168.5 should add the
+primitive-local declaration boundary for optional `return_type` bindings,
+preserving arbitrary source-defined names such as `ToBase` or `ToExtension`
+without treating those spellings as generator keywords.
 
-M169 should inventory specialization-symbol evidence across all
-`tsldata/**/*.tsl`, then add the smallest selected-context binding model
-needed by type lowering. It must not infer meanings from raw symbol names,
-parse the full nested implementation selector tree, expand wildcards, or use
-primitive attributes as hidden carriers for type/extension facts.
+M168.5 should inventory `return_type` evidence across all `tsldata/**/*.tsl`,
+then store an optional typed declaration on `Primitive` for supported
+`base: Identifier` and `extension: Identifier` forms. It must not bind
+concrete selected values, lower those identifiers, parse the full nested
+implementation selector tree, expand wildcards, or use primitive attributes as
+hidden carriers for type/extension facts.
 
-This is the next useful step because M168 can lower generic vector lengths
-only after aliases such as `OutVec` lower to concrete vector facts; corpus
-aliases often pass through `ToBase` or `ToExtension`.
+This inserted step is useful because M169 needs to resolve selected
+specialization symbols from source-declared primitive context, not from raw
+name guesses. Once M168.5 records the optional declaration and arbitrary
+identifier, M169 can bind concrete selected values to that declaration.
 ```
 
 Previous review verdict:
@@ -6757,13 +6759,13 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M169
+No stop condition is active. The workflow is ready to run the active M168.5
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M169 execution, run the validation command listed in
-`docs/agent/runs/m169-execution-review-loop-prompt.md`.
+For active M168.5 execution, run the validation command listed in
+`docs/agent/runs/m168.5-execution-review-loop-prompt.md`.
 
 For M168 execution and review, validation completed with:
 

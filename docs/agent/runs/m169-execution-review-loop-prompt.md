@@ -1,21 +1,23 @@
 # M169 Execution Review Loop Prompt
 
-This is the active follow-on prompt after M168. Execute it only when
-`docs/agent/current-redesign-state.md` points here and records M168 as
+This is the planned follow-on prompt after M168.5. Execute it only when
+`docs/agent/current-redesign-state.md` points here and records M168.5 as
 accepted.
 
-You are executing and reviewing the accepted next milestone after M168:
+You are executing and reviewing the accepted next milestone after M168.5:
 
 ```text
 Milestone 169: Exact Selected Specialization Binding Boundary
 ```
 
-Milestones 1 through 168 are accepted. M168 added exact
+Milestones 1 through 168.5 are accepted. M168 added exact
 `generic::length(TYPE_EXPR)` and fixed-vector
-`generic::runtime_length(TYPE_EXPR)` generation-expression lowering, but those
-expressions can become concrete only when `TYPE_EXPR` lowers to a concrete
-fixed vector. Current corpus aliases often flow through selected
-specialization symbols such as `ToBase`, `ToType`, and `ToExtension`.
+`generic::runtime_length(TYPE_EXPR)` generation-expression lowering. M168.5
+added primitive-local optional `return_type` binding declarations with
+arbitrary source-defined names. Generic expressions can become concrete only
+when `TYPE_EXPR` lowers to a concrete fixed vector, and current corpus aliases
+often flow through selected specialization symbols declared by the primitive,
+such as `ToBase` or `ToExtension`.
 
 M169 is an implementation milestone. It should add the next lowering boundary
 for resolving specialization symbols from explicit selected-target facts. It
@@ -58,15 +60,16 @@ must not parse or infer the full `.tsl` implementation selector tree.
 ## Goal
 
 Add explicit selected-specialization bindings to the type-lowering context so
-observed specialization symbols can resolve to concrete typed facts when the
-selected target supplies those facts.
+primitive-declared specialization symbols can resolve to concrete typed facts
+when the selected target supplies those facts.
 
-Selected examples:
+Selected examples from current corpus:
 
 ```text
-ToBase       -> scalar/base type tag, such as f64
-ToExtension  -> extension name, such as sse
-ToType       -> concrete vector/type value, if needed by observed type queries
+return_type base identifier       -> scalar/base type tag, such as f64
+return_type extension identifier  -> extension name, such as sse
+ToType-style derived value        -> concrete vector/type value, if needed by
+                                     observed type queries
 ```
 
 This should make type aliases such as these lowerable when explicit bindings
@@ -78,8 +81,9 @@ let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)))
 ```
 
 M169 is not responsible for discovering all specialization manifestations from
-the full source corpus. It creates the typed boundary that future selection
-and catalog work can populate.
+the full source corpus. It creates the typed selected-value boundary that
+future selector/catalog work can populate from M168.5 declarations and selected
+implementation facts.
 
 ## Required Executor Task
 
@@ -88,9 +92,10 @@ Run exactly one write-capable executor for M169. The executor should:
 1. Inspect dirty worktree state before editing and preserve unrelated changes.
 2. Inventory specialization symbol evidence across all `tsldata/**/*.tsl`.
    Classify at least:
-   - scalar/base type symbols such as `ToBase` and `UBase`;
+   - primitive-declared return-type base symbols such as `ToBase`;
+   - local type-alias symbols such as `UBase`;
    - vector/type symbols such as `ToType`;
-   - extension symbols such as `ToExtension`;
+   - primitive-declared return-type extension symbols such as `ToExtension`;
    - whether symbols appear in `return_type`, implementation-selector
      branches, `let<type>(...)`, `type<generation>(...)`,
      `type<backend>(...)`, `call<primitive=...>` selectors, or backend
@@ -99,6 +104,9 @@ Run exactly one write-capable executor for M169. The executor should:
    lowering. Prefer explicit domain/value objects over dictionaries past the
    boundary. Do not overload primitive attributes, stringly alias names, or
    body text.
+   Bindings must be validated against the primitive-local declarations from
+   M168.5 where the binding represents a declared return-type base or
+   extension symbol.
 4. Decide the narrow owner for supplied bindings. A small extension to
    `Target` / `SelectedImplementationLoweringContext` is acceptable if it
    keeps selection facts explicit and deterministic. Do not add a broad
@@ -137,6 +145,8 @@ Run exactly one write-capable executor for M169. The executor should:
 
 - This is selected-context type/generation lowering, not full source selector
   parsing.
+- Return-type binding names come from M168.5 primitive declarations and are
+  arbitrary user-defined identifiers.
 - Specialization resolution must come from explicit typed selected facts, not
   from raw name guesses such as "anything named ToBase is f64".
 - Do not infer specialization values from raw body text, test names,
