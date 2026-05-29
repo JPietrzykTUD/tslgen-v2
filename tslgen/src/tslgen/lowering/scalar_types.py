@@ -23,6 +23,34 @@ class ScalarTypeDescriptor:
 
 SUPPORTED_SCALAR_TYPE_DESCRIPTORS: tuple[ScalarTypeDescriptor, ...] = (
     ScalarTypeDescriptor(
+        tag="si8",
+        kind="scalar",
+        family="integer",
+        bit_width=8,
+        signedness="signed",
+    ),
+    ScalarTypeDescriptor(
+        tag="ui8",
+        kind="scalar",
+        family="integer",
+        bit_width=8,
+        signedness="unsigned",
+    ),
+    ScalarTypeDescriptor(
+        tag="si16",
+        kind="scalar",
+        family="integer",
+        bit_width=16,
+        signedness="signed",
+    ),
+    ScalarTypeDescriptor(
+        tag="ui16",
+        kind="scalar",
+        family="integer",
+        bit_width=16,
+        signedness="unsigned",
+    ),
+    ScalarTypeDescriptor(
         tag="si32",
         kind="scalar",
         family="integer",
@@ -34,6 +62,20 @@ SUPPORTED_SCALAR_TYPE_DESCRIPTORS: tuple[ScalarTypeDescriptor, ...] = (
         kind="scalar",
         family="integer",
         bit_width=32,
+        signedness="unsigned",
+    ),
+    ScalarTypeDescriptor(
+        tag="si64",
+        kind="scalar",
+        family="integer",
+        bit_width=64,
+        signedness="signed",
+    ),
+    ScalarTypeDescriptor(
+        tag="ui64",
+        kind="scalar",
+        family="integer",
+        bit_width=64,
         signedness="unsigned",
     ),
     ScalarTypeDescriptor(

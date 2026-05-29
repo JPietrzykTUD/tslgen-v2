@@ -39,13 +39,13 @@ EXTENSIONS_TSL = ROOT / "tsldata" / "extensions" / "extension.tsl"
 
 
 def test_m173_resolves_lane_bitmask_members_to_exact_unsigned_scalar() -> None:
-    catalog = _catalog_with_wide_lane_bitmask_extension()
+    catalog = _catalog_from_documents()
     source = _location(4, 7)
 
     mask = resolve_vector_member_scalar_type(
         LoweredVectorMemberType(
             member="mask",
-            extension="wide_bitmask",
+            extension="avx2",
             type_tag=TypeTag("si32"),
         ),
         catalog=catalog,
@@ -54,7 +54,7 @@ def test_m173_resolves_lane_bitmask_members_to_exact_unsigned_scalar() -> None:
     underlying = resolve_vector_member_scalar_type(
         LoweredVectorMemberType(
             member="mask_underlying",
-            extension="wide_bitmask",
+            extension="avx2",
             type_tag=TypeTag("si32"),
         ),
         catalog=catalog,
@@ -63,16 +63,16 @@ def test_m173_resolves_lane_bitmask_members_to_exact_unsigned_scalar() -> None:
     imask = resolve_vector_member_scalar_type(
         LoweredVectorMemberType(
             member="imask",
-            extension="wide_bitmask",
+            extension="avx2",
             type_tag=TypeTag("si32"),
         ),
         catalog=catalog,
         source=source,
     )
 
-    assert mask == LoweredScalarTypeIdentity(type_tag=TypeTag("ui32"))
-    assert underlying == LoweredScalarTypeIdentity(type_tag=TypeTag("ui32"))
-    assert imask == LoweredScalarTypeIdentity(type_tag=TypeTag("ui32"))
+    assert mask == LoweredScalarTypeIdentity(type_tag=TypeTag("ui8"))
+    assert underlying == LoweredScalarTypeIdentity(type_tag=TypeTag("ui8"))
+    assert imask == LoweredScalarTypeIdentity(type_tag=TypeTag("ui8"))
 
 
 def test_m173_matches_maskvec_style_alias_through_resolved_member_type(
@@ -80,15 +80,14 @@ def test_m173_matches_maskvec_style_alias_through_resolved_member_type(
 ) -> None:
     catalog, selected, payload = _selected_payload(
         tmp_path,
-        base_catalog=_catalog_with_wide_lane_bitmask_extension(),
-        current_extension="wide_bitmask",
+        current_extension="avx2",
         current_type_tag="si32",
         alias_name="LocalAlias",
         alias_expression=(
             "type<generation>(vector::transform("
             "type<generation>(vector::mask_underlying_t)))"
         ),
-        extra_primitives=(_primitive_source("convert", "wide_bitmask", "ui32"),),
+        extra_primitives=(_primitive_source("convert", "avx2", "ui8"),),
     )
 
     result = _match_target(catalog, selected, payload)
@@ -96,8 +95,8 @@ def test_m173_matches_maskvec_style_alias_through_resolved_member_type(
     assert result.diagnostics == ()
     assert result.match is not None
     assert result.match.selected.primitive.name == "convert"
-    assert result.match.selected.target.extension == "wide_bitmask"
-    assert result.match.selected.target.type_tag == "ui32"
+    assert result.match.selected.target.extension == "avx2"
+    assert result.match.selected.target.type_tag == "ui8"
 
 
 def test_m173_native_predicate_member_policy_is_not_scalar_selector(
@@ -233,14 +232,14 @@ def test_m173_reports_unsupported_policy_and_non_mask_member() -> None:
     assert "not a scalar mask member" in register.message
 
 
-def test_m173_requires_accepted_descriptor_for_exact_unsigned_result() -> None:
-    catalog = _catalog_from_documents()
+def test_m173_reports_unsupported_unmapped_lane_bitmask_width() -> None:
+    catalog = _catalog_with_large_lane_bitmask_extension()
     source = _location(4, 7)
 
     result = resolve_vector_member_scalar_type(
         LoweredVectorMemberType(
             member="imask",
-            extension="avx2",
+            extension="large_bitmask",
             type_tag=TypeTag("si32"),
         ),
         catalog=catalog,
@@ -250,10 +249,10 @@ def test_m173_requires_accepted_descriptor_for_exact_unsigned_result() -> None:
     assert isinstance(result, Diagnostic)
     _assert_direct_diagnostic(
         result,
-        "TSL-LOWER-MISSING-VECTOR-MEMBER-TYPE-METADATA",
+        "TSL-LOWER-UNSUPPORTED-VECTOR-MEMBER-TYPE",
         source,
     )
-    assert "exact unsigned TypeTag 'ui8'" in result.message
+    assert "exactly 128 bits" in result.message
 
 
 def test_m173_requires_explicit_non_runtime_lane_metadata() -> None:
@@ -545,7 +544,7 @@ def _catalog_from_documents() -> Catalog:
     return catalog_result.catalog
 
 
-def _catalog_with_wide_lane_bitmask_extension() -> Catalog:
+def _catalog_with_large_lane_bitmask_extension() -> Catalog:
     catalog = _catalog_from_documents()
     avx2 = catalog.extensions.get("avx2")
     assert avx2 is not None
@@ -553,9 +552,9 @@ def _catalog_with_wide_lane_bitmask_extension() -> Catalog:
         catalog,
         replace(
             avx2,
-            name="wide_bitmask",
-            extension_name="wide_bitmask",
-            vector_bits=1024,
+            name="large_bitmask",
+            extension_name="large_bitmask",
+            vector_bits=4096,
             runtime_lanes=False,
             size_parameter=None,
         ),

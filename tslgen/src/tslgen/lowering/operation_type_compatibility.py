@@ -7,6 +7,7 @@ from tslgen.lowering.scalar_types import (
     SUPPORTED_SCALAR_TYPE_DESCRIPTORS,
     ScalarTypeDescriptor,
     ScalarTypeFamily,
+    ScalarSignedness,
 )
 from tslgen.lowering.semantic_origin import (
     BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
@@ -27,7 +28,8 @@ class BinaryOperationScalarTypeCompatibilityRule:
 @dataclass(frozen=True, slots=True)
 class UnaryOperationScalarTypeCompatibilityRule:
     operation_id: str
-    accepted_scalar_type_tags: tuple[str, ...]
+    accepted_scalar_families: tuple[ScalarTypeFamily, ...] = ()
+    accepted_scalar_signedness: tuple[ScalarSignedness, ...] = ()
     semantic_origin: LoweringSemanticOrigin = (
         BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN
     )
@@ -73,12 +75,13 @@ _UNARY_OPERATION_SCALAR_TYPE_RULES: tuple[
 ] = (
     UnaryOperationScalarTypeCompatibilityRule(
         operation_id="bit_not",
-        accepted_scalar_type_tags=("si32", "ui32"),
+        accepted_scalar_families=("integer",),
         semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
     UnaryOperationScalarTypeCompatibilityRule(
         operation_id="neg",
-        accepted_scalar_type_tags=("si32", "f32", "f64"),
+        accepted_scalar_families=("integer", "floating"),
+        accepted_scalar_signedness=("signed", "not_applicable"),
         semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
     ),
 )
@@ -126,7 +129,7 @@ def unary_operation_supports_scalar_type(
     rule = _rule_for_unary_operation(operation)
     if rule is None:
         return True
-    return scalar_type.tag in rule.accepted_scalar_type_tags
+    return _unary_rule_accepts_scalar_type(rule, scalar_type)
 
 
 def supported_scalar_type_tags_for_unary_operation(
@@ -138,7 +141,7 @@ def supported_scalar_type_tags_for_unary_operation(
     return tuple(
         descriptor.tag
         for descriptor in SUPPORTED_SCALAR_TYPE_DESCRIPTORS
-        if descriptor.tag in rule.accepted_scalar_type_tags
+        if _unary_rule_accepts_scalar_type(rule, descriptor)
     )
 
 
@@ -158,3 +161,16 @@ def _rule_for_unary_operation(
         if rule.operation_id == operation.operation_id:
             return rule
     return None
+
+
+def _unary_rule_accepts_scalar_type(
+    rule: UnaryOperationScalarTypeCompatibilityRule,
+    scalar_type: ScalarTypeDescriptor,
+) -> bool:
+    return (
+        scalar_type.family in rule.accepted_scalar_families
+        and (
+            not rule.accepted_scalar_signedness
+            or scalar_type.signedness in rule.accepted_scalar_signedness
+        )
+    )

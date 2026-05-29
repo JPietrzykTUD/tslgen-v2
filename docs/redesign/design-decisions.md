@@ -2306,10 +2306,41 @@ Consequences:
 - Native predicate, lane-keyed native predicate, generic size-parameter,
   runtime/scalable lane, missing metadata, `unsigned_scalar` spelling-only,
   and register/member cases remain unsupported or backend-owned.
-- Current real extension metadata may produce exact unsigned tags such as
-  `ui8`, `ui16`, or `ui64`; those are diagnostics until the scalar descriptor
-  catalog explicitly accepts them.
+- M174 completes scalar descriptor coverage for current concrete scalar tags,
+  so real fixed lane-bitmask member outputs such as `ui8`, `ui16`, and `ui64`
+  can resolve through descriptor facts.
 - Alias spellings such as `MaskVec`, `MaskWord`, and `MaskT` remain
   source-local and are not semantic.
 - This is not backend type rendering, register spelling resolution, a
   selector engine, source parser, source repair pass, or runtime corpus lookup.
+
+## ADR-048: Current Scalar Tags Are Explicit Descriptor Facts
+
+Status: Accepted
+
+Context:
+
+M173 requires accepted scalar descriptors before vector member type queries
+can produce concrete scalar facts. Current TSL type data includes concrete
+integer and floating tags beyond the original clean-restart representative set:
+`si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`, `f32`, and
+`f64`.
+
+Decision:
+
+M174 accepts those current arithmetic scalar tags as explicit lowering-owned
+`ScalarTypeDescriptor` facts. Each descriptor records scalar kind, integer or
+floating family, bit width, and signedness. Descriptor consumers use these
+facts directly; they do not infer semantic properties from `TypeTag` spelling.
+
+Consequences:
+
+- Type-size, type-signedness, signed/unsigned transforms, generic length, and
+  M173 fixed lane-bitmask member resolution can use the full current scalar
+  descriptor set.
+- Integer operation compatibility broadens to all accepted integer
+  descriptors. `neg` broadens to accepted signed integer and floating
+  descriptors while unsigned descriptors remain unsupported for `neg`.
+- Pointer-like tags such as `ptr` remain outside scalar descriptor coverage.
+- Backend C++ and Rust scalar type spellings are still backend-owned and are
+  not broadened merely because lowering accepts a scalar descriptor.

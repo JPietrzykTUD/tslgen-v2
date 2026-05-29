@@ -108,7 +108,10 @@ UTF-8 byte count, and `written` status.
 
 Milestone 110 broadens only the tiny clean scalar type path. The same exact
 three-line `scalar` / `add(left, right)` source form may now declare the
-supported clean restart scalar tags `si32`, `ui32`, `f32`, and `f64`.
+supported clean restart scalar tags. M174 completes the descriptor table for
+the current concrete arithmetic scalar tags from `tsldata/detail/types.tsl`:
+`si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`, `f32`, and
+`f64`.
 
 Catalog construction preserves the parsed scalar type tag without deciding
 backend spellings. The lowerer owns the typed scalar descriptor table. A
@@ -117,9 +120,11 @@ lowered function carries a backend-neutral descriptor containing tag,
 Rust emitters consume that descriptor through backend-owned spelling tables.
 
 The existing `si32` C++ and Rust artifact bytes, logical paths, and digests
-remain stable. Syntactically malformed type tags are parser diagnostics.
-Syntactically valid but unsupported selected scalar tags are lowering
-diagnostics with code `TSL-LOWER-UNSUPPORTED-TYPE`.
+remain stable. Backend scalar spellings are not implied by descriptor
+acceptance; emitters still own their supported type-spelling tables and may
+diagnose unsupported backend spellings. Syntactically malformed type tags are
+parser diagnostics. Syntactically valid but unsupported selected scalar tags
+are lowering diagnostics with code `TSL-LOWER-UNSUPPORTED-TYPE`.
 
 ### M111 Tiny Binary Operation Lowering Table
 
@@ -227,8 +232,9 @@ Catalog construction still only preserves the parsed operation name, scalar
 type tag, and exact `left, right` body arguments. The lowerer owns a small
 operation/type compatibility boundary over the existing scalar and binary
 operation descriptors: `mod` lowers only for the currently supported integer
-scalar descriptors `si32` and `ui32`. Floating scalar descriptors such as
-`f32` and `f64` reach lowering and fail with
+scalar descriptors. After M174 this means `si8`, `ui8`, `si16`, `ui16`,
+`si32`, `ui32`, `si64`, and `ui64`. Floating scalar descriptors such as `f32`
+and `f64` reach lowering and fail with
 `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` at the implementation source location.
 
 The `mod` descriptor remains backend-neutral and does not define C++ or Rust
@@ -253,9 +259,10 @@ prim<v:=(v,v)> bit_and(left, right):
 Catalog construction still only preserves the parsed operation name, scalar
 type tag, and exact `left, right` body arguments. The lowerer reuses the
 operation/type compatibility boundary: `bit_and`, `bit_or`, and `bit_xor`
-lower only for the currently supported integer scalar descriptors `si32` and
-`ui32`. Floating scalar descriptors such as `f32` and `f64` reach lowering and
-fail with `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` at the implementation source
+lower only for the currently supported integer scalar descriptors. After M174
+this means `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, and `ui64`.
+Floating scalar descriptors such as `f32` and `f64` reach lowering and fail
+with `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` at the implementation source
 location.
 
 The bitwise descriptors remain backend-neutral and do not define C++ or Rust
@@ -281,9 +288,10 @@ Nearby unary body forms such as missing, renamed, or extra body arguments are
 diagnostic boundaries and are not repaired.
 
 The lowerer owns the backend-neutral `bit_not` unary descriptor and lowers it
-only for the currently supported integer scalar descriptors `si32` and
-`ui32`. Floating scalar descriptors such as `f32` and `f64` reach lowering and
-fail with `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` at the implementation source
+only for the currently supported integer scalar descriptors. After M174 this
+means `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, and `ui64`.
+Floating scalar descriptors such as `f32` and `f64` reach lowering and fail
+with `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` at the implementation source
 location. The descriptor does not define C++ or Rust spelling,
 logical-boolean behavior, mask behavior, signedness runtime behavior, overflow
 policy, constant folding, or source repair. C++ and Rust emitters own their
@@ -305,8 +313,9 @@ Catalog construction continues to preserve the unary body as an exact
 one-line implementation body whose single lowerable operation fragment carries
 the `value` argument. The lowerer owns the backend-neutral `neg` unary
 descriptor and lowers it only for the currently supported signed integer and
-floating scalar descriptors `si32`, `f32`, and `f64`. Unsigned scalar
-descriptors such as `ui32` reach lowering and fail with
+floating scalar descriptors. After M174 this means `si8`, `si16`, `si32`,
+`si64`, `f32`, and `f64`. Unsigned scalar descriptors such as `ui32` reach
+lowering and fail with
 `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` at the implementation source location.
 
 The `neg` descriptor does not define C++ or Rust spelling, unsigned-negation
@@ -330,9 +339,10 @@ prim<v:=(v,v)> shift_left(left, right):
 Catalog construction still only preserves the parsed operation name, scalar
 type tag, and exact `left, right` body arguments. The lowerer reuses the
 operation/type compatibility boundary: `shift_left` and `shift_right` lower
-only for the currently supported integer scalar descriptors `si32` and
-`ui32`. Floating scalar descriptors such as `f32` and `f64` reach lowering and
-fail with `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` at the implementation source
+only for the currently supported integer scalar descriptors. After M174 this
+means `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, and `ui64`.
+Floating scalar descriptors such as `f32` and `f64` reach lowering and fail
+with `TSL-LOWER-UNSUPPORTED-OPERATION-TYPE` at the implementation source
 location.
 
 The shift descriptors remain backend-neutral and do not define C++ or Rust
@@ -361,10 +371,12 @@ are diagnostic boundaries and are not repaired.
 
 The lowerer owns the backend-neutral comparison descriptor table and accepts
 only `equal`. It lowers accepted `equal(left, right)` bodies for the currently
-supported scalar input descriptors `si32`, `ui32`, `f32`, and `f64` into a
-lowered comparison expression paired with the existing single return-statement
-function body. The lowered signature records an explicit scalar-comparison
-result boundary; it does not contain C++ or Rust result spelling.
+supported scalar input descriptors. After M174 this means `si8`, `ui8`,
+`si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`, `f32`, and `f64`. Accepted
+bodies lower into a lowered comparison expression paired with the existing
+single return-statement function body. The lowered signature records an
+explicit scalar-comparison result boundary; it does not contain C++ or Rust
+result spelling.
 
 C++ and Rust emitters own both the comparison operator spelling and result
 type spelling for accepted lowered comparison functions. For M121, both
@@ -395,8 +407,9 @@ arguments remain diagnostic boundaries and are not repaired.
 
 The lowerer owns the backend-neutral comparison descriptor table and lowers the
 accepted comparison family for the currently supported scalar input
-descriptors `si32`, `ui32`, `f32`, and `f64`. Each accepted function retains
-the explicit scalar-comparison result boundary introduced in M121.
+descriptors. After M174 this means `si8`, `ui8`, `si16`, `ui16`, `si32`,
+`ui32`, `si64`, `ui64`, `f32`, and `f64`. Each accepted function retains the
+explicit scalar-comparison result boundary introduced in M121.
 
 C++ and Rust emitters own result-type spelling and comparison operator
 spelling. Both backends render scalar-comparison results as `bool` and render
@@ -1998,9 +2011,7 @@ The accepted concrete case is fixed `lane_bitmask` metadata: the selected
 extension must have fixed integer `vector_bits`, explicitly non-runtime lanes,
 no generic size parameter, and a selected scalar tag with an accepted scalar
 descriptor. The lane count must map exactly to an unsigned scalar tag that also
-has an accepted scalar descriptor. Exact unsigned tags that are named by the
-policy but not yet represented as scalar descriptors remain missing-metadata
-diagnostics until the scalar descriptor catalog is broadened.
+has an accepted scalar descriptor.
 
 Native predicate policies, lane-keyed native predicate policies,
 `unsigned_scalar` policies without a backend-neutral type tag, generic
@@ -2010,6 +2021,21 @@ remain diagnostics or unresolved backend-owned facts. M173 does not render
 backend type spelling, infer from alias names, parse body surroundings, solve
 register/native-predicate types, or introduce runtime `tsldata`, `frozen`, or
 `tslgenold` dependencies.
+
+### M174 Scalar Descriptor Catalog Completion
+
+Milestone 174 completes the lowering-owned scalar descriptor table for the
+current concrete arithmetic scalar tags in `tsldata/detail/types.tsl`:
+`si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`, `f32`, and
+`f64`. Each descriptor is an explicit typed fact with scalar kind, integer or
+floating family, bit width, and signedness. Lowering code consumes these facts
+instead of deriving semantics from `TypeTag` spelling.
+
+This broadening makes M173 real fixed `lane_bitmask` member results such as
+AVX2 `si32 -> ui8` resolvable through accepted descriptors. Pointer-like tags
+such as `ptr` remain outside scalar descriptor coverage. Backend C++ and Rust
+type spellings remain backend-owned and are not implied by descriptor
+acceptance.
 
 ## Catalog Behavior
 

@@ -520,6 +520,11 @@ Invariants:
   descriptors; native predicate, generic, runtime-lane, missing metadata, and
   unsupported member cases remain diagnostics or unresolved backend-owned
   facts.
+- M174 completes accepted `ScalarTypeDescriptor` coverage for current concrete
+  arithmetic tags `si8`, `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`,
+  `ui64`, `f32`, and `f64`. These descriptors are explicit typed facts;
+  pointer-like tags such as `ptr` and backend spellings remain outside this
+  lowering descriptor boundary.
 - M153 confirms that `details::arith_add`, `details::arith_mul`,
   `details::arith_rem`, `details::popcount`, `details::clz`,
   `details::clz_recursive`, `details::ctz`, and `details::mask_test` are

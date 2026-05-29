@@ -21935,8 +21935,9 @@ Follow-ups:
 
 Status:
 
-Selected after M173 acceptance. Active next prompt:
-`docs/agent/runs/m174-execution-review-loop-prompt.md`.
+Accepted after execution-review with follow-ups. Active next prompt after
+M174:
+`docs/agent/runs/m175-execution-review-loop-prompt.md`.
 
 Goal:
 
@@ -21974,5 +21975,93 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted behavior:
+
+- Completed the lowering-owned scalar descriptor table for the current
+  concrete arithmetic scalar tags in `tsldata/detail/types.tsl`: `si8`,
+  `ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`, `f32`, and `f64`.
+- Kept bit width, signedness, family, and scalar kind as explicit descriptor
+  facts rather than properties inferred from tag spelling.
+- Broadened operation compatibility through descriptor family/signedness
+  facts: integer-only operations now accept the current integer descriptors,
+  and `neg` accepts signed integers plus floating descriptors.
+- Covered generation value consumers for size bytes and integer signedness,
+  generation type transforms for signed/unsigned counterparts, type equality,
+  and fixed-vector `generic::length(Vec)` / `generic::runtime_length(Vec)`
+  for representative widened widths.
+- Made a real fixed lane-bitmask member result such as AVX2 `si32 -> ui8`
+  resolve through accepted scalar descriptors.
+- Preserved parser, renderer, backend spelling, primitive-call selector,
+  dependency closure, and output-writing boundaries.
+
+Validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M174 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`288 passed in 28.02s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed.
+
+Follow-ups:
+
+- Tag existence is grounded in `tsldata/detail/types.tsl`; bit width,
+  signedness, and family are explicit lowering-owned facts and should not be
+  described as parsed from the TSL type-group file itself.
+
+### Milestone 175: Vector Member Generation Value Type Arguments
+
+Status:
+
+Selected after M174 acceptance. Active next prompt:
+`docs/agent/runs/m175-execution-review-loop-prompt.md`.
+
+Goal:
+
+Let generation value queries that already accept scalar type arguments consume
+the accepted M173 vector-member resolver when a catalog is supplied. This
+bridges `type<generation>(vector::imask)` /
+`type<generation>(vector::mask_underlying_t)` into existing
+`type::size_bytes(...)`, `type::is_signed(...)`, and `type::is_same(...)`
+evaluation for fixed descriptor-backed cases.
+
+Scope:
+
+- Resolve `LoweredVectorMemberType` values inside generation value scalar type
+  argument handling through `resolve_vector_member_scalar_type(...)` and an
+  explicit catalog.
+- Preserve the existing unsupported behavior when no catalog is supplied or
+  when the member resolver returns diagnostics.
+- Add tests for real fixed `avx2` member cases that produce an accepted scalar
+  descriptor, especially `vector::imask` or `vector::mask_underlying_t`.
+- Add negative tests for catalog-missing and unsupported/native-predicate or
+  runtime/scalable metadata boundaries.
+- Update docs describing that generation value type queries can consume
+  descriptor-backed vector member type facts.
+
+Out of scope:
+
+Backend type spelling; register/native-predicate spelling; support-helper
+substitution; new vector member policies; new scalar descriptors; new
+generation value families; primitive-call matching changes; recursive source
+token rendering; branch, loop, declaration, backend query, intrinsic, cast,
+memory, or I/O rendering; source repair; output writing; runtime `tsldata`,
+`frozen`, or `tslgenold` dependencies; broad expression parsing; registries,
+dispatchers, worklists, callbacks, hidden backfeeds, or fixpoint machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py tslgen/tests/test_m175_vector_member_generation_values.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py tslgen/tests/test_m175_vector_member_generation_values.py
 find tslgen -type d -name __pycache__ -print
 ```

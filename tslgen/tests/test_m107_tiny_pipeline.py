@@ -346,10 +346,73 @@ NEQUAL_RUST_CONTENT = """pub fn nequal_scalar_si32(left: i32, right: i32) -> boo
 }
 """
 
+_ALL_SCALAR_TYPE_TAGS = (
+    "si8",
+    "ui8",
+    "si16",
+    "ui16",
+    "si32",
+    "ui32",
+    "si64",
+    "ui64",
+    "f32",
+    "f64",
+)
+_INTEGER_SCALAR_TYPE_TAGS = (
+    "si8",
+    "ui8",
+    "si16",
+    "ui16",
+    "si32",
+    "ui32",
+    "si64",
+    "ui64",
+)
+_SIGNED_OR_FLOATING_SCALAR_TYPE_TAGS = (
+    "si8",
+    "si16",
+    "si32",
+    "si64",
+    "f32",
+    "f64",
+)
+_INTEGER_SCALAR_TYPE_MESSAGE = ", ".join(_INTEGER_SCALAR_TYPE_TAGS)
+_SIGNED_OR_FLOATING_SCALAR_TYPE_MESSAGE = ", ".join(
+    _SIGNED_OR_FLOATING_SCALAR_TYPE_TAGS
+)
+
 
 def test_m110_scalar_descriptor_lookup_table() -> None:
-    assert supported_scalar_type_tags() == ("si32", "ui32", "f32", "f64")
+    assert supported_scalar_type_tags() == _ALL_SCALAR_TYPE_TAGS
     assert SUPPORTED_SCALAR_TYPE_DESCRIPTORS == (
+        ScalarTypeDescriptor(
+            tag="si8",
+            kind="scalar",
+            family="integer",
+            bit_width=8,
+            signedness="signed",
+        ),
+        ScalarTypeDescriptor(
+            tag="ui8",
+            kind="scalar",
+            family="integer",
+            bit_width=8,
+            signedness="unsigned",
+        ),
+        ScalarTypeDescriptor(
+            tag="si16",
+            kind="scalar",
+            family="integer",
+            bit_width=16,
+            signedness="signed",
+        ),
+        ScalarTypeDescriptor(
+            tag="ui16",
+            kind="scalar",
+            family="integer",
+            bit_width=16,
+            signedness="unsigned",
+        ),
         ScalarTypeDescriptor(
             tag="si32",
             kind="scalar",
@@ -362,6 +425,20 @@ def test_m110_scalar_descriptor_lookup_table() -> None:
             kind="scalar",
             family="integer",
             bit_width=32,
+            signedness="unsigned",
+        ),
+        ScalarTypeDescriptor(
+            tag="si64",
+            kind="scalar",
+            family="integer",
+            bit_width=64,
+            signedness="signed",
+        ),
+        ScalarTypeDescriptor(
+            tag="ui64",
+            kind="scalar",
+            family="integer",
+            bit_width=64,
             signedness="unsigned",
         ),
         ScalarTypeDescriptor(
@@ -380,7 +457,7 @@ def test_m110_scalar_descriptor_lookup_table() -> None:
         ),
     )
     assert _descriptor("f32").is_floating
-    assert lookup_scalar_type_descriptor("si64") is None
+    assert lookup_scalar_type_descriptor("ptr") is None
 
 
 def test_m120_binary_operation_descriptor_lookup_table_includes_shifts() -> None:
@@ -621,12 +698,13 @@ def test_m123_compatibility_rules_declare_bootstrap_core_origin() -> None:
     assert unary_rules == (
         UnaryOperationScalarTypeCompatibilityRule(
             operation_id="bit_not",
-            accepted_scalar_type_tags=("si32", "ui32"),
+            accepted_scalar_families=("integer",),
             semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
         ),
         UnaryOperationScalarTypeCompatibilityRule(
             operation_id="neg",
-            accepted_scalar_type_tags=("si32", "f32", "f64"),
+            accepted_scalar_families=("integer", "floating"),
+            accepted_scalar_signedness=("signed", "not_applicable"),
             semantic_origin=BOOTSTRAP_CORE_OPERATION_SEMANTIC_ORIGIN,
         ),
     )
@@ -733,11 +811,11 @@ def test_m121_lowered_result_type_boundary_is_backend_neutral() -> None:
 def test_m116_operation_type_compatibility_accepts_integer_mod_only() -> None:
     mod_operation = _operation("mod")
 
-    assert supported_scalar_type_tags_for_binary_operation(mod_operation) == (
-        "si32",
-        "ui32",
+    assert (
+        supported_scalar_type_tags_for_binary_operation(mod_operation)
+        == _INTEGER_SCALAR_TYPE_TAGS
     )
-    for type_tag in ("si32", "ui32"):
+    for type_tag in _INTEGER_SCALAR_TYPE_TAGS:
         assert binary_operation_supports_scalar_type(
             mod_operation,
             _descriptor(type_tag),
@@ -764,11 +842,11 @@ def test_m116_operation_type_compatibility_accepts_integer_mod_only() -> None:
 def test_m117_operation_type_compatibility_accepts_integer_bitwise_only() -> None:
     for operation_id in ("bit_and", "bit_or", "bit_xor"):
         operation = _operation(operation_id)
-        assert supported_scalar_type_tags_for_binary_operation(operation) == (
-            "si32",
-            "ui32",
+        assert (
+            supported_scalar_type_tags_for_binary_operation(operation)
+            == _INTEGER_SCALAR_TYPE_TAGS
         )
-        for type_tag in ("si32", "ui32"):
+        for type_tag in _INTEGER_SCALAR_TYPE_TAGS:
             assert binary_operation_supports_scalar_type(
                 operation,
                 _descriptor(type_tag),
@@ -783,11 +861,11 @@ def test_m117_operation_type_compatibility_accepts_integer_bitwise_only() -> Non
 def test_m120_operation_type_compatibility_accepts_integer_shifts_only() -> None:
     for operation_id in ("shift_left", "shift_right"):
         operation = _operation(operation_id)
-        assert supported_scalar_type_tags_for_binary_operation(operation) == (
-            "si32",
-            "ui32",
+        assert (
+            supported_scalar_type_tags_for_binary_operation(operation)
+            == _INTEGER_SCALAR_TYPE_TAGS
         )
-        for type_tag in ("si32", "ui32"):
+        for type_tag in _INTEGER_SCALAR_TYPE_TAGS:
             assert binary_operation_supports_scalar_type(
                 operation,
                 _descriptor(type_tag),
@@ -802,11 +880,11 @@ def test_m120_operation_type_compatibility_accepts_integer_shifts_only() -> None
 def test_m118_operation_type_compatibility_accepts_integer_bit_not_only() -> None:
     operation = _unary_operation("bit_not")
 
-    assert supported_scalar_type_tags_for_unary_operation(operation) == (
-        "si32",
-        "ui32",
+    assert (
+        supported_scalar_type_tags_for_unary_operation(operation)
+        == _INTEGER_SCALAR_TYPE_TAGS
     )
-    for type_tag in ("si32", "ui32"):
+    for type_tag in _INTEGER_SCALAR_TYPE_TAGS:
         assert unary_operation_supports_scalar_type(operation, _descriptor(type_tag))
     for type_tag in ("f32", "f64"):
         assert not unary_operation_supports_scalar_type(
@@ -818,12 +896,11 @@ def test_m118_operation_type_compatibility_accepts_integer_bit_not_only() -> Non
 def test_m119_operation_type_compatibility_accepts_signed_and_floating_neg_only() -> None:
     operation = _unary_operation("neg")
 
-    assert supported_scalar_type_tags_for_unary_operation(operation) == (
-        "si32",
-        "f32",
-        "f64",
+    assert (
+        supported_scalar_type_tags_for_unary_operation(operation)
+        == _SIGNED_OR_FLOATING_SCALAR_TYPE_TAGS
     )
-    for type_tag in ("si32", "f32", "f64"):
+    for type_tag in _SIGNED_OR_FLOATING_SCALAR_TYPE_TAGS:
         assert unary_operation_supports_scalar_type(operation, _descriptor(type_tag))
     assert not unary_operation_supports_scalar_type(operation, _descriptor("ui32"))
 
@@ -1071,7 +1148,7 @@ def test_m114_lowerer_stage_output_preserves_selected_order() -> None:
 def test_m114_lowerer_stage_output_accumulates_diagnostics() -> None:
     result = Lowerer().lower_all(
         (
-            _selected_implementation(type_tag="si64"),
+            _selected_implementation(type_tag="sx128"),
             _selected_implementation(operation_id="pow"),
         )
     )
@@ -1153,7 +1230,7 @@ def test_m115_lowerer_accepts_div_binary_operation() -> None:
 
 
 def test_m116_lowerer_accepts_mod_integer_scalar_descriptors() -> None:
-    for type_tag in ("si32", "ui32"):
+    for type_tag in _INTEGER_SCALAR_TYPE_TAGS:
         result = Lowerer().lower(
             _selected_implementation(operation_id="mod", type_tag=type_tag)
         )
@@ -1167,7 +1244,7 @@ def test_m116_lowerer_accepts_mod_integer_scalar_descriptors() -> None:
 
 def test_m117_lowerer_accepts_bitwise_integer_scalar_descriptors() -> None:
     for operation_id in ("bit_and", "bit_or", "bit_xor"):
-        for type_tag in ("si32", "ui32"):
+        for type_tag in _INTEGER_SCALAR_TYPE_TAGS:
             result = Lowerer().lower(
                 _selected_implementation(operation_id=operation_id, type_tag=type_tag)
             )
@@ -1181,7 +1258,7 @@ def test_m117_lowerer_accepts_bitwise_integer_scalar_descriptors() -> None:
 
 def test_m120_lowerer_accepts_shift_integer_scalar_descriptors() -> None:
     for operation_id in ("shift_left", "shift_right"):
-        for type_tag in ("si32", "ui32"):
+        for type_tag in _INTEGER_SCALAR_TYPE_TAGS:
             result = Lowerer().lower(
                 _selected_implementation(operation_id=operation_id, type_tag=type_tag)
             )
@@ -1194,7 +1271,7 @@ def test_m120_lowerer_accepts_shift_integer_scalar_descriptors() -> None:
 
 
 def test_m118_lowerer_accepts_bit_not_integer_scalar_descriptors() -> None:
-    for type_tag in ("si32", "ui32"):
+    for type_tag in _INTEGER_SCALAR_TYPE_TAGS:
         result = Lowerer().lower(_selected_unary_implementation(type_tag=type_tag))
 
         assert result.diagnostics == ()
@@ -1202,7 +1279,7 @@ def test_m118_lowerer_accepts_bit_not_integer_scalar_descriptors() -> None:
 
 
 def test_m119_lowerer_accepts_neg_signed_and_floating_scalar_descriptors() -> None:
-    for type_tag in ("si32", "f32", "f64"):
+    for type_tag in _SIGNED_OR_FLOATING_SCALAR_TYPE_TAGS:
         result = Lowerer().lower(
             _selected_unary_implementation(operation_id="neg", type_tag=type_tag)
         )
@@ -1228,7 +1305,7 @@ def test_m116_lowerer_rejects_mod_floating_scalar_descriptors() -> None:
         assert diagnostic.location == _location(2, 3)
         assert "mod" in diagnostic.message
         assert type_tag in diagnostic.message
-        assert "si32, ui32" in diagnostic.message
+        assert _INTEGER_SCALAR_TYPE_MESSAGE in diagnostic.message
 
 
 def test_m117_lowerer_rejects_bitwise_floating_scalar_descriptors() -> None:
@@ -1249,7 +1326,7 @@ def test_m117_lowerer_rejects_bitwise_floating_scalar_descriptors() -> None:
             assert diagnostic.location == _location(2, 3)
             assert operation_id in diagnostic.message
             assert type_tag in diagnostic.message
-            assert "si32, ui32" in diagnostic.message
+            assert _INTEGER_SCALAR_TYPE_MESSAGE in diagnostic.message
 
 
 def test_m120_lowerer_rejects_shift_floating_scalar_descriptors() -> None:
@@ -1270,7 +1347,7 @@ def test_m120_lowerer_rejects_shift_floating_scalar_descriptors() -> None:
             assert diagnostic.location == _location(2, 3)
             assert operation_id in diagnostic.message
             assert type_tag in diagnostic.message
-            assert "si32, ui32" in diagnostic.message
+            assert _INTEGER_SCALAR_TYPE_MESSAGE in diagnostic.message
 
 
 def test_m118_lowerer_rejects_bit_not_floating_scalar_descriptors() -> None:
@@ -1285,7 +1362,7 @@ def test_m118_lowerer_rejects_bit_not_floating_scalar_descriptors() -> None:
         assert diagnostic.location == _location(2, 3)
         assert "bit_not" in diagnostic.message
         assert type_tag in diagnostic.message
-        assert "si32, ui32" in diagnostic.message
+        assert _INTEGER_SCALAR_TYPE_MESSAGE in diagnostic.message
 
 
 def test_m119_lowerer_rejects_neg_unsigned_scalar_descriptor() -> None:
@@ -1301,7 +1378,7 @@ def test_m119_lowerer_rejects_neg_unsigned_scalar_descriptor() -> None:
     assert diagnostic.location == _location(2, 3)
     assert "neg" in diagnostic.message
     assert "ui32" in diagnostic.message
-    assert "si32, f32, f64" in diagnostic.message
+    assert _SIGNED_OR_FLOATING_SCALAR_TYPE_MESSAGE in diagnostic.message
 
 
 def test_m113_backends_emit_from_explicit_signature_and_body() -> None:
@@ -1565,7 +1642,7 @@ def test_m108_lowerer_reports_unsupported_body_boundary() -> None:
 
 
 def test_m110_lowerer_reports_unsupported_scalar_type() -> None:
-    result = Lowerer().lower(_selected_implementation(type_tag="si64"))
+    result = Lowerer().lower(_selected_implementation(type_tag="sx128"))
 
     assert result.function is None
     assert len(result.diagnostics) == 1
@@ -1573,8 +1650,8 @@ def test_m110_lowerer_reports_unsupported_scalar_type() -> None:
     assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-TYPE"
     assert diagnostic.severity == "error"
     assert diagnostic.location == _location(2, 3)
-    assert "si64" in diagnostic.message
-    assert "si32, ui32, f32, f64" in diagnostic.message
+    assert "sx128" in diagnostic.message
+    assert ", ".join(_ALL_SCALAR_TYPE_TAGS) in diagnostic.message
 
 
 def test_m111_lowerer_reports_unsupported_binary_operation() -> None:
@@ -2058,7 +2135,7 @@ def test_m123_bootstrap_origin_preserves_operation_type_diagnostic() -> None:
     assert diagnostic.location == _location(2, 3)
     assert diagnostic.message == (
         "operation 'neg' cannot be lowered for scalar type 'ui32'; "
-        "expected one of: si32, f32, f64"
+        f"expected one of: {_SIGNED_OR_FLOATING_SCALAR_TYPE_MESSAGE}"
     )
 
 
@@ -4198,7 +4275,7 @@ def test_m155_reports_missing_facts_and_unsupported_lowered_type_values() -> Non
         _location(5, 7),
     )
     missing_scalar_fact = lowerer.lower_generation_value_query(
-        _selected_implementation(type_tag="si64"),
+        _selected_implementation(type_tag="sx128"),
         "value<generation>(type::size_bytes(type<generation>(base::in)))",
         _location(6, 7),
     )
@@ -5011,7 +5088,7 @@ def test_m158_propagates_left_generation_value_diagnostics_and_preserves_boolean
                     RawStringToken(text="false_path();", source=_location(8, 9)),
                 ),
             ),
-            type_tag="si64",
+            type_tag="sx128",
         ),
     )
     missing_fact_with_bad_right = lowerer.lower_generation_control_region(
@@ -5028,7 +5105,7 @@ def test_m158_propagates_left_generation_value_diagnostics_and_preserves_boolean
                     RawStringToken(text="false_path();", source=_location(8, 9)),
                 ),
             ),
-            type_tag="si64",
+            type_tag="sx128",
         ),
     )
     boolean_condition = lowerer.lower_generation_control_region(
@@ -9318,7 +9395,7 @@ def test_m112_non_add_non_si32_output_uses_explicit_return_body(
 def test_m110_unsupported_source_type_reports_lowering_diagnostic(
     tmp_path: Path,
 ) -> None:
-    source = _write_tiny_source(tmp_path, "add", "si64")
+    source = _write_tiny_source(tmp_path, "add", "sx128")
     result = generate_from_paths(
         (source,),
         (
@@ -9326,7 +9403,7 @@ def test_m110_unsupported_source_type_reports_lowering_diagnostic(
                 backend="cpp",
                 primitive_name="add",
                 extension="scalar",
-                type_tag="si64",
+                type_tag="sx128",
             ),
         ),
     )
@@ -9340,7 +9417,7 @@ def test_m110_unsupported_source_type_reports_lowering_diagnostic(
     assert diagnostic.location.path == source.resolve()
     assert diagnostic.location.line == 2
     assert diagnostic.location.column == 3
-    assert "si64" in diagnostic.message
+    assert "sx128" in diagnostic.message
 
 
 def test_m116_unsupported_source_operation_reports_lowering_diagnostic(
@@ -9402,7 +9479,7 @@ def test_m116_floating_mod_source_reports_operation_type_diagnostic(
     assert diagnostic.location.column == 3
     assert "mod" in diagnostic.message
     assert "f32" in diagnostic.message
-    assert "si32, ui32" in diagnostic.message
+    assert _INTEGER_SCALAR_TYPE_MESSAGE in diagnostic.message
 
 
 def test_m117_floating_bitwise_source_reports_operation_type_diagnostic(
@@ -9432,7 +9509,7 @@ def test_m117_floating_bitwise_source_reports_operation_type_diagnostic(
     assert diagnostic.location.column == 3
     assert "bit_xor" in diagnostic.message
     assert "f32" in diagnostic.message
-    assert "si32, ui32" in diagnostic.message
+    assert _INTEGER_SCALAR_TYPE_MESSAGE in diagnostic.message
 
 
 def test_m120_floating_shift_source_reports_operation_type_diagnostic(
@@ -9462,7 +9539,7 @@ def test_m120_floating_shift_source_reports_operation_type_diagnostic(
     assert diagnostic.location.column == 3
     assert "shift_right" in diagnostic.message
     assert "f64" in diagnostic.message
-    assert "si32, ui32" in diagnostic.message
+    assert _INTEGER_SCALAR_TYPE_MESSAGE in diagnostic.message
 
 
 def test_m118_floating_bit_not_source_reports_operation_type_diagnostic(
@@ -9492,7 +9569,7 @@ def test_m118_floating_bit_not_source_reports_operation_type_diagnostic(
     assert diagnostic.location.column == 3
     assert "bit_not" in diagnostic.message
     assert "f32" in diagnostic.message
-    assert "si32, ui32" in diagnostic.message
+    assert _INTEGER_SCALAR_TYPE_MESSAGE in diagnostic.message
 
 
 def test_m119_unsigned_neg_source_reports_operation_type_diagnostic(
@@ -9522,7 +9599,7 @@ def test_m119_unsigned_neg_source_reports_operation_type_diagnostic(
     assert diagnostic.location.column == 3
     assert "neg" in diagnostic.message
     assert "ui32" in diagnostic.message
-    assert "si32, f32, f64" in diagnostic.message
+    assert _SIGNED_OR_FLOATING_SCALAR_TYPE_MESSAGE in diagnostic.message
 
 
 def test_m111_source_operation_body_mismatch_reports_lowering_diagnostic(

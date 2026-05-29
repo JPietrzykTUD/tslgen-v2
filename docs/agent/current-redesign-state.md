@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 173 is accepted.
+Milestone 174 is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -200,6 +200,25 @@ unsupported-member, and unaccepted exact unsigned result cases remain
 diagnostics. M173 preserved M172's typed selector-matching path and kept alias
 spellings such as `MaskVec`, `MaskWord`, and `MaskT` source-local rather than
 semantic.
+
+The M174 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor, one focused revision, read-only architecture,
+boundary, evidence, test, documentation, and validation audits, and focused
+re-review. M174 completed the lowering-owned scalar descriptor table for the
+current concrete arithmetic scalar tags in `tsldata/detail/types.tsl`: `si8`,
+`ui8`, `si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`, `f32`, and `f64`.
+Each descriptor is an explicit typed fact with scalar kind, family, bit width,
+and signedness; lowering consumers use those facts instead of deriving
+semantics from tag spelling.
+
+M174 made operation compatibility descriptor-driven for the broadened set,
+updated generation value/type query tests for size, signedness, type
+transforms, type equality, and generic fixed-vector length, and made a real
+AVX2 `si32 -> ui8` lane-bitmask member result resolve through accepted
+descriptors. Pointer-like tags such as `ptr` remain outside scalar descriptor
+coverage. Backend scalar type spelling, parser changes, renderer changes,
+new operation identifiers, source repair, runtime `tsldata`, runtime
+`frozen`, and runtime `tslgenold` dependencies remained out of scope.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -2930,54 +2949,56 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 174.
+Execute Milestone 175.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m174-execution-review-loop-prompt.md
+docs/agent/runs/m175-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 174: Scalar Descriptor Catalog Completion For Current Type Tags
+Milestone 175: Vector Member Generation Value Type Arguments
 ```
 
 Latest review verdict:
 
 ```text
-M173 execution-review returned Accept With Follow-Ups after one write-capable
+M174 execution-review returned Accept With Follow-Ups after one write-capable
 executor, one focused revision, read-only architecture, boundary, evidence,
 test, documentation, and validation audits, and focused re-review.
 
-M173 added descriptor-backed resolution for already lowered vector member type
-queries such as `vector::mask`, `vector::imask`,
-`vector::mask_underlying_t`, and `vector::mask_underlying`. It accepts fixed
-`lane_bitmask` member resolution only through explicit extension metadata and
-accepted scalar descriptors for both the selected scalar tag and produced
-exact unsigned scalar tag.
+Initial architecture and test audits returned Needs Revision for stale
+comparison descriptor docs and missing explicit coverage of signed/unsigned
+transforms, type equality, and generic length/runtime-length over the expanded
+descriptor set. The focused revision updated `behavioral-spec.md` and
+`test_m174_scalar_descriptor_catalog.py`; focused architecture, test,
+documentation, and validation re-reviews returned `Accept`.
 
-M173 review verdicts were: architecture `Accept With Follow-Ups`; boundary
-`Accept`; evidence `Accept With Follow-Ups`; test `Accept`; documentation
-`Accept With Follow-Ups`; validation `Accept`. No blocking findings were
-reported.
+M174 review verdicts were: architecture `Accept` after focused re-review;
+boundary `Accept With Follow-Ups`; evidence `Accept With Follow-Ups`; test
+`Accept` after focused re-review; documentation `Accept` after focused
+re-review; validation `Accept` after focused re-review.
 ```
 
 Next expected action:
 
 ```text
-Run the active M174 execution-review-loop prompt. M174 should broaden the
-lowering-owned scalar descriptor catalog to the current concrete scalar tags
-from `tsldata/detail/types.tsl`: `si8`, `ui8`, `si16`, `ui16`, `si32`,
-`ui32`, `si64`, `ui64`, `f32`, and `f64`.
+Run the active M175 execution-review-loop prompt. M175 should connect the
+already accepted vector-member type resolver to generation value type
+arguments, so queries such as
+`value<generation>(type::size_bytes(type<generation>(vector::imask)))` can
+resolve when an explicit catalog is supplied.
 
-This is useful because M173 is now correctly descriptor-backed but real
-lane-bitmask member results such as `ui8`, `ui16`, and `ui64` remain
-diagnostic-only until the descriptor catalog accepts them as typed facts. M174
-should close that gap directly without adding parser, renderer, or
-target-language operator semantics.
+This is useful because M173 can now resolve vector member types through
+extension metadata and M174 completed the scalar descriptors they produce, but
+M155 generation value evaluation still treats lowered vector-member type
+values as unsupported scalar type arguments. M175 should bridge that exact
+gap without adding backend type spelling, renderer behavior, broad expression
+parsing, or new TSIL keyword families.
 ```
 
 Previous review verdict:
@@ -6890,24 +6911,44 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   `vector::transform(type<generation>(vector::mask_underlying_t))` remain
   unresolved unless explicit extension metadata can prove a generation-time
   typed value.
-- M173 follow-up feeding M174: real current lane-bitmask member outputs such
-  as `ui8`, `ui16`, and `ui64` remain diagnostics until the scalar descriptor
-  catalog explicitly accepts those tags.
+- M174 resolved the M173 follow-up for real current lane-bitmask member
+  outputs by explicitly accepting current scalar descriptors such as `ui8`,
+  `ui16`, and `ui64`.
 - M173 evidence follow-up: current selector-relevant evidence for
   `mask_underlying` is the `_t` spelling, especially
   `vector::mask_underlying_t` under `MaskVec`; keep bare
   `vector::mask_underlying` as an accepted parsed synonym but do not cite it
   as direct current selector evidence unless source data changes.
+- M174 evidence follow-up: tag existence is grounded in
+  `tsldata/detail/types.tsl`; bit width, signedness, and family remain
+  explicit lowering-owned descriptor facts and must not be described as
+  properties parsed from the TSL file itself.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M174
+No stop condition is active. The workflow is ready to run the active M175
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M174 execution, run the validation command listed in
-`docs/agent/runs/m174-execution-review-loop-prompt.md`.
+For active M175 execution, run the validation command listed in
+`docs/agent/runs/m175-execution-review-loop-prompt.md`.
+
+For M174 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M174 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`288 passed in 28.02s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed. The
+validation auditor also reran the pytest command and reported
+`288 passed in 28.25s`.
 
 For M173 execution and review, validation completed with:
 
