@@ -20838,15 +20838,15 @@ the final cache check returning exit 0 with no output after cleanup.
 
 Status:
 
-Selected after M162.5 acceptance. Active next prompt:
-`docs/agent/runs/m163-execution-review-loop-prompt.md`.
+Accepted. Active next prompt after M163:
+`docs/agent/runs/m164-execution-review-loop-prompt.md`.
 
 Goal:
 
-Add the next generation-keyword lowering fact for exact top-level
+Add the next generation-keyword lowering boundary for exact top-level
 `var<...>(...)` declaration directives in arbitrary source-owned body token
-streams, without rendering declarations or evaluating initializer
-expressions.
+streams, recording unresolved backend-facing declaration facts/requests
+without rendering declarations or evaluating initializer expressions.
 
 Scope:
 
@@ -20860,7 +20860,8 @@ Scope:
   `var<const_infer>(NAME, VALUE)`, and
   `var<typed>(TYPE_TEXT, NAME, VALUE)`, with top-level comma splitting only.
 - Preserve initializer and explicit type payload text as source-owned opaque
-  values; do not evaluate them or recursively lower nested islands.
+  values for later backend-specific declaration handling; do not evaluate
+  them or recursively lower nested islands.
 - Preserve all non-var body tokens as source-owned opaque spans and support
   multiple top-level declarations in source order.
 - Emit deterministic diagnostics for unsupported selectors, malformed arity,
@@ -20869,11 +20870,93 @@ Scope:
 
 Out of scope:
 
-Declaration rendering; type inference; symbol tables; initializer expression
-evaluation; recursive lowering of initializer/type payloads; `let<...>`
-lowering; loop execution; assignment, array-access, cast, memory, I/O,
-intrinsic, primitive-call, backend-control, or backend rendering; source
-repair; dependency scheduling; output writing; runtime `tsldata`, `frozen`, or
+Declaration rendering; backend-specific declaration spelling; type inference;
+symbol tables; initializer expression evaluation; recursive lowering of
+initializer/type payloads; `let<...>` lowering; loop execution; assignment,
+array-access, cast, memory, I/O, intrinsic, primitive-call, backend-control,
+or backend rendering; source repair; dependency scheduling; output writing;
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad registries,
+dispatchers, worklists, callback maps, hidden backfeeds, or fixpoint
+mechanisms.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Review result:
+
+The M163 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor, one focused revision, and read-only architecture,
+boundary, evidence, test, documentation, and validation audits. M163 added
+exact top-level classified `var<...>(...)` declaration discovery over
+source-owned body-token streams. Accepted selectors are `init_register`,
+`infer`, `const_infer`, and `typed`. Declaration explicit type and initializer
+payload text remain source-owned opaque values and no declaration rendering,
+type inference, initializer evaluation, symbol table, surrounding-token
+special case, source repair, runtime `tsldata`, `frozen`, or `tslgenold`
+dependency was added.
+
+The focused revision replaced whole-payload angle balancing with
+declaration-local comma splitting that preserves raw `<<` and `>>` operator
+text inside opaque initializers while still respecting TSIL-like angle
+payloads for top-level field splitting.
+
+Validation completed with `git diff --check` returning exit 0 with no output,
+compileall returning exit 0 with no output, pytest returning exit 0 with
+`289 passed in 22.78s`, initial cache check listing validation-created
+`__pycache__` directories under `tslgen/src/tslgen` and `tslgen/tests`, and
+the final cache check returning exit 0 with no output after cleanup.
+
+Follow-ups:
+
+- Raw multiline `var<...>(...)` source intake remains a future
+  classifier/parser concern. M163 consumes already classified directive
+  tokens and does not claim full raw multiline directive intake.
+
+### Milestone 164: Exact Backend Value Query Request Boundary
+
+Status:
+
+Selected after M163 acceptance. Active next prompt:
+`docs/agent/runs/m164-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the next backend-owned lowering boundary for exact `value<backend>(...)`
+islands in source-owned text. Backend value queries are important for lowering
+but are normally not generation-time-solvable; this milestone records
+unresolved backend value query requests and preserves surrounding text.
+
+Scope:
+
+- Inventory current `value<backend>(...)` payload forms across all
+  `tsldata/**/*.tsl` files before implementation.
+- Recognize exact balanced `value<backend>(QUERY_TEXT)` islands in
+  source-owned text and preserve surrounding non-query text spans.
+- Provide discovery over `ImplementationBody.tokens` and a text-fragment
+  helper usable by opaque payload carriers such as M163 declaration text,
+  without adding context-specific consumers for every occurrence.
+- Preserve `QUERY_TEXT` as opaque backend-owned text. Nested
+  `type<generation>(...)`, `type<backend>(...)`, quoted strings, intrinsic
+  names, backend keys, casts, primitive calls, operators, and helper calls
+  inside the payload are not interpreted.
+- Emit deterministic diagnostics for malformed outer query islands and for no
+  exact backend value query when explicitly requested.
+
+Out of scope:
+
+Backend value translation/results; backend-specific spelling; rendering;
+`type<backend>(...)` broad discovery; declaration rendering; type inference;
+symbol tables; initializer expression evaluation; recursive lowering of query
+payloads; `let<...>` lowering; loop execution or unrolling; loop-variable
+substitution; assignment, array-access, cast, memory, I/O, intrinsic,
+primitive-call, backend-control, or backend rendering; source repair;
+dependency scheduling; output writing; runtime `tsldata`, `frozen`, or
 `tslgenold` dependencies; broad registries, dispatchers, worklists, callback
 maps, hidden backfeeds, or fixpoint mechanisms.
 
@@ -20881,7 +20964,7 @@ Validation:
 
 ```bash
 git diff --check
-python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py
 find tslgen -type d -name __pycache__ -print
 ```

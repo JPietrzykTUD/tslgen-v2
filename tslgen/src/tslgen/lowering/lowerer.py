@@ -41,6 +41,7 @@ from tslgen.lowering.model import (
     SelectedTypeEnvironment,
     BackendTypeQueryLoweringResult,
     GenerationLoopDiscoveryLoweringResult,
+    GenerationVariableDeclarationDiscoveryLoweringResult,
     GenerationControlRegionLoweringResult,
     GenerationLoopRegionLoweringResult,
     GenerationValueQueryLoweringResult,
@@ -53,6 +54,9 @@ from tslgen.lowering.generation_control import lower_generation_control_region
 from tslgen.lowering.generation_loops import (
     discover_generation_loop_regions,
     lower_generation_loop_region,
+)
+from tslgen.lowering.generation_variables import (
+    discover_generation_variable_declarations,
 )
 from tslgen.lowering.generation_values import lower_generation_value_query
 from tslgen.lowering.operation_type_compatibility import (
@@ -232,6 +236,16 @@ class Lowerer:
             context.implementation.body,
             catalog=catalog,
             environment=environment,
+        )
+
+    def discover_generation_variable_declarations(
+        self,
+        selected: SelectedImplementation,
+    ) -> GenerationVariableDeclarationDiscoveryLoweringResult:
+        context = self.context_for(selected)
+        return discover_generation_variable_declarations(
+            context,
+            context.implementation.body,
         )
 
     def lower_primitive_call_closure_lowering_package(

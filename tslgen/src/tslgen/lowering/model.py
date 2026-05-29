@@ -48,6 +48,12 @@ LoweredGenerationValueKind = Literal[
     "generation.arithmetic.rem",
 ]
 LoweredGenerationValuePayload = int | bool
+GenerationVariableDeclarationSelector = Literal[
+    "init_register",
+    "infer",
+    "const_infer",
+    "typed",
+]
 
 CURRENT_VECTOR_KEYWORD = "Vec"
 CURRENT_SCALAR_KEYWORD = "scalar"
@@ -394,6 +400,53 @@ class LoweredGenerationLoopDiscovery:
 @dataclass(frozen=True, slots=True)
 class GenerationLoopDiscoveryLoweringResult:
     discovery: LoweredGenerationLoopDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationVariableDeclarationText:
+    text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationVariableDeclarationRequest:
+    selector: GenerationVariableDeclarationSelector
+    name: str
+    name_source: SourceLocation
+    payload_text: str
+    source: SourceLocation
+    explicit_type: GenerationVariableDeclarationText | None = None
+    initializer: GenerationVariableDeclarationText | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationVariableDeclarationOpaqueSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationVariableDeclarationRequestSegment:
+    declaration: GenerationVariableDeclarationRequest
+    source: SourceLocation
+
+
+GenerationVariableDeclarationDiscoverySegment = (
+    GenerationVariableDeclarationOpaqueSegment
+    | GenerationVariableDeclarationRequestSegment
+)
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationVariableDeclarationDiscovery:
+    segments: tuple[GenerationVariableDeclarationDiscoverySegment, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationVariableDeclarationDiscoveryLoweringResult:
+    discovery: GenerationVariableDeclarationDiscovery | None
     diagnostics: tuple[Diagnostic, ...]
 
 

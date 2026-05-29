@@ -1524,6 +1524,51 @@ dependencies, read `tsldata`, `frozen`, or `tslgenold` at runtime, or add
 registries, dispatchers, worklists, callback maps, hidden backfeeds, or
 fixpoint machinery.
 
+### M163 Generation Variable Declaration Fact Boundary
+
+Milestone 163 adds exact discovery for already classified top-level
+`var<...>(...)` directives in arbitrary source-owned body token streams. A
+discovered declaration is an unresolved backend-facing request, not a solved
+target-language declaration.
+
+Accepted directive shapes are:
+
+- `var<init_register>(NAME)`;
+- `var<infer>(NAME, VALUE)`;
+- `var<const_infer>(NAME, VALUE)`;
+- `var<typed>(TYPE_TEXT, NAME, VALUE)`.
+
+Payloads are split only on top-level commas while respecting nested
+parentheses, square brackets, and TSIL-like angle payloads. Raw shift or
+comparison-looking operators such as `<<` and `>>` inside an initializer are
+preserved as initializer text, not treated as angle syntax. `NAME` must be an
+identifier. `TYPE_TEXT` and `VALUE` are preserved as opaque source-owned text;
+nested `call<primitive=...>`, `type<generation>(...)`, `value<backend>(...)`,
+casts, intrinsics, array indexing, operators, and helper calls inside those
+payloads are not interpreted by M163.
+
+Discovery preserves all non-var tokens as opaque source-owned spans and
+retains multiple top-level declarations in source order. Top-level discovery
+is guarded by raw brace depth over opaque raw tokens, so a `var` directive
+inside unrelated raw-brace scope is not accepted as a top-level declaration
+fact.
+
+Unsupported selectors, malformed arity or comma structure, invalid names, and
+explicit discovery requests with no exact top-level declaration produce
+deterministic diagnostics.
+
+M163 consumes the current classified directive-token boundary. Multiline raw
+source text that has not yet been classified into one `LowerableDirective` is a
+separate source-intake/classification concern, not declaration solving.
+
+M163 does not render declarations, infer types, build symbol tables, evaluate
+initializers, recursively lower declaration payloads, lower `let<...>`,
+execute loops, parse assignments, array access, casts, intrinsics,
+primitive-call payloads, backend control, or broad TSIL statements, repair
+source text, schedule dependencies, write output, read `tsldata`, `frozen`, or
+`tslgenold` at runtime, or add broad registries, dispatchers, worklists,
+callback maps, hidden backfeeds, or fixpoint machinery.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

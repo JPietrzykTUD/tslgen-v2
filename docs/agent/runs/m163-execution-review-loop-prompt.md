@@ -18,10 +18,12 @@ balanced delimiters, top-level payload splitting, selector terminators, and
 raw brace-depth updates without adding TSIL semantics.
 
 M163 is an implementation milestone. It should add the next generation-keyword
-lowering fact for exact top-level `var<...>(...)` declaration directives in
-arbitrary source-owned body token streams. It must not render declarations,
-infer types, evaluate initializer expressions, or special-case surrounding
-body-token patterns.
+lowering boundary for exact top-level `var<...>(...)` declaration directives
+in arbitrary source-owned body token streams. The result is an unresolved,
+backend-facing declaration directive fact/request with source-owned opaque
+payload text. It must not solve, render, type-check, infer, or otherwise
+complete declarations at generation time, and it must not special-case
+surrounding body-token patterns.
 
 ## Read First
 
@@ -63,12 +65,13 @@ var<typed>(TYPE_TEXT, NAME, VALUE)
 OPAQUE_TOKENS
 ```
 
-The result should record source-owned non-var token spans and lowered
-declaration facts in source order, or the equivalent minimal typed
-placement/slice contract needed to preserve token identity and diagnostics.
-Initializer and explicit type payloads remain opaque source-owned text. The
-accepted shape is the declaration directive itself, not any surrounding
-corpus sequence such as `var -> loop -> emit_return`.
+The result should record source-owned non-var token spans and unresolved
+declaration directive facts/requests in source order, or the equivalent
+minimal typed placement/slice contract needed to preserve token identity and
+diagnostics. Initializer and explicit type payloads remain opaque source-owned
+text for later backend-specific lowering/rendering. The accepted shape is the
+declaration directive itself, not any surrounding corpus sequence such as
+`var -> loop -> emit_return`.
 
 ## Required Executor Task
 
@@ -78,9 +81,11 @@ Run exactly one write-capable executor for M163. The executor should:
 2. Inventory current `var<...>` selector and payload forms across all
    `tsldata/**/*.tsl` files. Use corpus examples as evidence, not as accepted
    surrounding-shape templates.
-3. Add the smallest exact variable-declaration fact boundary over
+3. Add the smallest exact variable-declaration directive boundary over
    `ImplementationBody.tokens` that can identify every top-level
-   `var<...>(...)` directive and preserve source-owned non-var token slices.
+   `var<...>(...)` directive, preserve source-owned non-var token slices, and
+   carry unresolved declaration payloads forward for later backend-specific
+   handling.
 4. Accept exact selector/payload shapes for the current corpus family:
    - `var<init_register>(NAME)`
    - `var<infer>(NAME, VALUE)`
@@ -93,7 +98,9 @@ Run exactly one write-capable executor for M163. The executor should:
 6. Preserve initializer text and explicit type text as source-owned opaque
    values. Nested `call<primitive=...>`, `type<generation>(...)`,
    `value<backend>(...)`, casts, intrinsics, array indexing, and operators
-   inside payloads are not interpreted by M163.
+   inside payloads are not interpreted by M163. Backend-specific declaration
+   spelling, mutability, type solution, and initializer lowering remain
+   deferred.
 7. Use conservative top-level discovery consistent with M162/M162.5: a `var`
    directive inside unrelated opaque raw-brace scope is not a top-level
    declaration fact. Use the shared raw-brace depth helper where it directly
@@ -125,16 +132,17 @@ Run exactly one write-capable executor for M163. The executor should:
 
 ## Design Guardrails
 
-- Treat this as token-region discovery and declaration-fact lowering over
-  source-owned `BodyToken` values, not as a TSIL statement parser.
+- Treat this as token-region discovery and unresolved declaration-directive
+  intake over source-owned `BodyToken` values, not as a TSIL statement parser
+  or generation-time declaration solver.
 - The accepted shape is the `var<...>(...)` directive itself. No behavior may
   depend on the identity, order, or semantics of surrounding non-var tokens.
 - Do not render declarations, infer types, evaluate initializer expressions,
-  resolve symbols, lower `let<...>`, execute loops, substitute loop variables,
-  parse target-language statements, render backend code, schedule
-  dependencies, read `tsldata`, `frozen`, or `tslgenold` at runtime, or add
-  broad registries, dispatchers, worklists, callback maps, hidden backfeeds,
-  or fixpoint machinery.
+  resolve symbols, choose backend declaration spelling, lower `let<...>`,
+  execute loops, substitute loop variables, parse target-language statements,
+  render backend code, schedule dependencies, read `tsldata`, `frozen`, or
+  `tslgenold` at runtime, or add broad registries, dispatchers, worklists,
+  callback maps, hidden backfeeds, or fixpoint machinery.
 
 ## Must Preserve
 
@@ -151,24 +159,26 @@ Run exactly one write-capable executor for M163. The executor should:
 
 ## Out Of Scope
 
-Declaration rendering; type inference; symbol tables; initializer expression
-evaluation; recursive lowering of initializer/type payloads; `let<...>`
-lowering; loop execution or unrolling; loop-variable substitution;
-assignment, array-access, cast, memory, I/O, intrinsic, primitive-call,
-backend-control, or backend rendering; target-language declaration rendering;
-source repair; dependency scheduling; output writing; runtime `tsldata`,
-`frozen`, or `tslgenold` dependencies; broad registries, dispatchers,
-worklists, callback maps, hidden backfeeds, or fixpoint mechanisms.
+Declaration rendering; backend-specific declaration spelling; type inference;
+symbol tables; initializer expression evaluation; recursive lowering of
+initializer/type payloads; `let<...>` lowering; loop execution or unrolling;
+loop-variable substitution; assignment, array-access, cast, memory, I/O,
+intrinsic, primitive-call, backend-control, or backend rendering;
+target-language declaration rendering; source repair; dependency scheduling;
+output writing; runtime `tsldata`, `frozen`, or `tslgenold` dependencies;
+broad registries, dispatchers, worklists, callback maps, hidden backfeeds, or
+fixpoint mechanisms.
 
 ## Required Review/Audit Subagents
 
 After the executor finishes, use read-only subagents:
 
-1. Architecture reviewer: verify M163 adds only exact top-level var
-   declaration facts over source-owned body tokens and avoids rendering,
-   expression parsing, symbol tables, type inference, surrounding-token
-   special cases, registries, dispatchers, worklists, source repair, and
-   runtime data reads.
+1. Architecture reviewer: verify M163 adds only exact top-level unresolved
+   var declaration directive facts/requests over source-owned body tokens and
+   avoids generation-time declaration solving, backend declaration spelling,
+   rendering, expression parsing, symbol tables, type inference,
+   surrounding-token special cases, registries, dispatchers, worklists,
+   source repair, and runtime data reads.
 2. Boundary auditor: verify M155-M162.5 behavior remains intact, M162/M162.5
    top-level raw-brace guarding is preserved for declaration discovery, and
    initializer payloads remain opaque.

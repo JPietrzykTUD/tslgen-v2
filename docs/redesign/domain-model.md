@@ -962,6 +962,63 @@ Discovery tracks raw brace depth only to avoid treating loops inside unrelated
 opaque raw-brace scopes as top-level; it does not interpret those scopes as
 statements or control flow.
 
+Milestone 163 adds variable-declaration discovery values:
+
+```python
+GenerationVariableDeclarationSelector = Literal[
+    "init_register",
+    "infer",
+    "const_infer",
+    "typed",
+]
+
+@dataclass(frozen=True, slots=True)
+class GenerationVariableDeclarationText:
+    text: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class GenerationVariableDeclarationRequest:
+    selector: GenerationVariableDeclarationSelector
+    name: str
+    name_source: SourceLocation
+    payload_text: str
+    source: SourceLocation
+    explicit_type: GenerationVariableDeclarationText | None = None
+    initializer: GenerationVariableDeclarationText | None = None
+
+@dataclass(frozen=True, slots=True)
+class GenerationVariableDeclarationOpaqueSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class GenerationVariableDeclarationRequestSegment:
+    declaration: GenerationVariableDeclarationRequest
+    source: SourceLocation
+
+GenerationVariableDeclarationDiscoverySegment = (
+    GenerationVariableDeclarationOpaqueSegment
+    | GenerationVariableDeclarationRequestSegment
+)
+
+@dataclass(frozen=True, slots=True)
+class GenerationVariableDeclarationDiscovery:
+    segments: tuple[GenerationVariableDeclarationDiscoverySegment, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class GenerationVariableDeclarationDiscoveryLoweringResult:
+    discovery: GenerationVariableDeclarationDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+```
+
+The M163 declaration model records unresolved declaration facts/requests over
+source-owned body tokens. It preserves non-var tokens as opaque spans and
+keeps explicit type and initializer payloads as source text. It is not a
+symbol table, type inference result, backend declaration rendering plan, or
+statement AST.
+
 Milestone 144 adds selector-payload values:
 
 ```python
