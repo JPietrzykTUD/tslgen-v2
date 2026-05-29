@@ -6,6 +6,13 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+from tslgen.syntax.tsil_lexical import (
+    BRACKET_DELIMITER,
+    PAREN_DELIMITER,
+    matching_close,
+    split_top_level_parts,
+)
+
 TypeQueryKind = Literal["backend", "generation", "generation_value"]
 
 
@@ -77,41 +84,14 @@ def parse_type_syntax(expression: str) -> TypeSyntax | None:
 
 
 def split_top_level_arguments(payload: str) -> tuple[str, ...] | None:
-    if not payload.strip():
-        return ()
-
-    arguments: list[str] = []
-    start = 0
-    paren_depth = 0
-    bracket_depth = 0
-    for index, char in enumerate(payload):
-        if char == "(":
-            paren_depth += 1
-        elif char == ")":
-            if paren_depth == 0:
-                return None
-            paren_depth -= 1
-        elif char == "[":
-            bracket_depth += 1
-        elif char == "]":
-            if bracket_depth == 0:
-                return None
-            bracket_depth -= 1
-        elif char == "," and paren_depth == 0 and bracket_depth == 0:
-            argument = payload[start:index].strip()
-            if not argument:
-                return None
-            arguments.append(argument)
-            start = index + 1
-
-    if paren_depth != 0 or bracket_depth != 0:
+    parts = split_top_level_parts(
+        payload,
+        delimiters=(PAREN_DELIMITER, BRACKET_DELIMITER),
+        allow_empty_payload=True,
+    )
+    if parts is None:
         return None
-
-    argument = payload[start:].strip()
-    if not argument:
-        return None
-    arguments.append(argument)
-    return tuple(arguments)
+    return tuple(part.text for part in parts)
 
 
 def _parse_query(expression: str) -> TypeQuery | None:
@@ -135,7 +115,7 @@ def _parse_call(expression: str) -> TypeCall | None:
     if open_index == -1 or not expression.endswith(")"):
         return None
 
-    close_index = _matching_close_paren(expression, open_index)
+    close_index = matching_close(expression, open_index, PAREN_DELIMITER)
     if close_index is None or close_index != len(expression) - 1:
         return None
 
@@ -174,7 +154,7 @@ def _extract_query_payload(query: str, prefix: str) -> str | None:
         return None
 
     open_index = len(prefix) - 1
-    close_index = _matching_close_paren(query, open_index)
+    close_index = matching_close(query, open_index, PAREN_DELIMITER)
     if close_index is None or close_index != len(query) - 1:
         return None
 
@@ -182,19 +162,3 @@ def _extract_query_payload(query: str, prefix: str) -> str | None:
     if not expression or expression != expression.strip():
         return None
     return expression
-
-
-def _matching_close_paren(text: str, open_index: int) -> int | None:
-    if open_index >= len(text) or text[open_index] != "(":
-        return None
-
-    depth = 1
-    for index in range(open_index + 1, len(text)):
-        char = text[index]
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-            if depth == 0:
-                return index
-    return None

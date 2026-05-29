@@ -1,7 +1,6 @@
 """Typed lowering for primitive-call selector payload islands."""
 
 import re
-from dataclasses import dataclass
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import Catalog, ExtensionName, PrimitiveCall
@@ -31,6 +30,12 @@ from tslgen.lowering.model import (
     SelectorSpecializationValue,
     SelectorSymbol,
 )
+from tslgen.syntax.tsil_lexical import (
+    BRACKET_DELIMITER,
+    PAREN_DELIMITER,
+    LexicalPart,
+    split_top_level_parts,
+)
 from tslgen.lowering.type_queries import lower_type_expression
 
 _IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*")
@@ -49,12 +54,6 @@ _TYPE_PREFIXES = (
     "value<",
     "vector::",
 )
-
-
-@dataclass(frozen=True, slots=True)
-class _PayloadPart:
-    text: str
-    start: int
 
 
 def lower_primitive_call_selector_payload(
@@ -259,51 +258,12 @@ def _extension_names_from_predicate(
     )
 
 
-def _split_top_level_parts(payload: str) -> tuple[_PayloadPart, ...] | None:
-    if not payload.strip():
-        return ()
-
-    parts: list[_PayloadPart] = []
-    start = 0
-    paren_depth = 0
-    bracket_depth = 0
-    for index, char in enumerate(payload):
-        if char == "(":
-            paren_depth += 1
-        elif char == ")":
-            if paren_depth == 0:
-                return None
-            paren_depth -= 1
-        elif char == "[":
-            bracket_depth += 1
-        elif char == "]":
-            if bracket_depth == 0:
-                return None
-            bracket_depth -= 1
-        elif char == "," and paren_depth == 0 and bracket_depth == 0:
-            part = _trimmed_part(payload, start, index)
-            if part is None:
-                return None
-            parts.append(part)
-            start = index + 1
-
-    if paren_depth != 0 or bracket_depth != 0:
-        return None
-
-    part = _trimmed_part(payload, start, len(payload))
-    if part is None:
-        return None
-    parts.append(part)
-    return tuple(parts)
-
-
-def _trimmed_part(payload: str, start: int, end: int) -> _PayloadPart | None:
-    raw = payload[start:end]
-    stripped = raw.strip()
-    if not stripped:
-        return None
-    leading = len(raw) - len(raw.lstrip())
-    return _PayloadPart(text=stripped, start=start + leading)
+def _split_top_level_parts(payload: str) -> tuple[LexicalPart, ...] | None:
+    return split_top_level_parts(
+        payload,
+        delimiters=(PAREN_DELIMITER, BRACKET_DELIMITER),
+        allow_empty_payload=True,
+    )
 
 
 def _selector_payload_start(selector_text: str, marker: str) -> int | None:

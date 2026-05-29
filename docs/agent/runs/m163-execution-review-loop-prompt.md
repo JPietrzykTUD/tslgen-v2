@@ -1,19 +1,21 @@
 # M163 Execution Review Loop Prompt
 
-This is the active follow-on prompt after M162. Execute it only when
-`docs/agent/current-redesign-state.md` points here and records M162 as
+This is the active follow-on prompt after M162.5. Execute it only when
+`docs/agent/current-redesign-state.md` points here and records M162.5 as
 accepted.
 
-You are executing and reviewing the accepted next milestone after M162:
+You are executing and reviewing the accepted next milestone after M162.5:
 
 ```text
 Milestone 163: Exact Generation Variable Declaration Fact Boundary
 ```
 
-Milestones 1 through 162 are accepted. M161 added exact loop-region facts for
+Milestones 1 through 162.5 are accepted. M161 added exact loop-region facts for
 whole-body loop regions. M162 discovers every exact top-level M161 loop region
 inside arbitrary source-owned body token streams while preserving non-loop
-tokens as opaque spans.
+tokens as opaque spans. M162.5 introduced the shared lexical helper for
+balanced delimiters, top-level payload splitting, selector terminators, and
+raw brace-depth updates without adding TSIL semantics.
 
 M163 is an implementation milestone. It should add the next generation-keyword
 lowering fact for exact top-level `var<...>(...)` declaration directives in
@@ -39,11 +41,13 @@ body-token patterns.
 - `docs/redesign/testing-strategy.md`
 - `docs/redesign/tsil-surface-inventory.md`
 - `docs/redesign/missing-lowering-inventory.md`
+- `tslgen/src/tslgen/syntax/tsil_lexical.py`
 - `tslgen/src/tslgen/pipeline/_tsil_directives.py`
 - `tslgen/src/tslgen/lowering/generation_loops.py`
 - `tslgen/src/tslgen/lowering/lowerer.py`
 - `tslgen/src/tslgen/lowering/model.py`
 - `tslgen/tests/test_m107_tiny_pipeline.py`
+- `tslgen/tests/test_m1625_tsil_lexical.py`
 
 ## Goal
 
@@ -83,15 +87,17 @@ Run exactly one write-capable executor for M163. The executor should:
    - `var<const_infer>(NAME, VALUE)`
    - `var<typed>(TYPE_TEXT, NAME, VALUE)`
 5. Split declaration payloads only on top-level commas, respecting nested
-   parentheses, square brackets, and angle brackets. Do not parse
-   initializer/type expressions beyond that delimiter boundary.
+   parentheses, square brackets, and angle brackets. Use the M162.5 shared
+   lexical helper where it directly fits. Do not parse initializer/type
+   expressions beyond that delimiter boundary.
 6. Preserve initializer text and explicit type text as source-owned opaque
    values. Nested `call<primitive=...>`, `type<generation>(...)`,
    `value<backend>(...)`, casts, intrinsics, array indexing, and operators
    inside payloads are not interpreted by M163.
-7. Use conservative top-level discovery consistent with M162: a `var`
+7. Use conservative top-level discovery consistent with M162/M162.5: a `var`
    directive inside unrelated opaque raw-brace scope is not a top-level
-   declaration fact.
+   declaration fact. Use the shared raw-brace depth helper where it directly
+   fits, while keeping declaration-specific diagnostics local.
 8. Preserve all non-var tokens as opaque source-owned tokens. Loops,
    generation branches, returns, raw helper calls, assignments, array indexing,
    casts, intrinsics, primitive calls, backend-control directives, and
@@ -99,7 +105,7 @@ Run exactly one write-capable executor for M163. The executor should:
 9. Emit deterministic diagnostics for unsupported selectors, malformed arity,
    invalid variable names, malformed top-level comma structure, and no exact
    declaration when the caller explicitly asks for one.
-10. Preserve M155-M162 accepted behavior, diagnostics, source locations,
+10. Preserve M155-M162.5 accepted behavior, diagnostics, source locations,
     selected-branch handoff, helper raw preservation, M161 whole-body loop
     lowering, and M162 loop discovery behavior.
 11. Add focused tests for:
@@ -132,12 +138,14 @@ Run exactly one write-capable executor for M163. The executor should:
 
 ## Must Preserve
 
-- M107-M162 accepted behavior, diagnostics, source locations, and generated
+- M107-M162.5 accepted behavior, diagnostics, source locations, and generated
   bytes.
 - M155 isolated generation-value query behavior.
 - M156-M160 generation-control region and branch-chain behavior.
 - M161 whole-body exact loop-region fact behavior.
 - M162 embedded loop-region discovery behavior.
+- M162.5 shared lexical-helper behavior and migrated keyword/classifier
+  boundaries.
 - Accepted primitive-call resolver/collector behavior and helper raw
   preservation.
 
@@ -161,9 +169,9 @@ After the executor finishes, use read-only subagents:
    expression parsing, symbol tables, type inference, surrounding-token
    special cases, registries, dispatchers, worklists, source repair, and
    runtime data reads.
-2. Boundary auditor: verify M155-M162 behavior remains intact, M162 top-level
-   raw-brace guarding is preserved for declaration discovery, and initializer
-   payloads remain opaque.
+2. Boundary auditor: verify M155-M162.5 behavior remains intact, M162/M162.5
+   top-level raw-brace guarding is preserved for declaration discovery, and
+   initializer payloads remain opaque.
 3. Evidence auditor: verify the accepted var selector family is grounded in
    current `tsldata/**/*.tsl` evidence without treating corpus-neighbor
    patterns as accepted shapes.
@@ -183,8 +191,8 @@ Run:
 
 ```bash
 git diff --check
-python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py
 find tslgen -type d -name __pycache__ -print
 ```
 

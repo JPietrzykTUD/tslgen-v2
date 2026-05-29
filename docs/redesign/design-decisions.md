@@ -2061,3 +2061,42 @@ Consequences:
   family rather than as operator precedence machinery.
 - Backend helper calls named `details::arith_*` continue to be governed by
   ADR-039 and are not rewritten to operators or generation arithmetic facts.
+
+## ADR-041: Shared TSIL Lexical Helpers Are Not A Parser
+
+Status: Accepted
+
+Context:
+
+By M162, several accepted TSIL keyword boundaries used local copies of the
+same lexical mechanics: matching balanced parentheses, brackets, braces, and
+angle brackets; splitting payloads on top-level commas; finding selector
+terminators outside nested brackets; and tracking raw brace depth while
+discovering top-level loop regions. Duplicating this low-level scanning made
+future keyword slices more fragile, but replacing it with a broad TSIL parser
+would reintroduce the overengineering risk called out in the lowering
+guardrails.
+
+Decision:
+
+M162.5 introduces one small syntax-owned helper for lexical delimiter facts
+only. The helper returns character indexes, balanced-delimiter results,
+top-level payload parts with offsets, and raw brace-depth updates. It does not
+know TSIL keyword names, selectors, arity, source validity, diagnostics,
+lowering semantics, backend rendering, or catalog state.
+
+Keyword-specific classifiers and lowerers keep ownership of accepted source
+forms. They may use the shared helper only after they have selected a narrow
+lexical island such as a directive payload, primitive-call selector, type
+query, generation-value argument list, or top-level loop discovery scan.
+
+Consequences:
+
+- New TSIL keywords are not accepted by adding the helper; each keyword still
+  needs an explicit milestone, diagnostics, and tests.
+- Existing source forms keep their current behavior while duplicated scanner
+  code can be removed from accepted keyword modules.
+- Token-region scans with domain-specific diagnostics may keep local control
+  flow and use the helper only for the lexical subproblem that directly fits.
+- The helper must remain dependency-light and below pipeline/lowering semantics
+  in the package dependency direction.

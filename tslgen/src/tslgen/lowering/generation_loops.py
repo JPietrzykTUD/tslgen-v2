@@ -23,6 +23,13 @@ from tslgen.lowering.model import (
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
 )
+from tslgen.syntax.tsil_lexical import (
+    ANGLE_DELIMITER,
+    BRACKET_DELIMITER,
+    PAREN_DELIMITER,
+    raw_brace_depth_after,
+    split_top_level_parts,
+)
 
 _VALUE_QUERY_PREFIX = "value<generation>("
 
@@ -325,46 +332,14 @@ def _parse_loop_range_payload(
 
 
 def _split_top_level_arguments(payload: str) -> tuple[str, ...] | None:
-    parts: list[str] = []
-    start = 0
-    paren_depth = 0
-    bracket_depth = 0
-    angle_depth = 0
-
-    for index, char in enumerate(payload):
-        if char == "(":
-            paren_depth += 1
-        elif char == ")":
-            paren_depth -= 1
-        elif char == "[":
-            bracket_depth += 1
-        elif char == "]":
-            bracket_depth -= 1
-        elif char == "<":
-            angle_depth += 1
-        elif char == ">":
-            angle_depth -= 1
-        elif (
-            char == ","
-            and paren_depth == 0
-            and bracket_depth == 0
-            and angle_depth == 0
-        ):
-            part = payload[start:index].strip()
-            if not part:
-                return None
-            parts.append(part)
-            start = index + 1
-        if paren_depth < 0 or bracket_depth < 0 or angle_depth < 0:
-            return None
-
-    if paren_depth != 0 or bracket_depth != 0 or angle_depth != 0:
+    parts = split_top_level_parts(
+        payload,
+        delimiters=(PAREN_DELIMITER, BRACKET_DELIMITER, ANGLE_DELIMITER),
+        allow_empty_payload=False,
+    )
+    if parts is None:
         return None
-    part = payload[start:].strip()
-    if not part:
-        return None
-    parts.append(part)
-    return tuple(parts)
+    return tuple(part.text for part in parts)
 
 
 def _lower_loop_integer_value(
@@ -426,12 +401,7 @@ def _is_unsupported_loop_directive(token: BodyToken) -> bool:
 def _updated_raw_brace_depth(depth: int, token: BodyToken) -> int:
     if not isinstance(token, RawStringToken):
         return depth
-    for char in token.text:
-        if char == "{":
-            depth += 1
-        elif char == "}":
-            depth = max(0, depth - 1)
-    return depth
+    return raw_brace_depth_after(depth, token.text, clamp_underflow=True)
 
 
 def _loop_slice_start(

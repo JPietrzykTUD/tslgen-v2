@@ -9,6 +9,11 @@ from tslgen.domain.catalog import (
     RawStringToken,
 )
 from tslgen.syntax.ast import ParsedRawStringLine
+from tslgen.syntax.tsil_lexical import (
+    BRACE_DELIMITER,
+    PAREN_DELIMITER,
+    matching_close,
+)
 
 _EMIT_RETURN_DIRECTIVE = "emit_return"
 _EMIT_RETURN_PREFIX = f"{_EMIT_RETURN_DIRECTIVE}("
@@ -76,7 +81,7 @@ def _match_emit_return(text: str) -> _DirectiveMatch | None:
         return None
 
     payload_start = len(_EMIT_RETURN_PREFIX)
-    close_index = _matching_close_paren(text, payload_start - 1)
+    close_index = matching_close(text, payload_start - 1, PAREN_DELIMITER)
     if close_index is None:
         return None
 
@@ -143,7 +148,7 @@ def _match_call_shaped_directive(
     if open_index >= len(text) or text[open_index] != "(":
         return None
 
-    close_index = _matching_close_paren(text, open_index)
+    close_index = matching_close(text, open_index, PAREN_DELIMITER)
     if close_index is None:
         return None
 
@@ -215,7 +220,7 @@ def _accepted_inline_generation_block_suffix(tail: str) -> str | None:
     stripped = tail.strip()
     if not stripped.startswith("{"):
         return None
-    close_index = _matching_close_brace(stripped, 0)
+    close_index = matching_close(stripped, 0, BRACE_DELIMITER)
     if close_index is None or stripped[close_index + 1 :].strip():
         return None
     return tail
@@ -264,7 +269,7 @@ def _split_inline_block_suffix(
     open_index = suffix.find("{")
     if open_index == -1 or suffix[:open_index].strip():
         return None
-    close_index = _matching_close_brace(suffix, open_index)
+    close_index = matching_close(suffix, open_index, BRACE_DELIMITER)
     if close_index is None or suffix[close_index + 1 :].strip():
         return None
     body_text = suffix[open_index + 1 : close_index]
@@ -277,32 +282,6 @@ def _split_inline_block_suffix(
         open_index + 1,
         close_index,
     )
-
-
-def _matching_close_brace(text: str, open_index: int) -> int | None:
-    depth = 1
-    for index in range(open_index + 1, len(text)):
-        char = text[index]
-        if char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                return index
-    return None
-
-
-def _matching_close_paren(text: str, open_index: int) -> int | None:
-    depth = 1
-    for index in range(open_index + 1, len(text)):
-        char = text[index]
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-            if depth == 0:
-                return index
-    return None
 
 
 def _source_at(source: SourceLocation, column: int) -> SourceLocation:

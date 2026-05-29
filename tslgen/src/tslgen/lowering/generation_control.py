@@ -19,6 +19,7 @@ from tslgen.lowering.model import (
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
 )
+from tslgen.syntax.tsil_lexical import PAREN_DELIMITER, matching_close
 
 
 _VALUE_QUERY_PREFIX = "value<generation>("
@@ -461,24 +462,11 @@ def _extract_leading_value_query(condition: str) -> tuple[str | None, str]:
         return None, condition
 
     open_index = len(_VALUE_QUERY_PREFIX) - 1
-    close_index = _matching_close_paren(condition, open_index)
+    close_index = matching_close(condition, open_index, PAREN_DELIMITER)
     if close_index is None:
         return None, condition
 
     return condition[: close_index + 1], condition[close_index + 1 :].strip()
-
-
-def _matching_close_paren(text: str, open_index: int) -> int | None:
-    depth = 1
-    for index in range(open_index + 1, len(text)):
-        char = text[index]
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-            if depth == 0:
-                return index
-    return None
 
 
 def _comparison_suffix(suffix: str) -> tuple[str, str] | None:

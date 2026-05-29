@@ -14,6 +14,14 @@ from tslgen.domain.catalog import (
     RawStringToken,
     SelfPrimitiveReference,
 )
+from tslgen.syntax.tsil_lexical import (
+    BRACKET_DELIMITER,
+    PAREN_DELIMITER,
+    LexicalPart,
+    find_top_level_char,
+    matching_close,
+    split_top_level_parts,
+)
 
 _CALL_PREFIX = "call<primitive="
 _SELF_SELECTOR = "@self"
@@ -26,7 +34,7 @@ class _PrimitiveCallMatch:
     selector: str
     selector_parts: "_PrimitiveCallSelectorParts"
     payload: str
-    argument_parts: tuple["_PrimitiveCallArgumentPart", ...]
+    argument_parts: tuple[LexicalPart, ...]
     start: int
     selector_start: int
     end: int
@@ -38,12 +46,6 @@ class _PrimitiveCallSelectorParts:
     target_name: str | None
     specialization: str | None
     attrs: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class _PrimitiveCallArgumentPart:
-    text: str
-    start: int
 
 
 def classify_tsil_primitive_call_tokens(
@@ -138,7 +140,7 @@ def _match_primitive_call(text: str, start: int) -> _PrimitiveCallMatch | None:
     if open_index >= len(text) or text[open_index] != "(":
         return None
 
-    close_index = _matching_close_paren(text, open_index)
+    close_index = matching_close(text, open_index, PAREN_DELIMITER)
     if close_index is None:
         return None
     argument_parts = _split_call_argument_parts(
@@ -161,18 +163,12 @@ def _match_primitive_call(text: str, start: int) -> _PrimitiveCallMatch | None:
 
 
 def _matching_call_selector_end(text: str, start: int) -> int | None:
-    bracket_depth = 0
-    for index in range(start, len(text)):
-        char = text[index]
-        if char == "[":
-            bracket_depth += 1
-        elif char == "]":
-            if bracket_depth == 0:
-                return None
-            bracket_depth -= 1
-        elif char == ">" and bracket_depth == 0:
-            return index
-    return None
+    return find_top_level_char(
+        text,
+        ">",
+        start=start,
+        delimiters=(BRACKET_DELIMITER,),
+    )
 
 
 def _parse_primitive_call_selector(
@@ -196,7 +192,7 @@ def _parse_primitive_call_selector(
 
     specialization: str | None = None
     if index < len(selector) and selector[index] == "[":
-        close_index = _matching_close_bracket(selector, index)
+        close_index = matching_close(selector, index, BRACKET_DELIMITER)
         if close_index is None:
             return None
         specialization = selector[index + 1 : close_index]
@@ -212,7 +208,7 @@ def _parse_primitive_call_selector(
         if not selector.startswith(_ATTRS_PREFIX, index):
             return None
         attrs_open_index = index + len("attrs")
-        close_index = _matching_close_bracket(selector, attrs_open_index)
+        close_index = matching_close(selector, attrs_open_index, BRACKET_DELIMITER)
         if close_index is None:
             return None
         attrs = selector[attrs_open_index + 1 : close_index]
@@ -227,22 +223,6 @@ def _parse_primitive_call_selector(
         specialization=specialization,
         attrs=attrs,
     )
-
-
-def _matching_close_bracket(text: str, open_index: int) -> int | None:
-    if open_index >= len(text) or text[open_index] != "[":
-        return None
-
-    depth = 1
-    for index in range(open_index + 1, len(text)):
-        char = text[index]
-        if char == "[":
-            depth += 1
-        elif char == "]":
-            depth -= 1
-            if depth == 0:
-                return index
-    return None
 
 
 def _primitive_call_from_match(
@@ -280,75 +260,26 @@ def _primitive_call_from_match(
     )
 
 
-def _matching_close_paren(text: str, open_index: int) -> int | None:
-    depth = 1
-    for index in range(open_index + 1, len(text)):
-        char = text[index]
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-            if depth == 0:
-                return index
-    return None
-
-
 def _split_call_argument_parts(
     text: str,
     start: int,
     end: int,
-) -> tuple[_PrimitiveCallArgumentPart, ...] | None:
-    if text[start:end].strip() == "":
-        return ()
-
-    parts: list[_PrimitiveCallArgumentPart] = []
-    part_start = start
-    paren_depth = 0
-    bracket_depth = 0
-
-    for index in range(start, end):
-        char = text[index]
-        if char == "(":
-            paren_depth += 1
-        elif char == ")":
-            if paren_depth == 0:
-                return None
-            paren_depth -= 1
-        elif char == "[":
-            bracket_depth += 1
-        elif char == "]":
-            if bracket_depth == 0:
-                return None
-            bracket_depth -= 1
-        elif char == "," and paren_depth == 0 and bracket_depth == 0:
-            part = _call_argument_part(text, part_start, index)
-            if part is None:
-                return None
-            parts.append(part)
-            part_start = index + 1
-
-    if paren_depth != 0 or bracket_depth != 0:
+) -> tuple[LexicalPart, ...] | None:
+    parts = split_top_level_parts(
+        text[start:end],
+        delimiters=(PAREN_DELIMITER, BRACKET_DELIMITER),
+        allow_empty_payload=True,
+    )
+    if parts is None:
         return None
-
-    part = _call_argument_part(text, part_start, end)
-    if part is None:
-        return None
-    parts.append(part)
-    return tuple(parts)
-
-
-def _call_argument_part(
-    text: str,
-    start: int,
-    end: int,
-) -> _PrimitiveCallArgumentPart | None:
-    while start < end and text[start].isspace():
-        start += 1
-    while end > start and text[end - 1].isspace():
-        end -= 1
-    if start >= end:
-        return None
-    return _PrimitiveCallArgumentPart(text=text[start:end], start=start)
+    return tuple(
+        LexicalPart(
+            text=part.text,
+            start=start + part.start,
+            end=start + part.end,
+        )
+        for part in parts
+    )
 
 
 def _raw_token(

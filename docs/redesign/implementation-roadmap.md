@@ -20668,7 +20668,7 @@ with no output.
 Status:
 
 Accepted. Active next prompt after M162:
-`docs/agent/runs/m163-execution-review-loop-prompt.md`.
+`docs/agent/runs/m162.5-execution-review-loop-prompt.md`.
 
 Goal:
 
@@ -20761,11 +20761,84 @@ validation-created `__pycache__` directories under `tslgen/src/tslgen` and
 `tslgen/tests`; they were removed, and the final cache check returned exit 0
 with no output.
 
+### Milestone 162.5: Shared TSIL Lexical Boundary Refactor
+
+Status:
+
+Accepted. Active next prompt after M162.5:
+`docs/agent/runs/m163-execution-review-loop-prompt.md`.
+
+Goal:
+
+Refactor the recurring balanced-delimiter, top-level comma splitting, and
+exact token-region matching mechanics used by accepted TSIL
+keyword/classifier boundaries into a small shared lexical scanner.
+
+Scope:
+
+- Inventory the currently duplicated delimiter/top-level splitting helpers in
+  accepted TSIL keyword/classifier code, including directive-envelope
+  classification, primitive-call island classification, primitive-call
+  selector payload boundaries, `emit_return(...)` payload-token
+  classification, generation-control/loop-region boundaries,
+  generation-value arithmetic/function argument splitting, and
+  type-syntax/type-query/value-query call boundaries where the same lexical
+  problem is solved locally.
+- Introduce one small shared lexical helper module with documented ownership:
+  lexical delimiter scanning only, no TSIL semantics.
+- Migrate existing accepted users that duplicate the same lexical behavior to
+  the shared helper while preserving accepted diagnostics, source locations,
+  public imports, and tests.
+- Add focused tests for the shared helper and regression tests for migrated
+  keyword/classifier surfaces.
+- Keep user-facing behavior unchanged except for any deliberately equivalent
+  internal refactor.
+
+Out of scope:
+
+New TSIL keywords or accepted source forms; new semantic facts; expression
+ASTs; statement parsing; operator precedence; source repair; renderer
+behavior; dependency scheduling; output writing; runtime `tsldata`, `frozen`,
+or `tslgenold` dependencies; broad parser frameworks, registries,
+dispatchers, worklists, callback maps, hidden backfeeds, or fixpoint
+machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Review result:
+
+The M162.5 execution-review loop returned `Accept With Follow-Ups`. M162.5
+added `tslgen.syntax.tsil_lexical` as a small lexical-only helper for
+balanced delimiter matching, top-level splitting, selector terminator
+discovery, and raw brace-depth updates. Existing accepted directive,
+primitive-call, selector payload, type syntax, generation-loop, and
+generation-control users were migrated where the helper directly fit.
+
+No TSIL keyword semantics, accepted source forms, renderer behavior,
+expression parsing, source repair, broad parser framework, registry,
+dispatcher, worklist, runtime `tsldata`, `frozen`, or `tslgenold` dependency
+was added. Token-level raw-brace region matching for loop/control branch
+closures intentionally remains local because those functions own
+domain-specific diagnostics and connectors.
+
+Validation completed with `git diff --check` returning exit 0 with no output,
+compileall returning exit 0 with no output, pytest returning exit 0 with
+`272 passed in 26.73s`, initial cache check listing validation-created
+`__pycache__` directories under `tslgen/src/tslgen` and `tslgen/tests`, and
+the final cache check returning exit 0 with no output after cleanup.
+
 ### Milestone 163: Exact Generation Variable Declaration Fact Boundary
 
 Status:
 
-Selected after M162 acceptance. Active next prompt:
+Selected after M162.5 acceptance. Active next prompt:
 `docs/agent/runs/m163-execution-review-loop-prompt.md`.
 
 Goal:
@@ -20808,7 +20881,7 @@ Validation:
 
 ```bash
 git diff --check
-python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py
 find tslgen -type d -name __pycache__ -print
 ```
