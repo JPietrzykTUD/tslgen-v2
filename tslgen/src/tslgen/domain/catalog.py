@@ -9,6 +9,7 @@ from tslgen.core.diagnostics import SourceLocation
 
 ExtensionName = NewType("ExtensionName", str)
 TypeTag = NewType("TypeTag", str)
+ReturnTypeBindingKind = Literal["base", "extension"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +99,13 @@ class PrimitiveAttribute:
 
 
 @dataclass(frozen=True, slots=True)
+class ReturnTypeBindingDeclaration:
+    kind: ReturnTypeBindingKind
+    name: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
 class Primitive:
     name: str
     signature: str
@@ -107,6 +115,7 @@ class Primitive:
     source: SourceLocation
     attributes: tuple[PrimitiveAttribute, ...] = ()
     declared_attributes: tuple[PrimitiveAttribute, ...] = ()
+    return_type_binding: ReturnTypeBindingDeclaration | None = None
 
 
 @dataclass(frozen=True, slots=True)

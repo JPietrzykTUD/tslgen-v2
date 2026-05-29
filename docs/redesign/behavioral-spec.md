@@ -1789,6 +1789,44 @@ rendering, source replacement, generic-size-parameter code emission, broad
 expression parsing, source repair, runtime data reads, registries,
 dispatchers, worklists, or fixpoint machinery.
 
+### M168.5 Primitive Return-Type Binding Declaration Boundary
+
+Milestone 168.5 adds a declaration-only boundary for optional primitive-level
+`return_type` bindings. The clean restart parser accepts the exact selected
+forms:
+
+```text
+return_type:
+  base: Identifier
+```
+
+and:
+
+```text
+return_type:
+  extension: Identifier
+```
+
+The binding is promoted into a typed primitive-local domain declaration with
+kind `base` or `extension`, the exact user-defined identifier, and source
+location. The identifier is source-owned and arbitrary. `ToBase` and
+`ToExtension` are examples from current data, not generator keywords.
+
+Current `tsldata/primitives` evidence contains seven `return_type` blocks:
+five single `base: ToBase` bindings and two single `extension: ToExtension`
+bindings. No current corpus primitive has multiple return-type bindings or an
+unsupported return-type key. Primitives without `return_type` are normal and
+carry no declaration.
+
+Malformed selected clean-restart forms, unsupported binding keys, missing
+bindings, and multiple bindings produce deterministic parser diagnostics.
+
+M168.5 does not bind concrete selected type or extension values, lower the
+declared identifier in TSIL expressions, derive `ToType`, parse the full
+implementation selector tree, expand specialization wildcards, evaluate type
+queries, change primitive-call matching, render backend text, repair source,
+or introduce runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

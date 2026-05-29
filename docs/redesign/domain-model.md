@@ -110,11 +110,18 @@ class PrimitiveAttributes:
     values: FrozenMap[str, CatalogValue]
 
 @dataclass(frozen=True, slots=True)
+class PrimitiveReturnTypeBinding:
+    kind: Literal["base", "extension"]
+    name: str
+    span: SourceSpan
+
+@dataclass(frozen=True, slots=True)
 class PrimitiveDeclaration:
     name: PrimitiveName
     signature: Signature
     parameters: tuple[PrimitiveParameter, ...]
     attributes: PrimitiveAttributes
+    return_type_binding: PrimitiveReturnTypeBinding | None
     documentation: PrimitiveDocumentation
     generic_parameters: tuple[GenericParameter, ...]
     immediate: ImmediateSpec | None
@@ -128,11 +135,17 @@ Relationships:
 - A primitive name can have many declarations.
 - A declaration resolves to one template after signature and attribute validation.
 - A declaration can expand into multiple concrete variants when it has boolean wildcard attributes.
+- A declaration may optionally introduce one primitive-local return-type
+  binding such as `base: ResultBase` or `extension: TargetExtension`.
 
 Invariants:
 
 - Parameter count must match the signature shape after repeated/immediate rules are applied.
 - Attributes must be valid for the signature and template.
+- Return-type binding names are arbitrary source-defined identifiers, not
+  generator keywords. `ToBase` and `ToExtension` are corpus examples only.
+- Absence of `return_type` is normal and means the declaration has no
+  return-type binding.
 - A declaration must have a stable source identity for diagnostics.
 - Wildcard attributes must not survive past variant expansion.
 
@@ -1370,7 +1383,10 @@ Invariants:
   semantic input to that type transform without rendering it.
 - Observed specialization names such as `ToBase`, `ToType`, and
   `ToExtension` are `LoweredSpecializationTypeSymbol` values only when they
-  appear inside supported observed type transforms.
+  appear inside supported observed type transforms. M168.5 additionally
+  records primitive-local `return_type` declarations for arbitrary source names
+  such as `base: ToBase` or `extension: ToExtension`; selected-value binding
+  and identifier resolution remain later lowering work.
 - Raw source text is retained only as diagnostic/provenance context, not as a
   semantic value consumed by renderers.
 

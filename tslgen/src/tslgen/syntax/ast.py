@@ -8,6 +8,7 @@ from tslgen.core.diagnostics import Diagnostic, SourceLocation
 
 PARSED_TSIL_BODY_ENVELOPE = "tsil"
 ParsedImplementationBodyEnvelope = Literal["unknown", "tsil"]
+ParsedReturnTypeBindingKind = Literal["base", "extension"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +77,13 @@ class ParsedPrimitiveAttribute:
 
 
 @dataclass(frozen=True, slots=True)
+class ParsedReturnTypeBinding:
+    kind: ParsedReturnTypeBindingKind
+    name: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
 class ParsedPrimitive:
     name: str
     signature: str
@@ -83,6 +91,7 @@ class ParsedPrimitive:
     implementations: tuple[ParsedImplementation, ...]
     source: SourceLocation
     attributes: tuple[ParsedPrimitiveAttribute, ...] = ()
+    return_type_binding: ParsedReturnTypeBinding | None = None
 
 
 @dataclass(frozen=True, slots=True)

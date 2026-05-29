@@ -13,6 +13,7 @@ from tslgen.domain.catalog import (
     Primitive,
     PrimitiveAttribute,
     RawStringToken,
+    ReturnTypeBindingDeclaration,
 )
 from tslgen.pipeline.extension_catalog import build_extension_catalog, build_type_groups
 from tslgen.pipeline._tsil_directives import classify_tsil_directive_line
@@ -229,6 +230,7 @@ class CatalogBuilder:
             source=parsed.source,
             attributes=variant.attributes,
             declared_attributes=variant.declared_attributes,
+            return_type_binding=_domain_return_type_binding(parsed),
         )
 
     def _build_implementation(
@@ -411,6 +413,19 @@ def _domain_attribute(
         value=value,
         source=attribute.source,
         declared_value=declared_value or attribute.value,
+    )
+
+
+def _domain_return_type_binding(
+    primitive: ParsedPrimitive,
+) -> ReturnTypeBindingDeclaration | None:
+    binding = primitive.return_type_binding
+    if binding is None:
+        return None
+    return ReturnTypeBindingDeclaration(
+        kind=binding.kind,
+        name=binding.name,
+        source=binding.source,
     )
 
 

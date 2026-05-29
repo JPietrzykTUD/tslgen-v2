@@ -15,6 +15,7 @@ from tslgen.syntax.ast import (
     ParsedPrimitive,
     ParsedPrimitiveAttribute,
     ParsedRawStringLine,
+    ParsedReturnTypeBinding,
     ParseResult,
     ParsedSegmentedLine,
     ParsedTypeGroup,
@@ -62,6 +63,11 @@ _IMPLEMENTATION_PATTERN = re.compile(
     r"^  implementation "
     r"(?P<extension>scalar) "
     r"(?P<type_tag>[A-Za-z_][A-Za-z0-9_]*):$"
+)
+_RETURN_TYPE_HEADER = "  return_type:"
+_RETURN_TYPE_BINDING_PATTERN = re.compile(
+    r"^    (?P<kind>base|extension): "
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)$"
 )
 _EXTENSION_HEADER_PATTERN = re.compile(
     r"^extension (?P<name>[A-Za-z_][A-Za-z0-9_]*):$"
@@ -148,6 +154,22 @@ class TslParser:
         parameters = _split_names(header.group("params"))
         parsed_implementations: list[ParsedImplementation] = []
         next_index = header_index + 1
+        return_type_binding: ParsedReturnTypeBinding | None = None
+        return_type_index = _next_meaningful_index(source_lines, next_index)
+        if (
+            return_type_index is not None
+            and source_lines[return_type_index][1] == _RETURN_TYPE_HEADER
+        ):
+            parsed_return_type = _parse_return_type_binding(
+                document,
+                source_lines,
+                return_type_index,
+                diagnostics,
+            )
+            if parsed_return_type is None:
+                return None
+            return_type_binding, next_index = parsed_return_type
+
         while True:
             implementation_index = _next_meaningful_index(source_lines, next_index)
             if implementation_index is None:
@@ -244,6 +266,7 @@ class TslParser:
             implementations=tuple(parsed_implementations),
             source=SourceLocation(document.path, header_line_no, 1),
             attributes=attributes,
+            return_type_binding=return_type_binding,
         )
         return ParsedDocument(
             path=document.path.as_posix(),
@@ -550,6 +573,88 @@ def _parse_attributes(
         offset += len(raw_part) + 1
 
     return tuple(attributes)
+
+
+def _parse_return_type_binding(
+    document: SourceDocument,
+    lines: tuple[tuple[int, str], ...],
+    return_type_index: int,
+    diagnostics: list[Diagnostic],
+) -> tuple[ParsedReturnTypeBinding, int] | None:
+    return_type_line_no, _ = lines[return_type_index]
+    binding_index = _next_meaningful_index(lines, return_type_index + 1)
+    if binding_index is None:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-PARSE-UNSUPPORTED-FORM",
+                message=(
+                    "return_type block is missing a binding; expected exactly "
+                    "'base: Identifier' or 'extension: Identifier'"
+                ),
+                location=SourceLocation(document.path, return_type_line_no, 3),
+            )
+        )
+        return None
+
+    binding_line_no, binding_line = lines[binding_index]
+    binding_indent = len(binding_line) - len(binding_line.lstrip(" "))
+    binding_location = SourceLocation(document.path, binding_line_no, binding_indent + 1)
+    if binding_indent != 4:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-PARSE-UNSUPPORTED-FORM",
+                message=(
+                    "return_type block is missing a binding; expected exactly "
+                    "'base: Identifier' or 'extension: Identifier'"
+                ),
+                location=binding_location,
+            )
+        )
+        return None
+
+    binding = _RETURN_TYPE_BINDING_PATTERN.match(binding_line)
+    if binding is None:
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-PARSE-UNSUPPORTED-FORM",
+                message=(
+                    "unsupported return_type binding; expected exactly "
+                    "'base: Identifier' or 'extension: Identifier'"
+                ),
+                location=binding_location,
+            )
+        )
+        return None
+
+    next_index = _next_meaningful_index(lines, binding_index + 1)
+    if next_index is not None:
+        next_line_no, next_line = lines[next_index]
+        next_indent = len(next_line) - len(next_line.lstrip(" "))
+        if next_indent > 2:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-PARSE-UNSUPPORTED-FORM",
+                    message=(
+                        "return_type block supports exactly one binding; "
+                        "expected the next primitive-level field or implementation"
+                    ),
+                    location=SourceLocation(document.path, next_line_no, next_indent + 1),
+                )
+            )
+            return None
+
+    return (
+        ParsedReturnTypeBinding(
+            kind=binding.group("kind"),
+            name=binding.group("name"),
+            source=binding_location,
+        ),
+        binding_index + 1,
+    )
 
 
 def _parse_implementation_body(

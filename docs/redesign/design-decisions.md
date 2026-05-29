@@ -2100,3 +2100,34 @@ Consequences:
   flow and use the helper only for the lexical subproblem that directly fits.
 - The helper must remain dependency-light and below pipeline/lowering semantics
   in the package dependency direction.
+
+## ADR-042: Return-Type Binding Names Are Primitive-Local Source Declarations
+
+Status: Accepted
+
+Context:
+
+Current `.tsl` conversion and load/store primitives can declare a
+`return_type` block with a user-defined identifier, for example
+`base: ToBase` or `extension: ToExtension`. That identifier is later used in
+specialization branches and TSIL type queries. Treating spellings such as
+`ToBase` or `ToExtension` as generator keywords would move source-owned
+meaning into hidden generator convention.
+
+Decision:
+
+The primitive declaration owns an optional return-type binding declaration.
+The declaration records only the binding kind (`base` or `extension`), the
+exact source-defined identifier, and source location. Absence of
+`return_type` is normal. Concrete selected values for the declared identifier
+belong to later selected-context binding work.
+
+Consequences:
+
+- `ToBase`, `ToExtension`, and similar names are corpus examples, not magic
+  global names.
+- M168.5 stores declarations only; it does not lower identifiers or bind
+  selected type/extension values.
+- M169 and later selection/lowering work must resolve such identifiers through
+  explicit selected context supplied for the primitive declaration, not through
+  raw-name guessing.

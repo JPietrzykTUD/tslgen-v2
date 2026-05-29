@@ -45,6 +45,9 @@ must not parse or infer the full `.tsl` implementation selector tree.
 - `docs/redesign/missing-lowering-inventory.md`
 - `tslgen/src/tslgen/analysis/selection.py`
 - `tslgen/src/tslgen/domain/catalog.py`
+- `tslgen/src/tslgen/syntax/ast.py`
+- `tslgen/src/tslgen/syntax/parser.py`
+- `tslgen/src/tslgen/pipeline/catalog_builder.py`
 - `tslgen/src/tslgen/lowering/model.py`
 - `tslgen/src/tslgen/lowering/type_queries.py`
 - `tslgen/src/tslgen/lowering/selector_payload.py`
@@ -53,6 +56,7 @@ must not parse or infer the full `.tsl` implementation selector tree.
 - `tslgen/src/tslgen/lowering/generation_values.py`
 - `tslgen/src/tslgen/lowering/lowerer.py`
 - `tslgen/tests/test_m107_tiny_pipeline.py`
+- `tslgen/tests/test_m1685_return_type_bindings.py`
 - `tslgen/tests/test_m144_selector_payload.py`
 - `tslgen/tests/test_m145_primitive_call_target_matching.py`
 - `tslgen/tests/test_m168_generic_generation_expressions.py`
@@ -171,6 +175,8 @@ Run exactly one write-capable executor for M169. The executor should:
 - M155-M168 generation-value, generation-expression, control, loop,
   declaration, backend query/control, intrinsic, source-operation, and
   primitive-call behavior.
+- M168.5 primitive-local return-type binding declarations, including absent
+  declaration behavior and arbitrary source-defined binding names.
 - Existing diagnostics for unbound aliases, unsupported type expressions,
   unresolved generic vector types, missing generic vector metadata, and
   unsupported generic operations.
@@ -217,8 +223,8 @@ Run:
 
 ```bash
 git diff --check
-python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py
 find tslgen -type d -name __pycache__ -print
 ```
 

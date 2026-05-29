@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 168 is accepted.
+Milestone 168.5 is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -91,6 +91,21 @@ metadata, runtime/scalable metadata, and size-parameter-only metadata remain
 diagnostics. No raw target-language scanning, loop execution, rendering,
 source replacement, registries, dispatchers, worklists, or runtime `tsldata`,
 `frozen`, or `tslgenold` dependency was added.
+
+The M168.5 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, evidence, test,
+documentation, and validation audits. M168.5 added an optional
+primitive-local `return_type` binding declaration boundary. The clean restart
+parser and catalog now preserve supported `base: Identifier` and
+`extension: Identifier` forms as typed declarations on `Primitive`, with
+arbitrary source-defined names and source locations. Absence of `return_type`
+is normal.
+
+M168.5 stores declarations only. It did not bind concrete selected type or
+extension values, lower declared identifiers in TSIL expressions, derive
+`ToType`, parse the full implementation selector tree, expand specialization
+wildcards, change primitive-call matching, render backend text, repair source,
+or introduce runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -2821,58 +2836,58 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 168.5.
+Execute Milestone 169.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m168.5-execution-review-loop-prompt.md
+docs/agent/runs/m169-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 168.5: Primitive Return-Type Binding Declaration Boundary
+Milestone 169: Exact Selected Specialization Binding Boundary
 ```
 
 Latest review verdict:
 
 ```text
-M168 execution-review returned Accept With Follow-Ups after one write-capable
-executor and read-only architecture, boundary, evidence, test, documentation,
-and validation audits.
+M168.5 execution-review returned Accept With Follow-Ups after one
+write-capable executor and read-only architecture, boundary, evidence, test,
+documentation, and validation audits.
 
-M168 added exact `generic::*` generation-expression lowering for
-`generic::length(TYPE_EXPR)` and fixed-vector
-`generic::runtime_length(TYPE_EXPR)` through a reusable
-`lower_generation_expression(...)` entry point. `value<generation>(...)`
-remains a caller/materialization context, not the semantic owner.
+M168.5 added declaration-only parser/domain/catalog support for optional
+primitive-local `return_type` bindings. Current corpus evidence contains seven
+single-binding `return_type` blocks: five `base: ToBase` and two
+`extension: ToExtension`; no current corpus primitive has unsupported keys,
+missing bindings, or multiple return-type bindings. The binding names remain
+source-defined identifiers, not generator keywords.
 
-M168 review verdicts were: architecture `Accept With Follow-Ups`, boundary
-`Accept`, evidence `Accept`, test `Accept With Follow-Ups`, documentation
-`Accept`, and validation `Accept`.
+M168.5 review verdicts were: architecture `Accept`, boundary `Accept`,
+evidence `Accept`, test `Accept`, documentation `Accept`, and validation
+`Accept With Follow-Ups`. The validation follow-up was satisfied by including
+`tslgen/tests/test_m1685_return_type_bindings.py` in final validation.
 ```
 
 Next expected action:
 
 ```text
-Run the active M168.5 execution-review-loop prompt. M168.5 should add the
-primitive-local declaration boundary for optional `return_type` bindings,
-preserving arbitrary source-defined names such as `ToBase` or `ToExtension`
-without treating those spellings as generator keywords.
+Run the active M169 execution-review-loop prompt. M169 should add explicit
+selected-specialization bindings to the type-lowering context so
+primitive-declared return-type symbols and related selected symbols resolve
+only when the selected target/context supplies concrete typed facts.
 
-M168.5 should inventory `return_type` evidence across all `tsldata/**/*.tsl`,
-then store an optional typed declaration on `Primitive` for supported
-`base: Identifier` and `extension: Identifier` forms. It must not bind
-concrete selected values, lower those identifiers, parse the full nested
-implementation selector tree, expand wildcards, or use primitive attributes as
-hidden carriers for type/extension facts.
+M169 consumes the M168.5 primitive-local declarations; it must not infer
+meanings from raw names such as `ToBase`, parse the full nested implementation
+selector tree, expand wildcards, or use primitive attributes as hidden carriers
+for type/extension facts.
 
-This inserted step is useful because M169 needs to resolve selected
-specialization symbols from source-declared primitive context, not from raw
-name guesses. Once M168.5 records the optional declaration and arbitrary
-identifier, M169 can bind concrete selected values to that declaration.
+This is the next useful step because M168 can lower generic vector lengths
+only after aliases such as `OutVec` lower to concrete vector facts; corpus
+aliases often pass through declared return-type symbols such as `ToBase` or
+`ToExtension`.
 ```
 
 Previous review verdict:
@@ -6759,13 +6774,27 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M168.5
+No stop condition is active. The workflow is ready to run the active M169
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M168.5 execution, run the validation command listed in
-`docs/agent/runs/m168.5-execution-review-loop-prompt.md`.
+For active M169 execution, run the validation command listed in
+`docs/agent/runs/m169-execution-review-loop-prompt.md`.
+
+For M168.5 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M168.5 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`279 passed in 21.52s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed.
 
 For M168 execution and review, validation completed with:
 

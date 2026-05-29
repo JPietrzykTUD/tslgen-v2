@@ -21377,8 +21377,8 @@ after validation-created `__pycache__` directories were removed.
 
 Status:
 
-Selected after M168 acceptance and inserted before M169. Active next prompt:
-`docs/agent/runs/m168.5-execution-review-loop-prompt.md`.
+Accepted. Active next prompt after M168.5:
+`docs/agent/runs/m169-execution-review-loop-prompt.md`.
 
 Goal:
 
@@ -21428,19 +21428,26 @@ Validation:
 
 ```bash
 git diff --check
-python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py
 find tslgen -type d -name __pycache__ -print
 ```
 
-If the executor adds focused M168.5 test files, include them in the compileall
-and targeted pytest commands.
+The M168.5 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, evidence, test,
+documentation, and validation audits. The only follow-up was to include the
+focused M168.5 test file in final validation reporting, which was completed.
+
+The final M168.5 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`279 passed in 21.52s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed.
 
 ### Milestone 169: Exact Selected Specialization Binding Boundary
 
 Status:
 
-Deferred until M168.5 is accepted. Planned prompt:
+Selected after M168.5 acceptance. Active next prompt:
 `docs/agent/runs/m169-execution-review-loop-prompt.md`.
 
 Goal:
