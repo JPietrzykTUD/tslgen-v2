@@ -20922,8 +20922,8 @@ Follow-ups:
 
 Status:
 
-Selected after M163 acceptance. Active next prompt:
-`docs/agent/runs/m164-execution-review-loop-prompt.md`.
+Accepted. Active next prompt after M164:
+`docs/agent/runs/m165-execution-review-loop-prompt.md`.
 
 Goal:
 
@@ -20964,7 +20964,360 @@ Validation:
 
 ```bash
 git diff --check
-python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py
 find tslgen -type d -name __pycache__ -print
 ```
+
+Review result:
+
+The M164 execution-review loop returned `Accept` after one write-capable
+executor, focused revisions, and read-only architecture, boundary, evidence,
+test, documentation, and validation audits. M164 added exact
+`value<backend>(...)` backend value query request discovery over source-owned
+text and raw body tokens. Query payload text remains backend-owned opaque
+text, surrounding text/tokens remain opaque spans, and no backend value
+translation, rendering, expression parsing, type inference, source repair, or
+runtime `tsldata`, `frozen`, or `tslgenold` dependency was added.
+
+Focused revisions fixed pre-acceptance review issues by making the query
+island matcher quote-aware for delimiter-looking characters inside quoted
+payload strings, tightening malformed-query diagnostic assertions, adding
+corpus-backed opaque payload coverage, and correcting documentation
+acceptance/validation placement.
+
+### Milestone 165: Exact Backend-Control Directive Request Boundary
+
+Status:
+
+Accepted. Active next prompt after M165:
+`docs/agent/runs/m166-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the next backend-owned lowering boundary for already classified
+backend-control directive tokens such as `if<compile>(...)`,
+`else<compile>`, and `switch<compile>(...)`. These directives are generation
+relevant, but normally backend-specific rather than generation-time-solvable;
+this milestone records unresolved backend-control directive requests and
+preserves surrounding tokens.
+
+Scope:
+
+- Inventory current backend-control forms across all `tsldata/**/*.tsl`
+  files, including present compile-control evidence and runtime-control
+  absence/presence.
+- Recognize exact classified `LowerableDirective` backend-control tokens for
+  the selected `compile` selector.
+- Preserve condition/selector payload text as opaque backend-owned text.
+- Preserve all non-control body tokens as source-owned opaque spans.
+- Do not match branch bodies or raw brace blocks, select branches, evaluate
+  compile conditions, choose backend spellings, render target-language flow,
+  or special-case surrounding corpus patterns.
+- Emit deterministic diagnostics for unsupported backend-control selectors,
+  malformed directive arity, and no backend-control directive when explicitly
+  requested.
+
+Out of scope:
+
+Backend-control translation/results; backend-specific spelling; rendering;
+branch selection; block matching; runtime-control support unless explicitly
+selected by corpus evidence; declaration rendering; type inference; symbol
+tables; initializer expression evaluation; recursive payload lowering;
+`let<...>` lowering; loop execution or unrolling; loop-variable substitution;
+assignment, array-access, cast, memory, I/O, intrinsic, primitive-call,
+backend value/type query, or backend rendering; source repair; dependency
+scheduling; output writing; runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies; broad registries, dispatchers, worklists, callback maps, hidden
+backfeeds, or fixpoint mechanisms.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m165_backend_control.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m165_backend_control.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Review result:
+
+The M165 execution-review loop returned `Accept` after one write-capable
+executor, focused documentation/evidence revisions, and read-only
+architecture, boundary, evidence, test, documentation, and validation audits.
+M165 added exact backend-control directive request discovery over already
+classified `LowerableDirective` body tokens for `if<compile>(...)`,
+`else<compile>`, and `switch<compile>(...)`. Payload text remains
+backend-owned opaque text, non-control tokens remain source-owned opaque
+spans, `runtime` selectors are rejected, and no branch selection, block
+matching, backend-control translation, rendering, source repair, or runtime
+`tsldata`, `frozen`, or `tslgenold` dependency was added.
+
+Focused revisions corrected the full corpus evidence row for backend-control
+forms and placed the M165 validation command under the M165 milestone block.
+The final M165 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`327 passed in 28.41s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed.
+
+### Milestone 166: Exact Backend Intrinsic Request-Island Boundary
+
+Status:
+
+Accepted. Active next prompt after M166:
+`docs/agent/runs/m167-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the next backend-owned lowering boundary for exact intrinsic keyword
+islands in source-owned text:
+
+```text
+intrin<HEAD_TEXT>(ARGUMENT_TEXT)
+intrin_compose<HEAD_AND_MODIFIER_TEXT>(ARGUMENT_TEXT)
+```
+
+These forms are generation relevant, but they are backend-owned operation
+requests rather than portable primitive semantics. M166 records unresolved
+backend intrinsic requests and preserves surrounding source text/tokens.
+
+Scope:
+
+- Inventory current `intrin<...>(...)` and `intrin_compose<...>(...)` forms
+  across all `tsldata/**/*.tsl` files before implementation.
+- Recognize exact balanced intrinsic islands in source-owned text and body
+  token streams without depending on whether the island appears inside
+  `emit_return`, `var`, assignments, branches, loops, primitive-call
+  arguments, casts, or other surroundings.
+- Preserve intrinsic head/modifier text and argument text as opaque
+  backend-owned text. Nested `value<backend>(...)`,
+  `value<generation>(...)`, `type<generation>(...)`, `type<backend>(...)`,
+  primitive calls, casts, target identifiers, target literals, raw operators,
+  helper calls, and nested intrinsic text inside the argument payload are not
+  interpreted by M166.
+- Preserve non-intrinsic source text and non-raw body tokens as opaque spans
+  in source order.
+- Emit deterministic diagnostics for malformed outer intrinsic islands and no
+  intrinsic island when explicitly requested.
+
+Out of scope:
+
+Backend intrinsic translation/results; intrinsic-name lookup; suffix, prefix,
+postfix, infix, immediate, or target-template evaluation; backend-specific
+spelling; rendering; argument splitting; recursive payload lowering;
+generation/backend query evaluation; declaration rendering; branch selection;
+block matching; loop execution or unrolling; type inference; symbol tables;
+assignment, array-access, cast, memory, I/O, primitive-call, backend-control,
+or backend rendering; source repair; dependency scheduling; output writing;
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad registries,
+dispatchers, worklists, callback maps, hidden backfeeds, or fixpoint
+mechanisms.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m165_backend_control.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m165_backend_control.py
+find tslgen -type d -name __pycache__ -print
+```
+
+If the executor adds focused M166 test files, include them in the compileall
+and targeted pytest commands.
+
+M166 implementation should include `tslgen/tests/test_m166_backend_intrinsics.py`
+in the compileall and targeted pytest commands.
+
+Review result:
+
+The M166 execution-review loop returned `Accept` after one write-capable
+executor, one focused revision, and read-only architecture, boundary,
+evidence, test, documentation, validation, and focused re-review audits. M166
+added exact backend intrinsic request-island discovery for
+`intrin<...>(...)` and `intrin_compose<...>(...)` over source-owned text and
+contiguous raw body-token runs. Payload text remains opaque, non-raw body
+tokens remain opaque, and no intrinsic-name lookup, modifier evaluation,
+argument splitting, backend intrinsic translation, rendering, source repair,
+or runtime `tsldata`, `frozen`, or `tslgenold` dependency was added.
+
+The focused revision fixed the blocking corpus boundary issue by scanning
+contiguous `RawStringToken` runs before diagnosing malformed intrinsic
+islands, so multiline intrinsic islands split across TSIL source lines are
+handled as one exact island. The final M166 validation run returned exit 0 for
+`git diff --check` with no output, exit 0 for compileall with no output, exit
+0 for targeted pytest with `350 passed in 25.04s`, and exit 0 for the final
+cache check with no output after validation-created `__pycache__` directories
+were removed.
+
+### Milestone 167: Exact Cast/Memory/I/O Request-Island Boundary
+
+Status:
+
+Selected after M166 acceptance. Active next prompt:
+`docs/agent/runs/m167-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the next source/backend-owned lowering boundary for exact keyword islands
+that share the same outer TSIL shape:
+
+```text
+cast<CAST_MODE_TEXT>(ARGUMENT_TEXT)
+mem<MEMORY_OPERATION_TEXT>(ARGUMENT_TEXT)
+io<IO_OPERATION_TEXT>(ARGUMENT_TEXT)
+```
+
+These forms are generation relevant, but M167 records unresolved request
+islands only. It does not interpret cast modes, memory operation names, I/O
+operation names, type spellings, arguments, pointer expressions, or surrounding
+statements.
+
+Scope:
+
+- Inventory current `cast<...>(...)`, `mem<...>(...)`, and `io<...>(...)`
+  forms across all `tsldata/**/*.tsl` files before implementation.
+- Recognize exact balanced islands in source-owned text and contiguous raw
+  body-token streams without depending on whether the island appears inside
+  `emit_return`, `var`, assignment, branch, loop, primitive-call argument,
+  intrinsic argument, backend-control payload, or raw target-language text.
+- Preserve keyword kind, opaque angle payload text, opaque argument text,
+  complete source island text, and source locations.
+- Preserve non-island source text and non-raw body tokens as opaque spans in
+  source order.
+- Emit deterministic diagnostics for malformed outer islands and for no exact
+  selected island when explicitly requested.
+
+Out of scope:
+
+Cast translation/results; memory/I/O translation/results; validation of cast
+modes or operation names; type lowering inside payloads; argument splitting;
+pointer arithmetic; expression or statement parsing; generation/backend query
+evaluation; intrinsic, primitive-call, backend-control, declaration, loop, or
+return rendering; source repair; dependency scheduling; output writing;
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad registries,
+dispatchers, worklists, callback maps, hidden backfeeds, or fixpoint
+mechanisms.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m165_backend_control.py tslgen/tests/test_m166_backend_intrinsics.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m165_backend_control.py tslgen/tests/test_m166_backend_intrinsics.py
+find tslgen -type d -name __pycache__ -print
+```
+
+If the executor adds focused M167 test files, include them in the compileall
+and targeted pytest commands.
+
+Review result:
+
+The M167 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor, one focused documentation/evidence revision, and
+read-only architecture, boundary, evidence, test, documentation, validation,
+and focused re-review audits. M167 added exact source-operation request-island
+discovery for `cast<...>(...)`, `mem<...>(...)`, and `io<...>(...)` over
+source-owned text and contiguous raw body-token runs. Operation kind, angle
+payload text, argument payload text, source island text, and source locations
+are preserved; non-raw body tokens remain opaque; and no operation-name
+validation, type lowering inside payloads, argument splitting, backend
+translation, rendering, source repair, runtime `tsldata`, runtime `frozen`, or
+runtime `tslgenold` dependency was added.
+
+The focused revision fixed the documentation sequencing issue identified by
+review: inventory docs no longer marked M167 accepted before the orchestrator
+state transition, and the TSIL surface inventory now lists the observed
+cast/memory/I/O operation names as examples rather than as a closed operation
+set.
+
+Review verdicts were: architecture `Accept With Follow-Ups`, boundary
+`Accept`, evidence `Accept With Minor Docs Follow-Up`, test
+`Accept With Follow-Up`, documentation initially `Needs Revision`, validation
+`Accept`, and focused documentation/evidence re-review `Accept`.
+
+The final M167 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`375 passed in 30.96s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed.
+
+Recorded follow-ups:
+
+- Add an explicit raw branch/loop surrounding-text example to M167 tests if a
+  future slice touches nearby body-token discovery again.
+- Consider later lexical hardening for keyword-looking text inside raw target
+  string literals if source string literals become common inputs to direct
+  text-fragment discovery.
+
+### Milestone 168: Exact `generic::*` Generation-Expression Boundary
+
+Status:
+
+Selected after M167 acceptance. Active next prompt:
+`docs/agent/runs/m168-execution-review-loop-prompt.md`.
+
+Goal:
+
+Lower the largest safe remaining `generic::*` generation-expression subset:
+
+```text
+generic::length(TYPE_EXPR)
+generic::runtime_length(TYPE_EXPR)
+```
+
+`TYPE_EXPR` must lower through the already accepted M143 type-expression and
+`let<type>(...)` alias environment first. M168 should produce integer
+generation values only when a selected TSIL generation-time context provides
+the expression payload, the lowered type value resolves to a concrete fixed
+vector extension plus concrete scalar type, and the catalog has fixed lane
+metadata for that extension/type combination. Runtime/scalable,
+generic-size-parameter, unresolved alias/specialization, non-vector,
+metadata-missing, or unknown `generic::OP(...)` cases are deterministic
+diagnostic boundaries.
+
+`value<generation>(...)` is one caller/materialization context for this
+capability, not the semantic owner of `generic::*`. M168 must not scan
+arbitrary raw target-language text for `generic::*` calls.
+
+Scope:
+
+- Inventory current `generic::length(...)` and
+  `generic::runtime_length(...)` evidence across all `tsldata/**/*.tsl` files
+  before implementation.
+- Add or extend the smallest central generation-expression lowering
+  capability for exact `generic::OP(...)` expressions, with direct support for
+  `length` and fixed-vector `runtime_length`.
+- Reuse existing selected type-environment and type-expression lowering; do
+  not match alias names or type expressions by raw text.
+- Add typed generation-value kind(s) for successfully resolved generic vector
+  length/runtime length values.
+- Compute fixed lane counts from explicit catalog extension metadata and
+  scalar type descriptors only when those facts are concrete.
+- Wire existing generation-expression callers only where they already provide
+  expression payloads through the same boundary; do not overfit to surrounding
+  source shapes.
+- Preserve existing M155-M167 generation-value, control, loop, declaration,
+  backend query/control, intrinsic, and source-operation behavior.
+
+Out of scope:
+
+Loop execution or unrolling; loop-variable substitution; branch selection
+changes; declaration rendering; source replacement; backend rendering; cast,
+memory, I/O, intrinsic, primitive-call, or backend-control translation;
+runtime/scalable vector-length solving; generic-size-parameter code emission;
+type inference; arbitrary expression/statement parsing; scanning opaque raw
+target-language text for `generic::*`; source repair; dependency scheduling;
+output writing; runtime `tsldata`, `frozen`, or `tslgenold` dependencies;
+broad registries, dispatchers, worklists, callback maps, hidden backfeeds, or
+fixpoint machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m165_backend_control.py tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m167_source_operations.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m165_backend_control.py tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m167_source_operations.py
+find tslgen -type d -name __pycache__ -print
+```
+
+If the executor adds focused M168 test files, include them in the compileall
+and targeted pytest commands.

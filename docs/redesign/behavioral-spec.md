@@ -1569,6 +1569,192 @@ source text, schedule dependencies, write output, read `tsldata`, `frozen`, or
 `tslgenold` at runtime, or add broad registries, dispatchers, worklists,
 callback maps, hidden backfeeds, or fixpoint machinery.
 
+### M164 Backend Value Query Request Boundary
+
+Milestone 164 adds exact discovery for backend value query islands in
+source-owned text:
+
+```text
+value<backend>(QUERY_TEXT)
+```
+
+Discovery records each island as an unresolved backend-owned value query
+request. `QUERY_TEXT` and the complete source island text are preserved with
+source locations. M164 does not evaluate the query, choose a backend spelling,
+translate the value, or render target-language code.
+
+The text-fragment helper preserves opaque text before, between, and after
+multiple query islands in source order. The body-token helper scans only
+`RawStringToken` text and preserves all non-raw body tokens as opaque token
+spans. Opaque payload carriers such as M163 declaration initializer/type text
+can call the text helper explicitly; M164 does not recursively inspect every
+directive argument or payload in the body model.
+
+The accepted outer shape is only balanced `value<backend>(...)`. Payload text
+may contain nested `type<generation>(...)`, `type<backend>(...)`, quoted
+strings, intrinsic names, backend keys, casts, primitive calls, operators, and
+helper calls; those nested constructs remain opaque. Corpus neighbor patterns
+such as `intrin_compose<..., suffix=value<backend>(...)>(...)` or
+`var<typed>(..., value<backend>(...))` are evidence for occurrence sites, not
+accepted surrounding-shape templates.
+
+Malformed outer query islands and explicit discovery requests with no exact
+backend value query produce deterministic diagnostics.
+
+M164 does not add backend value translation/results, backend-specific
+spellings, rendering, broad `type<backend>(...)` discovery, declaration
+rendering, type inference, symbol tables, initializer evaluation, recursive
+query-payload lowering, `let<...>` lowering, loop execution, assignment,
+array-access, cast, memory, I/O, intrinsic, primitive-call, backend-control,
+or backend rendering semantics, source repair, dependency scheduling, output
+writing, runtime `tsldata`, `frozen`, or `tslgenold` dependencies, or broad
+registries, dispatchers, worklists, callback maps, hidden backfeeds, or
+fixpoint machinery.
+
+### M165 Backend-Control Directive Request Boundary
+
+Milestone 165 adds exact discovery for already classified backend-control
+directive tokens:
+
+```text
+if<compile>(CONDITION_TEXT)
+else<compile>
+switch<compile>(SELECTOR_TEXT)
+```
+
+Discovery records each accepted token as an unresolved backend-owned control
+directive request. The directive name, `compile` selector, reconstructed
+directive source text, source location, and opaque payload text when present
+are preserved. `CONDITION_TEXT` and `SELECTOR_TEXT` are backend-owned text for
+later backend translation/rendering; M165 does not evaluate them or choose a
+target-language control spelling.
+
+M165 consumes only classified `LowerableDirective` body tokens. It does not
+scan raw source text for backend-control directives. All non-control tokens,
+including raw braces, raw branch bodies, generation-control directives,
+generation loops, declarations, primitive-call directives, backend value
+queries, type queries, returns, assignments, helper calls, casts, intrinsics,
+array indexing, and other raw target-language text, are preserved as opaque
+token spans.
+
+The selected selector is `compile`. Classified `if<generation>` and
+`else<generation>` tokens remain generation-control tokens outside M165.
+Classified `runtime` backend-control selectors are rejected by M165 because
+the current `.tsl` corpus does not use `if<runtime>` / `else<runtime>` and no
+runtime-control boundary has been selected.
+
+Malformed accepted compile-control directive arity and explicit discovery
+requests with no exact compile-control directive produce deterministic
+diagnostics.
+
+M165 does not add backend-control translation/results, backend-specific
+spellings, rendering, branch selection, block matching, compile-condition
+evaluation, switch execution, type inference, symbol tables, initializer
+evaluation, recursive payload lowering, loop execution, source repair,
+dependency scheduling, output writing, runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies, or broad registries, dispatchers, worklists,
+callback maps, hidden backfeeds, or fixpoint machinery.
+
+### M166 Backend Intrinsic Request-Island Boundary
+
+Milestone 166 adds exact discovery for backend intrinsic islands in
+source-owned text:
+
+```text
+intrin<HEAD_TEXT>(ARGUMENT_TEXT)
+intrin_compose<HEAD_AND_MODIFIER_TEXT>(ARGUMENT_TEXT)
+```
+
+Discovery records each island as an unresolved backend-owned intrinsic
+request. The intrinsic keyword kind, opaque angle payload text, opaque
+argument payload text, complete source island text, and source locations are
+preserved. M166 does not check whether an intrinsic name is valid for a
+backend, evaluate modifiers, split arguments, choose a backend spelling, or
+render target-language calls.
+
+The text-fragment helper preserves opaque text before, between, and after
+multiple intrinsic islands in source order. The body-token helper scans only
+`RawStringToken` text and preserves all non-raw body tokens as opaque token
+spans. Opaque payload carriers such as declaration initializer text, return
+payload text, backend-control payload text, or primitive-call argument text
+can call the text helper explicitly; M166 does not add context-specific
+consumers for every possible surrounding TSIL construct.
+
+The accepted outer shape is only a balanced `intrin<...>(...)` or
+`intrin_compose<...>(...)` island. Payload text may contain nested
+`value<backend>(...)`, `value<generation>(...)`, `type<generation>(...)`,
+`type<backend>(...)`, `call<primitive=...>(...)`, `cast<...>(...)`,
+`intrin<...>(...)`, `intrin_compose<...>(...)`, target identifiers, target
+literals, raw operators, quoted text, and helper calls; those nested
+constructs remain opaque. Corpus neighbor patterns such as
+`emit_return(intrin<...>(...));`, `var<const_infer>(tmp, intrin<...>(...))`,
+or assignments containing `intrin_compose<...>(...)` are evidence for
+occurrence sites, not accepted surrounding-shape templates.
+
+Malformed outer intrinsic islands and explicit discovery requests with no
+exact intrinsic island produce deterministic diagnostics.
+
+M166 does not add backend intrinsic translation/results, intrinsic-name
+lookup, suffix/prefix/post/infix/immediate evaluation, backend-specific
+spelling, rendering, argument splitting, recursive payload lowering,
+generation/backend query evaluation, declaration rendering, branch selection,
+block matching, loop execution, type inference, symbol tables, source repair,
+dependency scheduling, output writing, runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies, or broad registries, dispatchers, worklists,
+callback maps, hidden backfeeds, or fixpoint machinery.
+
+### M167 Cast/Memory/I/O Request-Island Boundary
+
+Milestone 167 adds exact discovery for source/backend-owned operation
+islands in source-owned text:
+
+```text
+cast<CAST_MODE_TEXT>(ARGUMENT_TEXT)
+mem<MEMORY_OPERATION_TEXT>(ARGUMENT_TEXT)
+io<IO_OPERATION_TEXT>(ARGUMENT_TEXT)
+```
+
+Discovery records each island as an unresolved source-operation request. The
+operation keyword kind, opaque angle payload text, opaque argument payload
+text, complete source island text, and source locations are preserved. M167
+does not check whether a cast mode, memory operation, or I/O operation is
+valid; it does not lower types inside payloads, split arguments, choose
+backend spellings, or render target-language calls.
+
+The text-fragment helper preserves opaque text before, between, and after
+multiple request islands in source order. The body-token helper scans
+contiguous `RawStringToken` runs so valid islands split across adjacent raw
+tokens are discovered as one island. All non-raw body tokens remain opaque
+token spans. Opaque payload carriers such as declaration initializer text,
+return payload text, backend-control payload text, intrinsic argument text,
+or primitive-call argument text can call the text helper explicitly; M167 does
+not add context-specific consumers for every possible surrounding TSIL
+construct.
+
+The accepted outer shape is only a balanced `cast<...>(...)`,
+`mem<...>(...)`, or `io<...>(...)` island. Payload text may contain nested
+`value<backend>(...)`, `value<generation>(...)`, `type<generation>(...)`,
+`type<backend>(...)`, `call<primitive=...>(...)`, `intrin<...>(...)`,
+`intrin_compose<...>(...)`, `cast<...>(...)`, `mem<...>(...)`,
+`io<...>(...)`, target identifiers, target literals, raw operators, quoted
+text, and helper calls; those nested constructs remain opaque. Corpus
+neighbor patterns such as `emit_return(cast<...>(...));`,
+`var<const_infer>(tmp, cast<...>(...))`, assignments containing
+`mem<copy>(...)`, or I/O loop bodies are evidence for occurrence sites, not
+accepted surrounding-shape templates.
+
+Malformed outer source-operation islands and explicit discovery requests with
+no exact selected island produce deterministic diagnostics.
+
+M167 does not add cast, memory, or I/O translation/results; mode or operation
+lookup; backend-specific spelling; rendering; argument splitting; recursive
+payload lowering; type lowering inside payloads; generation/backend query
+evaluation; intrinsic, primitive-call, backend-control, declaration, loop, or
+return rendering; pointer arithmetic; type inference; symbol tables; source
+repair; dependency scheduling; output writing; runtime `tsldata`, `frozen`,
+or `tslgenold` dependencies; or broad registries, dispatchers, worklists,
+callback maps, hidden backfeeds, or fixpoint machinery.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

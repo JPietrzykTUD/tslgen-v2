@@ -1019,6 +1019,212 @@ keeps explicit type and initializer payloads as source text. It is not a
 symbol table, type inference result, backend declaration rendering plan, or
 statement AST.
 
+Milestone 164 adds backend value query discovery values:
+
+```python
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryRequest:
+    query_text: str
+    query_source: SourceLocation
+    source_text: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryOpaqueTextSegment:
+    text: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryOpaqueTokenSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryRequestSegment:
+    request: BackendValueQueryRequest
+    source: SourceLocation
+
+BackendValueQueryDiscoverySegment = (
+    BackendValueQueryOpaqueTextSegment
+    | BackendValueQueryOpaqueTokenSegment
+    | BackendValueQueryRequestSegment
+)
+
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryDiscovery:
+    segments: tuple[BackendValueQueryDiscoverySegment, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryDiscoveryLoweringResult:
+    discovery: BackendValueQueryDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+```
+
+The M164 backend value query model is a request-intake boundary over exact
+`value<backend>(...)` islands. It preserves opaque source text around requests
+and carries backend-owned query payload text forward unresolved. It is not a
+backend translation result, expression AST, declaration initializer evaluator,
+or renderer-ready value.
+
+Milestone 165 adds backend-control directive discovery values:
+
+```python
+BackendControlDirectiveName = Literal["if", "else", "switch"]
+BackendControlDirectiveSelector = Literal["compile"]
+
+@dataclass(frozen=True, slots=True)
+class BackendControlDirectiveRequest:
+    directive_name: BackendControlDirectiveName
+    selector: BackendControlDirectiveSelector
+    selector_source: SourceLocation
+    source_text: str
+    source: SourceLocation
+    payload_text: str | None = None
+    payload_source: SourceLocation | None = None
+
+@dataclass(frozen=True, slots=True)
+class BackendControlDirectiveOpaqueSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendControlDirectiveRequestSegment:
+    request: BackendControlDirectiveRequest
+    source: SourceLocation
+
+BackendControlDirectiveDiscoverySegment = (
+    BackendControlDirectiveOpaqueSegment
+    | BackendControlDirectiveRequestSegment
+)
+
+@dataclass(frozen=True, slots=True)
+class BackendControlDirectiveDiscovery:
+    segments: tuple[BackendControlDirectiveDiscoverySegment, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendControlDirectiveDiscoveryLoweringResult:
+    discovery: BackendControlDirectiveDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+```
+
+The M165 backend-control model is a request-intake boundary over already
+classified `if<compile>`, `else<compile>`, and `switch<compile>` directive
+tokens. It preserves non-control body tokens as opaque spans and carries
+backend-owned condition/selector payload text forward unresolved. It is not a
+branch-selection result, block model, backend flow translation result, or
+renderer-ready statement.
+
+Milestone 166 adds backend intrinsic request discovery values:
+
+```python
+BackendIntrinsicKind = Literal["intrin", "intrin_compose"]
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicRequest:
+    intrinsic_kind: BackendIntrinsicKind
+    angle_payload_text: str
+    angle_payload_source: SourceLocation
+    argument_text: str
+    argument_source: SourceLocation
+    source_text: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicOpaqueTextSegment:
+    text: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicOpaqueTokenSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicRequestSegment:
+    request: BackendIntrinsicRequest
+    source: SourceLocation
+
+BackendIntrinsicDiscoverySegment = (
+    BackendIntrinsicOpaqueTextSegment
+    | BackendIntrinsicOpaqueTokenSegment
+    | BackendIntrinsicRequestSegment
+)
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicDiscovery:
+    segments: tuple[BackendIntrinsicDiscoverySegment, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicDiscoveryLoweringResult:
+    discovery: BackendIntrinsicDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+```
+
+The M166 backend intrinsic model is a request-intake boundary over exact
+`intrin<...>(...)` and `intrin_compose<...>(...)` islands in source-owned
+text. It preserves surrounding text and non-raw body tokens as opaque spans
+and carries backend-owned angle payload and argument text forward unresolved.
+It is not an intrinsic-name validator, argument AST, modifier evaluator,
+backend intrinsic translation result, or renderer-ready call.
+
+Milestone 167 adds source-operation request discovery values for the exact
+`cast<...>(...)`, `mem<...>(...)`, and `io<...>(...)` keyword families:
+
+```python
+SourceOperationKind = Literal["cast", "mem", "io"]
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationRequest:
+    operation_kind: SourceOperationKind
+    angle_payload_text: str
+    angle_payload_source: SourceLocation
+    argument_text: str
+    argument_source: SourceLocation
+    source_text: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationOpaqueTextSegment:
+    text: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationOpaqueTokenSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationRequestSegment:
+    request: SourceOperationRequest
+    source: SourceLocation
+
+SourceOperationDiscoverySegment = (
+    SourceOperationOpaqueTextSegment
+    | SourceOperationOpaqueTokenSegment
+    | SourceOperationRequestSegment
+)
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationDiscovery:
+    segments: tuple[SourceOperationDiscoverySegment, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationDiscoveryLoweringResult:
+    discovery: SourceOperationDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+```
+
+The M167 source-operation model is a request-intake boundary over exact
+balanced source islands. It preserves surrounding text, contiguous raw
+body-token split islands, and non-raw body tokens as opaque spans while
+carrying mode/operation and argument payload text forward unresolved. It is
+not a cast/memory/I/O operation-name validator, type-lowering result,
+argument AST, backend translation result, or renderer-ready call.
+
 Milestone 144 adds selector-payload values:
 
 ```python

@@ -12,7 +12,7 @@ typed redesign contracts, explicit evidence, diagnostics, and tests.
 
 ## Current Baseline
 
-Accepted through M163:
+Accepted through M167:
 
 - Generation-time lowering handles only the accepted typed helper/predicate
   forms from M38, M41-M43, M48, M51-M59, and M67-M72.
@@ -46,12 +46,22 @@ Accepted through M163:
   `value<generation>(...)`, M160 exact selected-body
   `else if<generation>` branch-chain selection with an optional final
   `else<generation>` fallback, M161 exact `loop<range>(...)` region facts
-  with optional adjacent `loop<unroll>(...)` metadata, and M162 discovery of
-  every exact top-level M161 loop region inside arbitrary source-owned body
-  token streams, and M163 exact top-level classified `var<...>(...)`
-  declaration request discovery with opaque type/initializer payload text.
-  That path deliberately still does not render primitive-call expressions,
-  declarations, or loops, parse raw arithmetic operators, parse broad TSIL
+  with optional adjacent `loop<unroll>(...)` metadata, M162 discovery of every
+  exact top-level M161 loop region inside arbitrary source-owned body token
+  streams, M163 exact top-level classified `var<...>(...)` declaration request
+  discovery with opaque type/initializer payload text, and M164 exact
+  `value<backend>(...)` backend value query request discovery over
+  source-owned text, and M165 exact classified backend-control directive
+  request discovery for `if<compile>(...)`, `else<compile>`, and
+  `switch<compile>(...)`, M166 exact backend intrinsic request-island
+  discovery for `intrin<...>(...)` and `intrin_compose<...>(...)` over
+  source-owned text and contiguous raw body-token runs, and M167 exact
+  source-operation request-island discovery for `cast<...>(...)`,
+  `mem<...>(...)`, and `io<...>(...)` over source-owned text and contiguous
+  raw body-token runs. That path deliberately still does not render
+  primitive-call expressions, declarations, loops, backend values, backend
+  control flow, intrinsic calls, or cast/memory/I/O calls, parse raw
+  arithmetic operators, parse broad TSIL
   expressions/statements, execute loops, or support recursive generation
   control.
 
@@ -66,11 +76,11 @@ to implement several lanes in one milestone.
 | Generation value/query lowering | `value<generation>(...)` forms from the current corpus plus explicit future generation-value functions | Generation-time conditions, loop bounds, declarations, type predicates, vector metadata, primitive attributes, and selected source regions depend on typed values rather than raw helper text. | M155 accepts isolated selected-context evaluators for vector length/alignment, scalar type facts, and concrete boolean primitive attributes. M158 accepts exact integer comparisons over accepted integer value queries. M159 accepts explicit function-shaped integer arithmetic via `arith<generation>::add/sub/mul/div/rem(...)` inside `value<generation>(...)`. Remaining value families should still be selected explicitly and must not add a general expression parser or raw operator parser. |
 | Generation control lowering | `if<generation>(...)`, `else if<generation>(...)`, `else<generation>` | Real bodies need selected-branch pruning before backend rendering. | M156 accepts exact two-arm `if<generation>(VALUE_QUERY) { ... } else<generation> { ... }` token regions for M155 boolean conditions and preserves selected/unselected branch token slices. M157 hands selected branch tokens to existing direct body lowering. M160 accepts exact classified `else if<generation>` branch-chain selection with an optional final `else<generation>` fallback and first-true/no-match behavior. Plain target-language `else`, recursive branch lowering, and rendering remain deferred. |
 | Generation declaration/iteration lowering | `loop<unroll>(...)`, `loop<range>(...)`, `var<...>(...)`, non-type `let<...>(...)` | Generic/vector fallback bodies use TSIL directives for repeated statements, declarations, temporaries, and aliases. | M161 accepts an exact `loop<range>(...)` region fact with optional adjacent `loop<unroll>(...)` metadata over source-owned body tokens. M162 discovers every exact top-level M161 loop region inside arbitrary body token streams and preserves non-loop tokens as opaque spans. M162.5 refactors shared lexical delimiter/top-level scanning without adding new source behavior. M163 accepts exact top-level classified `var<init_register>`, `var<infer>`, `var<const_infer>`, and `var<typed>` declaration facts as unresolved backend-facing requests with opaque type/initializer payload text. `let<type>(...)` alias facts already feed the type environment. Loop execution/unrolling, loop-variable substitution, declaration rendering, raw multiline declaration-token intake, and broad surrounding target-language statement parsing remain deferred. |
-| Backend query lowering | `value<backend>(...)`, accepted `type<backend>(...)` requests | Backend spellings, suffixes, uninit values, and type spellings must be derived from typed semantic values before rendering. | M164 is the selected follow-on for exact `value<backend>(...)` request islands as unresolved backend-owned facts. Broader typed backend translation requests/results remain deferred. Renderers must not evaluate raw query text. |
-| Backend control lowering | `if<compile>(...)`, `else<compile>`, `switch<compile>(...)` | Backend-specific compile-time control appears in current `tsldata` bodies. | Treat as backend-owned control directives. `if<runtime>` / `else<runtime>` are absent from the current corpus and should remain future/diagnostic unless new source data adds them. |
-| Backend-owned operation lowering | `intrin_compose<...>(...)`, `intrin<...>(...)` | Intrinsic calls are generation relevant but backend-owned, not portable primitive semantics by themselves. | Lower to typed backend intrinsic requests from explicit metadata and selected context; do not infer semantics in renderers. |
+| Backend query lowering | `value<backend>(...)`, accepted `type<backend>(...)` requests | Backend spellings, suffixes, uninit values, and type spellings must be derived from typed semantic values before rendering. | M164 accepts exact `value<backend>(...)` request islands as unresolved backend-owned facts over source-owned text. Query payloads remain opaque, and surrounding text/tokens stay source-owned. Broader typed backend translation requests/results remain deferred. Renderers must not evaluate raw query text. |
+| Backend control lowering | `if<compile>(...)`, `else<compile>`, `switch<compile>(...)` | Backend-specific compile-time control appears in current `tsldata` bodies. | M165 accepts exact classified compile-control directive request facts over source-owned body tokens. Backend-control translation, rendering, branch selection, and block matching remain deferred. `if<runtime>` / `else<runtime>` are absent from the current corpus and should remain future/diagnostic unless new source data adds them. |
+| Backend-owned operation lowering | `intrin_compose<...>(...)`, `intrin<...>(...)` | Intrinsic calls are generation relevant but backend-owned, not portable primitive semantics by themselves. | M166 accepts exact intrinsic request-island discovery in source-owned text and contiguous raw body-token runs. Backend intrinsic translation, argument splitting, modifier evaluation, and rendering remain deferred. |
 | Primitive-call completion | Nested and surrounding `call<primitive=...>(...)` islands | M144-M152 can classify, match, bind, and collect primitive-call dependencies, but complete generation needs recursive token-stream use, backend rendering, and deterministic output scheduling. | Extend the existing call boundary only when a selected milestone needs recursive/nested calls or rendering. Avoid context-specific consumers for every possible surrounding syntax. |
-| Cast/memory/I/O keyword families | `cast<...>`, `mem<...>`, `io<...>` | These are likely generation-relevant backend/source directives but are not yet accepted lowering families. | Inventory them across all `tsldata/**/*.tsl` before implementation and select exact forms with diagnostics. |
+| Cast/memory/I/O keyword families | `cast<...>`, `mem<...>`, `io<...>` | These are generation-relevant backend/source directives that appear in broad body contexts. | M167 accepts exact request-island discovery over this shared outer keyword shape in source-owned text and contiguous raw body-token runs. Payloads stay opaque; mode/operation validation, type lowering inside payloads, argument splitting, backend translation, and rendering remain deferred. |
 | Body-token rendering policy | Raw target-language text plus accepted lowerable TSIL islands | Generated artifacts need a way to emit raw source text around lowered islands without turning lowering into a C++/Rust parser. | Backend rendering/output integration consumes typed lowering results and source-owned raw tokens. This is not helper-call substitution or source repair. |
 
 Not a lowering path by default: `details::arith_add`,
@@ -123,7 +133,7 @@ Deferred generation-value sublanes after M155:
 | --- | --- | --- |
 | Vector mask type values | `type::size_bytes(type<generation>(vector::imask))`, `type::is_signed(type<generation>(vector::imask))` | Mask/integral-mask type policy as generation-value size/signedness facts. |
 | Mask lane constants | `mask::lane::all_true`, `mask::lane::all_false` | Mask lane literal policy tied to the selected mask representation. |
-| Generic vector lengths | `generic::length(OutVec)`, `generic::runtime_length(ToType)` | Resolved generic-vector alias facts and runtime/scalable length policy. |
+| Generic vector lengths | `generic::length(OutVec)`, `generic::runtime_length(ToType)` | M168 is selected to lower the largest safe subset through already accepted type-alias/type-query facts and fixed extension metadata. Runtime/scalable or unresolved forms should remain diagnostic boundaries, not guessed generation values. |
 
 M99 is accepted:
 

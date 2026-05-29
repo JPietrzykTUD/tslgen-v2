@@ -1,0 +1,248 @@
+# M166 Execution Review Loop Prompt
+
+This is the active follow-on prompt after M165. Execute it only when
+`docs/agent/current-redesign-state.md` points here and records M165 as
+accepted.
+
+You are executing and reviewing the accepted next milestone after M165:
+
+```text
+Milestone 166: Exact Backend Intrinsic Request-Island Boundary
+```
+
+Milestones 1 through 165 are accepted. M165 records exact
+`if<compile>(...)`, `else<compile>`, and `switch<compile>(...)` classified
+directive tokens as unresolved backend-control requests while preserving
+payloads and surrounding tokens opaque.
+
+M166 is an implementation milestone. It should add the next backend-owned
+lowering boundary for exact intrinsic keyword islands in source-owned text:
+
+```text
+intrin<HEAD_TEXT>(ARGUMENT_TEXT)
+intrin_compose<HEAD_AND_MODIFIER_TEXT>(ARGUMENT_TEXT)
+```
+
+These islands are generation relevant, but M166 must not solve them at
+generation time. It records unresolved backend intrinsic requests and
+preserves surrounding source text/tokens.
+
+## Read First
+
+- `docs/agent/current-redesign-state.md`
+- `AGENTS.md`
+- `PLANS.md`
+- `docs/agent/next-run-prompt-protocol.md`
+- `docs/agent/review-checklist.md`
+- `docs/redesign/kiss-generator-restart.md`
+- `docs/redesign/requirements.md`
+- `docs/redesign/implementation-roadmap.md`
+- `docs/redesign/behavioral-spec.md`
+- `docs/redesign/domain-model.md`
+- `docs/redesign/design-decisions.md`
+- `docs/redesign/target-architecture.md`
+- `docs/redesign/pipeline-design.md`
+- `docs/redesign/testing-strategy.md`
+- `docs/redesign/tsil-surface-inventory.md`
+- `docs/redesign/missing-lowering-inventory.md`
+- `tslgen/src/tslgen/syntax/tsil_lexical.py`
+- `tslgen/src/tslgen/lowering/model.py`
+- `tslgen/src/tslgen/lowering/lowerer.py`
+- `tslgen/src/tslgen/lowering/backend_value_queries.py`
+- `tslgen/src/tslgen/lowering/backend_control.py`
+- `tslgen/src/tslgen/lowering/generation_variables.py`
+- `tslgen/tests/test_m107_tiny_pipeline.py`
+- `tslgen/tests/test_m1625_tsil_lexical.py`
+- `tslgen/tests/test_m163_generation_variables.py`
+- `tslgen/tests/test_m164_backend_value_queries.py`
+- `tslgen/tests/test_m165_backend_control.py`
+
+## Goal
+
+Recognize exact intrinsic request islands in source-owned text and body token
+streams:
+
+```text
+intrin<HEAD_TEXT>(ARGUMENT_TEXT)
+intrin_compose<HEAD_AND_MODIFIER_TEXT>(ARGUMENT_TEXT)
+```
+
+The result should record unresolved backend intrinsic requests in source order
+and preserve all non-request text/tokens as source-owned opaque spans.
+`HEAD_TEXT`, `HEAD_AND_MODIFIER_TEXT`, and `ARGUMENT_TEXT` remain
+backend-owned opaque text for later backend translation/rendering.
+
+The accepted shape is the intrinsic island itself, not any surrounding corpus
+pattern, return directive, declaration, assignment, branch body, loop body,
+primitive-call argument, cast, raw target-language statement, or generated
+target-language line.
+
+## Required Executor Task
+
+Run exactly one write-capable executor for M166. The executor should:
+
+1. Inspect dirty worktree state before editing and preserve unrelated changes.
+2. Inventory current `intrin<...>(...)` and `intrin_compose<...>(...)`
+   evidence across all `tsldata/**/*.tsl` files. Use corpus examples as
+   evidence for the keyword surface, not as accepted surrounding-shape
+   templates.
+3. Add the smallest exact backend intrinsic request-island boundary over
+   source-owned text and `ImplementationBody.tokens`.
+4. Recognize only balanced outer intrinsic islands whose keyword is exactly
+   `intrin` or `intrin_compose`, followed by `<...>` and then `(...)`.
+5. Preserve intrinsic kind, opaque angle payload text, opaque call argument
+   text, source text available from the island boundary, and source locations
+   needed for diagnostics.
+6. Preserve all non-intrinsic text and non-raw body tokens as source-owned
+   opaque spans.
+7. Avoid context-specific consumers. The same text-fragment helper should be
+   usable wherever source-owned text appears, so M166 does not need a separate
+   implementation for `emit_return(...)`, `var<...>(...)`, assignments,
+   primitive-call arguments, backend-control payloads, loops, casts, or branch
+   text.
+8. Keep payload text opaque. Nested `value<backend>(...)`,
+   `value<generation>(...)`, `type<generation>(...)`, `type<backend>(...)`,
+   `call<primitive=...>(...)`, `cast<...>(...)`, `intrin<...>(...)`,
+   `intrin_compose<...>(...)`, raw operators, helper calls, target
+   identifiers, target literals, and quoted text inside an intrinsic payload
+   are not interpreted by M166.
+9. Emit deterministic diagnostics for malformed outer intrinsic islands and
+   no exact intrinsic island when the caller explicitly asks for one.
+10. Preserve M155-M165 accepted behavior, diagnostics, source locations,
+    selected-branch handoff, helper raw preservation, loop discovery,
+    declaration requests, backend value queries, backend-control requests, and
+    generated bytes.
+11. Add focused tests for:
+    - `intrin<...>(...)` and `intrin_compose<...>(...)`;
+    - payload opacity, including backend/generation queries, primitive calls,
+      casts, nested intrinsic text, operators, helper calls, and quoted text;
+    - multiple intrinsic islands in source order;
+    - preservation of opaque prefix/suffix text and non-raw body tokens;
+    - use from body-token streams without overfitting to `emit_return`,
+      declarations, assignments, branches, or loops;
+    - malformed island diagnostics;
+    - no-intrinsic diagnostics;
+    - determinism.
+12. Update docs that describe the accepted M166 behavior and any newly
+    discovered boundary details.
+13. Leave final accepted-state updates to the orchestrator after read-only
+    review returns `Accept` or `Accept With Follow-Ups`.
+
+## Design Guardrails
+
+- Treat this as intrinsic request intake over source-owned text, not as
+  intrinsic translation.
+- Do not maintain a list of intrinsic names or decide whether an intrinsic is
+  valid for a backend.
+- Do not split arguments, parse expressions/statements, evaluate
+  suffix/prefix/post/infix/immediate modifiers, solve backend/generation
+  queries, lower nested payloads, choose backend spellings, render calls,
+  infer types, match raw statements, execute loops, select branches, schedule
+  dependencies, read `tsldata`, `frozen`, or `tslgenold` at runtime, or add
+  broad registries, dispatchers, worklists, callback maps, hidden backfeeds,
+  or fixpoint machinery.
+- Preserve `details::arith_add`, `details::arith_mul`,
+  `details::arith_rem`, `details::popcount`, `details::clz`,
+  `details::clz_recursive`, `details::ctz`, and `details::mask_test` as raw
+  helper calls. They are not intrinsic keyword islands.
+
+## Must Preserve
+
+- M107-M165 accepted behavior, diagnostics, source locations, and generated
+  bytes.
+- M155 isolated generation-value query behavior.
+- M156-M160 generation-control region and branch-chain behavior.
+- M161 whole-body exact loop-region fact behavior.
+- M162 embedded loop-region discovery behavior.
+- M162.5 shared lexical-helper behavior and migrated keyword/classifier
+  boundaries.
+- M163 exact top-level generation variable declaration request discovery.
+- M164 exact backend value query request discovery and quote-aware payload
+  preservation.
+- M165 exact classified backend-control directive request discovery.
+- Accepted primitive-call resolver/collector behavior and helper raw
+  preservation.
+
+## Out Of Scope
+
+Backend intrinsic translation/results; intrinsic-name lookup; suffix, prefix,
+postfix, infix, immediate, or target-template evaluation; backend-specific
+spelling; rendering; argument splitting; recursive payload lowering;
+generation/backend query evaluation; declaration rendering; branch selection;
+block matching; loop execution or unrolling; type inference; symbol tables;
+assignment, array-access, cast, memory, I/O, primitive-call, backend-control,
+or backend rendering; source repair; dependency scheduling; output writing;
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad registries,
+dispatchers, worklists, callback maps, hidden backfeeds, or fixpoint
+mechanisms.
+
+## Required Review/Audit Subagents
+
+After the executor finishes, use read-only subagents:
+
+1. Architecture reviewer: verify M166 adds only exact unresolved backend
+   intrinsic request facts over source-owned text/tokens and avoids intrinsic
+   translation, backend-name lookup, argument splitting, expression parsing,
+   context-specific consumers, registries, dispatchers, worklists, source
+   repair, and runtime data reads.
+2. Boundary auditor: verify M155-M165 behavior remains intact, payloads remain
+   opaque, helper calls stay raw, and existing generation-control, loop,
+   declaration, backend value query, backend-control, type-query, and
+   primitive-call behavior is not widened accidentally.
+3. Evidence auditor: verify the accepted intrinsic keyword surface is grounded
+   in current `tsldata/**/*.tsl` evidence without treating corpus neighbor
+   patterns as accepted shapes.
+4. Test auditor: verify tests cover both intrinsic keyword families, payload
+   opacity, multiple islands, opaque preservation, non-overfit body-token
+   usage, diagnostics, and determinism.
+5. Documentation auditor: verify roadmap, behavioral/domain docs, missing
+   inventory, TSIL surface inventory, and current state are coherent.
+6. Validation auditor: verify required validation ran and report exact command
+   results.
+
+Reviewer/auditor subagents are read-only. They must not edit files.
+
+## Required Validation
+
+Run:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m165_backend_control.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m165_backend_control.py
+find tslgen -type d -name __pycache__ -print
+```
+
+If the executor adds focused M166 test files, include them in the compileall
+and targeted pytest commands. Remove validation-created `__pycache__`
+directories before the final cache check if any are created.
+
+## Completion Rules
+
+If M166 review returns `Accept` or `Accept With Follow-Ups`:
+
+- update `docs/agent/current-redesign-state.md`;
+- mark M166 accepted in `docs/redesign/implementation-roadmap.md`;
+- record follow-ups in state if any;
+- create the next concrete run prompt under `docs/agent/runs/`.
+
+To keep planning and execution integrated, do the next-run planning inside
+this prompt after M166 is accepted. Do not start M167 until the next prompt
+explicitly selects it.
+
+If review returns `Needs Revision`, run one focused revision executor and then
+a focused re-review. If review returns `Return To Planner` or `Reject`, stop
+implementation and create the appropriate planner/rollback prompt instead of
+continuing.
+
+Do not start Milestone 167 in this prompt.
+
+## Final Report
+
+Report:
+
+1. Files/directories changed.
+2. Executor summary.
+3. Review/audit verdicts and any follow-ups.
+4. Validation commands and exact results.
+5. Next active prompt path.

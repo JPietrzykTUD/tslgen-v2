@@ -54,6 +54,10 @@ GenerationVariableDeclarationSelector = Literal[
     "const_infer",
     "typed",
 ]
+BackendControlDirectiveName = Literal["if", "else", "switch"]
+BackendControlDirectiveSelector = Literal["compile"]
+BackendIntrinsicKind = Literal["intrin", "intrin_compose"]
+SourceOperationKind = Literal["cast", "mem", "io"]
 
 CURRENT_VECTOR_KEYWORD = "Vec"
 CURRENT_SCALAR_KEYWORD = "scalar"
@@ -314,6 +318,187 @@ class TypeExpressionLoweringResult:
 @dataclass(frozen=True, slots=True)
 class BackendTypeQueryLoweringResult:
     request: BackendTypeSpellingRequest | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryRequest:
+    query_text: str
+    query_source: SourceLocation
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryOpaqueTextSegment:
+    text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryOpaqueTokenSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryRequestSegment:
+    request: BackendValueQueryRequest
+    source: SourceLocation
+
+
+BackendValueQueryDiscoverySegment = (
+    BackendValueQueryOpaqueTextSegment
+    | BackendValueQueryOpaqueTokenSegment
+    | BackendValueQueryRequestSegment
+)
+
+
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryDiscovery:
+    segments: tuple[BackendValueQueryDiscoverySegment, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryDiscoveryLoweringResult:
+    discovery: BackendValueQueryDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class BackendControlDirectiveRequest:
+    directive_name: BackendControlDirectiveName
+    selector: BackendControlDirectiveSelector
+    selector_source: SourceLocation
+    source_text: str
+    source: SourceLocation
+    payload_text: str | None = None
+    payload_source: SourceLocation | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BackendControlDirectiveOpaqueSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendControlDirectiveRequestSegment:
+    request: BackendControlDirectiveRequest
+    source: SourceLocation
+
+
+BackendControlDirectiveDiscoverySegment = (
+    BackendControlDirectiveOpaqueSegment | BackendControlDirectiveRequestSegment
+)
+
+
+@dataclass(frozen=True, slots=True)
+class BackendControlDirectiveDiscovery:
+    segments: tuple[BackendControlDirectiveDiscoverySegment, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendControlDirectiveDiscoveryLoweringResult:
+    discovery: BackendControlDirectiveDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicRequest:
+    intrinsic_kind: BackendIntrinsicKind
+    angle_payload_text: str
+    angle_payload_source: SourceLocation
+    argument_text: str
+    argument_source: SourceLocation
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicOpaqueTextSegment:
+    text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicOpaqueTokenSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicRequestSegment:
+    request: BackendIntrinsicRequest
+    source: SourceLocation
+
+
+BackendIntrinsicDiscoverySegment = (
+    BackendIntrinsicOpaqueTextSegment
+    | BackendIntrinsicOpaqueTokenSegment
+    | BackendIntrinsicRequestSegment
+)
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicDiscovery:
+    segments: tuple[BackendIntrinsicDiscoverySegment, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicDiscoveryLoweringResult:
+    discovery: BackendIntrinsicDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationRequest:
+    operation_kind: SourceOperationKind
+    angle_payload_text: str
+    angle_payload_source: SourceLocation
+    argument_text: str
+    argument_source: SourceLocation
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationOpaqueTextSegment:
+    text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationOpaqueTokenSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationRequestSegment:
+    request: SourceOperationRequest
+    source: SourceLocation
+
+
+SourceOperationDiscoverySegment = (
+    SourceOperationOpaqueTextSegment
+    | SourceOperationOpaqueTokenSegment
+    | SourceOperationRequestSegment
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationDiscovery:
+    segments: tuple[SourceOperationDiscoverySegment, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationDiscoveryLoweringResult:
+    discovery: SourceOperationDiscovery | None
     diagnostics: tuple[Diagnostic, ...]
 
 

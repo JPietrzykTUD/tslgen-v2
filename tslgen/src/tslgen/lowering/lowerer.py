@@ -25,6 +25,10 @@ from tslgen.lowering.comparison_operations import (
 from tslgen.lowering.model import (
     INPUT_SCALAR_RESULT_TYPE,
     SCALAR_COMPARISON_RESULT_TYPE,
+    BackendControlDirectiveDiscoveryLoweringResult,
+    BackendIntrinsicDiscoveryLoweringResult,
+    SourceOperationDiscoveryLoweringResult,
+    BackendValueQueryDiscoveryLoweringResult,
     LoweredBinaryOperationExpression,
     LoweredComparisonOperationExpression,
     LoweredFunction,
@@ -50,6 +54,10 @@ from tslgen.lowering.model import (
     TypeExpressionLoweringResult,
     build_selected_implementation_lowering_context,
 )
+from tslgen.lowering.backend_control import discover_backend_control_directives
+from tslgen.lowering.backend_intrinsics import discover_backend_intrinsic_requests
+from tslgen.lowering.backend_value_queries import discover_backend_value_queries
+from tslgen.lowering.source_operations import discover_source_operation_requests
 from tslgen.lowering.generation_control import lower_generation_control_region
 from tslgen.lowering.generation_loops import (
     discover_generation_loop_regions,
@@ -244,6 +252,46 @@ class Lowerer:
     ) -> GenerationVariableDeclarationDiscoveryLoweringResult:
         context = self.context_for(selected)
         return discover_generation_variable_declarations(
+            context,
+            context.implementation.body,
+        )
+
+    def discover_backend_value_queries(
+        self,
+        selected: SelectedImplementation,
+    ) -> BackendValueQueryDiscoveryLoweringResult:
+        context = self.context_for(selected)
+        return discover_backend_value_queries(
+            context,
+            context.implementation.body,
+        )
+
+    def discover_backend_control_directives(
+        self,
+        selected: SelectedImplementation,
+    ) -> BackendControlDirectiveDiscoveryLoweringResult:
+        context = self.context_for(selected)
+        return discover_backend_control_directives(
+            context,
+            context.implementation.body,
+        )
+
+    def discover_backend_intrinsic_requests(
+        self,
+        selected: SelectedImplementation,
+    ) -> BackendIntrinsicDiscoveryLoweringResult:
+        context = self.context_for(selected)
+        return discover_backend_intrinsic_requests(
+            context,
+            context.implementation.body,
+        )
+
+    def discover_source_operation_requests(
+        self,
+        selected: SelectedImplementation,
+    ) -> SourceOperationDiscoveryLoweringResult:
+        context = self.context_for(selected)
+        return discover_source_operation_requests(
             context,
             context.implementation.body,
         )
