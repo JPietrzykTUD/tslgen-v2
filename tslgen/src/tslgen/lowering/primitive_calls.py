@@ -29,6 +29,7 @@ from tslgen.lowering.model import (
     LoweredScalarTypeIdentity,
     LoweredTypeValue,
     LoweredVectorAsExtensionType,
+    LoweredVectorMemberType,
     LoweredVectorTransformType,
     PrimitiveCallArgumentBinding,
     PrimitiveCallArgumentBindingResult,
@@ -49,6 +50,7 @@ from tslgen.lowering.model import (
 )
 from tslgen.lowering.selector_payload import lower_primitive_call_selector_payload
 from tslgen.lowering.type_queries import build_selected_type_environment
+from tslgen.lowering.vector_member_types import resolve_vector_member_scalar_type
 
 _MISSING_PRIMITIVE_CALL_CAPABILITY = (
     "primitive-call dependency resolution is not implemented yet"
@@ -72,6 +74,8 @@ _SelectedIdentity = tuple[
     tuple[tuple[str, str, str, str], ...],
 ]
 _ReturnBindingSelectorValue = LoweredScalarTypeIdentity | ExtensionOperand
+_ScalarTypeTagResolution = TypeTag | Diagnostic | None
+_ConcreteVectorResolution = CurrentVector | Diagnostic | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +97,7 @@ class PrimitiveCallResolver:
     ) -> PrimitiveCallTargetMatchingResult:
         """Match a lowered selector payload to one catalog implementation."""
 
-        parts = _selector_target_parts(context, selector_payload)
+        parts = _selector_target_parts(context, selector_payload, self._catalog)
         if isinstance(parts, Diagnostic):
             return PrimitiveCallTargetMatchingResult(
                 match=None,
@@ -345,6 +349,7 @@ def _target_name(
 def _selector_target_parts(
     context: SelectedImplementationLoweringContext,
     selector_payload: PrimitiveCallSelectorPayload,
+    catalog: Catalog,
 ) -> _SelectorTargetParts | Diagnostic:
     specializations = selector_payload.specializations
     if not specializations:
@@ -364,7 +369,17 @@ def _selector_target_parts(
         )
 
     value = specializations[0]
-    vector = _concrete_vector_from_value(value)
+    vector = _concrete_vector_from_value(value, catalog, selector_payload.source)
+    if isinstance(vector, Diagnostic):
+        return _unsupported_specialization_diagnostic(
+            selector_payload,
+            (
+                "primitive-call selector specialization cannot be matched by "
+                "this boundary; expected a concrete vector specialization, got "
+                f"{_format_specialization_value(value)}; {vector.message}"
+            ),
+            location=_specialization_source(value, selector_payload.source),
+        )
     if vector is None:
         return _unsupported_specialization_diagnostic(
             selector_payload,
@@ -479,29 +494,50 @@ def _selected_with_target_binding(
 
 def _concrete_vector_from_value(
     value: SelectorSpecializationValue | LoweredTypeValue,
-) -> CurrentVector | None:
+    catalog: Catalog,
+    source: SourceLocation,
+) -> _ConcreteVectorResolution:
     if isinstance(value, CurrentVector):
         return value
     if isinstance(value, LoweredBackendTypeReference):
-        return _concrete_vector_from_value(value.request.value)
+        return _concrete_vector_from_value(value.request.value, catalog, source)
     if isinstance(value, LoweredVectorAsExtensionType):
-        type_tag = _scalar_type_tag(value.base_type)
+        type_tag = _scalar_type_tag(value.base_type, catalog, source)
+        if isinstance(type_tag, Diagnostic):
+            return type_tag
         if type_tag is not None:
             return CurrentVector(extension=value.extension, type_tag=type_tag)
     if isinstance(value, LoweredVectorTransformType):
-        type_tag = _scalar_type_tag(value.base_type)
+        type_tag = _scalar_type_tag(value.base_type, catalog, source)
+        if isinstance(type_tag, Diagnostic):
+            return type_tag
         if type_tag is not None:
             return CurrentVector(extension=value.extension, type_tag=type_tag)
     return None
 
 
-def _scalar_type_tag(value: LoweredTypeValue) -> TypeTag | None:
+def _scalar_type_tag(
+    value: LoweredTypeValue,
+    catalog: Catalog,
+    source: SourceLocation,
+) -> _ScalarTypeTagResolution:
     if isinstance(value, LoweredCurrentScalarType | LoweredScalarTypeIdentity):
         return value.type_tag
     if isinstance(value, CurrentVector):
         return value.type_tag
     if isinstance(value, LoweredBackendTypeReference):
-        return _scalar_type_tag(value.request.value)
+        if isinstance(value.request.value, LoweredVectorMemberType):
+            return None
+        return _scalar_type_tag(value.request.value, catalog, source)
+    resolved = resolve_vector_member_scalar_type(
+        value,
+        catalog=catalog,
+        source=source,
+    )
+    if isinstance(resolved, LoweredScalarTypeIdentity):
+        return resolved.type_tag
+    if isinstance(resolved, Diagnostic):
+        return resolved
     return None
 
 

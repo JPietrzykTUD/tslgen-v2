@@ -2272,3 +2272,44 @@ Consequences:
   shapes.
 - This is not a selector parser, alias-name interpreter, mask/register solver,
   wildcard expander, renderer, dependency scheduler, or source repair pass.
+
+## ADR-047: Vector Member Types Resolve Only From Explicit Fixed Metadata
+
+Status: Accepted
+
+Context:
+
+Current `.tsl` bodies use vector member type queries such as
+`vector::mask_underlying_t`, `vector::mask_underlying`, `vector::imask`, and
+`vector::mask` in type aliases. These aliases may appear inside primitive-call
+selectors, for example a `MaskVec`-style alias over
+`vector::transform(type<generation>(vector::mask_underlying_t))`. M172 could
+match vector-transform aliases only when their base already reduced to a
+concrete scalar type tag.
+
+Decision:
+
+M173 resolves `LoweredVectorMemberType` values to scalar type facts only from
+accepted extension catalog metadata. `vector::mask` uses `mask_type_policy`;
+`vector::imask`, `vector::mask_underlying_t`, and
+`vector::mask_underlying` use `integral_mask_type_policy`. Fixed
+`lane_bitmask` policies resolve by deriving the selected vector lane count
+from `vector_bits` and an accepted scalar descriptor for the selected scalar
+type tag, then mapping that count to an exact unsigned scalar `TypeTag` that
+also has an accepted scalar descriptor.
+
+Consequences:
+
+- `MaskVec`-style aliases can participate in primitive-call selector matching
+  only when the member query resolves to a concrete scalar tag through typed
+  metadata.
+- Native predicate, lane-keyed native predicate, generic size-parameter,
+  runtime/scalable lane, missing metadata, `unsigned_scalar` spelling-only,
+  and register/member cases remain unsupported or backend-owned.
+- Current real extension metadata may produce exact unsigned tags such as
+  `ui8`, `ui16`, or `ui64`; those are diagnostics until the scalar descriptor
+  catalog explicitly accepts them.
+- Alias spellings such as `MaskVec`, `MaskWord`, and `MaskT` remain
+  source-local and are not semantic.
+- This is not backend type rendering, register spelling resolution, a
+  selector engine, source parser, source repair pass, or runtime corpus lookup.

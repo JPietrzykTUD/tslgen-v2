@@ -1978,6 +1978,39 @@ backend types, expand wildcards, derive `ToType`, add dependency scheduling,
 render primitive calls, repair source, or introduce runtime `tsldata`,
 `frozen`, or `tslgenold` dependencies.
 
+### M173 Vector Member Type Query Resolution Boundary
+
+Milestone 173 adds a narrow resolver for already lowered current-vector member
+type values:
+
+```text
+LoweredVectorMemberType(member=..., extension=..., type_tag=...)
+```
+
+The resolver consumes explicit extension metadata from the catalog. For
+`vector::mask`, it uses `mask_type_policy`; for `vector::imask`,
+`vector::mask_underlying_t`, and `vector::mask_underlying`, it uses
+`integral_mask_type_policy`. A member resolves to
+`LoweredScalarTypeIdentity(TypeTag(...))` only when the policy and selected
+vector metadata prove an exact fixed scalar tag at generation time.
+
+The accepted concrete case is fixed `lane_bitmask` metadata: the selected
+extension must have fixed integer `vector_bits`, explicitly non-runtime lanes,
+no generic size parameter, and a selected scalar tag with an accepted scalar
+descriptor. The lane count must map exactly to an unsigned scalar tag that also
+has an accepted scalar descriptor. Exact unsigned tags that are named by the
+policy but not yet represented as scalar descriptors remain missing-metadata
+diagnostics until the scalar descriptor catalog is broadened.
+
+Native predicate policies, lane-keyed native predicate policies,
+`unsigned_scalar` policies without a backend-neutral type tag, generic
+size-parameter policies, runtime/scalable lanes, missing extension metadata,
+unsupported member kinds such as `vector::register`, and non-exact lane counts
+remain diagnostics or unresolved backend-owned facts. M173 does not render
+backend type spelling, infer from alias names, parse body surroundings, solve
+register/native-predicate types, or introduce runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

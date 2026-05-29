@@ -142,6 +142,7 @@ from tslgen.lowering.generation_values import (
     lower_generation_expression,
     lower_generation_value_query,
 )
+from tslgen.lowering.vector_member_types import resolve_vector_member_scalar_type
 from tslgen.lowering.binary_operations import (
     SUPPORTED_BINARY_OPERATION_DESCRIPTORS,
     BinaryOperationDescriptor,
@@ -302,6 +303,7 @@ __all__ = [
     "lower_generation_loop_region",
     "lower_generation_value_query",
     "lower_type_expression",
+    "resolve_vector_member_scalar_type",
     "SUPPORTED_BINARY_OPERATION_DESCRIPTORS",
     "BinaryOperationDescriptor",
     "lookup_binary_operation_descriptor",

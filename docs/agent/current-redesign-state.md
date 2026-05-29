@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 172 is accepted.
+Milestone 173 is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -181,6 +181,25 @@ that do not expose a concrete scalar type tag remain diagnostics. M172 did not
 add selector parsing, wildcard expansion, dependency scheduling, backend
 rendering, source repair, runtime `tsldata`, runtime `frozen`, or runtime
 `tslgenold` dependencies.
+
+The M173 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor, one focused revision, read-only architecture,
+boundary, evidence, test, documentation, and validation audits, and focused
+re-review. M173 added a focused vector-member type resolver for already
+lowered `LoweredVectorMemberType` facts. It resolves `vector::mask`,
+`vector::imask`, `vector::mask_underlying_t`, and `vector::mask_underlying`
+only from explicit extension catalog metadata and accepted scalar descriptor
+facts.
+
+M173 accepts fixed `lane_bitmask` member resolution only when the extension
+has fixed integer `vector_bits`, explicitly non-runtime lanes, no size
+parameter, an accepted descriptor for the selected scalar tag, and an accepted
+descriptor for the produced exact unsigned scalar tag. Native predicate,
+backend-owned, `unsigned_scalar`, runtime/scalable, missing-metadata,
+unsupported-member, and unaccepted exact unsigned result cases remain
+diagnostics. M173 preserved M172's typed selector-matching path and kept alias
+spellings such as `MaskVec`, `MaskWord`, and `MaskT` source-local rather than
+semantic.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -2911,54 +2930,54 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 173.
+Execute Milestone 174.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m173-execution-review-loop-prompt.md
+docs/agent/runs/m174-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 173: Vector Member Type Query Resolution Boundary
+Milestone 174: Scalar Descriptor Catalog Completion For Current Type Tags
 ```
 
 Latest review verdict:
 
 ```text
-M172 execution-review returned Accept With Follow-Ups after one write-capable
-executor and read-only architecture, boundary, evidence, test, documentation,
-and validation audits.
+M173 execution-review returned Accept With Follow-Ups after one write-capable
+executor, one focused revision, read-only architecture, boundary, evidence,
+test, documentation, and validation audits, and focused re-review.
 
-M172 added concrete-vector extraction for already lowered
-`LoweredVectorTransformType` selector values when their extension is concrete
-and their base type reduces to a concrete scalar `TypeTag`. It preserves M171
-selected-return-binding provenance for two-entry vector-plus-return-binding
-selectors and keeps alias spellings source-local rather than semantic.
+M173 added descriptor-backed resolution for already lowered vector member type
+queries such as `vector::mask`, `vector::imask`,
+`vector::mask_underlying_t`, and `vector::mask_underlying`. It accepts fixed
+`lane_bitmask` member resolution only through explicit extension metadata and
+accepted scalar descriptors for both the selected scalar tag and produced
+exact unsigned scalar tag.
 
-M172 review verdicts were: architecture `Accept`; boundary `Accept`; evidence
-`Accept with one note`; test `Accept With Follow-Up`; documentation
-`Accept With Follow-Up`; validation `Accept`. No blocking findings were
+M173 review verdicts were: architecture `Accept With Follow-Ups`; boundary
+`Accept`; evidence `Accept With Follow-Ups`; test `Accept`; documentation
+`Accept With Follow-Ups`; validation `Accept`. No blocking findings were
 reported.
 ```
 
 Next expected action:
 
 ```text
-Run the active M173 execution-review-loop prompt. M173 should resolve the next
-exact type-lowering gap for already recognized current-vector member queries
-such as `vector::mask_underlying_t`, `vector::mask_underlying`,
-`vector::imask`, and `vector::mask`.
+Run the active M174 execution-review-loop prompt. M174 should broaden the
+lowering-owned scalar descriptor catalog to the current concrete scalar tags
+from `tsldata/detail/types.tsl`: `si8`, `ui8`, `si16`, `ui16`, `si32`,
+`ui32`, `si64`, `ui64`, `f32`, and `f64`.
 
-This is useful because current `tsldata` bodies introduce aliases such as
-`MaskWord`, `MaskT`, and `MaskVec` from those member queries. M173 should
-consume accepted `LoweredVectorMemberType` values and explicit extension
-metadata, implement only the largest safe subset that can produce typed
-generation facts, and leave backend-native spelling/rendering for a later
-backend-owned milestone.
+This is useful because M173 is now correctly descriptor-backed but real
+lane-bitmask member results such as `ui8`, `ui16`, and `ui64` remain
+diagnostic-only until the descriptor catalog accepts them as typed facts. M174
+should close that gap directly without adding parser, renderer, or
+target-language operator semantics.
 ```
 
 Previous review verdict:
@@ -6871,16 +6890,38 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   `vector::transform(type<generation>(vector::mask_underlying_t))` remain
   unresolved unless explicit extension metadata can prove a generation-time
   typed value.
+- M173 follow-up feeding M174: real current lane-bitmask member outputs such
+  as `ui8`, `ui16`, and `ui64` remain diagnostics until the scalar descriptor
+  catalog explicitly accepts those tags.
+- M173 evidence follow-up: current selector-relevant evidence for
+  `mask_underlying` is the `_t` spelling, especially
+  `vector::mask_underlying_t` under `MaskVec`; keep bare
+  `vector::mask_underlying` as an accepted parsed synonym but do not cite it
+  as direct current selector evidence unless source data changes.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M173
+No stop condition is active. The workflow is ready to run the active M174
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M173 execution, run the validation command listed in
-`docs/agent/runs/m173-execution-review-loop-prompt.md`.
+For active M174 execution, run the validation command listed in
+`docs/agent/runs/m174-execution-review-loop-prompt.md`.
+
+For M173 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py tslgen/tests/test_m171_primitive_call_return_binding_matching.py tslgen/tests/test_m172_primitive_call_concrete_vector_alias_matching.py tslgen/tests/test_m173_vector_member_type_resolution.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py tslgen/tests/test_m171_primitive_call_return_binding_matching.py tslgen/tests/test_m172_primitive_call_concrete_vector_alias_matching.py tslgen/tests/test_m173_vector_member_type_resolution.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M173 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`411 passed in 28.01s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed.
 
 For M172 execution and review, validation completed with:
 

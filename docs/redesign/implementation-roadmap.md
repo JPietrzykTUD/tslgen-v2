@@ -21844,8 +21844,8 @@ Follow-ups:
 
 Status:
 
-Selected after M172 acceptance. Active next prompt:
-`docs/agent/runs/m173-execution-review-loop-prompt.md`.
+Accepted after execution-review with follow-ups. Next active prompt:
+`docs/agent/runs/m174-execution-review-loop-prompt.md`.
 
 Goal:
 
@@ -21887,5 +21887,92 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py tslgen/tests/test_m171_primitive_call_return_binding_matching.py tslgen/tests/test_m172_primitive_call_concrete_vector_alias_matching.py tslgen/tests/test_m173_vector_member_type_resolution.py
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py tslgen/tests/test_m171_primitive_call_return_binding_matching.py tslgen/tests/test_m172_primitive_call_concrete_vector_alias_matching.py tslgen/tests/test_m173_vector_member_type_resolution.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted behavior:
+
+- Added a focused `resolve_vector_member_scalar_type(...)` lowering helper for
+  already lowered `LoweredVectorMemberType` values.
+- Resolved `vector::mask`, `vector::imask`, `vector::mask_underlying_t`, and
+  `vector::mask_underlying` only through explicit catalog extension metadata.
+- Accepted fixed `lane_bitmask` member resolution only when the extension has
+  fixed integer `vector_bits`, explicitly non-runtime lanes, no size
+  parameter, an accepted descriptor for the selected scalar tag, and an
+  accepted descriptor for the produced exact unsigned scalar tag.
+- Kept native predicate, backend-owned, `unsigned_scalar`, runtime/scalable,
+  missing-metadata, unsupported-member, and unaccepted exact unsigned result
+  cases as diagnostics.
+- Let concrete member scalar facts feed M172 primitive-call selector matching
+  through the existing typed-value path while preserving unsupported selector
+  diagnostics and avoiding alias-name semantics.
+
+Validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py tslgen/tests/test_m171_primitive_call_return_binding_matching.py tslgen/tests/test_m172_primitive_call_concrete_vector_alias_matching.py tslgen/tests/test_m173_vector_member_type_resolution.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py tslgen/tests/test_m171_primitive_call_return_binding_matching.py tslgen/tests/test_m172_primitive_call_concrete_vector_alias_matching.py tslgen/tests/test_m173_vector_member_type_resolution.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M173 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`411 passed in 28.01s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed.
+
+Follow-ups:
+
+- Broaden the scalar descriptor catalog before treating real current
+  lane-bitmask member outputs such as `ui8`, `ui16`, and `ui64` as accepted
+  resolved member scalar facts.
+- Current corpus evidence for bare `vector::mask_underlying` is not direct;
+  keep it as an accepted spelling synonym for the already parsed member, but
+  continue citing `vector::mask_underlying_t` for current selector-relevant
+  evidence unless source data changes.
+
+### Milestone 174: Scalar Descriptor Catalog Completion For Current Type Tags
+
+Status:
+
+Selected after M173 acceptance. Active next prompt:
+`docs/agent/runs/m174-execution-review-loop-prompt.md`.
+
+Goal:
+
+Complete the lowering-owned scalar descriptor catalog for the current concrete
+scalar tags used by `tsldata/detail/types.tsl`, so typed type/generation
+queries and M173 vector-member resolution can reason about `si8`, `ui8`,
+`si16`, `ui16`, `si32`, `ui32`, `si64`, `ui64`, `f32`, and `f64` without
+spelling inference.
+
+Scope:
+
+- Inventory scalar type tags and signed/unsigned/floating relationships from
+  current `.tsl` source data and existing accepted tests.
+- Broaden `SUPPORTED_SCALAR_TYPE_DESCRIPTORS` to the current concrete scalar
+  tags with explicit family, signedness, and bit-width facts.
+- Update descriptor consumers intentionally, especially generation values,
+  generic length/runtime-length, base signed/unsigned transforms, operation
+  compatibility, and M173 vector-member resolution.
+- Add tests proving real fixed lane-bitmask member cases that produce accepted
+  unsigned tags now resolve through descriptors rather than TypeTag spelling.
+
+Out of scope:
+
+Adding new operation identifiers; parsing new body syntax; target-language
+operator parsing; backend type rendering; register/native-predicate spelling;
+new type categories beyond current scalar tags; wildcard expansion;
+dependency scheduling; branch, loop, declaration, or primitive-call rendering;
+source repair; output writing; runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies; broad registries, dispatchers, worklists, callback maps, hidden
+backfeeds, or fixpoint machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py
 find tslgen -type d -name __pycache__ -print
 ```

@@ -512,6 +512,14 @@ Invariants:
   `LoweredVectorTransformType` selector values as concrete vectors only when
   their extension is concrete and their base type resolves to a concrete
   scalar `TypeTag`. Alias names remain source-local and are not interpreted.
+- M173 resolves exact `LoweredVectorMemberType` values to
+  `LoweredScalarTypeIdentity` only when catalog extension metadata proves a
+  concrete backend-neutral scalar `TypeTag`. Fixed `lane_bitmask` policies can
+  produce exact unsigned scalar tags from selected vector lane counts only when
+  both the selected scalar tag and produced unsigned tag have accepted scalar
+  descriptors; native predicate, generic, runtime-lane, missing metadata, and
+  unsupported member cases remain diagnostics or unresolved backend-owned
+  facts.
 - M153 confirms that `details::arith_add`, `details::arith_mul`,
   `details::arith_rem`, `details::popcount`, `details::clz`,
   `details::clz_recursive`, `details::ctz`, and `details::mask_test` are
