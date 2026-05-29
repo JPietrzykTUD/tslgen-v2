@@ -1882,6 +1882,11 @@ For exact bare selector specialization entries:
 - a selected vector/type binding lowers to `CurrentVector(ExtensionName,
   TypeTag)`.
 
+Selector payloads also preserve minimal selected-return-binding provenance
+for each specialization entry. M171 uses that provenance to distinguish a
+selected return binding from an unrelated scalar type expression or catalog
+extension operand that happens to lower to the same value class.
+
 The names remain arbitrary source-defined or selected-context identifiers.
 `ResultBase`, `TargetExtension`, and `ToType` are examples, not generator
 keywords. Existing M144 behavior is preserved for `Vec`, `scalar`,
@@ -1906,6 +1911,41 @@ expand wildcards, derive `ToType`, change primitive-call dependency closure,
 forward selected bindings into dependency targets, render primitive calls or
 backend text, repair source, or introduce runtime `tsldata`, `frozen`, or
 `tslgenold` dependencies.
+
+### M171 Return Bindings In Primitive-Call Target Matching
+
+Milestone 171 extends primitive-call target matching for the exact two-entry
+selector shape where the first entry is already lowered to a concrete vector
+and the second entry is already lowered to a selected return-type binding
+value:
+
+```text
+call<primitive=NAME[CONCRETE_VECTOR, RETURN_BINDING_VALUE]>(...)
+```
+
+The resolver still performs normal target selection using the concrete vector
+extension/type and selector attributes. After a target primitive implementation
+is selected, the selected return-type value is mapped to that target
+primitive's own `return_type` declaration name:
+
+- a scalar return-type value plus `return_type: base: TargetName` becomes
+  `TargetReturnTypeBaseBinding(name=TargetName, type_tag=...)`;
+- an extension return-type value plus
+  `return_type: extension: TargetName` becomes
+  `TargetReturnTypeExtensionBinding(name=TargetName, extension=...)`.
+
+The caller's selector spelling remains caller-local. Names such as `ToBase`,
+`CallerResult`, and `TargetResult` are source data, not generator keywords.
+Existing no-specialization and single-concrete-vector matching behavior is
+unchanged.
+
+Unsupported second selector entries, literals, raw unbound selector symbols,
+raw scalar type expressions, raw catalog extension operands, non-concrete
+vector entries, missing target return-type declarations, and wrong target
+declaration kinds remain diagnostics. M171 does not parse the full selector
+tree, infer values from raw names, expand wildcards, derive `ToType`, add
+dependency scheduling, render primitive calls, repair source, or introduce
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
 
 ## Catalog Behavior
 

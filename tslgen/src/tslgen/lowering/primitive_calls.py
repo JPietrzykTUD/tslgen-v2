@@ -1,9 +1,13 @@
 """Cohesive primitive-call lowering resolution and dependency collection."""
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 from tslgen.analysis.selection import SelectedImplementation, Selector, Target
 from tslgen.analysis.selection import TargetAttribute
+from tslgen.analysis.selection import TargetReturnTypeBaseBinding
+from tslgen.analysis.selection import TargetReturnTypeExtensionBinding
+from tslgen.analysis.selection import TargetSpecializationBinding
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
     BodyToken,
@@ -66,6 +70,13 @@ _SelectedIdentity = tuple[
     tuple[tuple[str, str, str], ...],
     tuple[tuple[str, str, str, str], ...],
 ]
+_ReturnBindingSelectorValue = LoweredScalarTypeIdentity | ExtensionOperand
+
+
+@dataclass(frozen=True, slots=True)
+class _SelectorTargetParts:
+    vector: CurrentVector
+    return_binding_value: _ReturnBindingSelectorValue | None = None
 
 
 class PrimitiveCallResolver:
@@ -81,18 +92,18 @@ class PrimitiveCallResolver:
     ) -> PrimitiveCallTargetMatchingResult:
         """Match a lowered selector payload to one catalog implementation."""
 
-        vector = _selector_vector(context, selector_payload)
-        if isinstance(vector, Diagnostic):
+        parts = _selector_target_parts(context, selector_payload)
+        if isinstance(parts, Diagnostic):
             return PrimitiveCallTargetMatchingResult(
                 match=None,
-                diagnostics=(vector,),
+                diagnostics=(parts,),
             )
 
         target = Target(
             backend=context.backend,
             primitive_name=_target_name(context, selector_payload),
-            extension=str(vector.extension),
-            type_tag=str(vector.type_tag),
+            extension=str(parts.vector.extension),
+            type_tag=str(parts.vector.type_tag),
             attributes=_target_attributes(selector_payload.attributes),
         )
         selection = Selector().select(self._catalog, target)
@@ -105,9 +116,23 @@ class PrimitiveCallResolver:
                 ),
             )
 
+        selected = selection.selected[0]
+        target_binding = _target_return_binding(
+            selected,
+            parts.return_binding_value,
+            selector_payload,
+        )
+        if isinstance(target_binding, Diagnostic):
+            return PrimitiveCallTargetMatchingResult(
+                match=None,
+                diagnostics=(target_binding,),
+            )
+        if target_binding is not None:
+            selected = _selected_with_target_binding(selected, target_binding)
+
         return PrimitiveCallTargetMatchingResult(
             match=PrimitiveCallTargetMatch(
-                selected=selection.selected[0],
+                selected=selected,
                 selector_payload=selector_payload,
                 source=selector_payload.source,
             ),
@@ -316,21 +341,24 @@ def _target_name(
     raise AssertionError(f"unsupported primitive-call target: {target!r}")
 
 
-def _selector_vector(
+def _selector_target_parts(
     context: SelectedImplementationLoweringContext,
     selector_payload: PrimitiveCallSelectorPayload,
-) -> CurrentVector | Diagnostic:
+) -> _SelectorTargetParts | Diagnostic:
     specializations = selector_payload.specializations
     if not specializations:
-        return CurrentVector(extension=context.extension, type_tag=context.type_tag)
+        return _SelectorTargetParts(
+            vector=CurrentVector(extension=context.extension, type_tag=context.type_tag)
+        )
 
-    if len(specializations) != 1:
+    if len(specializations) > 2:
         return _unsupported_specialization_diagnostic(
             selector_payload,
             (
-                "primitive-call selector target matching supports at most one "
-                f"concrete vector specialization; got {len(specializations)} "
-                f"entries in {selector_payload.source_text!r}"
+                "primitive-call selector target matching supports only an "
+                "optional concrete vector specialization and optional selected "
+                "return-type binding; got "
+                f"{len(specializations)} entries in {selector_payload.source_text!r}"
             ),
         )
 
@@ -346,7 +374,106 @@ def _selector_vector(
             ),
             location=_specialization_source(value, selector_payload.source),
         )
-    return vector
+
+    if len(specializations) == 1:
+        return _SelectorTargetParts(vector=vector)
+
+    return_binding_value = specializations[1]
+    if not _is_selected_return_binding_entry(selector_payload, 1) or not isinstance(
+        return_binding_value,
+        LoweredScalarTypeIdentity | ExtensionOperand,
+    ):
+        return _unsupported_specialization_diagnostic(
+            selector_payload,
+            (
+                "primitive-call selector target matching supports two-entry "
+                "selectors only as a concrete vector plus selected return-type "
+                "binding; got 2 entries in "
+                f"{selector_payload.source_text!r}; unsupported second entry is "
+                f"{_format_specialization_value(return_binding_value)}"
+            ),
+        )
+    return _SelectorTargetParts(
+        vector=vector,
+        return_binding_value=return_binding_value,
+    )
+
+
+def _is_selected_return_binding_entry(
+    selector_payload: PrimitiveCallSelectorPayload,
+    index: int,
+) -> bool:
+    return (
+        index < len(selector_payload.selected_return_binding_names)
+        and selector_payload.selected_return_binding_names[index] is not None
+    )
+
+
+def _target_return_binding(
+    selected: SelectedImplementation,
+    value: _ReturnBindingSelectorValue | None,
+    selector_payload: PrimitiveCallSelectorPayload,
+) -> TargetSpecializationBinding | Diagnostic | None:
+    if value is None:
+        return None
+
+    declaration = selected.primitive.return_type_binding
+    if declaration is None:
+        return _unsupported_specialization_diagnostic(
+            selector_payload,
+            (
+                "primitive-call selector return-type binding cannot be matched; "
+                f"target primitive {selected.primitive.name!r} has no "
+                "primitive-local return_type declaration"
+            ),
+            location=_specialization_source(value, selector_payload.source),
+        )
+
+    if isinstance(value, LoweredScalarTypeIdentity):
+        if declaration.kind != "base":
+            return _wrong_return_binding_kind_diagnostic(
+                selector_payload,
+                expected=declaration.kind,
+                actual="base",
+                location=selector_payload.source,
+            )
+        return TargetReturnTypeBaseBinding(
+            name=declaration.name,
+            type_tag=value.type_tag,
+        )
+
+    if declaration.kind != "extension":
+        return _wrong_return_binding_kind_diagnostic(
+            selector_payload,
+            expected=declaration.kind,
+            actual="extension",
+            location=value.source,
+        )
+    return TargetReturnTypeExtensionBinding(
+        name=declaration.name,
+        extension=value.name,
+    )
+
+
+def _selected_with_target_binding(
+    selected: SelectedImplementation,
+    binding: TargetSpecializationBinding,
+) -> SelectedImplementation:
+    return SelectedImplementation(
+        target=Target(
+            backend=selected.target.backend,
+            primitive_name=selected.target.primitive_name,
+            extension=selected.target.extension,
+            type_tag=selected.target.type_tag,
+            attributes=selected.target.attributes,
+            specialization_bindings=(
+                *selected.target.specialization_bindings,
+                binding,
+            ),
+        ),
+        primitive=selected.primitive,
+        implementation=selected.implementation,
+    )
 
 
 def _concrete_vector_from_value(
@@ -400,11 +527,31 @@ def _unsupported_specialization_diagnostic(
     )
 
 
+def _wrong_return_binding_kind_diagnostic(
+    selector_payload: PrimitiveCallSelectorPayload,
+    *,
+    expected: str,
+    actual: str,
+    location: SourceLocation,
+) -> Diagnostic:
+    return _unsupported_specialization_diagnostic(
+        selector_payload,
+        (
+            "primitive-call selector return-type binding has the wrong kind "
+            "for the matched target declaration; expected "
+            f"return_type.{expected}, got return_type.{actual}"
+        ),
+        location=location,
+    )
+
+
 def _specialization_source(
     value: SelectorSpecializationValue,
     fallback: SourceLocation,
 ) -> SourceLocation:
     if isinstance(value, SelectorSymbol | SelectorLiteral):
+        return value.source
+    if isinstance(value, ExtensionOperand):
         return value.source
     if isinstance(value, LoweredBackendTypeReference):
         return value.request.source

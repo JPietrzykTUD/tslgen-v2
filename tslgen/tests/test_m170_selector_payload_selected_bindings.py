@@ -70,6 +70,7 @@ prim<v:=(v,v)> add(left, right):
     assert result.payload.specializations == (
         LoweredScalarTypeIdentity(type_tag=TypeTag("f64")),
     )
+    assert result.payload.selected_return_binding_names == ("ResultBase",)
     assert result.payload.source == SourceLocation(source, 5, 26)
 
 
@@ -103,6 +104,7 @@ prim<v:=(v,v)> add(left, right):
             source=SourceLocation(_single_primitive_call(selected).source.path, 5, 32),
         ),
     )
+    assert result.payload.selected_return_binding_names == ("TargetExtension",)
 
 
 def test_m170_selector_payload_lowers_explicit_vector_type_binding(
@@ -131,6 +133,7 @@ prim<v:=(v,v)> add(left, right):
     assert result.payload.specializations == (
         CurrentVector(extension=ExtensionName("avx2"), type_tag=TypeTag("f64")),
     )
+    assert result.payload.selected_return_binding_names == (None,)
 
 
 def test_m170_unbound_arbitrary_selector_symbol_stays_raw(
@@ -155,6 +158,7 @@ prim<v:=(v,v)> add(left, right):
             source=SourceLocation(_single_primitive_call(selected).source.path, 3, 32),
         ),
     )
+    assert result.payload.selected_return_binding_names == (None,)
 
 
 def test_m170_declared_extension_without_selected_fact_is_not_raw_extension(

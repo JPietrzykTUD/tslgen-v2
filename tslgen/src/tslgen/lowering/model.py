@@ -251,6 +251,7 @@ class PrimitiveCallSelectorPayload:
     attributes: tuple[SelectorAttribute, ...]
     source_text: str
     source: SourceLocation
+    selected_return_binding_names: tuple[str | None, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

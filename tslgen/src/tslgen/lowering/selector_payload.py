@@ -1,7 +1,12 @@
 """Typed lowering for primitive-call selector payload islands."""
 
+from dataclasses import dataclass
 import re
 
+from tslgen.analysis.selection import (
+    TargetReturnTypeBaseBinding,
+    TargetReturnTypeExtensionBinding,
+)
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import Catalog, ExtensionName, PrimitiveCall
 from tslgen.lowering.model import (
@@ -37,6 +42,7 @@ from tslgen.syntax.tsil_lexical import (
     split_top_level_parts,
 )
 from tslgen.lowering.selected_specializations import (
+    find_selected_specialization_binding,
     selected_specialization_selector_value,
 )
 from tslgen.lowering.type_queries import lower_type_expression
@@ -59,6 +65,12 @@ _TYPE_PREFIXES = (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class _LoweredSpecializationPart:
+    value: SelectorSpecializationValue
+    selected_return_binding_name: str | None = None
+
+
 def lower_primitive_call_selector_payload(
     context: SelectedImplementationLoweringContext,
     catalog: Catalog,
@@ -69,6 +81,7 @@ def lower_primitive_call_selector_payload(
 
     diagnostics: list[Diagnostic] = list(environment.diagnostics)
     specializations: list[SelectorSpecializationValue] = []
+    selected_return_binding_names: list[str | None] = []
 
     specialization = primitive_call.selector.specialization
     if specialization is not None:
@@ -101,14 +114,18 @@ def lower_primitive_call_selector_payload(
                 if isinstance(value, Diagnostic):
                     diagnostics.append(value)
                 else:
+                    lowered_part = value
                     value_diagnostics = _unknown_extension_diagnostics(
-                        value,
+                        lowered_part.value,
                         catalog,
                         part_source,
                     )
                     diagnostics.extend(value_diagnostics)
                     if not value_diagnostics:
-                        specializations.append(value)
+                        specializations.append(lowered_part.value)
+                        selected_return_binding_names.append(
+                            lowered_part.selected_return_binding_name
+                        )
 
     attrs = primitive_call.selector.attrs
     attributes: list[SelectorAttribute] = []
@@ -148,6 +165,7 @@ def lower_primitive_call_selector_payload(
             attributes=tuple(attributes),
             source_text=primitive_call.selector.source_text,
             source=primitive_call.selector.source,
+            selected_return_binding_names=tuple(selected_return_binding_names),
         ),
         diagnostics=(),
     )
@@ -159,7 +177,7 @@ def _lower_specialization_part(
     environment: SelectedTypeEnvironment,
     text: str,
     source: SourceLocation,
-) -> SelectorSpecializationValue | Diagnostic:
+) -> _LoweredSpecializationPart | Diagnostic:
     if _is_type_valued_selector_part(context, environment, text):
         result = lower_type_expression(
             context,
@@ -169,22 +187,38 @@ def _lower_specialization_part(
         )
         if result.value is None:
             return result.diagnostics[0]
-        return result.value
+        return _LoweredSpecializationPart(value=result.value)
 
+    selected_binding = find_selected_specialization_binding(context, text)
     selected_value = selected_specialization_selector_value(context, text, source)
     if isinstance(selected_value, Diagnostic):
         return selected_value
     if selected_value is not None:
-        return selected_value
+        selected_return_binding_name = (
+            text
+            if isinstance(
+                selected_binding,
+                TargetReturnTypeBaseBinding | TargetReturnTypeExtensionBinding,
+            )
+            else None
+        )
+        return _LoweredSpecializationPart(
+            value=selected_value,
+            selected_return_binding_name=selected_return_binding_name,
+        )
 
     if catalog.extensions.get(text) is not None:
-        return ExtensionOperand(name=ExtensionName(text), source=source)
+        return _LoweredSpecializationPart(
+            value=ExtensionOperand(name=ExtensionName(text), source=source)
+        )
 
     if _INTEGER_RE.fullmatch(text) is not None:
-        return SelectorLiteral(text=text, source=source)
+        return _LoweredSpecializationPart(
+            value=SelectorLiteral(text=text, source=source)
+        )
 
     if _IDENTIFIER_RE.fullmatch(text) is not None:
-        return SelectorSymbol(name=text, source=source)
+        return _LoweredSpecializationPart(value=SelectorSymbol(name=text, source=source))
 
     return _malformed_specialization_diagnostic(text, source)
 

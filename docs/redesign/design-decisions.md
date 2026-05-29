@@ -2201,3 +2201,41 @@ Consequences:
   extension or raw symbol.
 - The shared helper is not a registry, dispatcher, worklist, selector engine,
   dependency scheduler, or backend rendering surface.
+
+## ADR-045: Primitive-Call Target Matching May Decorate Matched Return Bindings
+
+Status: Accepted
+
+Context:
+
+M170 made explicit selected return-type facts visible in primitive-call
+selector payloads, but target matching still consumed only no selector entries
+or one concrete vector entry. Current conversion data uses selector shapes
+such as `call<primitive=cast[Vec, ToBase]>(...)`, where the second value must
+be available to the matched target primitive under that target primitive's
+own declaration name.
+
+Decision:
+
+M171 keeps selector parsing and selector-payload lowering unchanged, then
+extends primitive-call target matching for one exact value shape: a concrete
+vector selector followed by an already lowered selected return-type value.
+Selector payload lowering carries minimal per-entry selected-return-binding
+provenance so target matching can distinguish selected return bindings from
+raw scalar type expressions or catalog extension operands that lower to the
+same value classes.
+After normal target selection succeeds, the resolver validates the matched
+target primitive's `return_type` declaration and decorates the selected
+target with either `TargetReturnTypeBaseBinding` or
+`TargetReturnTypeExtensionBinding` using the matched target declaration name.
+
+Consequences:
+
+- Caller-local selector names do not become target-local names.
+- Existing no-specialization and single-vector selector matching remains
+  unchanged.
+- Missing target declarations, wrong declaration kinds, raw symbols, literals,
+  raw scalar type expressions, raw catalog extension operands, non-concrete
+  vector entries, and broader selector dimensions remain diagnostics.
+- This is not a selector engine, wildcard expander, dependency scheduler,
+  renderer, source repair pass, or raw-name inference mechanism.

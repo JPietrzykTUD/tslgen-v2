@@ -503,6 +503,11 @@ Invariants:
   selector-payload boundary only: it does not match primitive-call targets,
   select dependency implementations, lower dependency bodies, recursively lower
   call arguments, or render backend call syntax.
+- M171 lets primitive-call target matching consume one exact two-entry selector
+  payload shape: an already concrete vector selector plus an already lowered
+  selected return-type binding value. The matched target is decorated with the
+  target primitive's local `return_type` binding name, so caller-local names do
+  not leak into dependency contexts.
 - M153 confirms that `details::arith_add`, `details::arith_mul`,
   `details::arith_rem`, `details::popcount`, `details::clz`,
   `details::clz_recursive`, `details::ctz`, and `details::mask_test` are
@@ -1317,6 +1322,7 @@ class PrimitiveCallSelectorPayload:
     attributes: tuple[SelectorAttribute, ...]
     source_text: str
     source: SourceLocation
+    selected_return_binding_names: tuple[str | None, ...] = ()
 
 @dataclass(frozen=True, slots=True)
 class PrimitiveCallTargetMatch:
