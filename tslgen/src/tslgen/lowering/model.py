@@ -40,6 +40,8 @@ LoweredGenerationValueKind = Literal[
     "type.is_signed",
     "type.is_same",
     "primitive.attribute",
+    "generic.length",
+    "generic.runtime_length",
     "generation.integer_comparison",
     "generation.arithmetic.add",
     "generation.arithmetic.sub",

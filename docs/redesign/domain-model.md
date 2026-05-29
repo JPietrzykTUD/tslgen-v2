@@ -745,6 +745,8 @@ LoweredGenerationValueKind = Literal[
     "type.is_signed",
     "type.is_same",
     "primitive.attribute",
+    "generic.length",
+    "generic.runtime_length",
     "generation.integer_comparison",
     "generation.arithmetic.add",
     "generation.arithmetic.sub",
@@ -785,14 +787,22 @@ Invariants:
   through this generation-value model and must be integers. Division and
   remainder use deterministic truncating integer division; zero right operands
   are diagnostics.
+- `generic.length` and `generic.runtime_length` are produced only by the exact
+  `generic::length(TYPE_EXPR)` and `generic::runtime_length(TYPE_EXPR)`
+  generation-expression calls inside a selected generation-time context.
+  `TYPE_EXPR` is lowered through the selected type environment first. The
+  result is an integer only when the lowered type is a concrete fixed vector
+  with concrete extension, scalar type tag, and catalog lane metadata.
 - `generation.integer_comparison` is produced only by generation-control
   condition lowering for exact
   `value<generation>(QUERY) COMPARISON INTEGER_LITERAL` predicates over
   accepted integer generation values, including M159 arithmetic results. It is
   a boolean generation value consumed by branch selection, not a general
   expression node.
-- Unsupported query families, unsupported lowered type values, missing facts,
-  malformed query shapes, and non-concrete attributes produce diagnostics.
+- Unsupported query families, unsupported lowered type values, unresolved
+  aliases/specializations, missing facts, malformed query shapes, runtime or
+  size-parameter-only generic vector metadata, and non-concrete attributes
+  produce diagnostics.
 - This model is not a branch pruner, loop executor, expression parser,
   selector-attribute substitution engine, backend renderer, or raw text
   replacement mechanism.

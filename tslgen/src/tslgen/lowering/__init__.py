@@ -138,7 +138,10 @@ from tslgen.lowering.type_queries import (
     lower_generation_type_query,
     lower_type_expression,
 )
-from tslgen.lowering.generation_values import lower_generation_value_query
+from tslgen.lowering.generation_values import (
+    lower_generation_expression,
+    lower_generation_value_query,
+)
 from tslgen.lowering.binary_operations import (
     SUPPORTED_BINARY_OPERATION_DESCRIPTORS,
     BinaryOperationDescriptor,
@@ -295,6 +298,7 @@ __all__ = [
     "lower_backend_type_query",
     "lower_generation_type_query",
     "lower_generation_control_region",
+    "lower_generation_expression",
     "lower_generation_loop_region",
     "lower_generation_value_query",
     "lower_type_expression",

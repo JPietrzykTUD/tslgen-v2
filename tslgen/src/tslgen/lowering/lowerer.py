@@ -66,7 +66,10 @@ from tslgen.lowering.generation_loops import (
 from tslgen.lowering.generation_variables import (
     discover_generation_variable_declarations,
 )
-from tslgen.lowering.generation_values import lower_generation_value_query
+from tslgen.lowering.generation_values import (
+    lower_generation_expression,
+    lower_generation_value_query,
+)
 from tslgen.lowering.operation_type_compatibility import (
     binary_operation_supports_scalar_type,
     supported_scalar_type_tags_for_binary_operation,
@@ -196,6 +199,24 @@ class Lowerer:
         return lower_generation_value_query(
             context,
             query,
+            source,
+            catalog=catalog,
+            environment=environment,
+        )
+
+    def lower_generation_expression(
+        self,
+        selected: SelectedImplementation,
+        expression: str,
+        source: SourceLocation,
+        *,
+        catalog: Catalog | None = None,
+        environment: SelectedTypeEnvironment | None = None,
+    ) -> GenerationValueQueryLoweringResult:
+        context = self.context_for(selected)
+        return lower_generation_expression(
+            context,
+            expression,
             source,
             catalog=catalog,
             environment=environment,

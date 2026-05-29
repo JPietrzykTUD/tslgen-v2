@@ -11,6 +11,12 @@ from tslgen.lowering.model import (
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
 )
+from tslgen.lowering.generation_generic import (
+    GENERIC_GENERATION_PREFIX,
+    generic_generation_operation,
+    lower_generic_generation_value,
+    unsupported_generic_generation_expression_diagnostic,
+)
 from tslgen.lowering.scalar_types import (
     ScalarTypeDescriptor,
     lookup_scalar_type_descriptor,
@@ -27,6 +33,34 @@ from tslgen.lowering.type_syntax import (
 
 _GENERATION_ARITHMETIC_PREFIX = "arith<generation>::"
 _GENERATION_ARITHMETIC_OPERATIONS = frozenset(("add", "sub", "mul", "div", "rem"))
+
+
+def lower_generation_expression(
+    context: SelectedImplementationLoweringContext,
+    expression: str,
+    source: SourceLocation,
+    *,
+    catalog: Catalog | None = None,
+    environment: SelectedTypeEnvironment | None = None,
+) -> GenerationValueQueryLoweringResult:
+    parsed = parse_type_syntax(expression)
+    if parsed is None or (
+        isinstance(parsed, TypeQuery) and parsed.kind == "generation_value"
+    ):
+        return GenerationValueQueryLoweringResult(
+            value=None,
+            diagnostics=(_malformed_generation_expression_diagnostic(expression, source),),
+        )
+
+    return _lower_generation_value_expression(
+        context,
+        parsed,
+        expression,
+        source,
+        catalog=catalog,
+        environment=environment,
+        allow_integer_literal=False,
+    )
 
 
 def lower_generation_value_query(
@@ -162,6 +196,29 @@ def _lower_call_value(
             diagnostics=(
                 _unsupported_generation_arithmetic_diagnostic(
                     call.name.removeprefix(_GENERATION_ARITHMETIC_PREFIX),
+                    source,
+                ),
+            ),
+        )
+
+    generic_operation = generic_generation_operation(call.name)
+    if generic_operation is not None:
+        return lower_generic_generation_value(
+            context,
+            source_text,
+            generic_operation,
+            call,
+            source,
+            catalog=catalog,
+            environment=environment,
+        )
+
+    if call.name.startswith(GENERIC_GENERATION_PREFIX):
+        return GenerationValueQueryLoweringResult(
+            value=None,
+            diagnostics=(
+                unsupported_generic_generation_expression_diagnostic(
+                    call.name.removeprefix(GENERIC_GENERATION_PREFIX),
                     source,
                 ),
             ),
@@ -678,6 +735,22 @@ def _malformed_generation_value_query_diagnostic(
     )
 
 
+def _malformed_generation_expression_diagnostic(
+    expression: str,
+    source: SourceLocation,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-LOWER-MALFORMED-GENERATION-EXPRESSION",
+        message=(
+            "generation expression cannot be lowered; expected an exact "
+            "selected generation expression such as generic::length(TYPE_EXPR), "
+            f"got {expression!r}"
+        ),
+        location=source,
+    )
+
+
 def _unsupported_generation_value_query_diagnostic(
     query: str,
     source: SourceLocation,
@@ -690,7 +763,8 @@ def _unsupported_generation_value_query_diagnostic(
             "isolated value-query boundary; expected vector::length, "
             "vector::alignment, type::size_bytes(...), type::is_signed(...), "
             "type::is_same(...), primitive::attribute(...), or an M159 "
-            "arith<generation>::add/sub/mul/div/rem(...) call, got "
+            "arith<generation>::add/sub/mul/div/rem(...) call, or an M168 "
+            "generic::length/runtime_length(...) call, got "
             f"{query!r}"
         ),
         location=source,

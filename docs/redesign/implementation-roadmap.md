@@ -21252,8 +21252,8 @@ Recorded follow-ups:
 
 Status:
 
-Selected after M167 acceptance. Active next prompt:
-`docs/agent/runs/m168-execution-review-loop-prompt.md`.
+Accepted. Active next prompt after M168:
+`docs/agent/runs/m169-execution-review-loop-prompt.md`.
 
 Goal:
 
@@ -21320,4 +21320,118 @@ find tslgen -type d -name __pycache__ -print
 ```
 
 If the executor adds focused M168 test files, include them in the compileall
+and targeted pytest commands.
+
+Review result:
+
+The M168 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, evidence, test,
+documentation, and validation audits. M168 added a central
+`lower_generation_expression(...)` entry point for selected generation-time
+expression payloads and finite `generic::*` support for
+`generic::length(TYPE_EXPR)` and fixed-vector
+`generic::runtime_length(TYPE_EXPR)`.
+
+`TYPE_EXPR` lowers through the selected type environment and accepted
+type-expression path first. Concrete fixed vector facts produce typed integer
+generation values from scalar descriptors and catalog extension metadata.
+Unknown generic operations, malformed arity, unbound aliases, unresolved
+specialization symbols, scalar/non-vector arguments, missing metadata,
+runtime/scalable metadata, and size-parameter-only metadata remain
+diagnostics. M168 did not add raw target-language scanning, loop execution,
+rendering, source replacement, registries, dispatchers, worklists, or runtime
+`tsldata`, `frozen`, or `tslgenold` dependencies.
+
+- The central generation-value lowerer owns a reusable
+  `lower_generation_expression(...)` entry point for selected
+  generation-time expression payloads. `value<generation>(...)` remains a
+  materialization caller, not the semantic owner of `generic::*`.
+- Supported `generic::*` operations are exactly `length` and
+  `runtime_length`. Both produce integer generation values only for concrete
+  fixed vector facts derived from type lowering, scalar descriptors, and
+  catalog extension metadata.
+- Unknown `generic::*` operations, malformed arity, unbound aliases,
+  unresolved specialization symbols, scalar/non-vector arguments, missing
+  extension metadata, runtime/scalable metadata, and size-parameter-only
+  metadata remain diagnostics.
+
+Recorded follow-ups:
+
+- Strengthen M168 diagnostic tests with explicit severity, location, and
+  message assertions if this area is touched again.
+- Add a positive selected loop/control consumer test for
+  `value<generation>(generic::length(...))` when loop/control consumption is
+  touched again.
+- Add direct `lower_generation_expression(...)` coverage for
+  `generic::runtime_length(...)` if the generic-expression test surface is
+  touched again.
+
+Validation result:
+
+The final M168 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`383 passed in 43.35s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed.
+
+### Milestone 169: Exact Selected Specialization Binding Boundary
+
+Status:
+
+Selected after M168 acceptance. Active next prompt:
+`docs/agent/runs/m169-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the next type-lowering boundary needed by M168's concrete generic-vector
+length support: explicit selected specialization bindings for source symbols
+such as `ToBase`, `ToType`, `ToExtension`, and similar corpus-observed
+specialization names.
+
+M169 should let selected lowering contexts resolve specialization symbols only
+when explicit typed selected-target facts are supplied. For example,
+`let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))`
+can become a concrete vector type only when `ToBase` is bound to a concrete
+scalar type tag; `vector::as_extension(ToExtension)` can become concrete only
+when `ToExtension` is bound to a concrete extension. Unbound or unresolved
+symbols remain diagnostics or accepted unresolved-symbol facts, depending on
+the existing caller boundary.
+
+Scope:
+
+- Inventory specialization symbol evidence across all `tsldata/**/*.tsl`,
+  including type/base symbols and extension symbols.
+- Add the smallest typed selected-specialization binding model needed by
+  lowering; do not overload primitive attributes or raw alias names.
+- Resolve specialization symbols through explicit selected context/environment
+  facts before producing `LoweredSpecializationTypeSymbol` or unbound-alias
+  diagnostics.
+- Support concrete scalar/base type bindings and concrete extension bindings;
+  support concrete vector/type bindings only if they are needed for observed
+  `ToType`-style type lowering and can be expressed without a broad selector
+  engine.
+- Preserve M143 type-query behavior, M144-M151 primitive-call selector
+  behavior, and M168 generic-expression diagnostics.
+- Keep unresolved symbols deterministic diagnostics when no explicit binding
+  is supplied.
+
+Out of scope:
+
+Parsing the full nested `.tsl` implementation selector tree; selecting all
+specialization manifestations from source data; wildcard expansion; dependency
+closure; primitive-call target matching changes beyond using already supplied
+typed facts; branch selection; loop execution; rendering; source replacement;
+type inference; expression/statement parsing; source repair; runtime
+`tsldata`, `frozen`, or `tslgenold` dependencies; broad registries,
+dispatchers, worklists, hidden backfeeds, or fixpoint machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py
+find tslgen -type d -name __pycache__ -print
+```
+
+If the executor adds focused M169 test files, include them in the compileall
 and targeted pytest commands.

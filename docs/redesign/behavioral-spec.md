@@ -1755,6 +1755,40 @@ repair; dependency scheduling; output writing; runtime `tsldata`, `frozen`,
 or `tslgenold` dependencies; or broad registries, dispatchers, worklists,
 callback maps, hidden backfeeds, or fixpoint machinery.
 
+### M168 Exact `generic::*` Generation-Expression Boundary
+
+Milestone 168 extends the generation-value boundary with an inner
+generation-expression capability for exact generic vector length calls:
+
+```text
+generic::length(TYPE_EXPR)
+generic::runtime_length(TYPE_EXPR)
+```
+
+The accepted operations are finite: `length` and `runtime_length`.
+`value<generation>(...)` may materialize these expressions, and recursive
+generation-value callers such as `arith<generation>::...` may consume them
+when they already pass an expression payload through the same boundary. M168
+does not scan opaque raw target-language text for `generic::*`.
+
+`TYPE_EXPR` is always lowered through the accepted selected type environment
+and type-expression path first. The result is an integer generation value only
+when the lowered type resolves to a concrete fixed vector with concrete
+extension, concrete scalar type tag, catalog extension metadata, and scalar
+bit-width facts. `generic::runtime_length(...)` uses the same fixed-vector
+boundary; runtime/scalable vectors remain diagnostics rather than invented
+compile-time constants.
+
+Unsupported generic operation names, malformed arity, unbound aliases,
+unresolved specialization symbols, scalar or non-vector type arguments,
+missing extension metadata, runtime/scalable metadata, and size-parameter-only
+metadata produce deterministic diagnostics.
+
+M168 does not add loop execution, loop-variable substitution, backend
+rendering, source replacement, generic-size-parameter code emission, broad
+expression parsing, source repair, runtime data reads, registries,
+dispatchers, worklists, or fixpoint machinery.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

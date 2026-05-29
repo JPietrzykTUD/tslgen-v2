@@ -133,7 +133,7 @@ Deferred generation-value sublanes after M155:
 | --- | --- | --- |
 | Vector mask type values | `type::size_bytes(type<generation>(vector::imask))`, `type::is_signed(type<generation>(vector::imask))` | Mask/integral-mask type policy as generation-value size/signedness facts. |
 | Mask lane constants | `mask::lane::all_true`, `mask::lane::all_false` | Mask lane literal policy tied to the selected mask representation. |
-| Generic vector lengths | `generic::length(OutVec)`, `generic::runtime_length(ToType)` | M168 is selected to lower the largest safe subset through already accepted type-alias/type-query facts and fixed extension metadata. Runtime/scalable or unresolved forms should remain diagnostic boundaries, not guessed generation values. |
+| Generic vector lengths | `generic::length(OutVec)`, `generic::runtime_length(ToType)` | M168 lowers exact `generic::length(TYPE_EXPR)` and fixed-vector `generic::runtime_length(TYPE_EXPR)` as selected generation expressions after type-alias/type-query lowering. Runtime/scalable, size-parameter-only, unresolved alias/specialization, non-vector, and metadata-missing forms remain diagnostic boundaries, not guessed generation values. |
 
 M99 is accepted:
 

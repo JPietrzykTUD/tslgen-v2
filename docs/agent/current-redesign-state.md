@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 167 is accepted.
+Milestone 168 is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -72,6 +72,25 @@ M167 focused revision fixed premature acceptance wording in inventory docs and
 broadened the TSIL surface inventory examples so the row does not imply a
 closed cast/memory/I/O operation-name set. Focused re-review returned
 `Accept`.
+
+The M168 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, evidence, test,
+documentation, and validation audits. M168 added a reusable
+`lower_generation_expression(...)` entry point for selected generation-time
+expression payloads, plus finite `generic::*` support for
+`generic::length(TYPE_EXPR)` and fixed-vector
+`generic::runtime_length(TYPE_EXPR)`.
+
+M168 keeps `value<generation>(...)` as one materialization caller rather than
+the owner of `generic::*` semantics. `TYPE_EXPR` lowers through the selected
+type environment first, and concrete fixed vector facts produce typed integer
+generation values only from scalar descriptors plus catalog extension
+metadata. Unknown generic operations, malformed arity, unbound aliases,
+unresolved specialization symbols, scalar/non-vector arguments, missing
+metadata, runtime/scalable metadata, and size-parameter-only metadata remain
+diagnostics. No raw target-language scanning, loop execution, rendering,
+source replacement, registries, dispatchers, worklists, or runtime `tsldata`,
+`frozen`, or `tslgenold` dependency was added.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -2802,63 +2821,56 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 168.
+Execute Milestone 169.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m168-execution-review-loop-prompt.md
+docs/agent/runs/m169-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 168: Exact `generic::*` Generation-Expression Boundary
+Milestone 169: Exact Selected Specialization Binding Boundary
 ```
 
 Latest review verdict:
 
 ```text
-M167 execution-review returned Accept With Follow-Ups after one write-capable
-executor, one focused documentation/evidence revision, and read-only
-architecture, boundary, evidence, test, documentation, validation, and focused
-re-review audits.
+M168 execution-review returned Accept With Follow-Ups after one write-capable
+executor and read-only architecture, boundary, evidence, test, documentation,
+and validation audits.
 
-M167 added exact unresolved source-operation request-island discovery for
-`cast<...>(...)`, `mem<...>(...)`, and `io<...>(...)` over source-owned text
-and contiguous raw body-token runs. Payloads remain opaque text, surrounding
-text and non-raw tokens remain opaque spans, and no operation-name validation,
-argument splitting, type lowering inside payloads, backend spelling,
-rendering, expression parsing, source repair, runtime `tsldata`, runtime
-`frozen`, or runtime `tslgenold` dependency was added.
+M168 added exact `generic::*` generation-expression lowering for
+`generic::length(TYPE_EXPR)` and fixed-vector
+`generic::runtime_length(TYPE_EXPR)` through a reusable
+`lower_generation_expression(...)` entry point. `value<generation>(...)`
+remains a caller/materialization context, not the semantic owner.
 
-M167 review verdicts were: architecture `Accept With Follow-Ups`, boundary
-`Accept`, evidence `Accept With Minor Docs Follow-Up`, test
-`Accept With Follow-Up`, documentation initially `Needs Revision`, validation
-`Accept`, and focused documentation/evidence re-review `Accept`.
+M168 review verdicts were: architecture `Accept With Follow-Ups`, boundary
+`Accept`, evidence `Accept`, test `Accept With Follow-Ups`, documentation
+`Accept`, and validation `Accept`.
 ```
 
 Next expected action:
 
 ```text
-Run the active M168 execution-review-loop prompt. M168 should add the next
-typed lowering boundary for exact `generic::*` generation expressions, with
-`generic::length(TYPE_EXPR)` and fixed-vector
-`generic::runtime_length(TYPE_EXPR)` as the selected accepted operations.
+Run the active M169 execution-review-loop prompt. M169 should add the next
+typed lowering boundary for explicit selected specialization bindings, so
+symbols such as `ToBase`, `ToType`, and `ToExtension` can resolve only when
+the selected context supplies concrete typed facts.
 
-M168 must lower `TYPE_EXPR` through the already accepted type-expression and
-`let<type>(...)` alias environment first. It may produce integer generation
-values only when a selected TSIL generation-time context has provided the
-expression payload and a concrete fixed vector extension, concrete scalar
-type, and deterministic catalog lane metadata are available.
-Runtime/scalable, generic-size-parameter, unresolved alias/specialization,
-non-vector, metadata-missing, or unknown `generic::OP(...)` cases are
-diagnostics, not guessed constants.
+M169 should inventory specialization-symbol evidence across all
+`tsldata/**/*.tsl`, then add the smallest selected-context binding model
+needed by type lowering. It must not infer meanings from raw symbol names,
+parse the full nested implementation selector tree, expand wildcards, or use
+primitive attributes as hidden carriers for type/extension facts.
 
-M168 must not scan arbitrary raw target-language text for `generic::*` calls.
-`value<generation>(...)` is one caller/materialization context, not the owner
-of `generic::*` semantics.
+This is the next useful step because M168 can lower generic vector lengths
+only after aliases such as `OutVec` lower to concrete vector facts; corpus
+aliases often pass through `ToBase` or `ToExtension`.
 ```
 
 Previous review verdict:
@@ -6734,16 +6746,38 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M167 follow-up: consider lexical hardening for keyword-looking text inside
   raw target string literals if source string literals become common inputs to
   direct text-fragment discovery.
+- M168 follow-up: strengthen M168 diagnostic tests with explicit severity,
+  location, and message assertions if this area is touched again.
+- M168 follow-up: add a positive selected loop/control consumer test for
+  `value<generation>(generic::length(...))` when loop/control consumption is
+  touched again.
+- M168 follow-up: add direct `lower_generation_expression(...)` coverage for
+  `generic::runtime_length(...)` if the generic-expression test surface is
+  touched again.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M168
+No stop condition is active. The workflow is ready to run the active M169
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M168 execution, run the validation command listed in
-`docs/agent/runs/m168-execution-review-loop-prompt.md`.
+For active M169 execution, run the validation command listed in
+`docs/agent/runs/m169-execution-review-loop-prompt.md`.
+
+For M168 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m165_backend_control.py tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m168_generic_generation_expressions.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m165_backend_control.py tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m168_generic_generation_expressions.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M168 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`383 passed in 43.35s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed.
 
 For M167 execution and review, validation completed with:
 

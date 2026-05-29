@@ -4141,12 +4141,12 @@ def test_m155_reports_malformed_unsupported_and_surrounding_contexts() -> None:
         "TSL-LOWER-MALFORMED-GENERATION-VALUE-QUERY",
     ]
     assert [diagnostic.code for diagnostic in unsupported_generic.diagnostics] == [
-        "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
+        "TSL-LOWER-UNBOUND-TYPE-ALIAS",
     ]
     assert [
         diagnostic.code for diagnostic in unsupported_generic_runtime.diagnostics
     ] == [
-        "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
+        "TSL-LOWER-UNBOUND-TYPE-ALIAS",
     ]
     assert [diagnostic.code for diagnostic in unsupported_mask.diagnostics] == [
         "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
@@ -4419,7 +4419,7 @@ def test_m156_reports_nonboolean_and_unsupported_generation_conditions() -> None
         _location(4, 7),
     ]
     assert [diagnostic.code for diagnostic in unsupported.diagnostics] == [
-        "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
+        "TSL-LOWER-UNBOUND-TYPE-ALIAS",
     ]
     assert [diagnostic.location for diagnostic in unsupported.diagnostics] == [
         _location(4, 7),
@@ -5301,7 +5301,7 @@ def test_m159_reports_generation_arithmetic_diagnostics() -> None:
                 ),
                 _location(11, 7),
             ),
-            "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
+            "TSL-LOWER-UNBOUND-TYPE-ALIAS",
         ),
         (
             lowerer.lower_generation_value_query(
@@ -6025,7 +6025,7 @@ def test_m161_reports_noninteger_generation_value_bound() -> None:
     assert "primitive::attribute(aligned)" in result.diagnostics[0].message
 
 
-def test_m161_reports_deferred_generic_length_loop_bound() -> None:
+def test_m161_reports_unresolved_generic_length_loop_bound() -> None:
     body = _generation_loop_body(
         "i, 0, value<generation>(generic::length(OutVec)), 1",
     )
@@ -6035,9 +6035,9 @@ def test_m161_reports_deferred_generic_length_loop_bound() -> None:
     )
 
     assert [diagnostic.code for diagnostic in result.diagnostics] == [
-        "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
+        "TSL-LOWER-UNBOUND-TYPE-ALIAS",
     ]
-    assert "generic::length" in result.diagnostics[0].message
+    assert "OutVec" in result.diagnostics[0].message
 
 
 def test_m161_reports_missing_and_ambiguous_loop_braces() -> None:
