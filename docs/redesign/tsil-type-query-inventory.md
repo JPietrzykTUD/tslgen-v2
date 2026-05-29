@@ -36,6 +36,14 @@ M143 classifies observed forms into these semantic categories:
   supported type transforms. They are typed semantic symbols, not aliases and
   not backend text.
 
+M169 update: selected targets may now supply explicit specialization binding
+facts for those symbols. `ToBase`/`ToExtension` remain corpus examples:
+return-type base/extension bindings validate against the primitive-local
+`return_type` declaration, and focused tests also use arbitrary names such as
+`ResultBase` and `TargetExtension`. An explicit vector/type binding can make
+observed `ToType`-style `register::generic(ToType)` queries concrete without
+deriving `ToType` from source branches.
+
 ## `let<type>(...)` Forms
 
 | Count | Representative source | Form | Category |

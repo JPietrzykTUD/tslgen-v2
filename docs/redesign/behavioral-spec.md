@@ -1827,6 +1827,46 @@ implementation selector tree, expand specialization wildcards, evaluate type
 queries, change primitive-call matching, render backend text, repair source,
 or introduce runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
 
+### M169 Selected Specialization Binding Boundary
+
+Milestone 169 adds explicit selected specialization bindings to the selected
+target/lowering context. These bindings are selected facts supplied with the
+target; they are not inferred from raw source names, implementation branch
+shape, tests, primitive attributes, or backend helper text.
+
+Supported selected binding facts are:
+
+- a primitive-local return-type base binding name mapped to a concrete
+  scalar `TypeTag`;
+- a primitive-local return-type extension binding name mapped to a concrete
+  `ExtensionName`;
+- an explicit vector/type binding name mapped to a concrete
+  `ExtensionName + TypeTag` pair for observed `ToType`-style type queries.
+
+Return-type base and extension bindings validate against the M168.5
+primitive-local `return_type` declaration. The declaration name is arbitrary
+source data: fixtures prove names such as `ResultBase` and
+`TargetExtension` work, so `ToBase` and `ToExtension` remain corpus examples
+only.
+
+Type lowering resolves a bound base specialization symbol to a scalar type
+identity before falling back to the accepted unresolved-specialization or
+unbound-alias behavior. `vector::as_extension(...)` resolves a bound
+extension specialization operand to the supplied concrete extension. Explicit
+vector/type bindings resolve to concrete current-vector values that can feed
+accepted `register::generic(...)` and `generic::length(...)` consumers.
+
+Duplicate selected binding names, malformed selected binding names,
+return-type binding/declaration mismatches, return-type bindings without a
+primitive declaration, wrong binding kind usage, and declared extension
+symbols without a supplied selected binding produce deterministic diagnostics.
+
+M169 does not parse the full nested `.tsl` implementation selector tree,
+expand wildcards, select all specialization manifestations, derive `ToType`
+from `ToBase`, change primitive-call dependency closure, render backend text,
+repair source, or introduce runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

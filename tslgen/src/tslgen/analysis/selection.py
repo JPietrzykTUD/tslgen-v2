@@ -3,7 +3,13 @@
 from dataclasses import dataclass
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
-from tslgen.domain.catalog import Catalog, Implementation, Primitive
+from tslgen.domain.catalog import (
+    Catalog,
+    ExtensionName,
+    Implementation,
+    Primitive,
+    TypeTag,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,22 +20,57 @@ class TargetAttribute:
 
 
 @dataclass(frozen=True, slots=True)
+class TargetReturnTypeBaseBinding:
+    name: str
+    type_tag: TypeTag
+
+
+@dataclass(frozen=True, slots=True)
+class TargetReturnTypeExtensionBinding:
+    name: str
+    extension: ExtensionName
+
+
+@dataclass(frozen=True, slots=True)
+class TargetVectorTypeBinding:
+    name: str
+    extension: ExtensionName
+    type_tag: TypeTag
+
+
+TargetSpecializationBinding = (
+    TargetReturnTypeBaseBinding
+    | TargetReturnTypeExtensionBinding
+    | TargetVectorTypeBinding
+)
+
+
+@dataclass(frozen=True, slots=True)
 class Target:
     backend: str
     primitive_name: str
     extension: str
     type_tag: str
     attributes: tuple[TargetAttribute, ...] = ()
+    specialization_bindings: tuple[TargetSpecializationBinding, ...] = ()
 
     def sort_key(
         self,
-    ) -> tuple[str, str, str, str, tuple[tuple[str, str, str], ...]]:
+    ) -> tuple[
+        str,
+        str,
+        str,
+        str,
+        tuple[tuple[str, str, str], ...],
+        tuple[tuple[str, str, str, str], ...],
+    ]:
         return (
             self.backend,
             self.primitive_name,
             self.extension,
             self.type_tag,
             _target_attribute_sort_key(self.attributes),
+            _target_specialization_binding_sort_key(self.specialization_bindings),
         )
 
 
@@ -172,6 +213,29 @@ def _target_attribute_sort_key(
     attributes: tuple[TargetAttribute, ...],
 ) -> tuple[tuple[str, str, str], ...]:
     return _attribute_key_sort_key(_target_attribute_key(attributes))
+
+
+def _target_specialization_binding_sort_key(
+    bindings: tuple[TargetSpecializationBinding, ...],
+) -> tuple[tuple[str, str, str, str], ...]:
+    return tuple(sorted(_specialization_binding_key(binding) for binding in bindings))
+
+
+def _specialization_binding_key(
+    binding: TargetSpecializationBinding,
+) -> tuple[str, str, str, str]:
+    if isinstance(binding, TargetReturnTypeBaseBinding):
+        return ("return_type.base", binding.name, str(binding.type_tag), "")
+    if isinstance(binding, TargetReturnTypeExtensionBinding):
+        return ("return_type.extension", binding.name, str(binding.extension), "")
+    if isinstance(binding, TargetVectorTypeBinding):
+        return (
+            "type.vector",
+            binding.name,
+            str(binding.extension),
+            str(binding.type_tag),
+        )
+    raise AssertionError(f"unsupported specialization binding: {binding!r}")
 
 
 def _primitive_attribute_key(

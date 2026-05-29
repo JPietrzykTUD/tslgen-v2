@@ -17,7 +17,8 @@ added primitive-local optional `return_type` binding declarations with
 arbitrary source-defined names. Generic expressions can become concrete only
 when `TYPE_EXPR` lowers to a concrete fixed vector, and current corpus aliases
 often flow through selected specialization symbols declared by the primitive,
-such as `ToBase` or `ToExtension`.
+such as `ToBase` or `ToExtension`. Those are corpus examples only; M169 must
+also prove arbitrary M168.5-declared binding names are not hardwired.
 
 M169 is an implementation milestone. It should add the next lowering boundary
 for resolving specialization symbols from explicit selected-target facts. It
@@ -60,6 +61,7 @@ must not parse or infer the full `.tsl` implementation selector tree.
 - `tslgen/tests/test_m144_selector_payload.py`
 - `tslgen/tests/test_m145_primitive_call_target_matching.py`
 - `tslgen/tests/test_m168_generic_generation_expressions.py`
+- `tslgen/tests/test_m169_selected_specialization_bindings.py`
 
 ## Goal
 
@@ -121,9 +123,12 @@ Run exactly one write-capable executor for M169. The executor should:
 6. Support concrete scalar/base type bindings and concrete extension bindings.
    Support concrete vector/type bindings only if they are needed for observed
    `ToType`-style lowering and can reuse existing `LoweredTypeValue` shapes.
-7. Ensure `vector::transform_extension(ToBase)` and
-   `vector::as_extension(ToExtension)` can lower through aliases and can feed
-   M168 `generic::length(...)` when fixed extension/type metadata exists.
+7. Ensure `vector::transform_extension(...)` and
+   `vector::as_extension(...)` can lower declared specialization symbols
+   through aliases and can feed M168 `generic::length(...)` when fixed
+   extension/type metadata exists. Corpus examples such as `ToBase` and
+   `ToExtension` are useful evidence, but the implementation and tests must
+   not special-case those spellings.
 8. Preserve existing behavior for unbound symbols: if no explicit binding is
    supplied, current M143/M168 unresolved-symbol or unbound-alias diagnostics
    remain deterministic.
@@ -133,8 +138,12 @@ Run exactly one write-capable executor for M169. The executor should:
       expression;
     - positive extension binding resolving a specialization symbol in
       `vector::as_extension(...)`;
-    - positive alias plus `generic::length(...)` using a bound `ToBase`;
-    - positive alias plus `generic::length(...)` using a bound `ToExtension`;
+    - positive alias plus `generic::length(...)` using a bound
+      primitive-declared base symbol, including at least one arbitrary fixture
+      name other than `ToBase`;
+    - positive alias plus `generic::length(...)` using a bound
+      primitive-declared extension symbol, including at least one arbitrary
+      fixture name other than `ToExtension`;
     - unresolved/unbound symbol behavior when no binding is supplied;
     - wrong binding kind or malformed binding diagnostics, if the public model
       can represent invalid input;
@@ -151,6 +160,8 @@ Run exactly one write-capable executor for M169. The executor should:
   parsing.
 - Return-type binding names come from M168.5 primitive declarations and are
   arbitrary user-defined identifiers.
+- Focused positive tests must prove arbitrary declared names work; `ToBase`
+  and `ToExtension` are not generator keywords.
 - Specialization resolution must come from explicit typed selected facts, not
   from raw name guesses such as "anything named ToBase is f64".
 - Do not infer specialization values from raw body text, test names,
@@ -185,11 +196,12 @@ Run exactly one write-capable executor for M169. The executor should:
 
 Full `.tsl` implementation selector parsing; wildcard expansion; producing a
 complete catalog of every specialization manifestation; automatic target
-selection for `ToBase`/`ToExtension`; dependency closure changes; primitive
-call rendering; backend value/control/intrinsic/source-operation translation;
-loop execution or unrolling; branch selection changes; declaration rendering;
-source replacement; backend rendering; type inference; arbitrary expression or
-statement parsing; source repair; output writing; runtime `tsldata`,
+selection for declared return-type identifiers; dependency closure changes;
+primitive call rendering; backend value/control/intrinsic/source-operation
+translation; loop execution or unrolling; branch selection changes;
+declaration rendering; source replacement; backend rendering; type inference;
+arbitrary expression or statement parsing; source repair; output writing;
+runtime `tsldata`,
 `frozen`, or `tslgenold` dependencies; broad registries, dispatchers,
 worklists, callback maps, hidden backfeeds, or fixpoint machinery.
 
@@ -223,8 +235,8 @@ Run:
 
 ```bash
 git diff --check
-python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py
 find tslgen -type d -name __pycache__ -print
 ```
 

@@ -64,6 +64,7 @@ _SelectedIdentity = tuple[
     str,
     str,
     tuple[tuple[str, str, str], ...],
+    tuple[tuple[str, str, str, str], ...],
 ]
 
 

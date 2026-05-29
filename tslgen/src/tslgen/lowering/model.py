@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from tslgen.analysis.selection import SelectedImplementation, Target
+from tslgen.analysis.selection import (
+    SelectedImplementation,
+    Target,
+    TargetSpecializationBinding,
+)
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
     BodyToken,
@@ -80,6 +84,7 @@ class SelectedImplementationLoweringContext:
     parameter_names: tuple[str, ...]
     primitive_source: SourceLocation
     implementation_source: SourceLocation
+    selected_specialization_bindings: tuple[TargetSpecializationBinding, ...] = ()
     current_vector_keyword: str = CURRENT_VECTOR_KEYWORD
     current_scalar_keyword: str = CURRENT_SCALAR_KEYWORD
 
@@ -654,6 +659,7 @@ def build_selected_implementation_lowering_context(
         parameter_names=selected.primitive.parameters,
         primitive_source=selected.primitive.source,
         implementation_source=selected.implementation.source,
+        selected_specialization_bindings=selected.target.specialization_bindings,
     )
 
 

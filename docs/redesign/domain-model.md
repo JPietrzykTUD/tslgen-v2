@@ -540,12 +540,35 @@ class TargetAttribute:
     key_argument: str | None = None
 
 @dataclass(frozen=True, slots=True)
+class TargetReturnTypeBaseBinding:
+    name: str
+    type_tag: TypeTag
+
+@dataclass(frozen=True, slots=True)
+class TargetReturnTypeExtensionBinding:
+    name: str
+    extension: ExtensionName
+
+@dataclass(frozen=True, slots=True)
+class TargetVectorTypeBinding:
+    name: str
+    extension: ExtensionName
+    type_tag: TypeTag
+
+TargetSpecializationBinding = (
+    TargetReturnTypeBaseBinding
+    | TargetReturnTypeExtensionBinding
+    | TargetVectorTypeBinding
+)
+
+@dataclass(frozen=True, slots=True)
 class Target:
     backend: BackendId
     primitive_name: PrimitiveName
     extension: ExtensionName
     type_tag: TypeTag
     attributes: tuple[TargetAttribute, ...] = ()
+    specialization_bindings: tuple[TargetSpecializationBinding, ...] = ()
 
 @dataclass(frozen=True, slots=True)
 class SelectedImplementation:
@@ -567,6 +590,12 @@ Invariants:
 - Attribute-variant matching ignores provenance-only catalog fields, including
   source spans, `Primitive.declared_attributes`, and
   `PrimitiveAttribute.declared_value`.
+- Selected specialization bindings are explicit selected facts. Return-type
+  base/extension bindings must validate against the primitive-local
+  `return_type` declaration before type lowering consumes them. Vector/type
+  bindings are explicit concrete `ExtensionName + TypeTag` facts for observed
+  `ToType`-style queries; M169 does not derive them from implementation
+  selector trees.
 
 ## Lowering Context Model
 
@@ -590,6 +619,7 @@ class SelectedImplementationLoweringContext:
     parameter_names: tuple[ParameterName, ...]
     primitive_source: SourceLocation
     implementation_source: SourceLocation
+    selected_specialization_bindings: tuple[TargetSpecializationBinding, ...]
     current_vector_keyword: str
     current_scalar_keyword: str
 ```
@@ -600,6 +630,9 @@ Invariants:
   identity for diagnostics and traceability.
 - `primitive_attributes` is the selected concrete `Primitive.attributes` tuple
   chosen by target selection.
+- `selected_specialization_bindings` is copied from the explicit target and is
+  the only M169 source for return-type base/extension symbols or explicit
+  vector/type specialization symbols.
 - Declaration provenance such as `Primitive.declared_attributes` and
   `PrimitiveAttribute.declared_value` is not a separate semantic selector.
 - `Vec` is a current selected-context vector value: exactly the selected
@@ -1383,10 +1416,11 @@ Invariants:
   semantic input to that type transform without rendering it.
 - Observed specialization names such as `ToBase`, `ToType`, and
   `ToExtension` are `LoweredSpecializationTypeSymbol` values only when they
-  appear inside supported observed type transforms. M168.5 additionally
-  records primitive-local `return_type` declarations for arbitrary source names
-  such as `base: ToBase` or `extension: ToExtension`; selected-value binding
-  and identifier resolution remain later lowering work.
+  appear inside supported observed type transforms and no explicit M169
+  selected binding resolves them. M168.5 records primitive-local
+  `return_type` declarations for arbitrary source names such as
+  `base: ToBase` or `extension: ToExtension`; M169 resolves those names only
+  through explicit selected specialization bindings.
 - Raw source text is retained only as diagnostic/provenance context, not as a
   semantic value consumed by renderers.
 

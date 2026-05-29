@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 168.5 is accepted.
+Milestone 169 is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -106,6 +106,24 @@ extension values, lower declared identifiers in TSIL expressions, derive
 `ToType`, parse the full implementation selector tree, expand specialization
 wildcards, change primitive-call matching, render backend text, repair source,
 or introduce runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
+
+The M169 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor, one focused revision, read-only architecture,
+boundary, evidence, test, documentation, and validation audits, and focused
+re-review. M169 added explicit selected specialization binding facts on
+`Target`, copied them into `SelectedImplementationLoweringContext`, and made
+type/generation type lowering resolve arbitrary declared return-type base and
+extension names only when the selected target supplies concrete typed facts.
+It also supports explicit selected vector/type facts for `ToType`-style
+operands without deriving them from raw source text.
+
+M169 preserved unbound-specialization behavior when no selected fact is
+supplied, validates declared return-type bindings against M168.5 primitive
+declarations, rejects malformed, duplicate, undeclared, mismatched, and
+wrong-kind binding inputs with deterministic diagnostics, and kept primitive
+call selector payload lowering, dependency closure, wildcard expansion,
+rendering, source repair, runtime `tsldata`, runtime `frozen`, and runtime
+`tslgenold` out of scope.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -2836,58 +2854,62 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 169.
+Execute Milestone 170.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m169-execution-review-loop-prompt.md
+docs/agent/runs/m170-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 169: Exact Selected Specialization Binding Boundary
+Milestone 170: Selected Binding Visibility In Primitive-Call Selectors
 ```
 
 Latest review verdict:
 
 ```text
-M168.5 execution-review returned Accept With Follow-Ups after one
-write-capable executor and read-only architecture, boundary, evidence, test,
-documentation, and validation audits.
+M169 execution-review returned Accept With Follow-Ups after one write-capable
+executor, one focused revision, read-only architecture, boundary, evidence,
+test, documentation, and validation audits, and focused re-review.
 
-M168.5 added declaration-only parser/domain/catalog support for optional
-primitive-local `return_type` bindings. Current corpus evidence contains seven
-single-binding `return_type` blocks: five `base: ToBase` and two
-`extension: ToExtension`; no current corpus primitive has unsupported keys,
-missing bindings, or multiple return-type bindings. The binding names remain
-source-defined identifiers, not generator keywords.
+M169 added explicit selected specialization binding facts on `Target` and
+uses those facts in selected type/generation lowering. Arbitrary
+primitive-declared return-type base and extension names resolve only when
+explicit selected target facts are supplied; unbound names keep the accepted
+unresolved/unbound behavior. M169 also added explicit vector/type binding
+facts for `ToType`-style operands without deriving them from raw selector
+text.
 
-M168.5 review verdicts were: architecture `Accept`, boundary `Accept`,
-evidence `Accept`, test `Accept`, documentation `Accept`, and validation
-`Accept With Follow-Ups`. The validation follow-up was satisfied by including
-`tslgen/tests/test_m1685_return_type_bindings.py` in final validation.
+M169 review verdicts were: architecture `Accept With Follow-Ups`, boundary
+`Accept With Follow-Ups`, evidence `Accept`, test `Needs Revision` before the
+focused revision, documentation `Accept With Follow-Up`, validation `Gap`
+before final validation reporting, and focused re-review `Accept With
+Follow-Ups`.
 ```
 
 Next expected action:
 
 ```text
-Run the active M169 execution-review-loop prompt. M169 should add explicit
-selected-specialization bindings to the type-lowering context so
-primitive-declared return-type symbols and related selected symbols resolve
-only when the selected target/context supplies concrete typed facts.
+Run the active M170 execution-review-loop prompt. M170 should make already
+supplied M169 selected binding facts visible to primitive-call selector
+payload lowering, so exact selector parts such as `[ResultBase]`,
+`[TargetExtension]`, or `[ToType]` can become the same typed scalar,
+extension, or concrete vector facts used by type/generation lowering.
 
-M169 consumes the M168.5 primitive-local declarations; it must not infer
-meanings from raw names such as `ToBase`, parse the full nested implementation
-selector tree, expand wildcards, or use primitive attributes as hidden carriers
-for type/extension facts.
+M170 must preserve raw `SelectorSymbol` behavior for unbound arbitrary names
+and must not parse the full nested `.tsl` implementation selector tree,
+expand wildcards, derive `ToType`, change dependency closure, or add a
+selector engine. A small helper extraction from `type_queries.py` is in scope
+only if it shares the M169 binding boundary without creating a registry,
+dispatcher, worklist, or parser.
 
-This is the next useful step because M168 can lower generic vector lengths
-only after aliases such as `OutVec` lower to concrete vector facts; corpus
-aliases often pass through declared return-type symbols such as `ToBase` or
-`ToExtension`.
+This is useful because primitive-call selector payloads are the next boundary
+where selected type facts need to be visible. It closes the narrow M169
+follow-up without drifting into broad selector interpretation.
 ```
 
 Previous review verdict:
@@ -6771,16 +6793,41 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M168 follow-up: add direct `lower_generation_expression(...)` coverage for
   `generic::runtime_length(...)` if the generic-expression test surface is
   touched again.
+- M169 follow-up: `type_queries.py` reached the module-size guardrail area;
+  the next nearby selected-binding work should extract the M169 helper block
+  or otherwise keep type-query lowering from becoming a replacement monolith.
+- M169 follow-up: selected specialization bindings are visible in
+  type/generation lowering only. Primitive-call selector payloads still treat
+  bare selected binding names as raw selector symbols until M170.
+- M169 follow-up: primitive-call dependency targets do not forward selected
+  specialization bindings. Future closure/selector work should decide
+  explicit propagation only when evidence requires it.
+- M169 follow-up: `ToType` population remains future selected/catalog work;
+  M169 only accepts an already supplied explicit vector/type fact.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M169
+No stop condition is active. The workflow is ready to run the active M170
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M169 execution, run the validation command listed in
-`docs/agent/runs/m169-execution-review-loop-prompt.md`.
+For active M170 execution, run the validation command listed in
+`docs/agent/runs/m170-execution-review-loop-prompt.md`.
+
+For M169 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M169 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`372 passed in 25.21s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed.
 
 For M168.5 execution and review, validation completed with:
 

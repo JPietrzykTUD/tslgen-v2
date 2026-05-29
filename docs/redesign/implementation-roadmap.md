@@ -21447,15 +21447,16 @@ after validation-created `__pycache__` directories were removed.
 
 Status:
 
-Selected after M168.5 acceptance. Active next prompt:
-`docs/agent/runs/m169-execution-review-loop-prompt.md`.
+Accepted after M168.5. M170 selected as the active next prompt:
+`docs/agent/runs/m170-execution-review-loop-prompt.md`.
 
 Goal:
 
 Add the next type-lowering boundary needed by M168's concrete generic-vector
 length support: explicit selected specialization bindings for source symbols
 such as `ToBase`, `ToType`, `ToExtension`, and similar corpus-observed
-specialization names.
+specialization names. These names are source examples, not generator
+keywords; M169 must also prove arbitrary M168.5-declared binding names work.
 
 M169 should let selected lowering contexts resolve specialization symbols only
 when explicit typed selected-target facts are supplied. For example,
@@ -21472,6 +21473,9 @@ Scope:
   including type/base symbols and extension symbols.
 - Add the smallest typed selected-specialization binding model needed by
   lowering; do not overload primitive attributes or raw alias names.
+- Validate declared return-type base/extension bindings against the
+  primitive-local M168.5 declarations, using arbitrary declared names in tests
+  in addition to corpus examples such as `ToBase` and `ToExtension`.
 - Resolve specialization symbols through explicit selected context/environment
   facts before producing `LoweredSpecializationTypeSymbol` or unbound-alias
   diagnostics.
@@ -21494,14 +21498,96 @@ type inference; expression/statement parsing; source repair; runtime
 `tsldata`, `frozen`, or `tslgenold` dependencies; broad registries,
 dispatchers, worklists, hidden backfeeds, or fixpoint machinery.
 
+Accepted behavior:
+
+- Added explicit selected specialization binding facts on `Target` for
+  primitive-declared return-type base bindings, return-type extension
+  bindings, and explicit vector/type bindings.
+- Copied selected binding facts into `SelectedImplementationLoweringContext`
+  so selected type/generation lowering can resolve arbitrary source-defined
+  binding names only from explicit selected facts.
+- Validated declared return-type bindings against M168.5 primitive
+  declarations and diagnosed malformed, duplicate, undeclared, mismatched,
+  wrong-kind, and unbound selected binding cases deterministically.
+- Preserved unbound specialization behavior when no selected fact is supplied.
+- Kept primitive-call selector payload lowering, dependency closure, wildcard
+  expansion, full selector parsing, rendering, source repair, and runtime
+  `tsldata`, `frozen`, or `tslgenold` dependencies out of scope.
+
+Validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M169 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`372 passed in 25.21s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed.
+
+Follow-ups:
+
+- `type_queries.py` reached the module-size guardrail area; the next nearby
+  selected-binding work should extract or share the selected-binding helper
+  block instead of letting type-query lowering absorb more ownership.
+- Selected specialization bindings are not yet visible in primitive-call
+  selector payload lowering.
+- Primitive-call dependency targets do not forward selected specialization
+  bindings; future closure/selector work should decide explicit propagation
+  only from evidence.
+- `ToType` population remains future selected/catalog work; M169 only accepts
+  an already supplied explicit vector/type fact.
+
+### Milestone 170: Selected Binding Visibility In Primitive-Call Selectors
+
+Status:
+
+Selected after M169 acceptance. Active next prompt:
+`docs/agent/runs/m170-execution-review-loop-prompt.md`.
+
+Goal:
+
+Make already supplied M169 selected specialization binding facts visible to
+the existing primitive-call selector-payload lowerer. Exact bare selector
+parts such as `[ResultBase]`, `[TargetExtension]`, or `[ToType]` should lower
+to the same concrete scalar, extension, or current-vector facts used by
+selected type/generation lowering when those names are explicit selected
+bindings.
+
+Scope:
+
+- Reuse or extract the M169 selected-binding validation/resolution helper
+  only as needed to share it between type-query lowering and selector-payload
+  lowering.
+- Preserve M169 type/generation lowering behavior and diagnostics.
+- Extend selector payload lowering for explicit selected return-type base
+  bindings, return-type extension bindings, and vector/type bindings.
+- Preserve raw `SelectorSymbol` behavior for unbound arbitrary selector names.
+- Add focused tests for positive base, extension, and vector/type bindings,
+  raw-symbol preservation, diagnostic preservation, and target-matching
+  consumption through the already accepted concrete-vector path.
+- Preserve M144-M151 primitive-call behavior, M168 generic-expression behavior,
+  and M168.5/M169 selected binding behavior.
+
+Out of scope:
+
+Full `.tsl` implementation selector parsing; wildcard expansion; deriving
+`ToType`; dependency closure changes; forwarding selected bindings into
+dependency targets; primitive-call rendering; backend translation; loop or
+branch execution; declaration rendering; source replacement; backend
+rendering; type inference; arbitrary expression or statement parsing; source
+repair; output writing; runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies; broad registries, dispatchers, worklists, callback maps, hidden
+backfeeds, or fixpoint machinery.
+
 Validation:
 
 ```bash
 git diff --check
-python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py
 find tslgen -type d -name __pycache__ -print
 ```
-
-If the executor adds focused M169 test files, include them in the compileall
-and targeted pytest commands.

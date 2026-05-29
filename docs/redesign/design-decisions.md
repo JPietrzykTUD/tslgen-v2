@@ -2131,3 +2131,38 @@ Consequences:
 - M169 and later selection/lowering work must resolve such identifiers through
   explicit selected context supplied for the primitive declaration, not through
   raw-name guessing.
+
+## ADR-043: Selected Specialization Values Are Explicit Target Facts
+
+Status: Accepted
+
+Context:
+
+After M168.5, the generator knows that a primitive may declare an arbitrary
+return-type binding name such as `base: ToBase` or
+`extension: ToExtension`, but it still must not infer concrete values from
+those spellings. The current corpus also uses related names such as `ToType`
+inside type queries. Those values come from selected implementation facts,
+not from generic source-name conventions.
+
+Decision:
+
+M169 models selected specialization values as explicit target facts. A target
+may carry a primitive-local return-type base binding to a concrete `TypeTag`,
+a primitive-local return-type extension binding to a concrete
+`ExtensionName`, or an explicit vector/type binding to a concrete
+`ExtensionName + TypeTag` pair. Return-type base/extension bindings validate
+against the primitive-local M168.5 declaration before type lowering consumes
+them.
+
+Consequences:
+
+- `ToBase`, `ToExtension`, and `ToType` remain source examples. Tests use
+  arbitrary names such as `ResultBase` and `TargetExtension` to prevent
+  spelling-based behavior.
+- Type lowering can make aliases such as `OutVec` concrete when selected
+  facts are supplied, enabling accepted `generic::length(...)` lowering.
+- Missing, duplicate, malformed, mismatched, or wrong-kind selected bindings
+  are diagnostics, not raw fallback or source repair.
+- M169 does not parse implementation selector trees, expand wildcards, derive
+  `ToType`, or select all possible manifestations from `.tsl` source data.

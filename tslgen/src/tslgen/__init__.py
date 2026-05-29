@@ -1,7 +1,14 @@
 """Clean restart package surface for the TSL generator."""
 
 from tslgen.api import generate_from_paths, write_artifacts
-from tslgen.analysis.selection import Target, TargetAttribute
+from tslgen.analysis.selection import (
+    Target,
+    TargetAttribute,
+    TargetReturnTypeBaseBinding,
+    TargetReturnTypeExtensionBinding,
+    TargetSpecializationBinding,
+    TargetVectorTypeBinding,
+)
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.io.artifact_writer import (
     ArtifactWriteRecord,
@@ -23,6 +30,10 @@ __all__ = [
     "SourceLocation",
     "Target",
     "TargetAttribute",
+    "TargetReturnTypeBaseBinding",
+    "TargetReturnTypeExtensionBinding",
+    "TargetSpecializationBinding",
+    "TargetVectorTypeBinding",
     "TslProject",
     "generate_from_paths",
     "write_artifacts",
