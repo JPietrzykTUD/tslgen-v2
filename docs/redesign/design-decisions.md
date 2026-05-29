@@ -2239,3 +2239,36 @@ Consequences:
   vector entries, and broader selector dimensions remain diagnostics.
 - This is not a selector engine, wildcard expander, dependency scheduler,
   renderer, source repair pass, or raw-name inference mechanism.
+
+## ADR-046: Concrete Vector Alias Matching Consumes Typed Values Only
+
+Status: Accepted
+
+Context:
+
+Current corpus bodies use `let<type>` aliases such as `StepVec`, `UVec`,
+`IndexVec`, and `SignedVec` inside primitive-call selector payloads. M144 can
+lower those aliases to typed vector transform values, but primitive-call target
+matching previously recognized only direct `CurrentVector`, backend-wrapped
+vectors, and selected `vector::as_extension(...)` values as concrete vectors.
+
+Decision:
+
+M172 extends the existing concrete-vector extraction helper to accept
+`LoweredVectorTransformType` values only when the lowered value itself proves a
+concrete extension and a concrete scalar `TypeTag`. Backend type references
+wrapping scalar identities may be unwrapped. Alias names are not semantic and
+are not inspected by target matching.
+
+Consequences:
+
+- Corpus shapes such as `cast[StepVec, ToBase]`, `reinterpret[Vec, UVec]`, and
+  `load[UVec] attrs[...]` can move forward when their aliases already lower to
+  concrete vector facts.
+- Raw selector symbols, literals, known extension operands in vector position,
+  unresolved specialization symbols, and mask/member aliases that do not expose
+  a concrete scalar type tag remain diagnostics.
+- M171 selected-return-binding provenance is preserved for two-entry selector
+  shapes.
+- This is not a selector parser, alias-name interpreter, mask/register solver,
+  wildcard expander, renderer, dependency scheduler, or source repair pass.

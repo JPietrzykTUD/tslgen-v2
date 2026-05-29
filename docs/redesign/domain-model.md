@@ -508,6 +508,10 @@ Invariants:
   selected return-type binding value. The matched target is decorated with the
   target primitive's local `return_type` binding name, so caller-local names do
   not leak into dependency contexts.
+- M172 lets primitive-call target matching consume already lowered
+  `LoweredVectorTransformType` selector values as concrete vectors only when
+  their extension is concrete and their base type resolves to a concrete
+  scalar `TypeTag`. Alias names remain source-local and are not interpreted.
 - M153 confirms that `details::arith_add`, `details::arith_mul`,
   `details::arith_rem`, `details::popcount`, `details::clz`,
   `details::clz_recursive`, `details::ctz`, and `details::mask_test` are

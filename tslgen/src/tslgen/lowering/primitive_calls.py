@@ -29,6 +29,7 @@ from tslgen.lowering.model import (
     LoweredScalarTypeIdentity,
     LoweredTypeValue,
     LoweredVectorAsExtensionType,
+    LoweredVectorTransformType,
     PrimitiveCallArgumentBinding,
     PrimitiveCallArgumentBindingResult,
     PrimitiveCallDependencyClosure,
@@ -484,6 +485,10 @@ def _concrete_vector_from_value(
     if isinstance(value, LoweredBackendTypeReference):
         return _concrete_vector_from_value(value.request.value)
     if isinstance(value, LoweredVectorAsExtensionType):
+        type_tag = _scalar_type_tag(value.base_type)
+        if type_tag is not None:
+            return CurrentVector(extension=value.extension, type_tag=type_tag)
+    if isinstance(value, LoweredVectorTransformType):
         type_tag = _scalar_type_tag(value.base_type)
         if type_tag is not None:
             return CurrentVector(extension=value.extension, type_tag=type_tag)

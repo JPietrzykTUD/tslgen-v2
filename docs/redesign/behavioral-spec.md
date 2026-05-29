@@ -1947,6 +1947,37 @@ tree, infer values from raw names, expand wildcards, derive `ToType`, add
 dependency scheduling, render primitive calls, repair source, or introduce
 runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
 
+### M172 Concrete Vector Alias Selector Matching
+
+Milestone 172 extends primitive-call target matching for already lowered type
+alias values that represent concrete vector transforms. This accepts the typed
+value produced from source shapes such as:
+
+```text
+let<type>(Alias, type<generation>(vector::transform_extension(CONCRETE_BASE)))
+call<primitive=NAME[Alias]>(...)
+```
+
+The alias spelling is not semantic. Target matching consumes only the lowered
+`LoweredVectorTransformType` value when its extension is concrete and its base
+type resolves to a concrete scalar `TypeTag` through accepted typed lowering
+facts. Backend type references wrapping scalar identities are unwrapped for
+this purpose, so aliases over `type<backend>(scalar::...)` can match concrete
+targets.
+
+The same concrete-vector extraction applies to M171's two-entry selector
+shape, while M171 selected-return-binding provenance remains required for the
+second entry. Existing `Vec`, `type<backend>(vector::as_extension(...))`, and
+single-vector selector behavior is unchanged.
+
+Raw selector symbols, literals, catalog extension operands in vector position,
+unresolved specialization symbols, and mask/member vector aliases that do not
+expose a concrete scalar type tag remain diagnostics. M172 does not parse the
+full selector tree, infer values from alias names, solve mask/member/register
+backend types, expand wildcards, derive `ToType`, add dependency scheduling,
+render primitive calls, repair source, or introduce runtime `tsldata`,
+`frozen`, or `tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 171 is accepted.
+Milestone 172 is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -163,6 +163,24 @@ no-specialization and single-vector target matching, M144-M151 primitive-call
 behavior, M168-M170 selected binding behavior, and avoided selector engines,
 wildcard expansion, dependency scheduling, rendering, source repair, runtime
 `tsldata`, runtime `frozen`, and runtime `tslgenold` dependencies.
+
+The M172 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, evidence, test,
+documentation, and validation audits. M172 extended primitive-call target
+matching so the existing concrete-vector extraction helper accepts already
+lowered `LoweredVectorTransformType` selector values when their extension is
+concrete and their base type reduces to a concrete scalar `TypeTag`.
+
+M172 preserved existing `CurrentVector`, `LoweredBackendTypeReference`, and
+`LoweredVectorAsExtensionType` matching behavior, preserved M171
+selected-return-binding provenance and target decoration for the two-entry
+vector-plus-return-binding shape, and kept alias spellings source-local rather
+than semantic. Raw selector symbols, literals, known extension operands in
+vector position, unresolved specialization symbols, and mask/member aliases
+that do not expose a concrete scalar type tag remain diagnostics. M172 did not
+add selector parsing, wildcard expansion, dependency scheduling, backend
+rendering, source repair, runtime `tsldata`, runtime `frozen`, or runtime
+`tslgenold` dependencies.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -2893,60 +2911,54 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 172.
+Execute Milestone 173.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m172-execution-review-loop-prompt.md
+docs/agent/runs/m173-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 172: Concrete Vector Alias Selector Matching
+Milestone 173: Vector Member Type Query Resolution Boundary
 ```
 
 Latest review verdict:
 
 ```text
-M171 execution-review returned Accept after one write-capable executor,
-read-only architecture, boundary, evidence, test, documentation, and
-validation audits, one focused provenance revision, and focused architecture,
-boundary, test, and validation re-reviews.
+M172 execution-review returned Accept With Follow-Ups after one write-capable
+executor and read-only architecture, boundary, evidence, test, documentation,
+and validation audits.
 
-M171 added exact vector-plus-selected-return-binding target matching for
-already lowered primitive-call selector payloads. It decorates the matched
-target with the matched target primitive's own return_type declaration name
-and concrete selected value. Focused revision added
-`PrimitiveCallSelectorPayload.selected_return_binding_names` so raw scalar type
-expressions and catalog extension operands cannot masquerade as selected
-return bindings.
+M172 added concrete-vector extraction for already lowered
+`LoweredVectorTransformType` selector values when their extension is concrete
+and their base type reduces to a concrete scalar `TypeTag`. It preserves M171
+selected-return-binding provenance for two-entry vector-plus-return-binding
+selectors and keeps alias spellings source-local rather than semantic.
 
-M171 review verdicts were: architecture initially `Needs Revision` for the
-provenance leak and then focused re-review `Accept`; boundary initially
-`Needs Revision` for the same issue and then focused re-review `Accept`;
-evidence `Accept With Follow-Ups`; test initially `Accept With Follow-Ups`
-and then focused re-review `Accept`; documentation `Accept`; validation
-initially `Accept With Follow-Ups` for intent-add hygiene and then focused
-re-review `Accept`.
+M172 review verdicts were: architecture `Accept`; boundary `Accept`; evidence
+`Accept with one note`; test `Accept With Follow-Up`; documentation
+`Accept With Follow-Up`; validation `Accept`. No blocking findings were
+reported.
 ```
 
 Next expected action:
 
 ```text
-Run the active M172 execution-review-loop prompt. M172 should extend
-primitive-call target matching for already lowered concrete vector aliases
-such as `StepVec`, `UVec`, `OutVec`, and `InVec` when their typed alias value
-has a concrete extension and scalar type tag.
+Run the active M173 execution-review-loop prompt. M173 should resolve the next
+exact type-lowering gap for already recognized current-vector member queries
+such as `vector::mask_underlying_t`, `vector::mask_underlying`,
+`vector::imask`, and `vector::mask`.
 
-This is useful because the corpus uses `let<type>` aliases as selector entries
-in calls such as `cast[StepVec, ToBase]`, `reinterpret[Vec, UVec]`, and
-`load[UVec] attrs[...]`. M172 should consume only the existing typed alias
-values, not alias spellings, and should leave mask/member/backend-specific
-aliases for later explicit milestones unless they already expose a concrete
-scalar type tag through accepted facts.
+This is useful because current `tsldata` bodies introduce aliases such as
+`MaskWord`, `MaskT`, and `MaskVec` from those member queries. M173 should
+consume accepted `LoweredVectorMemberType` values and explicit extension
+metadata, implement only the largest safe subset that can produce typed
+generation facts, and leave backend-native spelling/rendering for a later
+backend-owned milestone.
 ```
 
 Previous review verdict:
@@ -6846,16 +6858,43 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   later explicit milestone.
 - M169 follow-up: `ToType` population remains future selected/catalog work;
   M169-M171 only accept an already supplied explicit vector/type fact.
+- M172 test follow-up: add a direct positive `base::signed_of(...)`
+  vector-transform alias case if the concrete-vector extraction area is
+  touched again. M172 covered the resolved unsigned-transform case.
+- M172 evidence/docs follow-up: keep wording precise. Current
+  selector-relevant member-alias evidence is specifically
+  `vector::mask_underlying_t` under a `MaskVec` alias; transform-alias
+  evidence is better represented by `StepVec`, `UVec`, `IndexVec`, and
+  `SignedVec`.
+- M172 follow-up feeding M173: vector-member aliases such as `MaskWord`,
+  `MaskT`, and the `MaskVec` alias over
+  `vector::transform(type<generation>(vector::mask_underlying_t))` remain
+  unresolved unless explicit extension metadata can prove a generation-time
+  typed value.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M172
+No stop condition is active. The workflow is ready to run the active M173
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M172 execution, run the validation command listed in
-`docs/agent/runs/m172-execution-review-loop-prompt.md`.
+For active M173 execution, run the validation command listed in
+`docs/agent/runs/m173-execution-review-loop-prompt.md`.
+
+For M172 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py tslgen/tests/test_m171_primitive_call_return_binding_matching.py tslgen/tests/test_m172_primitive_call_concrete_vector_alias_matching.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py tslgen/tests/test_m171_primitive_call_return_binding_matching.py tslgen/tests/test_m172_primitive_call_concrete_vector_alias_matching.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M172 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`401 passed in 26.65s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed.
 
 For M171 execution and review, validation completed with:
 
