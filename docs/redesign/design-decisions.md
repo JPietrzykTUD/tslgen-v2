@@ -2166,3 +2166,38 @@ Consequences:
   are diagnostics, not raw fallback or source repair.
 - M169 does not parse implementation selector trees, expand wildcards, derive
   `ToType`, or select all possible manifestations from `.tsl` source data.
+
+## ADR-044: Primitive-Call Selectors Consume Existing Selected Facts
+
+Status: Accepted
+
+Context:
+
+M169 made selected specialization facts available to type/generation
+lowering, but primitive-call selector payload lowering still classified bare
+selector entries only as current keywords, aliases, catalog extensions,
+literals, type-valued expressions, or raw selector symbols. That meant the
+same selected fact could be visible in `type<generation>(...)` while remaining
+invisible in `call<primitive=NAME[...]>(...)`.
+
+Decision:
+
+M170 reuses the explicit M169 selected specialization binding boundary in the
+M144 selector-payload lowerer. Exact bare selector entries that name selected
+bindings lower to existing selector/type values: base bindings become scalar
+type identities, extension bindings become `ExtensionOperand`, and vector/type
+bindings become `CurrentVector`. The selected-binding validation and
+resolution helpers live in one focused lowering module shared by type-query
+and selector-payload lowering.
+
+Consequences:
+
+- Selector payloads can consume explicit selected facts without parsing the
+  full implementation selector tree or deriving values from spellings such as
+  `ToBase`, `ToExtension`, or `ToType`.
+- Unbound arbitrary selector names remain raw `SelectorSymbol` values.
+- A primitive-declared extension binding name without a supplied selected fact
+  is diagnostic, so it cannot accidentally fall through to a raw catalog
+  extension or raw symbol.
+- The shared helper is not a registry, dispatcher, worklist, selector engine,
+  dependency scheduler, or backend rendering surface.

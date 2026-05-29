@@ -592,10 +592,10 @@ Invariants:
   `PrimitiveAttribute.declared_value`.
 - Selected specialization bindings are explicit selected facts. Return-type
   base/extension bindings must validate against the primitive-local
-  `return_type` declaration before type lowering consumes them. Vector/type
-  bindings are explicit concrete `ExtensionName + TypeTag` facts for observed
-  `ToType`-style queries; M169 does not derive them from implementation
-  selector trees.
+  `return_type` declaration before type or selector-payload lowering consumes
+  them. Vector/type bindings are explicit concrete `ExtensionName + TypeTag`
+  facts for observed `ToType`-style queries and primitive-call selector
+  payloads; M169/M170 do not derive them from implementation selector trees.
 
 ## Lowering Context Model
 
@@ -631,7 +631,7 @@ Invariants:
 - `primitive_attributes` is the selected concrete `Primitive.attributes` tuple
   chosen by target selection.
 - `selected_specialization_bindings` is copied from the explicit target and is
-  the only M169 source for return-type base/extension symbols or explicit
+  the only M169/M170 source for return-type base/extension symbols or explicit
   vector/type specialization symbols.
 - Declaration provenance such as `Primitive.declared_attributes` and
   `PrimitiveAttribute.declared_value` is not a separate semantic selector.
@@ -1372,6 +1372,15 @@ class PrimitiveCallClosureLoweringPackage:
     lowered_functions: LoweredFunctionSet
     diagnostics: tuple[Diagnostic, ...]
 ```
+
+M170 keeps the same selector-payload value model. It only extends the accepted
+sources of `SelectorSpecializationValue`: exact bare selector parts may now
+consume explicit M169 `TargetSpecializationBinding` facts. A base binding
+produces a scalar type value, an extension binding produces `ExtensionOperand`,
+and a vector/type binding produces `CurrentVector`. Unbound arbitrary selector
+names still produce `SelectorSymbol`; declared extension binding names without
+selected facts produce the accepted selected-binding diagnostic rather than a
+raw extension or symbol fallback.
 
 Invariants:
 

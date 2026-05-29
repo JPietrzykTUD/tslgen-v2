@@ -1867,6 +1867,46 @@ from `ToBase`, change primitive-call dependency closure, render backend text,
 repair source, or introduce runtime `tsldata`, `frozen`, or `tslgenold`
 dependencies.
 
+### M170 Selected Bindings In Primitive-Call Selectors
+
+Milestone 170 makes explicit M169 selected specialization binding facts
+visible to the existing M144 primitive-call selector-payload lowerer.
+This is the same selected fact boundary, not a new selector parser.
+
+For exact bare selector specialization entries:
+
+- a selected return-type base binding lowers to
+  `LoweredScalarTypeIdentity(TypeTag)`;
+- a selected return-type extension binding lowers to
+  `ExtensionOperand(ExtensionName)`;
+- a selected vector/type binding lowers to `CurrentVector(ExtensionName,
+  TypeTag)`.
+
+The names remain arbitrary source-defined or selected-context identifiers.
+`ResultBase`, `TargetExtension`, and `ToType` are examples, not generator
+keywords. Existing M144 behavior is preserved for `Vec`, `scalar`,
+`let<type>(...)` aliases, type-valued prefixes, known catalog extensions,
+integer literals, and raw selector symbols. Unbound arbitrary selector names
+still become `SelectorSymbol` values.
+
+If a primitive declares a return-type extension binding and no selected fact
+is supplied for that name, a bare selector entry with that declared name
+produces `TSL-LOWER-UNBOUND-SELECTED-SPECIALIZATION-BINDING` instead of being
+treated as a raw extension or raw symbol. Malformed, duplicate, undeclared,
+mismatched, and wrong-kind selected binding diagnostics remain the accepted
+M169 diagnostics.
+
+M170 also extracts the selected-binding validation/resolution helpers into a
+focused lowering utility shared by type-query and selector-payload lowering.
+The helper is not a registry, dispatcher, worklist, selector engine, parser,
+or dependency scheduler.
+
+M170 does not parse the full nested `.tsl` implementation selector tree,
+expand wildcards, derive `ToType`, change primitive-call dependency closure,
+forward selected bindings into dependency targets, render primitive calls or
+backend text, repair source, or introduce runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

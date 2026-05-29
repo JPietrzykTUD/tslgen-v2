@@ -21545,8 +21545,8 @@ Follow-ups:
 
 Status:
 
-Selected after M169 acceptance. Active next prompt:
-`docs/agent/runs/m170-execution-review-loop-prompt.md`.
+Accepted after M169. M171 selected as the active next prompt:
+`docs/agent/runs/m171-execution-review-loop-prompt.md`.
 
 Goal:
 
@@ -21589,5 +21589,104 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted behavior:
+
+- Extracted selected specialization binding validation/resolution helpers into
+  `tslgen/src/tslgen/lowering/selected_specializations.py`, a focused
+  lowering utility shared by type-query and selector-payload lowering.
+- Preserved M169 type/generation lowering behavior while reducing
+  `type_queries.py` below the module-size guardrail area.
+- Extended primitive-call selector payload lowering so exact bare selector
+  entries can consume explicit selected return-type base bindings,
+  return-type extension bindings, and vector/type bindings.
+- Kept raw `SelectorSymbol` behavior for unbound arbitrary selector names.
+- Diagnosed declared extension binding names without selected facts instead
+  of falling through to raw extension or raw symbol interpretation.
+- Preserved M144-M151 primitive-call behavior, M168 generic-expression
+  behavior, and M168.5/M169 selected binding behavior.
+
+Validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M170 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`382 passed in 25.92s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed.
+
+Follow-ups:
+
+- Primitive-call target matching can now see scalar/extension selected
+  binding values in selector payloads, but it still supports only the older
+  single-concrete-vector matching shape. M171 should add the exact
+  vector-plus-return-binding target matching boundary.
+- Primitive-call dependency targets still do not carry selected return-type
+  binding facts unless target matching decorates the matched target.
+- `ToType` population remains future selected/catalog work; M170 only consumes
+  an already supplied explicit vector/type fact in selector payloads.
+
+### Milestone 171: Return-Type Selector Binding Propagation In Primitive-Call Target Matching
+
+Status:
+
+Selected after M170 acceptance. Active next prompt:
+`docs/agent/runs/m171-execution-review-loop-prompt.md`.
+
+Goal:
+
+Extend primitive-call target matching to consume the exact two-entry selector
+shape already exposed by M170:
+
+```text
+call<primitive=NAME[CONCRETE_VECTOR, RETURN_BINDING_VALUE]>(...)
+```
+
+When the matched target primitive declares `return_type: base: TargetName`, a
+scalar selected value from the caller should become
+`TargetReturnTypeBaseBinding(name=TargetName, type_tag=...)` on the matched
+target. When the target declares `return_type: extension: TargetName`, an
+extension selected value should become
+`TargetReturnTypeExtensionBinding(name=TargetName, extension=...)`.
+
+Scope:
+
+- Ground the accepted shape in current conversion/load-store corpus evidence,
+  especially `call<primitive=cast[Vec, ToBase]>(...)` and
+  `call<primitive=reinterpret[Vec, ToBase]>(...)`.
+- Preserve existing no-specialization and single-concrete-vector target
+  matching behavior.
+- Map return-type binding values to the target primitive declaration name, not
+  the caller's selector spelling.
+- Preserve unsupported diagnostics for raw symbols, literals, unsupported
+  selector dimensions, non-concrete vector values, missing target
+  declarations, and wrong binding kinds.
+- Let existing reference inventory/dependency closure observe the decorated
+  matched target through the existing `PrimitiveCallTargetMatch`.
+
+Out of scope:
+
+Full `.tsl` implementation selector parsing; wildcard expansion; deriving
+`ToType`; forwarding arbitrary selected bindings into dependency targets;
+broad dependency closure changes; primitive-call rendering; backend
+translation; loop or branch execution; declaration rendering; source
+replacement; backend rendering; type inference; arbitrary expression or
+statement parsing; source repair; output writing; runtime `tsldata`,
+`frozen`, or `tslgenold` dependencies; broad registries, dispatchers,
+worklists, callback maps, hidden backfeeds, or fixpoint machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py tslgen/tests/test_m171_primitive_call_return_binding_matching.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m144_selector_payload.py tslgen/tests/test_m145_primitive_call_target_matching.py tslgen/tests/test_m146_primitive_call_argument_binding.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m149_primitive_call_closure_lowering_package.py tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m169_selected_specialization_bindings.py tslgen/tests/test_m170_selector_payload_selected_bindings.py tslgen/tests/test_m171_primitive_call_return_binding_matching.py
 find tslgen -type d -name __pycache__ -print
 ```

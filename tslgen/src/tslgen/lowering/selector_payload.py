@@ -36,6 +36,9 @@ from tslgen.syntax.tsil_lexical import (
     LexicalPart,
     split_top_level_parts,
 )
+from tslgen.lowering.selected_specializations import (
+    selected_specialization_selector_value,
+)
 from tslgen.lowering.type_queries import lower_type_expression
 
 _IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*")
@@ -167,6 +170,12 @@ def _lower_specialization_part(
         if result.value is None:
             return result.diagnostics[0]
         return result.value
+
+    selected_value = selected_specialization_selector_value(context, text, source)
+    if isinstance(selected_value, Diagnostic):
+        return selected_value
+    if selected_value is not None:
+        return selected_value
 
     if catalog.extensions.get(text) is not None:
         return ExtensionOperand(name=ExtensionName(text), source=source)

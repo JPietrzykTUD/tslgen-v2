@@ -44,6 +44,11 @@ return-type base/extension bindings validate against the primitive-local
 observed `ToType`-style `register::generic(ToType)` queries concrete without
 deriving `ToType` from source branches.
 
+M170 update: the same explicit selected binding facts are now visible to exact
+bare primitive-call selector payload entries. This does not add a selector
+tree parser; it only lets selector-payload lowering consume already supplied
+base, extension, and vector/type facts.
+
 ## `let<type>(...)` Forms
 
 | Count | Representative source | Form | Category |
