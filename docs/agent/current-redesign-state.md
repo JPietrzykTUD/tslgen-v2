@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 159 is accepted.
+Milestone 160 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -2737,68 +2737,70 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 160.
+Execute Milestone 161.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m160-execution-review-loop-prompt.md
+docs/agent/runs/m161-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 160: Exact Generation Branch-Chain Region Selection
+Milestone 161: Exact Generation Loop Region Lowering Boundary
 ```
 
 Latest review verdict:
 
 ```text
-M159 execution-review returned Accept With Follow-Ups after one write-capable
-executor and read-only architecture, boundary, evidence, test, documentation,
-and validation audits. M159 added explicit function-shaped generation-time
-integer arithmetic inside `value<generation>(...)`:
-`arith<generation>::add/sub/mul/div/rem(ARG, ARG)`.
+M160 execution-review returned Accept With Follow-Ups after one write-capable
+executor, one focused revision, focused re-review, and read-only architecture,
+boundary, evidence, test, documentation, and validation audits. M160 added
+exact generation branch-chain region selection over source-owned body tokens,
+including classified inline `else if<generation>` corpus forms and an optional
+final `else<generation>` fallback arm.
 
-Each arithmetic argument lowers recursively through the accepted
-generation-value boundary. Integer literals are accepted only as arithmetic
-operands, not as a new standalone top-level `value<generation>(8)` query
-family. Already accepted integer values such as `vector::length` and
-`type::size_bytes(TYPE_EXPR)` and nested `arith<generation>::...` calls can
-feed the arithmetic evaluator.
+M160 evaluates branch conditions in source order through the already accepted
+M155/M158/M159 condition boundary. It selects the first true conditional
+branch, or the final generation fallback when no condition matches, and hands
+only the selected branch token slice to the existing M157 body-lowering path.
+Unselected branch bodies remain opaque and silent, including raw helper text
+and unsupported primitive-call islands.
 
-M159 arithmetic values feed the existing M158 left-side comparison path. It
-does not parse raw `+`, `-`, `*`, `/`, or `%`, does not rewrite
-`details::arith_*` backend helper calls, and does not add precedence,
-associativity, branch-chain selection, loop/declaration/backend-control
-lowering, body-token rendering, backend rendering, source repair, runtime
-`tsldata`, `frozen`, or `tslgenold` dependencies, or broad
-registry/dispatcher/worklist machinery.
+M160 did not add plain target-language `else`, recursive or nested generation
+control, raw expression/operator parsing, right-hand value queries,
+loop/declaration/backend-control lowering, branch-body rendering, backend
+rendering, source repair, runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies, or broad registry/dispatcher/worklist machinery.
 
-M159 review verdicts were: architecture `Accept With Follow-Ups`; boundary
-`Accept With Follow-Ups`; evidence `Accept`; test `Accept With Follow-Ups`;
-documentation `Accept With Follow-Ups`; validation `Accept`. The nonblocking
-architecture/boundary/test follow-ups were addressed before finalization by
-narrowing the phase-marked call parser to `arith<generation>::...`, adding a
-right-operand non-integer diagnostic test, and adding negative-intermediate
-division/remainder coverage.
+M160 review verdicts were: architecture `Accept With Follow-Ups`; boundary
+`Accept With Follow-Ups`; evidence `Accept With Follow-Ups` after focused
+revision; test `Accept` after focused revision; documentation
+`Accept With Follow-Ups`; validation `Accept`. The blocking evidence/test
+findings were addressed before finalization by supporting the
+catalog-classified inline branch-chain corpus shape, adding
+first-true-with-later-true coverage, and asserting raw helper preservation in
+unselected branch tokens. Nonblocking documentation and fallback-condition
+provenance follow-ups were documented before finalization.
 ```
 
 Next expected action:
 
 ```text
-Run the active M160 execution-review-loop prompt. M160 should add exact
-selected-body `else if<generation>` branch-chain selection over source-owned
-body tokens by evaluating each branch condition through the already accepted
-generation-control condition boundary.
+Run the active M161 execution-review-loop prompt. M161 should add the next
+generation-control keyword boundary for exact `loop<range>(...)` regions,
+with optional immediately preceding `loop<unroll>(...)` metadata, over
+source-owned body tokens.
 
-M160 should select the first true branch and hand only that branch token slice
-to the existing body-lowering path. It must keep unselected branches silent
-and must not add raw expression parsing, branch-body rendering, loop or
-declaration lowering, backend-control lowering, backend rendering, source
-repair, runtime `tsldata`, `frozen`, or `tslgenold` dependencies, or broad
-registry/dispatcher/worklist machinery.
+M161 should lower the loop envelope into a typed generation-loop region fact
+recording loop variable name, accepted bounds, optional unroll count, body
+tokens, and source locations. It must not execute or unroll loops, substitute
+loop variables into raw body text, parse assignments/array access/calls/casts,
+render target-language loops, lower declarations or backend control, repair
+source text, read `tsldata`, `frozen`, or `tslgenold` at runtime, or introduce
+broad registry/dispatcher/worklist machinery.
 ```
 
 Previous review verdict:
@@ -6674,8 +6676,24 @@ execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M160 execution, run the validation command listed in
-`docs/agent/runs/m160-execution-review-loop-prompt.md`.
+For active M161 execution, run the validation command listed in
+`docs/agent/runs/m161-execution-review-loop-prompt.md`.
+
+For M160 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The compileall command
+returned exit 0 with no output. The full clean-restart pytest command returned
+exit 0 with `246 passed in 34.39s`. Validation-created `__pycache__`
+directories were removed, and the final
+`find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+output. The validation auditor reported `Accept`.
 
 For M125 execution and review, validation completed with:
 

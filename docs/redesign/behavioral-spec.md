@@ -1287,10 +1287,11 @@ classified directives remain body tokens for later milestones. M156 does not
 render, rewrite, normalize, or recursively lower the selected branch body.
 
 Malformed regions, unmatched braces, missing `else<generation>` branches,
-unsupported `else if<generation>` branch-chain regions, plain target-language
-`else` variants, unsupported M155 condition families, non-boolean generation
-values, and M155 missing-fact diagnostics produce deterministic lowering
-diagnostics.
+inline/unclassified `else if<generation>` text, plain target-language `else`
+variants, unsupported M155 condition families, non-boolean generation values,
+and M155 missing-fact diagnostics produce deterministic lowering diagnostics.
+M160 later accepts classified `else if<generation>` directive tokens as a
+separate exact branch-chain shape.
 
 M156 does not add loop execution, declaration lowering, raw expression
 parsing, arithmetic or comparison folding around generation values,
@@ -1389,6 +1390,62 @@ associativity, evaluate boolean or floating arithmetic, rewrite
 `details::arith_add`, `details::arith_mul`, or `details::arith_rem`, render
 backend code, lower loops/declarations/backend-control directives, repair
 source text, or read `tsldata`, `frozen`, or `tslgenold` at runtime.
+
+### M160 Exact Generation Branch-Chain Region Selection
+
+Milestone 160 extends the generation-control boundary to exact classified
+branch-chain token regions:
+
+```text
+if<generation>(COND) {
+  BODY_TOKENS
+}
+else if<generation>(COND) {
+  BODY_TOKENS
+}
+else if<generation>(COND) {
+  BODY_TOKENS
+}
+else<generation> {
+  BODY_TOKENS
+}
+```
+
+The leading arm is an `if<generation>` directive followed by a raw `{` token.
+Each following conditional arm is represented by a raw close-brace token whose
+remaining text is `else`, followed immediately by a classified
+`if<generation>` directive and raw `{` token, or by a source-next-line raw
+`else` prefix followed by a classified `if<generation>` directive. Exact
+single-line arms such as `if<generation>(COND) { BODY }` are split by the
+directive classifier into source-owned raw `{`, body, and `}` tokens before
+M160 selection. A final `else<generation>` fallback arm is optional.
+
+Conditions are evaluated in source order through the accepted generation
+condition boundary: M155 boolean value queries, M158 integer comparisons, and
+M159 arithmetic values when consumed by M158 comparisons. The first true
+conditional arm is selected. Later conditions and all unselected branch bodies
+remain opaque and silent. If no conditional arm is true and a final
+`else<generation>` fallback exists, the fallback body is selected. If no arm
+matches and no fallback exists, lowering emits
+`TSL-LOWER-NO-MATCHING-GENERATION-CONTROL-BRANCH`.
+
+M160 reuses the M157 selected-branch handoff: only the selected branch's
+source-owned token slice is wrapped in a temporary `ImplementationBody` and
+sent to the already accepted body lowerer. Unsupported primitive calls, raw
+helper calls, malformed directives, or unsupported branch contents in
+unselected arms do not produce diagnostics.
+
+Malformed branch-chain structure, missing or ambiguous raw braces,
+unclassified inline `else if<generation>` text, unsupported adjacent plain
+target-language `else`, and condition-lowering failures produce deterministic
+diagnostics at the relevant source locations.
+
+M160 does not add plain target-language `else`, recursive or nested
+generation-control lowering, broad control-flow parsing, raw expression or raw
+operator parsing, right-hand value queries, loop/declaration/backend-control
+lowering, branch-body rendering, backend rendering, source repair, dependency
+scheduling, runtime `tsldata`, `frozen`, or `tslgenold` dependencies,
+registries, dispatchers, worklists, or fixpoint machinery.
 
 ## Catalog Behavior
 

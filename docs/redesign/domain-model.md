@@ -801,9 +801,12 @@ Invariants:
 
 Milestone 156 adds a narrow result boundary for exact selected
 `if<generation>(...) { ... } else<generation> { ... }` body-token regions.
-It consumes an M155 boolean `LoweredGenerationValue` and preserves
-source-owned token slices for the selected and unselected branches. Branch
-contents are not parsed or rendered by this model.
+M160 broadens the same boundary to exact classified
+`if<generation>` / `else if<generation>` chains with an optional final
+`else<generation>` fallback. It consumes accepted boolean
+`LoweredGenerationValue` conditions and preserves source-owned token slices
+for the selected and unselected branches. Branch contents are not parsed or
+rendered by this model.
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -826,21 +829,37 @@ class GenerationControlRegionLoweringResult:
 
 Invariants:
 
-- The accepted region shape is exactly a generation `if` directive, raw `{`
-  opener, true-branch token slice, raw `}` close, generation `else`
+- The accepted M156 two-arm shape is exactly a generation `if` directive, raw
+  `{` opener, true-branch token slice, raw `}` close, generation `else`
   directive, raw `{` opener, false-branch token slice, and raw `}` close.
+- The accepted M160 branch-chain shape is a leading generation `if` arm
+  followed by one or more classified `else if<generation>` arms and an
+  optional final `else<generation>` fallback. The close brace before a
+  conditional continuation may share the raw token suffix `else`, but the next
+  arm must be a classified generation `if` directive token. Source-next-line
+  `else if<generation>(...) { BODY }` continuations are represented as a raw
+  `else` prefix token followed by a classified generation `if` directive and
+  source-owned raw `{`, body, and `}` tokens.
 - The condition must be an accepted M155 boolean query for primitive
   attributes, scalar signedness, or scalar type sameness, or an M158 exact
   integer comparison predicate over a left-side accepted integer generation
   value query and a base-10 integer literal.
+- Branch-chain arms are evaluated in source order. The first true conditional
+  arm wins. Later conditions and all unselected body tokens remain opaque and
+  silent. If no condition is true, a final `else<generation>` fallback is
+  selected when present; otherwise lowering produces a deterministic no-match
+  diagnostic.
+- When a fallback arm is selected, `LoweredGenerationControlRegion.condition`
+  records the last evaluated false conditional value as provenance; the
+  fallback itself does not synthesize a new condition value.
 - Integer generation values such as vector length, vector alignment, or scalar
   size bytes remain invalid branch conditions unless consumed by an accepted
   M158 comparison predicate.
 - Branch token slices are source-owned body tokens. Raw helper text,
   classified directives, nested raw braces, and adjacent raw tokens remain
   untouched for later lowering/rendering milestones.
-- Unsupported branch-chain or plain-else shapes are diagnostic boundaries, not
-  source repair targets.
+- Inline/unclassified branch-chain text and plain-else shapes are diagnostic
+  boundaries, not source repair targets.
 - M158 comparison predicates are a condition boundary only. M159 can supply
   explicit `arith<generation>::...` integer values on the left side, but raw
   operator parsing, right-hand value queries, precedence, and a TSIL
@@ -852,7 +871,10 @@ handoff into the existing direct body-lowering path. The temporary
 `ImplementationBody` built from selected branch tokens is a local adapter for
 composition; it is not a new stage envelope, renderer input, or recursive TSIL
 statement model. The unselected branch remains available as provenance in the
-M156 result but is not parsed or diagnosed by the handoff.
+M156/M160 result but is not parsed or diagnosed by the handoff. For M160
+chains, the existing single `unselected_branch` field aggregates the
+unselected arm token slices as provenance; it is not a recursive branch-list
+IR or renderer contract.
 
 Milestone 144 adds selector-payload values:
 

@@ -12,7 +12,7 @@ typed redesign contracts, explicit evidence, diagnostics, and tests.
 
 ## Current Baseline
 
-Accepted through M159:
+Accepted through M160:
 
 - Generation-time lowering handles only the accepted typed helper/predicate
   forms from M38, M41-M43, M48, M51-M59, and M67-M72.
@@ -41,11 +41,13 @@ Accepted through M159:
   primitive-attribute subset, exact M156 selected-branch token selection
   for two-arm `if<generation>` / `else<generation>` regions, M157
   selected-branch handoff into already accepted direct body lowering, M158
-  exact integer comparison predicates, and M159 explicit
+  exact integer comparison predicates, M159 explicit
   `arith<generation>::add/sub/mul/div/rem(...)` integer arithmetic inside
-  `value<generation>(...)`. That path deliberately still does not render
-  primitive-call expressions, support `else if<generation>` chains, parse raw
-  arithmetic operators, or parse broad TSIL expressions/statements.
+  `value<generation>(...)`, and M160 exact selected-body
+  `else if<generation>` branch-chain selection with an optional final
+  `else<generation>` fallback. That path deliberately still does not render
+  primitive-call expressions, parse raw arithmetic operators, parse broad TSIL
+  expressions/statements, or support recursive generation control.
 
 ## Post-M152 Clean Restart Lowering Paths
 
@@ -56,8 +58,8 @@ to implement several lanes in one milestone.
 | Path | TSIL surface | Why it matters | Boundary |
 | --- | --- | --- | --- |
 | Generation value/query lowering | `value<generation>(...)` forms from the current corpus plus explicit future generation-value functions | Generation-time conditions, loop bounds, declarations, type predicates, vector metadata, primitive attributes, and selected source regions depend on typed values rather than raw helper text. | M155 accepts isolated selected-context evaluators for vector length/alignment, scalar type facts, and concrete boolean primitive attributes. M158 accepts exact integer comparisons over accepted integer value queries. M159 accepts explicit function-shaped integer arithmetic via `arith<generation>::add/sub/mul/div/rem(...)` inside `value<generation>(...)`. Remaining value families should still be selected explicitly and must not add a general expression parser or raw operator parser. |
-| Generation control lowering | `if<generation>(...)`, `else if<generation>(...)`, `else<generation>` | Real bodies need selected-branch pruning before backend rendering. | M156 accepts exact two-arm `if<generation>(VALUE_QUERY) { ... } else<generation> { ... }` token regions for M155 boolean conditions and preserves selected/unselected branch token slices. M157 hands selected branch tokens to existing direct body lowering. M160 is selected next for exact no-final-else `else if<generation>` branch-chain selection. Plain `else`, recursive branch lowering, and rendering remain deferred. |
-| Generation declaration/iteration lowering | `loop<unroll>(...)`, `loop<range>(...)`, `var<...>(...)`, non-type `let<...>(...)` | Generic/vector fallback bodies use TSIL directives for repeated statements, declarations, temporaries, and aliases. | Lower directives over token regions with explicit symbol/type/value facts. `let<type>(...)` alias facts already feed the type environment; do not parse all surrounding target-language statements. |
+| Generation control lowering | `if<generation>(...)`, `else if<generation>(...)`, `else<generation>` | Real bodies need selected-branch pruning before backend rendering. | M156 accepts exact two-arm `if<generation>(VALUE_QUERY) { ... } else<generation> { ... }` token regions for M155 boolean conditions and preserves selected/unselected branch token slices. M157 hands selected branch tokens to existing direct body lowering. M160 accepts exact classified `else if<generation>` branch-chain selection with an optional final `else<generation>` fallback and first-true/no-match behavior. Plain target-language `else`, recursive branch lowering, and rendering remain deferred. |
+| Generation declaration/iteration lowering | `loop<unroll>(...)`, `loop<range>(...)`, `var<...>(...)`, non-type `let<...>(...)` | Generic/vector fallback bodies use TSIL directives for repeated statements, declarations, temporaries, and aliases. | M161 is selected next for an exact `loop<range>(...)` region fact with optional adjacent `loop<unroll>(...)` metadata over source-owned body tokens. `let<type>(...)` alias facts already feed the type environment. Do not execute loops, substitute loop variables, or parse all surrounding target-language statements. |
 | Backend query lowering | `value<backend>(...)`, accepted `type<backend>(...)` requests | Backend spellings, suffixes, uninit values, and type spellings must be derived from typed semantic values before rendering. | Produce typed backend translation requests/results. Renderers must not evaluate raw query text. |
 | Backend control lowering | `if<compile>(...)`, `else<compile>`, `switch<compile>(...)` | Backend-specific compile-time control appears in current `tsldata` bodies. | Treat as backend-owned control directives. `if<runtime>` / `else<runtime>` are absent from the current corpus and should remain future/diagnostic unless new source data adds them. |
 | Backend-owned operation lowering | `intrin_compose<...>(...)`, `intrin<...>(...)` | Intrinsic calls are generation relevant but backend-owned, not portable primitive semantics by themselves. | Lower to typed backend intrinsic requests from explicit metadata and selected context; do not infer semantics in renderers. |

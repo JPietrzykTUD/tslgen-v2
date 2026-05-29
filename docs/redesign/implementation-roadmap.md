@@ -20468,43 +20468,47 @@ adding negative-intermediate division/remainder coverage.
 
 Status:
 
-Selected after M159 acceptance. Active next prompt:
-`docs/agent/runs/m160-execution-review-loop-prompt.md`.
+Accepted. Active next prompt after M160:
+`docs/agent/runs/m161-execution-review-loop-prompt.md`.
 
 Goal:
 
 Add exact selected-body `else if<generation>` branch-chain selection over
 source-owned body tokens. This reuses the accepted M155/M158/M159 condition
 lowering path and moves another TSIL control keyword shape forward without
-introducing a broad expression parser or branch-body renderer.
+introducing a broad expression parser or branch-body renderer. The selected
+chain shape may include one optional final `else<generation>` fallback arm.
 
 Scope:
 
 - Recognize exact selected generation-control branch chains shaped as a
   leading `if<generation>(COND) { ... }` arm followed by one or more
-  `else if<generation>(COND) { ... }` arms in the body-token stream produced
-  by the accepted TSIL directive classifier.
+  `else if<generation>(COND) { ... }` arms and an optional final
+  `else<generation> { ... }` fallback arm in the body-token stream produced by
+  the accepted TSIL directive classifier.
 - Evaluate branch conditions in source order through the already accepted
   generation-control condition boundary, including M155 boolean queries, M158
   integer comparisons, and M159 arithmetic values consumed by M158
   comparisons.
-- Select the first true branch and hand only that branch's source-owned token
-  slice to the existing body-lowering path.
+- Select the first true branch, or the final `else<generation>` fallback when
+  no condition is true, and hand only that branch's source-owned token slice to
+  the existing body-lowering path.
 - Keep all unselected branch bodies opaque and silent, including unsupported
   calls, raw helpers, malformed directives, or unsupported branch contents.
 - Emit deterministic diagnostics for malformed branch-chain structure,
   condition diagnostics, ambiguous or missing braces, no matching true arm in
-  no-final-else chains, and unsupported adjacent plain/final `else` forms.
+  chains without a final fallback, and unsupported adjacent plain
+  target-language `else` forms.
 
 Out of scope:
 
-Plain `else`; final `else<generation>` in a chain; recursive or nested
-generation-control lowering; broad `if`/`else if` syntax beyond the accepted
-body-token chain shape; raw expression parsing; raw operator parsing;
-right-hand value queries; loop/declaration/backend-control lowering;
-branch-body rendering; backend rendering; source repair; dependency
-scheduling; runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad
-registries, dispatchers, worklists, or fixpoint machinery.
+Plain target-language `else`; recursive or nested generation-control
+lowering; broad `if`/`else if` syntax beyond the accepted body-token chain
+shape; raw expression parsing; raw operator parsing; right-hand value queries;
+loop/declaration/backend-control lowering; branch-body rendering; backend
+rendering; source repair; dependency scheduling; runtime `tsldata`, `frozen`,
+or `tslgenold` dependencies; broad registries, dispatchers, worklists, or
+fixpoint machinery.
 
 Validation:
 
@@ -20512,5 +20516,99 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
 python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted result:
+
+- Added exact generation branch-chain region selection over source-owned body
+  tokens, including classified inline `else if<generation>` corpus forms and
+  an optional final `else<generation>` fallback.
+- Reused the accepted M155/M158/M159 condition path and selected the first
+  true branch, or the final generation fallback when no condition matched.
+- Preserved unselected branch opacity and selected-branch handoff into the
+  existing direct body lowerer.
+- Added deterministic no-match, malformed-structure, unsupported
+  unclassified-inline-else-if, and plain-target-language-else diagnostics.
+- Added no raw expression parsing, raw operator parsing, loop/declaration or
+  backend-control lowering, branch-body rendering, backend rendering, source
+  repair, runtime `tsldata`, `frozen`, or `tslgenold` dependency, registry,
+  dispatcher, worklist, or fixpoint machinery.
+
+Review verdicts:
+
+- Architecture reviewer: `Accept With Follow-Ups`.
+- Boundary auditor: `Accept With Follow-Ups`.
+- Evidence auditor: `Accept With Follow-Ups` after focused revision.
+- Test auditor: `Accept` after focused revision.
+- Documentation auditor: `Accept With Follow-Ups`.
+- Validation auditor: `Accept`.
+
+The blocking evidence/test findings were addressed before finalization by
+supporting the catalog-classified inline branch-chain corpus shape, adding
+first-true-with-later-true coverage, and asserting raw helper preservation in
+unselected branch tokens. Nonblocking documentation and fallback-condition
+provenance follow-ups were also documented before finalization.
+
+Validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The compileall command
+returned exit 0 with no output. The full clean-restart pytest command returned
+exit 0 with `246 passed in 34.39s`. Validation-created `__pycache__`
+directories were removed, and the final cache check returned exit 0 with no
+output.
+
+### Milestone 161: Exact Generation Loop Region Lowering Boundary
+
+Status:
+
+Selected after M160 acceptance. Active next prompt:
+`docs/agent/runs/m161-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the next generation-control keyword boundary for exact
+`loop<range>(...)` regions, with optional immediately preceding
+`loop<unroll>(...)` metadata, without executing loops, substituting loop
+variables, parsing target-language statements, or rendering backend code.
+
+Scope:
+
+- Inventory current `loop<unroll>` and `loop<range>` forms across all
+  `tsldata/**/*.tsl` files before implementation.
+- Recognize exact selected generation loop regions shaped as
+  `loop<range>(INDEX, START, END, STEP) { BODY_TOKENS }`.
+- Recognize optional adjacent `loop<unroll>(COUNT)` metadata for that exact
+  range loop.
+- Lower loop bounds only when each is a base-10 integer literal or an accepted
+  integer generation value through the existing M155/M159 value path.
+- Preserve the loop body as source-owned body tokens.
+- Emit deterministic diagnostics for malformed loop payloads, unsupported
+  bounds, unsupported variable-dependent bounds, missing or ambiguous braces,
+  unsupported selectors, and extra surrounding tokens.
+
+Out of scope:
+
+Loop execution or unrolling; loop-variable substitution; nested loop
+semantics; variable declarations; non-type `let<...>` lowering; assignment,
+array-access, cast, memory, I/O, intrinsic, primitive-call, backend-control,
+or backend rendering; target-language `for` rendering; source repair;
+dependency scheduling; runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies; broad registries, dispatchers, worklists, callback maps, hidden
+backfeeds, or fixpoint mechanisms.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
 find tslgen -type d -name __pycache__ -print
 ```

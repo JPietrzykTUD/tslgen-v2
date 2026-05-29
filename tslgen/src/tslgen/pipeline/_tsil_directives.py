@@ -61,10 +61,10 @@ def classify_tsil_directive_line(
     )
 
     if match.suffix:
-        segments.append(
-            RawStringToken(
-                text=match.suffix,
-                source=_source_at(line.source, base_column + match.end),
+        segments.extend(
+            _raw_suffix_tokens(
+                match.suffix,
+                _source_at(line.source, base_column + match.end),
             )
         )
 
@@ -100,6 +100,10 @@ def _match_selected_directive(text: str) -> _DirectiveMatch | None:
     for name in sorted(_CALL_SHAPED_DIRECTIVES):
         match = _match_call_shaped_directive(text, name, 0, "")
         if match is not None:
+            return match
+    if text.startswith("else "):
+        match = _match_call_shaped_directive(text, "if", len("else "), "else ")
+        if match is not None and match.arguments[0] == "generation":
             return match
     prefix, start = _allowed_prefix(text)
     for name in sorted(_SELECTOR_ONLY_DIRECTIVES):
@@ -147,7 +151,7 @@ def _match_call_shaped_directive(
     if not payload:
         return None
 
-    suffix = _accepted_call_suffix(name, text[close_index + 1 :])
+    suffix = _accepted_call_suffix(name, selector, text[close_index + 1 :])
     if suffix is None:
         return None
 
@@ -192,7 +196,7 @@ def _match_selector_only_directive(
     )
 
 
-def _accepted_call_suffix(name: str, tail: str) -> str | None:
+def _accepted_call_suffix(name: str, selector: str, tail: str) -> str | None:
     stripped = tail.strip()
     if name in ("let", "var"):
         if stripped == "":
@@ -200,7 +204,21 @@ def _accepted_call_suffix(name: str, tail: str) -> str | None:
         if stripped == ";":
             return tail
         return None
+    if name == "if" and selector == "generation":
+        generation_inline = _accepted_inline_generation_block_suffix(tail)
+        if generation_inline is not None:
+            return generation_inline
     return _accepted_block_suffix(tail)
+
+
+def _accepted_inline_generation_block_suffix(tail: str) -> str | None:
+    stripped = tail.strip()
+    if not stripped.startswith("{"):
+        return None
+    close_index = _matching_close_brace(stripped, 0)
+    if close_index is None or stripped[close_index + 1 :].strip():
+        return None
+    return tail
 
 
 def _accepted_block_suffix(tail: str) -> str | None:
@@ -209,6 +227,68 @@ def _accepted_block_suffix(tail: str) -> str | None:
         return ""
     if stripped == "{":
         return tail
+    return None
+
+
+def _raw_suffix_tokens(
+    suffix: str,
+    source: SourceLocation,
+) -> tuple[RawStringToken, ...]:
+    inline_block = _split_inline_block_suffix(suffix)
+    if inline_block is None:
+        return (RawStringToken(text=suffix, source=source),)
+
+    open_text, body_text, close_text, body_offset, close_offset = inline_block
+    tokens = [
+        RawStringToken(text=open_text, source=source),
+    ]
+    if body_text:
+        tokens.append(
+            RawStringToken(
+                text=body_text,
+                source=_source_at(source, source.column + body_offset),
+            )
+        )
+    tokens.append(
+        RawStringToken(
+            text=close_text,
+            source=_source_at(source, source.column + close_offset),
+        )
+    )
+    return tuple(tokens)
+
+
+def _split_inline_block_suffix(
+    suffix: str,
+) -> tuple[str, str, str, int, int] | None:
+    open_index = suffix.find("{")
+    if open_index == -1 or suffix[:open_index].strip():
+        return None
+    close_index = _matching_close_brace(suffix, open_index)
+    if close_index is None or suffix[close_index + 1 :].strip():
+        return None
+    body_text = suffix[open_index + 1 : close_index]
+    if not body_text:
+        return None
+    return (
+        suffix[: open_index + 1],
+        body_text,
+        suffix[close_index:],
+        open_index + 1,
+        close_index,
+    )
+
+
+def _matching_close_brace(text: str, open_index: int) -> int | None:
+    depth = 1
+    for index in range(open_index + 1, len(text)):
+        char = text[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return index
     return None
 
 

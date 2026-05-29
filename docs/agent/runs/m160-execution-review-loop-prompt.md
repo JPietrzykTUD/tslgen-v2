@@ -18,7 +18,8 @@ explicit function-shaped generation arithmetic inside `value<generation>(...)`.
 
 M160 is an implementation milestone. It should add the next TSIL control-flow
 keyword shape: exact selected-body `else if<generation>` branch-chain
-selection over source-owned body tokens.
+selection over source-owned body tokens, including an optional final
+`else<generation>` fallback arm.
 
 ## Read First
 
@@ -56,11 +57,17 @@ else if<generation>(COND) {
 else if<generation>(COND) {
   BODY_TOKENS
 }
+else<generation> {
+  BODY_TOKENS
+}
 ```
 
 Evaluate branch conditions in source order through the already accepted
 generation-control condition boundary. Select the first true branch and hand
 only that branch's source-owned token slice to the existing body-lowering path.
+If no condition is true and a final `else<generation>` fallback exists, select
+that fallback branch. If no condition is true and no fallback exists, emit a
+deterministic no-match diagnostic.
 
 This is not a general control-flow parser. It is a small branch-chain consumer
 for already classified `if<generation>` directive tokens and raw brace tokens.
@@ -75,10 +82,12 @@ Run exactly one write-capable executor for M160. The executor should:
    produced by M130/M131.
 3. Add the smallest generation-control branch-chain lowering boundary for a
    leading `if<generation>(COND) { ... }` arm followed by one or more
-   `else if<generation>(COND) { ... }` arms.
+   `else if<generation>(COND) { ... }` arms and an optional final
+   `else<generation> { ... }` fallback arm.
 4. Reuse or extract the existing M156/M158/M159 condition lowering path rather
    than creating a second expression evaluator.
-5. Select the first arm whose condition lowers to `True`.
+5. Select the first arm whose condition lowers to `True`; if none match,
+   select the final `else<generation>` fallback when present.
 6. Hand only the selected branch token slice to the existing body-lowering
    path, preserving M157 selected-branch behavior.
 7. Keep unselected branch bodies opaque and silent, including unsupported
@@ -86,7 +95,8 @@ Run exactly one write-capable executor for M160. The executor should:
    body tokens.
 8. Emit deterministic diagnostics for malformed branch-chain structure,
    condition diagnostics, ambiguous or missing braces, unsupported adjacent
-   plain/final `else` forms, and no matching true arm in no-final-else chains.
+   plain target-language `else` forms, and no matching true arm in chains with
+   no final fallback.
 9. Preserve M155 value-query behavior, M156 exact two-arm region behavior,
    M157 selected-branch handoff, M158 comparison behavior, and M159 arithmetic
    behavior.
@@ -97,8 +107,9 @@ Run exactly one write-capable executor for M160. The executor should:
     - unselected branch opacity and silence;
     - condition diagnostics propagated from accepted M155/M158/M159 paths;
     - malformed branch-chain structure and missing/ambiguous brace diagnostics;
-    - no matching true arm in a no-final-else chain;
-    - rejection of unsupported plain/final `else` chain variants;
+    - final `else<generation>` fallback selection when no condition matches;
+    - no matching true arm in a chain without a final fallback;
+    - rejection of unsupported plain target-language `else` variants;
     - preservation of raw helper text inside unselected branches;
     - determinism.
 11. Update docs that describe the accepted M160 behavior and any newly
@@ -113,11 +124,11 @@ Run exactly one write-capable executor for M160. The executor should:
 - Reuse accepted generation condition lowering. Do not parse a new expression
   language for branch-chain conditions.
 - Do not render branch bodies or repair raw source text.
-- Do not add plain `else`, final `else<generation>` in a chain, recursive or
-  nested generation-control lowering, loop/declaration/backend-control
-  lowering, backend rendering, dependency scheduling, runtime reads from
-  `tsldata`, `frozen`, or `tslgenold`, or broad registries, dispatchers,
-  worklists, callback maps, hidden backfeeds, or fixpoint mechanisms.
+- Do not add plain target-language `else`, recursive or nested
+  generation-control lowering, loop/declaration/backend-control lowering,
+  backend rendering, dependency scheduling, runtime reads from `tsldata`,
+  `frozen`, or `tslgenold`, or broad registries, dispatchers, worklists,
+  callback maps, hidden backfeeds, or fixpoint mechanisms.
 
 ## Must Preserve
 
@@ -133,16 +144,16 @@ Run exactly one write-capable executor for M160. The executor should:
 
 ## Out Of Scope
 
-Plain `else`; final `else<generation>` in a chain; recursive or nested
-generation-control lowering; broad control-flow parsing; raw expression
-parsing; raw arithmetic operator parsing; right-hand value queries in
-comparisons; branch-body rendering; loop execution; `loop<unroll>` or
-`loop<range>` lowering; declaration lowering; non-type `let<...>` lowering;
-backend-control `if<compile>`, `else<compile>`, or `switch<compile>`
-lowering; casts, memory, I/O, intrinsics, backend rendering, dependency
-scheduling, output writing, source repair, runtime `tsldata`, `frozen`, or
-`tslgenold` dependencies; broad registries, dispatchers, worklists, callback
-maps, hidden backfeeds, or fixpoint mechanisms.
+Plain target-language `else`; recursive or nested generation-control
+lowering; broad control-flow parsing; raw expression parsing; raw arithmetic
+operator parsing; right-hand value queries in comparisons; branch-body
+rendering; loop execution; `loop<unroll>` or `loop<range>` lowering;
+declaration lowering; non-type `let<...>` lowering; backend-control
+`if<compile>`, `else<compile>`, or `switch<compile>` lowering; casts, memory,
+I/O, intrinsics, backend rendering, dependency scheduling, output writing,
+source repair, runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad
+registries, dispatchers, worklists, callback maps, hidden backfeeds, or
+fixpoint mechanisms.
 
 ## Required Review/Audit Subagents
 
@@ -160,8 +171,9 @@ After the executor finishes, use read-only subagents:
    current TSIL source/control evidence and that helper raw text remains raw.
 4. Test auditor: verify the tests cover branch selection order, first-true
    wins, selected handoff, unselected silence, condition diagnostics,
-   malformed structures, no-match diagnostics, unsupported `else` forms,
-   helper preservation, and determinism.
+   malformed structures, final `else<generation>` fallback selection,
+   no-match diagnostics for chains without fallback, unsupported plain
+   target-language `else` forms, helper preservation, and determinism.
 5. Documentation auditor: verify roadmap, behavioral/domain docs, missing
    inventory, and current state are coherent.
 6. Validation auditor: verify required validation ran and report exact command

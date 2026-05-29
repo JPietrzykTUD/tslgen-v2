@@ -30,6 +30,28 @@ _RAW_ARITHMETIC_OPERATORS = ("+", "-", "*", "/", "%")
 class _BranchBoundary:
     close_index: int
     next_index: int
+    connector: str = "none"
+
+
+@dataclass(frozen=True, slots=True)
+class _GenerationControlArm:
+    condition: str | None
+    condition_source: SourceLocation
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class _GenerationControlShape:
+    conditional_arms: tuple[_GenerationControlArm, ...]
+    fallback_arm: _GenerationControlArm | None
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class _GenerationControlShapeParse:
+    shape: _GenerationControlShape | None
+    diagnostics: tuple[Diagnostic, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,9 +75,77 @@ def lower_generation_control_region(
 ) -> GenerationControlRegionLoweringResult:
     tokens = body.tokens
 
+    shape_result = _parse_generation_control_shape(tokens, body.source)
+    if shape_result.shape is None:
+        return GenerationControlRegionLoweringResult(
+            region=None,
+            diagnostics=shape_result.diagnostics,
+        )
+    shape = shape_result.shape
+
+    selected_arm: _GenerationControlArm | None = None
+    selected_condition: LoweredGenerationValue | None = None
+    evaluated_conditions: list[LoweredGenerationValue] = []
+
+    for arm in shape.conditional_arms:
+        assert arm.condition is not None
+        condition_result = _lower_generation_condition(
+            context,
+            arm.condition,
+            arm.condition_source,
+            catalog=catalog,
+            environment=environment,
+        )
+        if condition_result.condition is None:
+            return GenerationControlRegionLoweringResult(
+                region=None,
+                diagnostics=condition_result.diagnostics,
+            )
+        condition = condition_result.condition
+        evaluated_conditions.append(condition)
+        if condition.value:
+            selected_arm = arm
+            selected_condition = condition
+            break
+
+    if selected_arm is None:
+        if shape.fallback_arm is None:
+            return GenerationControlRegionLoweringResult(
+                region=None,
+                diagnostics=(
+                    _no_matching_branch_diagnostic(
+                        shape.conditional_arms[0].condition_source
+                    ),
+                ),
+            )
+        selected_arm = shape.fallback_arm
+        selected_condition = evaluated_conditions[-1]
+
+    selected_branch = LoweredGenerationControlBranch(
+        tokens=selected_arm.tokens,
+        source=selected_arm.source,
+    )
+    unselected_branch = _unselected_branch(shape, selected_arm)
+    assert selected_condition is not None
+
+    return GenerationControlRegionLoweringResult(
+        region=LoweredGenerationControlRegion(
+            condition=selected_condition,
+            selected_branch=selected_branch,
+            unselected_branch=unselected_branch,
+            source=shape.source,
+        ),
+        diagnostics=(),
+    )
+
+
+def _parse_generation_control_shape(
+    tokens: tuple[BodyToken, ...],
+    body_source: SourceLocation,
+) -> _GenerationControlShapeParse:
     if not tokens:
-        return _malformed_region_result(
-            body.source,
+        return _malformed_shape_parse(
+            body_source,
             "expected if<generation>(...) { ... } else<generation> { ... }",
         )
 
@@ -66,113 +156,157 @@ def lower_generation_control_region(
         or len(if_directive.arguments) != 2
         or if_directive.arguments[0] != "generation"
     ):
-        return _malformed_region_result(
-            _token_source(tokens[0]) if tokens else body.source,
+        return _malformed_shape_parse(
+            _token_source(tokens[0]) if tokens else body_source,
             "expected leading if<generation>(Condition) directive",
         )
 
     if len(tokens) < 2:
-        return _malformed_region_result(
+        return _malformed_shape_parse(
             if_directive.source,
             "expected raw opening brace after if<generation>(...)",
         )
 
     if not _is_open_brace(tokens[1]):
-        return _malformed_region_result(
+        return _malformed_shape_parse(
             _token_source(tokens[1]),
             "expected raw opening brace after if<generation>(...)",
         )
 
-    true_search = _find_branch_close(tokens, start=2)
-    if true_search.diagnostic is not None:
-        return GenerationControlRegionLoweringResult(
-            region=None,
-            diagnostics=(true_search.diagnostic,),
-        )
-    true_boundary = true_search.boundary
-    if true_boundary is None:
-        return _malformed_region_result(
-            if_directive.source,
-            "could not find matching close brace for true branch",
+    arms: list[_GenerationControlArm] = []
+    directive_index = 0
+
+    while True:
+        directive = tokens[directive_index]
+        if (
+            not isinstance(directive, LowerableDirective)
+            or directive.name != "if"
+            or len(directive.arguments) != 2
+            or directive.arguments[0] != "generation"
+        ):
+            return _malformed_shape_parse(
+                _token_source(directive),
+                "expected if<generation>(Condition) branch",
+            )
+
+        open_index = directive_index + 1
+        if open_index >= len(tokens) or not _is_open_brace(tokens[open_index]):
+            return _malformed_shape_parse(
+                directive.source,
+                "expected raw opening brace after if<generation>(...)",
+            )
+
+        body_start = open_index + 1
+        branch_search = _find_branch_close(tokens, start=body_start)
+        if branch_search.diagnostic is not None:
+            return _diagnostic_shape_parse(branch_search.diagnostic)
+        boundary = branch_search.boundary
+        if boundary is None:
+            return _malformed_shape_parse(
+                directive.source,
+                "could not find matching close brace for generation branch",
+            )
+
+        branch_tokens = tokens[body_start:boundary.close_index]
+        arms.append(
+            _GenerationControlArm(
+                condition=directive.arguments[1],
+                condition_source=directive.source,
+                tokens=branch_tokens,
+                source=_branch_source(branch_tokens, directive.source),
+            )
         )
 
-    else_index = true_boundary.next_index
-    if else_index >= len(tokens):
-        return _malformed_region_result(
-            if_directive.source,
-            "expected else<generation> branch after true branch",
-        )
+        if boundary.connector == "else_if":
+            directive_index = boundary.next_index
+            continue
 
+        next_index = boundary.next_index
+        if next_index >= len(tokens):
+            if len(arms) == 1:
+                return _malformed_shape_parse(
+                    if_directive.source,
+                    "expected else<generation> branch after true branch",
+                )
+            return _shape_parse(
+                _GenerationControlShape(
+                    conditional_arms=tuple(arms),
+                    fallback_arm=None,
+                    source=if_directive.source,
+                )
+            )
+
+        if _tokens_start_generation_else_if(tokens, next_index):
+            directive_index = next_index + 1
+            continue
+
+        fallback_result = _parse_generation_fallback_arm(tokens, next_index)
+        if fallback_result.shape is not None:
+            return _shape_parse(
+                _GenerationControlShape(
+                    conditional_arms=tuple(arms),
+                    fallback_arm=fallback_result.shape.fallback_arm,
+                    source=if_directive.source,
+                )
+            )
+        return fallback_result
+
+
+def _parse_generation_fallback_arm(
+    tokens: tuple[BodyToken, ...],
+    else_index: int,
+) -> _GenerationControlShapeParse:
     else_directive = tokens[else_index]
     if (
         not isinstance(else_directive, LowerableDirective)
         or else_directive.name != "else"
         or else_directive.arguments != ("generation",)
     ):
-        return _malformed_region_result(
+        return _malformed_shape_parse(
             _token_source(else_directive),
-            "expected else<generation> directive after true branch",
+            "expected else<generation> directive after generation branch",
         )
 
     else_open_index = else_index + 1
     if else_open_index >= len(tokens) or not _is_open_brace(tokens[else_open_index]):
-        return _malformed_region_result(
+        return _malformed_shape_parse(
             _token_source(else_directive),
             "expected raw opening brace after else<generation>",
         )
 
-    false_start = else_open_index + 1
-    false_search = _find_branch_close(tokens, start=false_start)
-    if false_search.diagnostic is not None:
-        return GenerationControlRegionLoweringResult(
-            region=None,
-            diagnostics=(false_search.diagnostic,),
-        )
-    false_boundary = false_search.boundary
-    if false_boundary is None:
-        return _malformed_region_result(
+    fallback_start = else_open_index + 1
+    fallback_search = _find_branch_close(
+        tokens,
+        start=fallback_start,
+        allow_else_if_suffix=False,
+    )
+    if fallback_search.diagnostic is not None:
+        return _diagnostic_shape_parse(fallback_search.diagnostic)
+    fallback_boundary = fallback_search.boundary
+    if fallback_boundary is None:
+        return _malformed_shape_parse(
             else_directive.source,
-            "could not find matching close brace for false branch",
+            "could not find matching close brace for else<generation> branch",
         )
-    if false_boundary.next_index != len(tokens):
-        return _malformed_region_result(
-            _token_source(tokens[false_boundary.next_index]),
+    if fallback_boundary.next_index != len(tokens):
+        return _malformed_shape_parse(
+            _token_source(tokens[fallback_boundary.next_index]),
             "unexpected tokens after generation-control region",
         )
 
-    condition_result = _lower_generation_condition(
-        context,
-        if_directive.arguments[1],
-        if_directive.source,
-        catalog=catalog,
-        environment=environment,
+    fallback_tokens = tokens[fallback_start:fallback_boundary.close_index]
+    fallback_arm = _GenerationControlArm(
+        condition=None,
+        condition_source=else_directive.source,
+        tokens=fallback_tokens,
+        source=_branch_source(fallback_tokens, else_directive.source),
     )
-    if condition_result.condition is None:
-        return GenerationControlRegionLoweringResult(
-            region=None,
-            diagnostics=condition_result.diagnostics,
+    return _shape_parse(
+        _GenerationControlShape(
+            conditional_arms=(),
+            fallback_arm=fallback_arm,
+            source=else_directive.source,
         )
-    condition = condition_result.condition
-
-    true_tokens = tokens[2:true_boundary.close_index]
-    false_tokens = tokens[false_start:false_boundary.close_index]
-    true_branch = LoweredGenerationControlBranch(
-        tokens=true_tokens,
-        source=_branch_source(true_tokens, if_directive.source),
-    )
-    false_branch = LoweredGenerationControlBranch(
-        tokens=false_tokens,
-        source=_branch_source(false_tokens, else_directive.source),
-    )
-
-    return GenerationControlRegionLoweringResult(
-        region=LoweredGenerationControlRegion(
-            condition=condition,
-            selected_branch=true_branch if condition.value else false_branch,
-            unselected_branch=false_branch if condition.value else true_branch,
-            source=if_directive.source,
-        ),
-        diagnostics=(),
     )
 
 
@@ -395,6 +529,7 @@ def _find_branch_close(
     tokens: tuple[BodyToken, ...],
     *,
     start: int,
+    allow_else_if_suffix: bool = True,
 ) -> _BranchCloseSearch:
     depth = 1
     for index in range(start, len(tokens)):
@@ -416,6 +551,19 @@ def _find_branch_close(
                                 "expected isolated raw close brace",
                             ),
                         )
+                    if (
+                        allow_else_if_suffix
+                        and suffix.strip() == "else"
+                        and _next_token_is_generation_if(tokens, index)
+                    ):
+                        return _BranchCloseSearch(
+                            boundary=_BranchBoundary(
+                                close_index=index,
+                                next_index=index + 1,
+                                connector="else_if",
+                            ),
+                            diagnostic=None,
+                        )
                     unsupported = _unsupported_close_suffix_diagnostic(
                         suffix,
                         tokens,
@@ -434,6 +582,7 @@ def _find_branch_close(
                         boundary=_BranchBoundary(
                             close_index=index,
                             next_index=index + 1,
+                            connector="none",
                         ),
                         diagnostic=None,
                     )
@@ -453,26 +602,23 @@ def _unsupported_close_suffix_diagnostic(
     close_index: int,
 ) -> Diagnostic | None:
     stripped = suffix.strip()
-    if stripped.startswith("else if<generation>") or (
-        stripped == "else"
-        and _next_token_is_generation_if(tokens, close_index)
-    ):
+    if stripped.startswith("else if<generation>"):
         return Diagnostic(
             severity="error",
             code="TSL-LOWER-UNSUPPORTED-GENERATION-CONTROL-REGION",
             message=(
-                "generation-control branch-chain regions with "
-                "else if<generation> are not supported by M156"
+                "generation-control branch-chain regions require classified "
+                "else if<generation> directive tokens"
             ),
             location=tokens[close_index].source,
         )
-    if stripped.startswith("else {"):
+    if stripped == "else" or stripped.startswith("else {"):
         return Diagnostic(
             severity="error",
             code="TSL-LOWER-UNSUPPORTED-GENERATION-CONTROL-REGION",
             message=(
-                "plain else generation-control regions are not supported "
-                "by M156; expected else<generation>"
+                "plain target-language else generation-control regions are "
+                "not supported; expected else<generation>"
             ),
             location=tokens[close_index].source,
         )
@@ -495,8 +641,65 @@ def _next_token_is_generation_if(
     )
 
 
+def _tokens_start_generation_else_if(
+    tokens: tuple[BodyToken, ...],
+    next_index: int,
+) -> bool:
+    if next_index + 1 >= len(tokens):
+        return False
+    prefix = tokens[next_index]
+    directive = tokens[next_index + 1]
+    return (
+        isinstance(prefix, RawStringToken)
+        and prefix.text.strip() == "else"
+        and isinstance(directive, LowerableDirective)
+        and directive.name == "if"
+        and len(directive.arguments) == 2
+        and directive.arguments[0] == "generation"
+    )
+
+
 def _branch_close_diagnostic(diagnostic: Diagnostic) -> _BranchCloseSearch:
     return _BranchCloseSearch(boundary=None, diagnostic=diagnostic)
+
+
+def _shape_parse(
+    shape: _GenerationControlShape,
+) -> _GenerationControlShapeParse:
+    return _GenerationControlShapeParse(shape=shape, diagnostics=())
+
+
+def _diagnostic_shape_parse(
+    diagnostic: Diagnostic,
+) -> _GenerationControlShapeParse:
+    return _GenerationControlShapeParse(shape=None, diagnostics=(diagnostic,))
+
+
+def _malformed_shape_parse(
+    source: SourceLocation,
+    reason: str,
+) -> _GenerationControlShapeParse:
+    return _diagnostic_shape_parse(_malformed_region_diagnostic(source, reason))
+
+
+def _unselected_branch(
+    shape: _GenerationControlShape,
+    selected_arm: _GenerationControlArm,
+) -> LoweredGenerationControlBranch:
+    arms = list(shape.conditional_arms)
+    if shape.fallback_arm is not None:
+        arms.append(shape.fallback_arm)
+    unselected_arms = tuple(arm for arm in arms if arm is not selected_arm)
+    if not unselected_arms:
+        return LoweredGenerationControlBranch(tokens=(), source=selected_arm.source)
+
+    tokens: list[BodyToken] = []
+    for arm in unselected_arms:
+        tokens.extend(arm.tokens)
+    return LoweredGenerationControlBranch(
+        tokens=tuple(tokens),
+        source=unselected_arms[0].source,
+    )
 
 
 def _is_open_brace(token: BodyToken) -> bool:
@@ -536,6 +739,19 @@ def _malformed_region_diagnostic(
         message=(
             "generation-control region cannot be lowered; "
             f"{reason}"
+        ),
+        location=source,
+    )
+
+
+def _no_matching_branch_diagnostic(source: SourceLocation) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-LOWER-NO-MATCHING-GENERATION-CONTROL-BRANCH",
+        message=(
+            "generation-control branch chain cannot select a branch; no "
+            "condition lowered to true and no final else<generation> fallback "
+            "is present"
         ),
         location=source,
     )
