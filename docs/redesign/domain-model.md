@@ -924,6 +924,44 @@ Invariants:
   indexing, casts, intrinsics, and raw target-language text are not parsed or
   rendered by this model.
 
+Milestone 162 adds a source-ordered discovery fact for exact M161 loop regions
+inside larger body token streams:
+
+```python
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationLoopOpaqueSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationLoopRegionSegment:
+    region: LoweredGenerationLoopRegion
+    source: SourceLocation
+
+LoweredGenerationLoopDiscoverySegment = (
+    LoweredGenerationLoopOpaqueSegment | LoweredGenerationLoopRegionSegment
+)
+
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationLoopDiscovery:
+    segments: tuple[LoweredGenerationLoopDiscoverySegment, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class GenerationLoopDiscoveryLoweringResult:
+    discovery: LoweredGenerationLoopDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+```
+
+The M162 discovery model is a token-span provenance fact, not a statement
+model. It supports multiple exact top-level loop regions in source order,
+preserves all non-loop tokens as opaque spans, and reuses the M161 region
+fact for each loop slice. Surrounding token names such as `var<...>` or
+`emit_return(...)` do not affect discovery behavior.
+Discovery tracks raw brace depth only to avoid treating loops inside unrelated
+opaque raw-brace scopes as top-level; it does not interpret those scopes as
+statements or control flow.
+
 Milestone 144 adds selector-payload values:
 
 ```python

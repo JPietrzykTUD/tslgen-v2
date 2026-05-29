@@ -40,6 +40,7 @@ from tslgen.lowering.model import (
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
     BackendTypeQueryLoweringResult,
+    GenerationLoopDiscoveryLoweringResult,
     GenerationControlRegionLoweringResult,
     GenerationLoopRegionLoweringResult,
     GenerationValueQueryLoweringResult,
@@ -49,7 +50,10 @@ from tslgen.lowering.model import (
     build_selected_implementation_lowering_context,
 )
 from tslgen.lowering.generation_control import lower_generation_control_region
-from tslgen.lowering.generation_loops import lower_generation_loop_region
+from tslgen.lowering.generation_loops import (
+    discover_generation_loop_regions,
+    lower_generation_loop_region,
+)
 from tslgen.lowering.generation_values import lower_generation_value_query
 from tslgen.lowering.operation_type_compatibility import (
     binary_operation_supports_scalar_type,
@@ -209,6 +213,21 @@ class Lowerer:
     ) -> GenerationLoopRegionLoweringResult:
         context = self.context_for(selected)
         return lower_generation_loop_region(
+            context,
+            context.implementation.body,
+            catalog=catalog,
+            environment=environment,
+        )
+
+    def discover_generation_loop_regions(
+        self,
+        selected: SelectedImplementation,
+        *,
+        catalog: Catalog | None = None,
+        environment: SelectedTypeEnvironment | None = None,
+    ) -> GenerationLoopDiscoveryLoweringResult:
+        context = self.context_for(selected)
+        return discover_generation_loop_regions(
             context,
             context.implementation.body,
             catalog=catalog,

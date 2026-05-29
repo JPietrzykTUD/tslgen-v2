@@ -55,8 +55,11 @@ from tslgen.lowering import (
     LoweredFunctionSignature,
     LoweredGenerationControlBranch,
     LoweredGenerationControlRegion,
+    LoweredGenerationLoopDiscovery,
+    LoweredGenerationLoopOpaqueSegment,
     LoweredGenerationLoopBody,
     LoweredGenerationLoopRegion,
+    LoweredGenerationLoopRegionSegment,
     LoweredGenerationValue,
     LoweredGenericRegisterType,
     LoweredIntrinsicVectorImaskType,
@@ -6146,6 +6149,269 @@ def test_m161_preserves_loop_body_tokens_opaque_and_deterministic() -> None:
         source=_location(5, 9),
     )
     assert first == second
+
+
+def test_m162_discovers_embedded_loop_with_arbitrary_opaque_tokens() -> None:
+    prefix = (RawStringToken(text="prefix();", source=_location(3, 5)),)
+    loop_body_tokens = (
+        RawStringToken(text="result[i] = left[i];", source=_location(5, 9)),
+    )
+    loop_tokens = _generation_loop_body(
+        "i, 0, 4, 1",
+        body_tokens=loop_body_tokens,
+    ).tokens
+    suffix = (RawStringToken(text="suffix();", source=_location(7, 5)),)
+    body = ImplementationBody(tokens=prefix + loop_tokens + suffix, source=_location(3, 5))
+
+    result = Lowerer().discover_generation_loop_regions(
+        _selected_implementation(body=body),
+    )
+
+    assert result.diagnostics == ()
+    assert result.discovery == LoweredGenerationLoopDiscovery(
+        segments=(
+            LoweredGenerationLoopOpaqueSegment(tokens=prefix, source=_location(3, 5)),
+            LoweredGenerationLoopRegionSegment(
+                region=LoweredGenerationLoopRegion(
+                    index_name="i",
+                    start=LoweredGenerationValue(
+                        kind="generation.integer_literal",
+                        value=0,
+                        source_text="0",
+                        source=_location(4, 7),
+                    ),
+                    end=LoweredGenerationValue(
+                        kind="generation.integer_literal",
+                        value=4,
+                        source_text="4",
+                        source=_location(4, 7),
+                    ),
+                    step=LoweredGenerationValue(
+                        kind="generation.integer_literal",
+                        value=1,
+                        source_text="1",
+                        source=_location(4, 7),
+                    ),
+                    body=LoweredGenerationLoopBody(
+                        tokens=loop_body_tokens,
+                        source=_location(5, 9),
+                    ),
+                    source=_location(4, 7),
+                ),
+                source=_location(4, 7),
+            ),
+            LoweredGenerationLoopOpaqueSegment(tokens=suffix, source=_location(7, 5)),
+        ),
+        source=_location(3, 5),
+    )
+
+
+def test_m162_attaches_adjacent_unroll_and_keeps_neighbor_tokens_opaque() -> None:
+    catalog = Catalog(
+        primitives=(),
+        extensions=ExtensionCatalog(
+            (_extension_fact("avx2", vector_bits=256),),
+        ),
+    )
+    var_directive = LowerableDirective(
+        name="var",
+        arguments=("init_register", "result, 0"),
+        source=_location(3, 5),
+    )
+    loop_tokens = _generation_loop_body(
+        "i, 0, value<generation>(vector::length), 1",
+        body_tokens=(RawStringToken(text="result[i] = data[i];", source=_location(6, 9)),),
+        unroll_count="value<generation>(vector::length)",
+    ).tokens
+    emit_return = LowerableDirective(
+        name="emit_return",
+        arguments=("result",),
+        source=_location(8, 5),
+    )
+    body = ImplementationBody(
+        tokens=(var_directive, *loop_tokens, emit_return),
+        source=_location(3, 5),
+    )
+
+    result = Lowerer().discover_generation_loop_regions(
+        _selected_implementation(body=body, extension="avx2", type_tag="si32"),
+        catalog=catalog,
+    )
+
+    assert result.diagnostics == ()
+    assert result.discovery is not None
+    assert result.discovery.segments[0] == LoweredGenerationLoopOpaqueSegment(
+        tokens=(var_directive,),
+        source=_location(3, 5),
+    )
+    loop_segment = result.discovery.segments[1]
+    assert isinstance(loop_segment, LoweredGenerationLoopRegionSegment)
+    assert loop_segment.region.unroll_count == LoweredGenerationValue(
+        kind="vector.length",
+        value=8,
+        source_text="value<generation>(vector::length)",
+        source=_location(4, 7),
+    )
+    assert result.discovery.segments[2] == LoweredGenerationLoopOpaqueSegment(
+        tokens=(emit_return,),
+        source=_location(8, 5),
+    )
+
+
+def test_m162_lowers_multiple_top_level_loop_regions_in_source_order() -> None:
+    first_loop = _generation_loop_body(
+        "i, 0, 4, 1",
+        body_tokens=(RawStringToken(text="first[i] = i;", source=_location(5, 9)),),
+    ).tokens
+    separator = (RawStringToken(text="between();", source=_location(7, 5)),)
+    second_loop = _generation_loop_body(
+        "j, 1, 5, 1",
+        body_tokens=(RawStringToken(text="second[j] = j;", source=_location(9, 9)),),
+    ).tokens
+    body = ImplementationBody(
+        tokens=first_loop + separator + second_loop,
+        source=_location(4, 7),
+    )
+
+    first = Lowerer().discover_generation_loop_regions(
+        _selected_implementation(body=body),
+    )
+    second = Lowerer().discover_generation_loop_regions(
+        _selected_implementation(body=body),
+    )
+
+    assert first.diagnostics == ()
+    assert first.discovery is not None
+    assert [
+        segment.region.index_name
+        for segment in first.discovery.segments
+        if isinstance(segment, LoweredGenerationLoopRegionSegment)
+    ] == ["i", "j"]
+    assert first.discovery.segments[1] == LoweredGenerationLoopOpaqueSegment(
+        tokens=separator,
+        source=_location(7, 5),
+    )
+    assert first == second
+
+
+def test_m162_propagates_loop_region_diagnostics() -> None:
+    body = ImplementationBody(
+        tokens=(
+            RawStringToken(text="prefix();", source=_location(3, 5)),
+            *_generation_loop_body("i, 0, idx, 1").tokens,
+        ),
+        source=_location(3, 5),
+    )
+
+    result = Lowerer().discover_generation_loop_regions(
+        _selected_implementation(body=body),
+    )
+
+    assert result.discovery is None
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-GENERATION-LOOP-BOUND",
+    ]
+    assert "idx" in result.diagnostics[0].message
+
+
+def test_m162_reports_no_exact_loop_region_when_requested() -> None:
+    body = ImplementationBody(
+        tokens=(RawStringToken(text="plain();", source=_location(3, 5)),),
+        source=_location(3, 5),
+    )
+
+    result = Lowerer().discover_generation_loop_regions(
+        _selected_implementation(body=body),
+    )
+
+    assert result.discovery is None
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-LOWER-NO-GENERATION-LOOP-REGION",
+    ]
+    assert [diagnostic.severity for diagnostic in result.diagnostics] == ["error"]
+    assert result.diagnostics[0].location == _location(3, 5)
+    assert "no exact top-level" in result.diagnostics[0].message
+
+
+def test_m162_reports_unsupported_loop_selector_in_stream() -> None:
+    body = ImplementationBody(
+        tokens=(
+            RawStringToken(text="prefix();", source=_location(3, 5)),
+            LowerableDirective(
+                name="loop",
+                arguments=("while", "i < 4"),
+                source=_location(4, 7),
+            ),
+            RawStringToken(text=" {", source=_location(4, 24)),
+            RawStringToken(text="body();", source=_location(5, 9)),
+            RawStringToken(text="}", source=_location(6, 7)),
+        ),
+        source=_location(3, 5),
+    )
+
+    result = Lowerer().discover_generation_loop_regions(
+        _selected_implementation(body=body),
+    )
+
+    assert result.discovery is None
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-GENERATION-LOOP-SELECTOR",
+    ]
+    assert [diagnostic.severity for diagnostic in result.diagnostics] == ["error"]
+    assert result.diagnostics[0].location == _location(4, 7)
+    assert "expected 'range'" in result.diagnostics[0].message
+
+
+def test_m162_keeps_nested_braces_and_loop_tokens_inside_parent_loop() -> None:
+    nested_loop_tokens = _generation_loop_body(
+        "j, 0, 2, 1",
+        body_tokens=(RawStringToken(text="nested[j] = j;", source=_location(7, 11)),),
+    ).tokens
+    outer_body_tokens = (
+        RawStringToken(text="if (flag) {", source=_location(5, 9)),
+        *nested_loop_tokens,
+        RawStringToken(text="}", source=_location(8, 9)),
+    )
+    body = _generation_loop_body("i, 0, 4, 1", body_tokens=outer_body_tokens)
+
+    result = Lowerer().discover_generation_loop_regions(
+        _selected_implementation(body=body),
+    )
+
+    assert result.diagnostics == ()
+    assert result.discovery is not None
+    loop_segments = [
+        segment
+        for segment in result.discovery.segments
+        if isinstance(segment, LoweredGenerationLoopRegionSegment)
+    ]
+    assert len(loop_segments) == 1
+    assert loop_segments[0].region.index_name == "i"
+    assert loop_segments[0].region.body.tokens == outer_body_tokens
+
+
+def test_m162_does_not_discover_loop_inside_opaque_raw_brace_scope() -> None:
+    loop_tokens = _generation_loop_body(
+        "i, 0, 4, 1",
+        body_tokens=(RawStringToken(text="inside();", source=_location(5, 9)),),
+    ).tokens
+    body = ImplementationBody(
+        tokens=(
+            RawStringToken(text="if (flag) {", source=_location(3, 5)),
+            *loop_tokens,
+            RawStringToken(text="}", source=_location(7, 5)),
+        ),
+        source=_location(3, 5),
+    )
+
+    result = Lowerer().discover_generation_loop_regions(
+        _selected_implementation(body=body),
+    )
+
+    assert result.discovery is None
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-LOWER-NO-GENERATION-LOOP-REGION",
+    ]
 
 
 def test_m142_does_not_resolve_primitive_call_selector_targets(

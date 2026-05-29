@@ -368,6 +368,35 @@ class GenerationLoopRegionLoweringResult:
     diagnostics: tuple[Diagnostic, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationLoopOpaqueSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationLoopRegionSegment:
+    region: LoweredGenerationLoopRegion
+    source: SourceLocation
+
+
+LoweredGenerationLoopDiscoverySegment = (
+    LoweredGenerationLoopOpaqueSegment | LoweredGenerationLoopRegionSegment
+)
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationLoopDiscovery:
+    segments: tuple[LoweredGenerationLoopDiscoverySegment, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationLoopDiscoveryLoweringResult:
+    discovery: LoweredGenerationLoopDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
 def build_selected_implementation_lowering_context(
     selected: SelectedImplementation,
 ) -> SelectedImplementationLoweringContext:

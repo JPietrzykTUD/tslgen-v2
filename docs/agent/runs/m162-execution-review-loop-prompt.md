@@ -13,8 +13,8 @@ Milestone 162: Generation Loop Region Discovery In Body Token Streams
 Milestones 1 through 161 are accepted. M161 added an exact generation-loop
 region fact for bodies shaped wholly as `loop<range>(...) { ... }`, with
 optional immediately preceding `loop<unroll>(...)` metadata. Current corpus
-bodies usually place such loops inside a larger body sequence, commonly after
-`var<...>(...)` directives and before `emit_return(...)`.
+evidence confirms that such loops can appear with surrounding body text, but
+M162 must not special-case any surrounding token names or body sequence shape.
 
 M162 is an implementation milestone. It should make the M161 loop boundary
 usable inside source-owned body token streams without executing loops,
@@ -45,21 +45,24 @@ substituting loop variables, parsing assignments, or rendering backend code.
 
 ## Goal
 
-Recognize exact M161 loop regions embedded in a larger selected body token
-stream:
+Recognize every exact top-level M161 loop region embedded in an arbitrary
+selected body token stream:
 
 ```text
-PREFIX_TOKENS
+OPAQUE_TOKENS
 loop<unroll>(COUNT)
 loop<range>(INDEX, START, END, STEP) {
   BODY_TOKENS
 }
-SUFFIX_TOKENS
+OPAQUE_TOKENS
 ```
 
-The result should record source-owned prefix tokens, the lowered M161 loop
-region, and source-owned suffix tokens, or the equivalent minimal typed
+The result should record source-owned non-loop token spans and lowered M161
+loop regions in source order, or the equivalent minimal typed
 placement/slice contract needed to preserve token identity and diagnostics.
+Discovery should be delimiter-based enough to find the matching loop-region
+closing brace; it must not infer meaning from neighboring tokens such as
+`var<...>`, `let<...>`, or `emit_return(...)`.
 
 M162 must not execute the loop, unroll the body, substitute `INDEX` into raw
 text, parse declarations, parse assignments or array access, lower
@@ -71,18 +74,16 @@ Run exactly one write-capable executor for M162. The executor should:
 
 1. Inspect dirty worktree state before editing and preserve unrelated changes.
 2. Inspect current corpus examples where `loop<range>` appears inside larger
-   TSIL bodies, especially generic/vector fallback bodies with surrounding
-   `var<...>` and `emit_return(...)` directives.
+   TSIL bodies to ground delimiter and adjacency cases. Use corpus examples as
+   evidence, not as accepted-shape templates.
 3. Add the smallest exact embedded-loop discovery boundary over
-   `ImplementationBody.tokens` that can identify a top-level M161 loop region
-   and preserve source-owned prefix/suffix token slices.
+   `ImplementationBody.tokens` that can identify every top-level M161 loop
+   region and preserve source-owned non-loop token slices.
 4. Reuse the accepted M161 loop-region lowering for the loop slice rather than
    adding a second loop parser or evaluator.
-5. If multiple top-level exact M161 loop regions are present in one body, use a
-   deterministic policy selected by the executor and covered by tests:
-   either support all top-level exact regions in source order or emit a
-   deterministic unsupported-multiple-regions diagnostic. Do not silently pick
-   one by accident.
+5. If multiple top-level exact M161 loop regions are present in one body,
+   support all of them in source order. Do not silently pick one by accident
+   and do not reject multiple regions merely because the first slice worked.
 6. Preserve all non-loop tokens as opaque source-owned tokens. Raw helper
    calls, primitive-call islands, declarations, `emit_return(...)`, nested
    loops, generation-control branches, assignments, array indexing, casts, and
@@ -95,13 +96,13 @@ Run exactly one write-capable executor for M162. The executor should:
    selected-branch handoff, helper raw preservation, and M161 whole-body loop
    lowering behavior.
 9. Add focused tests for:
-   - embedded `loop<range>` with prefix and suffix tokens;
+   - embedded `loop<range>` with arbitrary opaque tokens before and after it;
    - embedded adjacent `loop<unroll>` plus `loop<range>`;
-   - corpus-like `var<...>` prefix and `emit_return(result)` suffix remaining
-     opaque;
+   - corpus-like `var<...>` and `emit_return(result)` tokens remaining opaque
+     without becoming part of the accepted loop shape;
    - propagated M161 bound/selector diagnostics;
    - no-region diagnostics;
-   - deterministic handling of multiple top-level exact loop regions;
+   - multiple top-level exact loop regions lowered in source order;
    - nested raw braces or nested loop body tokens remaining inside the
      selected loop body rather than being parsed;
    - determinism.
@@ -115,6 +116,8 @@ Run exactly one write-capable executor for M162. The executor should:
 - Treat this as token-region discovery over source-owned `BodyToken` values,
   not as a TSIL statement parser.
 - Reuse the M161 exact loop-region lowerer for the region slice.
+- The accepted shape is the loop region itself. No behavior may depend on the
+  identity, order, or semantics of surrounding non-loop tokens.
 - Do not execute loops, perform unrolling, substitute loop variables, evaluate
   declarations, lower `emit_return(result)`, parse target-language statements,
   render backend code, schedule dependencies, read `tsldata`, `frozen`, or
@@ -145,18 +148,20 @@ maps, hidden backfeeds, or fixpoint mechanisms.
 
 After the executor finishes, use read-only subagents:
 
-1. Architecture reviewer: verify M162 adds only exact embedded-loop discovery
-   over source-owned body tokens and avoids loop execution, body parsing,
-   rendering, registries, dispatchers, worklists, source repair, and runtime
-   data reads.
+1. Architecture reviewer: verify M162 adds only exact top-level loop-region
+   discovery over source-owned body tokens, supports multiple regions in
+   source order, and avoids loop execution, body parsing, rendering,
+   surrounding-token special cases, registries, dispatchers, worklists,
+   source repair, and runtime data reads.
 2. Boundary auditor: verify M155-M161 behavior remains intact and M161 loop
    lowering is reused rather than duplicated.
 3. Evidence auditor: verify the embedded-loop direction is grounded in current
-   `tsldata/**/*.tsl` body evidence and that surrounding declarations/returns
-   remain opaque.
+   `tsldata/**/*.tsl` body evidence without treating corpus-neighbor patterns
+   as accepted shapes, and that surrounding declarations/returns remain
+   opaque.
 4. Test auditor: verify the tests cover prefix/suffix preservation, unroll
-   metadata, propagated diagnostics, no-region behavior, multiple-region
-   policy, nested/raw body opacity, and determinism.
+   metadata, propagated diagnostics, no-region behavior, multiple regions in
+   source order, nested/raw body opacity, and determinism.
 5. Documentation auditor: verify roadmap, behavioral/domain docs, missing
    inventory, TSIL surface inventory, and current state are coherent.
 6. Validation auditor: verify required validation ran and report exact command

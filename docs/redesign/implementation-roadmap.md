@@ -20667,29 +20667,28 @@ with no output.
 
 Status:
 
-Selected after M161 acceptance. Active next prompt:
-`docs/agent/runs/m162-execution-review-loop-prompt.md`.
+Accepted. Active next prompt after M162:
+`docs/agent/runs/m163-execution-review-loop-prompt.md`.
 
 Goal:
 
 Make the accepted M161 loop-region lowering usable inside larger selected body
-token streams by discovering exact top-level M161 loop regions while
-preserving opaque source-owned prefix and suffix tokens.
+token streams by discovering every exact top-level M161 loop region in
+arbitrary source-owned body tokens while preserving opaque source-owned
+non-loop token spans.
 
 Scope:
 
 - Inspect current corpus examples where `loop<range>` appears inside larger
-  TSIL bodies, especially generic/vector fallback bodies with surrounding
-  `var<...>` and `emit_return(...)` directives.
-- Identify exact top-level M161 loop regions embedded in
+  TSIL bodies to ground delimiter and adjacency cases, not to derive
+  special-case body-sequence patterns.
+- Identify every exact top-level M161 loop region embedded in
   `ImplementationBody.tokens`, including optional adjacent
   `loop<unroll>(COUNT)` metadata.
 - Reuse the M161 loop-region lowerer for each discovered loop slice instead
   of adding a second loop parser or evaluator.
-- Preserve prefix, suffix, and non-loop body tokens as source-owned opaque
-  tokens.
-- Select and test a deterministic policy for multiple top-level exact loop
-  regions in one body.
+- Preserve all non-loop body tokens as source-owned opaque tokens.
+- Support multiple top-level exact loop regions in one body in source order.
 - Emit deterministic diagnostics for malformed embedded loop regions,
   propagated M161 bound/selector failures, ambiguous braces, nested or
   overlapping region ambiguity, and no exact loop region when explicitly
@@ -20705,6 +20704,105 @@ target-language `for` rendering; source repair; dependency scheduling; output
 writing; runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad
 registries, dispatchers, worklists, callback maps, hidden backfeeds, or
 fixpoint mechanisms.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted result:
+
+- Added source-ordered discovery for every exact top-level M161
+  `loop<range>(...) { ... }` region inside arbitrary selected body token
+  streams.
+- Reused the M161 whole-region lowerer for each discovered loop slice,
+  including optional immediately adjacent `loop<unroll>(...)` metadata.
+- Preserved all non-loop tokens as opaque source-owned spans and supported
+  multiple top-level loop regions in source order.
+- Guarded top-level discovery with raw brace depth over opaque non-loop tokens
+  so loop directives inside unrelated raw-brace scopes are not treated as
+  top-level loop regions.
+- Added deterministic no-region, unsupported selector, propagated loop-bound,
+  malformed embedded-region, and opacity/determinism coverage.
+- Added no loop execution or unrolling, loop-variable substitution,
+  declaration lowering, `emit_return(result)` lowering, assignment/array/call/
+  cast/intrinsic/backend-control parsing, backend rendering, source repair,
+  runtime `tsldata`, `frozen`, or `tslgenold` dependency, registry,
+  dispatcher, worklist, or fixpoint machinery.
+
+Review verdicts:
+
+- Architecture reviewer: `Accept` after focused re-review.
+- Boundary auditor: `Accept`.
+- Evidence auditor: `Accept`.
+- Test auditor: `Accept With Follow-Ups`; the nonblocking diagnostic
+  assertion hardening note was partly addressed before finalization.
+- Documentation auditor: `Accept` after focused re-review.
+- Validation auditor: `Accept With Follow-Up`; the full required validation
+  follow-up was addressed before finalization.
+
+Validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The compileall command
+returned exit 0 with no output. The full clean-restart pytest command returned
+exit 0 with `264 passed in 56.51s`. The first cache check listed
+validation-created `__pycache__` directories under `tslgen/src/tslgen` and
+`tslgen/tests`; they were removed, and the final cache check returned exit 0
+with no output.
+
+### Milestone 163: Exact Generation Variable Declaration Fact Boundary
+
+Status:
+
+Selected after M162 acceptance. Active next prompt:
+`docs/agent/runs/m163-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the next generation-keyword lowering fact for exact top-level
+`var<...>(...)` declaration directives in arbitrary source-owned body token
+streams, without rendering declarations or evaluating initializer
+expressions.
+
+Scope:
+
+- Inventory current `var<...>` selector and payload forms across all
+  `tsldata/**/*.tsl` files before implementation.
+- Discover every exact top-level `var<...>(...)` directive in arbitrary
+  `ImplementationBody.tokens`, guarded by opaque raw brace depth in the same
+  conservative spirit as M162.
+- Accept exact declaration selector shapes for the current corpus family,
+  including `var<init_register>(NAME)`, `var<infer>(NAME, VALUE)`,
+  `var<const_infer>(NAME, VALUE)`, and
+  `var<typed>(TYPE_TEXT, NAME, VALUE)`, with top-level comma splitting only.
+- Preserve initializer and explicit type payload text as source-owned opaque
+  values; do not evaluate them or recursively lower nested islands.
+- Preserve all non-var body tokens as source-owned opaque spans and support
+  multiple top-level declarations in source order.
+- Emit deterministic diagnostics for unsupported selectors, malformed arity,
+  invalid variable names, malformed top-level comma structure, and no exact
+  declaration when explicitly requested.
+
+Out of scope:
+
+Declaration rendering; type inference; symbol tables; initializer expression
+evaluation; recursive lowering of initializer/type payloads; `let<...>`
+lowering; loop execution; assignment, array-access, cast, memory, I/O,
+intrinsic, primitive-call, backend-control, or backend rendering; source
+repair; dependency scheduling; output writing; runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies; broad registries, dispatchers, worklists, callback
+maps, hidden backfeeds, or fixpoint mechanisms.
 
 Validation:
 

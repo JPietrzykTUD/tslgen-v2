@@ -1493,6 +1493,37 @@ loops, render backend code, repair source text, schedule dependencies, read
 dispatchers, worklists, callback maps, hidden backfeeds, or fixpoint
 machinery.
 
+### M162 Generation Loop Region Discovery In Body Token Streams
+
+Milestone 162 discovers exact M161 loop regions inside arbitrary
+source-owned implementation body token streams. It scans for every exact
+top-level `loop<range>(...) { ... }` region in source order, attaches an
+immediately adjacent preceding `loop<unroll>(...)` directive when present, and
+lowers each discovered loop slice through the M161 loop-region lowerer.
+
+All non-loop tokens are preserved as opaque source-owned spans. The accepted
+shape is the loop region itself, not any surrounding corpus pattern such as
+`var<...>` followed by `loop<range>` followed by `emit_return(...)`.
+Multiple top-level loop regions in one body are retained in source order.
+Loop-region bodies may contain raw braces or nested loop-looking tokens; those
+tokens remain part of the parent loop body rather than becoming separate M162
+discoveries.
+For M162, top-level discovery is guarded by raw brace depth over opaque
+non-loop tokens. A loop directive inside unrelated opaque raw braces, such as
+target-language control text, is not discovered as a top-level loop region.
+
+Malformed embedded loop regions, unsupported loop selectors, propagated M161
+bound diagnostics, ambiguous loop-region braces, and an explicit discovery
+request with no exact loop region produce deterministic diagnostics.
+
+M162 does not execute or unroll loops, substitute loop variables, evaluate
+declarations, lower `var<...>` or `emit_return(result)`, parse assignments,
+array access, casts, intrinsics, primitive calls, backend control, or broad
+TSIL statements, render target-language loops, repair source text, schedule
+dependencies, read `tsldata`, `frozen`, or `tslgenold` at runtime, or add
+registries, dispatchers, worklists, callback maps, hidden backfeeds, or
+fixpoint machinery.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

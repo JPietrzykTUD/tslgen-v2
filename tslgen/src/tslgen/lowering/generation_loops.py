@@ -12,9 +12,13 @@ from tslgen.domain.catalog import (
 )
 from tslgen.lowering.generation_values import lower_generation_value_query
 from tslgen.lowering.model import (
+    GenerationLoopDiscoveryLoweringResult,
     GenerationLoopRegionLoweringResult,
+    LoweredGenerationLoopDiscovery,
     LoweredGenerationLoopBody,
+    LoweredGenerationLoopOpaqueSegment,
     LoweredGenerationLoopRegion,
+    LoweredGenerationLoopRegionSegment,
     LoweredGenerationValue,
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
@@ -27,6 +31,18 @@ _VALUE_QUERY_PREFIX = "value<generation>("
 class _LoopBoundary:
     close_index: int
     next_index: int
+
+
+@dataclass(frozen=True, slots=True)
+class _LoopRegionSlice:
+    start_index: int
+    end_index: int
+
+
+@dataclass(frozen=True, slots=True)
+class _LoopRegionSliceSearch:
+    loop_slice: _LoopRegionSlice | None
+    diagnostic: Diagnostic | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,6 +205,102 @@ def lower_generation_loop_region(
     )
 
 
+def discover_generation_loop_regions(
+    context: SelectedImplementationLoweringContext,
+    body: ImplementationBody,
+    *,
+    catalog: Catalog | None = None,
+    environment: SelectedTypeEnvironment | None = None,
+) -> GenerationLoopDiscoveryLoweringResult:
+    tokens = body.tokens
+    segments: list[LoweredGenerationLoopOpaqueSegment | LoweredGenerationLoopRegionSegment] = []
+    pending_opaque_start = 0
+    index = 0
+    raw_brace_depth = 0
+
+    while index < len(tokens):
+        token = tokens[index]
+        if raw_brace_depth == 0 and _is_unsupported_loop_directive(token):
+            assert isinstance(token, LowerableDirective)
+            return GenerationLoopDiscoveryLoweringResult(
+                discovery=None,
+                diagnostics=(_unsupported_loop_selector_diagnostic(token),),
+            )
+
+        slice_start = _loop_slice_start(tokens, index) if raw_brace_depth == 0 else None
+        if slice_start is None:
+            raw_brace_depth = _updated_raw_brace_depth(raw_brace_depth, token)
+            index += 1
+            continue
+
+        slice_search = _find_embedded_loop_slice(tokens, start=slice_start)
+        if slice_search.diagnostic is not None:
+            return GenerationLoopDiscoveryLoweringResult(
+                discovery=None,
+                diagnostics=(slice_search.diagnostic,),
+            )
+        loop_slice = slice_search.loop_slice
+        if loop_slice is None:
+            index += 1
+            continue
+
+        loop_body = ImplementationBody(
+            tokens=tokens[loop_slice.start_index:loop_slice.end_index],
+            source=_token_source(tokens[loop_slice.start_index]),
+        )
+        loop_result = lower_generation_loop_region(
+            context,
+            loop_body,
+            catalog=catalog,
+            environment=environment,
+        )
+        if loop_result.region is None:
+            return GenerationLoopDiscoveryLoweringResult(
+                discovery=None,
+                diagnostics=loop_result.diagnostics,
+            )
+
+        opaque_tokens = tokens[pending_opaque_start:loop_slice.start_index]
+        if opaque_tokens:
+            segments.append(
+                LoweredGenerationLoopOpaqueSegment(
+                    tokens=opaque_tokens,
+                    source=_token_source(opaque_tokens[0]),
+                )
+            )
+        segments.append(
+            LoweredGenerationLoopRegionSegment(
+                region=loop_result.region,
+                source=loop_result.region.source,
+            )
+        )
+        pending_opaque_start = loop_slice.end_index
+        index = loop_slice.end_index
+
+    if not segments:
+        return GenerationLoopDiscoveryLoweringResult(
+            discovery=None,
+            diagnostics=(_no_loop_region_diagnostic(body.source),),
+        )
+
+    trailing_tokens = tokens[pending_opaque_start:]
+    if trailing_tokens:
+        segments.append(
+            LoweredGenerationLoopOpaqueSegment(
+                tokens=trailing_tokens,
+                source=_token_source(trailing_tokens[0]),
+            )
+        )
+
+    return GenerationLoopDiscoveryLoweringResult(
+        discovery=LoweredGenerationLoopDiscovery(
+            segments=tuple(segments),
+            source=body.source,
+        ),
+        diagnostics=(),
+    )
+
+
 def _parse_loop_range_payload(
     payload: str,
     source: SourceLocation,
@@ -300,6 +412,93 @@ def _is_loop_directive(token: BodyToken, selector: str) -> bool:
         and token.arguments[:1] == (selector,)
         and len(token.arguments) == 2
     )
+
+
+def _is_unsupported_loop_directive(token: BodyToken) -> bool:
+    return (
+        isinstance(token, LowerableDirective)
+        and token.name == "loop"
+        and len(token.arguments) >= 1
+        and token.arguments[0] not in {"range", "unroll"}
+    )
+
+
+def _updated_raw_brace_depth(depth: int, token: BodyToken) -> int:
+    if not isinstance(token, RawStringToken):
+        return depth
+    for char in token.text:
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth = max(0, depth - 1)
+    return depth
+
+
+def _loop_slice_start(
+    tokens: tuple[BodyToken, ...],
+    index: int,
+) -> int | None:
+    token = tokens[index]
+    if _is_loop_directive(token, "range"):
+        return index
+    if (
+        _is_loop_directive(token, "unroll")
+        and index + 1 < len(tokens)
+        and _is_loop_directive(tokens[index + 1], "range")
+    ):
+        return index
+    return None
+
+
+def _find_embedded_loop_slice(
+    tokens: tuple[BodyToken, ...],
+    *,
+    start: int,
+) -> _LoopRegionSliceSearch:
+    loop_index = start + 1 if _is_loop_directive(tokens[start], "unroll") else start
+    if loop_index >= len(tokens):
+        return _loop_slice_diagnostic(
+            _malformed_region_diagnostic(
+                _token_source(tokens[start]),
+                "expected loop<range>(...) region after loop<unroll>(...)",
+            )
+        )
+
+    loop = tokens[loop_index]
+    if not _is_loop_directive(loop, "range"):
+        return _LoopRegionSliceSearch(loop_slice=None, diagnostic=None)
+
+    open_index = loop_index + 1
+    if open_index >= len(tokens) or not _is_open_brace(tokens[open_index]):
+        return _loop_slice_diagnostic(
+            _malformed_region_diagnostic(
+                _token_source(tokens[open_index]) if open_index < len(tokens) else loop.source,
+                "expected raw opening brace after loop<range>(...)",
+            )
+        )
+
+    close_search = _find_loop_close(tokens, start=open_index + 1)
+    if close_search.diagnostic is not None:
+        return _loop_slice_diagnostic(close_search.diagnostic)
+    if close_search.boundary is None:
+        return _loop_slice_diagnostic(
+            _malformed_region_diagnostic(
+                loop.source,
+                "could not find matching close brace for generation loop",
+            )
+        )
+
+    return _LoopRegionSliceSearch(
+        loop_slice=_LoopRegionSlice(
+            start_index=start,
+            end_index=close_search.boundary.next_index,
+        ),
+        diagnostic=None,
+    )
+
+
+def _loop_slice_diagnostic(diagnostic: Diagnostic) -> _LoopRegionSliceSearch:
+    return _LoopRegionSliceSearch(loop_slice=None, diagnostic=diagnostic)
 
 
 def _is_identifier(text: str) -> bool:
@@ -472,6 +671,18 @@ def _noninteger_loop_bound_diagnostic(
         message=(
             "generation loop bound must lower to an integer generation value; "
             f"got {expression!r}"
+        ),
+        location=source,
+    )
+
+
+def _no_loop_region_diagnostic(source: SourceLocation) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-LOWER-NO-GENERATION-LOOP-REGION",
+        message=(
+            "generation loop discovery found no exact top-level "
+            "loop<range>(...) region"
         ),
         location=source,
     )

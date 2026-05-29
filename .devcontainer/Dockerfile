@@ -45,7 +45,7 @@ RUN set -eux; \
 RUN /opt/venv/bin/pip install --no-cache-dir \
     prompt_toolkit \
     lark jinja2 mkdocs-material \
-    numpy xxhash cyclopts networkx psutil 
+    numpy xxhash cyclopts networkx psutil \
     pytest mypy ruff black build \
     "mkdocstrings[python]" \
     mkdocs-git-revision-date-localized-plugin
