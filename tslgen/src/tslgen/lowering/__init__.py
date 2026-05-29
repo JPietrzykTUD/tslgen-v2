@@ -9,6 +9,7 @@ from tslgen.lowering.model import (
     CurrentVector,
     ExtensionOperand,
     GenerationControlRegionLoweringResult,
+    GenerationLoopRegionLoweringResult,
     GenerationValueQueryLoweringResult,
     LoweredBinaryOperationExpression,
     LoweredBackendTypeReference,
@@ -22,6 +23,8 @@ from tslgen.lowering.model import (
     LoweredFunctionSignature,
     LoweredGenerationControlBranch,
     LoweredGenerationControlRegion,
+    LoweredGenerationLoopBody,
+    LoweredGenerationLoopRegion,
     LoweredGenerationValue,
     LoweredGenerationValueKind,
     LoweredGenerationValuePayload,
@@ -65,6 +68,7 @@ from tslgen.lowering.model import (
     build_selected_implementation_lowering_context,
 )
 from tslgen.lowering.generation_control import lower_generation_control_region
+from tslgen.lowering.generation_loops import lower_generation_loop_region
 from tslgen.lowering.type_queries import (
     build_selected_type_environment,
     lower_backend_type_query,
@@ -108,6 +112,7 @@ __all__ = [
     "CurrentVector",
     "ExtensionOperand",
     "GenerationControlRegionLoweringResult",
+    "GenerationLoopRegionLoweringResult",
     "GenerationValueQueryLoweringResult",
     "INPUT_SCALAR_RESULT_TYPE",
     "LoweringSemanticOrigin",
@@ -123,6 +128,8 @@ __all__ = [
     "LoweredFunctionSignature",
     "LoweredGenerationControlBranch",
     "LoweredGenerationControlRegion",
+    "LoweredGenerationLoopBody",
+    "LoweredGenerationLoopRegion",
     "LoweredGenerationValue",
     "LoweredGenerationValueKind",
     "LoweredGenerationValuePayload",
@@ -172,6 +179,7 @@ __all__ = [
     "lower_backend_type_query",
     "lower_generation_type_query",
     "lower_generation_control_region",
+    "lower_generation_loop_region",
     "lower_generation_value_query",
     "lower_type_expression",
     "SUPPORTED_BINARY_OPERATION_DESCRIPTORS",

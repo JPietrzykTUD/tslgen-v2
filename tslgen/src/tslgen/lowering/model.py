@@ -345,6 +345,29 @@ class GenerationControlRegionLoweringResult:
     diagnostics: tuple[Diagnostic, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationLoopBody:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationLoopRegion:
+    index_name: str
+    start: LoweredGenerationValue
+    end: LoweredGenerationValue
+    step: LoweredGenerationValue
+    body: LoweredGenerationLoopBody
+    source: SourceLocation
+    unroll_count: LoweredGenerationValue | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationLoopRegionLoweringResult:
+    region: LoweredGenerationLoopRegion | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
 def build_selected_implementation_lowering_context(
     selected: SelectedImplementation,
 ) -> SelectedImplementationLoweringContext:

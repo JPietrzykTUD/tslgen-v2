@@ -876,6 +876,54 @@ chains, the existing single `unselected_branch` field aggregates the
 unselected arm token slices as provenance; it is not a recursive branch-list
 IR or renderer contract.
 
+## Generation Loop Region Lowering Model
+
+Milestone 161 adds a narrow semantic fact for exact generation loop envelopes.
+It records loop metadata and body-token provenance only; it is not a loop
+executor, statement model, renderer contract, or source-repair mechanism.
+
+```python
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationLoopBody:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class LoweredGenerationLoopRegion:
+    index_name: str
+    start: LoweredGenerationValue
+    end: LoweredGenerationValue
+    step: LoweredGenerationValue
+    body: LoweredGenerationLoopBody
+    source: SourceLocation
+    unroll_count: LoweredGenerationValue | None = None
+
+@dataclass(frozen=True, slots=True)
+class GenerationLoopRegionLoweringResult:
+    region: LoweredGenerationLoopRegion | None
+    diagnostics: tuple[Diagnostic, ...]
+```
+
+Invariants:
+
+- The accepted region shape is exactly an optional
+  `loop<unroll>(COUNT)` directive followed immediately by a
+  `loop<range>(INDEX, START, END, STEP)` directive, raw `{` opener,
+  source-owned body token slice, and matching raw `}` close.
+- `INDEX` is an identifier. M161 records the name but does not substitute it
+  into body text.
+- `START`, `END`, `STEP`, and optional `COUNT` lower only as base-10 integer
+  literals in this loop-bound context or as accepted integer
+  `value<generation>(...)` queries. Integer literals do not become a general
+  standalone generation-value query family.
+- Unsupported symbols such as variable-dependent bounds are diagnostics.
+  Nested loop bodies may be preserved as tokens, but nested loop execution or
+  dependence on an outer index is not M161 behavior.
+- Body tokens remain source-owned and opaque. Raw helpers, primitive-call
+  islands, generation-control directives, nested loops, assignments, array
+  indexing, casts, intrinsics, and raw target-language text are not parsed or
+  rendered by this model.
+
 Milestone 144 adds selector-payload values:
 
 ```python

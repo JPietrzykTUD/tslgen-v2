@@ -55,6 +55,8 @@ from tslgen.lowering import (
     LoweredFunctionSignature,
     LoweredGenerationControlBranch,
     LoweredGenerationControlRegion,
+    LoweredGenerationLoopBody,
+    LoweredGenerationLoopRegion,
     LoweredGenerationValue,
     LoweredGenericRegisterType,
     LoweredIntrinsicVectorImaskType,
@@ -5814,6 +5816,338 @@ def test_m160_rejects_unclassified_inline_else_if_text() -> None:
     assert result.diagnostics[0].location == _location(6, 7)
 
 
+def test_m161_lowers_exact_loop_range_region_with_integer_literals() -> None:
+    body_tokens = (
+        RawStringToken(
+            text="details::arith_mul(left[i], right[i]);",
+            source=_location(5, 9),
+        ),
+    )
+    body = _generation_loop_body(
+        "i, 0, 4, 1",
+        body_tokens=body_tokens,
+    )
+
+    result = Lowerer().lower_generation_loop_region(
+        _selected_implementation(body=body),
+    )
+
+    assert result.diagnostics == ()
+    assert result.region == LoweredGenerationLoopRegion(
+        index_name="i",
+        start=LoweredGenerationValue(
+            kind="generation.integer_literal",
+            value=0,
+            source_text="0",
+            source=_location(4, 7),
+        ),
+        end=LoweredGenerationValue(
+            kind="generation.integer_literal",
+            value=4,
+            source_text="4",
+            source=_location(4, 7),
+        ),
+        step=LoweredGenerationValue(
+            kind="generation.integer_literal",
+            value=1,
+            source_text="1",
+            source=_location(4, 7),
+        ),
+        body=LoweredGenerationLoopBody(
+            tokens=body_tokens,
+            source=_location(5, 9),
+        ),
+        source=_location(4, 7),
+        unroll_count=None,
+    )
+
+
+def test_m161_lowers_unroll_metadata_and_generation_value_bounds() -> None:
+    catalog = Catalog(
+        primitives=(),
+        extensions=ExtensionCatalog(
+            (_extension_fact("avx2", vector_bits=256),),
+        ),
+    )
+    body = _generation_loop_body(
+        (
+            "i, 0, value<generation>(vector::length), "
+            "value<generation>(arith<generation>::sub(2, 1))"
+        ),
+        unroll_count="value<generation>(vector::length)",
+        body_tokens=(RawStringToken(text="result[i] = data[i];", source=_location(6, 9)),),
+    )
+
+    result = Lowerer().lower_generation_loop_region(
+        _selected_implementation(body=body, extension="avx2", type_tag="si32"),
+        catalog=catalog,
+    )
+
+    assert result.diagnostics == ()
+    assert result.region is not None
+    assert result.region.unroll_count == LoweredGenerationValue(
+        kind="vector.length",
+        value=8,
+        source_text="value<generation>(vector::length)",
+        source=_location(4, 7),
+    )
+    assert result.region.end == LoweredGenerationValue(
+        kind="vector.length",
+        value=8,
+        source_text="value<generation>(vector::length)",
+        source=_location(5, 7),
+    )
+    assert result.region.step == LoweredGenerationValue(
+        kind="generation.arithmetic.sub",
+        value=1,
+        source_text="value<generation>(arith<generation>::sub(2, 1))",
+        source=_location(5, 7),
+    )
+
+
+def test_m161_lowers_catalog_classified_multiline_loop_region(
+    tmp_path: Path,
+) -> None:
+    source = _source_document(
+        tmp_path,
+        "tiny_add_loop_region.tsl",
+        "\n".join(
+            (
+                "prim<v:=(v,v)> add(left, right):",
+                "  implementation scalar si32:",
+                '    tsil """',
+                "      loop<range>(i, 0, 4, 1) {",
+                "        result[i] = left[i];",
+                "      }",
+                '    """',
+            )
+        ),
+    )
+
+    parse_result = TslParser().parse((source,))
+    catalog_result = CatalogBuilder().build(parse_result.documents)
+
+    assert parse_result.diagnostics == ()
+    assert catalog_result.diagnostics == ()
+    assert catalog_result.catalog is not None
+    body = catalog_result.catalog.primitives[0].implementations[0].body
+
+    result = Lowerer().lower_generation_loop_region(
+        _selected_implementation(body=body),
+    )
+
+    assert result.diagnostics == ()
+    assert result.region is not None
+    assert result.region.index_name == "i"
+    assert result.region.body.tokens == (
+        RawStringToken(
+            text="        result[i] = left[i];",
+            source=SourceLocation(source.path, 5, 1),
+        ),
+    )
+
+
+def test_m161_reports_malformed_loop_payloads() -> None:
+    malformed_arity = Lowerer().lower_generation_loop_region(
+        _selected_implementation(body=_generation_loop_body("i, 0, 4")),
+    )
+    invalid_index = Lowerer().lower_generation_loop_region(
+        _selected_implementation(body=_generation_loop_body("data[i], 0, 4, 1")),
+    )
+
+    assert [diagnostic.code for diagnostic in malformed_arity.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-LOOP-PAYLOAD",
+    ]
+    assert [diagnostic.code for diagnostic in invalid_index.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-LOOP-PAYLOAD",
+    ]
+    assert "exactly four arguments" in malformed_arity.diagnostics[0].message
+    assert "identifier" in invalid_index.diagnostics[0].message
+
+
+def test_m161_reports_unsupported_loop_selector_and_variable_bounds() -> None:
+    unsupported_selector = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="loop",
+                arguments=("while", "i < 4"),
+                source=_location(4, 7),
+            ),
+            RawStringToken(text=" {", source=_location(4, 24)),
+            RawStringToken(text="body();", source=_location(5, 9)),
+            RawStringToken(text="}", source=_location(6, 7)),
+        ),
+        source=_location(4, 7),
+    )
+    variable_bound = _generation_loop_body("cur, 0, idx, 1")
+
+    selector_result = Lowerer().lower_generation_loop_region(
+        _selected_implementation(body=unsupported_selector),
+    )
+    bound_result = Lowerer().lower_generation_loop_region(
+        _selected_implementation(body=variable_bound),
+    )
+
+    assert [diagnostic.code for diagnostic in selector_result.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-GENERATION-LOOP-SELECTOR",
+    ]
+    assert [diagnostic.code for diagnostic in bound_result.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-GENERATION-LOOP-BOUND",
+    ]
+    assert "idx" in bound_result.diagnostics[0].message
+
+
+def test_m161_reports_noninteger_generation_value_bound() -> None:
+    body = _generation_loop_body(
+        "i, 0, value<generation>(primitive::attribute(aligned)), 1",
+    )
+
+    result = Lowerer().lower_generation_loop_region(
+        _selected_implementation(
+            body=body,
+            attributes=(
+                PrimitiveAttribute(
+                    key="aligned",
+                    value="true",
+                    declared_value="*",
+                    source=_location(1, 16),
+                ),
+            ),
+        ),
+    )
+
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-LOWER-NONINTEGER-GENERATION-LOOP-BOUND",
+    ]
+    assert "primitive::attribute(aligned)" in result.diagnostics[0].message
+
+
+def test_m161_reports_deferred_generic_length_loop_bound() -> None:
+    body = _generation_loop_body(
+        "i, 0, value<generation>(generic::length(OutVec)), 1",
+    )
+
+    result = Lowerer().lower_generation_loop_region(
+        _selected_implementation(body=body),
+    )
+
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-QUERY",
+    ]
+    assert "generic::length" in result.diagnostics[0].message
+
+
+def test_m161_reports_missing_and_ambiguous_loop_braces() -> None:
+    missing_open = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="loop",
+                arguments=("range", "i, 0, 4, 1"),
+                source=_location(4, 7),
+            ),
+            RawStringToken(text="body();", source=_location(5, 9)),
+            RawStringToken(text="}", source=_location(6, 7)),
+        ),
+        source=_location(4, 7),
+    )
+    ambiguous_close = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="loop",
+                arguments=("range", "i, 0, 4, 1"),
+                source=_location(4, 7),
+            ),
+            RawStringToken(text=" {", source=_location(4, 31)),
+            RawStringToken(text="body(); }", source=_location(5, 9)),
+        ),
+        source=_location(4, 7),
+    )
+
+    missing_result = Lowerer().lower_generation_loop_region(
+        _selected_implementation(body=missing_open),
+    )
+    ambiguous_result = Lowerer().lower_generation_loop_region(
+        _selected_implementation(body=ambiguous_close),
+    )
+
+    assert [diagnostic.code for diagnostic in missing_result.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-LOOP-REGION",
+    ]
+    assert [diagnostic.location for diagnostic in missing_result.diagnostics] == [
+        _location(5, 9),
+    ]
+    assert [diagnostic.code for diagnostic in ambiguous_result.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-LOOP-REGION",
+    ]
+    assert [diagnostic.location for diagnostic in ambiguous_result.diagnostics] == [
+        _location(5, 9),
+    ]
+
+
+def test_m161_reports_extra_tokens_after_loop_region() -> None:
+    body = ImplementationBody(
+        tokens=(
+            LowerableDirective(
+                name="loop",
+                arguments=("range", "i, 0, 4, 1"),
+                source=_location(4, 7),
+            ),
+            RawStringToken(text=" {", source=_location(4, 31)),
+            RawStringToken(text="body();", source=_location(5, 9)),
+            RawStringToken(text="}", source=_location(6, 7)),
+            RawStringToken(text="trailing();", source=_location(7, 7)),
+        ),
+        source=_location(4, 7),
+    )
+
+    result = Lowerer().lower_generation_loop_region(
+        _selected_implementation(body=body),
+    )
+
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-LOWER-MALFORMED-GENERATION-LOOP-REGION",
+    ]
+    assert [diagnostic.location for diagnostic in result.diagnostics] == [
+        _location(7, 7),
+    ]
+    assert "unexpected tokens" in result.diagnostics[0].message
+
+
+def test_m161_preserves_loop_body_tokens_opaque_and_deterministic() -> None:
+    body_tokens = (
+        RawStringToken(
+            text="details::arith_mul(data[i], factor);",
+            source=_location(5, 9),
+        ),
+        LowerableDirective(
+            name="call",
+            arguments=("primitive", "sub", "left[i], right[i]"),
+            source=_location(6, 9),
+            primitive_call=_primitive_call(
+                VALID_TINY_ADD.resolve(),
+                6,
+                9,
+                "sub",
+                "left[i], right[i]",
+                target_name="sub",
+            ),
+        ),
+    )
+    body = _generation_loop_body("i, 0, 4, 1", body_tokens=body_tokens)
+    lowerer = Lowerer()
+
+    first = lowerer.lower_generation_loop_region(_selected_implementation(body=body))
+    second = lowerer.lower_generation_loop_region(_selected_implementation(body=body))
+
+    assert first.diagnostics == ()
+    assert first.region is not None
+    assert first.region.body == LoweredGenerationLoopBody(
+        tokens=body_tokens,
+        source=_location(5, 9),
+    )
+    assert first == second
+
+
 def test_m142_does_not_resolve_primitive_call_selector_targets(
     tmp_path: Path,
 ) -> None:
@@ -9456,6 +9790,50 @@ def _generation_branch_chain_body(
         else:
             tokens.append(RawStringToken(text="}", source=_location(close_line, 7)))
 
+    return ImplementationBody(tokens=tuple(tokens), source=_location(3, 5))
+
+
+def _generation_loop_body(
+    payload: str,
+    *,
+    body_tokens: tuple[
+        RawStringToken | LowerableDirective | LowerableOperationFragment,
+        ...,
+    ]
+    | None = None,
+    unroll_count: str | None = None,
+) -> ImplementationBody:
+    if body_tokens is None:
+        body_tokens = (RawStringToken(text="body();", source=_location(5, 9)),)
+
+    loop_text = f"loop<range>({payload})"
+    tokens: list[RawStringToken | LowerableDirective | LowerableOperationFragment] = []
+    loop_line = 4
+    if unroll_count is not None:
+        tokens.append(
+            LowerableDirective(
+                name="loop",
+                arguments=("unroll", unroll_count),
+                source=_location(4, 7),
+            )
+        )
+        loop_line = 5
+
+    tokens.extend(
+        (
+            LowerableDirective(
+                name="loop",
+                arguments=("range", payload),
+                source=_location(loop_line, 7),
+            ),
+            RawStringToken(
+                text=" {",
+                source=_location(loop_line, 7 + len(loop_text)),
+            ),
+            *body_tokens,
+            RawStringToken(text="}", source=_location(loop_line + 2, 7)),
+        )
+    )
     return ImplementationBody(tokens=tuple(tokens), source=_location(3, 5))
 
 

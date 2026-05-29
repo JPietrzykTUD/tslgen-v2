@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 160 is accepted.
+Milestone 161 is accepted.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -2737,70 +2737,68 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 161.
+Execute Milestone 162.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m161-execution-review-loop-prompt.md
+docs/agent/runs/m162-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 161: Exact Generation Loop Region Lowering Boundary
+Milestone 162: Generation Loop Region Discovery In Body Token Streams
 ```
 
 Latest review verdict:
 
 ```text
-M160 execution-review returned Accept With Follow-Ups after one write-capable
-executor, one focused revision, focused re-review, and read-only architecture,
-boundary, evidence, test, documentation, and validation audits. M160 added
-exact generation branch-chain region selection over source-owned body tokens,
-including classified inline `else if<generation>` corpus forms and an optional
-final `else<generation>` fallback arm.
+M161 execution-review returned Accept With Follow-Ups after one write-capable
+executor, read-only architecture, boundary, evidence, test, documentation, and
+validation audits, and focused re-review for the initial untracked-file/cache
+findings. M161 added an exact generation loop-region lowering boundary for
+selected bodies shaped wholly as `loop<range>(INDEX, START, END, STEP) {
+BODY_TOKENS }`, with optional immediately preceding `loop<unroll>(COUNT)`
+metadata.
 
-M160 evaluates branch conditions in source order through the already accepted
-M155/M158/M159 condition boundary. It selects the first true conditional
-branch, or the final generation fallback when no condition matches, and hands
-only the selected branch token slice to the existing M157 body-lowering path.
-Unselected branch bodies remain opaque and silent, including raw helper text
-and unsupported primitive-call islands.
+M161 lowers loop bounds only when each is a base-10 integer literal in the
+loop-bound context or an accepted integer generation value through the
+existing M155/M159 path. It records loop variable name, accepted bounds,
+optional unroll count, source-owned body tokens, and source locations as a
+typed loop-region fact. The loop body remains opaque source-owned tokens.
 
-M160 did not add plain target-language `else`, recursive or nested generation
-control, raw expression/operator parsing, right-hand value queries,
-loop/declaration/backend-control lowering, branch-body rendering, backend
-rendering, source repair, runtime `tsldata`, `frozen`, or `tslgenold`
-dependencies, or broad registry/dispatcher/worklist machinery.
+M161 did not execute or unroll loops, substitute loop variables, parse
+declarations, assignments, array access, calls, casts, intrinsics, nested loop
+semantics, or backend control, render target-language loops, repair source
+text, read `tsldata`, `frozen`, or `tslgenold` at runtime, or introduce broad
+registry/dispatcher/worklist machinery.
 
-M160 review verdicts were: architecture `Accept With Follow-Ups`; boundary
-`Accept With Follow-Ups`; evidence `Accept With Follow-Ups` after focused
-revision; test `Accept` after focused revision; documentation
-`Accept With Follow-Ups`; validation `Accept`. The blocking evidence/test
-findings were addressed before finalization by supporting the
-catalog-classified inline branch-chain corpus shape, adding
-first-true-with-later-true coverage, and asserting raw helper preservation in
-unselected branch tokens. Nonblocking documentation and fallback-condition
-provenance follow-ups were documented before finalization.
+M161 review verdicts were: architecture `Accept With Follow-Ups`; boundary
+`Accept` after focused re-review; evidence `Accept With Follow-Ups`; test
+`Accept With Follow-Ups`; documentation `Accept With Follow-Ups`; validation
+`Accept` after focused re-review. Nonblocking review notes were addressed
+before finalization by intent-adding the new loop module, adding explicit
+generic-length deferred-bound coverage, adding non-integer and trailing-token
+diagnostics, fixing the current-state stop-condition wording, and rerunning
+the required validation.
 ```
 
 Next expected action:
 
 ```text
-Run the active M161 execution-review-loop prompt. M161 should add the next
-generation-control keyword boundary for exact `loop<range>(...)` regions,
-with optional immediately preceding `loop<unroll>(...)` metadata, over
-source-owned body tokens.
+Run the active M162 execution-review-loop prompt. M162 should make the M161
+exact loop-region fact usable inside larger selected body token streams by
+discovering top-level exact loop regions and preserving opaque source-owned
+prefix/suffix tokens.
 
-M161 should lower the loop envelope into a typed generation-loop region fact
-recording loop variable name, accepted bounds, optional unroll count, body
-tokens, and source locations. It must not execute or unroll loops, substitute
-loop variables into raw body text, parse assignments/array access/calls/casts,
-render target-language loops, lower declarations or backend control, repair
-source text, read `tsldata`, `frozen`, or `tslgenold` at runtime, or introduce
-broad registry/dispatcher/worklist machinery.
+M162 must reuse the accepted M161 loop-region lowerer for the discovered slice.
+It must not execute or unroll loops, substitute loop variables into raw body
+text, parse declarations, assignments, array access, calls, casts, intrinsics,
+or `emit_return(result)`, render target-language loops, repair source text,
+read `tsldata`, `frozen`, or `tslgenold` at runtime, or introduce broad
+registry/dispatcher/worklist machinery.
 ```
 
 Previous review verdict:
@@ -6671,13 +6669,31 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M160
+No stop condition is active. The workflow is ready to run the active M162
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M161 execution, run the validation command listed in
-`docs/agent/runs/m161-execution-review-loop-prompt.md`.
+For active M162 execution, run the validation command listed in
+`docs/agent/runs/m162-execution-review-loop-prompt.md`.
+
+For M161 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The compileall command
+returned exit 0 with no output. The full clean-restart pytest command returned
+exit 0 with `256 passed in 47.67s`. The first cache check listed
+validation-created `__pycache__` directories under `tslgen/src/tslgen` and
+`tslgen/tests`; they were removed, and the final
+`find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+output. A focused pre-review command also returned `21 passed, 235 deselected
+in 11.01s`.
 
 For M160 execution and review, validation completed with:
 

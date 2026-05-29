@@ -41,6 +41,7 @@ from tslgen.lowering.model import (
     SelectedTypeEnvironment,
     BackendTypeQueryLoweringResult,
     GenerationControlRegionLoweringResult,
+    GenerationLoopRegionLoweringResult,
     GenerationValueQueryLoweringResult,
     PrimitiveCallClosureLoweringPackage,
     PrimitiveCallExpressionLoweringResult,
@@ -48,6 +49,7 @@ from tslgen.lowering.model import (
     build_selected_implementation_lowering_context,
 )
 from tslgen.lowering.generation_control import lower_generation_control_region
+from tslgen.lowering.generation_loops import lower_generation_loop_region
 from tslgen.lowering.generation_values import lower_generation_value_query
 from tslgen.lowering.operation_type_compatibility import (
     binary_operation_supports_scalar_type,
@@ -192,6 +194,21 @@ class Lowerer:
     ) -> GenerationControlRegionLoweringResult:
         context = self.context_for(selected)
         return lower_generation_control_region(
+            context,
+            context.implementation.body,
+            catalog=catalog,
+            environment=environment,
+        )
+
+    def lower_generation_loop_region(
+        self,
+        selected: SelectedImplementation,
+        *,
+        catalog: Catalog | None = None,
+        environment: SelectedTypeEnvironment | None = None,
+    ) -> GenerationLoopRegionLoweringResult:
+        context = self.context_for(selected)
+        return lower_generation_loop_region(
             context,
             context.implementation.body,
             catalog=catalog,

@@ -20569,8 +20569,8 @@ output.
 
 Status:
 
-Selected after M160 acceptance. Active next prompt:
-`docs/agent/runs/m161-execution-review-loop-prompt.md`.
+Accepted. Active next prompt after M161:
+`docs/agent/runs/m162-execution-review-loop-prompt.md`.
 
 Goal:
 
@@ -20603,6 +20603,108 @@ or backend rendering; target-language `for` rendering; source repair;
 dependency scheduling; runtime `tsldata`, `frozen`, or `tslgenold`
 dependencies; broad registries, dispatchers, worklists, callback maps, hidden
 backfeeds, or fixpoint mechanisms.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted result:
+
+- Added exact generation-loop region lowering for selected bodies shaped
+  wholly as `loop<range>(INDEX, START, END, STEP) { BODY_TOKENS }`, with
+  optional immediately preceding `loop<unroll>(COUNT)` metadata.
+- Lowered range bounds and unroll count only when they are base-10 integer
+  literals in the loop-bound context or accepted integer generation values
+  through the existing M155/M159 generation-value path.
+- Preserved loop body contents as source-owned opaque body tokens, including
+  raw helpers, primitive-call islands, assignments, array indexing, nested
+  loops, and generation-control directives.
+- Added deterministic diagnostics for malformed range payloads, invalid index
+  names, unsupported selectors, unsupported variable-dependent bounds,
+  non-integer bounds, deferred `generic::length(...)` bounds, missing or
+  ambiguous braces, and extra tokens around the exact whole-body region.
+- Added no loop execution or unrolling, loop-variable substitution,
+  declaration lowering, assignment/array/call/cast/intrinsic parsing, backend
+  control lowering, target-language loop rendering, source repair, runtime
+  `tsldata`, `frozen`, or `tslgenold` dependency, registry, dispatcher,
+  worklist, or fixpoint machinery.
+
+Review verdicts:
+
+- Architecture reviewer: `Accept With Follow-Ups`; the untracked-file note
+  was addressed before finalization.
+- Boundary auditor: `Accept` after focused re-review.
+- Evidence auditor: `Accept With Follow-Ups`; the generic-length deferred
+  bound coverage follow-up was addressed before finalization.
+- Test auditor: `Accept With Follow-Ups`; non-integer-bound and trailing-token
+  coverage follow-ups were addressed before finalization.
+- Documentation auditor: `Accept With Follow-Ups`; the current-state
+  stop-condition wording was corrected before finalization.
+- Validation auditor: `Accept` after focused re-review.
+
+Validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. The compileall command
+returned exit 0 with no output. The full clean-restart pytest command returned
+exit 0 with `256 passed in 47.67s`. The first cache check listed
+validation-created `__pycache__` directories under `tslgen/src/tslgen` and
+`tslgen/tests`; they were removed, and the final cache check returned exit 0
+with no output.
+
+### Milestone 162: Generation Loop Region Discovery In Body Token Streams
+
+Status:
+
+Selected after M161 acceptance. Active next prompt:
+`docs/agent/runs/m162-execution-review-loop-prompt.md`.
+
+Goal:
+
+Make the accepted M161 loop-region lowering usable inside larger selected body
+token streams by discovering exact top-level M161 loop regions while
+preserving opaque source-owned prefix and suffix tokens.
+
+Scope:
+
+- Inspect current corpus examples where `loop<range>` appears inside larger
+  TSIL bodies, especially generic/vector fallback bodies with surrounding
+  `var<...>` and `emit_return(...)` directives.
+- Identify exact top-level M161 loop regions embedded in
+  `ImplementationBody.tokens`, including optional adjacent
+  `loop<unroll>(COUNT)` metadata.
+- Reuse the M161 loop-region lowerer for each discovered loop slice instead
+  of adding a second loop parser or evaluator.
+- Preserve prefix, suffix, and non-loop body tokens as source-owned opaque
+  tokens.
+- Select and test a deterministic policy for multiple top-level exact loop
+  regions in one body.
+- Emit deterministic diagnostics for malformed embedded loop regions,
+  propagated M161 bound/selector failures, ambiguous braces, nested or
+  overlapping region ambiguity, and no exact loop region when explicitly
+  requested.
+
+Out of scope:
+
+Loop execution or unrolling; loop-variable substitution; declaration
+semantics; non-type `let<...>` lowering; `var<...>` lowering; `emit_return`
+name/reference lowering; assignment, array-access, cast, memory, I/O,
+intrinsic, primitive-call, backend-control, or backend rendering;
+target-language `for` rendering; source repair; dependency scheduling; output
+writing; runtime `tsldata`, `frozen`, or `tslgenold` dependencies; broad
+registries, dispatchers, worklists, callback maps, hidden backfeeds, or
+fixpoint mechanisms.
 
 Validation:
 

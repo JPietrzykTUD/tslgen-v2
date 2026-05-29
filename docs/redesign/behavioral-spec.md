@@ -1447,6 +1447,52 @@ lowering, branch-body rendering, backend rendering, source repair, dependency
 scheduling, runtime `tsldata`, `frozen`, or `tslgenold` dependencies,
 registries, dispatchers, worklists, or fixpoint machinery.
 
+### M161 Exact Generation Loop Region Lowering Boundary
+
+Milestone 161 adds the first generation-loop lowering fact for exact
+source-owned body-token regions shaped as:
+
+```text
+loop<range>(INDEX, START, END, STEP) {
+  BODY_TOKENS
+}
+```
+
+It also accepts one immediately preceding annotation:
+
+```text
+loop<unroll>(COUNT)
+loop<range>(INDEX, START, END, STEP) {
+  BODY_TOKENS
+}
+```
+
+The `loop<range>` payload must have exactly four comma-separated top-level
+arguments. `INDEX` must be an identifier. `START`, `END`, `STEP`, and optional
+`COUNT` must each be either a base-10 integer literal accepted only in this
+loop-bound context, or an accepted integer `value<generation>(...)` query
+through the existing M155/M159 value boundary. Non-integer generation values
+and unsupported symbols such as outer loop variables are diagnostics.
+
+The result records the loop variable name, lowered integer bounds, optional
+unroll count, source-owned body token slice, and source locations. Body tokens
+remain opaque: raw helper calls, primitive-call islands, generation-control
+directives, nested loops, assignments, array indexing, casts, intrinsics, and
+raw target-language text are preserved as body tokens and are not interpreted
+by M161.
+
+Malformed loop payloads, unsupported selectors, unsupported or malformed bound
+expressions, missing or ambiguous braces, and extra tokens around the exact
+loop region produce deterministic diagnostics.
+
+M161 does not execute or unroll loops, substitute loop variables into raw
+source text, parse nested loop semantics, parse assignments or array accesses,
+lower declarations, lower backend-control directives, render target-language
+loops, render backend code, repair source text, schedule dependencies, read
+`tsldata`, `frozen`, or `tslgenold` at runtime, or add registries,
+dispatchers, worklists, callback maps, hidden backfeeds, or fixpoint
+machinery.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:
