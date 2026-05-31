@@ -23770,7 +23770,7 @@ Validation result:
 
 Status:
 
-Selected. Active prompt:
+Accepted. Planning prompt:
 `docs/agent/runs/post-lowering-backend-output-transition-planning-prompt.md`.
 
 Goal:
@@ -23785,4 +23785,165 @@ Validation:
 
 ```bash
 git diff --check
+```
+
+Planning result:
+
+Accepted. The first backend/output milestone after lowering completion is:
+
+```text
+Milestone 188: Supplementary Asset And Template Boundary For C++/Rust Project Skeletons
+```
+
+The planning pass selected the supplementary asset/template boundary before
+backend type/value/intrinsic/source-operation translation. This is the
+highest-value first slice because it makes the generated-project output
+boundary concrete while preserving the post-M187 lowering contract: backend
+semantics remain typed Python rule/evaluator work before rendering, and
+templates are allowed only to format typed render contexts.
+
+The data-driven backend metadata catalog from `tsldata/detail/lang/**` remains
+a high-priority follow-up candidate. It was not selected as M188 because it
+starts the semantic translation-map boundary, while the immediate product
+need is to establish where build scaffolding, helper source files, and render
+templates live without smuggling semantics into template conditionals.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+
+### Milestone 188: Supplementary Asset And Template Boundary For C++/Rust Project Skeletons
+
+Status:
+
+Accepted. Execution prompt:
+`docs/agent/runs/m188-execution-review-loop-prompt.md`.
+
+Goal:
+
+Introduce the accepted `supplementary/` layout and the first typed static
+asset/template rendering boundary for deterministic C++ and Rust project
+skeleton artifacts. The slice should prove that supplementary static files
+and templates can be copied/rendered into an in-memory `ArtifactSet` without
+backend semantic decisions moving into template files.
+
+Scope:
+
+- Create the accepted supplementary layout:
+  - `supplementary/buildsystem/cpp/static/`
+  - `supplementary/buildsystem/cpp/templates/`
+  - `supplementary/buildsystem/rust/static/`
+  - `supplementary/buildsystem/rust/templates/`
+  - `supplementary/helpers/cpp/`
+  - `supplementary/helpers/rust/`
+  - `supplementary/templates/cpp/`
+  - `supplementary/templates/rust/`
+- Add a small typed asset/render boundary for static supplementary files and
+  template supplementary files.
+- Render or copy one deterministic C++ project-skeleton artifact set and one
+  deterministic Rust project-skeleton artifact set from typed render context
+  values such as backend id, package/project name, artifact path, and helper
+  file list.
+- Keep template logic presentational only: loops, optional sections,
+  indentation, and joining accepted typed lists.
+- Preserve existing tiny scalar C++/Rust function artifact behavior unless the
+  milestone deliberately routes the existing shell through templates with
+  byte-stable output.
+
+Out of scope:
+
+Backend type/value translation; language/translation metadata ingestion from
+`tsldata/detail/lang/**`; primitive body rendering beyond already accepted
+tiny outputs; intrinsic translation; source-operation translation; mask
+translation; backend-control rendering; M187 island translation; dependency
+closure; helper semantic availability; compiler invocation; generated-test
+execution; filesystem writing beyond the existing artifact writer; runtime
+dependencies on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py -k "m188 or tiny_fixture_generates_cpp_and_rust_artifact_values or artifact_writer"
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M188 accepted after one write-capable executor and read-only architecture,
+evidence, documentation, and validation audits, plus focused documentation
+finalization by the orchestrator. It added a small `tslgen.rendering`
+supplementary asset boundary with frozen typed asset/context/result values,
+the accepted `supplementary/` layout, tiny C++ and Rust project skeleton
+static/helper/template assets, and focused tests for deterministic ordering,
+golden output, missing asset diagnostics, semantic-field rejection, and
+unknown presentation-field rejection.
+
+The accepted boundary returns in-memory `ArtifactSet` values and diagnostics;
+it does not write files. Template rendering uses Python standard-library
+formatting only and accepts presentation fields from typed
+`ProjectSkeletonRenderContext` values. It does not introduce Jinja or another
+external template dependency.
+
+M188 deliberately did not ingest `tsldata/detail/lang/**`, translate backend
+type/value/intrinsic/source-operation requests, move scalar/operator
+semantics into templates, render primitive bodies beyond existing tiny
+outputs, translate M185/M187 request islands, execute dependency closure, or
+make `frozen/` or `tslgenold/` runtime dependencies.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py -k "m188 or tiny_fixture_generates_cpp_and_rust_artifact_values or artifact_writer"`:
+  exit 0, `8 passed, 261 deselected`.
+- Final `find tslgen -type d -name __pycache__ -print`: exit 0, no output after
+  validation-created caches were removed.
+
+### Milestone 189: Typed Backend Language And Translation Metadata Catalog
+
+Status:
+
+Selected. Execution prompt:
+`docs/agent/runs/m189-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the first typed catalog boundary for backend language/type maps and
+translation maps from `tsldata/detail/lang/**`, focused on current C++ and
+Rust evidence. The milestone should make backend metadata available as typed
+facts without evaluating snippets, rendering code, or replacing backend
+semantic rules with raw dictionary lookups.
+
+Scope:
+
+- Parse and catalog exact `language <backend>:` type-spelling entries such as
+  `s32 {type "int32_t"}` and `f32 {type "float"}` from the current
+  `tsldata/detail/lang/types/types_*.tsl` shape.
+- Parse and catalog exact `translation <backend>:` template entries such as
+  `call "..."`
+  and `value_uninit "{}"` from the current `tsldata/detail/lang/translate_*.tsl`
+  shape.
+- Store metadata as typed immutable domain/catalog values with deterministic
+  ordering and source-aware diagnostics.
+- Cover active C++ and Rust metadata in tests. C17 remains deferred evidence
+  and must not become an active backend.
+- Add diagnostics for malformed entries and duplicates within a backend map.
+
+Out of scope:
+
+Evaluating translation snippets; replacing existing scalar/operator emitter
+tables; backend type/value/intrinsic/source-operation translation; rendering
+primitive bodies; Jinja/template rendering; supplementary asset changes;
+lowering changes; dependency closure; runtime dependency on `frozen/` or
+`tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m189_backend_metadata_catalog.py
+find tslgen -type d -name __pycache__ -print
 ```

@@ -114,6 +114,14 @@ from tslgen.lowering.type_syntax import (
     parse_type_syntax,
 )
 from tslgen.pipeline.catalog_builder import CatalogBuilder
+from tslgen.rendering import (
+    ProjectSkeletonRenderContext,
+    SupplementaryStaticAsset,
+    SupplementaryTemplateAsset,
+    cpp_project_skeleton_assets,
+    render_supplementary_assets,
+    rust_project_skeleton_assets,
+)
 from tslgen.syntax.ast import (
     ParsedDocument,
     ParsedImplementation,
@@ -127,6 +135,7 @@ from tslgen.syntax.ast import (
 from tslgen.syntax.parser import TslParser
 
 FIXTURES = Path(__file__).parent / "fixtures" / "tsl"
+SUPPLEMENTARY_ROOT = Path(__file__).resolve().parents[2] / "supplementary"
 VALID_TINY_ADD = FIXTURES / "valid" / "tiny_add.tsl"
 INVALID_ADD_BODY = FIXTURES / "invalid" / "invalid_add_body.tsl"
 
@@ -9801,6 +9810,196 @@ def test_m109_artifact_writer_rejects_unsafe_paths_before_writing(
     assert all(diagnostic.severity == "error" for diagnostic in report.diagnostics)
     assert not output_root.exists()
     assert not (tmp_path / "escape.hpp").exists()
+
+
+def test_m188_project_skeleton_assets_are_deterministic() -> None:
+    cpp_context = ProjectSkeletonRenderContext(
+        backend_id="cpp",
+        project_name="tsl_cpp",
+        artifact_path="include/tsl/add_scalar_si32.hpp",
+        helper_files=("z_last.hpp", "include/tsl/support/skeleton.hpp"),
+    )
+    rust_context = ProjectSkeletonRenderContext(
+        backend_id="rust",
+        project_name="tsl_rust",
+        artifact_path="src/lib.rs",
+        helper_files=("src/support/skeleton.rs",),
+    )
+    assets = rust_project_skeleton_assets(rust_context) + cpp_project_skeleton_assets(
+        cpp_context
+    )
+
+    first = render_supplementary_assets(SUPPLEMENTARY_ROOT, assets)
+    second = render_supplementary_assets(SUPPLEMENTARY_ROOT, tuple(reversed(assets)))
+
+    assert first == second
+    assert first.diagnostics == ()
+    assert [artifact.logical_path for artifact in first.artifacts.artifacts] == [
+        "CMakeLists.txt",
+        "Cargo.toml",
+        "include/tsl/support/skeleton.hpp",
+        "share/tsl/cpp_skeleton.txt",
+        "share/tsl/rust_skeleton.txt",
+        "src/support/skeleton.rs",
+    ]
+    assert first.artifacts.digest_manifest() == second.artifacts.digest_manifest()
+
+
+def test_m188_project_skeleton_golden_content() -> None:
+    cpp_context = ProjectSkeletonRenderContext(
+        backend_id="cpp",
+        project_name="tsl_cpp",
+        artifact_path="include/tsl/add_scalar_si32.hpp",
+        helper_files=("z_last.hpp", "include/tsl/support/skeleton.hpp"),
+    )
+    rust_context = ProjectSkeletonRenderContext(
+        backend_id="rust",
+        project_name="tsl_rust",
+        artifact_path="src/lib.rs",
+        helper_files=("src/support/skeleton.rs",),
+    )
+
+    result = render_supplementary_assets(
+        SUPPLEMENTARY_ROOT,
+        cpp_project_skeleton_assets(cpp_context)
+        + rust_project_skeleton_assets(rust_context),
+    )
+
+    assert result.diagnostics == ()
+    by_path = {
+        artifact.logical_path: artifact.content
+        for artifact in result.artifacts.artifacts
+    }
+    assert by_path["CMakeLists.txt"] == (
+        "cmake_minimum_required(VERSION 3.20)\n"
+        "project(tsl_cpp LANGUAGES CXX)\n"
+        "\n"
+        "add_library(tsl_cpp INTERFACE)\n"
+        "target_include_directories(tsl_cpp INTERFACE include)\n"
+        "\n"
+        "# backend: cpp\n"
+        "# primary artifact: include/tsl/add_scalar_si32.hpp\n"
+        "# helper: include/tsl/support/skeleton.hpp\n"
+        "# helper: z_last.hpp\n"
+    )
+    assert by_path["Cargo.toml"] == (
+        "[package]\n"
+        'name = "tsl_rust"\n'
+        'version = "0.1.0"\n'
+        'edition = "2021"\n'
+        "\n"
+        "[lib]\n"
+        'path = "src/lib.rs"\n'
+        "\n"
+        "# backend: rust\n"
+        "# helper: src/support/skeleton.rs\n"
+    )
+    assert by_path["include/tsl/support/skeleton.hpp"] == (
+        "#pragma once\n"
+        "\n"
+        "namespace tsl::support {\n"
+        "\n"
+        'inline constexpr const char* generated_project_backend = "cpp";\n'
+        "\n"
+        "}  // namespace tsl::support\n"
+    )
+    assert by_path["src/support/skeleton.rs"] == (
+        'pub const GENERATED_PROJECT_BACKEND: &str = "rust";\n'
+    )
+
+
+def test_m188_missing_supplementary_assets_are_diagnostics(tmp_path: Path) -> None:
+    context = ProjectSkeletonRenderContext(
+        backend_id="cpp",
+        project_name="tsl_cpp",
+        artifact_path="include/tsl/add.hpp",
+    )
+
+    result = render_supplementary_assets(
+        tmp_path,
+        (
+            SupplementaryStaticAsset(
+                source_path="buildsystem/cpp/static/missing.marker",
+                logical_path="missing.txt",
+            ),
+            SupplementaryTemplateAsset(
+                source_path="buildsystem/cpp/templates/missing.in",
+                logical_path="missing.out",
+                context=context,
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-SUPPLEMENTARY-MISSING-STATIC-ASSET",
+        "TSL-SUPPLEMENTARY-MISSING-TEMPLATE-ASSET",
+    ]
+    assert all(diagnostic.severity == "error" for diagnostic in result.diagnostics)
+
+
+def test_m188_templates_reject_semantic_fields(tmp_path: Path) -> None:
+    template_path = tmp_path / "buildsystem" / "cpp" / "templates"
+    template_path.mkdir(parents=True)
+    (template_path / "bad.in").write_text(
+        "primitive {primitive_name} type {type_tag}\n",
+        encoding="utf-8",
+    )
+    context = ProjectSkeletonRenderContext(
+        backend_id="cpp",
+        project_name="tsl_cpp",
+        artifact_path="include/tsl/add.hpp",
+    )
+
+    result = render_supplementary_assets(
+        tmp_path,
+        (
+            SupplementaryTemplateAsset(
+                source_path="buildsystem/cpp/templates/bad.in",
+                logical_path="bad.out",
+                context=context,
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-SUPPLEMENTARY-TEMPLATE-SEMANTIC-FIELD",
+        "TSL-SUPPLEMENTARY-TEMPLATE-SEMANTIC-FIELD",
+    ]
+    assert "primitive_name" in result.diagnostics[0].message
+    assert "type_tag" in result.diagnostics[1].message
+
+
+def test_m188_templates_reject_unknown_presentation_fields(tmp_path: Path) -> None:
+    template_path = tmp_path / "buildsystem" / "rust" / "templates"
+    template_path.mkdir(parents=True)
+    (template_path / "bad.in").write_text(
+        "crate {crate_name}\n",
+        encoding="utf-8",
+    )
+    context = ProjectSkeletonRenderContext(
+        backend_id="rust",
+        project_name="tsl_rust",
+        artifact_path="src/lib.rs",
+    )
+
+    result = render_supplementary_assets(
+        tmp_path,
+        (
+            SupplementaryTemplateAsset(
+                source_path="buildsystem/rust/templates/bad.in",
+                logical_path="bad.out",
+                context=context,
+            ),
+        ),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-SUPPLEMENTARY-TEMPLATE-UNKNOWN-FIELD",
+    ]
+    assert result.diagnostics[0].severity == "error"
 
 
 def test_invalid_fixture_reports_source_aware_body_diagnostic() -> None:

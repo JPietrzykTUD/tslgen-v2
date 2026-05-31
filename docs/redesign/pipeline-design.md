@@ -949,6 +949,9 @@ Outputs:
 Processing:
 
 - Render primary declarations, specializations, wrappers, traits, tests, and support metadata.
+- Copy static supplementary assets and render supplementary template assets
+  from typed render contexts when the selected backend/output slice requests
+  project scaffolding or helper files.
 - Normalize text formatting if the backend defines a formatting policy.
 - Attach artifact metadata.
 
@@ -956,6 +959,8 @@ Validation:
 
 - Missing template file when a template strategy uses file templates.
 - Template variable mismatch.
+- Template or renderer attempts to evaluate backend semantics instead of
+  consuming already translated typed values.
 - Non-deterministic artifact ordering check in tests.
 
 Side effects:

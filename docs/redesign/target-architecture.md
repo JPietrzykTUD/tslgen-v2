@@ -108,6 +108,34 @@ tslgen/
 
 Implementation may adjust names, but it must preserve the architectural boundaries.
 
+## Supplementary Output Assets
+
+Backend/output implementation may use repository-level supplementary assets for
+generated-project scaffolding, helper source files, and render templates:
+
+```text
+supplementary/
+  buildsystem/
+    cpp/
+      static/
+      templates/
+    rust/
+      static/
+      templates/
+  helpers/
+    cpp/
+    rust/
+  templates/
+    cpp/
+    rust/
+```
+
+Static supplementary files are copied into in-memory artifact sets before any
+filesystem writer runs. Template supplementary files render only from typed
+render contexts supplied by backend/output stages. Backend semantics, TSIL
+lowering, type/intrinsic selection, feature gating, primitive selection, and
+source repair must not live in the template files.
+
 ## Dependency Direction
 
 ```mermaid

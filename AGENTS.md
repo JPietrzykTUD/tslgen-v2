@@ -96,11 +96,12 @@ Useful legacy evidence includes:
 - `docs/redesign/`: source of truth for requirements, behavior, architecture, pipeline, testing, and roadmap.
 - `docs/agent/`: reusable prompts and review checklists for future agents.
 - `tsldata/`: current TSL data corpus and likely source fixture set for the redesign.
-- `tslgen/`: reserved for the clean implementation. It currently contains only
-  a placeholder until a later accepted product milestone adds code.
+- `tslgen/`: clean implementation path for the restarted generator.
 - `tslgenold/`: quarantined old implementation evidence moved from the former
   top-level `tslgen/` tree.
 - `frozen/`: legacy evidence only. Do not extend it for the redesigned implementation.
+- `supplementary/`: planned home for static buildsystem assets, helper source
+  files, and render templates copied or rendered into generated outputs.
 - `.agents/skills/`: optional repo-scoped workflows for redesign planning, execution, and review.
 
 ## Coding Conventions
@@ -125,6 +126,43 @@ Do not use ad-hoc dictionary mappings as the semantic model past parser/catalog 
 A lookup table is acceptable only when its entries are typed rule values with documented supported cases, unsupported cases, diagnostics, and tests. It must not become an unreviewed shortcut from raw keys such as `(intrinsic, extension, type)` directly to emitted backend text.
 
 Do not implement semantic behavior through raw text rewriting. String templates or rendered text may appear only after lowering/translation has produced typed values for the selected slice.
+
+## Supplementary Assets And Template Boundary
+
+Backend/output milestones should keep language build scaffolding, helper source
+files, and render templates under the accepted supplementary layout:
+
+```text
+supplementary/
+  buildsystem/
+    cpp/
+      static/
+      templates/
+    rust/
+      static/
+      templates/
+  helpers/
+    cpp/
+    rust/
+  templates/
+    cpp/
+    rust/
+```
+
+Use `static/` assets for byte-for-byte copies. Use template assets only for
+formatting already-decided typed render values, such as artifact names,
+includes/imports, module or namespace structure, helper declarations, selected
+primitive records, and translated operations.
+
+Templates may contain simple presentation logic such as loops, indentation,
+optional sections, and joining lists. Templates must not perform backend
+semantic decisions, type or intrinsic selection, feature gating, primitive
+selection, overload resolution, TSIL parsing, dependency closure, fallback
+selection, or source repair.
+
+Python backend code may build typed render contexts and copy or render
+supplementary assets. Backend semantics must live in typed rule/evaluator
+stages before rendering, not in Jinja conditionals or other template logic.
 
 ## Lowering IR Taxonomy And Complexity Guardrails
 

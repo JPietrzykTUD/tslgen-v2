@@ -64,6 +64,8 @@ Evaluate at least:
   `array_type<...>`, and `pack<...>(...)`;
 - raw body-token rendering policy around typed request islands;
 - deterministic artifact planning/writing for one tiny selected fixture;
+- supplementary static assets and render templates under the accepted
+  `supplementary/` layout, with no backend semantics hidden in templates;
 - data-driven backend metadata ingestion from `tsldata/detail/lang/**` and
   extension metadata without dictionary-shaped semantic shortcuts downstream.
 

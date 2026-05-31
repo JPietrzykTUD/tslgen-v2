@@ -2451,3 +2451,54 @@ Consequences:
   assignment form.
 - Malformed, unknown, or nearby `mask::lane::*` forms remain diagnostics or
   unsupported generation-value families until explicitly selected.
+
+## ADR-052: Supplementary Assets Are Formatting And Packaging Boundaries
+
+Status: Accepted
+
+Context:
+
+After the post-M187 lowering completion gate, backend/output work needs a
+clean place for generated-project scaffolding, helper source files, and render
+templates. Moving hardcoded backend text out of Python is useful only if it
+does not hide backend semantics inside templates.
+
+Decision:
+
+The clean generator will use `supplementary/` for copied or rendered output
+assets:
+
+```text
+supplementary/
+  buildsystem/
+    cpp/
+      static/
+      templates/
+    rust/
+      static/
+      templates/
+  helpers/
+    cpp/
+    rust/
+  templates/
+    cpp/
+    rust/
+```
+
+Static assets are byte-for-byte inputs to generated artifact sets. Template
+assets format typed render contexts produced by Python backend/output stages.
+Templates may use presentation logic such as loops, indentation, optional
+sections, and list joining, but they must not perform backend semantic
+decisions, type or intrinsic selection, feature gating, primitive selection,
+TSIL parsing, dependency closure, fallback selection, or source repair.
+
+Consequences:
+
+- Backend semantics remain in typed rule/evaluator stages before rendering.
+- Template files are output formatting infrastructure, not semantic rule
+  tables.
+- Helper source files under `supplementary/helpers/**` are source-authored
+  backend support assets; their availability can be planned and copied, but
+  their existence does not resolve TSIL semantics by itself.
+- Future milestones that introduce a template engine must define typed render
+  contexts and tests proving deterministic output.

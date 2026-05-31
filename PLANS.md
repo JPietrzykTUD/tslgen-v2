@@ -431,6 +431,49 @@ becoming the extension path.
 
 Renderers must not perform semantic rule evaluation. They may only format typed lowered/translated values.
 
+## Supplementary Asset And Template Planning Guardrails
+
+Backend/output milestones should use the accepted supplementary layout for
+files that are copied or rendered into generated projects:
+
+```text
+supplementary/
+  buildsystem/
+    cpp/
+      static/
+      templates/
+    rust/
+      static/
+      templates/
+  helpers/
+    cpp/
+    rust/
+  templates/
+    cpp/
+    rust/
+```
+
+Plans that add or use supplementary files must state which boundary the work
+belongs to:
+
+- static asset copy;
+- template rendering from a typed render context;
+- typed backend semantic translation;
+- artifact writing.
+
+Milestones that add templates or static assets must define:
+
+- the exact supplementary path and whether each file is static or templated;
+- the typed render context consumed by each template;
+- the deterministic copy/render order;
+- tests or golden checks proving stable generated artifacts;
+- a review check that templates and renderers do not own backend semantics.
+
+Do not hide hardcoded backend logic in Jinja conditionals or equivalent
+template expressions. Template conditionals and loops are allowed only for
+layout and presentation over values already selected, lowered, and translated
+by typed Python rules.
+
 ## Testing Protocol
 
 For each milestone:

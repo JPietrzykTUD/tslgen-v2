@@ -19,6 +19,46 @@ flowchart TD
 
 Each stage receives explicit inputs and returns explicit outputs. Only source loading and artifact writing own filesystem side effects.
 
+## Supplementary Output Asset Behavior
+
+Backend/output stages may add generated-project scaffolding, helper source
+files, and render templates under `supplementary/`. Static supplementary files
+are copied byte-for-byte into in-memory `ArtifactSet` values. Template
+supplementary files render from explicit typed render contexts only.
+
+Templates may decide presentation details such as iteration, indentation, and
+optional sections. They must not decide backend semantics, select primitive or
+intrinsic implementations, evaluate TSIL, inspect raw source payloads, choose
+fallbacks, or repair source text. Those decisions must already be represented
+as typed backend/output values before rendering.
+
+### M188 Supplementary Project Skeleton Boundary
+
+Milestone 188 adds a small supplementary rendering boundary for project
+skeleton artifacts. The boundary consumes typed `SupplementaryStaticAsset`,
+`SupplementaryTemplateAsset`, and `ProjectSkeletonRenderContext` values and
+returns an in-memory `ArtifactSet` plus diagnostics. It does not write files.
+
+The accepted M188 template renderer uses Python standard-library formatting
+only; it does not introduce a Jinja dependency. The accepted project skeleton
+context exposes only presentation fields:
+
+- `backend_id`;
+- `project_name`;
+- `artifact_path`;
+- `helper_manifest`.
+
+Templates that reference semantic-looking fields such as primitive names,
+type tags, intrinsic names, TSIL/source payloads, feature gates, dependency
+fields, selectors, or fallback fields are rejected before formatting with
+`TSL-SUPPLEMENTARY-TEMPLATE-SEMANTIC-FIELD`. Unsupported compound field
+syntax is rejected with
+`TSL-SUPPLEMENTARY-TEMPLATE-UNSUPPORTED-FIELD-SHAPE`. Unknown presentation
+fields are rejected with `TSL-SUPPLEMENTARY-TEMPLATE-UNKNOWN-FIELD`. Missing
+static and template files are reported as
+`TSL-SUPPLEMENTARY-MISSING-STATIC-ASSET` and
+`TSL-SUPPLEMENTARY-MISSING-TEMPLATE-ASSET`.
+
 ## Input Behavior
 
 | Input | Expected Behavior | Evidence |
