@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 175.5 is accepted.
+Milestone 176 planning is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -251,6 +251,21 @@ typed extension metadata and accepted scalar descriptors only; it does not use
 C++/Rust spelling text, guess SVE/scalable or generic symbolic sizes, broaden
 `type::is_signed(...)` or `type::is_same(...)`, add backend rendering, or
 introduce runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
+
+The M176 planning review returned `Accept With Follow-Ups` after docs-only
+planning and read-only evidence, boundary, architecture, and documentation
+audits. M176 inventoried the current mask lane constant corpus:
+`value<generation>(mask::lane::all_true)` occurs 30 times across
+`bit_ops.tsl`, `comparison/fundamental.tsl`, `conversion/mask_specific.tsl`,
+and `mask/construct.tsl`; `value<generation>(mask::lane::all_false)` occurs
+12 times, all in `comparison/fundamental.tsl`.
+
+M176 selected a typed backend/support-helper request boundary for exact
+`mask::lane::all_true` and `mask::lane::all_false` value islands. These forms
+must not become Python booleans, integers, raw backend strings, or normal
+`LoweredGenerationValue[int|bool]` payloads. The request should record
+polarity and source provenance only; backend/helper rendering remains a later
+explicit rule boundary. FTF-001 remains open as a source-convention mismatch.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -2981,46 +2996,45 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Run Milestone 176 planning.
+Execute Milestone 177.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m176-mask-lane-constant-boundary-planning-prompt.md
+docs/agent/runs/m177-mask-lane-constant-request-execution-review-loop-prompt.md
 ```
 
-Active planning milestone:
+Active executor milestone:
 
 ```text
-Milestone 176: Mask Lane Constant Lowering Boundary Planning
+Milestone 177: Mask Lane Constant Support-Helper Request Boundary
 ```
 
 Latest review verdict:
 
 ```text
-M175.5 execution-review returned Accept With Follow-Ups after one write-capable
-executor and read-only architecture, boundary, evidence, test, documentation,
-and validation audits.
+M176 planning review returned Accept With Follow-Ups after docs-only planning
+and read-only evidence, boundary, architecture, and documentation audits.
 
-M175.5 review verdicts were: architecture `Accept With Follow-Ups`; boundary
-`Accept`; evidence `Accept With Follow-Ups`; test `Accept With Follow-Up`;
-documentation `Accept With Follow-Ups`; validation `Accept`.
+M176 review verdicts were: evidence `Accept`; boundary `Accept`;
+architecture `Accept With Follow-Up`; documentation
+`Accept With Required Finalization`. The required finalization was completed
+by this state update.
 ```
 
 Next expected action:
 
 ```text
-Run the active M176 planning prompt. M176 should settle the lowering boundary
-for `value<generation>(mask::lane::all_true)` and
-`value<generation>(mask::lane::all_false)` before any implementation.
+Run the active M177 execution-review-loop prompt. M177 should implement exact
+typed request discovery for
+`value<generation>(mask::lane::all_true)` and
+`value<generation>(mask::lane::all_false)` in source-owned body text.
 
-This is useful because these forms are the next remaining generation-value
-family in the corpus, but evidence suggests they behave like backend/support
-helper expressions rather than plain backend-neutral boolean generation
-values. The plan must decide whether to create a typed backend/support-helper
-request, a symbolic generation value, a raw backend-owned handoff, or a
-documented deferral.
+This is useful because M176 proved these islands are backend/support-helper
+needs, not materialized generation values. M177 should create the typed request
+boundary and preserve surrounding raw text/tokens without rendering helper text
+or parsing every surrounding call, assignment, declaration, or loop.
 ```
 
 Previous review verdict:
@@ -6958,16 +6972,32 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M175.5 follow-up: revisit whether `sse_vl` / `avx2_vl` should explicitly
   inherit or declare fixed non-runtime lane metadata before relying on their
   lane-keyed predicate policies for fixed byte-size generation values.
+- M176 follow-up: keep FTF-001 open as a source-convention mismatch even
+  though the clean generator boundary is selected as a typed request.
+- M176 follow-up: later backend/helper rendering must translate mask lane
+  constant requests from explicit backend/support-library rules, not raw
+  source text.
+- M176 follow-up: if `.tsl` source conventions are allowed to change later,
+  decide whether mask lane constants should move closer to `details::*`
+  support-helper calls.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M176
-planning prompt.
+No stop condition is active. The workflow is ready to run the active M177
+execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M176 planning, run the validation command listed in
-`docs/agent/runs/m176-mask-lane-constant-boundary-planning-prompt.md`.
+For active M177 execution, run the validation command listed in
+`docs/agent/runs/m177-mask-lane-constant-request-execution-review-loop-prompt.md`.
+
+For M176 planning and review, validation completed with:
+
+```bash
+git diff --check
+```
+
+The final M176 validation run returned exit 0 with no output.
 
 For M175.5 execution and review, validation completed with:
 

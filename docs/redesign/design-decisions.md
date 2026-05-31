@@ -2411,3 +2411,43 @@ Consequences:
   descriptor bridge; they do not infer register or native predicate semantics.
 - This is not backend rendering, register spelling resolution, a new query
   family, source repair, or a general type-system redesign.
+
+## ADR-051: Mask Lane Constants Are Backend Support-Helper Requests
+
+Status: Accepted
+
+Context:
+
+Current `.tsl` spells mask lane constants as generation values:
+`value<generation>(mask::lane::all_true)` and
+`value<generation>(mask::lane::all_false)`. Corpus evidence shows 42 current
+occurrences: 30 `all_true` and 12 `all_false`. They appear inside nested
+primitive-call arguments, direct assignment text, and `var<const_infer>`
+initializers.
+
+Legacy behavior maps these forms to backend/support helper expressions rather
+than backend-neutral booleans. C++ uses a `details::mask_true_lane_value`
+style helper for `all_true` and a default constructed base type for
+`all_false`; Rust uses corresponding helper/default expressions.
+
+Decision:
+
+The clean restart will model these exact forms as typed backend/support-helper
+requests. The request records only the semantic polarity, source text, and
+source location. It does not carry C++ or Rust helper text. It is not a
+`LoweredGenerationValue[int|bool]` and must not be consumed as a branch
+condition, loop bound, arithmetic operand, or Python boolean.
+
+Consequences:
+
+- The existing source mismatch remains explicit: the source uses
+  `value<generation>(...)`, but the clean generator treats the two accepted
+  mask lane constants as deferred backend/support-helper requests.
+- Backend helper text belongs to a later backend translation/rendering rule,
+  not generation lowering.
+- A future executor may discover exact request islands in source-owned text and
+  preserve surrounding raw text/tokens, similar in spirit to backend value
+  query discovery, without parsing every surrounding call, declaration, or
+  assignment form.
+- Malformed, unknown, or nearby `mask::lane::*` forms remain diagnostics or
+  unsupported generation-value families until explicitly selected.

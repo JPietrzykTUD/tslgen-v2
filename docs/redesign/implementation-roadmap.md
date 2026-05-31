@@ -22193,8 +22193,17 @@ Follow-ups:
 
 Status:
 
-Active after M175.5 acceptance. Active prompt:
-`docs/agent/runs/m176-mask-lane-constant-boundary-planning-prompt.md`.
+Accepted planning. The M176 planning review returned
+`Accept With Follow-Ups` after docs-only planning and read-only evidence,
+boundary, architecture, and documentation audits.
+
+M176 selected a typed backend/support-helper request boundary for exact
+`value<generation>(mask::lane::all_true)` and
+`value<generation>(mask::lane::all_false)` islands. These constants must not
+lower to Python booleans, integers, raw backend strings, or
+`LoweredGenerationValue[int|bool]`. They should become typed requests that
+record polarity and source provenance while preserving surrounding raw
+text/tokens for later backend rendering.
 
 Goal:
 
@@ -22235,4 +22244,59 @@ Validation:
 
 ```bash
 git diff --check
+```
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+
+Follow-ups:
+
+- Keep FTF-001 open as a source-convention mismatch even though the clean
+  generator boundary is selected.
+- Later backend/helper rendering must translate the typed request from explicit
+  backend/support-library rules, not by inspecting raw source text.
+- If the `.tsl` source convention changes later, decide whether these forms
+  should move closer to `details::*` helper calls.
+
+### Milestone 177: Mask Lane Constant Support-Helper Request Boundary
+
+Status:
+
+Selected after M176 planning. Active prompt:
+`docs/agent/runs/m177-mask-lane-constant-request-execution-review-loop-prompt.md`.
+
+Goal:
+
+Implement the M176 boundary as exact typed request discovery for
+`value<generation>(mask::lane::all_true)` and
+`value<generation>(mask::lane::all_false)` in source-owned implementation body
+text.
+
+Scope:
+
+- Add a small typed request model for mask lane constants with polarity
+  (`all_true` / `all_false`), source text, and source location.
+- Discover exact request islands in raw text and selected body-token text,
+  preserving surrounding raw text/tokens.
+- Reject malformed `value<generation>(mask::lane::...)` islands and unknown
+  mask-lane names with explicit diagnostics.
+- Keep existing materialized generation value lowering unchanged; mask lane
+  constants are requests, not `LoweredGenerationValue` payloads.
+
+Out of scope:
+
+Backend helper rendering; C++/Rust helper text; changing `.tsl` source
+conventions; primitive-call rendering; declaration rendering; assignment or
+loop semantics; branch/loop execution; source replacement; runtime
+`tsldata`, `frozen`, or `tslgenold` dependencies; broad expression parsing;
+and treating mask lane constants as Python booleans or integers.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m177_mask_lane_constant_requests.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m177_mask_lane_constant_requests.py
+find tslgen -type d -name __pycache__ -print
 ```

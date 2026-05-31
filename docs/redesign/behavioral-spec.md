@@ -2087,6 +2087,39 @@ unknown extension metadata remain diagnostics. `type::is_signed(...)` and
 `type::is_same(...)` continue to use the M175 scalar descriptor bridge and do
 not gain register/native-predicate size behavior.
 
+### M176 Mask Lane Constant Boundary Decision
+
+Milestone 176 is a planning boundary for
+`value<generation>(mask::lane::all_true)` and
+`value<generation>(mask::lane::all_false)`. The current corpus contains 30
+`all_true` occurrences and 12 `all_false` occurrences. `all_true` appears as a
+nested `set1(...)` primitive-call argument, as direct assignment text, and as a
+`var<const_infer>` initializer. `all_false` appears in matching
+`var<const_infer>` initializers.
+
+Legacy evidence does not treat these forms as backend-neutral Python
+booleans. It maps the canonical generation-value tokens to backend/support
+helper expressions: C++ uses a `::tsl::details::mask_true_lane_value<...>()`
+style helper for true and a default constructed base type for false; Rust uses
+the corresponding `crate::tsl::details::mask_true_lane_value::<...>()` helper
+and `Self::BaseType::default()`.
+
+The selected clean boundary is therefore a typed backend/support-helper
+request over the exact two source forms. Mask lane constants are not
+`LoweredGenerationValue[int|bool]`, are not raw backend strings, and are not
+renderer-side raw-text expressions. The request records the polarity
+(`all_true` or `all_false`), source text, and source location. Later backend
+translation/rendering may map that typed request to backend helper text using
+explicit backend/support-library rules.
+
+This deliberately preserves the current source-language mismatch recorded in
+FTF-001: the source spells these constants as `value<generation>(...)`, but
+their observable result is backend/support-helper text. M176 resolves only the
+clean generator boundary for the current corpus; it does not change `.tsl`
+source conventions, implement backend helper text, render primitive calls,
+parse surrounding assignments/declarations/calls, or treat mask lane constants
+as plain booleans.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:
