@@ -22113,8 +22113,17 @@ Follow-ups:
 
 Status:
 
-Selected after M175 acceptance. Active next prompt:
-`docs/agent/runs/m175.5-execution-review-loop-prompt.md`.
+Accepted. The M175.5 execution-review loop returned
+`Accept With Follow-Ups` after one write-capable executor and read-only
+architecture, boundary, evidence, test, documentation, and validation audits.
+
+M175.5 added a focused `vector_member_sizes` lowering helper and wired it only
+into `type::size_bytes(TYPE_EXPR)`. It computes fixed byte sizes for
+`vector::register`, lane-bitmask mask/imask/underlying members, and
+lane-keyed native predicate masks from typed extension metadata and accepted
+scalar descriptors. It preserved M175 no-catalog behavior and kept
+`type::is_signed(...)` / `type::is_same(...)` on the existing scalar
+descriptor bridge.
 
 Goal:
 
@@ -22161,11 +22170,30 @@ PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_
 find tslgen -type d -name __pycache__ -print
 ```
 
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q ...`: exit 0, no output.
+- Required pytest command: exit 0, `289 passed in 38.28s`.
+- Initial cache check listed validation-created `__pycache__` directories; after
+  removal, final `find tslgen -type d -name __pycache__ -print`: exit 0, no
+  output.
+
+Follow-ups:
+
+- If vector-member size tests are touched again, add direct positive coverage
+  for the `same_as_mask_type` path such as AVX-512 `vector::imask`.
+- If native predicate lane-capacity behavior is touched again, add coverage
+  for the "smallest sufficient capacity" path, not only exact capacity.
+- Revisit whether `sse_vl` / `avx2_vl` should explicitly inherit or declare
+  fixed non-runtime lane metadata before relying on their lane-keyed predicate
+  policies for fixed byte-size generation values.
+
 ### Milestone 176: Mask Lane Constant Lowering Boundary Planning
 
 Status:
 
-Deferred until M175.5 is accepted. Planned prompt:
+Active after M175.5 acceptance. Active prompt:
 `docs/agent/runs/m176-mask-lane-constant-boundary-planning-prompt.md`.
 
 Goal:

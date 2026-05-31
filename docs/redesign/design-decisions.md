@@ -2377,3 +2377,37 @@ Consequences:
 - Backend type spelling, native predicate/register spelling, new vector member
   policies, new query families, renderer behavior, and broad expression
   parsing remain out of scope.
+
+## ADR-050: Vector Member Byte Sizes Come From Fixed Metadata
+
+Status: Accepted
+
+Context:
+
+M175 let `type::*` generation values consume vector member types only when the
+member first reduced to a scalar descriptor. That was enough for fixed
+lane-bitmask members such as AVX2 `vector::imask`, but not for
+`vector::register` or lane-keyed native predicate masks such as AVX-512
+`__mmask*` families. The current extension catalog already records fixed
+`vector_bits` and native predicate lane-capacity metadata.
+
+Decision:
+
+M175.5 keeps the broad `type::*` scalar bridge unchanged and adds a focused
+fixed-size resolver used only by `type::size_bytes(TYPE_EXPR)`. The resolver
+accepts already lowered `LoweredVectorMemberType` values. Register size is
+computed from fixed positive integer `extension.vector_bits`. `lane_bitmask`
+mask size is `ceil(lanes / 8)`. `native_predicate_by_lanes` chooses an exact
+or smallest sufficient lane capacity from typed extension metadata and returns
+`ceil(capacity / 8)`. `same_as_mask_type` delegates to the mask policy.
+
+Consequences:
+
+- Size lowering uses typed extension and scalar descriptor facts, not C++ or
+  Rust spelling strings.
+- SVE/scalable vectors, generic symbolic `LANES`, missing catalog metadata,
+  and unsupported policies remain diagnostics.
+- `type::is_signed(...)` and `type::is_same(...)` still use the M175 scalar
+  descriptor bridge; they do not infer register or native predicate semantics.
+- This is not backend rendering, register spelling resolution, a new query
+  family, source repair, or a general type-system redesign.

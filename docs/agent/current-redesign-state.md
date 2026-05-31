@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 175 is accepted.
+Milestone 175.5 is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -235,6 +235,22 @@ missing-metadata and unsupported-policy diagnostics, and keeps backend
 spelling, rendering, primitive-call matching, source repair, new query
 families, broad expression parsing, runtime `tsldata`, runtime `frozen`, and
 runtime `tslgenold` dependencies out of scope.
+
+The M175.5 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, evidence, test,
+documentation, and validation audits. M175.5 added focused fixed byte-size
+lowering for already lowered `LoweredVectorMemberType` values only through
+`type::size_bytes(TYPE_EXPR)`.
+
+M175.5 computes `vector::register` size from fixed positive
+`extension.vector_bits / 8`, computes fixed `lane_bitmask` mask/imask/
+underlying sizes from selected lane count with `ceil(lanes / 8)`, delegates
+`same_as_mask_type` through the mask policy, and computes
+`native_predicate_by_lanes` sizes from typed lane-capacity metadata. It uses
+typed extension metadata and accepted scalar descriptors only; it does not use
+C++/Rust spelling text, guess SVE/scalable or generic symbolic sizes, broaden
+`type::is_signed(...)` or `type::is_same(...)`, add backend rendering, or
+introduce runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -2965,47 +2981,46 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 175.5.
+Run Milestone 176 planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m175.5-execution-review-loop-prompt.md
+docs/agent/runs/m176-mask-lane-constant-boundary-planning-prompt.md
 ```
 
-Active executor milestone:
+Active planning milestone:
 
 ```text
-Milestone 175.5: Vector Member Size-Bytes Generation Values
+Milestone 176: Mask Lane Constant Lowering Boundary Planning
 ```
 
 Latest review verdict:
 
 ```text
-M175 execution-review returned Accept With Follow-Ups after one write-capable
+M175.5 execution-review returned Accept With Follow-Ups after one write-capable
 executor and read-only architecture, boundary, evidence, test, documentation,
 and validation audits.
 
-M175 review verdicts were: architecture `Accept`; boundary
-`Accept With Follow-Ups`; evidence `Accept`; test `Accept`; documentation
-`Accept`; validation `Accept`.
+M175.5 review verdicts were: architecture `Accept With Follow-Ups`; boundary
+`Accept`; evidence `Accept With Follow-Ups`; test `Accept With Follow-Up`;
+documentation `Accept With Follow-Ups`; validation `Accept`.
 ```
 
 Next expected action:
 
 ```text
-Run the active M175.5 execution-review-loop prompt. M175.5 should teach
-generation value `type::size_bytes(TYPE_EXPR)` to consume already lowered
-`vector::register`, `vector::mask`, `vector::imask`, and
-`vector::mask_underlying_t` member types when explicit extension/scalar
-metadata proves a fixed byte size.
+Run the active M176 planning prompt. M176 should settle the lowering boundary
+for `value<generation>(mask::lane::all_true)` and
+`value<generation>(mask::lane::all_false)` before any implementation.
 
-This is useful because M175 connected vector-member type facts to scalar
-descriptor-backed `type::*` values, but `vector::register` and native or
-lane-bitmask mask member sizes are still not understood as generation-time
-size facts. M175.5 should cover fixed-width cases from `extension.tsl` and
-diagnose scalable/SVE or otherwise unsized cases instead of guessing.
+This is useful because these forms are the next remaining generation-value
+family in the corpus, but evidence suggests they behave like backend/support
+helper expressions rather than plain backend-neutral boolean generation
+values. The plan must decide whether to create a typed backend/support-helper
+request, a symbolic generation value, a raw backend-owned handoff, or a
+documented deferral.
 ```
 
 Previous review verdict:
@@ -6934,16 +6949,39 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   again, add a direct `lower_generation_value_query(...)` test for
   `TSL-LOWER-MISSING-VECTOR-MEMBER-TYPE-METADATA` propagation. M175 covered
   no-catalog preservation and unsupported-policy propagation directly.
+- M175.5 follow-up: if vector-member size tests are touched again, add direct
+  positive coverage for the `same_as_mask_type` path such as AVX-512
+  `vector::imask`.
+- M175.5 follow-up: if native predicate lane-capacity behavior is touched
+  again, add coverage for the "smallest sufficient capacity" path, not only
+  exact capacity.
+- M175.5 follow-up: revisit whether `sse_vl` / `avx2_vl` should explicitly
+  inherit or declare fixed non-runtime lane metadata before relying on their
+  lane-keyed predicate policies for fixed byte-size generation values.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M175.5
-execution-review-loop prompt.
+No stop condition is active. The workflow is ready to run the active M176
+planning prompt.
 
 ## Validation Expectations
 
-For active M175.5 execution, run the validation command listed in
-`docs/agent/runs/m175.5-execution-review-loop-prompt.md`.
+For active M176 planning, run the validation command listed in
+`docs/agent/runs/m176-mask-lane-constant-boundary-planning-prompt.md`.
+
+For M175.5 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py tslgen/tests/test_m175_vector_member_generation_values.py tslgen/tests/test_m175_5_vector_member_size_bytes.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py tslgen/tests/test_m175_vector_member_generation_values.py tslgen/tests/test_m175_5_vector_member_size_bytes.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M175.5 validation run returned exit 0 for `git diff --check` with
+no output, exit 0 for compileall with no output, exit 0 for targeted pytest
+with `289 passed in 38.28s`, and exit 0 for the final cache check with no
+output after validation-created `__pycache__` directories were removed.
 
 For M175 execution and review, validation completed with:
 

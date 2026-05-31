@@ -2062,6 +2062,31 @@ new vector member policies, new generation value query families, broad
 expression parsing, branch/loop/declaration rendering, source repair, output
 writing, or runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
 
+### M175.5 Vector Member Size-Byte Generation Values
+
+Milestone 175.5 extends only `type::size_bytes(TYPE_EXPR)` so already lowered
+`LoweredVectorMemberType` values can produce fixed byte-size generation values
+when explicit extension metadata and scalar descriptors prove the size.
+
+Accepted fixed-size rules:
+
+- `vector::register` uses fixed positive integer `extension.vector_bits / 8`.
+- `lane_bitmask` `vector::mask`, `vector::imask`, and
+  `vector::mask_underlying_t` / `vector::mask_underlying` use
+  `ceil(lanes / 8)`, where `lanes = vector_bits / selected_scalar_bit_width`.
+- `same_as_mask_type` resolves through the selected extension's mask policy.
+- `native_predicate_by_lanes` uses explicit lane-capacity metadata from
+  `extension.tsl`; the exact capacity is selected when present, otherwise the
+  smallest declared capacity able to hold the selected lane count is selected,
+  and byte size is `ceil(capacity / 8)`.
+
+This does not use C++ or Rust type spelling text to infer sizes. Missing
+catalog metadata, runtime/scalable lane counts such as SVE, symbolic/generic
+size parameters, unsupported policies such as plain `native_predicate`, and
+unknown extension metadata remain diagnostics. `type::is_signed(...)` and
+`type::is_same(...)` continue to use the M175 scalar descriptor bridge and do
+not gain register/native-predicate size behavior.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

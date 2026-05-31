@@ -30,6 +30,7 @@ from tslgen.lowering.type_syntax import (
     TypeSyntax,
     parse_type_syntax,
 )
+from tslgen.lowering.vector_member_sizes import resolve_vector_member_size_bytes
 from tslgen.lowering.vector_member_types import resolve_vector_member_scalar_type
 
 _GENERATION_ARITHMETIC_PREFIX = "arith<generation>::"
@@ -489,6 +490,29 @@ def _lower_type_size_bytes(
     catalog: Catalog | None,
     environment: SelectedTypeEnvironment | None,
 ) -> GenerationValueQueryLoweringResult:
+    vector_member_size = _lower_vector_member_size_bytes_argument(
+        context,
+        call.arguments[0],
+        source,
+        catalog,
+        environment,
+    )
+    if isinstance(vector_member_size, Diagnostic):
+        return GenerationValueQueryLoweringResult(
+            value=None,
+            diagnostics=(vector_member_size,),
+        )
+    if vector_member_size is not None:
+        return GenerationValueQueryLoweringResult(
+            value=LoweredGenerationValue(
+                kind="type.size_bytes",
+                value=vector_member_size,
+                source_text=source_text,
+                source=source,
+            ),
+            diagnostics=(),
+        )
+
     descriptor = _lower_scalar_type_argument(
         context,
         call.arguments[0],
@@ -518,6 +542,28 @@ def _lower_type_size_bytes(
         ),
         diagnostics=(),
     )
+
+
+def _lower_vector_member_size_bytes_argument(
+    context: SelectedImplementationLoweringContext,
+    syntax: TypeSyntax,
+    source: SourceLocation,
+    catalog: Catalog | None,
+    environment: SelectedTypeEnvironment | None,
+) -> int | Diagnostic | None:
+    if catalog is None:
+        return None
+
+    result = lower_type_expression(
+        context,
+        syntax.source_text,
+        source,
+        environment=environment,
+    )
+    if result.value is None:
+        return result.diagnostics[0]
+
+    return resolve_vector_member_size_bytes(result.value, catalog=catalog, source=source)
 
 
 def _lower_type_is_signed(

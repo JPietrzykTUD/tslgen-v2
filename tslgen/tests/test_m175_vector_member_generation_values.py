@@ -93,7 +93,7 @@ def test_m175_no_catalog_preserves_unsupported_generation_value_type() -> None:
 def test_m175_propagates_vector_member_resolution_diagnostics() -> None:
     result = Lowerer().lower_generation_value_query(
         _selected_implementation(extension="avx512", type_tag="si32"),
-        "value<generation>(type::size_bytes(type<generation>(vector::mask)))",
+        "value<generation>(type::is_signed(type<generation>(vector::mask)))",
         _location(4, 7),
         catalog=_catalog_from_documents(),
     )

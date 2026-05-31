@@ -1,7 +1,7 @@
 # M176 Mask Lane Constant Boundary Planning Prompt
 
 Execute this prompt only when `docs/agent/current-redesign-state.md` points
-here and records M175 as accepted.
+here and records M175.5 as accepted.
 
 You are planning and reviewing:
 
@@ -9,9 +9,11 @@ You are planning and reviewing:
 Milestone 176: Mask Lane Constant Lowering Boundary Planning
 ```
 
-Milestones 1 through 175 are accepted. M175 completed the descriptor-backed
-vector-member type argument bridge for existing generation value `type::*`
-queries. The next remaining generation-value family in the current corpus is
+Milestones 1 through 175.5 are accepted. M175 completed the
+descriptor-backed vector-member type argument bridge for existing generation
+value `type::*` queries, and M175.5 added fixed byte-size lowering for
+register and mask vector members where explicit extension metadata proves the
+size. The next remaining generation-value family in the current corpus is
 `mask::lane::all_true` / `mask::lane::all_false`, but legacy evidence suggests
 these are backend helper expressions rather than plain generator-time boolean
 values. M176 must settle the boundary before any implementation.

@@ -530,6 +530,12 @@ Invariants:
   resolver when an explicit `Catalog` is supplied. The result feeds existing
   scalar descriptor lookup; catalog-missing and unsupported vector-member
   cases remain diagnostics.
+- M175.5 adds a focused fixed byte-size rule for `type::size_bytes(...)` over
+  `LoweredVectorMemberType` values. Register bytes come from fixed
+  `extension.vector_bits / 8`; lane-bitmask mask bytes come from selected
+  lane count; lane-keyed native predicate bytes come from explicit
+  lane-capacity metadata. Backend spelling text, SVE/scalable sizes, and
+  generic symbolic sizes remain outside this lowering fact.
 - M153 confirms that `details::arith_add`, `details::arith_mul`,
   `details::arith_rem`, `details::popcount`, `details::clz`,
   `details::clz_recursive`, `details::ctz`, and `details::mask_test` are
