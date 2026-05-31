@@ -131,7 +131,7 @@ Deferred generation-value sublanes after M155:
 
 | Sublane | Evidence | Missing prerequisite |
 | --- | --- | --- |
-| Vector mask type values | `type::size_bytes(type<generation>(vector::imask))`, `type::is_signed(type<generation>(vector::imask))` | Mask/integral-mask type policy as generation-value size/signedness facts. |
+| Vector mask type values | `type::size_bytes(type<generation>(vector::imask))`, `type::is_signed(type<generation>(vector::imask))` | M175 connects descriptor-backed fixed vector member type facts from M173/M174 into existing `type::*` generation value evaluators when an explicit catalog is supplied. Native predicate, backend-owned, runtime/scalable, missing metadata, and no-catalog cases remain diagnostics or deferred backend facts. |
 | Mask lane constants | `mask::lane::all_true`, `mask::lane::all_false` | Mask lane literal policy tied to the selected mask representation. |
 | Generic vector lengths | `generic::length(OutVec)`, `generic::runtime_length(ToType)` | M168 lowers exact `generic::length(TYPE_EXPR)` and fixed-vector `generic::runtime_length(TYPE_EXPR)` as selected generation expressions after type-alias/type-query lowering. M169 lets explicit selected specialization bindings make aliases concrete when they flow through declared return-type symbols, and lets explicit vector/type bindings make `ToType`-style `TYPE_EXPR` values concrete before `generic::*` evaluation. Runtime/scalable, size-parameter-only, unresolved alias/specialization, non-vector, and metadata-missing forms remain diagnostic boundaries, not guessed generation values. |
 

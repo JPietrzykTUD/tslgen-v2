@@ -2344,3 +2344,36 @@ Consequences:
 - Pointer-like tags such as `ptr` remain outside scalar descriptor coverage.
 - Backend C++ and Rust scalar type spellings are still backend-owned and are
   not broadened merely because lowering accepts a scalar descriptor.
+
+## ADR-049: Generation Type Values May Consume Resolved Vector Members
+
+Status: Accepted
+
+Context:
+
+M155 `type::*` generation value queries accept scalar type arguments after the
+argument lowers through the type-expression path. M173 can resolve exact
+`LoweredVectorMemberType` values such as `vector::imask` and
+`vector::mask_underlying_t` to concrete scalar type facts from catalog
+extension metadata. M174 completed the scalar descriptors needed by real
+fixed lane-bitmask results such as `ui8`.
+
+Decision:
+
+M175 connects these existing facts without adding a new semantic layer. When a
+generation value `TYPE_EXPR` argument lowers to `LoweredVectorMemberType` and
+an explicit `Catalog` is available, the generation value lowerer invokes
+`resolve_vector_member_scalar_type(...)`. A successful
+`LoweredScalarTypeIdentity` result then feeds the same scalar descriptor lookup
+used by `base::in` and `scalar::...` arguments.
+
+Consequences:
+
+- `type::size_bytes(...)`, `type::is_signed(...)`, and `type::is_same(...)`
+  can consume fixed descriptor-backed vector mask/member type facts.
+- Missing catalog metadata preserves the previous unsupported generation-value
+  type diagnostic rather than inventing runtime corpus access.
+- M173 missing-metadata and unsupported-policy diagnostics propagate unchanged.
+- Backend type spelling, native predicate/register spelling, new vector member
+  policies, new query families, renderer behavior, and broad expression
+  parsing remain out of scope.

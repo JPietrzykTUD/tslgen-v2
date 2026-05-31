@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 174 is accepted.
+Milestone 175 is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -219,6 +219,22 @@ descriptors. Pointer-like tags such as `ptr` remain outside scalar descriptor
 coverage. Backend scalar type spelling, parser changes, renderer changes,
 new operation identifiers, source repair, runtime `tsldata`, runtime
 `frozen`, and runtime `tslgenold` dependencies remained out of scope.
+
+The M175 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, evidence, test,
+documentation, and validation audits. M175 connected existing M155
+generation value `type::*` scalar type arguments to the M173 vector-member
+type resolver when an explicit `Catalog` is supplied. If a `TYPE_EXPR` lowers
+to `LoweredVectorMemberType`, the generation value lowerer now resolves it
+through `resolve_vector_member_scalar_type(...)`, then feeds a successful
+`LoweredScalarTypeIdentity` into the existing M174 scalar descriptor lookup.
+
+M175 preserves no-catalog behavior as
+`TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-TYPE`, propagates M173
+missing-metadata and unsupported-policy diagnostics, and keeps backend
+spelling, rendering, primitive-call matching, source repair, new query
+families, broad expression parsing, runtime `tsldata`, runtime `frozen`, and
+runtime `tslgenold` dependencies out of scope.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -2949,56 +2965,47 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 175.
+Plan Milestone 176.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m175-execution-review-loop-prompt.md
+docs/agent/runs/m176-mask-lane-constant-boundary-planning-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 175: Vector Member Generation Value Type Arguments
+Milestone 176: Mask Lane Constant Lowering Boundary Planning
 ```
 
 Latest review verdict:
 
 ```text
-M174 execution-review returned Accept With Follow-Ups after one write-capable
-executor, one focused revision, read-only architecture, boundary, evidence,
-test, documentation, and validation audits, and focused re-review.
+M175 execution-review returned Accept With Follow-Ups after one write-capable
+executor and read-only architecture, boundary, evidence, test, documentation,
+and validation audits.
 
-Initial architecture and test audits returned Needs Revision for stale
-comparison descriptor docs and missing explicit coverage of signed/unsigned
-transforms, type equality, and generic length/runtime-length over the expanded
-descriptor set. The focused revision updated `behavioral-spec.md` and
-`test_m174_scalar_descriptor_catalog.py`; focused architecture, test,
-documentation, and validation re-reviews returned `Accept`.
-
-M174 review verdicts were: architecture `Accept` after focused re-review;
-boundary `Accept With Follow-Ups`; evidence `Accept With Follow-Ups`; test
-`Accept` after focused re-review; documentation `Accept` after focused
-re-review; validation `Accept` after focused re-review.
+M175 review verdicts were: architecture `Accept`; boundary
+`Accept With Follow-Ups`; evidence `Accept`; test `Accept`; documentation
+`Accept`; validation `Accept`.
 ```
 
 Next expected action:
 
 ```text
-Run the active M175 execution-review-loop prompt. M175 should connect the
-already accepted vector-member type resolver to generation value type
-arguments, so queries such as
-`value<generation>(type::size_bytes(type<generation>(vector::imask)))` can
-resolve when an explicit catalog is supplied.
+Run the active M176 planning prompt. M176 should settle the lowering boundary
+for `value<generation>(mask::lane::all_true)` and
+`value<generation>(mask::lane::all_false)` from current `tsldata` and legacy
+evidence before any executor tries to implement them.
 
-This is useful because M173 can now resolve vector member types through
-extension metadata and M174 completed the scalar descriptors they produce, but
-M155 generation value evaluation still treats lowered vector-member type
-values as unsupported scalar type arguments. M175 should bridge that exact
-gap without adding backend type spelling, renderer behavior, broad expression
-parsing, or new TSIL keyword families.
+This is useful because those mask lane constants are the next remaining
+generation-value family in the inventory, but legacy evidence renders them as
+backend helper expressions rather than simple Python booleans. M176 must
+avoid guessing and decide whether the correct next executable slice is a
+typed backend-literal request, a symbolic generation value, or a different
+deferred boundary.
 ```
 
 Previous review verdict:
@@ -6923,16 +6930,36 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   `tsldata/detail/types.tsl`; bit width, signedness, and family remain
   explicit lowering-owned descriptor facts and must not be described as
   properties parsed from the TSL file itself.
+- M175 follow-up: if generation value vector-member diagnostics are touched
+  again, add a direct `lower_generation_value_query(...)` test for
+  `TSL-LOWER-MISSING-VECTOR-MEMBER-TYPE-METADATA` propagation. M175 covered
+  no-catalog preservation and unsupported-policy propagation directly.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M175
-execution-review-loop prompt.
+No stop condition is active. The workflow is ready to run the active M176
+mask-lane-constant boundary planning prompt.
 
 ## Validation Expectations
 
-For active M175 execution, run the validation command listed in
-`docs/agent/runs/m175-execution-review-loop-prompt.md`.
+For active M176 planning, run the validation command listed in
+`docs/agent/runs/m176-mask-lane-constant-boundary-planning-prompt.md`.
+
+For M175 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py tslgen/tests/test_m175_vector_member_generation_values.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py tslgen/tests/test_m175_vector_member_generation_values.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M175 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`291 passed in 45.45s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed. The
+validation auditor also reran the pytest command with no-bytecode settings
+and reported `291 passed in 49.29s`.
 
 For M174 execution and review, validation completed with:
 

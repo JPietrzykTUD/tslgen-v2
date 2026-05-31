@@ -30,6 +30,7 @@ from tslgen.lowering.type_syntax import (
     TypeSyntax,
     parse_type_syntax,
 )
+from tslgen.lowering.vector_member_types import resolve_vector_member_scalar_type
 
 _GENERATION_ARITHMETIC_PREFIX = "arith<generation>::"
 _GENERATION_ARITHMETIC_OPERATIONS = frozenset(("add", "sub", "mul", "div", "rem"))
@@ -227,17 +228,38 @@ def _lower_call_value(
     if call.name == "type::size_bytes":
         if len(call.arguments) != 1:
             return _malformed_generation_value_query_result(source_text, source)
-        return _lower_type_size_bytes(context, source_text, call, source, environment)
+        return _lower_type_size_bytes(
+            context,
+            source_text,
+            call,
+            source,
+            catalog,
+            environment,
+        )
 
     if call.name == "type::is_signed":
         if len(call.arguments) != 1:
             return _malformed_generation_value_query_result(source_text, source)
-        return _lower_type_is_signed(context, source_text, call, source, environment)
+        return _lower_type_is_signed(
+            context,
+            source_text,
+            call,
+            source,
+            catalog,
+            environment,
+        )
 
     if call.name == "type::is_same":
         if len(call.arguments) != 2:
             return _malformed_generation_value_query_result(source_text, source)
-        return _lower_type_is_same(context, source_text, call, source, environment)
+        return _lower_type_is_same(
+            context,
+            source_text,
+            call,
+            source,
+            catalog,
+            environment,
+        )
 
     if call.name == "primitive::attribute":
         if len(call.arguments) != 1:
@@ -464,12 +486,14 @@ def _lower_type_size_bytes(
     source_text: str,
     call: TypeCall,
     source: SourceLocation,
+    catalog: Catalog | None,
     environment: SelectedTypeEnvironment | None,
 ) -> GenerationValueQueryLoweringResult:
     descriptor = _lower_scalar_type_argument(
         context,
         call.arguments[0],
         source,
+        catalog,
         environment,
     )
     if isinstance(descriptor, Diagnostic):
@@ -501,12 +525,14 @@ def _lower_type_is_signed(
     source_text: str,
     call: TypeCall,
     source: SourceLocation,
+    catalog: Catalog | None,
     environment: SelectedTypeEnvironment | None,
 ) -> GenerationValueQueryLoweringResult:
     descriptor = _lower_scalar_type_argument(
         context,
         call.arguments[0],
         source,
+        catalog,
         environment,
     )
     if isinstance(descriptor, Diagnostic):
@@ -538,12 +564,14 @@ def _lower_type_is_same(
     source_text: str,
     call: TypeCall,
     source: SourceLocation,
+    catalog: Catalog | None,
     environment: SelectedTypeEnvironment | None,
 ) -> GenerationValueQueryLoweringResult:
     left = _lower_scalar_type_argument(
         context,
         call.arguments[0],
         source,
+        catalog,
         environment,
     )
     if isinstance(left, Diagnostic):
@@ -552,6 +580,7 @@ def _lower_type_is_same(
         context,
         call.arguments[1],
         source,
+        catalog,
         environment,
     )
     if isinstance(right, Diagnostic):
@@ -671,6 +700,7 @@ def _lower_scalar_type_argument(
     context: SelectedImplementationLoweringContext,
     syntax: TypeSyntax,
     source: SourceLocation,
+    catalog: Catalog | None,
     environment: SelectedTypeEnvironment | None,
 ) -> ScalarTypeDescriptor | Diagnostic:
     result = lower_type_expression(
@@ -681,7 +711,10 @@ def _lower_scalar_type_argument(
     )
     if result.value is None:
         return result.diagnostics[0]
-    type_tag = _scalar_type_tag(result.value)
+    type_value = _resolve_vector_member_type_value(result.value, catalog, source)
+    if isinstance(type_value, Diagnostic):
+        return type_value
+    type_tag = _scalar_type_tag(type_value)
     if type_tag is None:
         return _unsupported_generation_value_type_diagnostic(
             syntax.source_text,
@@ -695,6 +728,26 @@ def _lower_scalar_type_argument(
             "scalar size or signedness",
         )
     return descriptor
+
+
+def _resolve_vector_member_type_value(
+    value: LoweredTypeValue,
+    catalog: Catalog | None,
+    source: SourceLocation,
+) -> LoweredTypeValue | Diagnostic:
+    if catalog is None:
+        return value
+
+    resolved = resolve_vector_member_scalar_type(
+        value,
+        catalog=catalog,
+        source=source,
+    )
+    if isinstance(resolved, Diagnostic):
+        return resolved
+    if resolved is not None:
+        return resolved
+    return value
 
 
 def _scalar_type_tag(value: LoweredTypeValue) -> str | None:

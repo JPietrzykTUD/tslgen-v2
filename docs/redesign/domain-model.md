@@ -525,6 +525,11 @@ Invariants:
   `ui64`, `f32`, and `f64`. These descriptors are explicit typed facts;
   pointer-like tags such as `ptr` and backend spellings remain outside this
   lowering descriptor boundary.
+- M175 lets generation value `type::*` scalar type arguments consume
+  descriptor-backed `LoweredVectorMemberType` facts by invoking the M173
+  resolver when an explicit `Catalog` is supplied. The result feeds existing
+  scalar descriptor lookup; catalog-missing and unsupported vector-member
+  cases remain diagnostics.
 - M153 confirms that `details::arith_add`, `details::arith_mul`,
   `details::arith_rem`, `details::popcount`, `details::clz`,
   `details::clz_recursive`, `details::ctz`, and `details::mask_test` are

@@ -2037,6 +2037,31 @@ such as `ptr` remain outside scalar descriptor coverage. Backend C++ and Rust
 type spellings remain backend-owned and are not implied by descriptor
 acceptance.
 
+### M175 Vector Member Generation Value Type Arguments
+
+Milestone 175 extends the existing M155 `type::*` generation value boundary so
+scalar type arguments may consume descriptor-backed vector member type facts.
+When a `TYPE_EXPR` argument lowers to `LoweredVectorMemberType` and an
+explicit `Catalog` is supplied, the generation value lowerer invokes the M173
+vector member resolver. If that resolver produces a
+`LoweredScalarTypeIdentity` whose tag has an accepted M174 scalar descriptor,
+the existing `type::size_bytes(...)`, `type::is_signed(...)`, and
+`type::is_same(...)` evaluators use that descriptor.
+
+For example, selected `avx2` / `si32` with current extension metadata lowers
+`value<generation>(type::size_bytes(type<generation>(vector::imask)))` to a
+typed integer generation value of `1`, because `vector::imask` resolves to the
+exact unsigned scalar tag `ui8`. The same bridge applies to accepted
+`vector::mask_underlying_t` and `vector::mask_underlying` cases.
+
+When no catalog is supplied, the existing unsupported generation-value type
+diagnostic is preserved. When the M173 resolver reports missing metadata or an
+unsupported policy such as native predicates, that diagnostic is propagated.
+M175 does not add backend type spelling, register/native-predicate spelling,
+new vector member policies, new generation value query families, broad
+expression parsing, branch/loop/declaration rendering, source repair, output
+writing, or runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
+
 ## Catalog Behavior
 
 The catalog must contain immutable typed objects for:

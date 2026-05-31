@@ -22021,8 +22021,9 @@ Follow-ups:
 
 Status:
 
-Selected after M174 acceptance. Active next prompt:
-`docs/agent/runs/m175-execution-review-loop-prompt.md`.
+Accepted after execution-review with follow-ups. Active next prompt after
+M175:
+`docs/agent/runs/m176-mask-lane-constant-boundary-planning-prompt.md`.
 
 Goal:
 
@@ -22064,4 +22065,90 @@ git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py tslgen/tests/test_m175_vector_member_generation_values.py
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py tslgen/tests/test_m175_vector_member_generation_values.py
 find tslgen -type d -name __pycache__ -print
+```
+
+Accepted behavior:
+
+- Generation value `type::*` scalar type arguments still lower through the
+  accepted type-expression path first.
+- If a `TYPE_EXPR` lowers to `LoweredVectorMemberType` and an explicit
+  `Catalog` is supplied, generation value lowering invokes the accepted M173
+  `resolve_vector_member_scalar_type(...)` helper.
+- Successful vector member resolution feeds the existing scalar descriptor
+  lookup, enabling `type::size_bytes(...)`, `type::is_signed(...)`, and
+  `type::is_same(...)` for fixed descriptor-backed member types such as
+  selected `avx2` / `si32` `vector::imask -> ui8`.
+- No-catalog behavior preserves the existing
+  `TSL-LOWER-UNSUPPORTED-GENERATION-VALUE-TYPE` diagnostic.
+- M173 missing-metadata and unsupported-policy diagnostics propagate through
+  `lower_generation_value_query(...)`.
+- Backend type spelling, register/native-predicate spelling, new vector
+  member policies, new scalar descriptors, new generation value families,
+  primitive-call matching, rendering, source repair, output writing, and
+  runtime `tsldata`, `frozen`, or `tslgenold` dependencies remain out of
+  scope.
+
+Validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py tslgen/tests/test_m175_vector_member_generation_values.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py tslgen/tests/test_m175_vector_member_generation_values.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M175 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`291 passed in 45.45s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed.
+
+Follow-ups:
+
+- If this exact area is touched again, add a direct
+  `lower_generation_value_query(...)` test for
+  `TSL-LOWER-MISSING-VECTOR-MEMBER-TYPE-METADATA` propagation. M175 directly
+  covers no-catalog preservation and unsupported-policy propagation.
+
+### Milestone 176: Mask Lane Constant Lowering Boundary Planning
+
+Status:
+
+Selected after M175 acceptance. Active next prompt:
+`docs/agent/runs/m176-mask-lane-constant-boundary-planning-prompt.md`.
+
+Goal:
+
+Settle the lowering boundary for
+`value<generation>(mask::lane::all_true)` and
+`value<generation>(mask::lane::all_false)` before implementation. These are
+the next remaining generation-value family in the corpus, but current evidence
+suggests they are not simple generator-time booleans.
+
+Scope:
+
+- Inventory all current `mask::lane::all_true` and
+  `mask::lane::all_false` occurrences and their surrounding contexts.
+- Inspect legacy evidence only as behavior evidence, especially the frozen
+  expansion support that lowers mask lane constants to backend helper
+  expressions for C++ and Rust.
+- Decide whether the next executable slice should produce a typed
+  backend-literal request, a symbolic generation value, a raw backend-owned
+  handoff, or a documented deferral.
+- Preserve the rule that generation value lowering must not guess backend
+  literal text or treat mask lane constants as Python booleans unless evidence
+  establishes that as a backend-neutral semantic value.
+- Produce the next concrete executor prompt if the boundary is accepted.
+
+Out of scope:
+
+Production code; renderer changes; backend helper implementation; primitive
+call rendering; declaration rendering; loop execution; source replacement;
+new mask representation semantics beyond the boundary decision; runtime
+`tsldata`, `frozen`, or `tslgenold` dependencies; broad expression parsing;
+and treating legacy code structure as architecture.
+
+Validation:
+
+```bash
+git diff --check
 ```
