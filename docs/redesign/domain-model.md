@@ -832,6 +832,7 @@ LoweredGenerationValueKind = Literal[
     "generic.length",
     "generic.runtime_length",
     "generation.integer_comparison",
+    "generation.boolean_condition",
     "generation.arithmetic.add",
     "generation.arithmetic.sub",
     "generation.arithmetic.mul",
@@ -878,11 +879,15 @@ Invariants:
   result is an integer only when the lowered type is a concrete fixed vector
   with concrete extension, scalar type tag, and catalog lane metadata.
 - `generation.integer_comparison` is produced only by generation-control
-  condition lowering for exact
-  `value<generation>(QUERY) COMPARISON INTEGER_LITERAL` predicates over
-  accepted integer generation values, including M159 arithmetic results. It is
-  a boolean generation value consumed by branch selection, not a general
-  expression node.
+  condition lowering for exact comparison leaves over accepted integer
+  generation values and base-10 integer literals. The integer side may be a
+  wrapped `value<generation>(...)` query or a bare accepted generation
+  expression such as `type::size_bytes(...)` or
+  `arith<generation>::mul(...)`.
+- `generation.boolean_condition` is produced only when generation-control
+  condition lowering combines accepted boolean leaves with the finite typed
+  grammar operators `!`, `&&`, `||`, or parenthesized grouping. It is consumed
+  by branch selection, not by backend rendering or raw source replacement.
 - Unsupported query families, unsupported lowered type values, unresolved
   aliases/specializations, missing facts, malformed query shapes, runtime or
   size-parameter-only generic vector metadata, and non-concrete attributes

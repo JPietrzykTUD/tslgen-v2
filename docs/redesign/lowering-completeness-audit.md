@@ -167,3 +167,34 @@ artifact integration.
 Broad parsing/deferred work includes raw assignments, array indexing,
 target-language loops, raw operators, expression precedence, argument ASTs,
 general recursive payload scanning, and source repair.
+
+## Post-M185 Completion Gate Addendum
+
+The post-M185 lowering completion gate re-ran the corpus check after M185 was
+accepted. It selected one additional lowering-owned gap before declaring the
+lowering surface complete by contract:
+
+| Candidate | Evidence | Classification | Next action |
+| --- | --- | --- | --- |
+| bare `if<generation>(type::is_same(...))` conditions | 15 current primitive-body conditions, including 3 exact two-term top-level `type::is_same(...) || type::is_same(...)` disjunctions | lowering-owned condition-expression gap | Select M186 as a typed generation boolean condition grammar. |
+| `assume_aligned<...>(...)`, `array_type<...>`, `pack<...>(...)` | same evidence as M184 | backend/output-owned or source-convention | Do not select as lowering implementation. |
+| `details::*` support helpers | same helper evidence as M184 | source-authored backend/support helpers | Preserve; do not rewrite to operators. |
+| recursive payload discovery, loop execution/substitution, declaration/body rendering, backend translation/rendering | required later for output, but not a missing keyword-family lowering boundary | backend/output-owned or broad/deferred | Keep out of M186. |
+
+Interactive product review broadened M186 from a one-off matcher to a small
+typed TSIL generation boolean condition grammar. M186 should accept boolean
+`!`, `&&`, `||`, and parentheses only over accepted generation
+expression/value leaves and accepted integer-comparison leaves. It must still
+leave recursive generation-control lowering, raw target-language expression
+parsing, helper-call semantics, pointer/indexing predicates, and backend
+translation/rendering out of scope.
+
+## Post-M186 Completion Gate Required
+
+M186 accepted the typed generation boolean condition grammar selected by the
+post-M185 completion gate. Before declaring the lowering surface complete or
+moving to backend/output integration, run one final lowering-focused planning
+gate that reconciles this audit, the current `tsldata/**/*.tsl` corpus, and
+the accepted M186 behavior. That gate must either record lowering completion
+by contract or select exactly one remaining lowering-owned gap; it must not
+start backend implementation merely because backend/output-owned work remains.

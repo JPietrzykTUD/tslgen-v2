@@ -10,7 +10,7 @@ from tslgen.domain.catalog import (
     LowerableDirective,
     RawStringToken,
 )
-from tslgen.lowering.generation_values import lower_generation_value_query
+from tslgen.lowering.generation_conditions import lower_generation_condition
 from tslgen.lowering.model import (
     GenerationControlRegionLoweringResult,
     LoweredGenerationControlBranch,
@@ -19,12 +19,6 @@ from tslgen.lowering.model import (
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
 )
-from tslgen.syntax.tsil_lexical import PAREN_DELIMITER, matching_close
-
-
-_VALUE_QUERY_PREFIX = "value<generation>("
-_COMPARISON_OPERATORS = ("==", "!=", "<=", ">=", "<", ">")
-_RAW_ARITHMETIC_OPERATORS = ("+", "-", "*", "/", "%")
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,12 +46,6 @@ class _GenerationControlShape:
 @dataclass(frozen=True, slots=True)
 class _GenerationControlShapeParse:
     shape: _GenerationControlShape | None
-    diagnostics: tuple[Diagnostic, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class _ConditionLowering:
-    condition: LoweredGenerationValue | None
     diagnostics: tuple[Diagnostic, ...]
 
 
@@ -90,19 +78,19 @@ def lower_generation_control_region(
 
     for arm in shape.conditional_arms:
         assert arm.condition is not None
-        condition_result = _lower_generation_condition(
+        condition_result = lower_generation_condition(
             context,
             arm.condition,
             arm.condition_source,
             catalog=catalog,
             environment=environment,
         )
-        if condition_result.condition is None:
+        if condition_result.value is None:
             return GenerationControlRegionLoweringResult(
                 region=None,
                 diagnostics=condition_result.diagnostics,
             )
-        condition = condition_result.condition
+        condition = condition_result.value
         evaluated_conditions.append(condition)
         if condition.value:
             selected_arm = arm
@@ -309,208 +297,6 @@ def _parse_generation_fallback_arm(
             source=else_directive.source,
         )
     )
-
-
-def _lower_generation_condition(
-    context: SelectedImplementationLoweringContext,
-    condition: str,
-    source: SourceLocation,
-    *,
-    catalog: Catalog | None,
-    environment: SelectedTypeEnvironment | None,
-) -> _ConditionLowering:
-    left_query, suffix = _extract_leading_value_query(condition)
-    if left_query is None:
-        value_result = lower_generation_value_query(
-            context,
-            condition,
-            source,
-            catalog=catalog,
-            environment=environment,
-        )
-        if value_result.value is None:
-            return _ConditionLowering(
-                condition=None,
-                diagnostics=value_result.diagnostics,
-            )
-        if type(value_result.value.value) is not bool:
-            return _ConditionLowering(
-                condition=None,
-                diagnostics=(
-                    _nonboolean_condition_diagnostic(
-                        value_result.value.source_text,
-                        source,
-                    ),
-                ),
-            )
-        return _ConditionLowering(condition=value_result.value, diagnostics=())
-
-    left_result = lower_generation_value_query(
-        context,
-        left_query,
-        source,
-        catalog=catalog,
-        environment=environment,
-    )
-    if left_result.value is None:
-        return _ConditionLowering(
-            condition=None,
-            diagnostics=left_result.diagnostics,
-        )
-
-    if not suffix:
-        if type(left_result.value.value) is not bool:
-            return _ConditionLowering(
-                condition=None,
-                diagnostics=(
-                    _nonboolean_condition_diagnostic(
-                        left_result.value.source_text,
-                        source,
-                    ),
-                ),
-            )
-        return _ConditionLowering(condition=left_result.value, diagnostics=())
-
-    if suffix.startswith(_RAW_ARITHMETIC_OPERATORS):
-        return _ConditionLowering(
-            condition=None,
-            diagnostics=(
-                _unsupported_condition_diagnostic(
-                    condition,
-                    source,
-                    "raw arithmetic operator text is not supported",
-                ),
-            ),
-        )
-
-    comparison = _comparison_suffix(suffix)
-    if comparison is None:
-        return _ConditionLowering(
-            condition=None,
-            diagnostics=(
-                _malformed_condition_diagnostic(
-                    condition,
-                    source,
-                    "expected a comparison operator followed by an integer literal",
-                ),
-            ),
-        )
-
-    operator, right_text = comparison
-    if type(left_result.value.value) is not int:
-        return _ConditionLowering(
-            condition=None,
-            diagnostics=(
-                _noninteger_condition_diagnostic(
-                    left_result.value.source_text,
-                    source,
-                ),
-            ),
-        )
-    if _contains_comparison_operator(right_text):
-        return _ConditionLowering(
-            condition=None,
-            diagnostics=(
-                _malformed_condition_diagnostic(
-                    condition,
-                    source,
-                    "expected exactly one top-level comparison operator",
-                ),
-            ),
-        )
-    if _contains_raw_arithmetic_operator(right_text):
-        return _ConditionLowering(
-            condition=None,
-            diagnostics=(
-                _unsupported_condition_diagnostic(
-                    condition,
-                    source,
-                    "raw arithmetic operator text is not supported",
-                ),
-            ),
-        )
-    if not _is_base_10_integer_literal(right_text):
-        return _ConditionLowering(
-            condition=None,
-            diagnostics=(
-                _malformed_condition_diagnostic(
-                    condition,
-                    source,
-                    "expected a base-10 integer literal on the right side",
-                ),
-            ),
-        )
-
-    return _ConditionLowering(
-        condition=LoweredGenerationValue(
-            kind="generation.integer_comparison",
-            value=_evaluate_integer_comparison(
-                left_result.value.value,
-                operator,
-                int(right_text),
-            ),
-            source_text=condition,
-            source=source,
-        ),
-        diagnostics=(),
-    )
-
-
-def _extract_leading_value_query(condition: str) -> tuple[str | None, str]:
-    stripped = condition.strip()
-    if stripped != condition or not condition.startswith(_VALUE_QUERY_PREFIX):
-        return None, condition
-
-    open_index = len(_VALUE_QUERY_PREFIX) - 1
-    close_index = matching_close(condition, open_index, PAREN_DELIMITER)
-    if close_index is None:
-        return None, condition
-
-    return condition[: close_index + 1], condition[close_index + 1 :].strip()
-
-
-def _comparison_suffix(suffix: str) -> tuple[str, str] | None:
-    for operator in _COMPARISON_OPERATORS:
-        if suffix.startswith(operator):
-            right_text = suffix[len(operator) :].strip()
-            if not right_text:
-                return None
-            return operator, right_text
-    return None
-
-
-def _contains_comparison_operator(text: str) -> bool:
-    return any(operator in text for operator in _COMPARISON_OPERATORS)
-
-
-def _contains_raw_arithmetic_operator(text: str) -> bool:
-    return any(operator in text for operator in _RAW_ARITHMETIC_OPERATORS)
-
-
-def _is_base_10_integer_literal(text: str) -> bool:
-    if text == "0":
-        return True
-    return text.isdecimal() and not text.startswith("0")
-
-
-def _evaluate_integer_comparison(
-    left: int,
-    operator: str,
-    right: int,
-) -> bool:
-    if operator == "==":
-        return left == right
-    if operator == "!=":
-        return left != right
-    if operator == "<":
-        return left < right
-    if operator == "<=":
-        return left <= right
-    if operator == ">":
-        return left > right
-    if operator == ">=":
-        return left >= right
-    raise AssertionError(f"unsupported generation comparison operator {operator!r}")
 
 
 def _find_branch_close(
@@ -740,68 +526,6 @@ def _no_matching_branch_diagnostic(source: SourceLocation) -> Diagnostic:
             "generation-control branch chain cannot select a branch; no "
             "condition lowered to true and no final else<generation> fallback "
             "is present"
-        ),
-        location=source,
-    )
-
-
-def _nonboolean_condition_diagnostic(
-    condition: str,
-    source: SourceLocation,
-) -> Diagnostic:
-    return Diagnostic(
-        severity="error",
-        code="TSL-LOWER-NONBOOLEAN-GENERATION-CONTROL-CONDITION",
-        message=(
-            "generation-control condition must lower to a boolean generation "
-            f"value; got {condition!r}"
-        ),
-        location=source,
-    )
-
-
-def _noninteger_condition_diagnostic(
-    condition: str,
-    source: SourceLocation,
-) -> Diagnostic:
-    return Diagnostic(
-        severity="error",
-        code="TSL-LOWER-NONINTEGER-GENERATION-CONTROL-CONDITION",
-        message=(
-            "generation-control integer comparison left side must lower to an "
-            f"integer generation value; got {condition!r}"
-        ),
-        location=source,
-    )
-
-
-def _malformed_condition_diagnostic(
-    condition: str,
-    source: SourceLocation,
-    reason: str,
-) -> Diagnostic:
-    return Diagnostic(
-        severity="error",
-        code="TSL-LOWER-MALFORMED-GENERATION-CONTROL-CONDITION",
-        message=(
-            "generation-control condition cannot be lowered; "
-            f"{reason}; got {condition!r}"
-        ),
-        location=source,
-    )
-
-
-def _unsupported_condition_diagnostic(
-    condition: str,
-    source: SourceLocation,
-    reason: str,
-) -> Diagnostic:
-    return Diagnostic(
-        severity="error",
-        code="TSL-LOWER-UNSUPPORTED-GENERATION-CONTROL-CONDITION",
-        message=(
-            "generation-control condition is outside the M158 comparison "
-            f"boundary; {reason}; got {condition!r}"
         ),
         location=source,
     )

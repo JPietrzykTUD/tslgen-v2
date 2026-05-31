@@ -1434,12 +1434,12 @@ directive classifier into source-owned raw `{`, body, and `}` tokens before
 M160 selection. A final `else<generation>` fallback arm is optional.
 
 Conditions are evaluated in source order through the accepted generation
-condition boundary: M155 boolean value queries, M158 integer comparisons, and
-M159 arithmetic values when consumed by M158 comparisons. The first true
-conditional arm is selected. Later conditions and all unselected branch bodies
-remain opaque and silent. If no conditional arm is true and a final
-`else<generation>` fallback exists, the fallback body is selected. If no arm
-matches and no fallback exists, lowering emits
+condition boundary. M186 extends that boundary to a finite typed boolean
+grammar over accepted generation boolean leaves and integer-comparison leaves.
+The first true conditional arm is selected. Later conditions and all
+unselected branch bodies remain opaque and silent. If no conditional arm is
+true and a final `else<generation>` fallback exists, the fallback body is
+selected. If no arm matches and no fallback exists, lowering emits
 `TSL-LOWER-NO-MATCHING-GENERATION-CONTROL-BRANCH`.
 
 M160 reuses the M157 selected-branch handoff: only the selected branch's
@@ -1459,6 +1459,42 @@ operator parsing, right-hand value queries, loop/declaration/backend-control
 lowering, branch-body rendering, backend rendering, source repair, dependency
 scheduling, runtime `tsldata`, `frozen`, or `tslgenold` dependencies,
 registries, dispatchers, worklists, or fixpoint machinery.
+
+### M186 Typed Generation Boolean Condition Grammar Boundary
+
+Milestone 186 extends only the condition expression accepted by
+`if<generation>(COND)` and `else if<generation>(COND)`. `COND` is a small
+typed TSIL generation boolean grammar:
+
+```text
+GenerationCondition =
+  Predicate
+  !GenerationCondition
+  GenerationCondition && GenerationCondition
+  GenerationCondition || GenerationCondition
+  (GenerationCondition)
+```
+
+`!` binds tighter than `&&`, and `&&` binds tighter than `||`; binary
+operators are left-associative. Both sides of a boolean operator are lowered,
+so malformed or unsupported later operands are not hidden by short-circuiting.
+
+Accepted predicate leaves are existing typed generation-value/expression
+families that lower to booleans, including wrapped `value<generation>(...)`
+boolean values, bare `type::is_same(TYPE_EXPR, TYPE_EXPR)`, bare
+`type::is_signed(TYPE_EXPR)`, and bare `primitive::attribute(KEY)`. Integer
+comparison leaves compare an accepted integer generation value or expression
+against a base-10 integer literal with `==`, `!=`, `<`, `<=`, `>`, or `>=`.
+This preserves existing M158 `value<generation>(...)` comparisons and also
+accepts bare integer generation expressions such as `type::size_bytes(...)`
+and `arith<generation>::mul(...)`.
+
+M186 does not parse C, C++, Rust, or arbitrary TSIL expressions, raw
+comparisons such as `left == right`, pointer or array predicates, raw
+arithmetic operator text, helper-call semantics, recursive generation-control
+regions, branch/body rendering, backend translation, source repair, runtime
+`tsldata`, `frozen`, or `tslgenold` dependencies, registries, dispatchers,
+worklists, or recursive payload walkers.
 
 ### M161 Exact Generation Loop Region Lowering Boundary
 

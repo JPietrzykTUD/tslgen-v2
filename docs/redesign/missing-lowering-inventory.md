@@ -12,7 +12,7 @@ typed redesign contracts, explicit evidence, diagnostics, and tests.
 
 ## Current Baseline
 
-Accepted through M185:
+Accepted through M186:
 
 - Generation-time lowering handles only the accepted typed helper/predicate
   forms from M38, M41-M43, M48, M51-M59, and M67-M72.
@@ -68,7 +68,10 @@ Accepted through M185:
   selector handoff for the observed cast/memory/I/O selectors, M184
   lowering completeness audit, and M185 exact `mask<...>(...)` mask keyword
   request discovery/classification for the observed `zero`, `test`, `set`,
-  and `set:1` selectors. That path deliberately still does not render
+  and `set:1` selectors, and M186 typed generation boolean condition grammar
+  lowering for `if<generation>` / `else if<generation>` conditions over
+  accepted boolean leaves, integer-comparison leaves, `!`, `&&`, `||`, and
+  parentheses. That path deliberately still does not render
   primitive-call expressions, declarations, loops, backend values, backend
   type spellings, backend control flow, intrinsic calls, cast/memory/I/O
   calls, or mask keyword calls; parse raw arithmetic operators; parse broad
@@ -86,6 +89,18 @@ translation, raw target-language text, and backend translation metadata as
 backend-owned, source-convention, or deferred rather than next lowering
 implementation.
 
+The post-M185 lowering completion gate found one remaining lowering-owned
+condition-expression gap before the project could honestly leave lowering:
+current primitive bodies contained 15 bare
+`if<generation>(type::is_same(...))` conditions, including three exact
+two-term top-level `type::is_same(...) || type::is_same(...)` disjunctions.
+M186 closed that gap with a small typed TSIL generation boolean condition
+grammar over accepted generation expression/value leaves, integer comparison
+leaves, `!`, `&&`, `||`, and parentheses. Recursive branch
+lowering, plain target-language `else`, arbitrary target-language expression
+parsing, backend translation/rendering, and the backend/output-owned families
+listed above remain out of scope.
+
 ## Post-M152 Clean Restart Lowering Paths
 
 The next clean restart milestones should choose from these generation-relevant
@@ -95,7 +110,7 @@ to implement several lanes in one milestone.
 | Path | TSIL surface | Why it matters | Boundary |
 | --- | --- | --- | --- |
 | Generation value/query lowering | `value<generation>(...)` forms from the current corpus plus explicit future generation-value functions | Generation-time conditions, loop bounds, declarations, type predicates, vector metadata, primitive attributes, and selected source regions depend on typed values rather than raw helper text. | M155 accepts isolated selected-context evaluators for vector length/alignment, scalar type facts, and concrete boolean primitive attributes. M158 accepts exact integer comparisons over accepted integer value queries. M159 accepts explicit function-shaped integer arithmetic via `arith<generation>::add/sub/mul/div/rem(...)` inside `value<generation>(...)`. Remaining value families should still be selected explicitly and must not add a general expression parser or raw operator parser. |
-| Generation control lowering | `if<generation>(...)`, `else if<generation>(...)`, `else<generation>` | Real bodies need selected-branch pruning before backend rendering. | M156 accepts exact two-arm `if<generation>(VALUE_QUERY) { ... } else<generation> { ... }` token regions for M155 boolean conditions and preserves selected/unselected branch token slices. M157 hands selected branch tokens to existing direct body lowering. M160 accepts exact classified `else if<generation>` branch-chain selection with an optional final `else<generation>` fallback and first-true/no-match behavior. Plain target-language `else`, recursive branch lowering, and rendering remain deferred. |
+| Generation control lowering | `if<generation>(...)`, `else if<generation>(...)`, `else<generation>` | Real bodies need selected-branch pruning before backend rendering. | M156 accepts exact two-arm `if<generation>(VALUE_QUERY) { ... } else<generation> { ... }` token regions for M155 boolean conditions and preserves selected/unselected branch token slices. M157 hands selected branch tokens to existing direct body lowering. M160 accepts exact classified `else if<generation>` branch-chain selection with an optional final `else<generation>` fallback and first-true/no-match behavior. M186 accepts a typed generation boolean condition grammar over accepted boolean/integer-comparison leaves, `!`, `&&`, `||`, and parentheses. Plain target-language `else`, recursive branch lowering, arbitrary target-language expression parsing, and rendering remain deferred. |
 | Generation declaration/iteration lowering | `loop<unroll>(...)`, `loop<range>(...)`, `var<...>(...)`, non-type `let<...>(...)` | Generic/vector fallback bodies use TSIL directives for repeated statements, declarations, temporaries, and aliases. | M161 accepts an exact `loop<range>(...)` region fact with optional adjacent `loop<unroll>(...)` metadata over source-owned body tokens. M162 discovers every exact top-level M161 loop region inside arbitrary body token streams and preserves non-loop tokens as opaque spans. M162.5 refactors shared lexical delimiter/top-level scanning without adding new source behavior. M163 accepts exact top-level classified `var<init_register>`, `var<infer>`, `var<const_infer>`, and `var<typed>` declaration facts as unresolved backend-facing requests with opaque type/initializer payload text. `let<type>(...)` alias facts already feed the type environment. Loop execution/unrolling, loop-variable substitution, declaration rendering, raw multiline declaration-token intake, and broad surrounding target-language statement parsing remain deferred. |
 | Backend query lowering | `value<backend>(...)`, accepted `type<backend>(...)` requests | Backend spellings, suffixes, uninit values, and type spellings must be derived from typed semantic values before rendering. | M164 accepts exact `value<backend>(...)` request islands as unresolved backend-owned facts over source-owned text. M179 accepts exact `type<backend>(...)` request-island discovery over source-owned text and contiguous raw body-token runs, keeping raw islands distinct from `BackendTypeSpellingRequest`. M180 accepts handoff from those exact discovered islands to existing selected-context `lower_backend_type_query(...)` semantics, producing existing `BackendTypeSpellingRequest` values while preserving opaque surroundings. M181 accepts handoff from M164 backend-value query islands to one typed unresolved backend-value request boundary for the five observed payload families: `intrin::suffix...`, `intrin::prefix`, `uninit::array`, `uninit::scalar`, and `x86::mm_fround_to_zero`. Backend translation requests/results, backend maps, backend value evaluation, and rendering remain deferred. Renderers must not evaluate raw query text. |
 | Backend control lowering | `if<compile>(...)`, `else<compile>`, `switch<compile>(...)` | Backend-specific compile-time control appears in current `tsldata` bodies. | M165 accepts exact classified compile-control directive request facts over source-owned body tokens. Backend-control translation, rendering, branch selection, and block matching remain deferred. `if<runtime>` / `else<runtime>` are absent from the current corpus and should remain future/diagnostic unless new source data adds them. |

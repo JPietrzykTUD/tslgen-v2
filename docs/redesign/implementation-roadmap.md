@@ -23404,13 +23404,18 @@ Validation result:
 
 Status:
 
-Selected. Active prompt:
-`docs/agent/runs/post-m185-lowering-planning-prompt.md`.
+Accepted. Completed prompt:
+`docs/agent/runs/post-m185-lowering-completion-gate-planning-prompt.md`.
 
 Goal:
 
-Select exactly one next lowering-focused milestone after M185, or record a
-return-to-planner/stop condition if no safe lowering-owned milestone remains.
+Run a final lowering completion gate after M185. Decide whether every
+generation-relevant TSIL keyword family in `tsldata/**/*.tsl` is either
+accepted as typed semantic lowering, accepted as a typed unresolved handoff,
+preserved as source-authored raw/support-helper text, or explicitly classified
+as backend/output-owned or broad/deferred. If a real lowering-owned gap
+remains, select exactly one M186 implementation milestone; otherwise create
+the next backend/output transition prompt.
 
 Scope:
 
@@ -23424,7 +23429,8 @@ Scope:
   helpers.
 - Classify remaining candidates as lowering-owned, backend/output-owned,
   broad/deferred, source-convention follow-up, or no current corpus evidence.
-- Create exactly one next concrete run prompt after planning acceptance.
+- Produce a completion matrix and create exactly one next concrete run prompt
+  after planning acceptance.
 
 Out of scope:
 
@@ -23438,3 +23444,147 @@ Validation:
 ```bash
 git diff --check
 ```
+
+Planning result:
+
+The post-M185 completion gate did not declare lowering complete. The rescan
+found one remaining lowering-owned condition-expression gap:
+`if<generation>(type::is_same(...))` appears 15 times in current primitive
+bodies without the accepted `value<generation>(...)` wrapper, and three of
+those conditions use the exact two-term top-level disjunction
+`type::is_same(...) || type::is_same(...)`.
+
+Completion matrix:
+
+| Family or candidate | Completion classification | Next action |
+| --- | --- | --- |
+| `tsil` envelopes, source-owned body tokens, and raw surrounding text | accepted source/body intake, with raw text preserved by default | No new lowering slice. Backend/output integration must consume accepted tokens without source repair. |
+| `emit_return(...)` and primitive calls | accepted enough for current exact lowering and dependency boundaries | Rendering and recursive token-stream use remain backend/output-owned. |
+| `type<generation>(...)`, `let<type>(...)`, selected aliases, extension/type facts, and vector member facts | accepted typed semantic lowering for current selected-context needs | No M186 action. |
+| `value<generation>(...)` families, integer comparisons, explicit `arith<generation>::...`, `generic::*`, and mask lane constants | accepted typed semantic values or typed backend/support-helper requests | No M186 action. |
+| `if<generation>(value<generation>(...))`, `else if<generation>`, and `else<generation>` branch-chain shapes | accepted exact branch selection over accepted condition values | Recursive branch lowering, plain `else`, and body rendering remain deferred. |
+| Bare `if<generation>(type::is_same(...))` and exact `type::is_same(...) || type::is_same(...)` condition forms | lowering-owned gap | Select M186. |
+| `loop<range>`, `loop<unroll>`, and `var<...>` | accepted typed request/fact discovery | Loop execution/substitution and declaration rendering remain output-owned/deferred. |
+| `value<backend>(...)`, `type<backend>(...)`, backend control, intrinsics, source operations, and `mask<...>(...)` | accepted typed unresolved request/handoff boundaries | Backend translation/rendering remains separate work. |
+| `assume_aligned<...>`, `array_type<...>`, and `pack<...>` | backend/output-owned spelling or source convention | Do not select as M186 lowering. |
+| `details::*` helpers | source-authored/backend-support helper calls | Preserve as raw/support-helper text; do not rewrite to operators. |
+| recursive discovery inside arbitrary opaque payloads, raw assignments/indexing/operators, and broad target-language expression parsing | broad parsing/deferred | Do not pull into lowering. |
+| `if<runtime>`, `else<runtime>`, and `switch<runtime>` | no current corpus evidence | No implementation until source data requires it. |
+
+Selected next milestone:
+
+```text
+Milestone 186: Typed Generation Boolean Condition Grammar Boundary
+```
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+
+Interactive product review broadened the M186 executor prompt from a one-off
+matcher for the observed `type::is_same(...) || type::is_same(...)` form into
+a small typed TSIL generation boolean condition grammar. This keeps the same
+lowering-owned gap but avoids adding binary condition operators one at a time.
+The grammar is still bounded to accepted generation expression/value leaves
+and must not become a C, C++, Rust, or broad TSIL expression parser.
+
+### Milestone 186: Typed Generation Boolean Condition Grammar Boundary
+
+Status:
+
+Accepted. Execution-review loop prompt:
+`docs/agent/runs/m186-generation-condition-expression-execution-review-loop-prompt.md`.
+
+Goal:
+
+Close the remaining lowering-owned generation-condition expression gap by
+making `if<generation>(COND)` consume a typed TSIL generation boolean
+condition grammar over accepted generation boolean leaves, integer-comparison
+leaves, `!`, `&&`, `||`, and parentheses.
+
+Scope:
+
+- Reuse accepted typed generation expression/value lowering for boolean
+  leaves such as bare `type::is_same(TYPE_EXPR, TYPE_EXPR)`, bare
+  `type::is_signed(TYPE_EXPR)`, bare `primitive::attribute(KEY)`, and wrapped
+  `value<generation>(...)` boolean values.
+- Preserve existing integer comparison behavior over accepted generation
+  integer values, including current size-byte comparison branches.
+- Add typed boolean `!`, `&&`, `||`, and parenthesized grouping over accepted
+  leaves with deterministic precedence/associativity tests.
+- Preserve existing `value<generation>(...)`, `arith<generation>::...`, and
+  `generic::*` behavior.
+- Add focused positive, false-branch, malformed, unsupported-form, and
+  no-broad-expression tests.
+- Keep diagnostics deterministic and source-owned.
+
+Out of scope:
+
+General C, C++, Rust, or target-language expression parsing; arbitrary
+function-call predicates outside accepted generation expression families; raw
+comparisons over source text such as `left == right`; pointer checks; array
+indexing predicates; helper-call semantics; raw arithmetic/operator parsing
+beyond accepted generation-value semantics and integer comparison leaves;
+recursive generation-control lowering; plain target-language `else`;
+branch/body rendering; loop execution/substitution; declaration rendering;
+`assume_aligned<...>`, `array_type<...>`, `pack<...>`, or `details::*`
+semantic lowering; backend translation/rendering; source repair; runtime
+`tsldata`, `frozen`, or `tslgenold` dependencies; registries, dispatchers,
+worklists, recursive payload walkers, or per-keyword frameworks.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m186_generation_condition_expressions.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m186_generation_condition_expressions.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Execution result:
+
+M186 accepted after one write-capable executor and read-only architecture,
+boundary/simplicity, evidence, test, documentation, and validation audits. The
+implementation extracts generation condition lowering from
+`generation_control.py` into a focused `generation_conditions.py` helper and
+reuses the existing generation expression/value lowerers for typed predicate
+leaves.
+
+Accepted behavior:
+
+- Bare boolean generation leaves such as `type::is_same(...)`,
+  `type::is_signed(...)`, and `primitive::attribute(KEY)` lower in
+  `if<generation>` / `else if<generation>` conditions without requiring a
+  `value<generation>(...)` wrapper.
+- Existing wrapped boolean values and integer comparisons remain accepted.
+- Integer comparisons accept typed integer generation values from either
+  wrapped `value<generation>(...)` queries or bare accepted generation
+  expressions such as `type::size_bytes(...)` and
+  `arith<generation>::mul(...)`.
+- Boolean `!`, `&&`, `||`, and parenthesized grouping are evaluated with
+  deterministic precedence; both operands are lowered so later malformed or
+  unsupported operands are not hidden by short-circuiting.
+- The resulting condition is a typed `LoweredGenerationValue`, either an
+  existing leaf kind, `generation.integer_comparison`, or the new narrow
+  `generation.boolean_condition` kind.
+
+The milestone preserved M156-M160 branch selection behavior and M158
+diagnostic precedence. It did not add target-language expression parsing, raw
+operator semantics, pointer/index predicates, helper-call semantics, recursive
+generation-control lowering, rendering, backend translation, runtime
+`tsldata`, `frozen`, or `tslgenold` dependencies, registries, dispatchers,
+worklists, or recursive payload walkers.
+
+Validation result:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m186_generation_condition_expressions.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m186_generation_condition_expressions.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. `compileall` returned exit
+0 with no output. The M186 pytest command returned `8 passed in 1.79s`.
+Validation-created `__pycache__` directories were removed before the final
+`find`; the final `find` returned exit 0 with no output.

@@ -48,6 +48,7 @@ LoweredGenerationValueKind = Literal[
     "generic.length",
     "generic.runtime_length",
     "generation.integer_comparison",
+    "generation.boolean_condition",
     "generation.arithmetic.add",
     "generation.arithmetic.sub",
     "generation.arithmetic.mul",

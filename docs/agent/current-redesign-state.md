@@ -6,6 +6,27 @@ or accepted planning passes.
 
 ## Accepted Through
 
+Milestone 186 is accepted.
+
+The M186 execution-review loop returned `Accept` after one write-capable
+executor and read-only architecture, boundary/simplicity, evidence, test,
+documentation, and validation audits. M186 added a finite typed generation
+boolean condition grammar for `if<generation>(COND)` and
+`else if<generation>(COND)` over accepted boolean generation leaves,
+integer-comparison leaves, `!`, `&&`, `||`, and parentheses.
+
+M186 keeps the condition boundary in lowering: leaves reuse accepted
+generation expression/value lowering, branch selection still consumes typed
+`LoweredGenerationValue` results, and no backend rendering or raw source
+replacement semantics were added. It preserved existing M156-M160 generation
+branch behavior and M158 diagnostic precedence.
+
+M186 deliberately did not add target-language expression parsing, raw
+operator semantics, pointer/index predicates, helper-call semantics,
+recursive generation-control lowering, rendering, backend translation,
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies, registries,
+dispatchers, worklists, or recursive payload walkers.
+
 Milestone 185 is accepted.
 
 The M185 execution-review loop returned `Accept` after one write-capable
@@ -21,6 +42,14 @@ constants and `details::*` helpers distinct, and does not translate masks,
 map selectors to backend helpers, split arguments, recursively lower nested
 payloads, render C++ or Rust, parse target-language expressions, or read
 `tsldata`, `frozen`, or `tslgenold` at runtime.
+
+The post-M185 lowering completion gate returned `Accept` and selected M186.
+It did not declare lowering complete: the completion rescan found one
+remaining lowering-owned condition-expression gap. M186 has now closed that
+gap with the accepted typed generation boolean condition grammar. Other
+post-M185 candidates remain backend/output-owned, source-convention, or
+broad/deferred rather than lowering work unless a final post-M186 completion
+gate finds contrary corpus evidence.
 
 M184 was a documentation/inventory milestone. It created
 `docs/redesign/lowering-completeness-audit.md`, linked it from
@@ -3142,43 +3171,41 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Run post-M185 lowering planning.
+Run post-M186 lowering completion gate planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m185-lowering-planning-prompt.md
+docs/agent/runs/post-m186-lowering-completion-gate-planning-prompt.md
 ```
 
-Active executor milestone:
+Active planning target:
 
 ```text
-None. The active prompt is planning-only and must select the next concrete
-lowering-focused milestone or record a stop/return-to-planner condition.
+Post-M186 lowering completion gate.
 ```
 
 Latest review verdict:
 
 ```text
-M185 execution-review returned Accept. The accepted implementation adds exact
-`mask<...>(...)` discovery/classification for selector payloads `zero`,
-`test`, `set`, and `set:1`, preserves mask arguments as opaque source-owned
-text, and keeps M177 mask lane constants and `details::*` support helpers
-distinct from mask keyword requests.
-
-Architecture, boundary, evidence, test, and documentation audits returned
-`Accept`. The first validation audit returned `Needs Revision` only because
-validation-created `__pycache__` directories remained after functional
-commands passed; focused cache cleanup plus validation re-review returned
-`Accept`.
+M186 execution-review returned Accept. The accepted slice evaluates
+`if<generation>` / `else if<generation>` conditions through a finite typed
+TSIL generation boolean grammar over accepted boolean leaves,
+integer-comparison leaves, `!`, `&&`, `||`, and parentheses. It keeps
+target-language expression parsing, raw operator semantics, pointer/index
+predicates, helper semantics, recursive generation-control lowering,
+rendering, backend translation, and runtime source-corpus dependencies out of
+scope.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M185 lowering planning prompt with read-only planning
-subagents. Do not implement M186 code in that prompt.
+Run the active post-M186 planning prompt. It is planning-only, must use
+read-only evidence, boundary/simplicity, and documentation subagents, and must
+decide whether lowering is complete by contract or exactly one lowering-owned
+gap remains. Do not implement code.
 ```
 
 Previous review verdict:
@@ -3186,14 +3213,16 @@ Previous review verdict:
 ```text
 M183 execution-review returned Accept. Post-M183 lowering planning returned
 Accept and selected M184. M184 lowering completeness audit returned Accept
-and selected M185. M185 execution-review returned Accept and selected
-post-M185 lowering planning.
+and selected M185. M185 execution-review returned Accept. Post-M185 lowering
+completion gate planning returned Accept and selected M186. M186
+execution-review returned Accept and selected a final post-M186 lowering
+completion gate.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m185-mask-keyword-boundary-execution-review-loop-prompt.md
+docs/agent/runs/m186-generation-condition-expression-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive begins below. These older entries are
@@ -7166,19 +7195,42 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M185 follow-up: mask translation, backend helper mapping, argument
   splitting, recursive payload lowering, and rendering remain deferred. M185
   accepts only request-island discovery and typed selector classification.
+- M186 follow-up: run a final lowering completion gate before leaving
+  lowering. M186 accepted finite typed condition grammar only; recursive
+  generation-control lowering, target-language expression parsing, rendering,
+  backend translation, and helper-call semantics remain out of scope unless a
+  later accepted prompt selects them explicitly.
 
 ## Stop Condition
 
 No stop condition is active. The workflow is ready to run the active
-post-M185 lowering planning prompt.
+post-M186 lowering completion gate planning prompt.
 
 ## Validation Expectations
 
-For post-M185 lowering planning, run:
+For post-M186 lowering completion gate planning, run:
 
 ```bash
 git diff --check
 ```
+
+For M186 typed generation boolean condition grammar execution and review,
+validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m186_generation_condition_expressions.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m186_generation_condition_expressions.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. `compileall` returned exit
+0 with no output. The M186 pytest command returned `8 passed in 1.79s`.
+Validation-created `__pycache__` directories were removed before the final
+`find`; the final `find` returned exit 0 with no output.
+
+For post-M185 lowering completion gate planning, validation completed with
+`git diff --check` exit 0 and no output.
 
 For M185 mask keyword boundary execution and review, validation completed
 with:
