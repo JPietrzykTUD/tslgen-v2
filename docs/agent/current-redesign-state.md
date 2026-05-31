@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 179 is accepted.
+Milestone 180 is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -316,6 +316,22 @@ M179 keeps raw discovered islands distinct from already-lowered
 translation, backend map evaluation, rendering, source repair, broad TSIL
 parsing, recursive payload lowering, parser/registry/dispatcher/worklist, or
 runtime `tsldata`, `frozen`, or `tslgenold` dependency.
+
+The M180 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor and read-only architecture, boundary, evidence, test,
+documentation, and validation audits. M180 added a focused semantic handoff
+from exact M179 `BackendTypeQueryRequestIsland` segments to the existing
+selected-context `lower_backend_type_query(...)` boundary.
+
+M180 consumes each island's complete `source_text` and source location, not
+only its payload text, and produces existing `BackendTypeSpellingRequest`
+values for successful handoffs while preserving opaque text/token segments,
+source order, raw token identity, and raw island provenance. Explicit
+`SelectedTypeEnvironment` alias behavior is reused when supplied; aliases are
+not inferred from surrounding opaque raw text. M180 added no backend type
+spelling translation, backend map evaluation, rendering, source repair, broad
+TSIL parsing, recursive payload discovery, parser/registry/dispatcher/worklist,
+or runtime `tsldata`, `frozen`, or `tslgenold` dependency.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -3046,46 +3062,51 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Plan the next lowering milestone after M179.
+Plan the next lowering milestone after M180.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m179-lowering-planning-prompt.md
+docs/agent/runs/post-m180-lowering-planning-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Post-M179 lowering planning.
+Post-M180 lowering planning.
 ```
 
 Latest review verdict:
 
 ```text
-M179 execution-review returned Accept after one write-capable executor and
-read-only architecture, boundary, test, documentation, and validation audits.
+M180 execution-review returned Accept With Follow-Ups after one write-capable
+executor and read-only architecture, boundary, evidence, test, documentation,
+and validation audits.
 
-M179 review verdicts were: architecture `Accept`; boundary `Accept`;
-test `Accept`; validation `Accept`; documentation `Accept`.
+M180 review verdicts were: architecture `Accept`; boundary `Accept`;
+evidence `Accept`; test `Accept`; documentation `Accept`; validation
+`Accept With Follow-Ups`. The validation follow-up was resolved by rerunning
+the exact compileall command from the write-capable main context and removing
+validation-created `__pycache__` directories before the final cache check.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M179 lowering planning prompt. The planning pass should
-select the next concrete M180 lowering milestone from the remaining
+Run the active post-M180 lowering planning prompt. The planning pass should
+select the next concrete M181 lowering milestone from the remaining
 generation/body/backend-query lowering gaps, grounded in the current
-`tsldata` corpus and the accepted M127-M179 boundaries.
+`tsldata` corpus and the accepted M127-M180 boundaries.
 
-This is useful because `value<backend>(...)` and `type<backend>(...)` request
-island discovery now both exist, while backend translation/rendering,
-recursive body composition, and several source-operation/intrinsic/backend
-control paths remain deferred. The next step should decide the highest-value
-lowering slice without adding code in the planning run and without sliding
-into broad TSIL parsing, backend rendering, source repair, or another one-off
-request/result family unless evidence justifies it.
+This is useful because `type<backend>(...)` discovery now has a selected
+semantic handoff to existing typed backend type requests, while backend value
+payload semantics, intrinsic modifier translation, backend/source-operation
+translation, declaration/loop execution, primitive-call rendering, and
+body-token rendering policy remain deferred. The next step should choose the
+highest-value narrow lowering slice without sliding into broad TSIL parsing,
+backend rendering, source repair, or another one-off request/result family
+unless evidence justifies it.
 ```
 
 Previous review verdict:
@@ -4254,6 +4275,14 @@ docs/agent/runs/m125-execution-review-loop-prompt.md
 - `frozen/` is evidence only and must never become runtime input.
 - `tslgenold/` is evidence-only old implementation state and must never become
   a runtime dependency of the clean restart package.
+- M180 is a semantic handoff slice only: consume exact M179
+  `BackendTypeQueryRequestIsland` segments and call existing
+  `lower_backend_type_query(...)` semantics with selected context to produce
+  existing `BackendTypeSpellingRequest` values.
+- M180 preserves opaque text/token segments and does not translate backend
+  type spellings, read backend maps, render C++/Rust text, parse surrounding
+  TSIL or target-language syntax, infer `let<type>` ordering from raw
+  surroundings, repair source, or add a new backend type model.
 - M107 established the tiny clean source-to-artifact path under fresh
   `tslgen/`.
 - M108 is limited to the exact M107 `add(left, right)` / `scalar` / `si32`
@@ -7035,12 +7064,38 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 ## Stop Condition
 
 No stop condition is active. The workflow is ready to run the active
-post-M179 lowering planning prompt.
+post-M180 lowering planning prompt.
 
 ## Validation Expectations
 
-For active post-M179 lowering planning, run the validation command listed in
-`docs/agent/runs/post-m179-lowering-planning-prompt.md`.
+For active post-M180 lowering planning, run the validation command listed in
+`docs/agent/runs/post-m180-lowering-planning-prompt.md`.
+
+For M180 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m179_backend_type_queries.py tslgen/tests/test_m180_backend_type_query_handoff.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m179_backend_type_queries.py tslgen/tests/test_m180_backend_type_query_handoff.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M180 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for the required pytest
+command with `26 passed in 1.77s`, and exit 0 for the final cache check with
+no output after validation-created `__pycache__` directories were removed.
+The validation auditor also ran a read-only focused pytest command and
+reported `26 passed in 1.83s`; architecture, boundary, evidence, test,
+documentation, and validation auditors reported clean results or accepted
+follow-up handling.
+
+For post-M179 lowering planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The final post-M179 planning validation run returned exit 0 with no output.
 
 For M179 execution and review, validation completed with:
 

@@ -9,6 +9,10 @@ from tslgen.lowering.model import (
     BackendTypeQueryDiscovery,
     BackendTypeQueryDiscoveryLoweringResult,
     BackendTypeQueryDiscoverySegment,
+    BackendTypeQueryHandoff,
+    BackendTypeQueryHandoffLoweringResult,
+    BackendTypeQueryHandoffRequestSegment,
+    BackendTypeQueryHandoffSegment,
     BackendTypeQueryOpaqueTextSegment,
     BackendTypeQueryOpaqueTokenSegment,
     BackendTypeQueryRequestIsland,
@@ -134,6 +138,7 @@ from tslgen.lowering.backend_intrinsics import (
 from tslgen.lowering.backend_type_queries import (
     discover_backend_type_queries,
     discover_backend_type_queries_in_text,
+    lower_backend_type_query_discovery,
 )
 from tslgen.lowering.backend_value_queries import (
     discover_backend_value_queries,
@@ -202,6 +207,10 @@ __all__ = [
     "BackendTypeQueryDiscovery",
     "BackendTypeQueryDiscoveryLoweringResult",
     "BackendTypeQueryDiscoverySegment",
+    "BackendTypeQueryHandoff",
+    "BackendTypeQueryHandoffLoweringResult",
+    "BackendTypeQueryHandoffRequestSegment",
+    "BackendTypeQueryHandoffSegment",
     "BackendTypeQueryOpaqueTextSegment",
     "BackendTypeQueryOpaqueTokenSegment",
     "BackendTypeQueryRequestIsland",
@@ -330,6 +339,7 @@ __all__ = [
     "discover_backend_intrinsic_requests_in_text",
     "discover_backend_type_queries",
     "discover_backend_type_queries_in_text",
+    "lower_backend_type_query_discovery",
     "discover_backend_value_queries",
     "discover_backend_value_queries_in_text",
     "discover_mask_lane_constant_requests",

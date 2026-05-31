@@ -22542,8 +22542,9 @@ Validation result:
 
 Status:
 
-Selected after M179. Active prompt:
-`docs/agent/runs/post-m179-lowering-planning-prompt.md`.
+Accepted after an interactive planning checkpoint and read-only evidence,
+boundary/simplicity, and documentation planning audits. Planning selected
+`Milestone 180: Exact Backend Type Query Island Semantic Handoff`.
 
 Goal:
 
@@ -22562,6 +22563,136 @@ Scope:
 Out of scope:
 
 M180 implementation; broad TSIL parsing; backend rendering; source repair;
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies; registries,
+dispatchers, worklists, or new request/result families without a concrete
+accepted-boundary reason.
+
+Validation:
+
+```bash
+git diff --check
+```
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+
+### Milestone 180: Exact Backend Type Query Island Semantic Handoff
+
+Status:
+
+Accepted. The M180 execution-review loop returned `Accept With Follow-Ups`
+after one write-capable executor and read-only architecture, boundary,
+evidence, test, documentation, and validation audits. The validation follow-up
+was resolved by rerunning the exact compileall command from the write-capable
+main context and removing validation-created `__pycache__` directories before
+the final cache check.
+
+Goal:
+
+Consume exact M179 `BackendTypeQueryRequestIsland` segments and hand them to
+the existing selected-context `lower_backend_type_query(...)` semantic
+boundary, producing existing `BackendTypeSpellingRequest` values while
+preserving opaque surrounding text/tokens.
+
+Why this is useful:
+
+The current corpus has 212 `type<backend>(...)` occurrences across 16 `.tsl`
+files, and `docs/redesign/tsil-type-query-inventory.md` records 11 normalized
+observed forms. M179 already discovers those source islands, while M143
+already accepts selected-context semantic lowering for all observed
+`type<backend>(...)` forms. M180 closes the raw-island-to-typed-request gap
+without inventing a second backend type model or stepping into backend
+rendering.
+
+Scope:
+
+- Add a focused handoff over M179 backend type query discovery segments.
+- Lower only exact `BackendTypeQueryRequestIsland` values by passing their
+  complete `source_text` and source location to existing
+  `lower_backend_type_query(...)` semantics.
+- Produce existing `BackendTypeSpellingRequest` values for successful
+  handoffs.
+- Preserve opaque text segments, opaque token segments, source order, and raw
+  island provenance.
+- Reuse the existing selected type environment behavior when an explicit
+  environment is supplied; do not infer `let<type>` ordering from opaque raw
+  surroundings.
+- Propagate semantic diagnostics from the existing type-query lowering path
+  with source locations tied to the discovered island.
+
+Out of scope:
+
+Backend type spelling translation; backend maps, manifests, or language type
+maps; generated output; C++/Rust rendering; backend value query evaluation;
+intrinsic/source-operation/declaration/backend-control payload lowering;
+recursive discovery through arbitrary payload contexts; broad TSIL or
+target-language expression parsing; source repair; dependency scheduling;
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies; registries,
+dispatchers, plugin maps, worklists, or a new backend type model.
+
+Expected tests:
+
+- Positive text-fragment handoff from discovered island to
+  `BackendTypeSpellingRequest`.
+- Positive implementation-body handoff with opaque text/token preservation.
+- Multiple islands in source order.
+- Representative accepted corpus forms: `type<backend>(size_t)`,
+  scalar backend requests, `type<backend>(intrin::vector::imask)`, and
+  `type<backend>(vector::as_extension(...))`.
+- Explicit alias environment success and unbound alias diagnostics without
+  inferring aliases from surrounding raw text.
+- Malformed discovery diagnostics remain discovery diagnostics; unsupported
+  semantic payloads remain type-query diagnostics.
+- Regression that raw M179 islands remain distinct from
+  `BackendTypeSpellingRequest` until the handoff API is explicitly invoked.
+- No backend spelling translation/rendering/source repair.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m179_backend_type_queries.py tslgen/tests/test_m180_backend_type_query_handoff.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m179_backend_type_queries.py tslgen/tests/test_m180_backend_type_query_handoff.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q ...`: exit 0, no output.
+- Required pytest command: exit 0, `26 passed in 1.77s`.
+- Initial cache check listed validation-created `__pycache__` directories;
+  after removal, final `find tslgen -type d -name __pycache__ -print`: exit
+  0, no output.
+- Architecture, boundary, evidence, test, and documentation auditors returned
+  `Accept`; validation auditor returned `Accept With Follow-Ups`, and the
+  follow-up was resolved by the final main-thread validation run.
+
+### Post-M180 Lowering Planning
+
+Status:
+
+Selected after M180. Active prompt:
+`docs/agent/runs/post-m180-lowering-planning-prompt.md`.
+
+Goal:
+
+Select the next concrete M181 lowering milestone from the remaining
+generation/body/backend-query lowering gaps, grounded in the current
+`tsldata` corpus and the accepted M127-M180 boundaries.
+
+Scope:
+
+- Inventory the remaining lowering candidates that still matter after M180.
+- Choose exactly one M181 slice that is useful for the research prototype and
+  implementable in one execution-review-loop prompt.
+- Keep the run planning-only: update roadmap/state and create the M181 prompt,
+  but do not edit production code or tests.
+
+Out of scope:
+
+M181 implementation; broad TSIL parsing; backend rendering; source repair;
 runtime `tsldata`, `frozen`, or `tslgenold` dependencies; registries,
 dispatchers, worklists, or new request/result families without a concrete
 accepted-boundary reason.

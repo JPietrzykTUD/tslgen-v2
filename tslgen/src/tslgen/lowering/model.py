@@ -376,6 +376,32 @@ class BackendTypeQueryDiscoveryLoweringResult:
 
 
 @dataclass(frozen=True, slots=True)
+class BackendTypeQueryHandoffRequestSegment:
+    request: BackendTypeSpellingRequest
+    island: BackendTypeQueryRequestIsland
+    source: SourceLocation
+
+
+BackendTypeQueryHandoffSegment = (
+    BackendTypeQueryOpaqueTextSegment
+    | BackendTypeQueryOpaqueTokenSegment
+    | BackendTypeQueryHandoffRequestSegment
+)
+
+
+@dataclass(frozen=True, slots=True)
+class BackendTypeQueryHandoff:
+    segments: tuple[BackendTypeQueryHandoffSegment, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendTypeQueryHandoffLoweringResult:
+    handoff: BackendTypeQueryHandoff | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class BackendValueQueryRequest:
     query_text: str
     query_source: SourceLocation

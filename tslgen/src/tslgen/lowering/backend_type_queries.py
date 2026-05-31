@@ -17,12 +17,18 @@ from tslgen.lowering.model import (
     BackendTypeQueryDiscovery,
     BackendTypeQueryDiscoveryLoweringResult,
     BackendTypeQueryDiscoverySegment,
+    BackendTypeQueryHandoff,
+    BackendTypeQueryHandoffLoweringResult,
+    BackendTypeQueryHandoffRequestSegment,
+    BackendTypeQueryHandoffSegment,
     BackendTypeQueryOpaqueTextSegment,
     BackendTypeQueryOpaqueTokenSegment,
     BackendTypeQueryRequestIsland,
     BackendTypeQueryRequestIslandSegment,
     SelectedImplementationLoweringContext,
+    SelectedTypeEnvironment,
 )
+from tslgen.lowering.type_queries import lower_backend_type_query
 
 _QUERY_PREFIX = "type<backend>("
 _QUERY_HEAD = "type<backend>"
@@ -86,6 +92,57 @@ def discover_backend_type_queries_in_text(
 
     return _discover_backend_type_queries_in_source_text(
         source_text_from_text(text, source),
+    )
+
+
+def lower_backend_type_query_discovery(
+    context: SelectedImplementationLoweringContext,
+    discovery: BackendTypeQueryDiscovery,
+    *,
+    environment: SelectedTypeEnvironment | None = None,
+) -> BackendTypeQueryHandoffLoweringResult:
+    """Lower discovered backend type-query islands to spelling requests."""
+
+    segments: list[BackendTypeQueryHandoffSegment] = []
+    diagnostics: list[Diagnostic] = []
+
+    for segment in discovery.segments:
+        if isinstance(
+            segment,
+            BackendTypeQueryOpaqueTextSegment | BackendTypeQueryOpaqueTokenSegment,
+        ):
+            segments.append(segment)
+            continue
+
+        result = lower_backend_type_query(
+            context,
+            segment.request.source_text,
+            segment.request.source,
+            environment=environment,
+        )
+        diagnostics.extend(result.diagnostics)
+        if result.request is None:
+            continue
+        segments.append(
+            BackendTypeQueryHandoffRequestSegment(
+                request=result.request,
+                island=segment.request,
+                source=segment.source,
+            )
+        )
+
+    if diagnostics:
+        return BackendTypeQueryHandoffLoweringResult(
+            handoff=None,
+            diagnostics=tuple(diagnostics),
+        )
+
+    return BackendTypeQueryHandoffLoweringResult(
+        handoff=BackendTypeQueryHandoff(
+            segments=tuple(segments),
+            source=discovery.source,
+        ),
+        diagnostics=(),
     )
 
 

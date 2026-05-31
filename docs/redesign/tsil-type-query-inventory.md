@@ -155,6 +155,14 @@ values or typed backend type-spelling requests. Backend spellings remain
 unrendered. Source strings are retained only on alias bindings and backend
 requests as provenance for diagnostics.
 
+M179/M180 update: exact `type<backend>(...)` request islands are now
+discoverable inside source-owned text and contiguous implementation-body
+raw-token runs, and M180 hands those exact discovered islands to the existing
+M143 semantic type-query boundary. The handoff produces existing
+`BackendTypeSpellingRequest` values while preserving opaque surroundings and
+raw island provenance; it does not infer aliases from surrounding raw text or
+render backend spellings.
+
 There are no deliberately unsupported observed `let<type>`,
 `type<generation>`, or `type<backend>` forms after M143. Future corpus changes
 that add new type forms must extend this inventory and add focused lowering
