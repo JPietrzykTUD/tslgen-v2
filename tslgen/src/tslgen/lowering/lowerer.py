@@ -27,6 +27,7 @@ from tslgen.lowering.model import (
     SCALAR_COMPARISON_RESULT_TYPE,
     BackendControlDirectiveDiscoveryLoweringResult,
     BackendIntrinsicDiscoveryLoweringResult,
+    BackendTypeQueryDiscoveryLoweringResult,
     SourceOperationDiscoveryLoweringResult,
     BackendValueQueryDiscoveryLoweringResult,
     MaskLaneConstantDiscoveryLoweringResult,
@@ -57,6 +58,7 @@ from tslgen.lowering.model import (
 )
 from tslgen.lowering.backend_control import discover_backend_control_directives
 from tslgen.lowering.backend_intrinsics import discover_backend_intrinsic_requests
+from tslgen.lowering.backend_type_queries import discover_backend_type_queries
 from tslgen.lowering.backend_value_queries import discover_backend_value_queries
 from tslgen.lowering.mask_lane_constants import discover_mask_lane_constant_requests
 from tslgen.lowering.source_operations import discover_source_operation_requests
@@ -285,6 +287,16 @@ class Lowerer:
     ) -> BackendValueQueryDiscoveryLoweringResult:
         context = self.context_for(selected)
         return discover_backend_value_queries(
+            context,
+            context.implementation.body,
+        )
+
+    def discover_backend_type_queries(
+        self,
+        selected: SelectedImplementation,
+    ) -> BackendTypeQueryDiscoveryLoweringResult:
+        context = self.context_for(selected)
+        return discover_backend_type_queries(
             context,
             context.implementation.body,
         )

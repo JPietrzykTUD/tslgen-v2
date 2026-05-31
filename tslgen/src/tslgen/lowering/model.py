@@ -331,6 +331,51 @@ class BackendTypeQueryLoweringResult:
 
 
 @dataclass(frozen=True, slots=True)
+class BackendTypeQueryRequestIsland:
+    payload_text: str
+    payload_source: SourceLocation
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendTypeQueryOpaqueTextSegment:
+    text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendTypeQueryOpaqueTokenSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendTypeQueryRequestIslandSegment:
+    request: BackendTypeQueryRequestIsland
+    source: SourceLocation
+
+
+BackendTypeQueryDiscoverySegment = (
+    BackendTypeQueryOpaqueTextSegment
+    | BackendTypeQueryOpaqueTokenSegment
+    | BackendTypeQueryRequestIslandSegment
+)
+
+
+@dataclass(frozen=True, slots=True)
+class BackendTypeQueryDiscovery:
+    segments: tuple[BackendTypeQueryDiscoverySegment, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendTypeQueryDiscoveryLoweringResult:
+    discovery: BackendTypeQueryDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class BackendValueQueryRequest:
     query_text: str
     query_source: SourceLocation
