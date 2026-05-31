@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 180 is accepted.
+Milestone 181 is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -332,6 +332,23 @@ not inferred from surrounding opaque raw text. M180 added no backend type
 spelling translation, backend map evaluation, rendering, source repair, broad
 TSIL parsing, recursive payload discovery, parser/registry/dispatcher/worklist,
 or runtime `tsldata`, `frozen`, or `tslgenold` dependency.
+
+The M181 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor, one focused revision, read-only architecture,
+boundary, evidence, test, documentation, and validation audits, and focused
+evidence/documentation re-review. M181 added a focused semantic handoff from
+exact M164 `BackendValueQueryRequest` segments to one typed unresolved
+backend-value request boundary.
+
+M181 covers the five currently observed top-level `value<backend>(...)`
+payload families from `tsldata`: `intrin::suffix...`, `intrin::prefix`,
+`uninit::array`, `uninit::scalar`, and `x86::mm_fround_to_zero`. Suffix
+arguments remain source-owned typed operands: no argument, accepted type
+expressions through existing type lowering, the exact observed quoted literal
+`"stream"`, and backend-owned unresolved symbol/literal operands. M181 added
+no backend value translation, backend map reads, C++/Rust rendering, broad
+TSIL parsing, recursive arbitrary-payload lowering, source repair, or runtime
+`tsldata`, `frozen`, or `tslgenold` dependency.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -3062,67 +3079,58 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Plan the next lowering milestone after M180.
+Run post-M181 lowering planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m180-lowering-planning-prompt.md
+docs/agent/runs/post-m181-lowering-planning-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Post-M180 lowering planning.
+None. The active prompt is planning-only and must select M182.
 ```
 
 Latest review verdict:
 
 ```text
-M180 execution-review returned Accept With Follow-Ups after one write-capable
-executor and read-only architecture, boundary, evidence, test, documentation,
-and validation audits.
-
-M180 review verdicts were: architecture `Accept`; boundary `Accept`;
-evidence `Accept`; test `Accept`; documentation `Accept`; validation
-`Accept With Follow-Ups`. The validation follow-up was resolved by rerunning
-the exact compileall command from the write-capable main context and removing
-validation-created `__pycache__` directories before the final cache check.
+M181 execution-review returned Accept With Follow-Ups. Architecture and
+boundary auditors returned Accept. Evidence and documentation auditors first
+returned Needs Revision for an over-broad quoted suffix literal and stale
+handoff wording; the focused revision restricted quoted suffix literals to the
+observed `"stream"` form, added a negative test for `"other"`, and corrected
+state/roadmap wording. Focused evidence and documentation re-review accepted
+the fixes. The test auditor returned Accept With Follow-Ups for future
+diagnostic message/location assertions, and validation returned Accept.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M180 lowering planning prompt. The planning pass should
-select the next concrete M181 lowering milestone from the remaining
-generation/body/backend-query lowering gaps, grounded in the current
-`tsldata` corpus and the accepted M127-M180 boundaries.
-
-This is useful because `type<backend>(...)` discovery now has a selected
-semantic handoff to existing typed backend type requests, while backend value
-payload semantics, intrinsic modifier translation, backend/source-operation
-translation, declaration/loop execution, primitive-call rendering, and
-body-token rendering policy remain deferred. The next step should choose the
-highest-value narrow lowering slice without sliding into broad TSIL parsing,
-backend rendering, source repair, or another one-off request/result family
-unless evidence justifies it.
+Run the active post-M181 lowering planning prompt. The planner should select
+exactly one M182 lowering milestone from the remaining generation/body/backend
+query gaps, grounded in accepted M127-M181 behavior and the current
+`tsldata` corpus.
 ```
 
 Previous review verdict:
 
 ```text
-M148 execution-review returned Accept after one write-capable executor and
-read-only architecture, boundary, evidence, documentation, and validation
-audits. M148 added a compact typed primitive-call dependency closure that
-discovers transitive selected implementations by composing M147 inventories.
+M181 execution-review returned Accept With Follow-Ups and is the latest
+accepted implementation milestone.
 ```
 
 Accepted planning prompt:
 
 ```text
-docs/agent/runs/post-m47-orchestrated-planning-plus-review-prompt.md
+docs/agent/runs/post-m180-lowering-planning-prompt.md
 ```
+
+Historical accepted prompt archive begins below. These older entries are
+non-authoritative for the active workflow.
 
 Accepted post-M48 planning prompt:
 
@@ -4264,7 +4272,7 @@ Completed M124 execution-review-loop prompt:
 docs/agent/runs/m124-execution-review-loop-prompt.md
 ```
 
-Active M125 execution-review-loop prompt:
+Completed M125 execution-review-loop prompt:
 
 ```text
 docs/agent/runs/m125-execution-review-loop-prompt.md
@@ -4275,6 +4283,15 @@ docs/agent/runs/m125-execution-review-loop-prompt.md
 - `frozen/` is evidence only and must never become runtime input.
 - `tslgenold/` is evidence-only old implementation state and must never become
   a runtime dependency of the clean restart package.
+- M181 is a semantic handoff slice only: consume exact M164
+  `BackendValueQueryRequest` segments and produce typed unresolved
+  backend-value request facts for the five observed top-level payload
+  families.
+- M181 preserves opaque text/token segments, raw token identity, source order,
+  raw island provenance, full source-island text, payload text, and source
+  locations. It does not translate backend values, read backend maps, render
+  C++/Rust, recursively lower arbitrary payload carriers, parse surrounding
+  TSIL or target-language syntax, or accept unobserved quoted suffix literals.
 - M180 is a semantic handoff slice only: consume exact M179
   `BackendTypeQueryRequestIsland` segments and call existing
   `lower_backend_type_query(...)` semantics with selected context to produce
@@ -7060,16 +7077,47 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M176 follow-up: if `.tsl` source conventions are allowed to change later,
   decide whether mask lane constants should move closer to `details::*`
   support-helper calls.
+- M181 follow-up: add diagnostic location/message assertions for semantic
+  backend-value payload failures if those diagnostics become broader public
+  contract.
 
 ## Stop Condition
 
 No stop condition is active. The workflow is ready to run the active
-post-M180 lowering planning prompt.
+post-M181 lowering planning prompt.
 
 ## Validation Expectations
 
-For active post-M180 lowering planning, run the validation command listed in
-`docs/agent/runs/post-m180-lowering-planning-prompt.md`.
+For active post-M181 lowering planning, run:
+
+```bash
+git diff --check
+```
+
+For M181 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m181_backend_value_query_handoff.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m181_backend_value_query_handoff.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M181 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for the required pytest
+command with `38 passed in 1.66s`, and exit 0 for the final cache check with
+no output after validation-created `__pycache__` directories were removed.
+Architecture, boundary, and validation auditors returned `Accept`; evidence
+and documentation auditors accepted the focused revisions; test auditor
+returned `Accept With Follow-Ups`.
+
+For post-M180 lowering planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
 
 For M180 execution and review, validation completed with:
 

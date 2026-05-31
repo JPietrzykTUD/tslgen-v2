@@ -65,6 +65,8 @@ BackendControlDirectiveSelector = Literal["compile"]
 BackendIntrinsicKind = Literal["intrin", "intrin_compose"]
 SourceOperationKind = Literal["cast", "mem", "io"]
 MaskLaneConstantPolarity = Literal["all_true", "all_false"]
+BackendValueUninitKind = Literal["array", "scalar"]
+BackendValueConstantName = Literal["x86::mm_fround_to_zero"]
 
 CURRENT_VECTOR_KEYWORD = "Vec"
 CURRENT_SCALAR_KEYWORD = "scalar"
@@ -443,6 +445,98 @@ class BackendValueQueryDiscovery:
 @dataclass(frozen=True, slots=True)
 class BackendValueQueryDiscoveryLoweringResult:
     discovery: BackendValueQueryDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class BackendValueTypeOperand:
+    value: LoweredTypeValue
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendValueStringLiteralOperand:
+    value: str
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendValueSymbolOperand:
+    text: str
+    source: SourceLocation
+
+
+BackendValueSuffixOperand = (
+    BackendValueTypeOperand
+    | BackendValueStringLiteralOperand
+    | BackendValueSymbolOperand
+)
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicSuffixValueRequest:
+    backend: str
+    argument: BackendValueSuffixOperand | None
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicPrefixValueRequest:
+    backend: str
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendUninitValueRequest:
+    backend: str
+    kind: BackendValueUninitKind
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendConstantValueRequest:
+    backend: str
+    name: BackendValueConstantName
+    source_text: str
+    source: SourceLocation
+
+
+BackendValueRequest = (
+    BackendIntrinsicSuffixValueRequest
+    | BackendIntrinsicPrefixValueRequest
+    | BackendUninitValueRequest
+    | BackendConstantValueRequest
+)
+
+
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryHandoffRequestSegment:
+    request: BackendValueRequest
+    island: BackendValueQueryRequest
+    source: SourceLocation
+
+
+BackendValueQueryHandoffSegment = (
+    BackendValueQueryOpaqueTextSegment
+    | BackendValueQueryOpaqueTokenSegment
+    | BackendValueQueryHandoffRequestSegment
+)
+
+
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryHandoff:
+    segments: tuple[BackendValueQueryHandoffSegment, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendValueQueryHandoffLoweringResult:
+    handoff: BackendValueQueryHandoff | None
     diagnostics: tuple[Diagnostic, ...]
 
 

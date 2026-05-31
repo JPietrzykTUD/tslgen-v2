@@ -1624,6 +1624,26 @@ writing, runtime `tsldata`, `frozen`, or `tslgenold` dependencies, or broad
 registries, dispatchers, worklists, callback maps, hidden backfeeds, or
 fixpoint machinery.
 
+Milestone 181 adds an explicit semantic handoff for M164 backend value query
+request islands. The handoff consumes only discovered `BackendValueQueryRequest`
+segments and produces typed unresolved backend-value request facts while
+preserving opaque text/token segments, raw token identity, source order, full
+source-island text, payload text, and source locations.
+
+The accepted top-level payload families are exactly the currently observed
+families: `intrin::suffix`, `intrin::suffix(ARG)`, `intrin::prefix`,
+`uninit::array`, `uninit::scalar`, and `x86::mm_fround_to_zero`.
+`intrin::suffix(ARG)` accepts no-argument suffixes, accepted type expressions
+through existing selected-context type lowering, the exact observed quoted
+literal `"stream"`, and backend-owned unresolved symbol/literal operands such
+as `ToBase` or `si?`. Other quoted suffix literals remain unsupported rather
+than silently becoming new source surface.
+
+M181 does not translate backend values, read backend maps, render C++ or Rust,
+evaluate uninit helpers/constants, recursively lower arbitrary payload
+carriers, parse surrounding TSIL or target-language expressions, repair source,
+or make `tsldata`, `frozen`, or `tslgenold` runtime inputs.
+
 ### M165 Backend-Control Directive Request Boundary
 
 Milestone 165 adds exact discovery for already classified backend-control

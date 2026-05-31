@@ -22673,7 +22673,8 @@ Validation result:
 
 Status:
 
-Selected after M180. Active prompt:
+Accepted. Post-M180 lowering planning selected M181. Completed planning
+prompt:
 `docs/agent/runs/post-m180-lowering-planning-prompt.md`.
 
 Goal:
@@ -22694,6 +22695,133 @@ Out of scope:
 
 M181 implementation; broad TSIL parsing; backend rendering; source repair;
 runtime `tsldata`, `frozen`, or `tslgenold` dependencies; registries,
+dispatchers, worklists, or new request/result families without a concrete
+accepted-boundary reason.
+
+Validation:
+
+```bash
+git diff --check
+```
+
+Planning result:
+
+Post-M180 lowering planning selected:
+
+```text
+Milestone 181: Exact Backend Value Query Semantic Handoff
+```
+
+Created M181 execution prompt:
+`docs/agent/runs/m181-backend-value-query-handoff-execution-review-loop-prompt.md`.
+
+The selected M181 scope covers all five currently observed top-level
+`value<backend>(...)` payload families in `tsldata`: `intrin::suffix...`,
+`intrin::prefix`, `uninit::array`, `uninit::scalar`, and
+`x86::mm_fround_to_zero`. The handoff must produce typed unresolved
+backend-value request facts only, preserving source provenance and opaque
+surrounding segments. It must not translate backend values, read backend maps,
+render C++/Rust, parse broad TSIL or target-language expressions, recursively
+lower arbitrary payload carriers, or create separate one-off request/result
+pipelines per spelling.
+
+### Milestone 181: Exact Backend Value Query Semantic Handoff
+
+Status:
+
+Accepted. The M181 execution-review loop returned `Accept With Follow-Ups`
+after one write-capable executor, one focused revision, read-only
+architecture, boundary, evidence, test, documentation, and validation audits,
+and focused evidence/documentation re-review. Completed prompt:
+`docs/agent/runs/m181-backend-value-query-handoff-execution-review-loop-prompt.md`.
+
+Goal:
+
+Consume exact M164 `BackendValueQueryRequest` discovery segments and hand the
+currently observed backend-value payload families to one typed semantic request
+boundary while preserving opaque surrounding text/tokens.
+
+Scope:
+
+- Add a focused handoff API for M164 backend value query discovery results.
+- Cover all currently observed top-level payload families:
+  `intrin::suffix...`, `intrin::prefix`, `uninit::array`, `uninit::scalar`,
+  and `x86::mm_fround_to_zero`.
+- Keep `intrin::suffix` arguments source-owned and typed only at the accepted
+  boundary: no-argument, accepted type-expression arguments through existing
+  type lowering, the exact observed quoted literal `"stream"`, and
+  backend-owned unresolved symbol/literal operands.
+- Preserve source-island text, payload text, source locations, opaque text
+  segments, opaque token segments, raw token identity, and source order.
+- Diagnose unsupported payload heads, malformed arity, malformed
+  string/literal forms, and unsupported nested forms deterministically.
+
+Out of scope:
+
+Backend value translation results; backend maps, manifests, or language maps;
+generated output; C++/Rust rendering; intrinsic modifier evaluation beyond
+typed request construction; intrinsic call rendering; source-operation
+translation; declaration rendering; loop execution; primitive-call rendering;
+body-token rendering policy; recursive discovery through arbitrary payload
+contexts; broad TSIL expression parsing; target-language expression parsing;
+source repair; dependency scheduling; runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies; registries, dispatchers, plugin maps, worklists, or
+per-payload-family pipelines.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m181_backend_value_query_handoff.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m181_backend_value_query_handoff.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q ...`: exit 0, no output.
+- Required pytest command: exit 0, `38 passed in 1.66s`.
+- Initial cache check listed validation-created `__pycache__` directories;
+  after removal, final `find tslgen -type d -name __pycache__ -print`: exit
+  0, no output.
+- Architecture and boundary auditors returned `Accept`; evidence and
+  documentation auditors returned `Needs Revision` for one over-broad quoted
+  suffix literal and stale handoff wording, then focused re-review accepted
+  the fixes; test auditor returned `Accept With Follow-Ups`; validation
+  auditor returned `Accept`.
+
+Follow-up:
+
+Add location/message assertions for M181 semantic backend-value payload
+diagnostics if those diagnostics become a broader public contract.
+
+### Post-M181 Lowering Planning
+
+Status:
+
+Selected after M181. Active prompt:
+`docs/agent/runs/post-m181-lowering-planning-prompt.md`.
+
+Goal:
+
+Select the next concrete M182 lowering milestone from the remaining
+generation/body/backend-query lowering gaps, grounded in the accepted
+M127-M181 boundaries and current `tsldata` corpus.
+
+Scope:
+
+- Re-inventory remaining lowering candidates that still matter after M181.
+- Choose exactly one M182 slice that is useful for the research prototype and
+  implementable in one execution-review-loop prompt.
+- Keep the run planning-only: update roadmap/state and create the M182 prompt,
+  but do not edit production code or tests.
+
+Out of scope:
+
+M182 implementation; backend rendering; backend value translation unless the
+planner explicitly selects it as the next boundary; broad TSIL parsing; source
+repair; runtime `tsldata`, `frozen`, or `tslgenold` dependencies; registries,
 dispatchers, worklists, or new request/result families without a concrete
 accepted-boundary reason.
 

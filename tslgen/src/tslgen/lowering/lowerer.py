@@ -32,6 +32,8 @@ from tslgen.lowering.model import (
     BackendTypeQueryHandoffLoweringResult,
     SourceOperationDiscoveryLoweringResult,
     BackendValueQueryDiscoveryLoweringResult,
+    BackendValueQueryDiscovery,
+    BackendValueQueryHandoffLoweringResult,
     MaskLaneConstantDiscoveryLoweringResult,
     LoweredBinaryOperationExpression,
     LoweredComparisonOperationExpression,
@@ -63,6 +65,7 @@ from tslgen.lowering.backend_intrinsics import discover_backend_intrinsic_reques
 from tslgen.lowering.backend_type_queries import discover_backend_type_queries
 from tslgen.lowering.backend_type_queries import lower_backend_type_query_discovery
 from tslgen.lowering.backend_value_queries import discover_backend_value_queries
+from tslgen.lowering.backend_value_queries import lower_backend_value_query_discovery
 from tslgen.lowering.mask_lane_constants import discover_mask_lane_constant_requests
 from tslgen.lowering.source_operations import discover_source_operation_requests
 from tslgen.lowering.generation_control import lower_generation_control_region
@@ -292,6 +295,20 @@ class Lowerer:
         return discover_backend_value_queries(
             context,
             context.implementation.body,
+        )
+
+    def lower_backend_value_query_discovery(
+        self,
+        selected: SelectedImplementation,
+        discovery: BackendValueQueryDiscovery,
+        *,
+        environment: SelectedTypeEnvironment | None = None,
+    ) -> BackendValueQueryHandoffLoweringResult:
+        context = self.context_for(selected)
+        return lower_backend_value_query_discovery(
+            context,
+            discovery,
+            environment=environment,
         )
 
     def discover_backend_type_queries(
