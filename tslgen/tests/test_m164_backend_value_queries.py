@@ -135,6 +135,22 @@ def test_m164_discovers_queries_inside_raw_body_tokens() -> None:
     assert result.discovery.segments[2].text == " suffix"
 
 
+def test_m178_preserves_m164_per_raw_token_backend_value_boundary() -> None:
+    tokens = (
+        _raw("value<backend>(", line=1, column=3),
+        _raw("uninit::array)", line=2, column=5),
+    )
+
+    result = Lowerer().discover_backend_value_queries(
+        _selected(ImplementationBody(tokens=tokens, source=_location()))
+    )
+
+    assert result.discovery is None
+    assert result.diagnostics[0].severity == "error"
+    assert result.diagnostics[0].location == _location(line=1, column=3)
+    assert _codes(result) == ("TSL-LOWER-MALFORMED-BACKEND-VALUE-QUERY",)
+
+
 def test_m164_text_helper_works_for_m163_style_declaration_text() -> None:
     declaration_text = GenerationVariableDeclarationText(
         text="value<backend>(uninit::array)",

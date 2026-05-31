@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
-    BodyToken,
     ImplementationBody,
     RawStringToken,
+)
+from tslgen.lowering._source_islands import (
+    JoinedRawStringRun,
+    OpaqueTokenBuffer,
+    RawStringRunBuffer,
+    SourceMappedText,
+    has_identifier_boundary_before,
+    matching_delimiter_close,
+    source_text_from_text,
 )
 from tslgen.lowering.model import (
     SelectedImplementationLoweringContext,
@@ -23,9 +29,6 @@ from tslgen.lowering.model import (
 )
 
 _SOURCE_OPERATION_HEADS: tuple[SourceOperationKind, ...] = ("cast", "mem", "io")
-_IDENTIFIER_CHARS = frozenset(
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
-)
 
 
 def discover_source_operation_requests(
@@ -37,24 +40,22 @@ def discover_source_operation_requests(
     del context
 
     segments: list[SourceOperationDiscoverySegment] = []
-    pending_opaque_tokens: list[BodyToken] = []
-    raw_run: list[RawStringToken] = []
+    pending_opaque_tokens = OpaqueTokenBuffer()
+    raw_run = RawStringRunBuffer()
 
     for token in body.tokens:
         if isinstance(token, RawStringToken):
             raw_run.append(token)
             continue
 
-        flush_result = _flush_raw_run(raw_run, segments, pending_opaque_tokens)
+        flush_result = _flush_raw_run(raw_run.take(), segments, pending_opaque_tokens)
         if flush_result is not None:
             return flush_result
-        raw_run.clear()
         pending_opaque_tokens.append(token)
 
-    flush_result = _flush_raw_run(raw_run, segments, pending_opaque_tokens)
+    flush_result = _flush_raw_run(raw_run.take(), segments, pending_opaque_tokens)
     if flush_result is not None:
         return flush_result
-    raw_run.clear()
 
     if not segments:
         return SourceOperationDiscoveryLoweringResult(
@@ -62,11 +63,12 @@ def discover_source_operation_requests(
             diagnostics=(_no_source_operation_diagnostic(body.source),),
         )
 
-    if pending_opaque_tokens:
+    opaque_span = pending_opaque_tokens.take()
+    if opaque_span is not None:
         segments.append(
             SourceOperationOpaqueTokenSegment(
-                tokens=tuple(pending_opaque_tokens),
-                source=pending_opaque_tokens[0].source,
+                tokens=opaque_span.tokens,
+                source=opaque_span.source,
             )
         )
 
@@ -85,58 +87,47 @@ def discover_source_operation_requests_in_text(
 ) -> SourceOperationDiscoveryLoweringResult:
     """Discover exact cast/memory/I/O request islands in one text fragment."""
 
-    return _discover_source_operation_requests_in_text(
-        text,
-        source,
-        source_at_offset=lambda offset: _source_at_offset(source, text, offset),
+    return _discover_source_operation_requests_in_source_text(
+        source_text_from_text(text, source),
     )
 
 
 def _flush_raw_run(
-    raw_run: list[RawStringToken],
+    raw_run: JoinedRawStringRun | None,
     segments: list[SourceOperationDiscoverySegment],
-    pending_opaque_tokens: list[BodyToken],
+    pending_opaque_tokens: OpaqueTokenBuffer,
 ) -> SourceOperationDiscoveryLoweringResult | None:
-    if not raw_run:
+    if raw_run is None:
         return None
 
-    text, source_map = _raw_run_text_and_source_map(raw_run)
-    text_result = _discover_source_operation_requests_in_text(
-        text,
-        raw_run[0].source,
-        source_at_offset=lambda offset: _source_from_raw_run(
-            raw_run[0].source,
-            text,
-            source_map,
-            offset,
-        ),
+    text_result = _discover_source_operation_requests_in_source_text(
+        raw_run.source_text,
     )
     if _has_malformed_source_operation_diagnostic(text_result):
         return text_result
     if text_result.discovery is None:
-        pending_opaque_tokens.extend(raw_run)
+        pending_opaque_tokens.extend(raw_run.tokens)
         return None
 
-    if pending_opaque_tokens:
+    opaque_span = pending_opaque_tokens.take()
+    if opaque_span is not None:
         segments.append(
             SourceOperationOpaqueTokenSegment(
-                tokens=tuple(pending_opaque_tokens),
-                source=pending_opaque_tokens[0].source,
+                tokens=opaque_span.tokens,
+                source=opaque_span.source,
             )
         )
-        pending_opaque_tokens.clear()
     segments.extend(text_result.discovery.segments)
     return None
 
 
-def _discover_source_operation_requests_in_text(
-    text: str,
-    source: SourceLocation,
-    *,
-    source_at_offset: Callable[[int], SourceLocation],
+def _discover_source_operation_requests_in_source_text(
+    source_text: SourceMappedText,
 ) -> SourceOperationDiscoveryLoweringResult:
     segments: list[SourceOperationOpaqueTextSegment | SourceOperationRequestSegment]
     segments = []
+    text = source_text.text
+    source = source_text.source
     index = 0
     found_source_operation = False
 
@@ -147,35 +138,36 @@ def _discover_source_operation_requests_in_text(
 
         start, operation_kind = match
         open_angle_index = start + len(operation_kind)
-        close_angle_index = _matching_close(text, open_angle_index, "<", ">")
+        close_angle_index = matching_delimiter_close(text, open_angle_index, "<", ">")
         if close_angle_index is None:
-            return _malformed_source_operation_result(source_at_offset(start))
+            return _malformed_source_operation_result(source_text.source_at(start))
 
         open_argument_index = close_angle_index + 1
         if (
             open_argument_index >= len(text)
             or text[open_argument_index] != "("
         ):
-            return _malformed_source_operation_result(source_at_offset(start))
+            return _malformed_source_operation_result(source_text.source_at(start))
 
-        close_argument_index = _matching_close(
+        close_argument_index = matching_delimiter_close(
             text,
             open_argument_index,
             "(",
             ")",
         )
         if close_argument_index is None:
-            return _malformed_source_operation_result(source_at_offset(start))
+            return _malformed_source_operation_result(source_text.source_at(start))
 
         angle_payload_start = open_angle_index + 1
         if not text[angle_payload_start:close_angle_index].strip():
-            return _malformed_source_operation_result(source_at_offset(start))
+            return _malformed_source_operation_result(source_text.source_at(start))
 
         if start > index:
+            opaque_span = source_text.span(index, start)
             segments.append(
                 SourceOperationOpaqueTextSegment(
-                    text=text[index:start],
-                    source=source_at_offset(index),
+                    text=opaque_span.text,
+                    source=opaque_span.source,
                 )
             )
 
@@ -183,11 +175,11 @@ def _discover_source_operation_requests_in_text(
         request = SourceOperationRequest(
             operation_kind=operation_kind,
             angle_payload_text=text[angle_payload_start:close_angle_index],
-            angle_payload_source=source_at_offset(angle_payload_start),
+            angle_payload_source=source_text.source_at(angle_payload_start),
             argument_text=text[argument_start:close_argument_index],
-            argument_source=source_at_offset(argument_start),
+            argument_source=source_text.source_at(argument_start),
             source_text=text[start : close_argument_index + 1],
-            source=source_at_offset(start),
+            source=source_text.source_at(start),
         )
         segments.append(
             SourceOperationRequestSegment(
@@ -205,10 +197,11 @@ def _discover_source_operation_requests_in_text(
         )
 
     if index < len(text):
+        opaque_span = source_text.span(index, len(text))
         segments.append(
             SourceOperationOpaqueTextSegment(
-                text=text[index:],
-                source=source_at_offset(index),
+                text=opaque_span.text,
+                source=opaque_span.source,
             )
         )
 
@@ -229,100 +222,9 @@ def _find_next_source_operation_head(
         for operation_kind in _SOURCE_OPERATION_HEADS:
             if not text.startswith(f"{operation_kind}<", index):
                 continue
-            if _has_identifier_boundary_before(text, index):
+            if has_identifier_boundary_before(text, index):
                 return (index, operation_kind)
     return None
-
-
-def _has_identifier_boundary_before(text: str, start: int) -> bool:
-    return start == 0 or text[start - 1] not in _IDENTIFIER_CHARS
-
-
-def _matching_close(
-    text: str,
-    open_index: int,
-    open_char: str,
-    close_char: str,
-) -> int | None:
-    if open_index < 0 or open_index >= len(text) or text[open_index] != open_char:
-        return None
-
-    depth = 1
-    quote: str | None = None
-    escaped = False
-
-    for index in range(open_index + 1, len(text)):
-        char = text[index]
-
-        if quote is not None:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote:
-                quote = None
-            continue
-
-        if char in {"'", '"'}:
-            quote = char
-            continue
-        if char == open_char:
-            depth += 1
-            continue
-        if char == close_char:
-            depth -= 1
-            if depth == 0:
-                return index
-
-    return None
-
-
-def _raw_run_text_and_source_map(
-    raw_run: list[RawStringToken],
-) -> tuple[str, tuple[SourceLocation, ...]]:
-    text_parts: list[str] = []
-    source_map: list[SourceLocation] = []
-
-    for token in raw_run:
-        text_parts.append(token.text)
-        line = token.source.line
-        column = token.source.column
-        for char in token.text:
-            source_map.append(SourceLocation(token.source.path, line, column))
-            if char == "\n":
-                line += 1
-                column = 1
-            else:
-                column += 1
-
-    return "".join(text_parts), tuple(source_map)
-
-
-def _source_from_raw_run(
-    fallback_source: SourceLocation,
-    text: str,
-    source_map: tuple[SourceLocation, ...],
-    offset: int,
-) -> SourceLocation:
-    if 0 <= offset < len(source_map):
-        return source_map[offset]
-    return _source_at_offset(fallback_source, text, offset)
-
-
-def _source_at_offset(
-    source: SourceLocation,
-    text: str,
-    offset: int,
-) -> SourceLocation:
-    line = source.line
-    column = source.column
-    for char in text[:offset]:
-        if char == "\n":
-            line += 1
-            column = 1
-        else:
-            column += 1
-    return SourceLocation(source.path, line, column)
 
 
 def _has_malformed_source_operation_diagnostic(

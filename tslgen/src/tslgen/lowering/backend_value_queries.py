@@ -4,9 +4,14 @@ from __future__ import annotations
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
-    BodyToken,
     ImplementationBody,
     RawStringToken,
+)
+from tslgen.lowering._source_islands import (
+    OpaqueTokenBuffer,
+    SourceMappedText,
+    matching_delimiter_close,
+    source_text_from_text,
 )
 from tslgen.lowering.model import (
     BackendValueQueryDiscovery,
@@ -32,7 +37,7 @@ def discover_backend_value_queries(
     del context
 
     segments: list[BackendValueQueryDiscoverySegment] = []
-    pending_opaque_tokens: list[BodyToken] = []
+    pending_opaque_tokens = OpaqueTokenBuffer()
 
     for token in body.tokens:
         if not isinstance(token, RawStringToken):
@@ -49,14 +54,14 @@ def discover_backend_value_queries(
             pending_opaque_tokens.append(token)
             continue
 
-        if pending_opaque_tokens:
+        opaque_span = pending_opaque_tokens.take()
+        if opaque_span is not None:
             segments.append(
                 BackendValueQueryOpaqueTokenSegment(
-                    tokens=tuple(pending_opaque_tokens),
-                    source=pending_opaque_tokens[0].source,
+                    tokens=opaque_span.tokens,
+                    source=opaque_span.source,
                 )
             )
-            pending_opaque_tokens.clear()
         segments.extend(text_result.discovery.segments)
 
     if not segments:
@@ -65,11 +70,12 @@ def discover_backend_value_queries(
             diagnostics=(_no_query_diagnostic(body.source),),
         )
 
-    if pending_opaque_tokens:
+    opaque_span = pending_opaque_tokens.take()
+    if opaque_span is not None:
         segments.append(
             BackendValueQueryOpaqueTokenSegment(
-                tokens=tuple(pending_opaque_tokens),
-                source=pending_opaque_tokens[0].source,
+                tokens=opaque_span.tokens,
+                source=opaque_span.source,
             )
         )
 
@@ -88,8 +94,18 @@ def discover_backend_value_queries_in_text(
 ) -> BackendValueQueryDiscoveryLoweringResult:
     """Discover exact backend value query islands in one source text fragment."""
 
+    return _discover_backend_value_queries_in_source_text(
+        source_text_from_text(text, source),
+    )
+
+
+def _discover_backend_value_queries_in_source_text(
+    source_text: SourceMappedText,
+) -> BackendValueQueryDiscoveryLoweringResult:
     segments: list[BackendValueQueryOpaqueTextSegment | BackendValueQueryRequestSegment]
     segments = []
+    text = source_text.text
+    source = source_text.source
     index = 0
     found_query = False
 
@@ -99,22 +115,23 @@ def discover_backend_value_queries_in_text(
             break
 
         open_index = start + len(_QUERY_HEAD)
-        close_index = _matching_query_close(text, open_index)
+        close_index = matching_delimiter_close(text, open_index, "(", ")")
         if close_index is None:
             return BackendValueQueryDiscoveryLoweringResult(
                 discovery=None,
                 diagnostics=(
                     _malformed_query_diagnostic(
-                        _source_at_offset(source, text, start),
+                        source_text.source_at(start),
                     ),
                 ),
             )
 
         if start > index:
+            opaque_span = source_text.span(index, start)
             segments.append(
                 BackendValueQueryOpaqueTextSegment(
-                    text=text[index:start],
-                    source=_source_at_offset(source, text, index),
+                    text=opaque_span.text,
+                    source=opaque_span.source,
                 )
             )
 
@@ -122,9 +139,9 @@ def discover_backend_value_queries_in_text(
         query_text = text[query_start:close_index]
         request = BackendValueQueryRequest(
             query_text=query_text,
-            query_source=_source_at_offset(source, text, query_start),
+            query_source=source_text.source_at(query_start),
             source_text=text[start : close_index + 1],
-            source=_source_at_offset(source, text, start),
+            source=source_text.source_at(start),
         )
         segments.append(
             BackendValueQueryRequestSegment(
@@ -142,54 +159,18 @@ def discover_backend_value_queries_in_text(
         )
 
     if index < len(text):
+        opaque_span = source_text.span(index, len(text))
         segments.append(
             BackendValueQueryOpaqueTextSegment(
-                text=text[index:],
-                source=_source_at_offset(source, text, index),
+                text=opaque_span.text,
+                source=opaque_span.source,
             )
         )
 
     return BackendValueQueryDiscoveryLoweringResult(
-        discovery=BackendValueQueryDiscovery(
-            segments=tuple(segments),
-            source=source,
-        ),
+        discovery=BackendValueQueryDiscovery(segments=tuple(segments), source=source),
         diagnostics=(),
     )
-
-
-def _matching_query_close(text: str, open_index: int) -> int | None:
-    if open_index < 0 or open_index >= len(text) or text[open_index] != "(":
-        return None
-
-    depth = 1
-    quote: str | None = None
-    escaped = False
-
-    for index in range(open_index + 1, len(text)):
-        char = text[index]
-
-        if quote is not None:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote:
-                quote = None
-            continue
-
-        if char in {"'", '"'}:
-            quote = char
-            continue
-        if char == "(":
-            depth += 1
-            continue
-        if char == ")":
-            depth -= 1
-            if depth == 0:
-                return index
-
-    return None
 
 
 def _has_malformed_query_diagnostic(
@@ -199,22 +180,6 @@ def _has_malformed_query_diagnostic(
         diagnostic.code == "TSL-LOWER-MALFORMED-BACKEND-VALUE-QUERY"
         for diagnostic in result.diagnostics
     )
-
-
-def _source_at_offset(
-    source: SourceLocation,
-    text: str,
-    offset: int,
-) -> SourceLocation:
-    line = source.line
-    column = source.column
-    for char in text[:offset]:
-        if char == "\n":
-            line += 1
-            column = 1
-        else:
-            column += 1
-    return SourceLocation(source.path, line, column)
 
 
 def _malformed_query_diagnostic(source: SourceLocation) -> Diagnostic:

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 177 is accepted.
+Milestone 178 is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -283,6 +283,24 @@ or target-language text. It added no backend rendering, helper translation,
 primitive-call rendering, declaration rendering, source repair, branch/loop
 execution, broad expression parsing, or runtime `tsldata`, `frozen`, or
 `tslgenold` dependency.
+
+The M178 execution-review loop returned `Accept` after one write-capable
+executor and read-only architecture, boundary, test, documentation, and
+validation audits. M178 added a private lowering helper module,
+`tslgen.lowering._source_islands`, for source-owned request-island scanner
+mechanics only: quote/escape-aware delimiter matching, source-at-offset
+mapping, contiguous raw-token-run joining with per-character source mapping,
+and opaque token buffering.
+
+M178 refactored the accepted M164 backend value query, M166 backend intrinsic,
+M167 source-operation, and M177 mask lane constant discoverers to use the
+shared mechanics while leaving each domain-specific module responsible for
+its accepted head names, payload validation, typed request construction, and
+diagnostic codes/messages. It preserved public imports, `Lowerer` behavior,
+raw token identity, and accepted positive/no-match/malformed behavior. It
+added no new source forms, generic parser, registry, dispatcher, semantic
+rule engine, backend translation, rendering, source repair, expression
+parsing, or runtime `tsldata`, `frozen`, or `tslgenold` dependency.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -3013,30 +3031,29 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 178.
+Plan the next lowering milestone after M178.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m178-source-island-scanner-consolidation-execution-review-loop-prompt.md
+docs/agent/runs/post-m178-lowering-planning-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 178: Source-Owned Request Island Scanner Consolidation
+Post-M178 lowering planning.
 ```
 
 Latest review verdict:
 
 ```text
-M177 execution-review returned Accept after one write-capable executor and
-read-only architecture, boundary, evidence, test, documentation, and
-validation audits.
+M178 execution-review returned Accept after one write-capable executor and
+read-only architecture, boundary, test, documentation, and validation audits.
 
-M177 review verdicts were: architecture `Accept`; boundary `Accept`;
-evidence `Accept`; test `Accept`; validation `Accept`; documentation
+M178 review verdicts were: architecture `Accept`; boundary `Accept`;
+test `Accept`; validation `Accept`; documentation
 `Accept With Required Finalization`. The required finalization was completed
 by this state update.
 ```
@@ -3044,16 +3061,16 @@ by this state update.
 Next expected action:
 
 ```text
-Run the active M178 execution-review-loop prompt. M178 should keep the next
-task focused on lowering by consolidating the repeated source-owned request
-island scanner mechanics used by accepted M164, M166, M167, and M177
-discoverers.
+Run the active post-M178 lowering planning prompt. The planning pass should
+select the next concrete M179 lowering milestone from the remaining
+generation/body lowering gaps, grounded in the current `tsldata` corpus and
+the accepted M127-M178 boundaries.
 
-This is useful because backend value queries, backend intrinsic requests,
-source-operation requests, and mask lane constant requests now share the same
-balanced-delimiter/source-location/raw-token-run mechanics. M178 should reduce
-that duplication without adding new source forms, registries, backend
-translation, rendering, or expression parsing.
+This is useful because the roadmap now ends at M178 and the scanner
+mechanics have been consolidated. The next step should decide the highest
+value lowering slice without adding code in the planning run and without
+sliding into broad TSIL parsing, backend rendering, source repair, or another
+one-off request/result family unless evidence justifies it.
 ```
 
 Previous review verdict:
@@ -7002,13 +7019,32 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M178
-execution-review-loop prompt.
+No stop condition is active. The workflow is ready to run the active
+post-M178 lowering planning prompt.
 
 ## Validation Expectations
 
-For active M178 execution, run the validation command listed in
-`docs/agent/runs/m178-source-island-scanner-consolidation-execution-review-loop-prompt.md`.
+For active post-M178 lowering planning, run the validation command listed in
+`docs/agent/runs/post-m178-lowering-planning-prompt.md`.
+
+For M178 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m177_mask_lane_constant_requests.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m177_mask_lane_constant_requests.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M178 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for the required pytest
+command with `79 passed in 2.11s`, and exit 0 for the final cache check with
+no output after validation-created `__pycache__` directories were removed.
+The added helper test command
+`PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m178_source_island_scanner.py`
+returned exit 0 with `4 passed in 1.46s`. The architecture and boundary
+reviewers also ran combined focused regression checks and reported `83
+passed`.
 
 For M177 execution and review, validation completed with:
 

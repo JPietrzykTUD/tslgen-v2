@@ -22329,8 +22329,25 @@ Validation result:
 
 Status:
 
-Selected after M177. Active prompt:
-`docs/agent/runs/m178-source-island-scanner-consolidation-execution-review-loop-prompt.md`.
+Accepted. The M178 execution-review loop returned `Accept` after one
+write-capable executor and read-only architecture, boundary, test,
+documentation, and validation audits.
+
+M178 added a private lowering helper module, `_source_islands.py`, for
+source-owned request-island scanner mechanics only: quote/escape-aware
+delimiter matching, source-at-offset mapping, contiguous raw-token-run joining
+with per-character source mapping, and opaque token buffering. It refactored
+the accepted M164 backend value query, M166 backend intrinsic, M167
+source-operation, and M177 mask lane constant discoverers to use those shared
+mechanics.
+
+Each domain-specific module still owns its accepted head names, payload
+validation, typed request construction, and diagnostic codes/messages. M178
+preserved public imports, `Lowerer` behavior, raw token identity, and accepted
+positive/no-match/malformed behavior. It added no new source forms, generic
+parser, registry, dispatcher, semantic rule engine, backend translation,
+rendering, source repair, expression parsing, or runtime `tsldata`,
+`frozen`, or `tslgenold` dependency.
 
 Goal:
 
@@ -22372,4 +22389,52 @@ git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m177_mask_lane_constant_requests.py
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m177_mask_lane_constant_requests.py
 find tslgen -type d -name __pycache__ -print
+```
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q ...`: exit 0, no output.
+- Required pytest command: exit 0, `79 passed in 2.11s`.
+- Initial cache check listed validation-created `__pycache__` directories;
+  after removal, final `find tslgen -type d -name __pycache__ -print`: exit
+  0, no output.
+- Additional helper test command
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m178_source_island_scanner.py`:
+  exit 0, `4 passed in 1.46s`.
+- Architecture and boundary reviewers also ran combined focused regression
+  checks and reported `83 passed`.
+
+### Post-M178 Lowering Planning
+
+Status:
+
+Selected after M178. Active prompt:
+`docs/agent/runs/post-m178-lowering-planning-prompt.md`.
+
+Goal:
+
+Select the next concrete M179 lowering milestone from the remaining
+generation/body lowering gaps, grounded in the current `tsldata` corpus and
+the accepted M127-M178 boundaries.
+
+Scope:
+
+- Inventory the remaining lowering candidates that still matter after M178.
+- Choose exactly one M179 slice that is useful for the research prototype and
+  implementable in one execution-review-loop prompt.
+- Keep the run planning-only: update roadmap/state and create the M179 prompt,
+  but do not edit production code or tests.
+
+Out of scope:
+
+M179 implementation; broad TSIL parsing; backend rendering; source repair;
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies; registries,
+dispatchers, worklists, or new request/result families without a concrete
+accepted-boundary reason.
+
+Validation:
+
+```bash
+git diff --check
 ```
