@@ -188,6 +188,10 @@ Inputs:
 - Normalized CPU flags.
 - Backend ID.
 
+Machine feature profiles may provide normalized requested CPU flags for a
+target profile. The profile catalog is build/configuration metadata and does
+not prove compiler support or perform host autodetection.
+
 Outputs:
 
 - `SelectionResult`

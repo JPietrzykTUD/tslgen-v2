@@ -90,6 +90,43 @@ Invariants:
 - Names are non-empty.
 - Normalization is explicit and stage-specific. For example, feature flags normalize through the flag catalog; primitive names should not be silently case-normalized.
 
+### Machine Feature Profiles
+
+Machine feature profiles are build metadata facts, not compiler capability
+rules.
+
+```python
+@dataclass(frozen=True, slots=True)
+class FeatureFlagNormalization:
+    spelling: FeatureFlagSpelling
+    normalized: FeatureFlagName
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class MachineFeatureAlternative:
+    feature: FeatureFlagName
+    spelling: FeatureFlagSpelling
+
+@dataclass(frozen=True, slots=True)
+class MachineFeatureProfile:
+    family: MachineProfileFamily
+    name: MachineProfileName
+    features: tuple[FeatureFlagName, ...]
+    alternatives: tuple[MachineFeatureAlternative, ...]
+    source: SourceLocation
+```
+
+Invariants:
+
+- Feature flags normalize through the flag normalization catalog.
+- Profile data may be loaded from JSON at the configuration/build metadata
+  boundary, but downstream code consumes typed profile values.
+- The scalar `NOSIMD-INVALID` source spelling means no SIMD feature flags.
+- Alternative values are source-provided build/presentation spellings, not
+  compiler support fallbacks.
+- Compiler capability policy, host autodetection, and compiler option spelling
+  are separate backend/tooling concerns.
+
 ## Primitive Model
 
 ```python

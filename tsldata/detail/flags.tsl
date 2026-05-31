@@ -18,6 +18,8 @@ flags:
   avx3_vpopcntdq {normalized "avx512_vpopcntdq"}
   avx3_4fmaps {normalized "avx512_4fmaps"}
   avx3_4vnniw {normalized "avx512_4vnniw"}
+  avx512er {normalized "avx512er"}
+  avx512pf {normalized "avx512pf"}
   avx2 {normalized "avx2"}
   avx {normalized "avx"}
   bmi2 {normalized "bmi2"}

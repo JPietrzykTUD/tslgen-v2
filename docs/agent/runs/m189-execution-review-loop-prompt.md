@@ -19,7 +19,7 @@ M188: Supplementary Asset And Template Boundary For C++/Rust Project Skeletons
 Selected milestone:
 
 ```text
-Milestone 189: Typed Backend Language And Translation Metadata Catalog
+Milestone 189: Typed Machine Feature Profile Catalog And Buildsystem Options Boundary
 ```
 
 ## Read First
@@ -35,72 +35,209 @@ Milestone 189: Typed Backend Language And Translation Metadata Catalog
 - `docs/redesign/pipeline-design.md`
 - `docs/redesign/target-architecture.md`
 - `docs/redesign/design-decisions.md`
-- `tsldata/detail/lang/types/types_cpp.tsl`
-- `tsldata/detail/lang/types/types_rust.tsl`
-- `tsldata/detail/lang/translate_cpp.tsl`
-- `tsldata/detail/lang/translate_rust.tsl`
+- `tsldata/detail/flags.tsl`
+- `tsldata/extensions/extension.tsl`
 - existing parser/catalog code under `tslgen/src/tslgen/syntax`,
   `tslgen/src/tslgen/domain`, and `tslgen/src/tslgen/pipeline`
+- M188 supplementary rendering code under `tslgen/src/tslgen/rendering`
+- `supplementary/buildsystem/**`
 
 ## Goal
 
-Add the first typed catalog boundary for backend language/type maps and
-translation maps from `tsldata/detail/lang/**`, focused on current C++ and
-Rust evidence.
+Add a typed catalog boundary for product-provided machine feature profiles
+used by generated-project build metadata.
 
-The milestone should make backend metadata available as typed facts without
-evaluating snippets, rendering code, replacing existing tiny emitters, or
-reopening lowering.
+The profile data is grouped by architecture family. Each profile names a
+machine/profile target and lists requested feature flags. The generator should
+normalize those flags through the accepted `tsldata/detail/flags.tsl` flag
+normalization data, then expose deterministic typed buildsystem option
+metadata for selected profiles.
+
+This is not a compiler support database. If a user asks for a generated
+project for a particular machine profile, the generator records and presents
+the requested normalized features; the user/toolchain remains responsible for
+using a compiler and environment that can build that profile.
+
+## Product Profile Data
+
+Use this product-provided profile data as the M189 source fixture/data. Store
+it at an appropriate loader/config boundary, preferably under
+`supplementary/buildsystem/` if no better existing source-data boundary is
+already present.
+
+```json
+{
+  "generic": [
+    {
+      "name": "scalar",
+      "flags": "NOSIMD-INVALID"
+    }
+  ],
+  "x86": [
+    {
+      "name": "sse",
+      "flags": "sse"
+    },
+    {
+      "name": "sse2",
+      "flags": "sse sse2"
+    },
+    {
+      "name": "sse3",
+      "flags": "sse sse2 ssse3"
+    },
+    {
+      "name": "avx",
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx"
+    },
+    {
+      "name": "avx2",
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2"
+    },
+    {
+      "name": "knl",
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512er avx512pf"
+    },
+    {
+      "name": "kml",
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512er avx512pf avx512_4fmaps avx512_4vnniw avx512_vpopcntdq"
+    },
+    {
+      "name": "skylake",
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw"
+    },
+    {
+      "name": "cannonlake",
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512ifma avx512vbmi"
+    },
+    {
+      "name": "cascadelake",
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni"
+    },
+    {
+      "name": "cooperlake",
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni avx512_bf16"
+    },
+    {
+      "name": "icelake-rockerlake",
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
+      "alternatives": {
+        "avx512_vpclmulqdq": "vpclmulqdq",
+        "avx512_gfni": "gfni",
+        "avx512_vaes": "vaes"
+      }
+    },
+    {
+      "name": "tigerlake",
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_vp2intersect",
+      "alternatives": {
+        "avx512_vpclmulqdq": "vpclmulqdq",
+        "avx512_gfni": "gfni",
+        "avx512_vaes": "vaes"
+      }
+    },
+    {
+      "name": "zen4",
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
+      "alternatives": {
+        "avx512_vpclmulqdq": "vpclmulqdq",
+        "avx512_gfni": "gfni",
+        "avx512_vaes": "vaes"
+      }
+    },
+    {
+      "name": "sapphirerapids",
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_fp16",
+      "alternatives": {
+        "avx512_vpclmulqdq": "vpclmulqdq",
+        "avx512_gfni": "gfni",
+        "avx512_vaes": "vaes"
+      }
+    },
+    {
+      "name": "zen5",
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_vp2intersect",
+      "alternatives": {
+        "avx512_vpclmulqdq": "vpclmulqdq",
+        "avx512_gfni": "gfni",
+        "avx512_vaes": "vaes"
+      }
+    }
+  ],
+  "aarch64": [
+    {
+      "name": "neon",
+      "flags": "neon",
+      "alternatives": {
+        "neon": "asimd"
+      }
+    }
+  ]
+}
+```
 
 ## Scope
 
-- Parse and catalog exact `language <backend>:` type-spelling entries from the
-  current `tsldata/detail/lang/types/types_*.tsl` shape, for example:
-
-  ```text
-  language cpp:
-    s32 {type "int32_t"}
-  ```
-
-- Parse and catalog exact `translation <backend>:` template entries from the
-  current `tsldata/detail/lang/translate_*.tsl` shape, for example:
-
-  ```text
-  translation cpp:
-    call "::tsl::{name}<Vec>({args})"
-  ```
-
-- Store metadata as typed immutable domain/catalog values with deterministic
-  ordering and source-aware diagnostics.
-- Cover active C++ and Rust metadata in focused tests. C17 remains deferred
-  evidence and must not become an active backend.
-- Add diagnostics for malformed entries and duplicate entries within a backend
-  language or translation map.
+- Add typed immutable values for machine feature profiles, such as:
+  architecture family, profile name, normalized required features, and
+  optional alternative spellings.
+- Add a loader/parser for the JSON schema above. Dictionary-like JSON values
+  may exist at the I/O boundary only; downstream code must consume typed
+  profile objects.
+- Reuse or add typed flag-normalization support from `tsldata/detail/flags.tsl`.
+  Do not hardcode the full feature vocabulary in the profile parser.
+- Normalize all profile flags deterministically. The `scalar` profile's
+  `NOSIMD-INVALID` spelling is a sentinel for no SIMD feature flags and must
+  not become a real requested feature.
+- Normalize alternatives deterministically. Alternative entries should be
+  represented as typed values mapping the normalized canonical feature key to
+  a source-provided alternative spelling. The key must resolve through
+  `tsldata/detail/flags.tsl`; the value is build/presentation text and must
+  not be required to exist in the canonical TSL feature vocabulary.
+- Expose a small typed buildsystem option/render-context boundary for a
+  selected profile. It should make values such as target profile name,
+  architecture family, normalized feature list, and alternatives available to
+  future supplementary buildsystem templates.
+- Add deterministic lookup helpers by architecture family and profile name.
+- Add diagnostics for malformed top-level JSON, malformed profile entries,
+  duplicate profile names within a family, duplicate normalized flags within a
+  profile, unknown flags, malformed alternatives, and unknown selected
+  profiles.
+- Add focused tests covering scalar, SSE/AVX, AVX-512 alternatives, AArch64
+  Neon alias data, deterministic ordering, and diagnostics.
 
 ## Out Of Scope
 
-- Evaluating translation snippets.
-- Replacing existing scalar/operator backend emitter tables.
+- Compiler capability detection or validation.
+- Mapping normalized features to compiler-specific command-line switches.
+- Deciding whether `gcc`, `clang`, `msvc`, `rustc`, or any version supports a
+  feature spelling.
+- Host CPU autodetection.
+- Invoking compilers or running generated tests.
+- Backend language/type/translation metadata ingestion from
+  `tsldata/detail/lang/**`.
 - Backend type/value/intrinsic/source-operation translation.
 - Rendering primitive bodies.
-- Jinja/template rendering.
-- Supplementary asset changes.
+- Moving backend semantics into `supplementary/` templates.
 - Lowering changes.
 - Dependency closure.
 - Runtime dependency on `frozen/` or `tslgenold`.
 
 ## Guardrails
 
-- Do not treat raw dictionary metadata as the semantic model downstream.
-  Dictionary-like parser details must be promoted into typed catalog/domain
-  values before backend/output stages consume them.
-- Do not introduce raw-key semantic shortcuts such as
-  `(backend, operation, type) -> emitted text`.
-- Do not make renderers evaluate translation strings in this milestone.
-- Keep the parser support exact to the observed language/translation metadata
-  forms; malformed or nearby forms should be diagnostics, not source repair.
-- Preserve the M188 supplementary/template boundary. Do not move backend
-  semantics into `supplementary/` templates.
+- This milestone creates product/build metadata, not backend semantic
+  translation.
+- Do not introduce an ad-hoc dictionary as the downstream semantic model.
+  Parsed JSON must become typed profile facts before selection/buildsystem
+  code consumes it.
+- Do not introduce compiler feature support policy. A selected machine profile
+  expresses requested target features only.
+- Do not treat alternatives as compiler support fallbacks. They are known
+  alternative feature spellings/aliases for later buildsystem presentation.
+- Keep supplementary templates presentational. Template files may receive typed
+  feature lists later, but they must not decide feature closure, aliases,
+  profile selection, backend type translation, or primitive semantics.
+- Do not reopen lowering or parse implementation bodies.
 
 ## Required Validation
 
@@ -109,7 +246,7 @@ Run:
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m189_backend_metadata_catalog.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m189_machine_feature_profiles.py
 find tslgen -type d -name __pycache__ -print
 ```
 
@@ -120,11 +257,12 @@ reporting if any appear.
 
 Run read-only review/audit subagents after the executor:
 
-1. Architecture/boundary auditor: verify typed metadata cataloging does not
-   become backend semantic evaluation or renderer-side inference.
-2. Evidence auditor: verify C++/Rust language and translation fixtures are
-   grounded in current `tsldata/detail/lang/**` evidence and no `frozen/` or
-   `tslgenold` runtime dependency is introduced.
+1. Architecture/boundary auditor: verify typed machine profile data does not
+   become compiler capability policy, backend semantic translation, or
+   renderer-side inference.
+2. Evidence auditor: verify feature normalization is grounded in
+   `tsldata/detail/flags.tsl`, the product profile JSON is preserved, and no
+   `frozen/` or `tslgenold` runtime dependency is introduced.
 3. Documentation auditor: verify roadmap, state, and redesign docs describe
    the accepted boundary and any diagnostic codes.
 4. Validation auditor: verify exact validation results and workspace hygiene.

@@ -59,6 +59,48 @@ static and template files are reported as
 `TSL-SUPPLEMENTARY-MISSING-STATIC-ASSET` and
 `TSL-SUPPLEMENTARY-MISSING-TEMPLATE-ASSET`.
 
+### M189 Machine Feature Profile Boundary
+
+Milestone 189 adds a typed machine feature profile catalog for generated
+project build metadata. The product profile source lives at
+`supplementary/buildsystem/machine_profiles.json` and is grouped by
+architecture family. Each profile has a name, a space-separated feature flag
+string, and optional alternative feature spellings.
+
+Feature flags normalize through `tsldata/detail/flags.tsl`. A source flag may
+be an alias listed in that file or an already-normalized canonical flag
+spelling that appears as a normalization result. The `generic/scalar`
+profile's `NOSIMD-INVALID` value is a sentinel for no SIMD target features and
+is not emitted as a feature flag.
+
+Alternative entries map a canonical feature key to a source-provided
+build/presentation spelling. The key must normalize through the flag catalog;
+the value is preserved as authored and is not required to be a canonical TSL
+feature flag.
+
+Selected profiles expose typed build option values such as target family,
+target profile name, normalized feature list, and alternative spellings. These
+values are build metadata only. The generator does not decide whether a
+compiler supports the requested feature set, does not perform host
+autodetection, and does not invoke a compiler.
+
+Accepted diagnostics include:
+
+- `TSL-FLAGS-MALFORMED-FORM`
+- `TSL-FLAGS-DUPLICATE-SPELLING`
+- `TSL-MACHINE-PROFILE-MALFORMED-JSON`
+- `TSL-MACHINE-PROFILE-MALFORMED-JSON-SHAPE`
+- `TSL-MACHINE-PROFILE-MALFORMED-FAMILY`
+- `TSL-MACHINE-PROFILE-MALFORMED-ENTRY`
+- `TSL-MACHINE-PROFILE-MALFORMED-NAME`
+- `TSL-MACHINE-PROFILE-MALFORMED-FLAGS`
+- `TSL-MACHINE-PROFILE-MALFORMED-ALTERNATIVES`
+- `TSL-MACHINE-PROFILE-DUPLICATE-PROFILE`
+- `TSL-MACHINE-PROFILE-DUPLICATE-FLAG`
+- `TSL-MACHINE-PROFILE-DUPLICATE-ALTERNATIVE`
+- `TSL-MACHINE-PROFILE-UNKNOWN-FLAG`
+- `TSL-MACHINE-PROFILE-UNKNOWN-PROFILE`
+
 ## Input Behavior
 
 | Input | Expected Behavior | Evidence |

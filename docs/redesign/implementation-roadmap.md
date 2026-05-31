@@ -23901,41 +23901,58 @@ Validation result:
 - Final `find tslgen -type d -name __pycache__ -print`: exit 0, no output after
   validation-created caches were removed.
 
-### Milestone 189: Typed Backend Language And Translation Metadata Catalog
+### Milestone 189: Typed Machine Feature Profile Catalog And Buildsystem Options Boundary
 
 Status:
 
-Selected. Execution prompt:
+Accepted. Execution prompt:
 `docs/agent/runs/m189-execution-review-loop-prompt.md`.
 
 Goal:
 
-Add the first typed catalog boundary for backend language/type maps and
-translation maps from `tsldata/detail/lang/**`, focused on current C++ and
-Rust evidence. The milestone should make backend metadata available as typed
-facts without evaluating snippets, rendering code, or replacing backend
-semantic rules with raw dictionary lookups.
+Add a typed catalog boundary for machine feature profiles used by generated
+project build metadata. The profile data is product-provided JSON grouped by
+architecture family. Flags are normalized through `tsldata/detail/flags.tsl`
+and exposed as deterministic typed facts for buildsystem option rendering.
+
+The milestone deliberately does not decide whether a user's compiler supports
+the requested feature flags. When a target profile is selected, the generated
+project/build configuration may present the normalized requested features and
+aliases; the user/toolchain remains responsible for supplying a compatible
+compiler and machine environment.
 
 Scope:
 
-- Parse and catalog exact `language <backend>:` type-spelling entries such as
-  `s32 {type "int32_t"}` and `f32 {type "float"}` from the current
-  `tsldata/detail/lang/types/types_*.tsl` shape.
-- Parse and catalog exact `translation <backend>:` template entries such as
-  `call "..."`
-  and `value_uninit "{}"` from the current `tsldata/detail/lang/translate_*.tsl`
-  shape.
-- Store metadata as typed immutable domain/catalog values with deterministic
-  ordering and source-aware diagnostics.
-- Cover active C++ and Rust metadata in tests. C17 remains deferred evidence
-  and must not become an active backend.
-- Add diagnostics for malformed entries and duplicates within a backend map.
+- Add typed immutable values for machine feature profile data, for example
+  profile family, profile name, normalized required feature set, and optional
+  alternative feature spellings.
+- Add a parser/loader boundary for the product-provided JSON schema:
+  top-level architecture family to profile list; each profile has `name`,
+  space-separated `flags`, and optional `alternatives`.
+- Normalize feature flags with the existing typed flag normalization data from
+  `tsldata/detail/flags.tsl`. Alternative keys must resolve to the same
+  normalized feature vocabulary. Alternative values are source-provided
+  build/presentation spellings and should be preserved as typed spellings
+  without requiring them to exist in the canonical TSL feature vocabulary.
+- Treat the current `scalar` profile's `NOSIMD-INVALID` value as a sentinel
+  for no SIMD target features, not as a real target feature flag.
+- Expose a small typed buildsystem option/render-context boundary for selected
+  profiles, such as target profile name, architecture family, normalized
+  feature list, and typed alternative spellings. These values are
+  presentation/build metadata only.
+- Add diagnostics for duplicate profile names within a family, duplicate
+  normalized flags within a profile, malformed fields, unknown flags, and
+  malformed alternatives.
+- Cover the product-provided profile set in tests, including scalar, SSE/AVX,
+  AVX-512 profiles with alternatives, and AArch64 Neon alias data.
 
 Out of scope:
 
-Evaluating translation snippets; replacing existing scalar/operator emitter
-tables; backend type/value/intrinsic/source-operation translation; rendering
-primitive bodies; Jinja/template rendering; supplementary asset changes;
+Compiler capability detection or validation; compiler flag spelling policy;
+host CPU autodetection; invoking compilers; running generated tests; backend
+language/type/translation metadata ingestion from `tsldata/detail/lang/**`;
+backend type/value/intrinsic/source-operation translation; rendering
+primitive bodies; Jinja/template rendering beyond typed build metadata;
 lowering changes; dependency closure; runtime dependency on `frozen/` or
 `tslgenold`.
 
@@ -23944,6 +23961,85 @@ Validation:
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m189_backend_metadata_catalog.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m189_machine_feature_profiles.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M189 accepted. It added typed machine feature profile values, a flag
+normalization parser for `tsldata/detail/flags.tsl`, a JSON profile catalog
+loader for `supplementary/buildsystem/machine_profiles.json`, typed selected
+build option metadata, and diagnostics for malformed or unresolved profile
+data. The product-provided profile set now loads deterministically, the scalar
+`NOSIMD-INVALID` sentinel lowers to an empty feature list, AVX-512 profile
+alternatives are preserved as typed presentation spellings, and unknown
+profiles/flags are reported as diagnostics.
+
+M189 also extended `tsldata/detail/flags.tsl` with self-normalized
+`avx512er` and `avx512pf` entries because the accepted product profiles use
+those feature flags. It did not add compiler capability checking, host
+autodetection, compiler flag spelling policy, compiler invocation, backend
+semantic translation, primitive body rendering, dependency closure, or any
+lowering changes.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m189_machine_feature_profiles.py`:
+  exit 0, `9 passed`.
+- `find tslgen -type d -name __pycache__ -print`: initially reported
+  validation-created `__pycache__` directories under `tslgen/src/tslgen/**`
+  and `tslgen/tests`; after cleanup, exit 0 with no output.
+- Focused validation re-review also removed pre-existing cache directories
+  under quarantined `frozen/` and `tslgenold/`; final
+  `find . -type d -name __pycache__ -print`: exit 0, no output.
+
+### Milestone 190: Typed Backend Language And Translation Metadata Catalog
+
+Status:
+
+Selected. Execution prompt:
+`docs/agent/runs/m190-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the first typed catalog boundary for backend language/type maps and
+translation maps from `tsldata/detail/lang/**`, focused on current C++ and
+Rust evidence. The milestone should make backend metadata available as typed
+facts without evaluating snippets, rendering code, replacing existing tiny
+emitters, or reopening lowering.
+
+Scope:
+
+- Parse and catalog exact `language <backend>:` type-spelling entries such as
+  `s32 {type "int32_t"}` and `f32 {type "float"}` from the current
+  `tsldata/detail/lang/types/types_*.tsl` shape.
+- Parse and catalog exact `translation <backend>:` template entries such as
+  `call "..."`
+  and `value_uninit "{}"` from the current
+  `tsldata/detail/lang/translate_*.tsl` shape.
+- Store metadata as typed immutable domain/catalog values with deterministic
+  ordering and source-aware diagnostics.
+- Cover active C++ and Rust metadata in tests. C17 remains deferred evidence
+  and must not become an active backend.
+- Add diagnostics for malformed entries and duplicates within a backend
+  language or translation map.
+
+Out of scope:
+
+Evaluating translation snippets; replacing existing scalar/operator emitter
+tables; backend type/value/intrinsic/source-operation translation; rendering
+primitive bodies; Jinja/template rendering; supplementary asset changes;
+machine profile changes; lowering changes; dependency closure; runtime
+dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m190_backend_metadata_catalog.py
 find tslgen -type d -name __pycache__ -print
 ```

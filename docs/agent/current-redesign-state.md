@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 188 is accepted.
+Milestone 189 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -29,6 +29,20 @@ into templates, render primitive bodies beyond existing tiny outputs,
 translate M185/M187 request islands, execute dependency closure, or make
 `frozen/` or `tslgenold/` runtime dependencies.
 
+M189 added typed machine feature profile values and a profile catalog loader
+for `supplementary/buildsystem/machine_profiles.json`. The catalog normalizes
+feature flags through `tsldata/detail/flags.tsl`, treats the `generic/scalar`
+`NOSIMD-INVALID` spelling as a no-SIMD sentinel, preserves alternative
+feature spellings as typed build/presentation metadata, and exposes selected
+profile build option values. It deliberately does not model compiler support,
+host autodetection, compiler-specific option spelling, compiler invocation,
+backend semantic translation, primitive rendering, dependency closure, or
+lowering.
+
+M189 also extended `tsldata/detail/flags.tsl` with self-normalized
+`avx512er` and `avx512pf` entries because the accepted product machine
+profiles use those feature flags.
+
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
 
@@ -48,37 +62,40 @@ parsing/source-repair work that lowering must not absorb by default.
 Current required action:
 
 ```text
-Run M189 execution-review loop.
+Run M190 execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m189-execution-review-loop-prompt.md
+docs/agent/runs/m190-execution-review-loop-prompt.md
 ```
 
 Active planning milestone:
 
 ```text
-Milestone 189: Typed Backend Language And Translation Metadata Catalog.
+Milestone 190: Typed Backend Language And Translation Metadata Catalog.
 ```
 
 Latest review verdict:
 
 ```text
-M188 execution-review returned Accept after one write-capable executor,
-read-only architecture, evidence, documentation, and validation audits, plus
-orchestrator documentation finalization. Validation passed and
-validation-created __pycache__ directories were removed.
+M189 execution-review returned Accept after one write-capable executor and
+read-only architecture, evidence, documentation, and validation audits, plus a
+focused validation-hygiene cleanup. Validation passed and validation-created
+`tslgen/` cache directories were removed. Pre-existing `__pycache__`
+directories under quarantined `frozen/` and `tslgenold/` were also removed
+during validation re-review; final workspace cache scan returned no output.
 ```
 
 Next expected action:
 
 ```text
-Run the active M189 execution-review loop prompt. It is an implementation task:
+Run the active M190 execution-review loop prompt. It is an implementation task:
 one write-capable executor adds the typed backend language/translation
 metadata catalog boundary for current C++ and Rust `tsldata/detail/lang/**`
-evidence without evaluating snippets, rendering code, or reopening lowering.
+evidence without evaluating snippets, rendering code, changing machine
+profiles, or reopening lowering.
 ```
 
 Previous review verdict:
@@ -94,13 +111,15 @@ and selected M187. M187 execution-review returned Accept. Post-M187 lowering
 completion gate planning returned Accept and declared lowering complete by
 current contract. Post-lowering backend/output transition planning returned
 Accept and selected M188. M188 execution-review returned Accept and selected
-M189.
+M189. M189 was then retargeted by planning decision to the machine feature
+profile/buildsystem option boundary before execution. M189 execution-review
+returned Accept and selected M190.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m188-execution-review-loop-prompt.md
+docs/agent/runs/m189-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

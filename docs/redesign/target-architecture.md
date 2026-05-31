@@ -136,6 +136,12 @@ render contexts supplied by backend/output stages. Backend semantics, TSIL
 lowering, type/intrinsic selection, feature gating, primitive selection, and
 source repair must not live in the template files.
 
+Machine feature profile data under `supplementary/buildsystem/` is loaded at a
+configuration/build metadata boundary and promoted into typed profile facts
+before use. It may feed buildsystem render contexts with requested normalized
+features, but it must not become a hidden compiler capability database or host
+autodetection mechanism.
+
 ## Dependency Direction
 
 ```mermaid

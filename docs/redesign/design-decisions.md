@@ -2502,3 +2502,43 @@ Consequences:
   their existence does not resolve TSIL semantics by itself.
 - Future milestones that introduce a template engine must define typed render
   contexts and tests proving deterministic output.
+
+## ADR-053: Machine Feature Profiles Are Build Metadata, Not Compiler Capability Policy
+
+Status: Accepted
+
+Context:
+
+Generated C++ and Rust projects need an explicit way to select a target
+machine/profile such as `sse2`, `avx2`, `skylake`, `zen4`, or `neon`.
+Product-provided profile data groups profiles by architecture family and lists
+requested feature flags plus occasional alternative spellings. The existing
+`tsldata/detail/flags.tsl` data already defines the normalized feature
+vocabulary used by the TSL corpus.
+
+Decision:
+
+The clean generator will model machine profiles as typed build metadata:
+architecture family, profile name, normalized requested feature set, and
+optional alternative feature spellings. Profile flags are normalized through
+typed flag-normalization data from `tsldata/detail/flags.tsl`. The scalar
+profile's `NOSIMD-INVALID` spelling is treated as a sentinel for no SIMD
+feature flags, not as a real feature.
+
+The generator does not decide whether a user's compiler supports the requested
+feature set, nor does it choose compiler-specific command-line spellings in
+the profile catalog. Host CPU autodetection, compiler capability checks, and
+compile/run validation belong to explicit outer tooling or later backend build
+integration, not to the pure profile catalog.
+
+Consequences:
+
+- Machine profile selection can feed deterministic buildsystem option/render
+  contexts without making compiler-support claims.
+- Alternative spellings are preserved as typed alias metadata for later
+  buildsystem presentation, not treated as automatic fallbacks.
+- Feature vocabulary stays grounded in `.tsl` data instead of a hardcoded
+  Python list.
+- Future CMake, Cargo, or compiler integration must consume these typed
+  profile facts and make any compiler-specific policy explicit in a separate
+  boundary.
