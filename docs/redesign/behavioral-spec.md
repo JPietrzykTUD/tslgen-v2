@@ -101,6 +101,34 @@ Accepted diagnostics include:
 - `TSL-MACHINE-PROFILE-UNKNOWN-FLAG`
 - `TSL-MACHINE-PROFILE-UNKNOWN-PROFILE`
 
+### M190 Backend Metadata Catalog Boundary
+
+Milestone 190 adds a typed backend metadata catalog for active C++ and Rust
+language/type maps and translation templates under `tsldata/detail/lang/**`.
+The active loader reads exactly the current C++ and Rust metadata sources.
+C17 remains deferred evidence and is not loaded into the active catalog.
+
+Backend language maps promote entries such as `s32 {type "int32_t"}` into
+typed backend/type/spelling facts. Backend translation maps promote entries
+such as `call "..."`
+and `value_uninit "{}"` into typed inert template facts. Multiline templates,
+such as the Rust `preamble`, are preserved as authored template text. M190
+does not format, evaluate, inspect placeholders, render code, or replace
+backend emitters.
+
+Accepted diagnostics include:
+
+- `TSL-BACKEND-METADATA-SOURCE-NOT-FOUND`
+- `TSL-BACKEND-METADATA-MALFORMED-LANGUAGE`
+- `TSL-BACKEND-METADATA-MALFORMED-TYPE`
+- `TSL-BACKEND-METADATA-MALFORMED-TRANSLATION`
+- `TSL-BACKEND-METADATA-MALFORMED-TRANSLATION-ENTRY`
+- `TSL-BACKEND-METADATA-UNCLOSED-TRANSLATION-TEMPLATE`
+- `TSL-BACKEND-METADATA-DUPLICATE-TYPE`
+- `TSL-BACKEND-METADATA-DUPLICATE-TRANSLATION`
+- `TSL-BACKEND-METADATA-UNKNOWN-TYPE-SPELLING`
+- `TSL-BACKEND-METADATA-UNKNOWN-TRANSLATION`
+
 ## Input Behavior
 
 | Input | Expected Behavior | Evidence |

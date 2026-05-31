@@ -142,6 +142,11 @@ before use. It may feed buildsystem render contexts with requested normalized
 features, but it must not become a hidden compiler capability database or host
 autodetection mechanism.
 
+Backend language maps and translation maps from `tsldata/detail/lang/**` are
+catalog inputs. They are promoted into typed backend metadata facts before
+backend/output stages consume them. Renderers must not parse these files, and
+the metadata catalog itself must not evaluate template placeholders.
+
 ## Dependency Direction
 
 ```mermaid

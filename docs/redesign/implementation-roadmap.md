@@ -24000,7 +24000,7 @@ Validation result:
 
 Status:
 
-Selected. Execution prompt:
+Accepted. Execution prompt:
 `docs/agent/runs/m190-execution-review-loop-prompt.md`.
 
 Goal:
@@ -24041,5 +24041,82 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m190_backend_metadata_catalog.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M190 accepted. It added typed backend metadata values for active backend
+language/type spellings and translation templates, plus an exact parser/loader
+for the current C++ and Rust `tsldata/detail/lang/**` files. The active loader
+uses only C++ and Rust; C17 remains deferred evidence. Translation templates
+are stored as inert typed source data, including multiline Rust `preamble`
+text, and are not evaluated, formatted, or rendered by the metadata catalog.
+
+Accepted diagnostics cover malformed language maps, malformed translation
+maps, unclosed multiline templates, duplicates within backend type or
+translation maps, missing backend metadata source files, and unknown metadata
+lookups. M190 did not replace existing scalar/operator emitters, translate
+backend type/value/intrinsic/source-operation requests, render primitive
+bodies, change supplementary assets or machine profiles, change lowering,
+execute dependency closure, or add runtime dependencies on `frozen/` or
+`tslgenold`.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m190_backend_metadata_catalog.py`:
+  exit 0, `9 passed`.
+- `find tslgen -type d -name __pycache__ -print`: initially reported
+  validation-created `__pycache__` directories under `tslgen/src/tslgen/**`
+  and `tslgen/tests`; after cleanup, exit 0 with no output.
+
+### Milestone 191: Backend Type Spelling Request Translation Boundary
+
+Status:
+
+Selected. Execution prompt:
+`docs/agent/runs/m191-execution-review-loop-prompt.md`.
+
+Goal:
+
+Consume existing typed `BackendTypeSpellingRequest` values from the accepted
+lowering handoff and the M190 backend metadata catalog to produce the first
+typed backend type spelling results. This starts backend translation from
+typed requests and typed metadata, not from raw `type<backend>(...)` text or
+renderer-local type tables.
+
+Scope:
+
+- Add a small backend type spelling translation boundary that accepts a
+  `BackendTypeSpellingRequest` and `BackendMetadataCatalog`.
+- Resolve exact scalar type identity requests such as `si32`, `ui32`, `f32`,
+  and `f64` through the active backend language maps. The slice must document
+  and test the accepted source type-tag to language-key normalization rule
+  such as `si32 -> s32` and `ui32 -> u32`.
+- Resolve `LoweredSizeType()` through the backend translation metadata entry
+  `type_size`.
+- Return typed backend type spelling results with source/provenance and
+  diagnostics for missing backend metadata, missing scalar type spellings,
+  unsupported request values, and unsupported backend ids.
+- Cover C++ and Rust focused cases and preserve deterministic ordering when a
+  collection helper is introduced.
+
+Out of scope:
+
+Rendering; formatting translation snippets; primitive body rendering; vector
+register/mask/member type spellings; `CurrentVector` or
+`LoweredVectorAsExtensionType` fulfillment; backend value, intrinsic, control,
+mask, source-operation, or call translation; dependency closure; machine
+profile changes; lowering changes; runtime dependency on `frozen/` or
+`tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m191_backend_type_spelling_translation.py
 find tslgen -type d -name __pycache__ -print
 ```

@@ -2542,3 +2542,38 @@ Consequences:
 - Future CMake, Cargo, or compiler integration must consume these typed
   profile facts and make any compiler-specific policy explicit in a separate
   boundary.
+
+## ADR-054: Backend Metadata Is Cataloged Before Translation
+
+Status: Accepted
+
+Context:
+
+Backend/output work needs C++ and Rust type spellings and translation
+templates from `tsldata/detail/lang/**`. Those files are source data, but
+using them directly from renderers or as raw dictionaries would hide semantic
+decisions behind string lookups.
+
+Decision:
+
+The clean generator will first promote active C++ and Rust backend language
+maps and translation maps into typed catalog facts:
+`BackendLanguageTypeSpelling` and `BackendTranslationTemplate`. Translation
+template text remains inert in the metadata catalog. The catalog may provide
+typed lookup helpers and missing-entry diagnostics, but it does not evaluate
+placeholders, render code, translate TSIL requests, or replace existing
+backend emitters by itself.
+
+C17 language and translation files remain deferred evidence. They are not
+loaded by the active backend metadata catalog until a future milestone
+explicitly selects C17 as an active backend.
+
+Consequences:
+
+- Later backend translation stages can consume typed metadata instead of raw
+  file strings.
+- Missing backend type/translation entries become source-aware diagnostics.
+- Template evaluation and rendering remain separate backend/output
+  responsibilities with their own typed rule boundaries.
+- The metadata catalog does not reopen lowering, dependency closure, machine
+  profile handling, compiler support policy, or generated-project rendering.

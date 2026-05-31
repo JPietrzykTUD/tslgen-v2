@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 189 is accepted.
+Milestone 190 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -43,6 +43,15 @@ M189 also extended `tsldata/detail/flags.tsl` with self-normalized
 `avx512er` and `avx512pf` entries because the accepted product machine
 profiles use those feature flags.
 
+M190 added typed backend metadata values and an exact parser/loader for active
+C++ and Rust backend language/type maps and translation templates under
+`tsldata/detail/lang/**`. The active catalog stores C++ and Rust type
+spellings and inert translation template text, including multiline Rust
+`preamble` text, with deterministic ordering and diagnostics. C17 remains
+deferred evidence. M190 deliberately did not evaluate snippets, render code,
+replace backend emitters, change machine profiles, reopen lowering, execute
+dependency closure, or add runtime dependencies on `frozen/` or `tslgenold`.
+
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
 
@@ -62,40 +71,40 @@ parsing/source-repair work that lowering must not absorb by default.
 Current required action:
 
 ```text
-Run M190 execution-review loop.
+Run M191 execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m190-execution-review-loop-prompt.md
+docs/agent/runs/m191-execution-review-loop-prompt.md
 ```
 
 Active planning milestone:
 
 ```text
-Milestone 190: Typed Backend Language And Translation Metadata Catalog.
+Milestone 191: Backend Type Spelling Request Translation Boundary.
 ```
 
 Latest review verdict:
 
 ```text
-M189 execution-review returned Accept after one write-capable executor and
-read-only architecture, evidence, documentation, and validation audits, plus a
-focused validation-hygiene cleanup. Validation passed and validation-created
-`tslgen/` cache directories were removed. Pre-existing `__pycache__`
-directories under quarantined `frozen/` and `tslgenold/` were also removed
-during validation re-review; final workspace cache scan returned no output.
+M190 execution-review returned Accept after one write-capable executor and
+read-only architecture, evidence, documentation, and validation audits.
+Validation passed and validation-created `tslgen/` cache directories were
+removed.
 ```
 
 Next expected action:
 
 ```text
-Run the active M190 execution-review loop prompt. It is an implementation task:
-one write-capable executor adds the typed backend language/translation
-metadata catalog boundary for current C++ and Rust `tsldata/detail/lang/**`
-evidence without evaluating snippets, rendering code, changing machine
-profiles, or reopening lowering.
+Run the active M191 execution-review loop prompt. It is an implementation task:
+one write-capable executor consumes existing typed
+`BackendTypeSpellingRequest` values and the M190 backend metadata catalog to
+produce the first typed backend type spelling translation results for scalar
+type identities and `LoweredSizeType`. It must not render code, evaluate
+arbitrary templates, broaden to vector/register/mask requests, or reopen
+lowering.
 ```
 
 Previous review verdict:
@@ -113,13 +122,14 @@ current contract. Post-lowering backend/output transition planning returned
 Accept and selected M188. M188 execution-review returned Accept and selected
 M189. M189 was then retargeted by planning decision to the machine feature
 profile/buildsystem option boundary before execution. M189 execution-review
-returned Accept and selected M190.
+returned Accept and selected M190. M190 execution-review returned Accept and
+selected M191.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m189-execution-review-loop-prompt.md
+docs/agent/runs/m190-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

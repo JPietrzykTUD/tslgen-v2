@@ -938,6 +938,11 @@ manifest language IDs before renderer dispatch. Active manifests require a
 language type map keyed by `language_id` and a translation map keyed by
 `backend_id`.
 
+Milestone 190 promotes active C++ and Rust language maps and translation maps
+into typed backend metadata facts before backend planning or rendering consume
+them. Translation templates are cataloged as inert source data in this stage;
+placeholder evaluation belongs to later typed backend translation rules.
+
 ## Stage 10: Rendering
 
 Inputs:

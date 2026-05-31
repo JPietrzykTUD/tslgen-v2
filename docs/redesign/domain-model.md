@@ -127,6 +127,39 @@ Invariants:
 - Compiler capability policy, host autodetection, and compiler option spelling
   are separate backend/tooling concerns.
 
+### Backend Metadata
+
+Backend metadata records language type spellings and translation templates as
+typed catalog facts. These are inputs to later backend translation stages, not
+rendered output.
+
+```python
+@dataclass(frozen=True, slots=True)
+class BackendLanguageTypeSpelling:
+    backend: BackendId
+    type_key: BackendTypeKey
+    spelling: BackendTypeSpellingText
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendTranslationTemplate:
+    backend: BackendId
+    key: BackendTranslationKey
+    template: BackendTemplateText
+    source: SourceLocation
+```
+
+Invariants:
+
+- C++ and Rust are the active backend metadata sources in the current product
+  path; C17 remains deferred evidence.
+- Translation template text is inert until a later typed backend translation
+  rule explicitly consumes it.
+- A backend metadata catalog can answer missing-type and missing-translation
+  lookups with diagnostics instead of raw key errors.
+- Raw dictionaries may exist at parse/loader boundaries only; backend/output
+  stages consume typed metadata values.
+
 ## Primitive Model
 
 ```python
