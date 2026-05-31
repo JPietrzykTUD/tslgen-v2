@@ -22984,7 +22984,7 @@ model-boundary split only when a later accepted slice needs it.
 
 Status:
 
-Selected as the next active prompt after M182 acceptance. Active prompt:
+Accepted. Completed prompt:
 `docs/agent/runs/post-m182-lowering-planning-prompt.md`.
 
 Goal:
@@ -23008,6 +23008,170 @@ the planner explicitly selects it as the next boundary; broad TSIL parsing;
 source repair; runtime `tsldata`, `frozen`, or `tslgenold` dependencies;
 registries, dispatchers, worklists, or new request/result families without a
 concrete accepted-boundary reason.
+
+Validation:
+
+```bash
+git diff --check
+```
+
+Planning result:
+
+Accepted. Post-M182 lowering planning selected
+`Milestone 183: Exact Source-Operation Selector Semantic Handoff` after
+interactive product review chose source-operation lowering over backend
+intrinsic translation or body-token rendering policy.
+
+Evidence planning over exact source-operation heads in `tsldata/**/*.tsl`
+found a finite selector set after excluding target-language false positives
+such as `static_cast<...>` and `bit_cast<...>`:
+
+- `cast`: `static`, `reinterpret`, `bitcast`, `saturating`.
+- `mem`: `copy`, `alloc`, `alloc_aligned`, `free`.
+- `io`: `write`, `write_base`, `write_bin`, `endl`.
+
+Boundary/simplicity review accepted the M183 direction with one important
+constraint: M183 must classify selector payloads into typed finite selector
+values, not re-wrap raw selector strings. New semantic dataclasses must not
+store raw strings for selector semantics. Raw text is allowed only where it is
+source-owned opaque payload/provenance, preferably by retaining the existing
+M167 raw request island on the handoff segment instead of duplicating
+`angle_payload_text`, `argument_text`, or `source_text` into new semantic
+records.
+
+Documentation planning review accepted the roadmap/state/prompt transition.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+
+### Milestone 183: Exact Source-Operation Selector Semantic Handoff
+
+Status:
+
+Accepted. Completed prompt:
+`docs/agent/runs/m183-source-operation-selector-handoff-execution-review-loop-prompt.md`.
+
+Goal:
+
+Consume exact M167 `SourceOperationRequest` discovery segments and classify
+the source-operation selector payload into finite typed selector values for
+all three families while preserving operation arguments as source-owned
+opaque payloads.
+
+Scope:
+
+- Add one focused handoff API for M167 source-operation discovery results.
+- Preserve opaque text segments, opaque token segments, source order, and raw
+  M167 `SourceOperationRequest` identity.
+- Accept exact selector payloads observed under exact source-operation heads:
+  `cast<static>`, `cast<reinterpret>`, `cast<bitcast>`, `cast<saturating>`,
+  `mem<copy>`, `mem<alloc>`, `mem<alloc_aligned>`, `mem<free>`,
+  `io<write>`, `io<write_base>`, `io<write_bin>`, and `io<endl>`.
+- Store selector semantics as typed finite values such as literals/enums or
+  typed selector classes, not raw strings.
+- Keep source-operation arguments opaque and available through source-owned
+  payload/provenance, preferably the retained M167 raw request island.
+- Diagnose unknown selector payloads deterministically.
+
+Out of scope:
+
+Source-operation translation; backend maps; language maps; rendering;
+generated artifacts; argument splitting; argument type/value lowering;
+recursive discovery inside arguments; treating target-language spellings or
+translation-template snippets as source-operation selectors; selector
+normalization or source repair; broad TSIL parsing; dependency scheduling;
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies; registries,
+dispatchers, plugin maps, or worklists.
+
+Expected tests:
+
+- Positive handoff tests for every accepted cast, memory, and I/O selector.
+- Body-token handoff preserving opaque text/token segments and raw M167
+  request identity.
+- Regression that M167 raw requests remain distinct from M183 semantic facts
+  until explicit handoff.
+- Regression that source-operation arguments remain verbatim opaque text and
+  nested lowerable-looking payloads are not recursively scanned.
+- Diagnostics for unknown selector payloads in each family, including
+  target-language/template-looking payloads such as `cast<{type}>`.
+- Determinism and public import/export tests where relevant.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m183_source_operation_selector_handoff.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m183_source_operation_selector_handoff.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Validation result:
+
+- Initial targeted pytest after implementation found one test assertion bug in
+  the body-token preservation index; the implementation was unchanged and the
+  test assertion was corrected.
+- Final `git diff --check`: exit 0, no output.
+- Final `python -B -m compileall -q ...`: exit 0, no output.
+- Final required pytest command: exit 0, `51 passed in 1.89s`.
+- Validation-created `__pycache__` directories were removed, and the final
+  `find tslgen -type d -name __pycache__ -print` returned exit 0 with no
+  output.
+
+Review result:
+
+Architecture, boundary, evidence, and test auditors returned `Accept`.
+Documentation and validation auditors returned `Accept` after final state,
+roadmap, behavior/domain/inventory docs, next prompt, and exact validation
+were completed.
+
+Accepted behavior:
+
+- Added `CastSourceOperationSelector`, `MemorySourceOperationSelector`, and
+  `IoSourceOperationSelector` enum values for the exact observed selector
+  payloads.
+- Added a focused `lower_source_operation_discovery(...)` handoff API that
+  consumes only accepted M167 source-operation request islands.
+- Preserved opaque text/token segments, source order, raw token identity, raw
+  request identity, complete source island text, angle payload text, argument
+  payload text, and locations by carrying the original M167 request island on
+  the handoff segment.
+- Kept source-operation arguments opaque and did not recursively scan or lower
+  nested TSIL-looking constructs inside those arguments.
+- Diagnosed unsupported selector payloads deterministically without source
+  repair or selector normalization.
+
+### Post-M183 Lowering Planning
+
+Status:
+
+Selected. Active prompt:
+`docs/agent/runs/post-m183-lowering-planning-prompt.md`.
+
+Goal:
+
+Select the next concrete M184 lowering milestone after M183, grounded in the
+accepted M127-M183 boundaries and current `tsldata` corpus, without starting
+backend rendering or implementation.
+
+Scope:
+
+- Re-inventory remaining lowering candidates that still matter after M183.
+- Decide whether the next useful slice should remain in lowering, defer to a
+  backend/translation phase, or first consolidate a boundary that would
+  otherwise grow another one-off request/result family.
+- Choose exactly one M184 slice if the evidence supports an executable next
+  milestone.
+- Create the M184 execution-review-loop prompt, or record an explicit stop or
+  return-to-planner condition if no safe lowering milestone is ready.
+
+Out of scope:
+
+M184 implementation; source-operation translation unless the planning review
+classifies it as a lowering-owned handoff rather than backend rendering;
+backend maps; language maps; C++/Rust rendering; generated artifacts; broad
+TSIL parsing; source repair; runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies; registries, dispatchers, plugin maps, or worklists.
 
 Validation:
 

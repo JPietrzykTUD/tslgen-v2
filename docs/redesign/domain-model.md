@@ -1376,6 +1376,58 @@ carrying mode/operation and argument payload text forward unresolved. It is
 not a cast/memory/I/O operation-name validator, type-lowering result,
 argument AST, backend translation result, or renderer-ready call.
 
+Milestone 183 adds source-operation selector handoff values over accepted
+M167 source-operation requests:
+
+```python
+class CastSourceOperationSelector(Enum):
+    STATIC = "static"
+    REINTERPRET = "reinterpret"
+    BITCAST = "bitcast"
+    SATURATING = "saturating"
+
+class MemorySourceOperationSelector(Enum):
+    COPY = "copy"
+    ALLOC = "alloc"
+    ALLOC_ALIGNED = "alloc_aligned"
+    FREE = "free"
+
+class IoSourceOperationSelector(Enum):
+    WRITE = "write"
+    WRITE_BASE = "write_base"
+    WRITE_BIN = "write_bin"
+    ENDL = "endl"
+
+@dataclass(frozen=True, slots=True)
+class CastSourceOperationHandoffRequest:
+    selector: CastSourceOperationSelector
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class MemorySourceOperationHandoffRequest:
+    selector: MemorySourceOperationSelector
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class IoSourceOperationHandoffRequest:
+    selector: IoSourceOperationSelector
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationHandoffRequestSegment:
+    request: SourceOperationHandoffRequest
+    island: SourceOperationRequest
+    source: SourceLocation
+```
+
+The M183 model is a semantic handoff boundary over already discovered M167
+request islands. The handoff classifies only the top-level selector payload
+into finite enum values and preserves the original M167 request island for
+angle payload text, argument payload text, complete source-island text, raw
+request identity, and diagnostics. It is not a cast/memory/I/O translator,
+argument splitter, nested payload scanner, backend map lookup, or
+renderer-ready call model.
+
 Milestone 144 adds selector-payload values:
 
 ```python

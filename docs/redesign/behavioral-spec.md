@@ -1822,6 +1822,36 @@ repair; dependency scheduling; output writing; runtime `tsldata`, `frozen`,
 or `tslgenold` dependencies; or broad registries, dispatchers, worklists,
 callback maps, hidden backfeeds, or fixpoint machinery.
 
+### M183 Cast/Memory/I/O Selector Handoff Boundary
+
+Milestone 183 consumes accepted M167 source-operation request islands and
+classifies only the exact top-level selector payload inside `<...>` into
+typed finite selector facts:
+
+```text
+cast<static|reinterpret|bitcast|saturating>(ARGUMENT_TEXT)
+mem<copy|alloc|alloc_aligned|free>(ARGUMENT_TEXT)
+io<write|write_base|write_bin|endl>(ARGUMENT_TEXT)
+```
+
+The semantic handoff request stores an enum selector value and source
+location. It does not duplicate raw `angle_payload_text`, `argument_text`, or
+`source_text`; those source-owned strings remain on the retained M167 request
+island carried by the handoff segment.
+
+Unsupported selector payloads produce deterministic diagnostics, including
+unknown selectors, wrong-family selectors, selector payloads with surrounding
+whitespace, empty selector payloads that reach handoff, template placeholders
+such as `{type}`, and expression-like selector payloads such as
+`mode=value<backend>(...)`. Malformed outer `cast<...>(...)`,
+`mem<...>(...)`, and `io<...>(...)` shapes remain M167 discovery diagnostics.
+
+M183 does not translate cast, memory, or I/O operations; does not split
+arguments; does not lower type/value/backend/intrinsic/primitive-call islands
+inside arguments; does not recursively discover nested source operations; does
+not read backend maps, language maps, manifests, `tsldata`, `frozen`, or
+`tslgenold` at runtime; and does not render C++ or Rust.
+
 ### M168 Exact `generic::*` Generation-Expression Boundary
 
 Milestone 168 extends the generation-value boundary with an inner

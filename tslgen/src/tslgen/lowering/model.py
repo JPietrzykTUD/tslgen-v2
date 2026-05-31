@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Literal
 
 from tslgen.analysis.selection import (
@@ -98,6 +99,27 @@ class SelectedImplementationLoweringContext:
     selected_specialization_bindings: tuple[TargetSpecializationBinding, ...] = ()
     current_vector_keyword: str = CURRENT_VECTOR_KEYWORD
     current_scalar_keyword: str = CURRENT_SCALAR_KEYWORD
+
+
+class CastSourceOperationSelector(Enum):
+    STATIC = "static"
+    REINTERPRET = "reinterpret"
+    BITCAST = "bitcast"
+    SATURATING = "saturating"
+
+
+class MemorySourceOperationSelector(Enum):
+    COPY = "copy"
+    ALLOC = "alloc"
+    ALLOC_ALIGNED = "alloc_aligned"
+    FREE = "free"
+
+
+class IoSourceOperationSelector(Enum):
+    WRITE = "write"
+    WRITE_BASE = "write_base"
+    WRITE_BIN = "write_bin"
+    ENDL = "endl"
 
 
 @dataclass(frozen=True, slots=True)
@@ -828,6 +850,57 @@ class SourceOperationDiscovery:
 @dataclass(frozen=True, slots=True)
 class SourceOperationDiscoveryLoweringResult:
     discovery: SourceOperationDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CastSourceOperationHandoffRequest:
+    selector: CastSourceOperationSelector
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class MemorySourceOperationHandoffRequest:
+    selector: MemorySourceOperationSelector
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class IoSourceOperationHandoffRequest:
+    selector: IoSourceOperationSelector
+    source: SourceLocation
+
+
+SourceOperationHandoffRequest = (
+    CastSourceOperationHandoffRequest
+    | MemorySourceOperationHandoffRequest
+    | IoSourceOperationHandoffRequest
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationHandoffRequestSegment:
+    request: SourceOperationHandoffRequest
+    island: SourceOperationRequest
+    source: SourceLocation
+
+
+SourceOperationHandoffSegment = (
+    SourceOperationOpaqueTextSegment
+    | SourceOperationOpaqueTokenSegment
+    | SourceOperationHandoffRequestSegment
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationHandoff:
+    segments: tuple[SourceOperationHandoffSegment, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class SourceOperationHandoffLoweringResult:
+    handoff: SourceOperationHandoff | None
     diagnostics: tuple[Diagnostic, ...]
 
 

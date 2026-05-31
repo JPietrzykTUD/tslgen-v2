@@ -32,7 +32,9 @@ from tslgen.lowering.model import (
     BackendTypeQueryDiscoveryLoweringResult,
     BackendTypeQueryDiscovery,
     BackendTypeQueryHandoffLoweringResult,
+    SourceOperationDiscovery,
     SourceOperationDiscoveryLoweringResult,
+    SourceOperationHandoffLoweringResult,
     BackendValueQueryDiscoveryLoweringResult,
     BackendValueQueryDiscovery,
     BackendValueQueryHandoffLoweringResult,
@@ -70,6 +72,7 @@ from tslgen.lowering.backend_type_queries import lower_backend_type_query_discov
 from tslgen.lowering.backend_value_queries import discover_backend_value_queries
 from tslgen.lowering.backend_value_queries import lower_backend_value_query_discovery
 from tslgen.lowering.mask_lane_constants import discover_mask_lane_constant_requests
+from tslgen.lowering.source_operation_handoff import lower_source_operation_discovery
 from tslgen.lowering.source_operations import discover_source_operation_requests
 from tslgen.lowering.generation_control import lower_generation_control_region
 from tslgen.lowering.generation_loops import (
@@ -391,6 +394,14 @@ class Lowerer:
             context,
             context.implementation.body,
         )
+
+    def lower_source_operation_discovery(
+        self,
+        selected: SelectedImplementation,
+        discovery: SourceOperationDiscovery,
+    ) -> SourceOperationHandoffLoweringResult:
+        context = self.context_for(selected)
+        return lower_source_operation_discovery(context, discovery)
 
     def lower_primitive_call_closure_lowering_package(
         self,

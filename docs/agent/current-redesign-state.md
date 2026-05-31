@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 182 is accepted.
+Milestone 183 is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -368,6 +368,24 @@ remain typed unresolved operands. M182 added no intrinsic translation,
 backend map reads, argument splitting, C++/Rust rendering, broad TSIL
 parsing, recursive arbitrary-payload lowering, source repair, or runtime
 `tsldata`, `frozen`, or `tslgenold` dependency.
+
+The M183 execution-review loop returned `Accept` after one write-capable
+executor and read-only architecture, boundary, evidence, test,
+documentation, and validation audits. M183 added a focused semantic handoff
+from exact M167 `SourceOperationRequest` discovery segments to typed finite
+selector facts for all accepted source-operation families.
+
+M183 accepts exact source-operation selector payloads observed under exact
+source-operation heads: `cast` selectors `static`, `reinterpret`, `bitcast`,
+and `saturating`; `mem` selectors `copy`, `alloc`, `alloc_aligned`, and
+`free`; and `io` selectors `write`, `write_base`, `write_bin`, and `endl`.
+The semantic request values store enum selectors and source locations only.
+The original M167 raw request island remains on the handoff segment and keeps
+angle payload text, argument payload text, complete source-island text, raw
+request identity, source order, and source locations. M183 added no
+source-operation translation, backend map reads, argument splitting, nested
+payload scanning/lowering, C++/Rust rendering, broad TSIL parsing, source
+repair, or runtime `tsldata`, `frozen`, or `tslgenold` dependency.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -3098,58 +3116,54 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Run post-M182 lowering planning.
+Run post-M183 lowering planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m182-lowering-planning-prompt.md
+docs/agent/runs/post-m183-lowering-planning-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The next prompt is planning-only and must select exactly one M183
-lowering milestone before any implementation.
+None. The active prompt is planning-only and must select the next M184
+lowering milestone before any M184 implementation.
 ```
 
 Latest review verdict:
 
 ```text
-M182 execution-review returned Accept With Follow-Ups. Architecture,
-boundary, evidence, test, documentation, and validation auditors accepted
-after one focused revision for missing tests, documentation completion, and
-the exact validation command sequence.
+M183 execution-review returned Accept. The accepted implementation consumes
+accepted M167 `SourceOperationRequest` discovery segments and classifies exact
+`cast<...>`, `mem<...>`, and `io<...>` selector payloads into enum-backed
+finite selector facts while preserving operation arguments as source-owned
+opaque payloads on the retained M167 request island.
 
-M182 added exact intrinsic modifier semantic handoff. It consumes accepted
-M166 backend intrinsic request segments, keeps direct `intrin<...>(...)`
-names and all intrinsic arguments opaque, parses only top-level
-`intrin_compose<...>(...)` angle payload modifier fields, and reuses M181
-only when a modifier value is exactly one balanced `value<backend>(...)`
-island.
+Post-M183 planning must select exactly one next M184 lowering milestone. It
+must pressure-test source-operation translation, body-token rendering, and
+additional request/result layers for backend/rendering leakage or
+overengineering before creating an executor prompt.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M182 lowering planning prompt. The planner should inspect
-the accepted roadmap and inventories, choose exactly one M183 lowering
-milestone, update roadmap/state, and create the concrete M183 execution
-prompt. Do not implement M183 during planning.
+Run the active post-M183 lowering planning prompt with read-only planning and
+audit subagents. Do not implement M184 code in that prompt.
 ```
 
 Previous review verdict:
 
 ```text
-M181 execution-review returned Accept With Follow-Ups. Post-M181 planning
-selected M182, and M182 is now accepted.
+Post-M182 lowering planning returned Accept and selected M183.
 ```
 
-Accepted planning prompt:
+Completed prompt:
 
 ```text
-docs/agent/runs/post-m182-lowering-planning-prompt.md
+docs/agent/runs/m183-source-operation-selector-handoff-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive begins below. These older entries are
@@ -7120,12 +7134,38 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 ## Stop Condition
 
 No stop condition is active. The workflow is ready to run the active
-post-M182 lowering planning prompt.
+post-M183 lowering planning prompt.
 
 ## Validation Expectations
 
-For post-M182 lowering planning, run the validation command listed in
-`docs/agent/runs/post-m182-lowering-planning-prompt.md`.
+For post-M183 lowering planning, run:
+
+```bash
+git diff --check
+```
+
+For M183 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m183_source_operation_selector_handoff.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m183_source_operation_selector_handoff.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M183 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for `python -B -m compileall -q ...` with no output, and exit
+0 for the required pytest command with `51 passed in 1.89s`.
+Validation-created `__pycache__` directories were removed, and the final
+`find tslgen -type d -name __pycache__ -print` returned exit 0 with no output.
+
+For post-M182 lowering planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
 
 For M182 execution and review, validation completed with:
 
