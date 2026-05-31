@@ -6,6 +6,25 @@ or accepted planning passes.
 
 ## Accepted Through
 
+Milestone 187 is accepted.
+
+The M187 execution-review loop returned `Accept` after one write-capable
+executor, read-only architecture, boundary/simplicity, evidence, test,
+documentation, and validation audits, and validation-created cache cleanup.
+M187 added exact backend/output source-island discovery for
+`assume_aligned<...>(...)`, angle-only `array_type<...>`, and
+`pack<...>(...)` over source-owned text and contiguous raw body-token runs.
+
+M187 preserves request kind, angle payload text/source, optional call argument
+payload text/source, complete source-island text, source locations,
+surrounding opaque text/token segments, and raw token identity. Payloads
+remain opaque. The milestone deliberately did not resolve alignment values,
+pointer semantics, array layout/type semantics, pack semantics, argument
+splitting, nested payload lowering, backend helper translation, declaration
+rendering, C++/Rust output, source repair, runtime `tsldata`, runtime
+`frozen`, runtime `tslgenold`, registries, dispatchers, worklists, or
+recursive payload walkers.
+
 Milestone 186 is accepted.
 
 The M186 execution-review loop returned `Accept` after one write-capable
@@ -3171,41 +3190,39 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Run post-M186 lowering completion gate planning.
+Run post-M187 lowering completion gate planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m186-lowering-completion-gate-planning-prompt.md
+docs/agent/runs/post-m187-lowering-completion-gate-planning-prompt.md
 ```
 
-Active planning target:
+Active planning milestone:
 
 ```text
-Post-M186 lowering completion gate.
+Post-M187 Lowering Completion Gate Planning.
 ```
 
 Latest review verdict:
 
 ```text
-M186 execution-review returned Accept. The accepted slice evaluates
-`if<generation>` / `else if<generation>` conditions through a finite typed
-TSIL generation boolean grammar over accepted boolean leaves,
-integer-comparison leaves, `!`, `&&`, `||`, and parentheses. It keeps
-target-language expression parsing, raw operator semantics, pointer/index
-predicates, helper semantics, recursive generation-control lowering,
-rendering, backend translation, and runtime source-corpus dependencies out of
-scope.
+M187 execution-review returned Accept. M187 added exact backend/output
+request-island identity for `assume_aligned<...>(...)`, angle-only
+`array_type<...>`, and `pack<...>(...)`, preserving opaque payloads and
+surrounding source-owned text/tokens. It did not solve alignment, array
+layout/type, pack semantics, nested payloads, backend translation, rendering,
+or source repair.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M186 planning prompt. It is planning-only, must use
-read-only evidence, boundary/simplicity, and documentation subagents, and must
-decide whether lowering is complete by contract or exactly one lowering-owned
-gap remains. Do not implement code.
+Run the active post-M187 lowering completion gate planning prompt. It is
+documentation/planning-only, uses read-only review/audit subagents, and must
+either record lowering complete by current contract or select exactly one
+remaining lowering-owned gap with a concrete next prompt.
 ```
 
 Previous review verdict:
@@ -3216,13 +3233,14 @@ Accept and selected M184. M184 lowering completeness audit returned Accept
 and selected M185. M185 execution-review returned Accept. Post-M185 lowering
 completion gate planning returned Accept and selected M186. M186
 execution-review returned Accept and selected a final post-M186 lowering
-completion gate.
+completion gate. Post-M186 lowering completion gate planning returned Accept
+and selected M187. M187 execution-review returned Accept.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m186-generation-condition-expression-execution-review-loop-prompt.md
+docs/agent/runs/m187-backend-output-source-islands-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive begins below. These older entries are
@@ -7200,19 +7218,54 @@ renderers, emit generated output, or parse broad TSIL body syntax.
   generation-control lowering, target-language expression parsing, rendering,
   backend translation, and helper-call semantics remain out of scope unless a
   later accepted prompt selects them explicitly.
+- Post-M186 interactive follow-up: distinguish backend/output semantics from
+  backend/output request-island identity. `assume_aligned<...>(...)`,
+  `array_type<...>`, and `pack<...>(...)` may need exact typed source-island
+  discovery for later backend consumption, but should not be semantically
+  interpreted by lowering.
+- M187 accepted exact backend/output source-island request discovery for
+  `assume_aligned<...>(...)`, angle-only `array_type<...>`, and
+  `pack<...>(...)`, preserving payloads as source-owned opaque text.
+- M187 follow-up: run a post-M187 lowering completion gate before leaving
+  lowering. The gate must either record lowering complete by current contract
+  or select exactly one remaining lowering-owned gap; it must not start
+  backend/output implementation merely because backend/output work remains.
 
 ## Stop Condition
 
 No stop condition is active. The workflow is ready to run the active
-post-M186 lowering completion gate planning prompt.
+post-M187 lowering completion gate planning prompt.
 
 ## Validation Expectations
 
-For post-M186 lowering completion gate planning, run:
+For post-M187 lowering completion gate planning, run:
 
 ```bash
 git diff --check
 ```
+
+For M187 backend/output source-island discovery execution and review,
+validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m187_backend_output_source_islands.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m187_backend_output_source_islands.py
+find tslgen -type d -name __pycache__ -print
+```
+
+`git diff --check` returned exit 0 with no output. `compileall` returned exit
+0 with no output. The M187 pytest command returned `17 passed in 1.40s`.
+Validation-created `__pycache__` directories were removed before the final
+`find`; the final `find` returned exit 0 with no output.
+
+For post-M186 lowering completion gate planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
 
 For M186 typed generation boolean condition grammar execution and review,
 validation completed with:

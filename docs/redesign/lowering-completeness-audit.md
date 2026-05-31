@@ -129,9 +129,9 @@ Support-helper evidence in primitive bodies:
 | `intrin<...>(...)`, `intrin_compose<...>(...)` | 737 and 627 heads | backend translation/rendering/output-owned gap | M166 discovers islands and M182 classifies top-level `intrin_compose` modifiers. Backend intrinsic lookup, argument splitting, and rendering remain backend-owned. |
 | `cast<...>(...)`, `mem<...>(...)`, `io<...>(...)` | 1083, 25, and 14 heads | backend translation/rendering/output-owned gap | M167 discovers islands and M183 classifies exact selectors. Type/value lowering inside arguments and operation translation are later backend/source-operation work. |
 | `mask<...>(...)` | 71 heads: `zero`, `test`, `set`, `set:1` | lowering-owned gap | No accepted boundary currently discovers this TSIL-like keyword family. M185 should add exact discovery and selector classification while preserving arguments opaque. |
-| `assume_aligned<...>(...)` | 20 heads, mostly around pointers and `vector::alignment` | backend translation/rendering/output-owned gap | This is a support/helper-shaped source form around pointer expressions. Inner generation alignment can already lower when selected; the outer helper spelling belongs to backend/support output integration, not semantic lowering now. |
-| `array_type<...>` | 21 heads, mainly inside `var<typed>` type payloads | backend translation/rendering/output-owned gap | This is a target type-constructor spelling needed when declaration rendering starts. Inner type/value arguments can lower through accepted boundaries, but the array type spelling is renderer/backend-owned until declaration output is selected. |
-| `pack<first>(args...)` | 1 head in `load_store/construct.tsl` | backend translation/rendering/output-owned gap | Single observed backend/helper-like operation. Do not spend the next lowering milestone here unless output integration selects pack rendering. |
+| `assume_aligned<...>(...)` | 20 heads, mostly around pointers and `vector::alignment` | backend/output source-island candidate | This is a support/helper-shaped source form around pointer expressions. Inner generation alignment can already lower when selected; the outer helper semantics belong to backend/support output integration, but the source island may still need typed request identity before rendering. |
+| `array_type<...>` | 21 heads, mainly inside `var<typed>` type payloads | backend/output source-island candidate | This is a target type-constructor spelling needed when declaration rendering starts. Inner type/value arguments can lower through accepted boundaries, but the array type semantics are renderer/backend-owned. The post-M186 gate should decide whether opaque island identity is needed now. |
+| `pack<first>(args...)` | 1 head in `load_store/construct.tsl` | backend/output source-island candidate | Single observed backend/helper-like operation. Do not solve pack semantics in lowering; consider only exact opaque request-island discovery if grouped with `assume_aligned` and `array_type`. |
 | `details::*` support helpers | `arith_*`, `popcount`, `clz`, `ctz`, `mask_test` | source-convention flaw/follow-up | These remain source-authored backend/support helpers. Lowering must not rewrite them to operators or infer semantics from helper names. Backend support-library availability may need later explicit rules. |
 | raw target-language-like text | assignments, indexing, loops, operators around islands | broad parsing/deferred | Surrounding C/C++/Rust-like syntax remains source-owned text. Narrow source-island discovery should not become a general expression or statement parser. |
 | backend translation metadata | `tsldata/detail/lang/**/*.tsl` | backend translation/rendering/output-owned gap | Translation maps are not primitive-body TSIL evidence. Lowering produces typed requests/facts; backend translation consumes explicit metadata later. |
@@ -177,7 +177,7 @@ lowering surface complete by contract:
 | Candidate | Evidence | Classification | Next action |
 | --- | --- | --- | --- |
 | bare `if<generation>(type::is_same(...))` conditions | 15 current primitive-body conditions, including 3 exact two-term top-level `type::is_same(...) || type::is_same(...)` disjunctions | lowering-owned condition-expression gap | Select M186 as a typed generation boolean condition grammar. |
-| `assume_aligned<...>(...)`, `array_type<...>`, `pack<...>(...)` | same evidence as M184 | backend/output-owned or source-convention | Do not select as lowering implementation. |
+| `assume_aligned<...>(...)`, `array_type<...>`, `pack<...>(...)` | same evidence as M184 | backend/output source-island candidates | Do not select as M186 semantic lowering. After M186, reassess whether all three need one exact typed request-island discovery milestone with opaque payload preservation. |
 | `details::*` support helpers | same helper evidence as M184 | source-authored backend/support helpers | Preserve; do not rewrite to operators. |
 | recursive payload discovery, loop execution/substitution, declaration/body rendering, backend translation/rendering | required later for output, but not a missing keyword-family lowering boundary | backend/output-owned or broad/deferred | Keep out of M186. |
 
@@ -198,3 +198,47 @@ gate that reconciles this audit, the current `tsldata/**/*.tsl` corpus, and
 the accepted M186 behavior. That gate must either record lowering completion
 by contract or select exactly one remaining lowering-owned gap; it must not
 start backend implementation merely because backend/output-owned work remains.
+
+Interactive product review after M186 clarified one important distinction:
+`assume_aligned<...>(...)`, `array_type<...>`, and `pack<...>(...)` should
+not be semantically solved by lowering, but they may still need typed
+backend/output request-island identity before backend rendering can consume
+them intentionally. The post-M186 gate must therefore decide whether all three
+forms should become one exact M187 source-island discovery milestone with
+opaque payload preservation, or whether existing source-owned raw token
+preservation is already sufficient.
+
+## Post-M186 Completion Gate Result
+
+The post-M186 completion gate selected one remaining lowering-owned request
+discovery gap:
+
+```text
+Milestone 187: Exact Backend/Output Source-Island Discovery Boundary
+```
+
+The selected M187 boundary covers all three backend/output source-island
+candidates together: `assume_aligned<...>(...)`, `array_type<...>`, and
+`pack<...>(...)`. It should preserve kind, angle payload, optional argument
+payload for call-shaped forms, complete source text, source locations, and
+surrounding opaque segments. It must not resolve alignment, array layout/type,
+or pack semantics; split arbitrary arguments; lower nested payloads; parse
+target-language expressions; translate backend helper calls; or render C++ or
+Rust.
+
+The gate selected M187 because raw-token preservation alone would force later
+backend/output stages either to rescan raw text for these same TSIL-like forms
+or to leave them as anonymous helper text without request identity. The
+selected boundary adds only that identity; it does not make lowering
+responsible for backend spelling or semantics.
+
+## M187 Result
+
+M187 accepted the selected backend/output source-island discovery boundary.
+The lowering surface now has typed request identity for
+`assume_aligned<...>(...)`, angle-only `array_type<...>`, and
+`pack<...>(...)` in source-owned text and contiguous raw body-token runs.
+Payload text remains opaque, surrounding raw text/tokens remain source-owned,
+and alignment values, array layout/type semantics, pack semantics, argument
+splitting, nested payload lowering, helper translation, declaration
+rendering, and C++/Rust output remain backend/output-owned or deferred.

@@ -1476,6 +1476,51 @@ is not a mask translator, argument splitter, recursive payload scanner,
 backend helper mapper, renderer-ready call model, or replacement for M177 mask
 lane constant requests.
 
+Milestone 187 adds backend/output source-island request values for exact
+`assume_aligned<...>(...)`, `array_type<...>`, and `pack<...>(...)` islands.
+These values also live in a focused lowering module instead of extending the
+already large shared model module:
+
+```python
+class BackendOutputRequestKind(Enum):
+    ASSUME_ALIGNED = "assume_aligned"
+    ARRAY_TYPE = "array_type"
+    PACK = "pack"
+
+@dataclass(frozen=True, slots=True)
+class BackendOutputRequest:
+    kind: BackendOutputRequestKind
+    angle_payload_text: str
+    angle_payload_source: SourceLocation
+    source_text: str
+    source: SourceLocation
+    argument_text: str | None = None
+    argument_source: SourceLocation | None = None
+
+@dataclass(frozen=True, slots=True)
+class BackendOutputOpaqueTextSegment:
+    text: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendOutputOpaqueTokenSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendOutputRequestSegment:
+    request: BackendOutputRequest
+    source: SourceLocation
+```
+
+The M187 model is a request-identity boundary for backend/output-owned
+source forms. It preserves the exact angle payload and optional call argument
+payload as source-owned text. `array_type<...>` is angle-only;
+`assume_aligned<...>(...)` and `pack<...>(...)` are call-shaped. The model is
+not an alignment evaluator, array-type/type-layout model, pack translator,
+argument splitter, recursive payload scanner, backend map lookup, declaration
+model, or renderer-ready call model.
+
 Milestone 144 adds selector-payload values:
 
 ```python

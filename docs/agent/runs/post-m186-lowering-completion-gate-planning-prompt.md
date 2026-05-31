@@ -6,6 +6,11 @@ here and records M186 as accepted.
 This is a planning-only milestone. Do not implement production code or tests.
 The purpose is to decide whether the lowering surface is now complete by
 contract after M186, or whether exactly one concrete lowering-owned gap remains.
+Interactive product review after M186 clarified that `assume_aligned<...>(...)`,
+`array_type<...>`, and `pack<...>(...)` must not be dismissed merely because
+their semantics are backend/output-owned: they may still need exact
+source-island discovery so the body IR can identify them as backend/output
+requests for later backend consumption.
 
 ## Accepted State
 
@@ -56,6 +61,8 @@ TSIL keyword family observed in `tsldata/**/*.tsl` is classified as one of:
 
 - accepted typed semantic fact/value lowering;
 - accepted typed unresolved request/handoff for a later backend/output stage;
+- a concrete missing typed unresolved request/handoff boundary that should
+  become exactly one next lowering milestone;
 - source-authored raw text or support helper that lowering must preserve;
 - backend translation/rendering/output-owned work;
 - broad parsing/deferred work that must not be pulled into lowering;
@@ -87,23 +94,38 @@ their facts or requests.
      and `io<...>`;
    - mask keyword translation/rendering;
    - support-helper calls such as `details::*`.
-4. Decide exactly one of:
+4. For `assume_aligned<...>(...)`, `array_type<...>`, and `pack<...>(...)`,
+   specifically decide whether they should become a single M187 exact
+   backend/output source-island discovery milestone. If selected, the boundary
+   must cover all three forms together and must be limited to:
+   - detecting exact source islands in raw body text / contiguous raw token runs;
+   - preserving kind, angle payload, argument payload, full source text, and
+     source location;
+   - preserving surrounding raw text as opaque spans;
+   - deterministic malformed-island diagnostics.
+   It must not resolve alignment, array layout/type, or pack semantics; split
+   arbitrary arguments; lower nested payloads; parse target-language
+   expressions; render C++/Rust; or translate backend helper calls.
+5. Decide exactly one of:
    - a concrete M187 lowering implementation milestone, only if a real
      lowering-owned gap remains;
    - a docs-only M187 lowering-completion contract milestone, only if the
      classification itself needs to be made binding before leaving lowering;
    - a backend/output transition milestone, if lowering is complete by
      contract and the remaining work belongs to translation/rendering/output.
-5. Update `docs/redesign/implementation-roadmap.md` with the planning result.
-6. Update `docs/agent/current-redesign-state.md` to point at the next concrete
+6. Update `docs/redesign/implementation-roadmap.md` with the planning result.
+7. Update `docs/agent/current-redesign-state.md` to point at the next concrete
    prompt.
-7. Create the next concrete prompt under `docs/agent/runs/`.
+8. Create the next concrete prompt under `docs/agent/runs/`.
 
 ## Guardrails
 
 - Keep focus on lowering completion, not implementation.
 - Do not start M187 implementation in this prompt.
 - Do not treat `details::*` support helpers as semantic lowering by default.
+- Do not classify `assume_aligned<...>(...)`, `array_type<...>`, or
+  `pack<...>(...)` as anonymous raw text only if the backend will need
+  structured source-island identity to consume them later.
 - Do not parse raw target-language assignments, indexing, operators,
   templates, loops, or helper bodies.
 - Do not add or recommend a registry, dispatcher, plugin map, worklist,

@@ -67,6 +67,10 @@ from tslgen.lowering.model import (
 from tslgen.lowering.backend_control import discover_backend_control_directives
 from tslgen.lowering.backend_intrinsic_handoff import lower_backend_intrinsic_discovery
 from tslgen.lowering.backend_intrinsics import discover_backend_intrinsic_requests
+from tslgen.lowering.backend_output_source_islands import (
+    BackendOutputDiscoveryLoweringResult,
+    discover_backend_output_requests,
+)
 from tslgen.lowering.backend_type_queries import discover_backend_type_queries
 from tslgen.lowering.backend_type_queries import lower_backend_type_query_discovery
 from tslgen.lowering.backend_value_queries import discover_backend_value_queries
@@ -379,6 +383,16 @@ class Lowerer:
     ) -> BackendIntrinsicDiscoveryLoweringResult:
         context = self.context_for(selected)
         return discover_backend_intrinsic_requests(
+            context,
+            context.implementation.body,
+        )
+
+    def discover_backend_output_requests(
+        self,
+        selected: SelectedImplementation,
+    ) -> BackendOutputDiscoveryLoweringResult:
+        context = self.context_for(selected)
+        return discover_backend_output_requests(
             context,
             context.implementation.body,
         )

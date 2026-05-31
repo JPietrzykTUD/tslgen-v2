@@ -23588,3 +23588,164 @@ find tslgen -type d -name __pycache__ -print
 0 with no output. The M186 pytest command returned `8 passed in 1.79s`.
 Validation-created `__pycache__` directories were removed before the final
 `find`; the final `find` returned exit 0 with no output.
+
+### Post-M186 Lowering Completion Gate Planning
+
+Status:
+
+Accepted. Planning prompt:
+`docs/agent/runs/post-m186-lowering-completion-gate-planning-prompt.md`.
+
+Planning result:
+
+The post-M186 completion gate did not declare lowering complete. The rescan
+confirmed that accepted M155-M186 lowering covers the current generation
+condition/value/type/control surfaces, loops, variable declarations, backend
+value/type request islands and handoffs, backend-control request facts,
+intrinsic request islands and compose modifier handoff, cast/memory/I/O
+request islands and selector handoff, mask keyword requests, and selected
+source-owned body/token preservation. The remaining generation-relevant gap is
+not semantic evaluation: it is exact backend/output request-island discovery
+for three source forms that later backend/rendering work must consume
+intentionally rather than as anonymous raw text.
+
+Existing raw-token preservation is not sufficient for these three forms
+because backend/output planning needs to distinguish them from arbitrary
+target-language helper text before rendering decisions are possible. Without
+typed island identity, a backend would either have to rescan raw body text for
+the same TSIL-like forms or treat alignment helpers, array type constructors,
+and pack helpers as opaque text forever. M187 creates that identity without
+interpreting the payloads.
+
+Corpus evidence:
+
+- `assume_aligned<...>(...)`: 20 primitive-body heads in
+  `load_store/load.tsl`, `load_store/store.tsl`, and
+  `load_store/array.tsl`.
+- `array_type<...>`: 21 primitive-body heads in
+  `load_store/array.tsl`, `load_store/construct.tsl`, and
+  `conversion/mask_specific.tsl`.
+- `pack<first>(args...)`: one primitive-body head in
+  `load_store/construct.tsl`.
+
+Completion matrix:
+
+| Family or candidate | Completion classification | Next action |
+| --- | --- | --- |
+| `if<generation>`, `else if<generation>`, `else<generation>` conditions | accepted typed condition lowering after M186 | No M187 action. Recursive generation-control lowering and plain target-language `else` remain deferred. |
+| `type<generation>(...)`, `value<generation>(...)`, aliases, scalar/vector/member facts | accepted typed semantic facts/values for current selected-context needs | No M187 action. |
+| `type<backend>(...)`, `value<backend>(...)`, backend control, intrinsics, source operations, and `mask<...>(...)` | accepted typed unresolved request/handoff boundaries | Translation and rendering are backend/output-owned. |
+| `loop<range>`, `loop<unroll>`, `var<...>` | accepted request/fact discovery with opaque payloads where appropriate | Loop execution/substitution and declaration rendering remain output-owned. |
+| `assume_aligned<...>(...)`, `array_type<...>`, and `pack<...>(...)` | concrete missing typed unresolved backend/output request-island boundary | Select M187 covering all three forms together. |
+| `details::*` helpers | source-authored backend/support helpers | Preserve; do not rewrite or semantically lower. |
+| recursive discovery inside arbitrary opaque payloads, raw assignments/indexing/operators, helper-call bodies, broad target-language parsing | broad/deferred | Do not pull into M187. |
+
+Selected next milestone:
+
+```text
+Milestone 187: Exact Backend/Output Source-Island Discovery Boundary
+```
+
+Why this avoids the slippery path:
+
+M187 should identify exact source islands so later backend/output stages can
+consume them intentionally, but it must preserve payloads opaque and must not
+resolve alignment, array layout/type, or pack semantics. It is a request
+discovery boundary, not a target-language parser, argument splitter, renderer,
+or helper evaluator.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+
+### Milestone 187: Exact Backend/Output Source-Island Discovery Boundary
+
+Status:
+
+Accepted. Execution prompt:
+`docs/agent/runs/m187-backend-output-source-islands-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add exact request-island discovery for backend/output-owned source forms that
+are currently meaningful only as raw text but need typed body-IR identity for
+later backend/rendering consumption:
+
+```text
+assume_aligned<...>(...)
+array_type<...>
+pack<...>(...)
+```
+
+Scope:
+
+- Discover exact islands in source-owned raw text and contiguous
+  `RawStringToken` runs.
+- Preserve kind, angle payload text/source, optional argument payload
+  text/source for call-shaped forms, complete source text, source location, and
+  surrounding opaque text/token segments.
+- Treat `array_type<...>` as angle-only; treat `assume_aligned<...>(...)` and
+  `pack<...>(...)` as call-shaped.
+- Add deterministic malformed-island diagnostics for missing/mismatched angle
+  or argument delimiters and empty angle payloads.
+- Reuse the shared source-island scanner utilities where they fit.
+- Add corpus-shaped positive tests and negative/malformed/determinism tests.
+
+Out of scope:
+
+Resolving alignment, array layout/type, or pack semantics; splitting arbitrary
+arguments; lowering nested payloads such as `value<generation>(...)` or
+`type<generation>(...)`; parsing target-language expressions, assignments, or
+indexing; translating backend helpers; rendering C++ or Rust; source repair;
+runtime `tsldata`, `frozen`, or `tslgenold` dependencies; registries,
+dispatchers, worklists, recursive payload walkers, or per-keyword frameworks.
+
+Accepted behavior:
+
+M187 adds `tslgen.lowering.backend_output_source_islands` with
+`BackendOutputRequestKind`, `BackendOutputRequest`, discovery segment values,
+`discover_backend_output_requests_in_text(...)`, and
+`Lowerer.discover_backend_output_requests(...)`. The discoverer uses the
+shared source-island scanner mechanics for source-owned text and contiguous
+raw body-token runs, preserves non-raw tokens as opaque token spans, and
+diagnoses malformed exact outer shapes. The new request values keep raw text
+only as source-owned payload/provenance, not as semantic substitutes for
+alignment, arrays, or pack behavior.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m187_backend_output_source_islands.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m187_backend_output_source_islands.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Validation result:
+
+`git diff --check` returned exit 0 with no output. `compileall` returned exit
+0 with no output. The M187 pytest command returned `17 passed in 1.40s`.
+Validation-created `__pycache__` directories were removed before the final
+`find`; the final `find` returned exit 0 with no output.
+
+### Post-M187 Lowering Completion Gate Planning
+
+Status:
+
+Selected. Active prompt:
+`docs/agent/runs/post-m187-lowering-completion-gate-planning-prompt.md`.
+
+Goal:
+
+Run a final lowering-focused completion gate after M187. The gate must either
+record lowering complete by current contract or select exactly one remaining
+lowering-owned gap from current corpus evidence. It must not start backend
+implementation or treat backend/output translation, rendering, source-authored
+support helpers, broad target-language parsing, recursive payload discovery,
+or source repair as lowering work by default.
+
+Validation:
+
+```bash
+git diff --check
+```

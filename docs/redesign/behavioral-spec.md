@@ -1920,6 +1920,39 @@ Rust, read backend maps, split arguments, lower nested payloads, parse target
 language expressions, repair source, or introduce registries, dispatchers, or
 per-selector pipelines.
 
+### M187 Backend/Output Source-Island Discovery Boundary
+
+Milestone 187 discovers exact backend/output source-island forms in
+source-owned text and contiguous raw body-token runs:
+
+```text
+assume_aligned<...>(...)
+array_type<...>
+pack<...>(...)
+```
+
+The request kind is typed. `array_type<...>` is angle-only, while
+`assume_aligned<...>(...)` and `pack<...>(...)` are call-shaped. The request
+preserves complete source-island text, angle payload text and source
+location, optional call argument payload text and source location, surrounding
+opaque text segments, opaque token segments, raw token identity, and source
+order.
+
+The angle and argument payloads remain source-owned opaque text. They may
+contain nested TSIL-looking constructs such as `value<generation>(...)`,
+`type<generation>(...)`, `type<backend>(...)`, or `call<primitive=...>(...)`,
+but M187 does not split or recursively lower those payloads.
+
+Malformed outer islands produce deterministic diagnostics for missing or
+mismatched angle delimiters, empty angle payloads, missing or mismatched call
+argument delimiters, and immediate call delimiters after angle-only
+`array_type<...>`.
+
+M187 does not resolve alignment values, pointer semantics, array layout,
+array element types, array lengths, pack semantics, backend helper
+translation, declaration rendering, C++ or Rust output, source repair, or
+runtime reads from `tsldata`, `frozen`, or `tslgenold`.
+
 ### M168 Exact `generic::*` Generation-Expression Boundary
 
 Milestone 168 extends the generation-value boundary with an inner
