@@ -22023,7 +22023,7 @@ Status:
 
 Accepted after execution-review with follow-ups. Active next prompt after
 M175:
-`docs/agent/runs/m176-mask-lane-constant-boundary-planning-prompt.md`.
+`docs/agent/runs/m175.5-execution-review-loop-prompt.md`.
 
 Goal:
 
@@ -22109,11 +22109,63 @@ Follow-ups:
   `TSL-LOWER-MISSING-VECTOR-MEMBER-TYPE-METADATA` propagation. M175 directly
   covers no-catalog preservation and unsupported-policy propagation.
 
-### Milestone 176: Mask Lane Constant Lowering Boundary Planning
+### Milestone 175.5: Vector Member Size-Bytes Generation Values
 
 Status:
 
 Selected after M175 acceptance. Active next prompt:
+`docs/agent/runs/m175.5-execution-review-loop-prompt.md`.
+
+Goal:
+
+Extend generation value `type::size_bytes(TYPE_EXPR)` so already lowered
+current-vector member types can produce fixed byte-size facts when the
+selected extension and scalar descriptor metadata prove them:
+
+- `type<generation>(vector::register)`;
+- `type<generation>(vector::mask)`;
+- `type<generation>(vector::imask)`;
+- `type<generation>(vector::mask_underlying_t)` /
+  `type<generation>(vector::mask_underlying)`.
+
+Scope:
+
+- For fixed register types, compute byte size from explicit fixed vector
+  metadata: `extension.vector_bits / 8`.
+- For `lane_bitmask` mask policies, compute storage bytes from selected lane
+  count: `ceil(lanes / 8)`, where `lanes = vector_bits / scalar_bit_width`.
+- For `native_predicate_by_lanes` mask policies, derive the fixed predicate
+  storage size from explicit lane-capacity metadata, choosing an exact or
+  smallest-supported lane capacity for the selected lane count.
+- Preserve `same_as_mask_type` policy behavior for `imask` /
+  `mask_underlying` by resolving through the mask policy.
+- Diagnose scalable, runtime-lane, symbolic-size, missing-metadata,
+  unsupported-policy, and no-catalog cases instead of guessing.
+
+Out of scope:
+
+Backend type spelling; register/native-predicate spelling text; SVE scalable
+byte sizes; generic `LANES` symbolic byte-size expressions; new vector member
+policies; new scalar descriptors; new generation value families beyond
+`type::size_bytes`; primitive-call matching changes; rendering; source repair;
+output writing; runtime `tsldata`, `frozen`, or `tslgenold` dependencies;
+broad expression parsing; registries, dispatchers, worklists, callbacks,
+hidden backfeeds, or fixpoint machinery.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py tslgen/tests/test_m175_vector_member_generation_values.py tslgen/tests/test_m175_5_vector_member_size_bytes.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m173_vector_member_type_resolution.py tslgen/tests/test_m174_scalar_descriptor_catalog.py tslgen/tests/test_m175_vector_member_generation_values.py tslgen/tests/test_m175_5_vector_member_size_bytes.py
+find tslgen -type d -name __pycache__ -print
+```
+
+### Milestone 176: Mask Lane Constant Lowering Boundary Planning
+
+Status:
+
+Deferred until M175.5 is accepted. Planned prompt:
 `docs/agent/runs/m176-mask-lane-constant-boundary-planning-prompt.md`.
 
 Goal:
@@ -22131,6 +22183,10 @@ Scope:
 - Inspect legacy evidence only as behavior evidence, especially the frozen
   expansion support that lowers mask lane constants to backend helper
   expressions for C++ and Rust.
+- Account for the known mismatch recorded in
+  `docs/redesign/flaws-to-fix.md`: these constants are written as
+  `value<generation>(...)` TSIL but behave like backend/support helpers, while
+  other `details::*` support helpers are preserved as raw source text.
 - Decide whether the next executable slice should produce a typed
   backend-literal request, a symbolic generation value, a raw backend-owned
   handoff, or a documented deferral.

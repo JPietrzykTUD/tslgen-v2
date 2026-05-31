@@ -28,6 +28,7 @@ values. M176 must settle the boundary before any implementation.
 - `docs/redesign/behavioral-spec.md`
 - `docs/redesign/domain-model.md`
 - `docs/redesign/design-decisions.md`
+- `docs/redesign/flaws-to-fix.md`
 - `docs/redesign/missing-lowering-inventory.md`
 - `docs/redesign/generation-value-query-inventory.md`
 - `docs/redesign/generation-time-semantic-lowering.md`
@@ -71,12 +72,16 @@ The planner should:
 4. Compare the evidence to current clean lowering models:
    `LoweredGenerationValue`, backend request discovery, source-owned raw
    tokens, and deferred rendering.
-5. Decide the smallest safe executable follow-up. Prefer a narrow typed value
+5. Account explicitly for FTF-001 in `docs/redesign/flaws-to-fix.md`: explain
+   whether the next slice preserves the mismatch, narrows it into a typed
+   backend/support-helper request, or defers because the mismatch should be
+   fixed by a later source convention.
+6. Decide the smallest safe executable follow-up. Prefer a narrow typed value
    or request boundary only if it avoids backend text guessing and helps
    future rendering.
-6. Update redesign docs with the boundary decision, open questions, or
+7. Update redesign docs with the boundary decision, open questions, or
    deferral rationale.
-7. Create the next concrete prompt under `docs/agent/runs/`. If the decision
+8. Create the next concrete prompt under `docs/agent/runs/`. If the decision
    selects implementation, create an M177 execution-review-loop prompt. If the
    decision is blocked, create the appropriate planner/finalization prompt and
    record the stop or blocker in current state.
@@ -86,6 +91,10 @@ The planner should:
 - Do not treat `mask::lane::all_true` and `mask::lane::all_false` as Python
   booleans unless the plan proves that is the backend-neutral semantic value.
 - Do not inject backend helper text into generation lowering.
+- Do not hide the mismatch with `details::*` support-helper handling. M176
+  must either preserve it deliberately as a typed deferred request or record
+  why implementation is deferred until the source/lowering convention is made
+  consistent.
 - Do not add production code, renderer code, generated output, parser
   behavior, primitive-call rendering, declaration rendering, loop execution,
   source replacement, or broad expression parsing in M176.

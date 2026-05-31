@@ -2965,19 +2965,19 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Plan Milestone 176.
+Execute Milestone 175.5.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m176-mask-lane-constant-boundary-planning-prompt.md
+docs/agent/runs/m175.5-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 176: Mask Lane Constant Lowering Boundary Planning
+Milestone 175.5: Vector Member Size-Bytes Generation Values
 ```
 
 Latest review verdict:
@@ -2995,17 +2995,17 @@ M175 review verdicts were: architecture `Accept`; boundary
 Next expected action:
 
 ```text
-Run the active M176 planning prompt. M176 should settle the lowering boundary
-for `value<generation>(mask::lane::all_true)` and
-`value<generation>(mask::lane::all_false)` from current `tsldata` and legacy
-evidence before any executor tries to implement them.
+Run the active M175.5 execution-review-loop prompt. M175.5 should teach
+generation value `type::size_bytes(TYPE_EXPR)` to consume already lowered
+`vector::register`, `vector::mask`, `vector::imask`, and
+`vector::mask_underlying_t` member types when explicit extension/scalar
+metadata proves a fixed byte size.
 
-This is useful because those mask lane constants are the next remaining
-generation-value family in the inventory, but legacy evidence renders them as
-backend helper expressions rather than simple Python booleans. M176 must
-avoid guessing and decide whether the correct next executable slice is a
-typed backend-literal request, a symbolic generation value, or a different
-deferred boundary.
+This is useful because M175 connected vector-member type facts to scalar
+descriptor-backed `type::*` values, but `vector::register` and native or
+lane-bitmask mask member sizes are still not understood as generation-time
+size facts. M175.5 should cover fixed-width cases from `extension.tsl` and
+diagnose scalable/SVE or otherwise unsized cases instead of guessing.
 ```
 
 Previous review verdict:
@@ -6937,13 +6937,13 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M176
-mask-lane-constant boundary planning prompt.
+No stop condition is active. The workflow is ready to run the active M175.5
+execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M176 planning, run the validation command listed in
-`docs/agent/runs/m176-mask-lane-constant-boundary-planning-prompt.md`.
+For active M175.5 execution, run the validation command listed in
+`docs/agent/runs/m175.5-execution-review-loop-prompt.md`.
 
 For M175 execution and review, validation completed with:
 
