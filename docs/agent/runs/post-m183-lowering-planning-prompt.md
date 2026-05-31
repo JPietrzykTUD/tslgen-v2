@@ -6,7 +6,8 @@ here and records M183 as accepted.
 You are planning the next lowering milestone:
 
 ```text
-Post-M183 lowering planning for Milestone 184
+Post-M183 lowering planning for Milestone 184:
+Lowering Completeness Audit / Remaining TSIL Keyword Closure
 ```
 
 Milestones 1 through 183 are accepted. M183 added a focused semantic handoff
@@ -39,9 +40,16 @@ syntax evidence that cannot be answered from redesign docs or current
 
 ## Goal
 
-Select exactly one next M184 milestone that gets the research prototype closer
-to complete generation support while staying on the lowering side of the
-architecture.
+Prepare M184 as a planning/audit milestone, not an implementation milestone:
+
+```text
+Milestone 184: Lowering Completeness Audit / Remaining TSIL Keyword Closure
+```
+
+The M184 milestone should identify the remaining generation-relevant TSIL
+keyword/lowering surface, classify what is already covered, what is truly
+lowering-owned, and what belongs to backend translation/rendering, then select
+the next executable lowering slice after that audit.
 
 The planner must actively avoid the repeated slippery path:
 
@@ -62,26 +70,31 @@ Run a planning pass, not an executor:
 1. Inspect current accepted M127-M183 lowering coverage.
 2. Re-inventory the remaining generation-relevant TSIL/lowering gaps from
    `docs/redesign/missing-lowering-inventory.md` and current `tsldata`.
-3. Identify the highest-value next lowering-owned slice for M184.
-4. Pressure-test whether the candidate would be overengineering:
+3. Plan M184 as a read-only completeness audit / keyword-closure milestone.
+4. Define the exact evidence M184 must gather:
+   - remaining generation-relevant TSIL keyword families;
+   - accepted discovery/classification/handoff coverage through M183;
+   - gaps that are lowering-owned;
+   - gaps that should be deferred to backend translation/rendering;
+   - any gaps that would require broad parsing and should not be selected.
+5. Pressure-test whether the audit itself would drift into overengineering:
    - Is it a durable semantic fact, request, result, inventory, provenance
      value, rule input, or stage envelope?
-   - Is it needed by at least two concrete accepted/forthcoming stages, or is
-     it a one-off wrapper?
-   - Would a simpler class/protocol boundary express the same contract?
+   - Is it only an inventory/planning artifact, or does it accidentally create
+     another one-off runtime wrapper?
+   - Would a simpler documentation inventory express the same contract?
    - Does it keep raw strings only at source-owned opaque/provenance
      boundaries or backend-owned unresolved text?
-5. If M184 should be an executor milestone, write the concrete
-   `docs/agent/runs/m184-...-execution-review-loop-prompt.md`.
-6. If no safe executor milestone is ready, write a concrete planner or
-   return-to-planner prompt instead and record why.
+6. Write the concrete
+   `docs/agent/runs/m184-lowering-completeness-audit-planning-prompt.md`.
+   It must be planning/audit only and must not implement lowering code.
 7. Update `docs/redesign/implementation-roadmap.md`,
    `docs/agent/current-redesign-state.md`, and any inventories/spec docs whose
    accepted planning state changes.
 
-## Candidate Areas To Consider
+## Areas M184 Must Audit
 
-Consider, but do not assume, these areas:
+M184 must audit these areas without selecting implementation prematurely:
 
 - Remaining lowering-owned handoffs for accepted backend/source operation
   facts that still need typed unresolved requests before backend translation.
@@ -99,9 +112,10 @@ Consider, but do not assume, these areas:
 ## Out Of Scope
 
 M184 implementation; backend rendering; generated artifacts; backend map
-evaluation; language map evaluation; source-operation translation unless the
-planner explicitly defines a lowering-owned unresolved handoff; recursive
-payload discovery through arbitrary contexts; argument splitting; broad TSIL
+evaluation; language map evaluation; source-operation translation
+implementation; selecting source-operation translation before the audit
+classifies whether any part is still lowering-owned; recursive payload
+discovery through arbitrary contexts; argument splitting; broad TSIL
 expression or statement parsing; target-language parsing; source repair;
 dependency scheduling; runtime `tsldata`, `frozen`, or `tslgenold`
 dependencies; registries, dispatchers, plugin maps, worklists, or broad
@@ -138,7 +152,8 @@ If planning is accepted:
 - update `docs/agent/current-redesign-state.md`;
 - mark post-M183 lowering planning accepted in
   `docs/redesign/implementation-roadmap.md`;
-- create the next concrete prompt under `docs/agent/runs/`;
+- create
+  `docs/agent/runs/m184-lowering-completeness-audit-planning-prompt.md`;
 - do not start M184 implementation.
 
 If planning needs revision, create a focused planning-revision prompt. If the
@@ -149,8 +164,9 @@ and create the appropriate next prompt instead of selecting an executor slice.
 
 Report:
 
-1. Selected M184 candidate or stop/return-to-planner decision.
-2. Why the candidate is useful and why it is not overengineering.
+1. Confirmation that M184 is planned as a lowering completeness audit /
+   remaining TSIL keyword closure milestone.
+2. Why that audit is useful and why it is not overengineering.
 3. Review/audit verdicts.
 4. Validation command and exact result.
 5. Next active prompt path.

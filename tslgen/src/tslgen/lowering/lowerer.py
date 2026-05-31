@@ -72,6 +72,8 @@ from tslgen.lowering.backend_type_queries import lower_backend_type_query_discov
 from tslgen.lowering.backend_value_queries import discover_backend_value_queries
 from tslgen.lowering.backend_value_queries import lower_backend_value_query_discovery
 from tslgen.lowering.mask_lane_constants import discover_mask_lane_constant_requests
+from tslgen.lowering.mask_keywords import discover_mask_keyword_requests
+from tslgen.lowering.mask_keywords import MaskKeywordDiscoveryLoweringResult
 from tslgen.lowering.source_operation_handoff import lower_source_operation_discovery
 from tslgen.lowering.source_operations import discover_source_operation_requests
 from tslgen.lowering.generation_control import lower_generation_control_region
@@ -347,6 +349,16 @@ class Lowerer:
     ) -> MaskLaneConstantDiscoveryLoweringResult:
         context = self.context_for(selected)
         return discover_mask_lane_constant_requests(
+            context,
+            context.implementation.body,
+        )
+
+    def discover_mask_keyword_requests(
+        self,
+        selected: SelectedImplementation,
+    ) -> MaskKeywordDiscoveryLoweringResult:
+        context = self.context_for(selected)
+        return discover_mask_keyword_requests(
             context,
             context.implementation.body,
         )

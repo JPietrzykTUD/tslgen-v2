@@ -23145,12 +23145,18 @@ Accepted behavior:
 
 Status:
 
-Selected. Active prompt:
+Accepted. Completed prompt:
 `docs/agent/runs/post-m183-lowering-planning-prompt.md`.
 
 Goal:
 
-Select the next concrete M184 lowering milestone after M183, grounded in the
+Prepare the next concrete M184 lowering milestone after M183 as:
+
+```text
+Milestone 184: Lowering Completeness Audit / Remaining TSIL Keyword Closure
+```
+
+M184 is planning/audit work, not implementation. It should be grounded in the
 accepted M127-M183 boundaries and current `tsldata` corpus, without starting
 backend rendering or implementation.
 
@@ -23160,10 +23166,10 @@ Scope:
 - Decide whether the next useful slice should remain in lowering, defer to a
   backend/translation phase, or first consolidate a boundary that would
   otherwise grow another one-off request/result family.
-- Choose exactly one M184 slice if the evidence supports an executable next
-  milestone.
-- Create the M184 execution-review-loop prompt, or record an explicit stop or
-  return-to-planner condition if no safe lowering milestone is ready.
+- Use interactive product review's selected direction: M184 must be a
+  lowering completeness audit / remaining TSIL keyword closure milestone.
+- Create the M184 planning/audit prompt, or record an explicit stop or
+  return-to-planner condition if even that audit is not safe.
 
 Out of scope:
 
@@ -23172,6 +23178,260 @@ classifies it as a lowering-owned handoff rather than backend rendering;
 backend maps; language maps; C++/Rust rendering; generated artifacts; broad
 TSIL parsing; source repair; runtime `tsldata`, `frozen`, or `tslgenold`
 dependencies; registries, dispatchers, plugin maps, or worklists.
+
+Validation:
+
+```bash
+git diff --check
+```
+
+Planning result:
+
+Accepted. Interactive product review selected option 1 for M184:
+
+```text
+Milestone 184: Lowering Completeness Audit / Remaining TSIL Keyword Closure
+```
+
+M184 is a documentation/inventory milestone, not an implementation milestone.
+It must audit the remaining generation-relevant TSIL keyword/lowering surface
+after M183, classify each family as already covered, lowering-owned,
+backend/rendering-owned, source-convention follow-up, broad-parsing/deferred,
+or absent from the current corpus, and then select the next executable
+lowering slice.
+
+Evidence review accepted the direction and identified `mask<...>(...)` as the
+strongest currently visible missing TSIL-like keyword family for the audit to
+classify. Real primitive-body examples include `mask<zero>()`,
+`mask<test>(...)`, `mask<set>(...)`, and `mask<set:1>(...)` in
+`tsldata/primitives/mask/bitwise.tsl` and
+`tsldata/primitives/conversion/mask_specific.tsl`. The same evidence review
+also noted `assume_aligned<...>(...)`, `array_type<...>`, and
+`pack<...>(...)` as function-template-looking primitive-body forms that M184
+must classify without prematurely selecting implementation.
+
+Boundary/simplicity review returned `Accept`: the M184 direction is an
+inventory/planning artifact only and does not add request/result layering,
+backend rendering, source-operation translation, broad parsing, or raw-string
+semantics. Documentation review initially returned pending post-update checks;
+the required state, roadmap, and M184 prompt transition were then completed.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+
+### Milestone 184: Lowering Completeness Audit / Remaining TSIL Keyword Closure
+
+Status:
+
+Accepted. Completed prompt:
+`docs/agent/runs/m184-lowering-completeness-audit-planning-prompt.md`.
+
+Goal:
+
+Create a corpus-backed lowering completeness audit that records the remaining
+generation-relevant TSIL keyword families after M183, distinguishes accepted
+coverage from true lowering-owned gaps, and separates backend/rendering-owned
+or broad-parsing-deferred work before selecting the next executable lowering
+slice.
+
+Scope:
+
+- Audit current M127-M183 accepted lowering coverage against `tsldata/**/*.tsl`.
+- Classify each relevant TSIL/lowering family as accepted enough for current
+  lowering, lowering-owned gap, backend translation/rendering/output-owned gap,
+  source-convention flaw/follow-up, broad parsing/deferred, or no current
+  corpus evidence.
+- Include explicit attention to `mask<...>(...)`, `assume_aligned<...>(...)`,
+  `array_type<...>`, and `pack<...>(...)` in addition to the previously
+  inventoried TSIL keyword families.
+- Update or create a documentation artifact under `docs/redesign/` for the
+  audit and link it from existing inventories if needed.
+- Select exactly one next concrete milestone after M184, or record a
+  stop/return-to-planner condition if no safe lowering-owned executable slice
+  exists.
+
+Out of scope:
+
+Production code changes; test changes; parser changes; new lowering behavior;
+new runtime IR classes; backend translation; backend maps; C++/Rust rendering;
+generated artifacts; source-operation translation; body-token rendering
+implementation; recursive payload discovery; argument splitting; broad TSIL
+or target-language parsing; source repair; dependency scheduling; runtime
+dependency on `frozen` or `tslgenold`; registries, dispatchers, plugin maps,
+worklists, or framework construction.
+
+Validation:
+
+```bash
+git diff --check
+```
+
+Audit result:
+
+M184 created the focused audit artifact
+`docs/redesign/lowering-completeness-audit.md` and linked it from
+`docs/redesign/missing-lowering-inventory.md`.
+
+The audit classified the accepted-through-M183 lowering surface against the
+current `tsldata/**/*.tsl` corpus. Most high-frequency TSIL families are
+accepted enough for current lowering as discovery, handoff, or
+selected-context semantic facts: `tsil` envelopes, `emit_return(...)` for
+accepted exact forms, `call<primitive=...>(...)`, `let<type>(...)`,
+`var<...>(...)`, `loop<...>(...)`, generation control, `type<generation>`,
+`type<backend>`, `value<generation>`, `value<backend>`, intrinsic islands,
+and source-operation islands. The accepted boundaries deliberately still do
+not render backend code, parse broad TSIL or target-language expressions,
+execute loops, or recursively lower every opaque payload carrier.
+
+The audit identified `mask<...>(...)` as the strongest remaining
+lowering-owned gap. The current primitive-body corpus has 71 such islands:
+`mask<test>` 33 times, `mask<zero>` 20 times, `mask<set:1>` 14 times, and
+`mask<set>` 4 times. This family is distinct from the already accepted M177
+`value<generation>(mask::lane::...)` backend/support-helper requests.
+
+The audit classified `assume_aligned<...>(...)`, `array_type<...>`,
+`pack<...>(...)`, `details::*` helper calls, backend-control rendering,
+backend intrinsic rendering, source-operation translation, raw
+target-language-like text, and backend translation metadata as
+backend-owned, source-convention, or broad/deferred rather than next
+lowering implementation.
+
+Read-only evidence, boundary/simplicity, and documentation audits returned
+`Accept`.
+
+Selected next milestone:
+
+```text
+Milestone 185: Exact Mask Keyword Request / Selector Boundary
+```
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+
+### Milestone 185: Exact Mask Keyword Request / Selector Boundary
+
+Status:
+
+Accepted. Completed prompt:
+`docs/agent/runs/m185-mask-keyword-boundary-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add exact `mask<...>(...)` source-island discovery and typed selector
+classification for the observed selector payloads `zero`, `test`, `set`, and
+`set:1`, preserving arguments and surrounding text as source-owned opaque
+data.
+
+Scope:
+
+- Discover balanced `mask<...>(...)` islands in source-owned text and
+  contiguous raw body-token runs.
+- Classify only the top-level selector payload into typed finite selector
+  values.
+- Preserve complete source-island text, argument payload text/source,
+  selector source, opaque text/token segments, raw token identity, and source
+  order.
+- Keep M177 mask lane constants and `details::mask_test` support-helper calls
+  distinct from `mask<...>(...)`.
+- Add positive, malformed, unsupported-selector, no-match, preservation, and
+  no-false-positive tests.
+
+Out of scope:
+
+Mask translation/results; backend maps; C++/Rust rendering; mapping mask
+selectors to `details::*`; argument splitting; recursive payload lowering;
+declaration rendering; loop execution; primitive-call rendering; body-token
+rendering policy; broad TSIL or target-language expression parsing; source
+repair; dependency scheduling; runtime `tsldata`, `frozen`, or `tslgenold`
+dependencies; registries, dispatchers, plugin maps, worklists, or
+per-selector pipelines.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m177_mask_lane_constant_requests.py tslgen/tests/test_m178_source_island_scanner.py tslgen/tests/test_m185_mask_keyword_requests.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m177_mask_lane_constant_requests.py tslgen/tests/test_m178_source_island_scanner.py tslgen/tests/test_m185_mask_keyword_requests.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Accepted behavior:
+
+M185 adds exact `mask<...>(...)` source-island discovery and typed selector
+classification for the current observed selector payloads:
+
+- `zero`;
+- `test`;
+- `set`;
+- `set:1`.
+
+The implementation lives in a focused `mask_keywords` lowering module instead
+of growing `model.py`. It uses the accepted source-island mechanics for
+source-owned text and contiguous raw body-token runs, preserves opaque text
+segments, opaque token segments, raw token identity, source-island text,
+selector source, argument payload text/source, and source order, and exposes a
+thin `Lowerer.discover_mask_keyword_requests(...)` entry point plus package
+exports.
+
+Arguments remain opaque source-owned text. Nested `mask<...>(...)` text,
+`type<generation>(...)`, `value<generation>(...)`, `value<backend>(...)`,
+`call<primitive=...>(...)`, intrinsics, casts, memory/I/O forms, helper calls,
+quoted delimiters, and raw target-language-like expressions inside arguments
+are not split or recursively lowered by M185.
+
+M185 keeps M177 mask lane constants and `details::mask_test` support-helper
+calls distinct from mask keyword requests. Unsupported selector payloads and
+malformed outer mask keyword islands produce deterministic diagnostics.
+
+Review result:
+
+Architecture, boundary, evidence, test, and documentation audits returned
+`Accept`. The first validation audit returned `Needs Revision` only because
+validation-created `__pycache__` directories remained after the functional
+commands passed; the focused cache-state validation re-review returned
+`Accept` after cleanup.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m177_mask_lane_constant_requests.py tslgen/tests/test_m178_source_island_scanner.py tslgen/tests/test_m185_mask_keyword_requests.py`: exit 0, no output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m177_mask_lane_constant_requests.py tslgen/tests/test_m178_source_island_scanner.py tslgen/tests/test_m185_mask_keyword_requests.py`: exit 0, `37 passed in 3.57s`.
+- `find tslgen -type d -name __pycache__ -print` after cleanup: exit 0, no output.
+
+### Post-M185 Lowering Planning
+
+Status:
+
+Selected. Active prompt:
+`docs/agent/runs/post-m185-lowering-planning-prompt.md`.
+
+Goal:
+
+Select exactly one next lowering-focused milestone after M185, or record a
+return-to-planner/stop condition if no safe lowering-owned milestone remains.
+
+Scope:
+
+- Reconcile the M184 lowering completeness audit with the accepted M185 mask
+  keyword boundary.
+- Re-check the current `tsldata/**/*.tsl` corpus for generation-relevant TSIL
+  keyword families still missing from accepted lowering coverage.
+- Pressure-test `assume_aligned<...>`, `array_type<...>`, `pack<...>`,
+  recursive payload discovery, loop execution/substitution, declaration/body
+  rendering policy, backend translation/rendering, and `details::*` support
+  helpers.
+- Classify remaining candidates as lowering-owned, backend/output-owned,
+  broad/deferred, source-convention follow-up, or no current corpus evidence.
+- Create exactly one next concrete run prompt after planning acceptance.
+
+Out of scope:
+
+Production code changes; test changes; backend translation; rendering;
+generated output; broad TSIL parsing; target-language parsing; source repair;
+runtime `frozen` or `tslgenold` dependencies; registries, dispatchers,
+plugin maps, worklists, recursive payload walkers, or per-keyword frameworks.
 
 Validation:
 

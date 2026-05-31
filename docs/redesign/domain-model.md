@@ -1428,6 +1428,49 @@ request identity, and diagnostics. It is not a cast/memory/I/O translator,
 argument splitter, nested payload scanner, backend map lookup, or
 renderer-ready call model.
 
+Milestone 185 adds mask keyword request values for exact `mask<...>(...)`
+islands. These values live in the focused `mask_keywords` lowering module so
+the already large shared model module does not become the default home for
+another narrow family:
+
+```python
+class MaskKeywordSelector(Enum):
+    ZERO = "zero"
+    TEST = "test"
+    SET = "set"
+    SET_ONE = "set:1"
+
+@dataclass(frozen=True, slots=True)
+class MaskKeywordRequest:
+    selector: MaskKeywordSelector
+    selector_source: SourceLocation
+    argument_text: str
+    argument_source: SourceLocation
+    source_text: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class MaskKeywordOpaqueTextSegment:
+    text: str
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class MaskKeywordOpaqueTokenSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class MaskKeywordRequestSegment:
+    request: MaskKeywordRequest
+    source: SourceLocation
+```
+
+The M185 model classifies only the top-level selector payload into the finite
+enum and preserves argument payload text as opaque source-owned provenance. It
+is not a mask translator, argument splitter, recursive payload scanner,
+backend helper mapper, renderer-ready call model, or replacement for M177 mask
+lane constant requests.
+
 Milestone 144 adds selector-payload values:
 
 ```python

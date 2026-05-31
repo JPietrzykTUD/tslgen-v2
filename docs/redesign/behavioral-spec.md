@@ -1852,6 +1852,38 @@ inside arguments; does not recursively discover nested source operations; does
 not read backend maps, language maps, manifests, `tsldata`, `frozen`, or
 `tslgenold` at runtime; and does not render C++ or Rust.
 
+### M185 Mask Keyword Request / Selector Boundary
+
+Milestone 185 discovers and classifies exact mask keyword islands in
+source-owned text and contiguous raw body-token runs:
+
+```text
+mask<zero|test|set|set:1>(ARGUMENT_TEXT)
+```
+
+The accepted selector payloads are finite and typed: `zero`, `test`, `set`,
+and `set:1`. The request preserves complete source-island text, selector
+source location, argument payload text and source location, surrounding
+opaque text segments, opaque token segments, raw token identity, and source
+order.
+
+The argument payload remains source-owned opaque text. It may contain nested
+TSIL-looking constructs, raw target-language expressions, quoted delimiters,
+or helper calls, but M185 does not split or recursively lower those payloads.
+Nested `mask<...>(...)` text inside an accepted mask argument is part of that
+argument payload, not a second request from the same discovery pass.
+
+Malformed outer `mask<...>(...)` islands and unsupported selector payloads
+produce deterministic diagnostics. M177 mask lane constants such as
+`value<generation>(mask::lane::all_true)` and support helpers such as
+`details::mask_test` remain distinct source forms and are not rewritten into
+mask keyword requests.
+
+M185 does not translate masks, map selectors to backend helpers, render C++ or
+Rust, read backend maps, split arguments, lower nested payloads, parse target
+language expressions, repair source, or introduce registries, dispatchers, or
+per-selector pipelines.
+
 ### M168 Exact `generic::*` Generation-Expression Boundary
 
 Milestone 168 extends the generation-value boundary with an inner

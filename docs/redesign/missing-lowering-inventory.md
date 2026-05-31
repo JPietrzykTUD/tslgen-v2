@@ -12,7 +12,7 @@ typed redesign contracts, explicit evidence, diagnostics, and tests.
 
 ## Current Baseline
 
-Accepted through M179:
+Accepted through M185:
 
 - Generation-time lowering handles only the accepted typed helper/predicate
   forms from M38, M41-M43, M48, M51-M59, and M67-M72.
@@ -59,15 +59,32 @@ Accepted through M179:
   source-operation request-island discovery for `cast<...>(...)`,
   `mem<...>(...)`, and `io<...>(...)` over source-owned text and contiguous
   raw body-token runs, M177 exact mask lane constant backend/support-helper
-  request discovery, M178 shared source-island scanner consolidation, and
-  M179 exact `type<backend>(...)` backend type query request-island
-  discovery, and M180 exact backend type query island handoff to existing
-  `BackendTypeSpellingRequest` values. That path deliberately still does not render
+  request discovery, M178 shared source-island scanner consolidation, M179
+  exact `type<backend>(...)` backend type query request-island discovery,
+  M180 exact backend type query island handoff to existing
+  `BackendTypeSpellingRequest` values, M181 exact backend-value payload
+  handoff for the five observed backend-value families, M182 exact
+  top-level intrinsic-compose modifier handoff, M183 exact source-operation
+  selector handoff for the observed cast/memory/I/O selectors, M184
+  lowering completeness audit, and M185 exact `mask<...>(...)` mask keyword
+  request discovery/classification for the observed `zero`, `test`, `set`,
+  and `set:1` selectors. That path deliberately still does not render
   primitive-call expressions, declarations, loops, backend values, backend
-  type spellings, backend control flow, intrinsic calls, or cast/memory/I/O
-  calls, parse raw arithmetic operators, parse broad TSIL
-  expressions/statements, execute loops, support recursive generation
-  control, or translate/render the accepted backend type spelling requests.
+  type spellings, backend control flow, intrinsic calls, cast/memory/I/O
+  calls, or mask keyword calls; parse raw arithmetic operators; parse broad
+  TSIL expressions/statements; execute loops; support recursive generation
+  control; or translate/render the accepted backend type/value/source
+  operation/mask spelling requests.
+
+M184 records a focused completeness audit in
+`docs/redesign/lowering-completeness-audit.md`. M185 resolved the audit's
+selected `mask<...>(...)` lowering-owned gap at the request/selector
+boundary. The audit still classifies
+`assume_aligned<...>(...)`, `array_type<...>`, `pack<...>(...)`,
+`details::*`, backend-control rendering, backend intrinsic/source-operation
+translation, raw target-language text, and backend translation metadata as
+backend-owned, source-convention, or deferred rather than next lowering
+implementation.
 
 ## Post-M152 Clean Restart Lowering Paths
 
@@ -85,6 +102,7 @@ to implement several lanes in one milestone.
 | Backend-owned operation lowering | `intrin_compose<...>(...)`, `intrin<...>(...)` | Intrinsic calls are generation relevant but backend-owned, not portable primitive semantics by themselves. | M166 accepts exact intrinsic request-island discovery in source-owned text and contiguous raw body-token runs. M182 accepts a handoff for top-level `intrin_compose<...>` modifier fields into typed unresolved modifier facts while preserving direct `intrin<...>` names and intrinsic arguments opaque. Backend intrinsic translation, argument splitting, modifier evaluation, and rendering remain deferred. |
 | Primitive-call completion | Nested and surrounding `call<primitive=...>(...)` islands | M144-M152 can classify, match, bind, and collect primitive-call dependencies. M170 lets selector payloads consume explicit selected specialization facts for bare base, extension, and vector/type binding names. M171 lets target matching carry the exact concrete-vector plus selected return-binding selector shape into the matched target context. M172 lets target matching consume already lowered concrete vector-transform aliases. M173 lets `MaskVec`-style aliases participate only when vector member type queries resolve through fixed typed metadata and accepted scalar descriptors; M174 completes descriptor coverage for current real `ui8`/`ui16`/`ui64` member results. Complete generation still needs recursive token-stream use, backend rendering, and deterministic output scheduling. | Extend the existing call boundary only when a selected milestone needs recursive/nested calls or rendering. Avoid context-specific consumers for every possible surrounding syntax. |
 | Cast/memory/I/O keyword families | `cast<...>`, `mem<...>`, `io<...>` | These are generation-relevant backend/source directives that appear in broad body contexts. | M167 accepts exact request-island discovery over this shared outer keyword shape in source-owned text and contiguous raw body-token runs. M183 accepts classification of the exact observed selector payloads into typed finite selector values while keeping arguments opaque and backend/source-operation translation deferred. Type lowering inside payloads, argument splitting, rendering, and recursive payload discovery remain deferred. |
+| Mask keyword family | `mask<zero>()`, `mask<test>(...)`, `mask<set>(...)`, `mask<set:1>(...)` | Primitive bodies use `mask<...>(...)` as a real TSIL-like keyword family distinct from M177 mask lane constants. | M185 accepts exact request-island discovery and typed selector classification only. Backend mask helper translation, argument splitting, recursive payload lowering, and surrounding expression parsing remain deferred. |
 | Body-token rendering policy | Raw target-language text plus accepted lowerable TSIL islands | Generated artifacts need a way to emit raw source text around lowered islands without turning lowering into a C++/Rust parser. | Backend rendering/output integration consumes typed lowering results and source-owned raw tokens. This is not helper-call substitution or source repair. |
 
 Not a lowering path by default: `details::arith_add`,

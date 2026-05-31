@@ -6,7 +6,33 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 183 is accepted.
+Milestone 185 is accepted.
+
+The M185 execution-review loop returned `Accept` after one write-capable
+executor, read-only architecture, boundary, evidence, test, documentation,
+and validation audits, one focused cache cleanup revision, and focused
+validation re-review. M185 added exact `mask<...>(...)` source-island
+discovery and typed selector classification for the observed selector
+payloads `zero`, `test`, `set`, and `set:1`.
+
+M185 keeps mask arguments source-owned and opaque, preserves surrounding
+opaque text/token segments and raw token identity, keeps M177 mask lane
+constants and `details::*` helpers distinct, and does not translate masks,
+map selectors to backend helpers, split arguments, recursively lower nested
+payloads, render C++ or Rust, parse target-language expressions, or read
+`tsldata`, `frozen`, or `tslgenold` at runtime.
+
+M184 was a documentation/inventory milestone. It created
+`docs/redesign/lowering-completeness-audit.md`, linked it from
+`docs/redesign/missing-lowering-inventory.md`, and classified the remaining
+generation-relevant TSIL surface after M183. The audit selected
+`mask<...>(...)` as the strongest next lowering-owned gap: current primitive
+bodies contain exact selector payloads `zero`, `test`, `set`, and `set:1`.
+It also classified `assume_aligned<...>(...)`, `array_type<...>`,
+`pack<...>(...)`, `details::*` helper calls, backend-control rendering,
+backend intrinsic/source-operation translation, raw target-language-like text,
+and backend translation metadata as backend-owned, source-convention, or
+broad/deferred rather than next lowering implementation.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -3116,54 +3142,58 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Run post-M183 lowering planning.
+Run post-M185 lowering planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m183-lowering-planning-prompt.md
+docs/agent/runs/post-m185-lowering-planning-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The active prompt is planning-only and must select the next M184
-lowering milestone before any M184 implementation.
+None. The active prompt is planning-only and must select the next concrete
+lowering-focused milestone or record a stop/return-to-planner condition.
 ```
 
 Latest review verdict:
 
 ```text
-M183 execution-review returned Accept. The accepted implementation consumes
-accepted M167 `SourceOperationRequest` discovery segments and classifies exact
-`cast<...>`, `mem<...>`, and `io<...>` selector payloads into enum-backed
-finite selector facts while preserving operation arguments as source-owned
-opaque payloads on the retained M167 request island.
+M185 execution-review returned Accept. The accepted implementation adds exact
+`mask<...>(...)` discovery/classification for selector payloads `zero`,
+`test`, `set`, and `set:1`, preserves mask arguments as opaque source-owned
+text, and keeps M177 mask lane constants and `details::*` support helpers
+distinct from mask keyword requests.
 
-Post-M183 planning must select exactly one next M184 lowering milestone. It
-must pressure-test source-operation translation, body-token rendering, and
-additional request/result layers for backend/rendering leakage or
-overengineering before creating an executor prompt.
+Architecture, boundary, evidence, test, and documentation audits returned
+`Accept`. The first validation audit returned `Needs Revision` only because
+validation-created `__pycache__` directories remained after functional
+commands passed; focused cache cleanup plus validation re-review returned
+`Accept`.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M183 lowering planning prompt with read-only planning and
-audit subagents. Do not implement M184 code in that prompt.
+Run the active post-M185 lowering planning prompt with read-only planning
+subagents. Do not implement M186 code in that prompt.
 ```
 
 Previous review verdict:
 
 ```text
-Post-M182 lowering planning returned Accept and selected M183.
+M183 execution-review returned Accept. Post-M183 lowering planning returned
+Accept and selected M184. M184 lowering completeness audit returned Accept
+and selected M185. M185 execution-review returned Accept and selected
+post-M185 lowering planning.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m183-source-operation-selector-handoff-execution-review-loop-prompt.md
+docs/agent/runs/m185-mask-keyword-boundary-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive begins below. These older entries are
@@ -7130,19 +7160,56 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M182 follow-up: `tslgen/src/tslgen/lowering/model.py` is now above 1,000
   lines; avoid casual growth there and consider a focused model-boundary split
   only when a later accepted slice needs it.
+- M184 follow-up: keep `docs/redesign/lowering-completeness-audit.md` as a
+  planning/audit artifact, not a runtime completeness oracle or permission to
+  implement several keyword families in one milestone.
+- M185 follow-up: mask translation, backend helper mapping, argument
+  splitting, recursive payload lowering, and rendering remain deferred. M185
+  accepts only request-island discovery and typed selector classification.
 
 ## Stop Condition
 
 No stop condition is active. The workflow is ready to run the active
-post-M183 lowering planning prompt.
+post-M185 lowering planning prompt.
 
 ## Validation Expectations
 
-For post-M183 lowering planning, run:
+For post-M185 lowering planning, run:
 
 ```bash
 git diff --check
 ```
+
+For M185 mask keyword boundary execution and review, validation completed
+with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m177_mask_lane_constant_requests.py tslgen/tests/test_m178_source_island_scanner.py tslgen/tests/test_m185_mask_keyword_requests.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m177_mask_lane_constant_requests.py tslgen/tests/test_m178_source_island_scanner.py tslgen/tests/test_m185_mask_keyword_requests.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The results were: `git diff --check` exit 0 with no output; compileall exit
+0 with no output; pytest exit 0 with `37 passed in 3.57s`; after cache
+cleanup, `find tslgen -type d -name __pycache__ -print` exit 0 with no
+output.
+
+For M184 lowering completeness audit planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
+
+For post-M183 lowering planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
 
 For M183 execution and review, validation completed with:
 
