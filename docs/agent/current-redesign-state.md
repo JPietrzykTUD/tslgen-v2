@@ -6,6 +6,24 @@ or accepted planning passes.
 
 ## Accepted Through
 
+The post-M187 lowering completion gate is accepted.
+
+The gate declared lowering complete by current contract. The current
+`tsldata/**/*.tsl` corpus no longer shows a lowering-owned gap that must be
+implemented before backend/output planning. Remaining observed forms are
+already accepted typed facts, typed semantic values, typed request islands,
+typed handoff values, source-owned opaque tokens, catalog syntax such as
+`prim<...>`, accepted selector/type payload syntax such as `Vec<...>`,
+backend metadata under `tsldata/detail/lang/**`, source-authored
+`details::*` helpers, backend/output translation or rendering obligations, or
+broad/deferred parsing/source-repair work that lowering must not absorb by
+default.
+
+The post-M187 gate deliberately did not start backend implementation, add
+production code, introduce a broad TSIL/parser framework, reinterpret
+`details::*` helpers, recursively scan opaque payload carriers, or reopen
+lowering for backend/output-owned forms.
+
 Milestone 187 is accepted.
 
 The M187 execution-review loop returned `Accept` after one write-capable
@@ -3190,39 +3208,37 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Run post-M187 lowering completion gate planning.
+Run post-lowering backend/output transition planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m187-lowering-completion-gate-planning-prompt.md
+docs/agent/runs/post-lowering-backend-output-transition-planning-prompt.md
 ```
 
 Active planning milestone:
 
 ```text
-Post-M187 Lowering Completion Gate Planning.
+Post-Lowering Backend/Output Transition Planning.
 ```
 
 Latest review verdict:
 
 ```text
-M187 execution-review returned Accept. M187 added exact backend/output
-request-island identity for `assume_aligned<...>(...)`, angle-only
-`array_type<...>`, and `pack<...>(...)`, preserving opaque payloads and
-surrounding source-owned text/tokens. It did not solve alignment, array
-layout/type, pack semantics, nested payloads, backend translation, rendering,
-or source repair.
+Post-M187 lowering completion gate planning returned Accept and declared
+lowering complete by current contract. Remaining observed corpus forms are
+accepted lowering facts/requests/handoffs, catalog syntax, backend metadata,
+source-authored support helpers, backend/output translation or rendering
+obligations, or broad/deferred parser/source-repair work.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M187 lowering completion gate planning prompt. It is
+Run the active post-lowering backend/output transition planning prompt. It is
 documentation/planning-only, uses read-only review/audit subagents, and must
-either record lowering complete by current contract or select exactly one
-remaining lowering-owned gap with a concrete next prompt.
+select exactly one first backend/output milestone without reopening lowering.
 ```
 
 Previous review verdict:
@@ -3234,13 +3250,15 @@ and selected M185. M185 execution-review returned Accept. Post-M185 lowering
 completion gate planning returned Accept and selected M186. M186
 execution-review returned Accept and selected a final post-M186 lowering
 completion gate. Post-M186 lowering completion gate planning returned Accept
-and selected M187. M187 execution-review returned Accept.
+and selected M187. M187 execution-review returned Accept. Post-M187 lowering
+completion gate planning returned Accept and declared lowering complete by
+current contract.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m187-backend-output-source-islands-execution-review-loop-prompt.md
+docs/agent/runs/post-m187-lowering-completion-gate-planning-prompt.md
 ```
 
 Historical accepted prompt archive begins below. These older entries are
@@ -7226,23 +7244,31 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M187 accepted exact backend/output source-island request discovery for
   `assume_aligned<...>(...)`, angle-only `array_type<...>`, and
   `pack<...>(...)`, preserving payloads as source-owned opaque text.
-- M187 follow-up: run a post-M187 lowering completion gate before leaving
-  lowering. The gate must either record lowering complete by current contract
-  or select exactly one remaining lowering-owned gap; it must not start
-  backend/output implementation merely because backend/output work remains.
+- Post-M187 lowering completion gate accepted: lowering is complete by
+  current contract. Future work should move to backend/output planning unless
+  new `.tsl` evidence introduces a concrete unrepresented lowering-owned
+  keyword or semantic fact.
 
 ## Stop Condition
 
 No stop condition is active. The workflow is ready to run the active
-post-M187 lowering completion gate planning prompt.
+post-lowering backend/output transition planning prompt.
 
 ## Validation Expectations
 
-For post-M187 lowering completion gate planning, run:
+For post-lowering backend/output transition planning, run:
 
 ```bash
 git diff --check
 ```
+
+For post-M187 lowering completion gate planning, validation completed with:
+
+```bash
+git diff --check
+```
+
+The command returned exit 0 with no output.
 
 For M187 backend/output source-island discovery execution and review,
 validation completed with:

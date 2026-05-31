@@ -23732,7 +23732,7 @@ Validation-created `__pycache__` directories were removed before the final
 
 Status:
 
-Selected. Active prompt:
+Accepted. Planning prompt:
 `docs/agent/runs/post-m187-lowering-completion-gate-planning-prompt.md`.
 
 Goal:
@@ -23743,6 +23743,43 @@ lowering-owned gap from current corpus evidence. It must not start backend
 implementation or treat backend/output translation, rendering, source-authored
 support helpers, broad target-language parsing, recursive payload discovery,
 or source repair as lowering work by default.
+
+Validation:
+
+```bash
+git diff --check
+```
+
+Planning result:
+
+The post-M187 gate declares lowering complete by current contract. The
+current `tsldata/**/*.tsl` corpus no longer shows a lowering-owned gap that
+must be implemented before backend/output planning. Remaining observed forms
+are already accepted lowering facts/requests/handoffs, catalog syntax such as
+`prim<...>`, accepted selector/type payload syntax such as `Vec<...>`,
+backend metadata under `tsldata/detail/lang/**`, source-authored
+`details::*` helpers, backend/output translation/rendering obligations, or
+broad/deferred target-language parsing that the generator should not pull into
+lowering by default.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+
+### Post-Lowering Backend/Output Transition Planning
+
+Status:
+
+Selected. Active prompt:
+`docs/agent/runs/post-lowering-backend-output-transition-planning-prompt.md`.
+
+Goal:
+
+Plan the first backend/output milestone after the accepted lowering-complete
+contract. The planning pass should pick exactly one thin backend/output slice
+that consumes accepted typed lowering facts/requests without adding new
+lowering semantics, broad TSIL parsing, renderer-side semantic inference, or
+runtime `frozen`/`tslgenold` dependencies.
 
 Validation:
 

@@ -16,6 +16,10 @@ The survey found 41 current `.tsl` files. Simple token counts found 1328
 small number of `tsil:` block entries. These counts are search evidence, not a
 semantic AST count.
 
+Post-M187 status: the lowering surface is complete by current contract. The
+inventory below remains the TSIL/source-surface map for backend/output
+planning, but no row currently selects another lowering milestone.
+
 ## Boundary
 
 M126 remains valid as a body-line and segment container boundary. Its
@@ -89,30 +93,10 @@ syntax. For example, `prim<v:=(v,v)> sub(left, right):` is a declaration in
 - `tsldata/detail/lang/translate_cpp.tsl:1` defines backend translation
   metadata, including return, loop, flow, cast, memory, and value templates.
 
-## Next Implementation Recommendation
+## Current Recommendation
 
-The next implementation milestone should be:
-
-```text
-Milestone 128: Real TSIL Payload Envelope Body Intake Slice
-```
-
-Goal:
-
-Parse and catalog exactly the real source-authored `tsil` implementation
-payload envelope from `.tsl` files into the M126 `ImplementationBody` line
-model, without lowering `emit_return(...)`, primitive calls, helper calls,
-intrinsics, assignments, loops, or backend-control directives yet.
-
-Why this is the next high-value step:
-
-- Every later lowering slice needs real `tsil` payloads in the clean product
-  path; synthetic `body <operation>(...)` fixtures are no longer a good guide.
-- It preserves the source-body design decision: raw text by default, with
-  future lowerable islands added only by focused milestones.
-- It makes future M129-style work possible, such as selecting one exact
-  `emit_return(...)` directive family, without forcing the generator to become
-  a TSIL compiler.
-
-M128 must not render raw TSIL as generated backend code and must not evaluate
-backend translation maps, helper semantics, or primitive-call dependencies.
+After M187 and the post-M187 completion gate, no next lowering milestone is
+selected from this inventory. The active workflow moves to backend/output
+transition planning, where the next milestone should consume accepted typed
+lowering facts, requests, handoffs, and source-owned opaque text rather than
+adding another lowering slice by default.

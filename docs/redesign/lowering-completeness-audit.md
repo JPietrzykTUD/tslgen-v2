@@ -242,3 +242,37 @@ Payload text remains opaque, surrounding raw text/tokens remain source-owned,
 and alignment values, array layout/type semantics, pack semantics, argument
 splitting, nested payload lowering, helper translation, declaration
 rendering, and C++/Rust output remain backend/output-owned or deferred.
+
+## Post-M187 Completion Gate Result
+
+The post-M187 completion gate declares lowering complete by current contract.
+The current `tsldata/**/*.tsl` evidence no longer contains a remaining
+lowering-owned gap that must be implemented before backend/output planning can
+begin.
+
+The gate rechecked the primitive-body and metadata surface after M187:
+
+- primitive-body TSIL still centers on the accepted families
+  `type<...>`, `value<...>`, `call<...>`, `var<...>`, `let<type>`,
+  `loop<...>`, `if<generation>`, `else<generation>`, backend compile-control,
+  backend intrinsic islands, cast/memory/I/O islands, mask islands, and M187
+  backend/output islands;
+- `prim<...>` is catalog/primitive definition syntax, not implementation-body
+  lowering;
+- `Vec<...>` appears inside accepted primitive-call selector/type payloads and
+  selected type/query lowering paths;
+- `details::*` helpers remain source-authored backend/support helper calls;
+- `seq<...>`, `algo<...>`, and runtime control forms remain absent from the
+  current corpus scan;
+- `tsldata/detail/lang/**` contains backend metadata and support-language
+  definitions, not primitive-body lowering obligations.
+
+Remaining work is backend/output-owned or broad/deferred: translating backend
+type/value requests, intrinsic requests, source-operation requests,
+compile-control requests, mask requests, and M187 backend/output requests;
+rendering raw source text around typed islands; declaration/loop/body output;
+support-helper availability; deterministic artifact generation; and C++/Rust
+backend integration. Lowering should not grow a target-language parser,
+statement parser, recursive payload walker, source repair mechanism, or
+semantic model for source-authored `details::*` helper calls merely because
+those backend/output tasks remain.

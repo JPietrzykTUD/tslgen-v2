@@ -112,6 +112,13 @@ source-island discovery for `assume_aligned<...>(...)`, `array_type<...>`,
 and `pack<...>(...)`. The accepted boundary is intentionally opaque and does
 not solve alignment, array type/layout, or pack semantics.
 
+The post-M187 lowering completion gate declares lowering complete by current
+contract. No further lowering-owned gap is currently selected. Remaining
+known work belongs to backend/output translation, rendering, artifact
+generation, backend metadata consumption, source-authored support-helper
+availability, or broad/deferred language parsing that the generator should
+avoid unless a later product milestone deliberately changes the contract.
+
 ## Post-M152 Clean Restart Lowering Paths
 
 The next clean restart milestones should choose from these generation-relevant
@@ -131,6 +138,12 @@ to implement several lanes in one milestone.
 | Mask keyword family | `mask<zero>()`, `mask<test>(...)`, `mask<set>(...)`, `mask<set:1>(...)` | Primitive bodies use `mask<...>(...)` as a real TSIL-like keyword family distinct from M177 mask lane constants. | M185 accepts exact request-island discovery and typed selector classification only. Backend mask helper translation, argument splitting, recursive payload lowering, and surrounding expression parsing remain deferred. |
 | Backend/output source-island family | `assume_aligned<...>(...)`, `array_type<...>`, `pack<...>(...)` | Backend/output stages need structured request identity for source forms that must not remain anonymous raw text, while their semantics remain backend/rendering-owned. | M187 accepts exact island discovery for all three forms with opaque payload preservation. Alignment, array layout/type, pack semantics, argument splitting, nested payload lowering, and rendering remain out of scope. |
 | Body-token rendering policy | Raw target-language text plus accepted lowerable TSIL islands | Generated artifacts need a way to emit raw source text around lowered islands without turning lowering into a C++/Rust parser. | Backend rendering/output integration consumes typed lowering results and source-owned raw tokens. This is not helper-call substitution or source repair. |
+
+As of the post-M187 completion gate, the paths above are either accepted
+lowering boundaries or backend/output handoff points. This inventory remains
+useful for backend/output planning, but it should not be read as a request for
+another lowering milestone unless new `.tsl` source data introduces a concrete
+unrepresented TSIL keyword or semantic fact.
 
 Not a lowering path by default: `details::arith_add`,
 `details::arith_mul`, `details::arith_rem`, `details::popcount`,
