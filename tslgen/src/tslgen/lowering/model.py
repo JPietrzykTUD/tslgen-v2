@@ -64,6 +64,7 @@ BackendControlDirectiveName = Literal["if", "else", "switch"]
 BackendControlDirectiveSelector = Literal["compile"]
 BackendIntrinsicKind = Literal["intrin", "intrin_compose"]
 SourceOperationKind = Literal["cast", "mem", "io"]
+MaskLaneConstantPolarity = Literal["all_true", "all_false"]
 
 CURRENT_VECTOR_KEYWORD = "Vec"
 CURRENT_SCALAR_KEYWORD = "scalar"
@@ -371,6 +372,50 @@ class BackendValueQueryDiscovery:
 @dataclass(frozen=True, slots=True)
 class BackendValueQueryDiscoveryLoweringResult:
     discovery: BackendValueQueryDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MaskLaneConstantRequest:
+    polarity: MaskLaneConstantPolarity
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class MaskLaneConstantOpaqueTextSegment:
+    text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class MaskLaneConstantOpaqueTokenSegment:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class MaskLaneConstantRequestSegment:
+    request: MaskLaneConstantRequest
+    source: SourceLocation
+
+
+MaskLaneConstantDiscoverySegment = (
+    MaskLaneConstantOpaqueTextSegment
+    | MaskLaneConstantOpaqueTokenSegment
+    | MaskLaneConstantRequestSegment
+)
+
+
+@dataclass(frozen=True, slots=True)
+class MaskLaneConstantDiscovery:
+    segments: tuple[MaskLaneConstantDiscoverySegment, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class MaskLaneConstantDiscoveryLoweringResult:
+    discovery: MaskLaneConstantDiscovery | None
     diagnostics: tuple[Diagnostic, ...]
 
 

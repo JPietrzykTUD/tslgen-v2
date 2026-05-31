@@ -22263,8 +22263,19 @@ Follow-ups:
 
 Status:
 
-Selected after M176 planning. Active prompt:
-`docs/agent/runs/m177-mask-lane-constant-request-execution-review-loop-prompt.md`.
+Accepted. The M177 execution-review loop returned `Accept` after one
+write-capable executor and read-only architecture, boundary, evidence, test,
+documentation, and validation audits.
+
+M177 added exact typed mask lane constant request discovery for
+`value<generation>(mask::lane::all_true)` and
+`value<generation>(mask::lane::all_false)` in source-owned raw text and
+selected body raw-token text. Request values carry only polarity, source text,
+and source location; surrounding raw text/tokens remain opaque; malformed
+outer payloads and unknown mask lane names produce explicit diagnostics.
+Existing materialized generation value lowering remains unchanged: these
+forms do not become `LoweredGenerationValue`, Python booleans, integers,
+backend helper strings, or target-language text.
 
 Goal:
 
@@ -22298,5 +22309,67 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m177_mask_lane_constant_requests.py
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m177_mask_lane_constant_requests.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q ...`: exit 0, no output.
+- Required pytest command: exit 0, `12 passed in 1.17s`.
+- Initial cache check listed validation-created `__pycache__` directories;
+  after removal, final `find tslgen -type d -name __pycache__ -print`: exit
+  0, no output.
+- Test auditor reran the focused pytest command and reported
+  `12 passed in 1.91s`.
+- Boundary auditor ran additional regression checks covering M164, M166,
+  M167, M168, M175, and M175.5 behavior and reported all passed.
+
+### Milestone 178: Source-Owned Request Island Scanner Consolidation
+
+Status:
+
+Selected after M177. Active prompt:
+`docs/agent/runs/m178-source-island-scanner-consolidation-execution-review-loop-prompt.md`.
+
+Goal:
+
+Consolidate the repeated source-owned request-island scanner mechanics now
+shared by accepted M164, M166, M167, and M177 lowering discoverers without
+changing accepted source behavior.
+
+Scope:
+
+- Extract a small lowering-owned helper for the common mechanics used by exact
+  source-island discoverers:
+  balanced delimiter matching with quote/escape handling, source-at-offset
+  mapping, contiguous raw-token-run text/source maps, and stable opaque
+  segment preservation.
+- Apply the helper to the already accepted discoverers where it preserves
+  behavior:
+  `value<backend>(...)`, `intrin<...>(...)`,
+  `intrin_compose<...>(...)`, `cast<...>(...)`, `mem<...>(...)`,
+  `io<...>(...)`, and exact mask lane constant requests.
+- Keep each semantic/request module responsible for its own accepted head
+  names, payload validation, typed request objects, and diagnostics.
+- Preserve public imports, diagnostic codes/messages/locations, source
+  ordering, raw token identity, and all accepted positive/no-match/malformed
+  behavior.
+
+Out of scope:
+
+New TSIL forms; broad expression parsing; source repair; renderer-ready IR;
+backend translation; backend helper rendering; primitive-call rendering;
+declaration rendering; branch/loop execution; changing M164/M166/M167/M177
+diagnostic contracts; registries, dispatchers, plugin maps, worklists,
+callback systems, or hidden backfeeds; runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m177_mask_lane_constant_requests.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m177_mask_lane_constant_requests.py
 find tslgen -type d -name __pycache__ -print
 ```

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 176 planning is accepted.
+Milestone 177 is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -266,6 +266,23 @@ must not become Python booleans, integers, raw backend strings, or normal
 `LoweredGenerationValue[int|bool]` payloads. The request should record
 polarity and source provenance only; backend/helper rendering remains a later
 explicit rule boundary. FTF-001 remains open as a source-convention mismatch.
+
+The M177 execution-review loop returned `Accept` after one write-capable
+executor and read-only architecture, boundary, evidence, test, documentation,
+and validation audits. M177 added exact typed mask lane constant request
+discovery for `value<generation>(mask::lane::all_true)` and
+`value<generation>(mask::lane::all_false)` over source-owned raw text and
+selected body raw-token text. Request values carry only polarity, source text,
+and source location; surrounding text/tokens remain opaque; malformed outer
+payloads and unknown mask lane names produce explicit diagnostics.
+
+M177 preserved existing materialized generation value behavior: mask lane
+constants still do not lower through `lower_generation_value_query(...)` to
+`LoweredGenerationValue`, Python booleans, integers, backend helper strings,
+or target-language text. It added no backend rendering, helper translation,
+primitive-call rendering, declaration rendering, source repair, branch/loop
+execution, broad expression parsing, or runtime `tsldata`, `frozen`, or
+`tslgenold` dependency.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
 `docs/redesign/tsil-surface-inventory.md`, a corpus-grounded inventory over
@@ -2996,29 +3013,30 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Execute Milestone 177.
+Execute Milestone 178.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m177-mask-lane-constant-request-execution-review-loop-prompt.md
+docs/agent/runs/m178-source-island-scanner-consolidation-execution-review-loop-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-Milestone 177: Mask Lane Constant Support-Helper Request Boundary
+Milestone 178: Source-Owned Request Island Scanner Consolidation
 ```
 
 Latest review verdict:
 
 ```text
-M176 planning review returned Accept With Follow-Ups after docs-only planning
-and read-only evidence, boundary, architecture, and documentation audits.
+M177 execution-review returned Accept after one write-capable executor and
+read-only architecture, boundary, evidence, test, documentation, and
+validation audits.
 
-M176 review verdicts were: evidence `Accept`; boundary `Accept`;
-architecture `Accept With Follow-Up`; documentation
+M177 review verdicts were: architecture `Accept`; boundary `Accept`;
+evidence `Accept`; test `Accept`; validation `Accept`; documentation
 `Accept With Required Finalization`. The required finalization was completed
 by this state update.
 ```
@@ -3026,15 +3044,16 @@ by this state update.
 Next expected action:
 
 ```text
-Run the active M177 execution-review-loop prompt. M177 should implement exact
-typed request discovery for
-`value<generation>(mask::lane::all_true)` and
-`value<generation>(mask::lane::all_false)` in source-owned body text.
+Run the active M178 execution-review-loop prompt. M178 should keep the next
+task focused on lowering by consolidating the repeated source-owned request
+island scanner mechanics used by accepted M164, M166, M167, and M177
+discoverers.
 
-This is useful because M176 proved these islands are backend/support-helper
-needs, not materialized generation values. M177 should create the typed request
-boundary and preserve surrounding raw text/tokens without rendering helper text
-or parsing every surrounding call, assignment, declaration, or loop.
+This is useful because backend value queries, backend intrinsic requests,
+source-operation requests, and mask lane constant requests now share the same
+balanced-delimiter/source-location/raw-token-run mechanics. M178 should reduce
+that duplication without adding new source forms, registries, backend
+translation, rendering, or expression parsing.
 ```
 
 Previous review verdict:
@@ -6983,13 +7002,30 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 
 ## Stop Condition
 
-No stop condition is active. The workflow is ready to run the active M177
+No stop condition is active. The workflow is ready to run the active M178
 execution-review-loop prompt.
 
 ## Validation Expectations
 
-For active M177 execution, run the validation command listed in
-`docs/agent/runs/m177-mask-lane-constant-request-execution-review-loop-prompt.md`.
+For active M178 execution, run the validation command listed in
+`docs/agent/runs/m178-source-island-scanner-consolidation-execution-review-loop-prompt.md`.
+
+For M177 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m177_mask_lane_constant_requests.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m177_mask_lane_constant_requests.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M177 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for compileall with no output, exit 0 for targeted pytest with
+`12 passed in 1.17s`, and exit 0 for the final cache check with no output
+after validation-created `__pycache__` directories were removed. The test
+auditor also reran the focused pytest command and reported `12 passed in
+1.91s`. The boundary auditor ran additional regression checks covering M164,
+M166, M167, M168, M175, and M175.5 behavior and reported all passed.
 
 For M176 planning and review, validation completed with:
 

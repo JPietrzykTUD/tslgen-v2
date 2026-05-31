@@ -29,6 +29,7 @@ from tslgen.lowering.model import (
     BackendIntrinsicDiscoveryLoweringResult,
     SourceOperationDiscoveryLoweringResult,
     BackendValueQueryDiscoveryLoweringResult,
+    MaskLaneConstantDiscoveryLoweringResult,
     LoweredBinaryOperationExpression,
     LoweredComparisonOperationExpression,
     LoweredFunction,
@@ -57,6 +58,7 @@ from tslgen.lowering.model import (
 from tslgen.lowering.backend_control import discover_backend_control_directives
 from tslgen.lowering.backend_intrinsics import discover_backend_intrinsic_requests
 from tslgen.lowering.backend_value_queries import discover_backend_value_queries
+from tslgen.lowering.mask_lane_constants import discover_mask_lane_constant_requests
 from tslgen.lowering.source_operations import discover_source_operation_requests
 from tslgen.lowering.generation_control import lower_generation_control_region
 from tslgen.lowering.generation_loops import (
@@ -283,6 +285,16 @@ class Lowerer:
     ) -> BackendValueQueryDiscoveryLoweringResult:
         context = self.context_for(selected)
         return discover_backend_value_queries(
+            context,
+            context.implementation.body,
+        )
+
+    def discover_mask_lane_constant_requests(
+        self,
+        selected: SelectedImplementation,
+    ) -> MaskLaneConstantDiscoveryLoweringResult:
+        context = self.context_for(selected)
+        return discover_mask_lane_constant_requests(
             context,
             context.implementation.body,
         )

@@ -38,12 +38,13 @@ Future work should choose one coherent direction:
 - or document a deliberate special case explaining why these support-helper
   constants remain TSIL generation values.
 
-M176 selected the first direction for the clean generator boundary: exact
-mask lane constants should become typed backend/support-helper requests, not
-plain generation values. This does not fully eliminate the source-language
+M176 selected the first direction for the clean generator boundary, and M177
+implements exact typed backend/support-helper request discovery for current
+mask lane constant islands. This does not fully eliminate the source-language
 mismatch; it records how the generator should handle the current corpus while
-leaving any future `.tsl` source-convention cleanup as a separate decision.
+leaving backend/helper rendering and any future `.tsl` source-convention
+cleanup as separate decisions.
 
-Until that typed request and later rendering path is implemented, do not
-resolve mask lane constants to Python booleans, integers, raw backend strings,
-or hardcoded target-language text in generation lowering.
+Until the later rendering path is implemented, do not resolve mask lane
+constants to Python booleans, integers, raw backend strings, or hardcoded
+target-language text in generation lowering.

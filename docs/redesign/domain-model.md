@@ -536,7 +536,7 @@ Invariants:
   lane count; lane-keyed native predicate bytes come from explicit
   lane-capacity metadata. Backend spelling text, SVE/scalable sizes, and
   generic symbolic sizes remain outside this lowering fact.
-- M176 selects a typed backend/support-helper request boundary for exact
+- M177 accepts a typed backend/support-helper request boundary for exact
   `value<generation>(mask::lane::all_true)` and
   `value<generation>(mask::lane::all_false)` forms. These constants are not
   `LoweredGenerationValue[int|bool]`; the request records polarity and source
