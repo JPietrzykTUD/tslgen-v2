@@ -63,6 +63,14 @@ GenerationVariableDeclarationSelector = Literal[
 BackendControlDirectiveName = Literal["if", "else", "switch"]
 BackendControlDirectiveSelector = Literal["compile"]
 BackendIntrinsicKind = Literal["intrin", "intrin_compose"]
+BackendIntrinsicModifierName = Literal[
+    "suffix",
+    "prefix",
+    "post",
+    "infix",
+    "infix_sep",
+    "immediate",
+]
 SourceOperationKind = Literal["cast", "mem", "io"]
 MaskLaneConstantPolarity = Literal["all_true", "all_false"]
 BackendValueUninitKind = Literal["array", "scalar"]
@@ -669,6 +677,109 @@ class BackendIntrinsicDiscovery:
 @dataclass(frozen=True, slots=True)
 class BackendIntrinsicDiscoveryLoweringResult:
     discovery: BackendIntrinsicDiscovery | None
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicModifierBackendValueOperand:
+    request: BackendValueRequest
+    island: BackendValueQueryRequest
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicModifierSymbolOperand:
+    text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicModifierIntegerOperand:
+    value: int
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicModifierStringOperand:
+    value: str
+    source_text: str
+    source: SourceLocation
+
+
+BackendIntrinsicModifierOperand = (
+    BackendIntrinsicModifierBackendValueOperand
+    | BackendIntrinsicModifierIntegerOperand
+    | BackendIntrinsicModifierStringOperand
+    | BackendIntrinsicModifierSymbolOperand
+)
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicModifierField:
+    name: BackendIntrinsicModifierName
+    key_text: str
+    value: BackendIntrinsicModifierOperand
+    source_text: str
+    source: SourceLocation
+    key_source: SourceLocation
+    value_source: SourceLocation
+    immediate_index: int | None = None
+    immediate_index_text: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BackendDirectIntrinsicHandoffRequest:
+    angle_payload_text: str
+    angle_payload_source: SourceLocation
+    argument_text: str
+    argument_source: SourceLocation
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicComposeHandoffRequest:
+    base_text: str
+    base_source: SourceLocation
+    modifiers: tuple[BackendIntrinsicModifierField, ...]
+    angle_payload_text: str
+    angle_payload_source: SourceLocation
+    argument_text: str
+    argument_source: SourceLocation
+    source_text: str
+    source: SourceLocation
+
+
+BackendIntrinsicHandoffRequest = (
+    BackendDirectIntrinsicHandoffRequest | BackendIntrinsicComposeHandoffRequest
+)
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicHandoffRequestSegment:
+    request: BackendIntrinsicHandoffRequest
+    island: BackendIntrinsicRequest
+    source: SourceLocation
+
+
+BackendIntrinsicHandoffSegment = (
+    BackendIntrinsicOpaqueTextSegment
+    | BackendIntrinsicOpaqueTokenSegment
+    | BackendIntrinsicHandoffRequestSegment
+)
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicHandoff:
+    segments: tuple[BackendIntrinsicHandoffSegment, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicHandoffLoweringResult:
+    handoff: BackendIntrinsicHandoff | None
     diagnostics: tuple[Diagnostic, ...]
 
 

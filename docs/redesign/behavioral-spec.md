@@ -1736,6 +1736,40 @@ dependency scheduling, output writing, runtime `tsldata`, `frozen`, or
 `tslgenold` dependencies, or broad registries, dispatchers, worklists,
 callback maps, hidden backfeeds, or fixpoint machinery.
 
+Milestone 182 adds a semantic handoff for exact M166 backend intrinsic request
+islands. The handoff consumes only `BackendIntrinsicRequest` segments and
+keeps raw M166 request islands distinct until the handoff API is explicitly
+called. Opaque text segments, opaque token segments, raw token identity, raw
+request identity, source order, complete source-island text, angle payload
+text, argument payload text, and source locations are preserved.
+
+Direct `intrin<...>(...)` requests remain opaque direct-intrinsic facts. M182
+does not parse direct intrinsic name templates, modifiers, or embedded
+`value<backend>(...)` text inside a direct intrinsic name.
+
+For `intrin_compose<...>(...)`, M182 parses only the top-level angle payload
+into a base token followed by source-ordered modifier fields. The accepted
+modifier keys are `suffix=...`, `prefix=...`, `post=...`, `infix=...`,
+`infix_sep=...`, and `immediate(N)=...`. The field parser is delimiter-aware
+and quote-aware for the angle payload and supports both comma-separated and
+observed whitespace-separated top-level modifier fields. Intrinsic argument
+payloads remain opaque text and are not recursively scanned.
+
+Modifier values remain unresolved typed operands. Accepted operand families
+are exact M181 `BackendValueRequest` values when the whole modifier value is
+one balanced `value<backend>(...)` island, unresolved backend-owned symbols,
+decimal integer operands, and quoted string operands. Embedded backend-value
+queries inside another modifier value, duplicate fields, malformed
+`immediate(...)` keys, malformed backend-value islands, unsupported nested
+modifier values, and malformed fields produce deterministic diagnostics.
+
+M182 does not translate backend values, intrinsic names, prefixes, suffixes,
+posts, infixes, immediates, or arguments; does not read backend maps or
+language metadata; does not render C++ or Rust; does not repair source; and
+does not introduce recursive arbitrary-payload lowering, broad TSIL parsing,
+registries, dispatchers, worklists, or runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies.
+
 ### M167 Cast/Memory/I/O Request-Island Boundary
 
 Milestone 167 adds exact discovery for source/backend-owned operation

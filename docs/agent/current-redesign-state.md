@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 181 is accepted.
+Milestone 182 is accepted.
 
 The M164 execution-review loop returned `Accept` after one write-capable
 executor, focused revisions, and read-only architecture, boundary, evidence,
@@ -348,6 +348,25 @@ expressions through existing type lowering, the exact observed quoted literal
 `"stream"`, and backend-owned unresolved symbol/literal operands. M181 added
 no backend value translation, backend map reads, C++/Rust rendering, broad
 TSIL parsing, recursive arbitrary-payload lowering, source repair, or runtime
+`tsldata`, `frozen`, or `tslgenold` dependency.
+
+The M182 execution-review loop returned `Accept With Follow-Ups` after one
+write-capable executor, one focused test/documentation/validation revision,
+read-only architecture, boundary, evidence, test, documentation, and
+validation audits, and focused test/documentation/validation re-review. M182
+added a focused semantic handoff from exact M166 `BackendIntrinsicRequest`
+segments to typed unresolved intrinsic modifier facts.
+
+M182 keeps direct `intrin<...>(...)` angle payloads opaque as direct intrinsic
+names and preserves intrinsic argument payloads as opaque text. For
+`intrin_compose<...>(...)`, it parses only top-level angle payload modifier
+fields for `suffix`, `prefix`, `post`, `infix`, `infix_sep`, and
+`immediate(N)`, preserving source order and provenance. Modifier values that
+are exactly one balanced `value<backend>(...)` island reuse M181
+`BackendValueRequest` facts; symbols, decimal integers, and quoted strings
+remain typed unresolved operands. M182 added no intrinsic translation,
+backend map reads, argument splitting, C++/Rust rendering, broad TSIL
+parsing, recursive arbitrary-payload lowering, source repair, or runtime
 `tsldata`, `frozen`, or `tslgenold` dependency.
 
 The M127 execution-review loop returned `Accept With Follow-Ups`. M127 created
@@ -3079,54 +3098,58 @@ repair source bodies, or handle Rust/direct-intrinsic/SVE semantics.
 Current required action:
 
 ```text
-Run post-M181 lowering planning.
+Run post-M182 lowering planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/post-m181-lowering-planning-prompt.md
+docs/agent/runs/post-m182-lowering-planning-prompt.md
 ```
 
 Active executor milestone:
 
 ```text
-None. The active prompt is planning-only and must select M182.
+None. The next prompt is planning-only and must select exactly one M183
+lowering milestone before any implementation.
 ```
 
 Latest review verdict:
 
 ```text
-M181 execution-review returned Accept With Follow-Ups. Architecture and
-boundary auditors returned Accept. Evidence and documentation auditors first
-returned Needs Revision for an over-broad quoted suffix literal and stale
-handoff wording; the focused revision restricted quoted suffix literals to the
-observed `"stream"` form, added a negative test for `"other"`, and corrected
-state/roadmap wording. Focused evidence and documentation re-review accepted
-the fixes. The test auditor returned Accept With Follow-Ups for future
-diagnostic message/location assertions, and validation returned Accept.
+M182 execution-review returned Accept With Follow-Ups. Architecture,
+boundary, evidence, test, documentation, and validation auditors accepted
+after one focused revision for missing tests, documentation completion, and
+the exact validation command sequence.
+
+M182 added exact intrinsic modifier semantic handoff. It consumes accepted
+M166 backend intrinsic request segments, keeps direct `intrin<...>(...)`
+names and all intrinsic arguments opaque, parses only top-level
+`intrin_compose<...>(...)` angle payload modifier fields, and reuses M181
+only when a modifier value is exactly one balanced `value<backend>(...)`
+island.
 ```
 
 Next expected action:
 
 ```text
-Run the active post-M181 lowering planning prompt. The planner should select
-exactly one M182 lowering milestone from the remaining generation/body/backend
-query gaps, grounded in accepted M127-M181 behavior and the current
-`tsldata` corpus.
+Run the active post-M182 lowering planning prompt. The planner should inspect
+the accepted roadmap and inventories, choose exactly one M183 lowering
+milestone, update roadmap/state, and create the concrete M183 execution
+prompt. Do not implement M183 during planning.
 ```
 
 Previous review verdict:
 
 ```text
-M181 execution-review returned Accept With Follow-Ups and is the latest
-accepted implementation milestone.
+M181 execution-review returned Accept With Follow-Ups. Post-M181 planning
+selected M182, and M182 is now accepted.
 ```
 
 Accepted planning prompt:
 
 ```text
-docs/agent/runs/post-m180-lowering-planning-prompt.md
+docs/agent/runs/post-m182-lowering-planning-prompt.md
 ```
 
 Historical accepted prompt archive begins below. These older entries are
@@ -4292,6 +4315,16 @@ docs/agent/runs/m125-execution-review-loop-prompt.md
   locations. It does not translate backend values, read backend maps, render
   C++/Rust, recursively lower arbitrary payload carriers, parse surrounding
   TSIL or target-language syntax, or accept unobserved quoted suffix literals.
+- M182 is a handoff-only intrinsic modifier slice: consume exact M166
+  backend intrinsic request segments, parse only top-level
+  `intrin_compose<...>(...)` angle payload modifier fields, preserve direct
+  `intrin<...>(...)` names and intrinsic argument payloads opaque, and reuse
+  M181 only for modifier values that are exactly one `value<backend>(...)`
+  island.
+- M182 must not translate intrinsic names or modifier values, read
+  backend maps, split intrinsic arguments, render C++/Rust, recursively scan
+  arbitrary payloads, repair source, parse broad TSIL or target-language
+  expressions, or create per-modifier pipelines.
 - M180 is a semantic handoff slice only: consume exact M179
   `BackendTypeQueryRequestIsland` segments and call existing
   `lower_backend_type_query(...)` semantics with selected context to produce
@@ -7080,19 +7113,42 @@ renderers, emit generated output, or parse broad TSIL body syntax.
 - M181 follow-up: add diagnostic location/message assertions for semantic
   backend-value payload failures if those diagnostics become broader public
   contract.
+- M182 follow-up: `tslgen/src/tslgen/lowering/model.py` is now above 1,000
+  lines; avoid casual growth there and consider a focused model-boundary split
+  only when a later accepted slice needs it.
 
 ## Stop Condition
 
 No stop condition is active. The workflow is ready to run the active
-post-M181 lowering planning prompt.
+post-M182 lowering planning prompt.
 
 ## Validation Expectations
 
-For active post-M181 lowering planning, run:
+For post-M182 lowering planning, run the validation command listed in
+`docs/agent/runs/post-m182-lowering-planning-prompt.md`.
+
+For M182 execution and review, validation completed with:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m181_backend_value_query_handoff.py tslgen/tests/test_m182_intrinsic_modifier_handoff.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m181_backend_value_query_handoff.py tslgen/tests/test_m182_intrinsic_modifier_handoff.py
+find tslgen -type d -name __pycache__ -print
+```
+
+The final M182 validation run returned exit 0 for `git diff --check` with no
+output, exit 0 for `python -B -m compileall -q ...` with no output, and exit
+0 for the required pytest command with `58 passed in 2.03s`. Validation-created
+`__pycache__` directories were removed, and the final
+`find tslgen -type d -name __pycache__ -print` returned exit 0 with no output.
+
+For post-M181 lowering planning, validation completed with:
 
 ```bash
 git diff --check
 ```
+
+The command returned exit 0 with no output.
 
 For M181 execution and review, validation completed with:
 

@@ -26,7 +26,9 @@ from tslgen.lowering.model import (
     INPUT_SCALAR_RESULT_TYPE,
     SCALAR_COMPARISON_RESULT_TYPE,
     BackendControlDirectiveDiscoveryLoweringResult,
+    BackendIntrinsicDiscovery,
     BackendIntrinsicDiscoveryLoweringResult,
+    BackendIntrinsicHandoffLoweringResult,
     BackendTypeQueryDiscoveryLoweringResult,
     BackendTypeQueryDiscovery,
     BackendTypeQueryHandoffLoweringResult,
@@ -61,6 +63,7 @@ from tslgen.lowering.model import (
     build_selected_implementation_lowering_context,
 )
 from tslgen.lowering.backend_control import discover_backend_control_directives
+from tslgen.lowering.backend_intrinsic_handoff import lower_backend_intrinsic_discovery
 from tslgen.lowering.backend_intrinsics import discover_backend_intrinsic_requests
 from tslgen.lowering.backend_type_queries import discover_backend_type_queries
 from tslgen.lowering.backend_type_queries import lower_backend_type_query_discovery
@@ -363,6 +366,20 @@ class Lowerer:
         return discover_backend_intrinsic_requests(
             context,
             context.implementation.body,
+        )
+
+    def lower_backend_intrinsic_discovery(
+        self,
+        selected: SelectedImplementation,
+        discovery: BackendIntrinsicDiscovery,
+        *,
+        environment: SelectedTypeEnvironment | None = None,
+    ) -> BackendIntrinsicHandoffLoweringResult:
+        context = self.context_for(selected)
+        return lower_backend_intrinsic_discovery(
+            context,
+            discovery,
+            environment=environment,
         )
 
     def discover_source_operation_requests(

@@ -22800,7 +22800,9 @@ diagnostics if those diagnostics become a broader public contract.
 
 Status:
 
-Selected after M181. Active prompt:
+Accepted. Post-M181 lowering planning selected M182 after read-only
+evidence, boundary/simplicity, and documentation review plus human acceptance.
+Completed planning prompt:
 `docs/agent/runs/post-m181-lowering-planning-prompt.md`.
 
 Goal:
@@ -22824,6 +22826,188 @@ planner explicitly selects it as the next boundary; broad TSIL parsing; source
 repair; runtime `tsldata`, `frozen`, or `tslgenold` dependencies; registries,
 dispatchers, worklists, or new request/result families without a concrete
 accepted-boundary reason.
+
+Validation:
+
+```bash
+git diff --check
+```
+
+Planning result:
+
+Post-M181 lowering planning selected:
+
+```text
+Milestone 182: Exact Intrinsic Modifier Semantic Handoff
+```
+
+Created M182 execution prompt:
+`docs/agent/runs/m182-intrinsic-modifier-handoff-execution-review-loop-prompt.md`.
+
+The selected M182 scope consumes exact M166 backend intrinsic discovery
+segments and only parses top-level `intrin_compose<...>(...)` angle payload
+modifier fields. Direct `intrin<...>(...)` angle payloads remain opaque
+direct-intrinsic names. Intrinsic arguments remain opaque. Modifier field
+values that are exactly one `value<backend>(...)` island are handed to the
+accepted M181 backend-value request boundary; other accepted literal, symbol,
+numeric, and quoted modifier operands are preserved as unresolved typed
+modifier operands. M182 must not translate intrinsic names or modifier values,
+read backend maps, split arguments, render C++/Rust, recursively discover
+arbitrary payloads, parse broad TSIL or target-language expressions, repair
+source, or add per-modifier pipelines.
+
+Planning evidence:
+
+- `intrin_compose<...>` appears as 627 raw matches / 619 balanced islands in
+  current `tsldata`, with 442 balanced islands carrying top-level modifiers.
+- Direct `intrin<...>` has 737 raw matches / 733 balanced islands and no
+  top-level modifier fields; direct intrinsic names therefore remain opaque.
+- Observed modifier surfaces include `suffix=` 360 times,
+  `prefix=value<backend>(intrin::prefix)` 9 times, `post=` 80 times,
+  `infix=` 28 times, and `immediate(n)=...` 179 times.
+- Competing candidates such as cast/source operations, declarations, loops,
+  and backend control have larger surfaces but require broader argument,
+  declaration, execution, or rendering policy. Intrinsic modifier handoff is
+  the cleaner post-M181 lowering slice because it joins M166 and M181 without
+  backend translation.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+
+### Milestone 182: Exact Intrinsic Modifier Semantic Handoff
+
+Status:
+
+Accepted. The M182 execution-review loop returned `Accept With Follow-Ups`
+after one write-capable executor, one focused test/documentation/validation
+revision, read-only architecture, boundary, evidence, test, documentation,
+and validation audits, and focused test/documentation/validation re-review.
+Completed prompt:
+`docs/agent/runs/m182-intrinsic-modifier-handoff-execution-review-loop-prompt.md`.
+
+Goal:
+
+Consume exact M166 `BackendIntrinsicRequest` discovery segments and hand
+top-level `intrin_compose<...>(...)` modifier fields to one typed unresolved
+intrinsic-modifier boundary while preserving opaque surrounding text/tokens
+and intrinsic argument payloads.
+
+Scope:
+
+- Add a focused handoff API for M166 backend intrinsic discovery results.
+- Preserve opaque text segments, opaque token segments, raw request identity,
+  source order, complete source-island text, angle payload text, argument
+  payload text, and source locations.
+- Keep direct `intrin<...>(...)` angle payloads opaque as direct intrinsic
+  names; do not parse direct intrinsic modifiers or direct intrinsic name
+  templates.
+- Parse only the top-level `intrin_compose<...>(...)` angle payload into an
+  intrinsic base token plus source-ordered top-level modifier fields.
+- Accept delimiter/quote-aware top-level modifier forms for `suffix=...`,
+  `prefix=...`, `post=...`, `infix=...`, `infix_sep=...`, and
+  `immediate(N)=...`, including comma-separated and observed whitespace-
+  separated modifier fields.
+- For a selected modifier value that is exactly one `value<backend>(...)`
+  island, reuse the accepted M181 backend-value handoff and store the existing
+  typed unresolved `BackendValueRequest` value.
+- Preserve accepted literal, symbol, numeric, and quoted modifier operands as
+  typed unresolved modifier operands with source text and provenance.
+- Diagnose malformed modifier fields, duplicate fields where the shape is
+  ambiguous, unsupported nested modifier values, and malformed backend-value
+  modifier islands deterministically.
+
+Out of scope:
+
+Backend intrinsic translation; backend modifier value translation; backend
+maps, manifests, or language maps; generated output; C++/Rust rendering;
+intrinsic-name validation; direct intrinsic name-template lowering; intrinsic
+argument splitting; argument payload lowering; recursive discovery through
+arbitrary payload contexts; source-operation translation; declaration
+rendering; loop execution; primitive-call rendering; body-token rendering
+policy; broad TSIL expression parsing; target-language expression parsing;
+source repair; dependency scheduling; runtime `tsldata`, `frozen`, or
+`tslgenold` dependencies; registries, dispatchers, plugin maps, worklists, or
+per-modifier pipelines.
+
+Expected tests:
+
+- Positive text-fragment handoff covering `intrin_compose` with no modifiers,
+  with one modifier, with multiple source-ordered modifiers, and with
+  comma-separated plus observed whitespace-separated modifier fields.
+- Positive body-token handoff with opaque text/token preservation and raw
+  request identity.
+- Positive modifier operands for exact backend-value island values,
+  unresolved symbols/literals, integer immediates, quoted strings, and empty
+  quoted `infix_sep`.
+- Positive direct `intrin<...>(...)` preservation as an opaque direct
+  intrinsic request without modifier parsing, including a direct name payload
+  containing `value<backend>(...)` text.
+- Unsupported/malformed tests for unbalanced modifier value delimiters,
+  malformed `immediate(...)`, duplicate or ambiguous fields, unsupported
+  nested modifier values, and backend-value handoff diagnostics.
+- Regression that raw M166 requests remain distinct from semantic modifier
+  handoff facts until the handoff API is explicitly invoked.
+- No backend maps, backend translation, rendering, source repair, argument
+  splitting, or recursive arbitrary-payload lowering.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m181_backend_value_query_handoff.py tslgen/tests/test_m182_intrinsic_modifier_handoff.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m181_backend_value_query_handoff.py tslgen/tests/test_m182_intrinsic_modifier_handoff.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q ...`: exit 0, no output.
+- Required pytest command: exit 0, `58 passed in 2.03s`.
+- Initial cache check listed validation-created `__pycache__` directories;
+  after removal, final `find tslgen -type d -name __pycache__ -print`: exit
+  0, no output.
+- Architecture, boundary, and evidence auditors returned `Accept`; test,
+  documentation, and validation auditors initially returned `Needs Revision`
+  for missing boundary tests, missing behavior/inventory docs, and the missing
+  exact `compileall` validation command. Focused revision added the missing
+  tests/docs and reran exact validation; focused re-review returned `Accept`.
+
+Follow-up:
+
+`tslgen/src/tslgen/lowering/model.py` is now above 1,000 lines. Future
+milestones should avoid casual growth there and consider a focused
+model-boundary split only when a later accepted slice needs it.
+
+### Post-M182 Lowering Planning
+
+Status:
+
+Selected as the next active prompt after M182 acceptance. Active prompt:
+`docs/agent/runs/post-m182-lowering-planning-prompt.md`.
+
+Goal:
+
+Select the next concrete M183 lowering milestone from the remaining
+generation/body/backend-query lowering gaps, grounded in the accepted
+M127-M182 boundaries and current `tsldata` corpus.
+
+Scope:
+
+- Re-inventory remaining lowering candidates that still matter after M182.
+- Choose exactly one M183 slice that is useful for the research prototype and
+  implementable in one execution-review-loop prompt.
+- Keep the run planning-only: update roadmap/state and create the M183 prompt,
+  but do not edit production code or tests.
+
+Out of scope:
+
+M183 implementation; backend rendering; backend intrinsic translation unless
+the planner explicitly selects it as the next boundary; broad TSIL parsing;
+source repair; runtime `tsldata`, `frozen`, or `tslgenold` dependencies;
+registries, dispatchers, worklists, or new request/result families without a
+concrete accepted-boundary reason.
 
 Validation:
 

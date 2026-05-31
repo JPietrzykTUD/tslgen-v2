@@ -1264,6 +1264,63 @@ and carries backend-owned angle payload and argument text forward unresolved.
 It is not an intrinsic-name validator, argument AST, modifier evaluator,
 backend intrinsic translation result, or renderer-ready call.
 
+Milestone 182 adds backend intrinsic handoff values for the semantic boundary
+after M166 discovery:
+
+```python
+BackendIntrinsicModifierName = Literal[
+    "suffix",
+    "prefix",
+    "post",
+    "infix",
+    "infix_sep",
+    "immediate",
+]
+
+BackendIntrinsicModifierOperand = (
+    BackendIntrinsicModifierBackendValueOperand
+    | BackendIntrinsicModifierIntegerOperand
+    | BackendIntrinsicModifierStringOperand
+    | BackendIntrinsicModifierSymbolOperand
+)
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicModifierField:
+    name: BackendIntrinsicModifierName
+    key_text: str
+    value: BackendIntrinsicModifierOperand
+    source_text: str
+    source: SourceLocation
+    key_source: SourceLocation
+    value_source: SourceLocation
+    immediate_index: int | None = None
+    immediate_index_text: str | None = None
+
+BackendIntrinsicHandoffRequest = (
+    BackendDirectIntrinsicHandoffRequest
+    | BackendIntrinsicComposeHandoffRequest
+)
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicHandoffRequestSegment:
+    request: BackendIntrinsicHandoffRequest
+    island: BackendIntrinsicRequest
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicHandoff:
+    segments: tuple[BackendIntrinsicHandoffSegment, ...]
+    source: SourceLocation
+```
+
+The M182 model is a semantic handoff boundary over already discovered M166
+request islands. Direct `intrin<...>(...)` requests preserve angle and
+argument payload text opaque. `intrin_compose<...>(...)` requests expose only
+the top-level base token and source-ordered modifier fields. Modifier operands
+remain unresolved symbols, integers, strings, or exact M181 backend-value
+requests. The model is not an intrinsic renderer, argument AST, backend map
+lookup, direct intrinsic name-template parser, or recursive TSIL parser.
+
 Milestone 167 adds source-operation request discovery values for the exact
 `cast<...>(...)`, `mem<...>(...)`, and `io<...>(...)` keyword families:
 
