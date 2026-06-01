@@ -2897,3 +2897,55 @@ Consequences:
   generic/immediate-parameter value problem.
 - FTF-002 `intrin::suffix(si?)` remains source-data debt and must stay
   unsupported until a focused source-data cleanup milestone changes the input.
+
+## ADR-060: `infix=to_type_suffix` Is A Selected Destination-Type Marker
+
+Status: Accepted.
+
+Context:
+
+After M204, destination/return-type suffix operands are supported when the
+source explicitly spells a backend suffix query, for example:
+
+```text
+infix=value<backend>(intrin::suffix(ToBase))
+```
+
+The remaining corpus also contains the exact marker:
+
+```text
+infix=to_type_suffix
+```
+
+This marker appears only in `tsldata/primitives/conversion/cast.tsl` for
+NEON/SVE reinterpret intrinsic names. It is not a literal infix fragment, and
+it is not a request for backend modifier translation to treat the raw string
+`to_type_suffix` as magic. FTF-003 records the source-convention flaw: this is
+legacy shorthand for the explicit destination suffix query, not preferred new
+TSIL syntax.
+
+Decision:
+
+`infix=to_type_suffix` may be lowered only as an exact source marker meaning
+"the suffix for the selected destination/return base type." It requires a
+primitive-local `return_type: base: ...` declaration and a matching selected
+return-type base binding. The arbitrary declaration name remains source-owned;
+`ToBase` is an observed spelling, not a generator keyword.
+
+Lowering must turn the marker into typed destination-type suffix information
+before backend modifier translation consumes it. Backend translation must not
+infer the destination type from `BackendIntrinsicModifierSymbolOperand(
+"to_type_suffix")` or any raw symbol.
+
+Consequences:
+
+- M206 implements only the exact `infix=to_type_suffix` selected-context slice
+  and reuses the existing metadata-backed suffix translation path once
+  lowering has produced a typed scalar destination type.
+- M206 introduces a small semantic modifier operand for the marker so
+  provenance stays honest; it does not fake a `value<backend>(...)` island or
+  add a broad request/result family.
+- Symbol immediates such as `index` and `Index` remain a separate selected
+  immediate/generic-parameter value problem.
+- FTF-002 `intrin::suffix(si?)` remains source-data debt and must stay
+  unsupported until a focused source-data cleanup milestone changes the input.

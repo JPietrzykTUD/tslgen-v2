@@ -261,6 +261,12 @@ Invariants:
   `BackendValueTypeOperand(LoweredScalarTypeIdentity(...))`. Source-owned
   names such as `ToBase` or `ResultBase` are not backend keywords and raw
   symbol operands are still rejected.
+- The exact legacy marker `infix=to_type_suffix` may be lowered as a
+  destination/return-type suffix only when the selected primitive declares
+  `return_type: base: NAME` and the selected target supplies the matching
+  `TargetReturnTypeBaseBinding`. The marker is represented by a small typed
+  semantic modifier operand, not by a fake `value<backend>(...)` island or a
+  raw backend string.
 - Selected x86-family prefix operands
   `prefix=value<backend>(intrin::prefix)` may be translated through selected
   extension context and backend metadata for `sse`, `sse_vl`, `avx2`,
@@ -271,8 +277,8 @@ Invariants:
 - Rust `core::arch::*` intrinsic qualification, intrinsic-name assembly,
   arbitrary quoted suffixes, unresolved raw symbol suffixes, symbol
   immediates, wildcard-looking fragments, quoted-string infix suffixes, and
-  `infix=to_type_suffix` remain unsupported diagnostics until later typed
-  rules explicitly provide those semantics.
+  unbound or context-free `infix=to_type_suffix` remain unsupported
+  diagnostics until later typed rules explicitly provide those semantics.
 
 ## Primitive Model
 

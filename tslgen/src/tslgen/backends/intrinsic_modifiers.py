@@ -29,6 +29,7 @@ from tslgen.lowering.model import (
     BackendIntrinsicComposeHandoffRequest,
     BackendIntrinsicHandoffRequest,
     BackendIntrinsicModifierBackendValueOperand,
+    BackendIntrinsicModifierDestinationTypeSuffixOperand,
     BackendIntrinsicModifierField,
     BackendIntrinsicModifierIntegerOperand,
     BackendIntrinsicModifierName,
@@ -272,9 +273,9 @@ def _translate_metadata_backed_modifier(
 ) -> BackendIntrinsicModifierTranslationResult | None:
     if field.name != family.field_name:
         return None
-    if not isinstance(field.value, BackendIntrinsicModifierBackendValueOperand):
+    request = _metadata_backed_modifier_request(field)
+    if request is None:
         return None
-    request = field.value.request
     if not family.request_matches(request):
         return None
 
@@ -363,6 +364,16 @@ def _translate_metadata_backed_modifier(
         ),
         diagnostics=(),
     )
+
+
+def _metadata_backed_modifier_request(
+    field: BackendIntrinsicModifierField,
+) -> object | None:
+    if isinstance(field.value, BackendIntrinsicModifierBackendValueOperand):
+        return field.value.request
+    if isinstance(field.value, BackendIntrinsicModifierDestinationTypeSuffixOperand):
+        return field.value.request
+    return None
 
 
 def _placeholders(template: BackendTemplateText) -> tuple[str, ...]:

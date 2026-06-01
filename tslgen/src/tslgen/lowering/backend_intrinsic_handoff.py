@@ -22,6 +22,7 @@ from tslgen.lowering.model import (
     BackendIntrinsicHandoffRequestSegment,
     BackendIntrinsicHandoffSegment,
     BackendIntrinsicModifierBackendValueOperand,
+    BackendIntrinsicModifierDestinationTypeSuffixOperand,
     BackendIntrinsicModifierField,
     BackendIntrinsicModifierIntegerOperand,
     BackendIntrinsicModifierName,
@@ -31,14 +32,23 @@ from tslgen.lowering.model import (
     BackendIntrinsicOpaqueTextSegment,
     BackendIntrinsicOpaqueTokenSegment,
     BackendIntrinsicRequest,
+    BackendIntrinsicSuffixValueRequest,
+    BackendValueTypeOperand,
+    LoweredScalarTypeIdentity,
     BackendValueQueryDiscovery,
     BackendValueQueryHandoffRequestSegment,
     BackendValueQueryRequestSegment,
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
 )
+from tslgen.lowering.selected_specializations import (
+    selected_specialization_binding_kind_diagnostic,
+    selected_specialization_type_value,
+    unbound_selected_specialization_binding_diagnostic,
+)
 
 _BACKEND_VALUE_QUERY_PREFIX = "value<backend>("
+_TO_TYPE_SUFFIX_SYMBOL = "to_type_suffix"
 _NORMAL_MODIFIER_NAMES: tuple[BackendIntrinsicModifierName, ...] = (
     "infix_sep",
     "suffix",
@@ -316,6 +326,7 @@ def _parse_intrin_compose_payload(
         value_source = source_text.source_at(value_start + value_offset)
         operand = _lower_modifier_operand(
             context,
+            key_scan.key,
             _ModifierValue(
                 text=value_text,
                 source_text=value_text,
@@ -621,10 +632,20 @@ def _next_top_level_separator(text: str, start: int) -> int:
 
 def _lower_modifier_operand(
     context: SelectedImplementationLoweringContext,
+    key: _ModifierKey,
     value: _ModifierValue,
     *,
     environment: SelectedTypeEnvironment | None,
 ) -> BackendIntrinsicModifierOperand | Diagnostic:
+    if key.name == "infix" and value.text == _TO_TYPE_SUFFIX_SYMBOL:
+        destination_suffix = _lower_to_type_suffix_operand(
+            context,
+            value,
+            environment=environment,
+        )
+        if destination_suffix is not None:
+            return destination_suffix
+
     if value.text.startswith(_BACKEND_VALUE_QUERY_PREFIX):
         return _lower_backend_value_operand(
             context,
@@ -654,6 +675,89 @@ def _lower_modifier_operand(
         value.text,
         "expected a backend value island, symbol, integer, or quoted string",
     )
+
+
+def _lower_to_type_suffix_operand(
+    context: SelectedImplementationLoweringContext,
+    value: _ModifierValue,
+    *,
+    environment: SelectedTypeEnvironment | None,
+) -> BackendIntrinsicModifierDestinationTypeSuffixOperand | Diagnostic | None:
+    declaration = context.primitive.return_type_binding
+    if declaration is None:
+        diagnostic = _first_selected_binding_diagnostic(environment)
+        if diagnostic is not None:
+            return diagnostic
+        return None
+
+    if declaration.kind != "base":
+        selected_value = selected_specialization_type_value(
+            context,
+            declaration.name,
+            value.source,
+        )
+        if isinstance(selected_value, Diagnostic):
+            return selected_value
+        if selected_value is None:
+            return unbound_selected_specialization_binding_diagnostic(
+                declaration.name,
+                value.source,
+            )
+        return selected_specialization_binding_kind_diagnostic(
+            declaration.name,
+            "return_type.base",
+            type(selected_value).__name__,
+            value.source,
+        )
+
+    selected_value = selected_specialization_type_value(
+        context,
+        declaration.name,
+        value.source,
+    )
+    if isinstance(selected_value, Diagnostic):
+        return selected_value
+    if selected_value is None:
+        diagnostic = _first_selected_binding_diagnostic(environment)
+        if diagnostic is not None:
+            return diagnostic
+        return unbound_selected_specialization_binding_diagnostic(
+            declaration.name,
+            value.source,
+        )
+    if not isinstance(selected_value, LoweredScalarTypeIdentity):
+        return selected_specialization_binding_kind_diagnostic(
+            declaration.name,
+            "return_type.base",
+            type(selected_value).__name__,
+            value.source,
+        )
+
+    return BackendIntrinsicModifierDestinationTypeSuffixOperand(
+        request=BackendIntrinsicSuffixValueRequest(
+            backend=context.backend,
+            argument=BackendValueTypeOperand(
+                value=selected_value,
+                source_text=declaration.name,
+                source=value.source,
+            ),
+            source_text=value.source_text,
+            source=value.source,
+        ),
+        source_text=value.source_text,
+        source=value.source,
+    )
+
+
+def _first_selected_binding_diagnostic(
+    environment: SelectedTypeEnvironment | None,
+) -> Diagnostic | None:
+    if environment is None:
+        return None
+    for diagnostic in environment.diagnostics:
+        if "SELECTED-SPECIALIZATION-BINDING" in diagnostic.code:
+            return diagnostic
+    return None
 
 
 def _lower_backend_value_operand(

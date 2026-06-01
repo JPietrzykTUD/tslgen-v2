@@ -25455,3 +25455,175 @@ Validation:
 git diff --check
 find tslgen -type d -name __pycache__ -print
 ```
+
+Result:
+
+M205 accepted. The post-M204 evidence audit keeps context-free corpus
+accounting separate from selected-context behavior:
+
+- Context-free corpus characterization still intentionally leaves raw
+  `ToBase` suffix/infix symbol operands untranslated unless a selected binding
+  context is supplied.
+- The remaining selected-context implementation gaps are:
+  - 4 exact `infix=to_type_suffix` markers in
+    `tsldata/primitives/conversion/cast.tsl`;
+  - 18 `immediate(1)=index` fields in
+    `tsldata/primitives/conversion/repr_change.tsl`;
+  - 1 `immediate(1)=Index` field in
+    `tsldata/primitives/load_store/array.tsl`;
+  - 1 FTF-002 `intrin::suffix(si?)` source-data flaw in
+    `tsldata/primitives/load_store/construct.tsl`.
+
+The planner selected M206 to implement only exact `infix=to_type_suffix`
+because it can reuse the accepted M204 selected return-type base binding
+boundary. ADR-060 records the rule: the marker means "destination/return-type
+suffix" only after lowering resolves the primitive-local return-type base
+binding to a typed scalar type. Backend translation must not interpret raw
+`BackendIntrinsicModifierSymbolOperand("to_type_suffix")` as magic. FTF-003
+records the marker as legacy shorthand/source-convention debt; the future
+source direction is the explicit `value<backend>(intrin::suffix(NAME))` form.
+
+The planner rejected `index`/`Index` for M206 because those spellings are
+source-owned selected parameter/immediate values. They require a separate
+typed selected immediate/generic-parameter binding model and must not be
+implemented as raw-name checks.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+### Milestone 206: To-Type Suffix Infix Marker Translation
+
+Status:
+
+Accepted. Execution-review prompt:
+`docs/agent/runs/m206-to-type-suffix-infix-execution-review-loop-prompt.md`.
+
+Goal:
+
+Lower and translate the exact `infix=to_type_suffix` intrinsic-compose marker
+through selected destination/return-type context, without making
+`to_type_suffix` a backend magic string. FTF-003 records this marker as
+legacy shorthand that should eventually be replaced by explicit
+`value<backend>(intrin::suffix(NAME))` source.
+
+Scope:
+
+- Accept only the exact modifier field/value shape:
+  `infix=to_type_suffix`.
+- Require a primitive-local `return_type: base: NAME` declaration and a
+  matching selected `TargetReturnTypeBaseBinding(name=NAME, type_tag=...)`.
+- Lower the marker to typed destination-type suffix information before backend
+  modifier translation. The selected destination scalar type should then reuse
+  the existing metadata-backed type-suffix rule path for C++ and Rust.
+- Preserve the source field name as `infix` and preserve useful source
+  provenance for diagnostics. Do not fake a `value<backend>(...)` island if the
+  existing operand shape cannot represent the marker honestly; introduce only a
+  minimal named semantic modifier fact if needed.
+- Add focused positive coverage with arbitrary return-type binding names such
+  as `ResultBase`, plus corpus/evidence coverage for all four observed
+  `infix=to_type_suffix` occurrences.
+- Preserve M195 literal modifiers, M197 type-derived suffixes, M198 prefixes,
+  M200 current-type suffixes, M202 stream suffixes, and M204
+  destination/return-type explicit suffix behavior.
+
+Out of scope:
+
+Treating `to_type_suffix`, `ToBase`, `index`, or `Index` as magic raw strings;
+symbol immediate resolution; selected generic/immediate-parameter modeling;
+intrinsic-name assembly; Rust `core::arch::*` qualification; rendering;
+generated output; dependency closure; source repair; FTF-002
+`intrin::suffix(si?)`; broad TSIL or target-language parsing; and runtime
+dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m206_to_type_suffix_infix_translation.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m195_literal_intrinsic_modifier_translation.py tslgen/tests/test_m197_type_derived_intrinsic_suffix_translation.py tslgen/tests/test_m198_intrinsic_prefix_modifier_translation.py tslgen/tests/test_m200_current_type_intrinsic_suffix_translation.py tslgen/tests/test_m202_stream_intrinsic_suffix_translation.py tslgen/tests/test_m204_destination_return_type_intrinsic_suffix_translation.py tslgen/tests/test_m206_to_type_suffix_infix_translation.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M206 accepted. It adds a focused
+`BackendIntrinsicModifierDestinationTypeSuffixOperand` for the exact legacy
+`infix=to_type_suffix` marker. Lowering creates that operand only when the
+selected primitive has `return_type: base: NAME` and the selected target has a
+matching `TargetReturnTypeBaseBinding(name=NAME, type_tag=...)`. The operand
+wraps a typed `BackendIntrinsicSuffixValueRequest` with a
+`BackendValueTypeOperand(LoweredScalarTypeIdentity(...))`, so backend
+translation reuses the existing metadata-backed type-suffix rule path without
+pretending the source contained a `value<backend>(...)` island.
+
+Raw `BackendIntrinsicModifierSymbolOperand("to_type_suffix")` still diagnoses
+as an unsupported semantic infix, context-free marker use still stays
+unsupported, and selected-binding mismatches block translation. The new tests
+prove arbitrary binding names such as `ResultBase`, both C++ and Rust metadata
+translation, the observed marker-plus-current-suffix shape, all four current
+corpus occurrences in `tsldata/primitives/conversion/cast.tsl`, and the
+negative boundaries for M204 explicit destination suffixes, `index`/`Index`
+symbol immediates, and FTF-002 `intrin::suffix(si?)`.
+
+M206 did not implement symbol immediate resolution, selected
+generic/immediate-parameter modeling, intrinsic-name assembly, rendering, Rust
+`core::arch::*` qualification, dependency closure, source repair, FTF-002
+cleanup, or runtime dependencies on `frozen/` or `tslgenold`.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m206_to_type_suffix_infix_translation.py`:
+  exit 0, `16 passed`.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m195_literal_intrinsic_modifier_translation.py tslgen/tests/test_m197_type_derived_intrinsic_suffix_translation.py tslgen/tests/test_m198_intrinsic_prefix_modifier_translation.py tslgen/tests/test_m200_current_type_intrinsic_suffix_translation.py tslgen/tests/test_m202_stream_intrinsic_suffix_translation.py tslgen/tests/test_m204_destination_return_type_intrinsic_suffix_translation.py tslgen/tests/test_m206_to_type_suffix_infix_translation.py`:
+  exit 0, `144 passed`.
+- `find tslgen -type d -name __pycache__ -print`: validation-created
+  `__pycache__` directories were removed; final command exited 0 with no
+  output.
+
+### Milestone 207: Selected Symbol Immediate Planning
+
+Status:
+
+Selected. Planning prompt:
+`docs/agent/runs/m207-selected-symbol-immediate-planning-prompt.md`.
+
+Goal:
+
+Plan the smallest correct lowering path for source-owned symbol immediate
+modifier operands such as `immediate(1)=index` and `immediate(1)=Index`
+without treating those names as backend magic strings.
+
+Scope:
+
+- Inventory all observed non-literal `immediate(N)=SYMBOL` intrinsic compose
+  modifier operands across `tsldata/primitives/**/*.tsl`, with source
+  locations and nearby source context.
+- Determine where each symbol is declared or owned in the `.tsl` source:
+  compile-time switch variables, signature/index terms, primitive parameters,
+  tests, or other catalog metadata.
+- Decide whether the next executable slice can introduce a minimal typed
+  selected immediate/generic-parameter value context, or whether another
+  catalog/selector evidence slice is needed first.
+- Preserve the M206/M204 rule: source-owned symbols are resolved only through
+  typed selected context and never by raw-name matching.
+- Keep the result as planning only; do not change implementation code in M207.
+
+Out of scope:
+
+Implementation code; translating raw `index` or `Index` by spelling;
+intrinsic-name assembly; rendering; generated output; dependency closure;
+source repair; FTF-002 cleanup; broad TSIL parsing; and runtime dependencies
+on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+find tslgen -type d -name __pycache__ -print
+```

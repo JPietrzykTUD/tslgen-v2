@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 204 is accepted.
+Milestone 206 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -294,6 +294,32 @@ implement `infix=to_type_suffix`, `index`/`Index` immediates, FTF-002 `si?`,
 rendering, dependency closure, source repair, or Rust `core::arch::*`
 qualification.
 
+M205 planned the next lowering-focused intrinsic modifier slice after M204.
+The selected-context gaps are 4 exact `infix=to_type_suffix` markers, 18
+`immediate(1)=index` fields, 1 `immediate(1)=Index` field, and the FTF-002
+`intrin::suffix(si?)` source-data flaw. Context-free corpus accounting remains
+separate: raw `ToBase` suffix/infix symbols stay untranslated unless selected
+binding context is supplied. M205 records ADR-060 and selects M206 to
+implement only exact `infix=to_type_suffix` through selected return-type base
+context. `index` and `Index` are deferred because they require a separate
+selected immediate/generic-parameter value model, not raw-name checks. FTF-003
+records `infix=to_type_suffix` as legacy shorthand/source-convention debt that
+should eventually be replaced by an explicit destination suffix query.
+
+M206 implemented only the exact `infix=to_type_suffix` selected-context slice.
+Lowering now produces a focused
+`BackendIntrinsicModifierDestinationTypeSuffixOperand` only when the selected
+primitive declares `return_type: base: NAME` and the selected target supplies
+the matching `TargetReturnTypeBaseBinding`. Backend modifier translation then
+reuses the existing metadata-backed type-suffix rule path through typed
+`BackendIntrinsicSuffixValueRequest` / `BackendValueTypeOperand` data. M206
+does not fake a `value<backend>(...)` island, does not translate raw
+`BackendIntrinsicModifierSymbolOperand("to_type_suffix")`, and keeps
+context-free or unbound marker use diagnostic. It preserves M204 explicit
+destination suffix behavior, leaves `index`/`Index` symbol immediates and
+FTF-002 deferred, and does not add rendering, dependency closure, source
+repair, or runtime dependency on `frozen/` or `tslgenold`.
+
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
 
@@ -313,44 +339,44 @@ parsing/source-repair work that lowering must not absorb by default.
 Current required action:
 
 ```text
-Run M205 post-destination intrinsic modifier planning prompt.
+Run M207 selected symbol immediate planning prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m205-post-destination-intrinsic-modifier-planning-prompt.md
+docs/agent/runs/m207-selected-symbol-immediate-planning-prompt.md
 ```
 
 Active planning milestone:
 
 ```text
-Milestone 205: Post-Destination Intrinsic Modifier Planning.
+Milestone 207: Selected Symbol Immediate Planning.
 ```
 
 Latest review verdict:
 
 ```text
-M204 execution-review returned Accept after a focused coverage revision.
-Architecture/boundary review accepted the typed selected-binding path and
-metadata-backed typed `infix` suffix reuse. Validation/documentation audit
-initially requested revision for missing Rust positive coverage, missing
-lower-case `index` negative coverage, and unfinalized workflow docs; all were
-addressed. Required validation passed: `git diff --check` exit 0; compileall
-exit 0; M204 targeted tests 15 passed; M197-M202 plus M204 modifier regression
-final result recorded in the roadmap; final `find __pycache__` check exit 0
-with no output after cleanup.
+M206 execution-review returned Accept. The executor implemented the exact
+`infix=to_type_suffix` selected-context bridge with a small typed semantic
+modifier operand, preserved M204 explicit destination suffix behavior, and
+kept raw `to_type_suffix`, `index`/`Index`, and FTF-002 unsupported. Required
+M206 validation passed: `git diff --check` exit 0 with no output;
+`python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no
+output; focused M206 pytest exit 0 with `16 passed`; modifier regression
+pytest exit 0 with `144 passed`; final `find tslgen -type d -name __pycache__
+-print` exit 0 with no output after cleanup.
 ```
 
 Next expected action:
 
 ```text
-Run the active M205 planning prompt. Re-inventory the remaining unsupported
-intrinsic modifier families after M204 and decide whether M206 should implement
-exact `infix=to_type_suffix` lowering/translation, add selected
-generic/immediate parameter binding context for `index`/`Index`, or return to
-planner. Keep context-free corpus accounting separate from selected-context
-behavior. Do not implement code in M205.
+Run the active M207 planning prompt. Focus on the remaining source-owned
+symbol immediate operands `immediate(N)=index` and `immediate(N)=Index`.
+Inventory all observed symbol immediate occurrences, identify their source
+ownership context, and decide the smallest correct typed selected-context
+slice before any implementation. Do not translate `index` or `Index` by raw
+spelling.
 ```
 
 Previous review verdict:
@@ -381,13 +407,15 @@ selected M200. M200 execution-review returned Accept With Follow-Ups and
 selected M201 planning. M201 planning returned Accept and selected M202. M202
 execution-review returned Accept With Follow-Ups and selected M203 planning.
 M203 planning returned Accept and selected M204. M204 execution-review returned
-Accept after focused coverage revision and selected M205 planning.
+Accept after focused coverage revision and selected M205 planning. M205
+planning returned Accept and selected M206. M206 execution-review returned
+Accept and selected M207 planning.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m204-destination-return-type-intrinsic-suffix-execution-review-loop-prompt.md
+docs/agent/runs/m206-to-type-suffix-infix-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

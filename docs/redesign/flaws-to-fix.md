@@ -79,3 +79,45 @@ Until a focused source-data cleanup milestone changes the `.tsl` corpus, keep
 `intrin::suffix(si?)` as an explicit unsupported diagnostic boundary. Do not
 add a semantic rule that interprets wildcard-looking type-group tokens as
 selected concrete suffix inputs.
+
+## FTF-003: `infix=to_type_suffix` Is A Legacy Destination-Suffix Shorthand
+
+Current `.tsl` contains four intrinsic compose modifiers with the exact marker:
+
+```text
+tsldata/primitives/conversion/cast.tsl:62
+tsldata/primitives/conversion/cast.tsl:71
+tsldata/primitives/conversion/cast.tsl:81
+tsldata/primitives/conversion/cast.tsl:90
+infix=to_type_suffix
+```
+
+This marker appears to be a legacy shorthand for spelling the destination or
+return-type suffix explicitly, for example:
+
+```text
+infix=value<backend>(intrin::suffix(ToBase))
+```
+
+where `ToBase` is only the current corpus spelling for the primitive-local
+`return_type: base: ...` binding. The clean semantic meaning is "use the
+selected destination/return base type suffix", resolved through the same typed
+selected-binding context as explicit `intrin::suffix(NAME)` forms.
+
+The shorthand is a source-convention mismatch because it hides a backend-value
+query behind a bare symbol-like modifier value. Treat it as a compatibility
+marker for the current corpus, not as a pattern to grow.
+
+Future source cleanup should replace the shorthand with the explicit
+`value<backend>(intrin::suffix(NAME))` spelling, using the actual
+primitive-local return-type binding name.
+
+Until that cleanup happens, any generator support for `infix=to_type_suffix`
+must remain exact and selected-context gated. Do not translate raw
+`to_type_suffix` as a literal fragment, do not make it a backend magic string,
+and do not generalize it to arbitrary `*_suffix` marker spellings.
+
+M206 adds that bounded compatibility bridge by lowering the exact marker
+through primitive-local `return_type: base: NAME` context and a matching
+selected return-type base binding. The source-convention flaw remains open
+until the `.tsl` source uses the explicit backend suffix query directly.

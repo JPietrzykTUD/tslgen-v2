@@ -1,0 +1,136 @@
+# M207 Selected Symbol Immediate Planning Prompt
+
+Execute this prompt only when `docs/agent/current-redesign-state.md` points
+here and records M206 as accepted.
+
+This is a planning milestone, not an implementation milestone. Use the
+subagent workflow with read-only evidence and architecture reviewers. The main
+thread is the orchestrator and owns the final roadmap/state updates. Do not
+modify implementation code.
+
+## Accepted State
+
+Accepted through:
+
+```text
+M206: To-Type Suffix Infix Marker Translation
+```
+
+Selected milestone:
+
+```text
+Milestone 207: Selected Symbol Immediate Planning
+```
+
+## Read First
+
+- `docs/agent/current-redesign-state.md`
+- `AGENTS.md`
+- `PLANS.md`
+- `docs/agent/review-checklist.md`
+- `docs/redesign/implementation-roadmap.md`
+- `docs/redesign/behavioral-spec.md`
+- `docs/redesign/domain-model.md`
+- `docs/redesign/pipeline-design.md`
+- `docs/redesign/target-architecture.md`
+- `docs/redesign/design-decisions.md`
+- `docs/redesign/flaws-to-fix.md`
+- `tslgen/src/tslgen/lowering/model.py`
+- `tslgen/src/tslgen/lowering/backend_intrinsic_handoff.py`
+- `tslgen/src/tslgen/backends/intrinsic_modifiers.py`
+- `tslgen/tests/test_m195_literal_intrinsic_modifier_translation.py`
+- `tslgen/tests/test_m206_to_type_suffix_infix_translation.py`
+- `tsldata/primitives/conversion/repr_change.tsl`
+- `tsldata/primitives/load_store/array.tsl`
+
+## Goal
+
+Plan the smallest correct lowering path for source-owned symbol immediate
+modifier operands such as:
+
+```text
+immediate(1)=index
+immediate(1)=Index
+```
+
+The goal is to decide what typed selected context is needed before any
+implementation translates these operands. Do not treat `index` or `Index` as
+backend magic strings.
+
+## Planning Scope
+
+- Inventory all observed non-literal `immediate(N)=SYMBOL` intrinsic compose
+  modifier operands across `tsldata/primitives/**/*.tsl`.
+- Record source locations, intrinsic compose bases, argument positions, and
+  nearby `.tsl` ownership context for each observed symbol.
+- Determine whether each symbol is owned by a compile-time switch variable,
+  signature/index term, primitive parameter, test/catalog value, or another
+  source construct.
+- Decide whether the next executable slice can introduce a minimal typed
+  selected immediate/generic-parameter value context, or whether a prior
+  catalog/selector evidence milestone is required.
+- Define exact positive and negative tests for the next executable milestone:
+  arbitrary source-owned names should be supported only when their typed
+  context is supplied; unresolved raw symbols must remain unsupported.
+- Keep M204/M206 behavior intact: destination suffix names and
+  `to_type_suffix` stay selected-context gated, not raw-name matched.
+
+## Out Of Scope
+
+- Implementation code.
+- Translating raw `index` or `Index` by spelling.
+- Broad TSIL parsing.
+- Intrinsic-name assembly.
+- Rendering, generated output, artifact writing, or build verification.
+- Dependency closure.
+- Source repair.
+- FTF-002 `intrin::suffix(si?)` cleanup.
+- Runtime dependency on `frozen/` or `tslgenold`.
+
+## Subagent Workflow
+
+Use read-only subagents for:
+
+- evidence audit: inventory all observed symbol immediate operands and their
+  source ownership context;
+- architecture/boundary audit: check that the proposed next slice does not
+  turn source-owned names into magic strings and does not add broad IR
+  machinery prematurely.
+
+The orchestrator must consolidate findings into one verdict:
+
+- `Accept`: update the roadmap and state, and create the next concrete prompt.
+- `Needs Revision`: revise only docs/planning and rerun the focused review.
+- `Return To Planner`: record the blocking design issue and create a planner
+  prompt instead of selecting an executor.
+
+## Required Validation
+
+Run:
+
+```bash
+git diff --check
+find tslgen -type d -name __pycache__ -print
+```
+
+Remove validation-created `__pycache__` directories before final validation
+reporting if any appear.
+
+## Final State Update
+
+Before finishing an accepted run, update
+`docs/agent/current-redesign-state.md`, update
+`docs/redesign/implementation-roadmap.md` with the M207 planning result, and
+create the next concrete prompt under `docs/agent/runs/` according to
+`docs/agent/next-run-prompt-protocol.md`, unless review records an explicit
+stop condition.
+
+## Final Report
+
+Report:
+
+1. Planning/review verdict.
+2. Selected next milestone or stop condition.
+3. Why that next milestone is useful.
+4. Files changed.
+5. Validation commands with exact results.

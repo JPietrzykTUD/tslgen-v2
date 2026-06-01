@@ -712,6 +712,13 @@ class BackendIntrinsicModifierBackendValueOperand:
 
 
 @dataclass(frozen=True, slots=True)
+class BackendIntrinsicModifierDestinationTypeSuffixOperand:
+    request: BackendIntrinsicSuffixValueRequest
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
 class BackendIntrinsicModifierSymbolOperand:
     text: str
     source: SourceLocation
@@ -733,6 +740,7 @@ class BackendIntrinsicModifierStringOperand:
 
 BackendIntrinsicModifierOperand = (
     BackendIntrinsicModifierBackendValueOperand
+    | BackendIntrinsicModifierDestinationTypeSuffixOperand
     | BackendIntrinsicModifierIntegerOperand
     | BackendIntrinsicModifierStringOperand
     | BackendIntrinsicModifierSymbolOperand

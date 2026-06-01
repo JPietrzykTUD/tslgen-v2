@@ -37,6 +37,7 @@ from tslgen.lowering.model import (
     BackendIntrinsicHandoffSegment,
     BackendIntrinsicKind,
     BackendIntrinsicModifierBackendValueOperand,
+    BackendIntrinsicModifierDestinationTypeSuffixOperand,
     BackendIntrinsicModifierField,
     BackendIntrinsicModifierIntegerOperand,
     BackendIntrinsicModifierName,
