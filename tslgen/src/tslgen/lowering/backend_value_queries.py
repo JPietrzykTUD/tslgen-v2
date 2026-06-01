@@ -437,6 +437,9 @@ def _lower_suffix_argument(
             source_text=argument.text,
             source=argument.source,
         )
+    blocking_diagnostic = _selected_binding_diagnostic(type_result.diagnostics)
+    if blocking_diagnostic is not None:
+        return blocking_diagnostic
 
     if _BACKEND_SYMBOL_RE.fullmatch(argument.text) is not None:
         return BackendValueSymbolOperand(
@@ -445,6 +448,15 @@ def _lower_suffix_argument(
         )
 
     return _unsupported_suffix_argument_diagnostic(argument)
+
+
+def _selected_binding_diagnostic(
+    diagnostics: tuple[Diagnostic, ...],
+) -> Diagnostic | None:
+    for diagnostic in diagnostics:
+        if "SELECTED-SPECIALIZATION" in diagnostic.code:
+            return diagnostic
+    return None
 
 
 def _string_literal_operand(

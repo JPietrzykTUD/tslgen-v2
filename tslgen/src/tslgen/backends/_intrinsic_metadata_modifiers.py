@@ -376,9 +376,9 @@ METADATA_BACKED_MODIFIER_FAMILIES: tuple[
     ),
     MetadataBackedModifierFamily(
         field_name="infix",
-        label="current-type intrinsic suffix",
+        label="intrinsic suffix",
         diagnostic_name="TYPE-SUFFIX",
-        request_matches=_is_current_suffix_request,
+        request_matches=_is_type_or_current_suffix_request,
         precondition_diagnostic=_type_suffix_precondition_diagnostic,
         metadata_key=_type_suffix_metadata_key,
     ),

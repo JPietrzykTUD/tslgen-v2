@@ -256,6 +256,11 @@ Invariants:
   selected extension context and backend metadata for `sse`, `sse_vl`, `avx2`,
   `avx2_vl`, and `avx512`. The quoted value is a named policy, not raw emitted
   text or general quoted-string suffix support.
+- Destination/return-type suffix operands may be translated for `suffix` and
+  `infix` fields only after selected-binding lowering has produced a
+  `BackendValueTypeOperand(LoweredScalarTypeIdentity(...))`. Source-owned
+  names such as `ToBase` or `ResultBase` are not backend keywords and raw
+  symbol operands are still rejected.
 - Selected x86-family prefix operands
   `prefix=value<backend>(intrin::prefix)` may be translated through selected
   extension context and backend metadata for `sse`, `sse_vl`, `avx2`,
@@ -264,10 +269,10 @@ Invariants:
   keys. Fragment text comes from the backend metadata catalog, not hardcoded
   Python strings.
 - Rust `core::arch::*` intrinsic qualification, intrinsic-name assembly,
-  arbitrary quoted suffixes, symbol suffixes, symbol immediates,
-  wildcard-looking fragments, destination-type backend-value infix suffixes,
-  quoted-string infix suffixes, and `infix=to_type_suffix` remain unsupported
-  diagnostics until later typed rules explicitly provide those semantics.
+  arbitrary quoted suffixes, unresolved raw symbol suffixes, symbol
+  immediates, wildcard-looking fragments, quoted-string infix suffixes, and
+  `infix=to_type_suffix` remain unsupported diagnostics until later typed
+  rules explicitly provide those semantics.
 
 ## Primitive Model
 

@@ -2850,3 +2850,50 @@ Consequences:
 - Stream suffix support should be metadata-backed for C++ and Rust, preserving
   ADR-056: Rust architecture module paths are still renderer/call-translation
   work, not modifier translation work.
+
+## ADR-059: Return-Type Intrinsic Suffix Symbols Resolve Through Selected Bindings
+
+Status: Accepted.
+
+Context:
+
+After M202, the largest remaining intrinsic modifier family uses source-owned
+symbols such as `ToBase` in forms like:
+
+```text
+suffix=value<backend>(intrin::suffix(ToBase))
+infix=value<backend>(intrin::suffix(ToBase))
+```
+
+`ToBase` is not a generator keyword. It is the current corpus spelling for an
+arbitrary primitive-local `return_type: base: ...` binding name. Existing
+selected-specialization lowering can resolve such names to a typed scalar
+identity when the selected target supplies a matching return-type base binding.
+
+Decision:
+
+Destination or return-type intrinsic suffix translation may proceed only when
+the source symbol has already lowered through typed selected binding context to
+`BackendValueTypeOperand(LoweredScalarTypeIdentity(...))`.
+
+Backend modifier translation must not interpret
+`BackendValueSymbolOperand("ToBase")`, or any other raw symbol spelling, as a
+destination type. Unbound or mismatched symbols remain diagnostics. Tests should
+use arbitrary fixture names such as `ResultBase` to prove the rule is not
+spelling-specific.
+
+The same metadata-backed type-suffix rule may translate typed operands for
+both `suffix` and `infix` fields; the field name controls later intrinsic-name
+placement. This does not make `infix=to_type_suffix` a supported literal
+fragment and does not add intrinsic-name assembly.
+
+Consequences:
+
+- M204 can implement the destination/return-type suffix slice by using the
+  accepted lowering context and a narrow typed `infix` suffix rule.
+- No `.tsl` implementation selector tree inference, wildcard expansion, source
+  repair, or raw-name special casing is allowed.
+- Symbol immediates such as `index` and `Index` remain a separate selected
+  generic/immediate-parameter value problem.
+- FTF-002 `intrin::suffix(si?)` remains source-data debt and must stay
+  unsupported until a focused source-data cleanup milestone changes the input.

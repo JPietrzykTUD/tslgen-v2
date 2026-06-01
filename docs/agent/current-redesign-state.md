@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 202 is accepted.
+Milestone 204 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -263,6 +263,37 @@ modifiers. The remaining 56 unsupported fields are 19 `suffix(ToBase)` symbol
 suffixes, 1 FTF-002 `suffix(si?)` source-data flaw, 13 `infix(ToBase)` symbol
 suffixes, 4 `infix=to_type_suffix` markers, and 19 symbol immediates.
 
+M203 planned the next post-stream intrinsic modifier slice. The accepted
+corpus accounting remains 643 total modifier fields, 587 translated after
+M202, and 56 unsupported fields: 20 `suffix(SYMBOL)` backend-value suffixes
+including 19 actionable `ToBase` cases and one FTF-002 `si?` source flaw, 13
+`infix(ToBase)` backend-value suffixes, 4 `infix=to_type_suffix` markers, and
+19 symbol immediates. Evidence from `conversion/cast.tsl` and
+`load_store/pack_expand.tsl` shows the actionable `ToBase` cases are
+primitive-local `return_type: base: ToBase` bindings. `ToBase` remains an
+arbitrary source-owned name, not a generator keyword.
+
+M203 records ADR-059: destination/return-type intrinsic suffix translation may
+only proceed after typed selected-binding lowering has produced
+`BackendValueTypeOperand(LoweredScalarTypeIdentity(...))`. Raw
+`BackendValueSymbolOperand("ToBase")` and other raw symbols stay unsupported.
+M204 is selected to prove this lowering/context path with arbitrary names such
+as `ResultBase` and add the narrow missing typed `infix` suffix translation
+through the existing metadata-backed type-suffix rule.
+
+M204 added destination/return-type intrinsic suffix translation without
+turning source names into backend keywords. Suffix payloads such as
+`intrin::suffix(ResultBase)` now translate only after selected-binding lowering
+has produced `BackendValueTypeOperand(LoweredScalarTypeIdentity(...))`.
+Selected-binding diagnostics block fallback to raw backend symbols, while
+unresolved raw symbol operands such as `BackendValueSymbolOperand("ToBase")`
+remain unsupported. Typed `infix=value<backend>(intrin::suffix(TYPE))` now
+reuses the metadata-backed type-suffix rule path and preserves the field name
+as `infix`; final intrinsic-name assembly remains out of scope. M204 did not
+implement `infix=to_type_suffix`, `index`/`Index` immediates, FTF-002 `si?`,
+rendering, dependency closure, source repair, or Rust `core::arch::*`
+qualification.
+
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
 
@@ -282,43 +313,44 @@ parsing/source-repair work that lowering must not absorb by default.
 Current required action:
 
 ```text
-Run M203 post-stream intrinsic modifier planning prompt.
+Run M205 post-destination intrinsic modifier planning prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m203-post-stream-intrinsic-modifier-planning-prompt.md
+docs/agent/runs/m205-post-destination-intrinsic-modifier-planning-prompt.md
 ```
 
 Active planning milestone:
 
 ```text
-Milestone 203: Post-Stream Intrinsic Modifier Planning.
+Milestone 205: Post-Destination Intrinsic Modifier Planning.
 ```
 
 Latest review verdict:
 
 ```text
-M202 execution-review returned Accept With Follow-Ups after focused revision.
-Architecture/boundary review accepted the typed named-policy boundary.
-Validation/documentation audit initially requested revision for stale state,
-missing roadmap result, cache hygiene, and corpus test accounting clarity; all
-were addressed. Required validation passed: `git diff --check` exit 0;
-compileall exit 0; M202 targeted tests 19 passed; M197-M200 plus M202
-supplemental modifier regression 94 passed; final `find __pycache__` check
-exit 0 with no output after cleanup.
+M204 execution-review returned Accept after a focused coverage revision.
+Architecture/boundary review accepted the typed selected-binding path and
+metadata-backed typed `infix` suffix reuse. Validation/documentation audit
+initially requested revision for missing Rust positive coverage, missing
+lower-case `index` negative coverage, and unfinalized workflow docs; all were
+addressed. Required validation passed: `git diff --check` exit 0; compileall
+exit 0; M204 targeted tests 15 passed; M197-M202 plus M204 modifier regression
+final result recorded in the roadmap; final `find __pycache__` check exit 0
+with no output after cleanup.
 ```
 
 Next expected action:
 
 ```text
-Run the active M203 planning prompt. Re-inventory the remaining 56 unsupported
-intrinsic modifier fields after M202 and decide whether M204 should implement a
-remaining family or first add a typed context/lowering prerequisite. Pay special
-attention to source-owned binding symbols such as `ToBase`: do not treat them
-as magic raw strings. Preserve ADR-056, ADR-057, ADR-058, and FTF-002. Do not
-implement code in M203.
+Run the active M205 planning prompt. Re-inventory the remaining unsupported
+intrinsic modifier families after M204 and decide whether M206 should implement
+exact `infix=to_type_suffix` lowering/translation, add selected
+generic/immediate parameter binding context for `index`/`Index`, or return to
+planner. Keep context-free corpus accounting separate from selected-context
+behavior. Do not implement code in M205.
 ```
 
 Previous review verdict:
@@ -348,12 +380,14 @@ returned Accept and selected M199 planning. M199 planning returned Accept and
 selected M200. M200 execution-review returned Accept With Follow-Ups and
 selected M201 planning. M201 planning returned Accept and selected M202. M202
 execution-review returned Accept With Follow-Ups and selected M203 planning.
+M203 planning returned Accept and selected M204. M204 execution-review returned
+Accept after focused coverage revision and selected M205 planning.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m202-stream-intrinsic-suffix-translation-execution-review-loop-prompt.md
+docs/agent/runs/m204-destination-return-type-intrinsic-suffix-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

@@ -200,7 +200,7 @@ Accepted M193 diagnostic codes include:
 - `TSL-BACKEND-VALUE-TRANSLATION-MISSING-TRANSLATION`
 - `TSL-BACKEND-VALUE-TRANSLATION-UNRESOLVED-PLACEHOLDER`
 
-### M195-M200 Intrinsic Modifier Translation Boundary
+### M195-M204 Intrinsic Modifier Translation Boundary
 
 Milestone 195 adds a typed backend translation boundary for accepted M182
 `BackendIntrinsicComposeHandoffRequest` modifier fields. It consumes typed
@@ -254,13 +254,21 @@ quoted-string suffix support. The translator maps the selected x86-family
 extension to a backend metadata key and takes the fragment text from active
 C++/Rust backend metadata. Quoted-string `infix` suffixes remain unsupported.
 
+Milestone 204 adds destination/return-type suffix translation for
+`suffix` and `infix` fields only when the suffix argument has already lowered
+through selected return-type binding context to
+`BackendValueTypeOperand(LoweredScalarTypeIdentity(...))`. Source-owned
+binding names such as `ToBase` or `ResultBase` are not backend keywords; raw
+`BackendValueSymbolOperand` values remain unsupported. Selected-binding
+validation diagnostics block fallback to raw-symbol translation.
+
 Unsupported forms remain explicit diagnostics, including
 arbitrary quoted suffix names, quoted-string `infix` suffixes,
-symbol-argument suffixes such as `ToBase`, FTF-002 `intrin::suffix(si?)`,
-semantic `infix=to_type_suffix`, symbol immediates such as `index` or
-`Index`, direct intrinsic handoff requests, unsupported selected prefix or
-named-suffix extensions such as `neon` and `sve`, and metadata lookup
-failures.
+unresolved symbol-argument suffixes such as unbound `ToBase`, FTF-002
+`intrin::suffix(si?)`, semantic `infix=to_type_suffix`, symbol immediates such
+as `index` or `Index`, direct intrinsic handoff requests, unsupported selected
+prefix or named-suffix extensions such as `neon` and `sve`, and metadata
+lookup failures.
 
 Accepted M195 diagnostic codes include:
 
