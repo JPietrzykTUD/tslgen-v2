@@ -22,6 +22,7 @@ from tslgen.domain.catalog import (
     PrimitiveCallTarget,
 )
 from tslgen.domain.catalog import ExtensionName, TypeTag
+from tslgen.domain.signatures import PrimitiveSignature, SignatureParameterTerm
 from tslgen.lowering.binary_operations import BinaryOperationDescriptor
 from tslgen.lowering.comparison_operations import ComparisonOperationDescriptor
 from tslgen.lowering.scalar_types import ScalarTypeDescriptor
@@ -100,6 +101,8 @@ class SelectedImplementationLoweringContext:
     selected_specialization_bindings: tuple[TargetSpecializationBinding, ...] = ()
     current_vector_keyword: str = CURRENT_VECTOR_KEYWORD
     current_scalar_keyword: str = CURRENT_SCALAR_KEYWORD
+    signature_model: PrimitiveSignature | None = None
+    parameter_signature_terms: tuple[SignatureParameterTerm, ...] = ()
 
 
 class CastSourceOperationSelector(Enum):
@@ -1064,6 +1067,8 @@ def build_selected_implementation_lowering_context(
         primitive_source=selected.primitive.source,
         implementation_source=selected.implementation.source,
         selected_specialization_bindings=selected.target.specialization_bindings,
+        signature_model=selected.primitive.signature_model,
+        parameter_signature_terms=selected.primitive.parameter_signature_terms,
     )
 
 

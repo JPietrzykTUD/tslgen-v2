@@ -25586,6 +25586,93 @@ Validation result:
   `__pycache__` directories were removed; final command exited 0 with no
   output.
 
+### Milestone 206.5: Complete Observed Signature Term Model
+
+Status:
+
+Accepted. Execution-review prompt:
+`docs/agent/runs/m2065-signature-term-model-execution-review-loop-prompt.md`.
+
+Goal:
+
+Introduce a typed signature model for all primitive signature forms currently
+observed in `tsldata/primitives/**/*.tsl`, so later lowering can determine
+facts such as "parameter `index` is compile-time immediate because its
+signature term is `sImm`" without raw-name matching.
+
+Scope:
+
+- Add typed signature domain values using dataclasses and enums, not
+  dictionaries or raw string tuples past the parser/catalog boundary.
+- Parse and normalize all currently observed primitive signature forms:
+  `m:=()`, `m:=(m,m)`, `m:=(m,s)`, `m:=(m,v)`, `m:=(m,v,v)`,
+  `m:=(m,v,v,v)`, `m:=(v,v)`, `m:=(v,v,v)`, `m:=m`, `m:=ptr`,
+  `m:=s`, `m:=v`, `o:=(o,v,s)`, `ptr:=(s)`, `ptr:=(s,s)`,
+  `s:=(m,v)`, `s:=(s,s)`, `s:=(s,s,s)`, `s:=(v,s)`, `s:=m`,
+  `s:=ptr`, `s:=s`, `s:=v`, `s:=v[idx]`, `s[]:=v`, `v:=()`,
+  `v:=(m,ptr)`, `v:=(m,ptr,v)`, `v:=(m,ptr,vidx,v,sImm)`,
+  `v:=(m,v)`, `v:=(m,v,s)`, `v:=(m,v,sImm)`, `v:=(m,v,v)`,
+  `v:=(m,v,v,v)`, `v:=(ptr,vidx,sImm)`, `v:=(s,s)`,
+  `v:=(v,s)`, `v:=(v,sImm)`, `v:=(v,v)`, `v:=(v,v,sImm)`,
+  `v:=m`, `v:=ptr+`, `v:=ptr`, `v:=s...`, `v:=s`, `v:=s[]`,
+  `v:=sequence`, `v:=v`, `void:=(m,ptr,v)`,
+  `void:=(m,ptr,vidx,v,sImm)`, `void:=(ptr)`, `void:=(ptr,m)`,
+  `void:=(ptr,ptr,s,s)`, `void:=(ptr,s)`, `void:=(ptr,v)`, and
+  `void:=(ptr,vidx,v,sImm)`.
+- Represent the observed terms explicitly: `v`, `m`, `s`, `sImm`, `ptr`,
+  `vidx`, `void`, `o`, `sequence`, `s[]`, `v[idx]`, `ptr+`, and `s...`.
+- Preserve normalized signature text for deterministic identity and
+  diagnostics, but expose typed result and parameter terms through the domain
+  catalog and selected lowering context.
+- Add parameter-to-signature-term mapping by position, e.g.
+  `convert_up(data, index)` with `v:=(v,sImm)` maps `data -> v` and
+  `index -> sImm`.
+- Add corpus evidence tests that scan all `prim<...>` signatures in
+  `tsldata/primitives/**/*.tsl` and prove the typed signature parser accepts
+  exactly the observed set.
+- Preserve existing clean parser/catalog/lowering behavior for previously
+  supported tiny signatures and existing M206 intrinsic modifier behavior.
+
+Out of scope:
+
+Lowering `immediate(N)=index` or `immediate(N)=Index`; backend translation of
+compile-time parameters; C++ non-type template parameter syntax; Rust const
+generic syntax; template resolution beyond existing behavior; parsing every
+complex `.tsl` implementation body; intrinsic-name assembly; rendering;
+generated output; dependency closure; source repair; and runtime dependency on
+`frozen/` or `tslgenold`.
+
+Validation:
+
+M206.5 added `tslgen.domain.signatures` with typed signature terms,
+primitive signatures, and positional parameter-term bindings. The catalog now
+parses accepted primitive signature text into a typed `PrimitiveSignature`,
+stores parameter-to-term bindings on `Primitive`, and selected lowering
+context carries those facts. The accepted corpus test scans all
+`tsldata/primitives/**/*.tsl` `prim<...>` signatures and proves all currently
+observed forms are recognized. A catalog-level `v:=(v,sImm)` test proves
+`index -> sImm` through `CatalogBuilder` without broadening the clean parser
+or body parsing.
+
+M206.5 kept `immediate(N)=index` and `immediate(N)=Index` unresolved, did not
+add backend compile-time parameter rendering, did not broaden implementation
+body parsing, did not change intrinsic-name assembly/rendering/dependency
+closure, and did not introduce runtime dependencies on `frozen/` or
+`tslgenold`.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m2065_signature_term_model.py`:
+  exit 0, `9 passed`.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m1685_return_type_bindings.py tslgen/tests/test_m206_to_type_suffix_infix_translation.py`:
+  exit 0, `292 passed`.
+- `find tslgen -type d -name __pycache__ -print`: validation-created
+  `__pycache__` directories were removed; final command exited 0 with no
+  output.
+
 ### Milestone 207: Selected Symbol Immediate Planning
 
 Status:
@@ -25604,12 +25691,15 @@ Scope:
 - Inventory all observed non-literal `immediate(N)=SYMBOL` intrinsic compose
   modifier operands across `tsldata/primitives/**/*.tsl`, with source
   locations and nearby source context.
-- Determine where each symbol is declared or owned in the `.tsl` source:
-  compile-time switch variables, signature/index terms, primitive parameters,
-  tests, or other catalog metadata.
+- Use the M206.5 typed signature model to determine each symbol's owning
+  primitive parameter and corresponding signature term.
+- Treat `sImm` as the compile-time immediate evidence. Distinguish
+  signature-owned compile-time parameters from compile-time switch variables,
+  test/catalog values, or other source constructs; do not infer immediacy from
+  names such as `index` or `Index`.
 - Decide whether the next executable slice can introduce a minimal typed
-  selected immediate/generic-parameter value context, or whether another
-  catalog/selector evidence slice is needed first.
+  signature-parameter immediate value operand for backend intrinsic modifiers,
+  or whether another catalog/selector evidence slice is needed first.
 - Preserve the M206/M204 rule: source-owned symbols are resolved only through
   typed selected context and never by raw-name matching.
 - Keep the result as planning only; do not change implementation code in M207.

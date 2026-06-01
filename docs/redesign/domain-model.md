@@ -363,6 +363,11 @@ Invariants:
 
 - Normalized string form is stable.
 - Unknown terms produce diagnostics unless introduced through a documented extension point.
+- Primitive parameter names bind positionally to signature parameter terms in
+  the catalog. Compile-time immediate evidence comes from the bound term, such
+  as `sImm`, not from user-owned names such as `index` or `Index`.
+- Selected lowering context carries the typed primitive signature and
+  parameter-to-term bindings when a selected implementation is lowered.
 - Signature-to-template resolution is data-driven.
 
 ## Template Model

@@ -2618,7 +2618,11 @@ Catalog construction must reject or diagnose malformed structures instead of sil
 
 ## Signature And Template Resolution
 
-Signatures are normalized by removing whitespace. A signature plus attributes resolves to a template name.
+Signatures are normalized by removing whitespace and parsed into typed result
+and parameter terms. The catalog binds primitive parameter names positionally
+to those terms, so compile-time immediate-ness is represented by a term such
+as `sImm`, not by raw names such as `index` or `Index`. A signature plus
+attributes resolves to a template name.
 
 | Signature Pattern | Attribute Condition | Template |
 | --- | --- | --- |

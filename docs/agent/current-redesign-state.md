@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 206 is accepted.
+Milestone 206.5 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -320,6 +320,17 @@ destination suffix behavior, leaves `index`/`Index` symbol immediates and
 FTF-002 deferred, and does not add rendering, dependency closure, source
 repair, or runtime dependency on `frozen/` or `tslgenold`.
 
+M206.5 added a typed primitive signature term model for all currently
+observed `tsldata/primitives/**/*.tsl` `prim<...>` signature forms. The
+catalog now stores a typed `PrimitiveSignature` plus positional
+`SignatureParameterTerm` bindings on each `Primitive`, and selected lowering
+context carries those facts. This makes source-owned names such as `index` or
+`Index` non-semantic by themselves: compile-time immediate evidence comes from
+the bound signature term, such as `sImm`. M206.5 did not lower
+`immediate(N)=index`, did not add backend compile-time parameter rendering,
+did not broaden implementation-body parsing, and did not add runtime
+dependencies on `frozen/` or `tslgenold`.
+
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
 
@@ -357,15 +368,17 @@ Milestone 207: Selected Symbol Immediate Planning.
 Latest review verdict:
 
 ```text
-M206 execution-review returned Accept. The executor implemented the exact
-`infix=to_type_suffix` selected-context bridge with a small typed semantic
-modifier operand, preserved M204 explicit destination suffix behavior, and
-kept raw `to_type_suffix`, `index`/`Index`, and FTF-002 unsupported. Required
-M206 validation passed: `git diff --check` exit 0 with no output;
+M206.5 execution-review returned Accept With Follow-Ups. The executor added
+typed signature term dataclasses/enums, parsed all observed corpus signature
+forms, exposed positional parameter-to-term bindings through the catalog and
+selected lowering context, and kept symbol immediate lowering/rendering out of
+scope. A reviewer requested a catalog-level `v:=(v,sImm)` proof; the executor
+added it before final validation. Required M206.5 validation passed:
+`git diff --check` exit 0 with no output;
 `python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no
-output; focused M206 pytest exit 0 with `16 passed`; modifier regression
-pytest exit 0 with `144 passed`; final `find tslgen -type d -name __pycache__
--print` exit 0 with no output after cleanup.
+output; focused M206.5 pytest exit 0 with `9 passed`; regression pytest exit
+0 with `292 passed`; final `find tslgen -type d -name __pycache__ -print`
+exit 0 with no output after cleanup.
 ```
 
 Next expected action:
@@ -374,9 +387,9 @@ Next expected action:
 Run the active M207 planning prompt. Focus on the remaining source-owned
 symbol immediate operands `immediate(N)=index` and `immediate(N)=Index`.
 Inventory all observed symbol immediate occurrences, identify their source
-ownership context, and decide the smallest correct typed selected-context
-slice before any implementation. Do not translate `index` or `Index` by raw
-spelling.
+ownership context through the M206.5 typed signature bindings, and decide the
+smallest correct typed selected-context slice before any implementation. Do
+not translate `index` or `Index` by raw spelling.
 ```
 
 Previous review verdict:
@@ -409,13 +422,16 @@ execution-review returned Accept With Follow-Ups and selected M203 planning.
 M203 planning returned Accept and selected M204. M204 execution-review returned
 Accept after focused coverage revision and selected M205 planning. M205
 planning returned Accept and selected M206. M206 execution-review returned
-Accept and selected M207 planning.
+Accept and selected M207 planning. Post-M206 planning then inserted M206.5
+before M207 because selected symbol-immediate lowering needs typed signature
+parameter facts first. M206.5 execution-review returned Accept With Follow-Ups
+and selected M207 planning.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m206-to-type-suffix-infix-execution-review-loop-prompt.md
+docs/agent/runs/m2065-signature-term-model-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

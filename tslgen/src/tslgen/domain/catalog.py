@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Literal, NewType
 
 from tslgen.core.diagnostics import SourceLocation
+from tslgen.domain.signatures import PrimitiveSignature, SignatureParameterTerm
 
 ExtensionName = NewType("ExtensionName", str)
 TypeTag = NewType("TypeTag", str)
@@ -116,6 +117,8 @@ class Primitive:
     attributes: tuple[PrimitiveAttribute, ...] = ()
     declared_attributes: tuple[PrimitiveAttribute, ...] = ()
     return_type_binding: ReturnTypeBindingDeclaration | None = None
+    signature_model: PrimitiveSignature | None = None
+    parameter_signature_terms: tuple[SignatureParameterTerm, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

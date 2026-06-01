@@ -15,6 +15,10 @@ from tslgen.domain.catalog import (
     RawStringToken,
     ReturnTypeBindingDeclaration,
 )
+from tslgen.domain.signatures import (
+    parse_primitive_signature,
+    signature_parameter_terms,
+)
 from tslgen.pipeline.extension_catalog import build_extension_catalog, build_type_groups
 from tslgen.pipeline._tsil_directives import classify_tsil_directive_line
 from tslgen.pipeline._tsil_primitive_calls import (
@@ -45,6 +49,7 @@ M121_TEMPLATE = "compare"
 M118_SIGNATURE = "v:=(v)"
 M118_PARAMETERS = ("value",)
 M118_TEMPLATE = "unary"
+UNKNOWN_TEMPLATE = "unknown"
 SUPPORTED_EXTENSION = "scalar"
 _EMIT_RETURN_DIRECTIVE = "emit_return"
 _EMIT_RETURN_PREFIX = f"{_EMIT_RETURN_DIRECTIVE}("
@@ -172,35 +177,25 @@ class CatalogBuilder:
         diagnostics: list[Diagnostic],
     ) -> Primitive:
         parsed = variant.parsed
-        signature_shape = _shape_for_signature(parsed.signature)
-        if signature_shape is None:
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    code="TSL-CATALOG-UNSUPPORTED-SIGNATURE",
-                    message=(
-                        f"primitive {parsed.name!r} uses signature "
-                        f"{parsed.signature!r}; expected one of: "
-                        f"{_supported_signatures_text()}"
-                    ),
-                    location=parsed.source,
-                )
+        signature_result = parse_primitive_signature(parsed.signature, parsed.source)
+        diagnostics.extend(signature_result.diagnostics)
+        signature_model = signature_result.signature
+        parameter_signature_bindings = ()
+        if signature_model is not None:
+            parameter_result = signature_parameter_terms(
+                signature_model,
+                parsed.parameters,
+                parsed.source,
             )
+            diagnostics.extend(parameter_result.diagnostics)
+            parameter_signature_bindings = parameter_result.bindings
 
-        shape = signature_shape or _SUPPORTED_SOURCE_SHAPES[0]
-        if parsed.parameters != shape.parameters:
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    code="TSL-CATALOG-UNSUPPORTED-PARAMETERS",
-                    message=(
-                        f"primitive {parsed.name!r} uses parameters "
-                        f"{parsed.parameters!r}; expected exactly "
-                        f"{shape.parameters!r}"
-                    ),
-                    location=parsed.source,
-                )
-            )
+        signature_shape = _shape_for_signature(parsed.signature)
+
+        if signature_model is None:
+            shape = _SUPPORTED_SOURCE_SHAPES[0]
+        else:
+            shape = signature_shape
 
         if not parsed.implementations:
             diagnostics.append(
@@ -225,19 +220,21 @@ class CatalogBuilder:
             name=parsed.name,
             signature=parsed.signature,
             parameters=parsed.parameters,
-            template=shape.template,
+            template=shape.template if shape is not None else UNKNOWN_TEMPLATE,
             implementations=implementations,
             source=parsed.source,
             attributes=variant.attributes,
             declared_attributes=variant.declared_attributes,
             return_type_binding=_domain_return_type_binding(parsed),
+            signature_model=signature_model,
+            parameter_signature_terms=parameter_signature_bindings,
         )
 
     def _build_implementation(
         self,
         primitive: ParsedPrimitive,
         parsed: ParsedImplementation,
-        shape: _SourceShape,
+        shape: _SourceShape | None,
         diagnostics: list[Diagnostic],
     ) -> Implementation:
         if parsed.extension != SUPPORTED_EXTENSION:
@@ -254,7 +251,7 @@ class CatalogBuilder:
             )
 
         body_fragment = _single_operation_fragment(parsed.body)
-        expected_body = _expected_body_text(body_fragment, shape.parameters)
+        expected_body = _expected_body_text(body_fragment, primitive.parameters)
         if body_fragment is None:
             if not _is_parsed_tsil_raw_body(parsed.body):
                 diagnostics.append(
@@ -268,7 +265,7 @@ class CatalogBuilder:
                         location=parsed.body.source,
                     )
                 )
-        elif body_fragment.arguments != shape.parameters:
+        elif shape is not None and body_fragment.arguments != primitive.parameters:
             diagnostics.append(
                 Diagnostic(
                     severity="error",
@@ -468,7 +465,7 @@ def _duplicate_implementation_key_diagnostics(
 
 def _build_body(
     parsed: ParsedImplementation,
-    shape: _SourceShape,
+    shape: _SourceShape | None,
 ) -> ImplementationBody:
     del shape
     return _build_implementation_body(parsed.body)
