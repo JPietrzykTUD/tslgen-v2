@@ -276,3 +276,37 @@ backend integration. Lowering should not grow a target-language parser,
 statement parser, recursive payload walker, source repair mechanism, or
 semantic model for source-authored `details::*` helper calls merely because
 those backend/output tasks remain.
+
+## Post-M211 Completion Gate Result
+
+M211 re-ran the lowering completion gate after backend intrinsic modifier work
+exposed two narrow source-owned non-literal immediate gaps. Lowering remains
+complete by current contract after M210.
+
+The gate confirmed that the current `tsldata/**/*.tsl` corpus has no remaining
+non-literal intrinsic immediate family that needs another lowering-owned fact:
+
+- M208 covers the 18 observed `immediate(1)=index` occurrences by lowering
+  only selected runtime primitive parameters bound to the `sImm` signature
+  term.
+- M210 covers the one observed `immediate(1)=Index` occurrence by lowering
+  only selected primitive-local integer `generic_params` values in an
+  indexed-vector signature context.
+- The observed `generic_params` families are now typed primitive-local
+  compile-time/template facts: `PreserveSign` as `bool`, `IndicesType` as
+  `simd_type`, and `N`/`Index` as `int`.
+
+The remaining observed TSIL/source surface is already covered by accepted
+typed facts, semantic values, request islands, handoff values, opaque source
+tokens, or backend/output translation/rendering obligations. Backend metadata
+under `tsldata/detail/lang/**` remains backend translation input, not
+primitive-body lowering. Source-authored helpers such as `details::arith_add`,
+`details::arith_mul`, `details::arith_rem`, `details::popcount`,
+`details::clz`, `details::clz_recursive`, `details::ctz`, and
+`details::mask_test` remain backend/support helper calls, not lowering-owned
+operator semantics.
+
+M211 therefore selects no further lowering milestone. The next workflow step
+returns to backend/output planning, where render and translation stages should
+consume accepted typed lowering facts and backend modifier translation results
+without rescanning raw source text for new lowering facts.

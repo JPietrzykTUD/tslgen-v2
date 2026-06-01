@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 210 is accepted.
+Milestone 211 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -393,44 +393,55 @@ exposed two narrow source-owned immediate gaps: M208 closed the selected
 indexed-vector generic-parameter family. This does not reopen broad TSIL
 parsing, source repair, or arbitrary expression interpretation.
 
+M211 accepted the post-selected-immediate lowering completion gate. Lowering
+is complete by current contract after selected immediates: M208 covers the 18
+observed `immediate(1)=index` occurrences through selected `sImm` runtime
+parameter facts, and M210 covers the one observed `immediate(1)=Index`
+occurrence through selected primitive-local integer `generic_params` facts in
+an indexed-vector signature context. The remaining observed TSIL/source forms
+are accepted typed facts, semantic values, request islands, handoff values,
+opaque source tokens, backend metadata, source-authored support helpers,
+backend/output work, or broad/deferred parsing. M211 selects no further
+lowering milestone and returns the workflow to backend/output planning.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M211 post-selected-immediate lowering completion gate planning prompt.
+Run M212 backend output intrinsic call assembly planning prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m211-post-selected-immediate-lowering-completion-gate-planning-prompt.md
+docs/agent/runs/m212-backend-output-intrinsic-call-assembly-planning-prompt.md
 ```
 
 Active planning milestone:
 
 ```text
-Milestone 211: Post-Selected-Immediate Lowering Completion Gate.
+Milestone 212: Backend Intrinsic Invocation Assembly Planning.
 ```
 
 Latest review verdict:
 
 ```text
-M210 execution-review returned Accept With Follow-Ups. Review accepted the
-typed primitive-local generic parameter facts, selected-context propagation,
-generic-immediate lowering rule, backend typed-consumer boundary, and M208
-stability. The only follow-up was removing validation-created `__pycache__`
-directories, which was completed before final validation reporting.
+M211 planning returned Accept. Evidence, boundary/simplicity, documentation,
+and validation auditors agreed that no further lowering-owned gap remains by
+current contract after M208/M210 selected immediates. Documentation freshness
+updates were applied, and M212 was selected as the next backend/output
+planning prompt.
 ```
 
 Next expected action:
 
 ```text
-Run the active M211 planning prompt. Reconcile the accepted lowering contract
-after M210 with the current `tsldata/**/*.tsl` corpus. Either declare lowering
-complete by current contract after selected immediates and create the next
-backend/output prompt, or select exactly one remaining lowering-owned gap as
-the next concrete milestone. Do not implement code in M211.
+Run the active M212 planning prompt. Select the smallest high-value
+backend/output milestone after lowering completion, preferably the typed
+backend intrinsic invocation assembly boundary that consumes accepted
+intrinsic islands and translated modifier results. Do not reopen lowering or
+implement code in M212.
 ```
 
 Previous review verdict:
@@ -470,12 +481,13 @@ and selected M207 planning. M207 planning returned Accept and selected M208.
 M208 execution-review returned Accept With Follow-Ups and selected M209
 planning. M209 planning returned Accept and selected M210. M210
 execution-review returned Accept With Follow-Ups and selected M211 planning.
+M211 planning returned Accept and selected M212 planning.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m210-indexed-generic-immediate-execution-review-loop-prompt.md
+docs/agent/runs/m211-post-selected-immediate-lowering-completion-gate-planning-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

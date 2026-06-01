@@ -12,7 +12,7 @@ typed redesign contracts, explicit evidence, diagnostics, and tests.
 
 ## Current Baseline
 
-Accepted through M187:
+Accepted through M211:
 
 - Generation-time lowering handles only the accepted typed helper/predicate
   forms from M38, M41-M43, M48, M51-M59, and M67-M72.
@@ -119,6 +119,16 @@ generation, backend metadata consumption, source-authored support-helper
 availability, or broad/deferred language parsing that the generator should
 avoid unless a later product milestone deliberately changes the contract.
 
+M211 refreshed that completion result after backend intrinsic modifier work
+found the two source-owned non-literal immediate families. M208 covers the 18
+selected-signature `sImm` occurrences spelled `immediate(1)=index`; M210 covers
+the one selected indexed-vector generic-parameter occurrence spelled
+`immediate(1)=Index`. The primitive-local `generic_params` declarations are
+now catalog/domain facts for compile-time/template parameters, not runtime
+primitive parameters. The accepted observed kinds are `int`, `bool`, and
+`simd_type`, with typed defaults where present. No additional lowering-owned
+gap is selected after M211.
+
 ## Post-M152 Clean Restart Lowering Paths
 
 The next clean restart milestones should choose from these generation-relevant
@@ -139,7 +149,7 @@ to implement several lanes in one milestone.
 | Backend/output source-island family | `assume_aligned<...>(...)`, `array_type<...>`, `pack<...>(...)` | Backend/output stages need structured request identity for source forms that must not remain anonymous raw text, while their semantics remain backend/rendering-owned. | M187 accepts exact island discovery for all three forms with opaque payload preservation. Alignment, array layout/type, pack semantics, argument splitting, nested payload lowering, and rendering remain out of scope. |
 | Body-token rendering policy | Raw target-language text plus accepted lowerable TSIL islands | Generated artifacts need a way to emit raw source text around lowered islands without turning lowering into a C++/Rust parser. | Backend rendering/output integration consumes typed lowering results and source-owned raw tokens. This is not helper-call substitution or source repair. |
 
-As of the post-M187 completion gate, the paths above are either accepted
+As of the post-M211 completion gate, the paths above are either accepted
 lowering boundaries or backend/output handoff points. This inventory remains
 useful for backend/output planning, but it should not be read as a request for
 another lowering milestone unless new `.tsl` source data introduces a concrete

@@ -25998,7 +25998,7 @@ Validation result:
 
 Status:
 
-Selected. Planning prompt:
+Accepted. Planning prompt:
 `docs/agent/runs/m211-post-selected-immediate-lowering-completion-gate-planning-prompt.md`.
 
 Goal:
@@ -26028,6 +26028,84 @@ Out of scope:
 Production code; tests; backend implementation; rendering; intrinsic-name
 assembly; dependency closure; source repair; broad TSIL expression/statement
 parsing; and turning backend translation/rendering work into lowering work.
+
+Validation:
+
+```bash
+git diff --check
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M211 accepted the post-selected-immediate lowering completion gate. The gate
+found no remaining lowering-owned gap after M208 and M210 closed the observed
+source-owned non-literal intrinsic immediate families. Lowering is complete by
+current contract after selected immediates.
+
+Evidence:
+
+- M208 covers the 18 observed `immediate(1)=index` occurrences by lowering
+  only selected runtime primitive parameters bound to `sImm`.
+- M210 covers the one observed `immediate(1)=Index` occurrence by lowering
+  only selected primitive-local integer `generic_params` in an indexed-vector
+  signature context.
+- The remaining observed TSIL/source forms are accepted typed facts, semantic
+  values, request islands, handoff values, opaque source tokens, backend
+  metadata, source-authored support helpers, backend/output work, or
+  broad/deferred parsing.
+- `details::*` helpers remain backend/support helper calls and are not
+  lowering-owned operator semantics.
+
+Review/audit verdict:
+
+Accepted. Evidence, boundary/simplicity, documentation, and validation
+auditors all agreed that no new lowering milestone should be selected. The
+documentation auditor requested post-M211 freshness updates, which were
+applied.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Next concrete prompt:
+`docs/agent/runs/m212-backend-output-intrinsic-call-assembly-planning-prompt.md`.
+
+### Milestone 212: Backend Intrinsic Invocation Assembly Planning
+
+Status:
+
+Selected. Planning prompt:
+`docs/agent/runs/m212-backend-output-intrinsic-call-assembly-planning-prompt.md`.
+
+Goal:
+
+Plan the next backend/output slice after lowering completion: a typed backend
+intrinsic invocation assembly boundary that consumes already accepted
+intrinsic islands, translated modifier results, backend metadata, and selected
+context facts without reopening lowering.
+
+Scope:
+
+- Inventory the backend/output-ready intrinsic facts and results accepted
+  through M210.
+- Decide the smallest next executable slice for assembling backend intrinsic
+  invocation render inputs from typed intrinsic request islands and typed
+  modifier translation results.
+- Preserve direct intrinsic requests and `intrin_compose` requests as
+  backend-owned operations with typed provenance and diagnostics.
+- Keep C++/Rust rendering, Rust `core::arch::*` qualification, C++ non-type
+  templates, Rust const generics, dependency planning, primitive body
+  rendering, and generated project verification out of M212 unless selected
+  as a future milestone.
+
+Out of scope:
+
+Production code; tests; new lowering; raw TSIL rescans for semantic facts;
+arbitrary argument parsing; primitive dependency closure; whole generated
+project rendering; template-side semantics; source repair; and runtime
+dependency on `frozen/` or `tslgenold`.
 
 Validation:
 
