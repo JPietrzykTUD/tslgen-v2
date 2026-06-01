@@ -8,6 +8,8 @@ from typing import Literal, NewType
 
 from tslgen.backends._intrinsic_metadata_modifiers import (
     METADATA_BACKED_MODIFIER_FAMILIES,
+    BackendIntrinsicNamedSuffixPolicy,
+    BackendIntrinsicNamedSuffixTranslationRule,
     BackendIntrinsicPrefixTranslationRule,
     BackendIntrinsicStyle,
     BackendIntrinsicTypeSuffixTranslationRule,

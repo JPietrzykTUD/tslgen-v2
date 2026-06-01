@@ -13,11 +13,13 @@ from tslgen.lowering.model import (
     BackendIntrinsicModifierName,
     BackendIntrinsicPrefixValueRequest,
     BackendIntrinsicSuffixValueRequest,
+    BackendValueStringLiteralOperand,
     BackendValueTypeOperand,
     LoweredScalarTypeIdentity,
 )
 
 BackendIntrinsicStyle = NewType("BackendIntrinsicStyle", str)
+BackendIntrinsicNamedSuffixPolicy = NewType("BackendIntrinsicNamedSuffixPolicy", str)
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +31,13 @@ class BackendIntrinsicTypeSuffixTranslationRule:
 
 @dataclass(frozen=True, slots=True)
 class BackendIntrinsicPrefixTranslationRule:
+    extension: ExtensionName
+    metadata_key: BackendTranslationKey
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicNamedSuffixTranslationRule:
+    policy: BackendIntrinsicNamedSuffixPolicy
     extension: ExtensionName
     metadata_key: BackendTranslationKey
 
@@ -181,6 +190,37 @@ PREFIX_TRANSLATION_RULES: tuple[
     ),
 )
 
+NAMED_SUFFIX_TRANSLATION_RULES: tuple[
+    BackendIntrinsicNamedSuffixTranslationRule,
+    ...,
+] = (
+    BackendIntrinsicNamedSuffixTranslationRule(
+        BackendIntrinsicNamedSuffixPolicy("stream"),
+        ExtensionName("sse"),
+        BackendTranslationKey("intrinsic_suffix_stream_sse"),
+    ),
+    BackendIntrinsicNamedSuffixTranslationRule(
+        BackendIntrinsicNamedSuffixPolicy("stream"),
+        ExtensionName("sse_vl"),
+        BackendTranslationKey("intrinsic_suffix_stream_sse_vl"),
+    ),
+    BackendIntrinsicNamedSuffixTranslationRule(
+        BackendIntrinsicNamedSuffixPolicy("stream"),
+        ExtensionName("avx2"),
+        BackendTranslationKey("intrinsic_suffix_stream_avx2"),
+    ),
+    BackendIntrinsicNamedSuffixTranslationRule(
+        BackendIntrinsicNamedSuffixPolicy("stream"),
+        ExtensionName("avx2_vl"),
+        BackendTranslationKey("intrinsic_suffix_stream_avx2_vl"),
+    ),
+    BackendIntrinsicNamedSuffixTranslationRule(
+        BackendIntrinsicNamedSuffixPolicy("stream"),
+        ExtensionName("avx512"),
+        BackendTranslationKey("intrinsic_suffix_stream_avx512"),
+    ),
+)
+
 
 def _is_type_or_current_suffix_request(request: object) -> bool:
     if not isinstance(request, BackendIntrinsicSuffixValueRequest):
@@ -195,6 +235,12 @@ def _is_current_suffix_request(request: object) -> bool:
     if not isinstance(request, BackendIntrinsicSuffixValueRequest):
         return False
     return request.argument is None
+
+
+def _is_named_suffix_request(request: object) -> bool:
+    if not isinstance(request, BackendIntrinsicSuffixValueRequest):
+        return False
+    return isinstance(request.argument, BackendValueStringLiteralOperand)
 
 
 def _is_prefix_request(request: object) -> bool:
@@ -223,6 +269,21 @@ def _type_suffix_precondition_diagnostic(
     if isinstance(argument.value, LoweredScalarTypeIdentity):
         return None
     return _unsupported_lowered_type_diagnostic(field, argument)
+
+
+def _named_suffix_precondition_diagnostic(
+    field: BackendIntrinsicModifierField,
+    request: object,
+) -> Diagnostic | None:
+    if not isinstance(request, BackendIntrinsicSuffixValueRequest):
+        return None
+    argument = request.argument
+    if not isinstance(argument, BackendValueStringLiteralOperand):
+        return None
+    policy = BackendIntrinsicNamedSuffixPolicy(argument.value)
+    if policy in _known_named_suffix_policies():
+        return None
+    return _unsupported_named_suffix_policy_diagnostic(field, argument)
 
 
 def _type_suffix_metadata_key(
@@ -255,6 +316,27 @@ def _type_suffix_metadata_key(
     return _unsupported_type_tag_diagnostic(field, style, type_tag, type_tag_source)
 
 
+def _named_suffix_metadata_key(
+    field: BackendIntrinsicModifierField,
+    request: object,
+    extension: Extension,
+    selected_type_tag: TypeTag,
+) -> BackendTranslationKey | Diagnostic:
+    del selected_type_tag
+    if not isinstance(request, BackendIntrinsicSuffixValueRequest):
+        return _invalid_metadata_family_request_diagnostic(field)
+    argument = request.argument
+    if not isinstance(argument, BackendValueStringLiteralOperand):
+        return _invalid_metadata_family_request_diagnostic(field)
+
+    policy = BackendIntrinsicNamedSuffixPolicy(argument.value)
+    rule = _named_suffix_rule(policy, ExtensionName(extension.name))
+    if rule is not None:
+        return rule.metadata_key
+
+    return _unsupported_named_suffix_extension_diagnostic(field, policy, extension)
+
+
 def _prefix_metadata_key(
     field: BackendIntrinsicModifierField,
     request: object,
@@ -276,6 +358,14 @@ METADATA_BACKED_MODIFIER_FAMILIES: tuple[
     MetadataBackedModifierFamily,
     ...,
 ] = (
+    MetadataBackedModifierFamily(
+        field_name="suffix",
+        label="named intrinsic suffix",
+        diagnostic_name="NAMED-SUFFIX",
+        request_matches=_is_named_suffix_request,
+        precondition_diagnostic=_named_suffix_precondition_diagnostic,
+        metadata_key=_named_suffix_metadata_key,
+    ),
     MetadataBackedModifierFamily(
         field_name="suffix",
         label="intrinsic suffix",
@@ -339,8 +429,34 @@ def _prefix_rule(
     return None
 
 
+def _named_suffix_rule(
+    policy: BackendIntrinsicNamedSuffixPolicy,
+    extension: ExtensionName,
+) -> BackendIntrinsicNamedSuffixTranslationRule | None:
+    for rule in NAMED_SUFFIX_TRANSLATION_RULES:
+        if str(rule.policy) == str(policy) and str(rule.extension) == str(extension):
+            return rule
+    return None
+
+
 def _known_type_suffix_styles() -> frozenset[BackendIntrinsicStyle]:
     return frozenset(rule.intrinsic_style for rule in TYPE_SUFFIX_TRANSLATION_RULES)
+
+
+def _known_named_suffix_policies() -> frozenset[BackendIntrinsicNamedSuffixPolicy]:
+    return frozenset(rule.policy for rule in NAMED_SUFFIX_TRANSLATION_RULES)
+
+
+def _known_named_suffix_extensions(
+    policy: BackendIntrinsicNamedSuffixPolicy,
+) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            str(rule.extension)
+            for rule in NAMED_SUFFIX_TRANSLATION_RULES
+            if str(rule.policy) == str(policy)
+        )
+    )
 
 
 def _known_prefix_extensions() -> tuple[str, ...]:
@@ -424,6 +540,42 @@ def _unsupported_lowered_type_diagnostic(
     )
 
 
+def _unsupported_named_suffix_policy_diagnostic(
+    field: BackendIntrinsicModifierField,
+    argument: BackendValueStringLiteralOperand,
+) -> Diagnostic:
+    expected = ", ".join(
+        sorted(str(item) for item in _known_named_suffix_policies())
+    ) or "<none>"
+    return Diagnostic(
+        severity="error",
+        code="TSL-BACKEND-INTRINSIC-MODIFIER-NAMED-SUFFIX-UNSUPPORTED-NAME",
+        message=(
+            f"named intrinsic suffix translation does not support suffix "
+            f"policy {argument.value!r}; expected one of: {expected}"
+        ),
+        location=argument.source or field.value_source,
+    )
+
+
+def _unsupported_named_suffix_extension_diagnostic(
+    field: BackendIntrinsicModifierField,
+    policy: BackendIntrinsicNamedSuffixPolicy,
+    extension: Extension,
+) -> Diagnostic:
+    expected = ", ".join(_known_named_suffix_extensions(policy)) or "<none>"
+    return Diagnostic(
+        severity="error",
+        code="TSL-BACKEND-INTRINSIC-MODIFIER-NAMED-SUFFIX-UNSUPPORTED-EXTENSION",
+        message=(
+            f"named intrinsic suffix translation for policy {str(policy)!r} "
+            f"does not support selected extension {extension.name!r}; "
+            f"expected one of: {expected}"
+        ),
+        location=extension.source or field.value_source,
+    )
+
+
 def _unsupported_prefix_extension_diagnostic(
     field: BackendIntrinsicModifierField,
     extension: Extension,
@@ -455,6 +607,8 @@ def _invalid_metadata_family_request_diagnostic(
 
 
 __all__ = [
+    "BackendIntrinsicNamedSuffixPolicy",
+    "BackendIntrinsicNamedSuffixTranslationRule",
     "BackendIntrinsicPrefixTranslationRule",
     "BackendIntrinsicStyle",
     "BackendIntrinsicTypeSuffixTranslationRule",

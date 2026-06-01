@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 200 is accepted.
+Milestone 202 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -232,6 +232,37 @@ symbol immediates. Architecture review accepted M200 with a non-blocking
 follow-up: current-type suffix diagnostics still reuse some "type-derived
 intrinsic suffix" wording and can be clarified later.
 
+M201 planned the next backend intrinsic modifier slice after M200. The
+post-M200 accepted handoff corpus still has 643 total modifier fields; 566
+translate and 77 remain unsupported. Excluding the one FTF-002
+`intrin::suffix(si?)` source-data flaw, the remaining implementation families
+are 21 `suffix=value<backend>(intrin::suffix("stream"))` named string suffix
+requests, 19 `suffix(ToBase)` symbol suffix requests, 13 `infix(ToBase)`
+symbol suffix requests, 4 `infix=to_type_suffix` markers, and 19 symbol
+immediates. M201 records ADR-058: quoted intrinsic suffix arguments are
+explicit named policies only when selected, not arbitrary string passthrough.
+M201 selected M202 to implement only the accepted balanced handoff form
+`suffix=value<backend>(intrin::suffix("stream"))` through typed rule records
+and active C++/Rust backend metadata. M202 must not change lowering or
+source-island discovery; two escaped `"stream"` spellings in quoted TSIL in
+`tsldata/primitives/conversion/cast.tsl` remain raw source evidence outside
+the current balanced handoff corpus.
+
+M202 added metadata-backed named suffix translation for the exact accepted
+handoff form `suffix=value<backend>(intrin::suffix("stream"))`. The
+translator treats `"stream"` as a named policy, not raw emitted text or
+general quoted-string suffix support. Typed rule records map
+`(policy="stream", selected_extension)` to active backend metadata keys for
+`sse`, `sse_vl`, `avx2`, `avx2_vl`, and `avx512`; C++ and Rust metadata hold
+the emitted fragments `si128`, `si256`, and `si512`. Rust `core::arch::*`
+qualification remains out of modifier translation per ADR-056. Corpus
+accounting after M202: 587 of 643 modifier fields translate, split as 335
+literal modifiers, 181 type-derived suffix modifiers, 9 prefix modifiers, 41
+current-type no-argument suffix modifiers, and 21 stream named suffix
+modifiers. The remaining 56 unsupported fields are 19 `suffix(ToBase)` symbol
+suffixes, 1 FTF-002 `suffix(si?)` source-data flaw, 13 `infix(ToBase)` symbol
+suffixes, 4 `infix=to_type_suffix` markers, and 19 symbol immediates.
+
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
 
@@ -251,43 +282,43 @@ parsing/source-repair work that lowering must not absorb by default.
 Current required action:
 
 ```text
-Run M201 post-current-suffix intrinsic modifier planning prompt.
+Run M203 post-stream intrinsic modifier planning prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m201-post-current-suffix-intrinsic-modifier-planning-prompt.md
+docs/agent/runs/m203-post-stream-intrinsic-modifier-planning-prompt.md
 ```
 
 Active planning milestone:
 
 ```text
-Milestone 201: Post-Current-Suffix Intrinsic Modifier Planning.
+Milestone 203: Post-Stream Intrinsic Modifier Planning.
 ```
 
 Latest review verdict:
 
 ```text
-M200 execution-review returned Accept With Follow-Ups. Architecture/boundary
-review accepted the typed current-suffix boundary; evidence re-review accepted
-the tightened corpus accounting; documentation audit issues were addressed in
-behavioral/domain docs, roadmap, and current state. Required validation passed:
-compileall exit 0; M200 targeted tests 16 passed; M197+M198 supplemental
-regression 59 passed; `git diff --check` exit 0; final `find __pycache__`
-check exit 0 after cleanup.
+M202 execution-review returned Accept With Follow-Ups after focused revision.
+Architecture/boundary review accepted the typed named-policy boundary.
+Validation/documentation audit initially requested revision for stale state,
+missing roadmap result, cache hygiene, and corpus test accounting clarity; all
+were addressed. Required validation passed: `git diff --check` exit 0;
+compileall exit 0; M202 targeted tests 19 passed; M197-M200 plus M202
+supplemental modifier regression 94 passed; final `find __pycache__` check
+exit 0 with no output after cleanup.
 ```
 
 Next expected action:
 
 ```text
-Run the active M201 planning prompt. Re-inventory the remaining 77 unsupported
-intrinsic modifier fields after M200, identify the typed context each family
-needs, and select one next executable backend intrinsic modifier milestone or
-record a stop condition. Preserve ADR-056 Rust module-qualification boundary,
-ADR-057 current-type no-argument suffix binding, and FTF-002
-`intrin::suffix(si?)` source-data-debt boundary. Do not implement code in
-M201.
+Run the active M203 planning prompt. Re-inventory the remaining 56 unsupported
+intrinsic modifier fields after M202 and decide whether M204 should implement a
+remaining family or first add a typed context/lowering prerequisite. Pay special
+attention to source-owned binding symbols such as `ToBase`: do not treat them
+as magic raw strings. Preserve ADR-056, ADR-057, ADR-058, and FTF-002. Do not
+implement code in M203.
 ```
 
 Previous review verdict:
@@ -315,13 +346,14 @@ planning. M196 planning returned Accept and selected M197. M197
 execution-review returned Accept and selected M198. M198 execution-review
 returned Accept and selected M199 planning. M199 planning returned Accept and
 selected M200. M200 execution-review returned Accept With Follow-Ups and
-selected M201 planning.
+selected M201 planning. M201 planning returned Accept and selected M202. M202
+execution-review returned Accept With Follow-Ups and selected M203 planning.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m200-current-type-intrinsic-suffix-translation-execution-review-loop-prompt.md
+docs/agent/runs/m202-stream-intrinsic-suffix-translation-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

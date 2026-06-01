@@ -279,7 +279,7 @@ def test_m198_diagnoses_prefix_metadata_placeholders() -> None:
         ),
         (
             'intrin_compose<setzero, suffix=value<backend>(intrin::suffix("stream"))>()',
-            "TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-BACKEND-VALUE",
+            None,
         ),
         (
             "intrin_compose<svld1sb, suffix=value<backend>(intrin::suffix(ToBase))>(pg, ptr)",
@@ -358,6 +358,7 @@ def test_m198_corpus_prefixes_translate_and_arm_direct_names_stay_outside_prefix
     type_suffix_translated = 0
     prefix_translated = 0
     current_suffix_translated = 0
+    stream_suffix_translated = 0
     arm_direct_names = 0
     unsupported_families: dict[str, int] = {}
 
@@ -398,6 +399,8 @@ def test_m198_corpus_prefixes_translate_and_arm_direct_names_stay_outside_prefix
                             type_suffix_translated += 1
                         elif _is_current_suffix_field(field):
                             current_suffix_translated += 1
+                        elif _is_stream_suffix_field(field):
+                            stream_suffix_translated += 1
                         elif _is_prefix_field(field):
                             prefix_translated += 1
                             assert translated_fields[
@@ -417,11 +420,11 @@ def test_m198_corpus_prefixes_translate_and_arm_direct_names_stay_outside_prefix
     assert type_suffix_translated == 181
     assert prefix_translated == 9
     assert current_suffix_translated == 41
+    assert stream_suffix_translated == 21
     assert arm_direct_names > 0
     assert unsupported_families == {
         "infix:backend-suffix:symbol": 13,
         "infix:semantic": 4,
-        "suffix:backend-suffix:string": 21,
         "suffix:backend-suffix:symbol": 20,
         "immediate:symbol": 19,
     }
@@ -675,6 +678,20 @@ def _is_current_suffix_field(field: BackendIntrinsicModifierField) -> bool:
     request = field.value.request
     return isinstance(request, BackendIntrinsicSuffixValueRequest) and (
         request.argument is None
+    )
+
+
+def _is_stream_suffix_field(field: BackendIntrinsicModifierField) -> bool:
+    if field.name != "suffix":
+        return False
+    if not isinstance(field.value, BackendIntrinsicModifierBackendValueOperand):
+        return False
+    request = field.value.request
+    if not isinstance(request, BackendIntrinsicSuffixValueRequest):
+        return False
+    argument = request.argument
+    return isinstance(argument, BackendValueStringLiteralOperand) and (
+        argument.value == "stream"
     )
 
 

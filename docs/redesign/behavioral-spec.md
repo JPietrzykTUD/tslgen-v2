@@ -247,12 +247,20 @@ active C++/Rust backend metadata. It preserves the source field name: a
 `suffix` field stays a suffix modifier and an `infix` field stays an infix
 modifier; final intrinsic-name assembly remains out of scope.
 
+Milestone 202 adds metadata-backed named suffix translation for the exact
+accepted handoff form `suffix=value<backend>(intrin::suffix("stream"))`.
+`"stream"` is a named suffix policy, not raw emitted text and not arbitrary
+quoted-string suffix support. The translator maps the selected x86-family
+extension to a backend metadata key and takes the fragment text from active
+C++/Rust backend metadata. Quoted-string `infix` suffixes remain unsupported.
+
 Unsupported forms remain explicit diagnostics, including
-`intrin::suffix("stream")`, symbol-argument suffixes such as `ToBase`,
-FTF-002 `intrin::suffix(si?)`, semantic `infix=to_type_suffix`, symbol
-immediates such as `index` or `Index`, direct intrinsic handoff requests,
-unsupported selected prefix extensions such as `neon` and `sve`, and metadata
-lookup failures.
+arbitrary quoted suffix names, quoted-string `infix` suffixes,
+symbol-argument suffixes such as `ToBase`, FTF-002 `intrin::suffix(si?)`,
+semantic `infix=to_type_suffix`, symbol immediates such as `index` or
+`Index`, direct intrinsic handoff requests, unsupported selected prefix or
+named-suffix extensions such as `neon` and `sve`, and metadata lookup
+failures.
 
 Accepted M195 diagnostic codes include:
 
@@ -280,6 +288,13 @@ Accepted M195 diagnostic codes include:
 - `TSL-BACKEND-INTRINSIC-MODIFIER-PREFIX-UNSUPPORTED-EXTENSION`
 - `TSL-BACKEND-INTRINSIC-MODIFIER-PREFIX-MISSING-ENTRY`
 - `TSL-BACKEND-INTRINSIC-MODIFIER-PREFIX-UNRESOLVED-PLACEHOLDER`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-NAMED-SUFFIX-MISSING-METADATA`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-NAMED-SUFFIX-UNSUPPORTED-BACKEND`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-NAMED-SUFFIX-UNKNOWN-EXTENSION`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-NAMED-SUFFIX-UNSUPPORTED-NAME`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-NAMED-SUFFIX-UNSUPPORTED-EXTENSION`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-NAMED-SUFFIX-MISSING-ENTRY`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-NAMED-SUFFIX-UNRESOLVED-PLACEHOLDER`
 
 ## Input Behavior
 

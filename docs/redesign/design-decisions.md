@@ -2798,3 +2798,55 @@ Consequences:
   `intrin::suffix(si?)`, `infix=to_type_suffix`, or symbol immediates.
 - Intrinsic-name assembly and Rust `core::arch::*` qualification remain later
   backend rendering or call-translation concerns.
+
+## ADR-058: Quoted Intrinsic Suffix Names Are Explicit Named Policies
+
+Status: Accepted.
+
+Context:
+
+After M200, the only quoted intrinsic suffix argument in the accepted balanced
+`intrin_compose` handoff corpus is `"stream"`, observed as
+`suffix=value<backend>(intrin::suffix("stream"))`. Legacy evidence maps this
+name to x86 register-width suffix fragments such as `si128`, `si256`, and
+`si512`, but quoted strings in source must not become arbitrary literal
+passthrough.
+
+The raw `.tsl` corpus also contains escaped `"stream"` spellings inside quoted
+TSIL strings in `conversion/cast.tsl`. The accepted M195-M200
+discovery/lowering path does not currently classify those escaped spellings as
+balanced modifier fields. They are evidence for a future source-island/lowering
+check, not a reason for M202 to change discovery while implementing a backend
+modifier rule.
+
+Decision:
+
+`intrin::suffix("stream")` is a named backend suffix policy only when an
+execution milestone explicitly selects it. It is not a request to emit the raw
+string `stream`, and it does not generalize to arbitrary quoted suffix names.
+
+The named policy must consume typed backend modifier handoff values plus typed
+backend/extension context. Python may contain typed rule records that map the
+accepted policy name and selected extension to backend metadata keys, but the
+suffix fragment text must live in active C++ and Rust backend metadata.
+
+M202 may implement only the exact accepted handoff form:
+
+```text
+suffix=value<backend>(intrin::suffix("stream"))
+```
+
+Destination-bound suffixes such as `intrin::suffix(ToBase)`, semantic
+`infix=to_type_suffix`, symbol immediates, intrinsic-name assembly, escaped
+quoted-TSIL discovery changes, and Rust `core::arch::*` qualification remain
+separate future work.
+
+Consequences:
+
+- Unsupported quoted suffix names must continue to produce diagnostics.
+- The `infix` field must not gain quoted-string suffix behavior unless a
+  future milestone explicitly selects and justifies it from typed handoff
+  evidence.
+- Stream suffix support should be metadata-backed for C++ and Rust, preserving
+  ADR-056: Rust architecture module paths are still renderer/call-translation
+  work, not modifier translation work.

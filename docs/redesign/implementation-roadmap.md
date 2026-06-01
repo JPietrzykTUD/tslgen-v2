@@ -25073,3 +25073,202 @@ Validation:
 git diff --check
 find tslgen -type d -name __pycache__ -print
 ```
+
+Result:
+
+M201 accepted. The post-M200 typed handoff corpus still has 643 modifier
+fields. Of those, 566 translate after M200 and 77 remain unsupported. Excluding
+the one FTF-002 `intrin::suffix(si?)` source-data flaw, the remaining
+implementation families are:
+
+- 21 `suffix=value<backend>(intrin::suffix("stream"))` named string suffix
+  requests;
+- 19 `suffix=value<backend>(intrin::suffix(ToBase))` destination/return-type
+  symbol suffix requests;
+- 13 `infix=value<backend>(intrin::suffix(ToBase))` destination/return-type
+  symbol suffix requests used as infix fragments;
+- 4 `infix=to_type_suffix` semantic infix markers;
+- 19 symbol immediates split as 18 `index` and 1 `Index`.
+
+The planner selected the `"stream"` suffix family as M202 because it is the
+largest remaining family that does not require destination/return-type binding
+or immediate argument provenance. ADR-058 records the boundary: quoted suffix
+arguments are explicit named policies, not arbitrary literal passthrough. M202
+will implement only the accepted balanced handoff form
+`suffix=value<backend>(intrin::suffix("stream"))` through typed rule records
+and active C++/Rust backend metadata. It will not change lowering/discovery,
+support arbitrary quoted suffix names, support quoted-string `infix` suffixes,
+assemble intrinsic names, render Rust `core::arch::*` paths, or resolve
+`ToBase`.
+
+Raw source evidence note:
+
+The raw `.tsl` corpus also contains two escaped `"stream"` spellings inside
+quoted TSIL strings in `tsldata/primitives/conversion/cast.tsl`. The accepted
+M195-M200 balanced `intrin_compose` handoff path does not currently classify
+those escaped spellings as modifier fields. M202 must not broaden lowering or
+source-island discovery to include them. If an executor changes discovery and
+the corpus counts shift, it should stop and return to planner.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+### Milestone 202: Stream Intrinsic Suffix Translation
+
+Status:
+
+Accepted. Execution-review prompt:
+`docs/agent/runs/m202-stream-intrinsic-suffix-translation-execution-review-loop-prompt.md`.
+
+Goal:
+
+Translate the exact named suffix policy
+`suffix=value<backend>(intrin::suffix("stream"))` from accepted
+`BackendIntrinsicComposeHandoffRequest` modifier fields into typed backend
+modifier fragments.
+
+Scope:
+
+- Consume only `suffix` fields whose backend-value request is
+  `BackendIntrinsicSuffixValueRequest` with
+  `BackendValueStringLiteralOperand("stream")`.
+- Treat `"stream"` as a named backend suffix policy, not emitted raw text and
+  not arbitrary quoted suffix support.
+- Use selected backend and extension context plus active backend metadata.
+  Python may map typed `(policy="stream", selected_extension)` rules to
+  metadata keys, but fragment text must come from `translate_cpp.tsl` and
+  `translate_rust.tsl`.
+- Cover the active x86-family extension names observed by existing extension
+  metadata: `sse`, `sse_vl`, `avx2`, `avx2_vl`, and `avx512`.
+- Preserve modifier order, field provenance, metadata provenance, M195 literal
+  translation, M197 type-derived suffix translation, M198 prefix translation,
+  and M200 current-type suffix translation.
+- Add focused positive, unsupported-name, unsupported-field, missing-metadata,
+  and corpus-characterization tests.
+- The corpus characterization should show 587 translated modifier fields after
+  M202 and 56 unsupported fields remaining.
+
+Out of scope:
+
+Arbitrary quoted suffix names; quoted-string `infix` suffix behavior;
+destination/return-type suffix binding such as `ToBase`; FTF-002 `si?`;
+`infix=to_type_suffix`; symbol immediates; intrinsic-name assembly; rendering;
+Rust `core::arch::*` qualification; dependency closure; source repair;
+lowering/discovery changes; generated output; and runtime dependency on
+`frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m202_stream_intrinsic_suffix_translation.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M202 accepted. It adds metadata-backed named suffix translation for the exact
+accepted handoff form `suffix=value<backend>(intrin::suffix("stream"))`.
+The translator consumes typed `BackendIntrinsicSuffixValueRequest` values with
+`BackendValueStringLiteralOperand("stream")`; it does not parse raw source,
+inspect intrinsic base names, broaden source-island discovery, or treat quoted
+strings as arbitrary literal suffixes.
+
+Python rule records now map `(policy="stream", selected_extension)` to active
+backend metadata keys for `sse`, `sse_vl`, `avx2`, `avx2_vl`, and `avx512`.
+C++ and Rust backend metadata hold the emitted fragments:
+
+```text
+sse      -> si128
+sse_vl   -> si128
+avx2     -> si256
+avx2_vl  -> si256
+avx512   -> si512
+```
+
+M202 preserves modifier order, field/request provenance, metadata
+key/source provenance, M195 literal translation, M197 type-derived suffix
+translation, M198 prefix translation, and M200 current-type suffix
+translation. Rust `core::arch::*` qualification remains a later
+renderer/call-translation concern.
+
+Corpus characterization now shows 587 translated modifier fields out of 643:
+335 literal modifiers, 181 type-derived suffix modifiers, 9 prefix modifiers,
+41 current-type no-argument suffix modifiers, and 21 stream named suffix
+modifiers. The remaining 56 unsupported fields are 19 `suffix(ToBase)` symbol
+suffixes, 1 FTF-002 `suffix(si?)` source-data flaw, 13 `infix(ToBase)` symbol
+suffixes, 4 `infix=to_type_suffix` markers, and 19 symbol immediates.
+
+Review verdict:
+
+Architecture/boundary review returned `Accept With Follow-Ups`. The follow-up
+was to keep older corpus regression tests from folding the 21 stream suffix
+fields into the literal modifier bucket; those tests now track stream suffixes
+as a separate translated family. Validation/documentation audit initially
+returned `Needs Revision` for stale state, missing roadmap result, cache
+hygiene, and corpus-accounting clarity; all issues were addressed.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m202_stream_intrinsic_suffix_translation.py`:
+  exit 0, `19 passed`.
+- Supplemental regression:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m197_type_derived_intrinsic_suffix_translation.py tslgen/tests/test_m198_intrinsic_prefix_modifier_translation.py tslgen/tests/test_m200_current_type_intrinsic_suffix_translation.py tslgen/tests/test_m202_stream_intrinsic_suffix_translation.py`:
+  exit 0, `94 passed`.
+- `find tslgen -type d -name __pycache__ -print`: validation-created
+  `__pycache__` directories were removed; final command exited 0 with no
+  output.
+
+### Milestone 203: Post-Stream Intrinsic Modifier Planning
+
+Status:
+
+Selected. Planning prompt:
+`docs/agent/runs/m203-post-stream-intrinsic-modifier-planning-prompt.md`.
+
+Goal:
+
+Plan the next executable intrinsic modifier or context/lowering slice after
+M202. The remaining unsupported modifier families need a fresh boundary check
+because the largest remaining family uses source-owned symbols such as
+`ToBase`.
+
+Scope:
+
+- Re-inventory the remaining unsupported modifier families after M202 using
+  the accepted M182/M195-M202 discovery, lowering, and modifier translation
+  paths.
+- Confirm the expected remaining corpus: 643 total modifier fields, 587
+  translated, and 56 unsupported fields.
+- Classify the typed context needed for each remaining family:
+  destination/return-type binding symbols such as `ToBase`,
+  the relationship between `suffix(ToBase)`, `infix(ToBase)`, and
+  `infix=to_type_suffix`, symbol immediate argument provenance for `index` and
+  `Index`, and FTF-002 `si?` as source-data debt only.
+- Decide whether M204 should implement one remaining family, add a narrow typed
+  context prerequisite, or return to planner with a stop condition.
+- Prefer source-owned typed context over raw text inference. Names like
+  `ToBase` are arbitrary user-authored binding names and must not be treated as
+  magic keywords unless resolved from selected primitive data.
+- Preserve ADR-056, ADR-057, ADR-058, and FTF-002.
+
+Out of scope:
+
+Implementation code; generated output; rendering; Rust module qualification;
+intrinsic-name assembly implementation; dependency closure; source repair;
+broad TSIL or target-language parsing; treating `ToBase` or `Index` as magic
+raw strings; and lowering changes unless the planner proves an accepted typed
+handoff cannot represent an observed corpus form or cannot carry required
+selected context.
+
+Validation:
+
+```bash
+git diff --check
+find tslgen -type d -name __pycache__ -print
+```
