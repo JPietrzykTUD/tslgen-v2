@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
+from tslgen.domain.catalog import PrimitiveGenericParameterKind
 from tslgen.domain.signatures import SignatureTermKind
 from tslgen.lowering._source_islands import SourceMappedText, source_text_from_text
 from tslgen.lowering.backend_value_queries import (
@@ -39,6 +40,7 @@ from tslgen.lowering.model import (
     BackendValueQueryDiscovery,
     BackendValueQueryHandoffRequestSegment,
     BackendValueQueryRequestSegment,
+    LoweredSelectedGenericImmediateParameter,
     LoweredSelectedSignatureImmediateParameter,
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
@@ -675,6 +677,13 @@ def _lower_modifier_operand(
             )
             if selected_immediate is not None:
                 return selected_immediate
+            selected_generic_immediate = _lower_selected_generic_immediate_parameter(
+                context,
+                key.immediate_index,
+                value,
+            )
+            if selected_generic_immediate is not None:
+                return selected_generic_immediate
         return BackendIntrinsicModifierSymbolOperand(
             text=value.text,
             source=value.source,
@@ -709,6 +718,45 @@ def _lower_selected_signature_immediate_parameter(
         parameter=parameter,
         source_text=value.source_text,
         source=value.source,
+    )
+
+
+def _lower_selected_generic_immediate_parameter(
+    context: SelectedImplementationLoweringContext,
+    argument_index: int,
+    value: _ModifierValue,
+) -> LoweredSelectedGenericImmediateParameter | None:
+    matches = tuple(
+        parameter
+        for parameter in context.generic_parameters
+        if parameter.name == value.text
+    )
+    if len(matches) != 1:
+        return None
+
+    parameter = matches[0]
+    if parameter.kind is not PrimitiveGenericParameterKind.INT:
+        return None
+    if not _signature_has_indexed_vector_term(context):
+        return None
+
+    return LoweredSelectedGenericImmediateParameter(
+        argument_index=argument_index,
+        parameter=parameter,
+        source_text=value.source_text,
+        source=value.source,
+    )
+
+
+def _signature_has_indexed_vector_term(
+    context: SelectedImplementationLoweringContext,
+) -> bool:
+    signature = context.signature_model
+    if signature is None:
+        return False
+    return any(
+        term.kind is SignatureTermKind.INDEXED_VECTOR_ELEMENT
+        for term in (*signature.parameters, signature.result)
     )
 
 

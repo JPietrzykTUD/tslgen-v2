@@ -2624,6 +2624,16 @@ to those terms, so compile-time immediate-ness is represented by a term such
 as `sImm`, not by raw names such as `index` or `Index`. A signature plus
 attributes resolves to a template name.
 
+Primitive-local `generic_params` declarations are compile-time/template
+parameters of the primitive interface, not runtime/value parameters. The
+catalog promotes the observed kinds `int`, `bool`, and `simd_type` into typed
+facts with typed defaults (`int`, `bool`, or absent). For backend intrinsic
+modifier lowering, `immediate(N)=SYMBOL` may resolve through these facts only
+when `SYMBOL` matches exactly one selected primitive-local integer generic
+parameter and the selected signature contains an indexed-vector term such as
+`v[idx]`. Backend translation consumes the lowered generic-immediate fact and
+does not resolve raw symbol names.
+
 | Signature Pattern | Attribute Condition | Template |
 | --- | --- | --- |
 | `v:=(v,v)` | none | `binary` |

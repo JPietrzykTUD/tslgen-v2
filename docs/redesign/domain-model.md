@@ -305,6 +305,18 @@ class PrimitiveReturnTypeBinding:
     name: str
     span: SourceSpan
 
+class GenericParameterKind(Enum):
+    INT = "int"
+    BOOL = "bool"
+    SIMD_TYPE = "simd_type"
+
+@dataclass(frozen=True, slots=True)
+class GenericParameter:
+    name: str
+    kind: GenericParameterKind
+    default: int | bool | None
+    span: SourceSpan
+
 @dataclass(frozen=True, slots=True)
 class PrimitiveDeclaration:
     name: PrimitiveName
@@ -327,11 +339,17 @@ Relationships:
 - A declaration can expand into multiple concrete variants when it has boolean wildcard attributes.
 - A declaration may optionally introduce one primitive-local return-type
   binding such as `base: ResultBase` or `extension: TargetExtension`.
+- A declaration may introduce primitive-local generic parameters. These are
+  compile-time/template parameters of the primitive interface, not runtime
+  value parameters.
 
 Invariants:
 
 - Parameter count must match the signature shape after repeated/immediate rules are applied.
 - Attributes must be valid for the signature and template.
+- Generic parameter names are arbitrary source-defined identifiers. The
+  observed kinds are `int`, `bool`, and `simd_type`; defaults are typed as
+  integers, booleans, or absent.
 - Return-type binding names are arbitrary source-defined identifiers, not
   generator keywords. `ToBase` and `ToExtension` are corpus examples only.
 - Absence of `return_type` is normal and means the declaration has no

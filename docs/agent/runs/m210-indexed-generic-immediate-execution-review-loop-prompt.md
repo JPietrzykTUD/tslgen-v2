@@ -62,10 +62,17 @@ in the NEON `extract_value` implementation. `Index` must resolve only through
 the selected primitive's typed `generic_params` facts, not through raw-name
 magic.
 
+Treat `generic_params` as primitive compile-time/template parameters: they are
+part of the primitive interface, analogous to C++ template parameters or Rust
+generic/const parameters, but they are distinct from runtime/value parameters
+such as `extract_value(a)`. M210 models the typed semantic fact only; it does
+not render C++ or Rust template syntax.
+
 ## Executor Scope
 
-- Add typed primitive-local generic parameter domain values. Use dataclasses
-  and an enum or equivalent typed value for the observed kinds:
+- Add typed primitive-local compile-time parameter domain values for
+  `generic_params`. Use dataclasses and an enum or equivalent typed value for
+  the observed kinds:
   - `int`
   - `bool`
   - `simd_type`
@@ -92,7 +99,8 @@ magic.
     ```
 
 - Promote generic parameter facts onto `Primitive` and
-  `SelectedImplementationLoweringContext`.
+  `SelectedImplementationLoweringContext`, separate from runtime primitive
+  parameters and `parameter_signature_terms`.
 - Add a lowering-owned value for a selected generic immediate parameter. It
   must carry:
   - the immediate argument index from `immediate(N)`;
@@ -116,9 +124,9 @@ magic.
 ## Required Positive Coverage
 
 - A selected `extract_value`-like context with signature `s:=v[idx]`,
-  parameter `(a)`, and `generic_params.Index {kind int, default 0}` lowers
-  `immediate(1)=Index` to the typed generic immediate value and backend
-  translation consumes it.
+  runtime parameter `(a)`, and compile-time parameter
+  `generic_params.Index {kind int, default 0}` lowers `immediate(1)=Index` to
+  the typed generic immediate value and backend translation consumes it.
 - The same path works with an arbitrary integer generic parameter name, proving
   `Index` is not hardcoded.
 - Corpus characterization proves the observed `array.tsl` NEON
@@ -178,8 +186,9 @@ Use `docs/agent/review-checklist.md`.
 
 Reviewers must verify:
 
-- generic parameter facts are typed domain/catalog facts, not dictionaries or
-  raw string conventions past the parser boundary;
+- generic parameter facts are typed primitive compile-time/template parameter
+  facts, not runtime parameters, dictionaries, or raw string conventions past
+  the parser boundary;
 - lowering resolves generic immediates through selected primitive-local facts
   and the indexed-vector signature term, not through names such as `Index`;
 - backend translation consumes only the already-lowered generic immediate

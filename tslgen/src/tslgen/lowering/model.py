@@ -17,6 +17,7 @@ from tslgen.domain.catalog import (
     Implementation,
     Primitive,
     PrimitiveAttribute,
+    PrimitiveGenericParameter,
     PrimitiveCall,
     PrimitiveCallArgument,
     PrimitiveCallTarget,
@@ -103,6 +104,7 @@ class SelectedImplementationLoweringContext:
     current_scalar_keyword: str = CURRENT_SCALAR_KEYWORD
     signature_model: PrimitiveSignature | None = None
     parameter_signature_terms: tuple[SignatureParameterTerm, ...] = ()
+    generic_parameters: tuple[PrimitiveGenericParameter, ...] = ()
 
 
 class CastSourceOperationSelector(Enum):
@@ -730,6 +732,14 @@ class LoweredSelectedSignatureImmediateParameter:
 
 
 @dataclass(frozen=True, slots=True)
+class LoweredSelectedGenericImmediateParameter:
+    argument_index: int
+    parameter: PrimitiveGenericParameter
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
 class BackendIntrinsicModifierSymbolOperand:
     text: str
     source: SourceLocation
@@ -753,6 +763,7 @@ BackendIntrinsicModifierOperand = (
     BackendIntrinsicModifierBackendValueOperand
     | BackendIntrinsicModifierDestinationTypeSuffixOperand
     | LoweredSelectedSignatureImmediateParameter
+    | LoweredSelectedGenericImmediateParameter
     | BackendIntrinsicModifierIntegerOperand
     | BackendIntrinsicModifierStringOperand
     | BackendIntrinsicModifierSymbolOperand
@@ -1078,6 +1089,7 @@ def build_selected_implementation_lowering_context(
         selected_specialization_bindings=selected.target.specialization_bindings,
         signature_model=selected.primitive.signature_model,
         parameter_signature_terms=selected.primitive.parameter_signature_terms,
+        generic_parameters=selected.primitive.generic_parameters,
     )
 
 

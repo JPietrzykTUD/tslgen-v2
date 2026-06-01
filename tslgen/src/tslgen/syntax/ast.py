@@ -84,6 +84,14 @@ class ParsedReturnTypeBinding:
 
 
 @dataclass(frozen=True, slots=True)
+class ParsedGenericParameter:
+    name: str
+    kind: str
+    default: str | None
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
 class ParsedPrimitive:
     name: str
     signature: str
@@ -92,6 +100,7 @@ class ParsedPrimitive:
     source: SourceLocation
     attributes: tuple[ParsedPrimitiveAttribute, ...] = ()
     return_type_binding: ParsedReturnTypeBinding | None = None
+    generic_parameters: tuple[ParsedGenericParameter, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

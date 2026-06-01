@@ -23,7 +23,12 @@ from tslgen.domain.backend_metadata import (
     BackendTranslationKey,
     BackendTranslationTemplate,
 )
-from tslgen.domain.catalog import ExtensionCatalog, ExtensionName, TypeTag
+from tslgen.domain.catalog import (
+    ExtensionCatalog,
+    ExtensionName,
+    PrimitiveGenericParameter,
+    TypeTag,
+)
 from tslgen.domain.signatures import SignatureParameterTerm
 from tslgen.lowering.model import (
     BackendDirectIntrinsicHandoffRequest,
@@ -36,6 +41,7 @@ from tslgen.lowering.model import (
     BackendIntrinsicModifierName,
     BackendIntrinsicModifierStringOperand,
     BackendIntrinsicModifierSymbolOperand,
+    LoweredSelectedGenericImmediateParameter,
     LoweredSelectedSignatureImmediateParameter,
 )
 
@@ -51,6 +57,7 @@ BackendIntrinsicModifierValueKind = Literal[
     "literal_fragment",
     "infix_separator",
     "immediate_literal",
+    "immediate_generic_parameter_reference",
     "immediate_parameter_reference",
 ]
 _FRAGMENT_MODIFIER_NAMES = frozenset({"suffix", "post", "infix"})
@@ -82,10 +89,19 @@ class BackendIntrinsicImmediateParameterReference:
     source: SourceLocation
 
 
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicImmediateGenericParameterReference:
+    argument_index: int
+    parameter: PrimitiveGenericParameter
+    source_text: str
+    source: SourceLocation
+
+
 BackendTranslatedIntrinsicModifierValue = (
     BackendIntrinsicLiteralFragment
     | BackendIntrinsicInfixSeparator
     | BackendIntrinsicImmediateLiteral
+    | BackendIntrinsicImmediateGenericParameterReference
     | BackendIntrinsicImmediateParameterReference
 )
 
@@ -464,6 +480,23 @@ def _translate_immediate_modifier(
     field: BackendIntrinsicModifierField,
     backend: BackendId,
 ) -> BackendIntrinsicModifierTranslationResult:
+    if isinstance(field.value, LoweredSelectedGenericImmediateParameter):
+        return BackendIntrinsicModifierTranslationResult(
+            modifier=BackendTranslatedIntrinsicModifier(
+                backend=backend,
+                field=field,
+                name=field.name,
+                value=BackendIntrinsicImmediateGenericParameterReference(
+                    argument_index=field.value.argument_index,
+                    parameter=field.value.parameter,
+                    source_text=field.value.source_text,
+                    source=field.value.source,
+                ),
+                source=field.source,
+            ),
+            diagnostics=(),
+        )
+
     if isinstance(field.value, LoweredSelectedSignatureImmediateParameter):
         return BackendIntrinsicModifierTranslationResult(
             modifier=BackendTranslatedIntrinsicModifier(

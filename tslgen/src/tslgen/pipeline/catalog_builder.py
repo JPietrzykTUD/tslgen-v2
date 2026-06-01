@@ -1,5 +1,6 @@
 """Parser-to-domain catalog promotion for the tiny clean source form."""
 
+import re
 from dataclasses import dataclass
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
@@ -12,6 +13,9 @@ from tslgen.domain.catalog import (
     LowerableOperationFragment,
     Primitive,
     PrimitiveAttribute,
+    PrimitiveGenericParameter,
+    PrimitiveGenericParameterDefault,
+    PrimitiveGenericParameterKind,
     RawStringToken,
     ReturnTypeBindingDeclaration,
 )
@@ -28,6 +32,7 @@ from tslgen.syntax.ast import (
     PARSED_TSIL_BODY_ENVELOPE,
     ParsedBodySegment,
     ParsedDocument,
+    ParsedGenericParameter,
     ParsedImplementation,
     ParsedImplementationBody,
     ParsedLowerableDirective,
@@ -55,6 +60,11 @@ _EMIT_RETURN_DIRECTIVE = "emit_return"
 _EMIT_RETURN_PREFIX = f"{_EMIT_RETURN_DIRECTIVE}("
 _BOOLEAN_WILDCARD_ATTRIBUTE_VALUES = ("true", "false")
 _SUPPORTED_BOOLEAN_WILDCARD_ATTRIBUTES = frozenset(("aligned", "packed"))
+_GENERIC_PARAMETER_KINDS = {
+    kind.value: kind for kind in PrimitiveGenericParameterKind
+}
+_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_INTEGER_PATTERN = re.compile(r"^[0-9]+$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,6 +226,7 @@ class CatalogBuilder:
             self._build_implementation(parsed, implementation, shape, diagnostics)
             for implementation in parsed.implementations
         )
+        generic_parameters = _domain_generic_parameters(parsed, diagnostics)
         return Primitive(
             name=parsed.name,
             signature=parsed.signature,
@@ -228,6 +239,7 @@ class CatalogBuilder:
             return_type_binding=_domain_return_type_binding(parsed),
             signature_model=signature_model,
             parameter_signature_terms=parameter_signature_bindings,
+            generic_parameters=generic_parameters,
         )
 
     def _build_implementation(
@@ -424,6 +436,130 @@ def _domain_return_type_binding(
         name=binding.name,
         source=binding.source,
     )
+
+
+def _domain_generic_parameters(
+    primitive: ParsedPrimitive,
+    diagnostics: list[Diagnostic],
+) -> tuple[PrimitiveGenericParameter, ...]:
+    parameters: list[PrimitiveGenericParameter] = []
+    seen_by_name: dict[str, ParsedGenericParameter] = {}
+
+    for parsed in primitive.generic_parameters:
+        if _IDENTIFIER_PATTERN.fullmatch(parsed.name) is None:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-CATALOG-INVALID-GENERIC-PARAMETER-NAME",
+                    message=(
+                        f"generic parameter name {parsed.name!r} is invalid; "
+                        "expected an identifier"
+                    ),
+                    location=parsed.source,
+                )
+            )
+            continue
+
+        first = seen_by_name.get(parsed.name)
+        if first is not None:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-CATALOG-DUPLICATE-GENERIC-PARAMETER",
+                    message=(
+                        f"generic parameter {parsed.name!r} is declared more "
+                        "than once for the primitive; first declaration is at "
+                        f"{first.source.path}:{first.source.line}:"
+                        f"{first.source.column}"
+                    ),
+                    location=parsed.source,
+                )
+            )
+            continue
+        seen_by_name[parsed.name] = parsed
+
+        kind = _GENERIC_PARAMETER_KINDS.get(parsed.kind)
+        if kind is None:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-CATALOG-UNSUPPORTED-GENERIC-PARAMETER-KIND",
+                    message=(
+                        f"generic parameter {parsed.name!r} uses kind "
+                        f"{parsed.kind!r}; expected one of: "
+                        f"{_supported_generic_parameter_kinds_text()}"
+                    ),
+                    location=parsed.source,
+                )
+            )
+            continue
+
+        default = _generic_parameter_default(parsed, kind)
+        if isinstance(default, Diagnostic):
+            diagnostics.append(default)
+            continue
+
+        parameters.append(
+            PrimitiveGenericParameter(
+                name=parsed.name,
+                kind=kind,
+                default=default,
+                source=parsed.source,
+            )
+        )
+
+    return tuple(parameters)
+
+
+def _generic_parameter_default(
+    parsed: ParsedGenericParameter,
+    kind: PrimitiveGenericParameterKind,
+) -> PrimitiveGenericParameterDefault | Diagnostic:
+    default = parsed.default
+    if default is None:
+        return None
+
+    if kind is PrimitiveGenericParameterKind.INT:
+        if _INTEGER_PATTERN.fullmatch(default) is None:
+            return _unsupported_generic_default_diagnostic(
+                parsed,
+                "an integer literal",
+            )
+        return int(default)
+
+    if kind is PrimitiveGenericParameterKind.BOOL:
+        if default == "true":
+            return True
+        if default == "false":
+            return False
+        return _unsupported_generic_default_diagnostic(parsed, "'true' or 'false'")
+
+    if kind is PrimitiveGenericParameterKind.SIMD_TYPE:
+        return _unsupported_generic_default_diagnostic(
+            parsed,
+            "no default for simd_type",
+        )
+
+    raise ValueError(f"unsupported generic parameter kind {kind!r}")
+
+
+def _unsupported_generic_default_diagnostic(
+    parsed: ParsedGenericParameter,
+    expected: str,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-CATALOG-UNSUPPORTED-GENERIC-PARAMETER-DEFAULT",
+        message=(
+            f"generic parameter {parsed.name!r} has unsupported default "
+            f"{parsed.default!r} for kind {parsed.kind!r}; expected {expected}"
+        ),
+        location=parsed.source,
+    )
+
+
+def _supported_generic_parameter_kinds_text() -> str:
+    return ", ".join(sorted(_GENERIC_PARAMETER_KINDS))
 
 
 def _attribute_key(

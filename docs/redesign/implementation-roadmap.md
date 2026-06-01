@@ -25877,13 +25877,17 @@ non-literal immediate family is `immediate(1)=Index` in the NEON
 primitive parameter bound to `sImm`.
 
 M209 selects M210 as an implementation milestone. M210 should add only the
-typed generic-parameter facts needed by this exact family:
+typed primitive compile-time/template parameter facts needed by this exact
+family. These `generic_params` are part of the primitive interface, analogous
+to C++ template parameters or Rust generic/const parameters, but distinct from
+runtime/value parameters:
 
 - catalog/domain facts for observed primitive-local `generic_params`
   declarations, using a constrained kind enum for `int`, `bool`, and
   `simd_type`, typed defaults, and source provenance;
 - selected lowering context exposure of the current primitive's generic
-  parameters;
+  parameters, separate from runtime primitive parameters and
+  `parameter_signature_terms`;
 - lowering of `immediate(N)=SYMBOL` only when `SYMBOL` matches exactly one
   selected primitive-local generic parameter whose kind is `int`, and the
   selected primitive has an indexed-vector signature term such as `v[idx]`;
@@ -25905,7 +25909,7 @@ Validation result:
 
 Status:
 
-Selected. Execution-review prompt:
+Accepted after execution-review. Execution-review prompt:
 `docs/agent/runs/m210-indexed-generic-immediate-execution-review-loop-prompt.md`.
 
 Goal:
@@ -25945,5 +25949,89 @@ git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m210_indexed_generic_immediate_translation.py
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m208_selected_signature_immediate_translation.py tslgen/tests/test_m2065_signature_term_model.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M210 added typed primitive-local compile-time/template parameter facts for the
+observed `generic_params` forms. `PrimitiveGenericParameterKind` models the
+observed `int`, `bool`, and `simd_type` kinds; `PrimitiveGenericParameter`
+preserves the name, typed default (`int`, `bool`, or `None`), and source
+provenance. The parser accepts the observed inline and block declaration
+forms, and catalog construction promotes them onto `Primitive` with
+diagnostics for unsupported kinds, unsupported defaults, duplicate names, and
+invalid names.
+
+Selected lowering context now carries the selected primitive's generic
+parameters separately from runtime primitive parameters and
+`parameter_signature_terms`. Backend intrinsic handoff lowering resolves
+`immediate(N)=SYMBOL` to `LoweredSelectedGenericImmediateParameter` only when
+`SYMBOL` matches exactly one selected primitive-local generic parameter whose
+kind is `int`, and the selected primitive signature includes
+`SignatureTermKind.INDEXED_VECTOR_ELEMENT`. This accepts the observed NEON
+`extract_value` `immediate(1)=Index` family without hardcoding `Index`, and
+keeps `N`, `PreserveSign`, `IndicesType`, unknown symbols, non-integer
+generic params, raw backend symbols, and integer generics outside the
+indexed-vector slice unsupported.
+
+Backend intrinsic modifier translation consumes the already-lowered generic
+immediate value and produces `BackendIntrinsicImmediateGenericParameterReference`.
+It does not inspect selected context, raw symbol names, primitive signatures,
+or `generic_params`. M208's selected-signature `sImm` immediate path remains
+unchanged.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m210_indexed_generic_immediate_translation.py`:
+  exit 0, `18 passed`.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m208_selected_signature_immediate_translation.py tslgen/tests/test_m2065_signature_term_model.py`:
+  exit 0, `17 passed`.
+- `find tslgen -type d -name __pycache__ -print`: validation-created
+  `__pycache__` directories were removed; final command exited 0 with no
+  output.
+
+### Milestone 211: Post-Selected-Immediate Lowering Completion Gate
+
+Status:
+
+Selected. Planning prompt:
+`docs/agent/runs/m211-post-selected-immediate-lowering-completion-gate-planning-prompt.md`.
+
+Goal:
+
+Run a lowering-focused completion gate after M208/M210 closed the
+source-owned non-literal intrinsic immediate families.
+
+Scope:
+
+- Reconcile the accepted lowering contract after M210 with the current
+  `tsldata/**/*.tsl` corpus.
+- Inventory any remaining observed TSIL/source forms that still require
+  lowering-owned typed facts before backend/output work can continue without
+  rescanning raw text.
+- Classify remaining unresolved forms as accepted lowering facts/requests,
+  backend translation/rendering obligations, backend metadata, source-authored
+  helper calls, deferred broad parsing, or genuine lowering gaps.
+- If exactly one genuine lowering-owned gap remains, select it as the next
+  concrete milestone with exact source forms, typed values, diagnostics, and
+  validation.
+- If no lowering-owned gap remains by the current contract, record that
+  lowering is complete after selected immediates and create the next
+  backend/output prompt.
+
+Out of scope:
+
+Production code; tests; backend implementation; rendering; intrinsic-name
+assembly; dependency closure; source repair; broad TSIL expression/statement
+parsing; and turning backend translation/rendering work into lowering work.
+
+Validation:
+
+```bash
+git diff --check
 find tslgen -type d -name __pycache__ -print
 ```

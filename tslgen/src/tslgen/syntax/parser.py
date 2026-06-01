@@ -11,6 +11,7 @@ from tslgen.syntax.ast import (
     ParsedExtensionField,
     ParsedImplementation,
     ParsedImplementationBody,
+    ParsedGenericParameter,
     ParsedLowerableOperationFragment,
     ParsedPrimitive,
     ParsedPrimitiveAttribute,
@@ -68,6 +69,21 @@ _RETURN_TYPE_HEADER = "  return_type:"
 _RETURN_TYPE_BINDING_PATTERN = re.compile(
     r"^    (?P<kind>base|extension): "
     r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)$"
+)
+_GENERIC_PARAMS_HEADER = "  generic_params:"
+_GENERIC_INLINE_PATTERN = re.compile(
+    r"^    (?P<name>[A-Za-z_][A-Za-z0-9_]*) "
+    r"\{kind (?P<kind>[A-Za-z_][A-Za-z0-9_]*)"
+    r"(?:, default (?P<default>[A-Za-z_][A-Za-z0-9_]*|[0-9]+))?\}$"
+)
+_GENERIC_BLOCK_HEADER_PATTERN = re.compile(
+    r"^    (?P<name>[A-Za-z_][A-Za-z0-9_]*):$"
+)
+_GENERIC_BLOCK_KIND_PATTERN = re.compile(
+    r"^      kind (?P<kind>[A-Za-z_][A-Za-z0-9_]*)$"
+)
+_GENERIC_BLOCK_DEFAULT_PATTERN = re.compile(
+    r"^      default (?P<default>[A-Za-z_][A-Za-z0-9_]*|[0-9]+)$"
 )
 _EXTENSION_HEADER_PATTERN = re.compile(
     r"^extension (?P<name>[A-Za-z_][A-Za-z0-9_]*):$"
@@ -170,6 +186,22 @@ class TslParser:
                 return None
             return_type_binding, next_index = parsed_return_type
 
+        generic_parameters: tuple[ParsedGenericParameter, ...] = ()
+        generic_params_index = _next_meaningful_index(source_lines, next_index)
+        if (
+            generic_params_index is not None
+            and source_lines[generic_params_index][1] == _GENERIC_PARAMS_HEADER
+        ):
+            parsed_generic_params = _parse_generic_parameters(
+                document,
+                source_lines,
+                generic_params_index,
+                diagnostics,
+            )
+            if parsed_generic_params is None:
+                return None
+            generic_parameters, next_index = parsed_generic_params
+
         while True:
             implementation_index = _next_meaningful_index(source_lines, next_index)
             if implementation_index is None:
@@ -267,6 +299,7 @@ class TslParser:
             source=SourceLocation(document.path, header_line_no, 1),
             attributes=attributes,
             return_type_binding=return_type_binding,
+            generic_parameters=generic_parameters,
         )
         return ParsedDocument(
             path=document.path.as_posix(),
@@ -654,6 +687,180 @@ def _parse_return_type_binding(
             source=binding_location,
         ),
         binding_index + 1,
+    )
+
+
+def _parse_generic_parameters(
+    document: SourceDocument,
+    lines: tuple[tuple[int, str], ...],
+    generic_params_index: int,
+    diagnostics: list[Diagnostic],
+) -> tuple[tuple[ParsedGenericParameter, ...], int] | None:
+    parameters: list[ParsedGenericParameter] = []
+    index = generic_params_index + 1
+
+    while True:
+        parameter_index = _next_meaningful_index(lines, index)
+        if parameter_index is None:
+            break
+
+        line_no, line = lines[parameter_index]
+        indent = len(line) - len(line.lstrip(" "))
+        if indent <= 2:
+            break
+        if indent != 4:
+            diagnostics.append(
+                _unsupported_generic_parameter_diagnostic(
+                    document,
+                    line_no,
+                    indent + 1,
+                    line,
+                )
+            )
+            return None
+
+        inline = _GENERIC_INLINE_PATTERN.match(line)
+        if inline is not None:
+            parameters.append(
+                ParsedGenericParameter(
+                    name=inline.group("name"),
+                    kind=inline.group("kind"),
+                    default=inline.group("default"),
+                    source=SourceLocation(document.path, line_no, 5),
+                )
+            )
+            index = parameter_index + 1
+            continue
+
+        block_header = _GENERIC_BLOCK_HEADER_PATTERN.match(line)
+        if block_header is None:
+            diagnostics.append(
+                _unsupported_generic_parameter_diagnostic(
+                    document,
+                    line_no,
+                    indent + 1,
+                    line,
+                )
+            )
+            return None
+
+        parsed_block = _parse_generic_parameter_block(
+            document,
+            lines,
+            parameter_index,
+            block_header.group("name"),
+            diagnostics,
+        )
+        if parsed_block is None:
+            return None
+        parameter, index = parsed_block
+        parameters.append(parameter)
+
+    if not parameters:
+        header_line_no, _ = lines[generic_params_index]
+        diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-PARSE-UNSUPPORTED-GENERIC-PARAMETER",
+                message=(
+                    "generic_params block is empty; expected at least one "
+                    "inline or block-style generic parameter declaration"
+                ),
+                location=SourceLocation(document.path, header_line_no, 3),
+            )
+        )
+        return None
+
+    return (tuple(parameters), index)
+
+
+def _parse_generic_parameter_block(
+    document: SourceDocument,
+    lines: tuple[tuple[int, str], ...],
+    parameter_index: int,
+    name: str,
+    diagnostics: list[Diagnostic],
+) -> tuple[ParsedGenericParameter, int] | None:
+    line_no, _ = lines[parameter_index]
+    kind_index = _next_meaningful_index(lines, parameter_index + 1)
+    if kind_index is None:
+        diagnostics.append(
+            _missing_generic_parameter_kind_diagnostic(document, line_no, 5, name)
+        )
+        return None
+
+    kind_line_no, kind_line = lines[kind_index]
+    kind = _GENERIC_BLOCK_KIND_PATTERN.match(kind_line)
+    if kind is None:
+        diagnostics.append(
+            _missing_generic_parameter_kind_diagnostic(document, kind_line_no, 7, name)
+        )
+        return None
+
+    default: str | None = None
+    next_index = kind_index + 1
+    default_index = _next_meaningful_index(lines, next_index)
+    if default_index is not None:
+        default_line_no, default_line = lines[default_index]
+        default_indent = len(default_line) - len(default_line.lstrip(" "))
+        if default_indent == 6:
+            default_match = _GENERIC_BLOCK_DEFAULT_PATTERN.match(default_line)
+            if default_match is None:
+                diagnostics.append(
+                    _unsupported_generic_parameter_diagnostic(
+                        document,
+                        default_line_no,
+                        default_indent + 1,
+                        default_line,
+                    )
+                )
+                return None
+            default = default_match.group("default")
+            next_index = default_index + 1
+
+    return (
+        ParsedGenericParameter(
+            name=name,
+            kind=kind.group("kind"),
+            default=default,
+            source=SourceLocation(document.path, line_no, 5),
+        ),
+        next_index,
+    )
+
+
+def _unsupported_generic_parameter_diagnostic(
+    document: SourceDocument,
+    line: int,
+    column: int,
+    text: str,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-PARSE-UNSUPPORTED-GENERIC-PARAMETER",
+        message=(
+            f"unsupported generic parameter declaration {text!r}; expected "
+            "'Name {kind int|bool|simd_type[, default VALUE]}' or "
+            "block style with 'kind KIND' and optional 'default VALUE'"
+        ),
+        location=SourceLocation(document.path, line, column),
+    )
+
+
+def _missing_generic_parameter_kind_diagnostic(
+    document: SourceDocument,
+    line: int,
+    column: int,
+    name: str,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-PARSE-UNSUPPORTED-GENERIC-PARAMETER",
+        message=(
+            f"generic parameter {name!r} is missing a kind; expected "
+            "'kind int', 'kind bool', or 'kind simd_type'"
+        ),
+        location=SourceLocation(document.path, line, column),
     )
 
 
