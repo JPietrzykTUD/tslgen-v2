@@ -24072,20 +24072,146 @@ Validation result:
   validation-created `__pycache__` directories under `tslgen/src/tslgen/**`
   and `tslgen/tests`; after cleanup, exit 0 with no output.
 
-### Milestone 191: Backend Type Spelling Request Translation Boundary
+### Milestone 191: Profile-Aware Generated Project Skeleton And Smoke Verification Boundary
 
 Status:
 
-Selected. Execution prompt:
+Accepted. Execution prompt:
 `docs/agent/runs/m191-execution-review-loop-prompt.md`.
 
 Goal:
 
+Implement the first ADR-055 backend/output slice before further backend
+semantic translation. The slice should produce a run-level generated project
+tree with C++ and Rust backend subprojects, profile-specific skeleton files,
+manifest-aware writing, and an after-write smoke build verification boundary.
+
+This milestone proves that generated artifacts can be written and build-tested
+from typed render models before primitive bodies, backend type spellings,
+intrinsics, source operations, or dependency closure are rendered.
+
+Scope:
+
+- Add a small typed profile-subset selection boundary over the M189 machine
+  profile catalog:
+  - omitted profile selection resolves to `scalar`;
+  - explicit profile names resolve to a deterministic generated subset;
+  - the default active profile is `scalar` when `scalar` is generated, or the
+    first selected profile otherwise;
+  - reserved `all` resolves to all known machine profiles in catalog order;
+  - unknown or ambiguous profile names are diagnostics.
+- Add typed backend project/profile render models that contain only
+  already-decided presentation values: backend id, project paths, selected
+  profile names, allowed profile choices, public entry point paths, smoke test
+  paths, and already-prepared profile/build metadata. They must not contain
+  primitive bodies, lowering requests, raw TSIL, unresolved backend metadata,
+  or source catalog objects.
+- Render a run-level generated project tree with this layout:
+
+  ```text
+  generated/
+    cpp/
+      CMakeLists.txt
+      include/
+        tsl.hpp
+        profiles/
+          scalar.hpp
+          ...
+      tests/
+        smoke.cpp
+    rust/
+      Cargo.toml
+      src/
+        lib.rs
+        profiles/
+          scalar.rs
+          ...
+      tests/
+        smoke.rs
+  ```
+
+- Update supplementary templates/static assets only as needed for the
+  profile-aware skeleton. C++ must expose `include/tsl.hpp`; Rust must expose
+  `src/lib.rs`. Generated profile files may contain only compileable skeleton
+  marker code.
+- Add a manifest-based writer mode to the existing artifact writer so stale
+  generator-owned files can be removed without deleting unknown user files.
+- Add an after-write build verifier boundary with an injectable command runner
+  and command records. It must verify each generated profile in the selected
+  subset for each generated backend project. Tests may use the real scalar
+  smoke path and injected command execution for multi-profile behavior.
+- Preserve deterministic artifact ordering, manifest ordering, diagnostics,
+  and verifier command ordering.
+
+Out of scope:
+
+Primitive body rendering; backend type/value/intrinsic/source-operation
+translation; primitive-call rendering; dependency closure; topological
+primitive rendering beyond empty skeleton plans; evaluating backend translation
+templates; translating normalized machine features into final compiler-specific
+target-feature option spellings; C17; CLI integration; broad generated test
+framework parity; lowering changes; runtime dependency on `frozen/` or
+`tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m191_generated_project_smoke_boundary.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M191 accepted. It added a typed generated-profile selection boundary over the
+M189 machine feature profile catalog, typed C++/Rust generated-project render
+models, profile-aware generated skeleton rendering, manifest-clean artifact
+writing, and an after-write build verification boundary with injectable command
+execution. The generated skeleton emits `generated/cpp/CMakeLists.txt`,
+`generated/cpp/include/tsl.hpp`, profile headers under
+`generated/cpp/include/profiles/`, `generated/cpp/tests/smoke.cpp`,
+`generated/rust/Cargo.toml`, `generated/rust/src/lib.rs`, profile modules
+under `generated/rust/src/profiles/`, and `generated/rust/tests/smoke.rs`.
+
+The build verifier configures, builds, and tests each generated C++ profile
+and runs `cargo test` for each generated Rust profile. It preserves command
+ordering, skips only dependent commands in a failed profile, and continues with
+later profiles/backends so one failure does not hide the rest of the selected
+subset. Manifest-clean writing removes stale generator-owned files from the
+previous `.tslgen-manifest.json` while preserving unknown user files.
+
+M191 deliberately did not render primitive bodies, translate backend
+type/value/intrinsic/source-operation requests, evaluate backend translation
+templates, map normalized machine features to final compiler target-feature
+options, execute dependency closure, change lowering, or introduce runtime
+dependencies on `frozen/` or `tslgenold`.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m191_generated_project_smoke_boundary.py`:
+  exit 0, `8 passed in 2.19s`.
+- `find tslgen -type d -name __pycache__ -print`: initially reported
+  validation-created `__pycache__` directories under `tslgen/src/tslgen/**`
+  and `tslgen/tests`; after cleanup, exit 0 with no output.
+
+### Milestone 192: Backend Type Spelling Translation Feeding Render Models
+
+Status:
+
+Selected. Execution prompt:
+`docs/agent/runs/m192-execution-review-loop-prompt.md`.
+
+Goal:
+
 Consume existing typed `BackendTypeSpellingRequest` values from the accepted
-lowering handoff and the M190 backend metadata catalog to produce the first
-typed backend type spelling results. This starts backend translation from
-typed requests and typed metadata, not from raw `type<backend>(...)` text or
-renderer-local type tables.
+lowering handoff and the M190 backend metadata catalog to produce typed backend
+type spelling translation results that can later feed M191-style render
+models. This starts backend translation from typed requests and typed metadata,
+not from raw `type<backend>(...)` text, renderer-local type tables, or
+template-side decisions.
 
 Scope:
 
@@ -24105,8 +24231,8 @@ Scope:
 
 Out of scope:
 
-Rendering; formatting translation snippets; primitive body rendering; vector
-register/mask/member type spellings; `CurrentVector` or
+Rendering; formatting arbitrary translation snippets; primitive body rendering;
+vector register/mask/member type spellings; `CurrentVector` or
 `LoweredVectorAsExtensionType` fulfillment; backend value, intrinsic, control,
 mask, source-operation, or call translation; dependency closure; machine
 profile changes; lowering changes; runtime dependency on `frozen/` or
@@ -24117,6 +24243,6 @@ Validation:
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m191_backend_type_spelling_translation.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m192_backend_type_spelling_translation.py
 find tslgen -type d -name __pycache__ -print
 ```

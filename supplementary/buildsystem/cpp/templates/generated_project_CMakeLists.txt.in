@@ -1,0 +1,16 @@
+cmake_minimum_required(VERSION 3.20)
+project({project_name} LANGUAGES CXX)
+
+add_library(tsl_generated INTERFACE)
+target_include_directories(tsl_generated INTERFACE include)
+
+set(TSL_PROFILE "{default_profile}" CACHE STRING "Selected TSL profile")
+set_property(CACHE TSL_PROFILE PROPERTY STRINGS {allowed_profiles})
+
+{cpp_profile_cases}
+
+add_executable(tsl_smoke tests/smoke.cpp)
+target_link_libraries(tsl_smoke PRIVATE tsl_generated)
+
+enable_testing()
+add_test(NAME tsl_smoke COMMAND tsl_smoke)

@@ -3406,43 +3406,144 @@ The artifact writer:
   any path that would escape the output root.
 - Computes SHA-256 digests.
 - Creates parent directories.
-- Skips writing unchanged files when skip-unchanged behavior is enabled.
-- Supports dry-run mode that reports planned writes without mutating the
-  filesystem.
-- Reports written paths, skipped paths, failed paths, would-write paths, and a
-  digest map.
+- Writes generated artifact content.
+- Reports written paths and digests.
 
 Write reports use these per-artifact statuses:
 
-- `would_write`: the artifact content would be written in dry-run mode.
 - `written`: the artifact content was written or rewritten.
-- `skipped_unchanged`: the target file already contained the artifact content
-  and skip-unchanged behavior was enabled.
-- `failed`: the artifact was not written because path validation, conflict
-  detection, or filesystem I/O failed.
-
-Non-dry-run reports must not contain `would_write` records. If planning errors
-abort a non-dry-run write before otherwise safe artifacts are written, those
-artifacts are reported as `failed`.
+- `removed`: a stale generator-owned artifact from the previous manifest was
+  removed by manifest-clean mode.
 
 The writer emits deterministic diagnostics for:
 
-- `TSL-ARTIFACT-WRITE-UNSAFE-PATH`: a logical path is absolute, contains parent
-  traversal, follows an existing symlink outside the output root, or otherwise
-  cannot be resolved safely under the output root.
-- `TSL-ARTIFACT-WRITE-DUPLICATE-TARGET`: multiple artifacts resolve to the same
-  output target.
-- `TSL-ARTIFACT-WRITE-ROOT-CONFLICT`: the output root exists but is not a
+- `TSL-WRITE-OUTPUT-ROOT-NOT-DIRECTORY`: the output root exists but is not a
   directory.
-- `TSL-ARTIFACT-WRITE-TARGET-CONFLICT`: the target path is a directory or an
-  existing parent path is not a directory.
-- `TSL-ARTIFACT-WRITE-IO`: directory creation or file writing failed.
-- `TSL-ARTIFACT-WRITE-ABORTED`: an otherwise writable artifact was not written
-  because the write plan contained errors.
+- `TSL-WRITE-EMPTY-LOGICAL-PATH`: an artifact logical path is empty.
+- `TSL-WRITE-ABSOLUTE-LOGICAL-PATH`: an artifact logical path is absolute.
+- `TSL-WRITE-PARENT-ESCAPE`: an artifact logical path contains `..`.
+- `TSL-WRITE-DUPLICATE-LOGICAL-PATH`: the same artifact logical path appears
+  more than once.
+- `TSL-WRITE-DUPLICATE-TARGET-PATH`: multiple logical paths resolve to the
+  same target.
+- `TSL-WRITE-DIRECTORY-FILE-COLLISION`: an artifact path conflicts with a file
+  or directory path.
+- `TSL-WRITE-TARGET-ESCAPES-OUTPUT-ROOT`: the resolved target escapes the
+  output root.
+- `TSL-WRITE-FILESYSTEM-ERROR`: directory creation, file writing, stale-file
+  removal, or manifest writing failed.
+- `TSL-WRITE-UNKNOWN-MODE`: the requested writer mode is unsupported.
+- `TSL-WRITE-RESERVED-MANIFEST-PATH`: a normal artifact attempts to use the
+  reserved generator manifest path.
+- `TSL-WRITE-MALFORMED-MANIFEST`: the previous generator manifest cannot be
+  read as supported manifest data.
+- `TSL-WRITE-MANIFEST-UNSAFE-PATH`: the previous manifest contains an unsafe
+  logical path.
+- `TSL-WRITE-MANIFEST-STALE-PATH-ESCAPES-OUTPUT-ROOT`: a stale manifest path
+  resolves outside the output root.
+- `TSL-WRITE-MANIFEST-STALE-PATH-NOT-FILE`: a stale manifest path targets a
+  directory rather than a file.
 
 Artifact writing is the only generation stage that mutates the filesystem.
 Rendering and reporting must produce in-memory artifacts; they must not write
 files directly.
+
+The M191 generated-project writer boundary adds a manifest-clean mode for the
+clean restart implementation. In manifest-clean mode, the writer reads the
+previous `.tslgen-manifest.json`, removes stale files that were previously
+written by the generator and are no longer present in the new `ArtifactSet`,
+preserves unknown user files, writes the new artifacts, and writes a new
+deterministic manifest. The manifest records artifact logical paths and
+digests. The writer rejects attempts to use `.tslgen-manifest.json` as a
+normal artifact path and reports diagnostics for malformed manifests, unsafe
+manifest paths, stale manifest paths that are not files, unknown write modes,
+reserved manifest paths, path traversal, duplicate targets, root conflicts,
+directory/file collisions, and filesystem errors.
+
+## Generated Project Skeleton And Verification Behavior
+
+The first profile-aware generated-project skeleton boundary produces a
+run-level output tree:
+
+```text
+generated/
+  cpp/
+    CMakeLists.txt
+    include/
+      tsl.hpp
+      profiles/
+        <profile>.hpp
+    tests/
+      smoke.cpp
+  rust/
+    Cargo.toml
+    src/
+      lib.rs
+      profiles/
+        <profile>.rs
+    tests/
+      smoke.rs
+```
+
+Profile subset selection is explicit and typed:
+
+- no requested profile means `scalar`;
+- reserved `all` means every machine profile in catalog order;
+- explicit profile names preserve request order;
+- the default active profile is `scalar` when `scalar` is generated, otherwise
+  the first selected generated profile;
+- `all` may not be combined with other names;
+- unknown, duplicate, or ambiguous profile names produce diagnostics.
+
+Accepted M191 diagnostic codes include:
+
+- `TSL-GENERATED-PROFILE-SELECTION-EMPTY-CATALOG`
+- `TSL-GENERATED-PROFILE-SELECTION-ALL-MUST-STAND-ALONE`
+- `TSL-GENERATED-PROFILE-SELECTION-DUPLICATE-PROFILE`
+- `TSL-GENERATED-PROFILE-SELECTION-UNKNOWN-PROFILE`
+- `TSL-GENERATED-PROFILE-SELECTION-AMBIGUOUS-PROFILE`
+- `TSL-GENERATED-PROJECT-DUPLICATE-PROFILE-FILE-STEM`
+- `TSL-GENERATED-PROJECT-DUPLICATE-CPP-PROFILE-MACRO`
+- `TSL-GENERATED-PROJECT-DUPLICATE-RUST-PROFILE-FEATURE`
+- `TSL-GENERATED-PROJECT-DUPLICATE-RUST-PROFILE-MODULE`
+- `TSL-GENERATED-PROJECT-MISSING-TEMPLATE`
+- `TSL-GENERATED-PROJECT-TEMPLATE-UNSUPPORTED-FIELD-SHAPE`
+- `TSL-GENERATED-PROJECT-TEMPLATE-UNKNOWN-FIELD`
+- `TSL-WRITE-OUTPUT-ROOT-NOT-DIRECTORY`
+- `TSL-WRITE-EMPTY-LOGICAL-PATH`
+- `TSL-WRITE-ABSOLUTE-LOGICAL-PATH`
+- `TSL-WRITE-PARENT-ESCAPE`
+- `TSL-WRITE-DUPLICATE-LOGICAL-PATH`
+- `TSL-WRITE-DUPLICATE-TARGET-PATH`
+- `TSL-WRITE-DIRECTORY-FILE-COLLISION`
+- `TSL-WRITE-TARGET-ESCAPES-OUTPUT-ROOT`
+- `TSL-WRITE-FILESYSTEM-ERROR`
+- `TSL-WRITE-UNKNOWN-MODE`
+- `TSL-WRITE-RESERVED-MANIFEST-PATH`
+- `TSL-WRITE-MALFORMED-MANIFEST`
+- `TSL-WRITE-MANIFEST-UNSAFE-PATH`
+- `TSL-WRITE-MANIFEST-STALE-PATH-ESCAPES-OUTPUT-ROOT`
+- `TSL-WRITE-MANIFEST-STALE-PATH-NOT-FILE`
+- `TSL-BUILD-VERIFY-MISSING-PROJECT`
+- `TSL-BUILD-VERIFY-MISSING-PUBLIC-ENTRY`
+- `TSL-BUILD-VERIFY-MISSING-SMOKE-TEST`
+- `TSL-BUILD-VERIFY-MISSING-PROFILE-FILE`
+- `TSL-BUILD-VERIFY-COMMAND-FAILED`
+
+The C++ skeleton uses a `TSL_PROFILE` CMake cache string with declared allowed
+values and emits a compile definition for the selected generated profile. It
+does not translate normalized machine features into final compiler-specific
+target-feature options in M191. The Rust skeleton selects exactly one profile
+through generated feature names and emits compile errors if zero or multiple
+profile features are enabled.
+
+After-write build verification consumes the written output tree and the typed
+generated-project render model. It configures, builds, and tests every
+generated C++ profile and runs `cargo test` for every generated Rust profile.
+The verifier command runner is injectable, and compiler choice belongs to
+verification policy, not to generator semantics. Verification failures produce
+build diagnostics and do not feed repairs back into rendering, writing,
+lowering, or backend translation.
 
 ## Test Generation Behavior
 

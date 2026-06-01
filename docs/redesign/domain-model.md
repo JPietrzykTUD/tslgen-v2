@@ -2013,6 +2013,60 @@ Invariants:
 - Artifact ordering is deterministic.
 - Artifact content is UTF-8 text unless a future binary artifact type is introduced explicitly.
 
+## Generated Project Model
+
+```python
+@dataclass(frozen=True, slots=True)
+class GeneratedProfileSet:
+    profiles: tuple[MachineFeatureProfile, ...]
+    default_profile: MachineFeatureProfile
+
+@dataclass(frozen=True, slots=True)
+class BackendProfileRenderModel:
+    family: MachineProfileFamily
+    profile_name: MachineProfileName
+    features: tuple[FeatureFlagName, ...]
+    alternatives: tuple[MachineFeatureAlternative, ...]
+    file_stem: ProfileFileStem
+    cpp_macro: CppProfileMacro
+    rust_feature: RustProfileFeature
+    rust_module: RustProfileModule
+
+@dataclass(frozen=True, slots=True)
+class BackendProjectRenderModel:
+    backend_id: str
+    project_name: str
+    root_path: str
+    public_entry_path: str
+    smoke_test_path: str
+    profiles: tuple[BackendProfileRenderModel, ...]
+    default_profile: MachineProfileName
+
+@dataclass(frozen=True, slots=True)
+class GeneratedProjectRenderModel:
+    cpp: BackendProjectRenderModel
+    rust: BackendProjectRenderModel
+```
+
+Invariants:
+
+- `GeneratedProfileSet` is resolved from typed machine profile catalog facts.
+  Omitted profile selection resolves to `scalar`; reserved `all` resolves to
+  all known profiles in catalog order; explicit names preserve request order.
+  The default profile is `scalar` when it is part of the generated set and the
+  first selected profile otherwise.
+- `BackendProjectRenderModel` is presentation data for an already-decided
+  skeleton output. It may carry profile names, generated file stems, C++
+  profile macros, Rust feature names, and smoke-test paths, but it must not
+  carry raw TSIL, catalog objects, lowering requests, unresolved backend
+  metadata, primitive bodies, or compiler capability decisions.
+- C++ generated projects expose `cpp/include/tsl.hpp` and profile headers under
+  `cpp/include/profiles/`. Rust generated projects expose `rust/src/lib.rs`
+  and profile modules under `rust/src/profiles/`.
+- The render model is consumed before artifact writing. The writer receives
+  only an `ArtifactSet`, not primitive dependency information or profile
+  selection policy.
+
 ## Diagnostics Model
 
 ```python
@@ -2044,6 +2098,7 @@ Invariants:
 9. Backend planner creates render jobs and wrapper/test plans.
 10. Renderer creates artifacts.
 11. Writer commits artifacts to disk and reports digests.
+12. Build verifier checks written generated projects when requested.
 
 ## Concepts That Should Not Leak Into The Domain Model
 

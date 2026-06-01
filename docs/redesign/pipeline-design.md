@@ -1105,6 +1105,16 @@ Build verification is after-write validation. It does not repair generated
 sources, select alternative profiles, infer compiler capability, or feed
 semantic changes back into lowering, translation, rendering, or writing.
 
+Milestone 191 implements the first profile-aware generated-project skeleton
+and after-write smoke verification boundary. It resolves generated profile
+subsets from M189 machine profile facts, renders compileable C++ and Rust
+skeleton projects under `generated/cpp` and `generated/rust`, adds
+manifest-clean artifact writing, and verifies each selected profile. It does
+not render primitive bodies, translate backend type/value/intrinsic/source
+operations, evaluate backend translation templates, map profile features to
+compiler target-feature options, execute dependency closure, or change
+lowering.
+
 ## Backend Entry Points
 
 Backend-specific behavior enters at:

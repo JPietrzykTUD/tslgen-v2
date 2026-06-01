@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 190 is accepted.
+Milestone 191 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -62,6 +62,19 @@ profile subsets defaulting to `scalar`, reserved `all` for all known profiles,
 presentation-only templates, manifest-preserving cleanup, and verification of
 every generated profile in the selected subset.
 
+M191 added a typed generated-profile selection boundary over the M189 machine
+feature profile catalog, typed C++/Rust generated-project render models,
+profile-aware generated skeleton rendering, manifest-clean artifact writing,
+and an after-write build verification boundary with injectable command
+execution. The skeleton produces the ADR-055 `generated/cpp` and
+`generated/rust` project layout, verifies every selected profile, skips only
+dependent commands in a failed profile, and continues with later profiles and
+backends. M191 did not render primitive bodies, translate backend
+type/value/intrinsic/source-operation requests, evaluate backend translation
+templates, map profile features to compiler target-feature options, execute
+dependency closure, change lowering, or add runtime dependencies on `frozen/`
+or `tslgenold`.
+
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
 
@@ -81,37 +94,41 @@ parsing/source-repair work that lowering must not absorb by default.
 Current required action:
 
 ```text
-Retarget M191 before executing implementation.
+Run M192 execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m191-execution-review-loop-prompt.md
+docs/agent/runs/m192-execution-review-loop-prompt.md
 ```
 
 Active planning milestone:
 
 ```text
-Milestone 191 needs replanning against ADR-055 before execution.
+Milestone 192: Backend Type Spelling Translation Feeding Render Models.
 ```
 
 Latest review verdict:
 
 ```text
-M190 execution-review returned Accept after one write-capable executor and
-read-only architecture, evidence, documentation, and validation audits.
-Validation passed and validation-created `tslgen/` cache directories were
-removed.
+M191 execution-review returned Accept after one write-capable executor,
+read-only architecture, evidence, documentation, and validation audits, and
+focused architecture/documentation re-review after two blocking findings were
+fixed. Validation passed and validation-created `tslgen/` cache directories
+were removed.
 ```
 
 Next expected action:
 
 ```text
-Rewrite or replace the active M191 prompt so the next milestone establishes
-the backend output architecture and build-verification boundary before further
-backend type/value translation is implemented. The stale M191 type-spelling
-translation prompt must not be executed unchanged.
+Run the active M192 execution-review loop prompt. It is an implementation
+task: one write-capable executor consumes existing typed
+`BackendTypeSpellingRequest` values and the M190 backend metadata catalog to
+produce typed backend type spelling translation results for scalar type
+identities and `LoweredSizeType`. It must not render code, evaluate arbitrary
+templates, broaden to vector/register/mask requests, modify generated-project
+verification, or reopen lowering.
 ```
 
 Previous review verdict:
@@ -130,13 +147,14 @@ Accept and selected M188. M188 execution-review returned Accept and selected
 M189. M189 was then retargeted by planning decision to the machine feature
 profile/buildsystem option boundary before execution. M189 execution-review
 returned Accept and selected M190. M190 execution-review returned Accept and
-selected M191.
+selected M191. M191 was then retargeted by ADR-055 planning correction before
+execution. M191 execution-review returned Accept and selected M192.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m190-execution-review-loop-prompt.md
+docs/agent/runs/m191-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
