@@ -354,6 +354,38 @@ Invariants:
   intrinsic-name assembly, suffix/prefix semantics, immediacy, or direct-name
   placeholder resolution.
 
+C++ intrinsic call rendering is a backend/output render-result boundary over
+assembled M213 invocation values:
+
+```python
+CppIntrinsicCallText = NewType("CppIntrinsicCallText", str)
+
+@dataclass(frozen=True, slots=True)
+class CppRenderedIntrinsicCall:
+    invocation: BackendAssembledIntrinsicInvocation
+    call_text: CppIntrinsicCallText
+    immediates: tuple[BackendIntrinsicInvocationImmediate, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class CppIntrinsicCallRenderResult:
+    call: CppRenderedIntrinsicCall | None
+    diagnostics: tuple[Diagnostic, ...] = ()
+```
+
+Invariants:
+
+- Rendering consumes only assembled M213 direct/composed invocation values.
+  It does not parse raw TSIL or reassemble intrinsic names.
+- M214 supports only backend `cpp`; non-C++ invocation values are diagnostics.
+- The rendered call text is exactly
+  `assembled_name(opaque_argument_payload)`, with `assembled_name()` for empty
+  payloads.
+- Argument payload text remains opaque and is not split, normalized, repaired,
+  or recursively lowered.
+- Immediate metadata is preserved for later wrapper/signature/template work.
+  M214 does not render C++ non-type template syntax.
+
 ## Primitive Model
 
 ```python

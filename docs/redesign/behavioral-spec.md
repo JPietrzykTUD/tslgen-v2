@@ -360,6 +360,36 @@ Accepted M213 diagnostic codes include:
 - `TSL-BACKEND-INTRINSIC-ASSEMBLY-MISSING-MODIFIER-TRANSLATION`
 - `TSL-BACKEND-INTRINSIC-ASSEMBLY-UNSUPPORTED-MODIFIER-VALUE`
 
+### M214 C++ Intrinsic Invocation Call Rendering Boundary
+
+Milestone 214 adds a typed C++ backend/output rendering boundary for accepted
+M213 intrinsic invocation values. It consumes
+`BackendDirectIntrinsicInvocation` and `BackendComposedIntrinsicInvocation`
+values only after intrinsic-name assembly has already happened. It does not
+rediscover raw TSIL, reopen lowering, parse or split intrinsic argument
+payloads, resolve direct-name placeholders, render Rust calls, qualify Rust
+`core::arch::*` paths, render C++ non-type template signatures, or write
+generated projects.
+
+The C++ call renderer supports backend `cpp` only. It renders one call text
+value as:
+
+```text
+assembled_name(opaque_argument_payload)
+```
+
+An empty argument payload renders as `assembled_name()`. Argument payload text
+is preserved byte-for-byte from the M213 invocation value, including nested
+TSIL-looking text. Typed immediate metadata from composed invocations is
+preserved on the rendered call result for later wrapper/signature/template
+work, but M214 does not rewrite call text or choose C++ non-type template
+syntax.
+
+Accepted M214 diagnostic codes include:
+
+- `TSL-CPP-INTRINSIC-CALL-UNSUPPORTED-BACKEND`
+- `TSL-CPP-INTRINSIC-CALL-UNSUPPORTED-INVOCATION`
+
 ## Input Behavior
 
 | Input | Expected Behavior | Evidence |

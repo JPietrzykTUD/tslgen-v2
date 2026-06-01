@@ -26264,48 +26264,130 @@ Validation result:
   `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
 
 Next concrete prompt:
-`docs/agent/runs/m214-post-invocation-assembly-rendering-lowering-gate-planning-prompt.md`.
+`docs/agent/runs/m214-cpp-intrinsic-invocation-call-rendering-execution-review-loop-prompt.md`.
 
-### Milestone 214: Post-Invocation Assembly Rendering/Lowering Gate Planning
+### Milestone 214: C++ Intrinsic Invocation Call Rendering
 
 Status:
 
-Selected. Planning prompt:
-`docs/agent/runs/m214-post-invocation-assembly-rendering-lowering-gate-planning-prompt.md`.
+Accepted. Execution-review prompt:
+`docs/agent/runs/m214-cpp-intrinsic-invocation-call-rendering-execution-review-loop-prompt.md`.
 
 Goal:
 
-Plan the next smallest high-value milestone after M213. The expected direction
-is a typed backend intrinsic invocation rendering boundary, but the plan must
-first run a narrow lowering-readiness gate: if rendering is blocked by a
-specific lowering-owned gap, identify and select exactly that gap; otherwise
-keep lowering closed by current contract and select the backend/output
-rendering slice.
+Implement the smallest C++ backend/output rendering boundary that consumes
+already assembled M213 intrinsic invocation values and produces typed C++
+intrinsic call text.
 
 Scope:
 
-- Inspect M213 invocation values, M195-M210 modifier translations, M211
-  lowering completion, and backend/output architecture docs.
-- Decide whether any concrete lowering-owned blocker remains for rendering
-  assembled intrinsic invocations.
-- If no lowering blocker is found, plan the next rendering/output boundary for
-  consuming already assembled invocation values without parsing arguments or
-  deciding backend semantics in templates.
-- Keep Rust `core::arch::*` qualification, C++ non-type template rendering,
-  Rust const generic rendering, direct placeholder resolution, and primitive
-  body/output integration as explicitly selected options rather than hidden
-  side effects.
+- Consume `BackendDirectIntrinsicInvocation` and
+  `BackendComposedIntrinsicInvocation` values.
+- Support only backend `cpp` in M214.
+- Render C++ call text as `assembled_name(opaque_argument_payload)`, including
+  `assembled_name()` for empty arguments.
+- Preserve M213 typed immediate metadata on the render result, but do not
+  rewrite argument text or render C++ non-type template syntax in this slice.
+- Preserve invocation/request/source provenance.
+- Diagnose non-C++ invocation values and unsupported invocation shapes.
 
 Out of scope:
 
-Production code; tests; broad lowering reopen; raw TSIL rescans; arbitrary
-argument parsing; dependency closure; whole generated project rendering;
-template-side semantics; source repair; and runtime dependency on `frozen/` or
-`tslgenold`.
+New lowering; raw TSIL rescans; argument parsing/splitting/repair; direct
+placeholder resolution; Rust rendering; Rust `core::arch::*` qualification;
+C++ non-type template signature rendering; Rust const generic rendering;
+primitive dependency closure; whole primitive body rendering; whole generated
+project rendering/writing/build verification; template-side semantics; and
+runtime dependency on `frozen/` or `tslgenold`.
 
 Validation:
 
 ```bash
 git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m214_cpp_intrinsic_invocation_call_rendering.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M214 added `tslgen.backends.cpp.intrinsic_calls`, a focused C++ backend/output
+rendering boundary over accepted M213 assembled intrinsic invocation values.
+The renderer consumes direct and composed invocation values, supports only
+backend `cpp`, renders `assembled_name(opaque_argument_payload)`, preserves
+empty payloads as `assembled_name()`, preserves typed immediate metadata for
+later wrapper/signature work, and diagnoses non-C++ or unsupported invocation
+shapes. It does not parse raw TSIL, reopen lowering, split or repair argument
+payloads, render Rust, decide C++ non-type template syntax, render whole
+primitive bodies, or write generated projects.
+
+Review/audit verdict:
+
+Accepted after focused test and documentation revision. Architecture/boundary
+and evidence reviewers accepted the narrow C++ renderer over M213 typed values.
+The test reviewer initially requested coverage for unsupported invocation
+shape diagnostics, public `CppIntrinsicCallRenderResult` import, and non-C++
+diagnostic severity/message assertions; those fixes were applied and focused
+test re-review accepted them. The documentation reviewer initially requested
+domain-model coverage for the public result wrapper; that fix was applied and
+focused documentation re-review accepted it. The validation auditor only found
+test-created `__pycache__` directories, which the orchestrator removed before
+the final hygiene check.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m214_cpp_intrinsic_invocation_call_rendering.py`:
+  exit 0, `8 passed in 2.22s`.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created `__pycache__` directories during validation audit.
+- After removing those directories, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Next concrete prompt:
+`docs/agent/runs/m215-cpp-intrinsic-return-statement-rendering-execution-review-loop-prompt.md`.
+
+### Milestone 215: C++ Intrinsic Return Statement Rendering
+
+Status:
+
+Selected. Execution-review prompt:
+`docs/agent/runs/m215-cpp-intrinsic-return-statement-rendering-execution-review-loop-prompt.md`.
+
+Goal:
+
+Implement the smallest body-level C++ rendering boundary that consumes M214
+rendered intrinsic call values and produces a typed C++ return-statement
+fragment.
+
+Scope:
+
+- Consume `CppRenderedIntrinsicCall` values produced from M213 invocations.
+- Support only one body fragment shape in M215: `return {call_text};`.
+- Preserve the rendered call value, source provenance, and typed immediate
+  metadata for later wrapper/signature/template work.
+- Return structured diagnostics for unsupported input shapes if the public API
+  accepts object-shaped defensive input.
+- Keep the boundary presentation-level: it should not decide intrinsic names,
+  immediacy, argument payload structure, primitive selection, dependency
+  closure, or generated project layout.
+
+Out of scope:
+
+New lowering; raw TSIL rescans; `emit_return(...)` parsing; primitive body
+tokenization; argument parsing/splitting/repair; direct placeholder
+resolution; Rust rendering; C++ non-type template signature rendering; Rust
+const generic rendering; dependency closure; whole primitive body rendering;
+whole generated project rendering/writing/build verification; template-side
+semantics; and runtime dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m215_cpp_intrinsic_return_statement_rendering.py
 find tslgen -type d -name __pycache__ -print
 ```

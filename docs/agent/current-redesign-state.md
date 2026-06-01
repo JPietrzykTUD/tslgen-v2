@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 213 is accepted.
+Milestone 214 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -425,44 +425,57 @@ arguments, resolve direct placeholders, render C++ or Rust calls, qualify Rust
 `core::arch::*`, render C++ non-type templates or Rust const generics, execute
 dependency closure, or write generated output.
 
+M214 added the focused C++ intrinsic call rendering boundary. The new
+`tslgen.backends.cpp.intrinsic_calls` module consumes accepted M213 direct or
+composed intrinsic invocation values, supports only backend `cpp`, and renders
+typed call text as `assembled_name(opaque_argument_payload)`, including
+`assembled_name()` for empty payloads. It preserves invocation provenance and
+typed immediate metadata for later wrapper/signature work. M214 keeps lowering
+closed and does not parse raw TSIL, split or repair argument payloads, render
+Rust calls, decide C++ non-type template syntax, render whole primitive
+bodies, write generated projects, or add another intrinsic-compose IR family.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M214 post-invocation assembly rendering/lowering gate planning prompt.
+Run M215 C++ intrinsic return statement rendering execution-review-loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m214-post-invocation-assembly-rendering-lowering-gate-planning-prompt.md
+docs/agent/runs/m215-cpp-intrinsic-return-statement-rendering-execution-review-loop-prompt.md
 ```
 
-Active planning milestone:
+Active execution milestone:
 
 ```text
-Milestone 214: Post-Invocation Assembly Rendering/Lowering Gate Planning.
+Milestone 215: C++ Intrinsic Return Statement Rendering.
 ```
 
 Latest review verdict:
 
 ```text
-M213 execution-review returned Accept after focused documentation revision.
-Architecture/boundary, evidence, test, documentation re-review, and final
-hygiene validation agreed that M213 is a typed backend/output assembly
-boundary. The only blocking review issue was stale documentation around
-selected immediate modifier values, which was fixed.
+M214 execution-review returned Accept after focused test and documentation
+revision. Architecture/boundary and evidence reviewers accepted the narrow
+C++ renderer over M213 typed invocation values. Focused re-review accepted the
+added unsupported-shape/public-import/non-C++ diagnostic tests and the
+domain-model result-wrapper documentation. The validation auditor only found
+test-created `__pycache__` directories, which were removed before the final
+hygiene check.
 ```
 
 Next expected action:
 
 ```text
-Run the active M214 planning prompt. First verify whether rendering assembled
-intrinsic invocations is blocked by a concrete lowering-owned gap. If not,
-keep lowering closed by current contract and select the smallest backend/output
-rendering milestone that consumes M213 invocation values without parsing
-arguments or moving semantics into templates.
+Run the active M215 execution-review-loop prompt. Implement only the smallest
+C++ body-level rendering boundary that consumes M214 rendered intrinsic call
+values and emits a typed `return {call_text};` fragment. Do not reopen
+lowering, parse `emit_return(...)`, parse arguments, add Rust rendering,
+render C++ non-type template signatures, render whole primitive bodies, write
+generated projects, or add another intrinsic-compose IR family.
 ```
 
 Previous review verdict:
@@ -504,14 +517,16 @@ planning. M209 planning returned Accept and selected M210. M210
 execution-review returned Accept With Follow-Ups and selected M211 planning.
 M211 planning returned Accept and selected M212 planning. M212 planning
 returned Accept and selected M213 execution-review. M213 execution-review
-returned Accept after focused documentation revision and selected M214
-planning.
+returned Accept after focused documentation revision and selected M214 C++
+intrinsic invocation call rendering execution-review. M214 execution-review
+returned Accept after focused test and documentation revision and selected
+M215 C++ intrinsic return statement rendering execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m213-backend-intrinsic-invocation-assembly-execution-review-loop-prompt.md
+docs/agent/runs/m214-cpp-intrinsic-invocation-call-rendering-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
