@@ -24678,6 +24678,11 @@ Scope:
 - Return existing typed `BackendTranslatedIntrinsicModifier` results with
   `BackendIntrinsicLiteralFragment` values, preserving field/request/metadata
   provenance and modifier order in any batch helper.
+- Keep the implementation shaped as the reusable typed modifier translation
+  pattern for later family-specific milestones: exact typed field matching,
+  typed rule/metadata lookup, typed translated modifier results, stable
+  diagnostics, and no renderer-side semantic decisions. This pattern must not
+  broaden M197 into prefix, infix, intrinsic-name assembly, or rendering.
 - Add focused tests for x86 and arm style suffixes, C++ and Rust metadata
   entries, signed/unsigned/float type tags, metadata-missing diagnostics,
   missing/unsupported extension style diagnostics, unsupported lowered type
@@ -24702,5 +24707,102 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m197_type_derived_intrinsic_suffix_translation.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M197 accepted. It added a context-aware backend intrinsic modifier translation
+path over accepted M182/M181 typed handoff values while preserving the M195
+literal-only API. The new context path translates only
+`suffix=value<backend>(intrin::suffix(TYPE))` fields whose suffix argument has
+already lowered to `LoweredScalarTypeIdentity`.
+
+M197 added exact C++ and Rust backend metadata entries for x86 and arm
+type-derived intrinsic suffix fragments. Python backend code contains typed
+rule records mapping `(intrinsic_style, type_tag)` to backend metadata keys;
+the suffix fragment text itself comes from the typed backend metadata catalog,
+not from a hidden Python value map. Translated suffix modifiers carry field
+provenance plus metadata key/source provenance.
+
+M197 intentionally keeps no-argument suffixes, string suffixes such as
+`intrin::suffix("stream")`, symbol suffixes such as `ToBase`, prefix
+requests, backend-value infix suffix requests, `infix=to_type_suffix`, symbol
+immediates, direct intrinsic names, rendering, dependency closure, and
+lowering changes out of scope. The accepted tests characterize the corpus and
+show that only the 181 type-derived suffix fields newly translate; all other
+remaining M195 unsupported families stay named unsupported families.
+
+Accepted follow-up:
+
+- `tslgen/src/tslgen/backends/intrinsic_modifiers.py` is now substantial
+  enough that M198 must apply the module-size guardrail before adding prefix
+  logic. If prefix work would push it toward a catch-all module, split typed
+  rule-family helpers into focused private modules while preserving public
+  imports and M195/M197 behavior.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m197_type_derived_intrinsic_suffix_translation.py`:
+  exit 0, `31 passed`.
+- `find tslgen -type d -name __pycache__ -print`: validation-created
+  `__pycache__` directories were removed; final command exited 0 with no
+  output.
+
+### Milestone 198: Intrinsic Prefix Modifier Translation
+
+Status:
+
+Selected. Execution-review prompt:
+`docs/agent/runs/m198-intrinsic-prefix-modifier-translation-execution-review-loop-prompt.md`.
+
+Goal:
+
+Translate the observed typed intrinsic prefix modifier family using the M197
+context-aware modifier translation pattern. The executable slice should
+consume accepted M182/M181 lowering IR for
+`prefix=value<backend>(intrin::prefix)` and produce a typed
+`BackendTranslatedIntrinsicModifier` literal prefix fragment using explicit
+backend metadata/rule input.
+
+Scope:
+
+- Add explicit C++ and Rust backend metadata entries for selected x86-family
+  prefix fragments keyed by selected extension.
+- Add typed prefix metadata/rule records that map selected extension names to
+  exact backend metadata keys. Prefix fragment values must come from typed
+  backend metadata, not a hidden hardcoded value map.
+- Consume `BackendIntrinsicModifierField` values whose name is `prefix` and
+  whose value is `BackendIntrinsicModifierBackendValueOperand` carrying
+  `BackendIntrinsicPrefixValueRequest`.
+- Resolve the selected extension through the accepted `ExtensionCatalog`.
+- Return existing typed `BackendTranslatedIntrinsicModifier` results with
+  `BackendIntrinsicLiteralFragment` values, preserving field/request/metadata
+  provenance and modifier order.
+- Apply the M197 module-size follow-up before adding prefix logic.
+- Keep M195 literal translation and M197 type-derived suffix translation
+  behavior intact.
+- Add focused positive, negative, provenance, and corpus characterization
+  tests.
+
+Out of scope:
+
+Intrinsic name assembly; rendering; direct `intrin<...>(...)` parsing;
+intrinsic argument payload parsing; no-argument suffix resolution;
+`intrin::suffix("stream")`; `intrin::suffix(ToBase)`; wildcard-looking
+`intrin::suffix(si?)`; backend-value infix suffix resolution;
+`infix=to_type_suffix`; symbol immediate resolution; type spelling changes;
+value translation changes except preserving its unsupported boundary; source
+repair; dependency closure; generated-project changes; lowering changes; and
+runtime dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m198_intrinsic_prefix_modifier_translation.py
 find tslgen -type d -name __pycache__ -print
 ```

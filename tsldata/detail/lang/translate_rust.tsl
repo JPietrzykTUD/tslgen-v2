@@ -1,4 +1,24 @@
 translation rust:
+  intrinsic_suffix_x86_si8 "epi8"
+  intrinsic_suffix_x86_si16 "epi16"
+  intrinsic_suffix_x86_si32 "epi32"
+  intrinsic_suffix_x86_si64 "epi64"
+  intrinsic_suffix_x86_ui8 "epu8"
+  intrinsic_suffix_x86_ui16 "epu16"
+  intrinsic_suffix_x86_ui32 "epu32"
+  intrinsic_suffix_x86_ui64 "epu64"
+  intrinsic_suffix_x86_f32 "ps"
+  intrinsic_suffix_x86_f64 "pd"
+  intrinsic_suffix_arm_si8 "s8"
+  intrinsic_suffix_arm_si16 "s16"
+  intrinsic_suffix_arm_si32 "s32"
+  intrinsic_suffix_arm_si64 "s64"
+  intrinsic_suffix_arm_ui8 "u8"
+  intrinsic_suffix_arm_ui16 "u16"
+  intrinsic_suffix_arm_ui32 "u32"
+  intrinsic_suffix_arm_ui64 "u64"
+  intrinsic_suffix_arm_f32 "f32"
+  intrinsic_suffix_arm_f64 "f64"
   preamble """  #![allow(non_upper_case_globals)]
   #![allow(unused_parens)]
   #[cfg(feature = "std")]

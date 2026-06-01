@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 196 is accepted.
+Milestone 197 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -149,7 +149,30 @@ and can be handled from accepted `BackendIntrinsicSuffixValueRequest` /
 `BackendValueTypeOperand` IR plus selected extension context and backend
 metadata. M196 found no lowering change is needed for that family. M197 must
 not hardcode suffix fragment values in Python; suffix fragment text should
-come from explicit typed backend metadata or typed rule input.
+come from explicit typed backend metadata or typed rule input. M197 should
+establish the reusable typed modifier translation pattern for later
+family-specific prefix and infix milestones without implementing those
+families in M197.
+
+M197 added a context-aware backend intrinsic modifier translation path over
+accepted M182/M181 typed handoff values while preserving the M195 literal-only
+API. The new path translates only
+`suffix=value<backend>(intrin::suffix(TYPE))` fields whose suffix argument has
+already lowered to `LoweredScalarTypeIdentity`. C++ and Rust suffix fragment
+text now lives in typed backend metadata entries; Python backend code carries
+typed rule records mapping `(intrinsic_style, type_tag)` to metadata keys, not
+a hidden suffix-value map. Translated suffix modifiers preserve field
+provenance plus metadata key/source provenance. Corpus characterization shows
+only the 181 type-derived suffix fields newly translate; no-argument suffixes,
+string suffixes, symbol suffixes, prefix requests, backend-value infix suffix
+requests, `infix=to_type_suffix`, symbol immediates, direct intrinsic names,
+rendering, dependency closure, and lowering changes remain out of scope.
+Architecture review accepted M197 with a follow-up: M198 must apply the
+module-size guardrail before adding prefix logic because
+`tslgen/src/tslgen/backends/intrinsic_modifiers.py` is now substantial. If
+prefix work would push it toward a catch-all module, split typed rule-family
+helpers into focused private modules while preserving public imports and
+M195/M197 behavior.
 
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
@@ -170,40 +193,42 @@ parsing/source-repair work that lowering must not absorb by default.
 Current required action:
 
 ```text
-Run M197 type-derived intrinsic suffix translation execution-review loop prompt.
+Run M198 intrinsic prefix modifier translation execution-review loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m197-type-derived-intrinsic-suffix-translation-execution-review-loop-prompt.md
+docs/agent/runs/m198-intrinsic-prefix-modifier-translation-execution-review-loop-prompt.md
 ```
 
 Active implementation milestone:
 
 ```text
-Milestone 197: Type-Derived Intrinsic Suffix Translation.
+Milestone 198: Intrinsic Prefix Modifier Translation.
 ```
 
 Latest review verdict:
 
 ```text
-M196 planning returned Accept after read-only evidence, architecture/boundary,
-and documentation audits. It selected M197 as the next executable backend
-translation slice and did not modify implementation code.
+M197 execution-review returned Accept. Architecture/boundary, evidence,
+validation, and documentation audits accepted the typed type-derived intrinsic
+suffix translation boundary.
 ```
 
 Next expected action:
 
 ```text
-Run the active M197 execution-review loop. Implement only type-derived
-intrinsic suffix translation over accepted M182/M181 typed handoff values.
-Consume selected extension context, typed extension metadata, and typed
-backend metadata/rule input. Do not hardcode suffix fragment values in Python,
-assemble intrinsic names, parse direct intrinsic names or arguments, resolve
-no-argument/string/symbol suffixes, resolve prefixes or symbol immediates,
-render output, execute dependency closure, or change lowering. If the accepted
-M182/M181 typed handoff proves insufficient, stop and return to planner.
+Run the active M198 execution-review loop. Implement only typed
+`prefix=value<backend>(intrin::prefix)` modifier translation over accepted
+M182/M181 handoff values. Consume selected extension context, typed extension
+metadata, and typed backend metadata/rule input. Do not hardcode prefix
+fragment values in Python, assemble intrinsic names, parse direct intrinsic
+names or arguments, resolve no-argument/string/symbol suffixes, resolve infix
+or symbol immediates, render output, execute dependency closure, or change
+lowering. If the accepted M182/M181 typed handoff proves insufficient, stop
+and return to planner. Apply the M197 module-size follow-up before adding
+prefix logic.
 ```
 
 Previous review verdict:
@@ -227,13 +252,14 @@ execution. M191 execution-review returned Accept and selected M192. M192
 execution-review returned Accept and selected M193. M193 execution-review
 returned Accept and selected M194 planning. M194 planning returned Accept and
 selected M195. M195 execution-review returned Accept and selected M196
-planning. M196 planning returned Accept and selected M197.
+planning. M196 planning returned Accept and selected M197. M197
+execution-review returned Accept and selected M198.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m196-intrinsic-semantic-modifier-translation-planning-prompt.md
+docs/agent/runs/m197-type-derived-intrinsic-suffix-translation-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

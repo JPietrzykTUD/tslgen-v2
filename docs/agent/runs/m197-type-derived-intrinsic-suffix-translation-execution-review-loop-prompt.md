@@ -108,6 +108,11 @@ typed backend metadata/rule input.
 - Return `BackendTranslatedIntrinsicModifier` values with
   `BackendIntrinsicLiteralFragment` suffix fragments, preserving
   field/request/metadata provenance and modifier order in any batch helper.
+- Keep the implementation shaped as the reusable typed modifier translation
+  pattern for later family-specific milestones: exact typed field matching,
+  typed rule/metadata lookup, typed translated modifier results, stable
+  diagnostics, and no renderer-side semantic decisions. This pattern must not
+  broaden M197 into prefix, infix, intrinsic-name assembly, or rendering.
 - Keep M195 literal translation behavior intact. The new semantic suffix
   translator may be a focused helper or an extension of the existing intrinsic
   modifier translation module, but it must not make literal translation depend
@@ -176,6 +181,8 @@ Corpus characterization:
   selected context, extension catalog, and backend metadata;
 - assert all other M195 unsupported families remain named unsupported
   families, not accidental successes.
+- assert the public helper shape is suitable for future prefix/infix modifier
+  translators without implementing those families in M197.
 
 ## Out Of Scope
 
