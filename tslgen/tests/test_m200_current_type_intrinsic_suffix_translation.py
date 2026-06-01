@@ -1,20 +1,17 @@
 from __future__ import annotations
 
-import inspect
-from dataclasses import fields, replace
+from collections import Counter
 from pathlib import Path
 
 import pytest
 
-import tslgen.backends.intrinsic_modifiers as intrinsic_modifiers
 from tslgen.analysis.selection import SelectedImplementation, Target
 from tslgen.backends import (
+    BackendIntrinsicInfixSeparator,
     BackendIntrinsicLiteralFragment,
     BackendIntrinsicModifierTranslationContext,
     BackendTranslatedIntrinsicModifier,
-    BackendIntrinsicTypeSuffixTranslationRule,
     translate_backend_intrinsic_compose_modifiers_with_context,
-    translate_backend_intrinsic_modifier_field,
     translate_backend_intrinsic_modifier_field_with_context,
     translate_backend_intrinsic_modifier_fields_with_context,
 )
@@ -22,14 +19,10 @@ from tslgen.core.diagnostics import SourceLocation
 from tslgen.domain.backend_metadata import (
     BackendId,
     BackendMetadataCatalog,
-    BackendTemplateText,
     BackendTranslationKey,
-    BackendTranslationTemplate,
 )
 from tslgen.domain.catalog import (
-    Extension,
     ExtensionCatalog,
-    ExtensionName,
     Implementation,
     ImplementationBody,
     Primitive,
@@ -37,7 +30,6 @@ from tslgen.domain.catalog import (
 )
 from tslgen.io.sources import SourceLoader
 from tslgen.lowering import (
-    BackendDirectIntrinsicHandoffRequest,
     BackendIntrinsicComposeHandoffRequest,
     BackendIntrinsicHandoffRequestSegment,
     BackendIntrinsicModifierBackendValueOperand,
@@ -50,8 +42,6 @@ from tslgen.lowering import (
     BackendValueStringLiteralOperand,
     BackendValueSymbolOperand,
     BackendValueTypeOperand,
-    LoweredScalarTypeIdentity,
-    LoweredSizeType,
     Lowerer,
     discover_backend_intrinsic_requests_in_text,
 )
@@ -68,29 +58,29 @@ _DEFAULT_METADATA = object()
 
 
 @pytest.mark.parametrize(
-    ("extension", "backend", "type_tag", "expected"),
+    ("backend", "extension", "selected_type_tag", "expected", "expected_key"),
     (
-        ("avx2", "cpp", "si32", "epi32"),
-        ("avx2", "cpp", "ui64", "epu64"),
-        ("avx2", "cpp", "f32", "ps"),
-        ("neon", "cpp", "si16", "s16"),
-        ("neon", "cpp", "ui8", "u8"),
-        ("neon", "cpp", "f64", "f64"),
-        ("avx2", "rust", "f64", "pd"),
-        ("neon", "rust", "si32", "s32"),
+        ("cpp", "avx2", "si32", "epi32", "intrinsic_suffix_x86_si32"),
+        ("rust", "avx2", "f64", "pd", "intrinsic_suffix_x86_f64"),
+        ("cpp", "neon", "ui16", "u16", "intrinsic_suffix_arm_ui16"),
     ),
 )
-def test_m197_translates_type_derived_suffix_through_active_metadata(
-    extension: str,
+def test_m200_translates_current_type_suffix_through_active_metadata(
     backend: str,
-    type_tag: str,
+    extension: str,
+    selected_type_tag: str,
     expected: str,
+    expected_key: str,
 ) -> None:
-    field = _type_suffix_field(type_tag)
+    field = _current_suffix_field("suffix")
 
     result = translate_backend_intrinsic_modifier_field_with_context(
         field,
-        _context(backend=backend, extension=extension),
+        _context(
+            backend=backend,
+            extension=extension,
+            selected_type_tag=selected_type_tag,
+        ),
     )
 
     assert result.diagnostics == ()
@@ -100,21 +90,72 @@ def test_m197_translates_type_derived_suffix_through_active_metadata(
         name="suffix",
         value=BackendIntrinsicLiteralFragment(expected),
         source=field.source,
-        metadata_key=BackendTranslationKey(
-            f"intrinsic_suffix_{_style(extension)}_{type_tag}"
-        ),
+        metadata_key=BackendTranslationKey(expected_key),
         metadata_source=result.modifier.metadata_source,
     )
     assert result.modifier.metadata_source is not None
     assert result.modifier.metadata_source.path.name == f"translate_{backend}.tsl"
 
 
-def test_m197_uses_metadata_value_not_a_hidden_python_suffix_map() -> None:
-    field = _type_suffix_field("si32")
-    custom_catalog = _metadata_catalog_with_template(
-        "cpp",
-        "intrinsic_suffix_x86_si32",
-        "custom_suffix",
+def test_m200_translates_current_type_suffix_as_infix_without_assembly() -> None:
+    request = _single_compose_request(
+        'intrin_compose<cvt infix=value<backend>(intrin::suffix) '
+        'infix_sep="">(data)'
+    )
+    assert isinstance(request, BackendIntrinsicComposeHandoffRequest)
+
+    result = translate_backend_intrinsic_compose_modifiers_with_context(
+        request,
+        _context(backend="cpp", extension="avx2", selected_type_tag="f32"),
+    )
+
+    assert result.diagnostics == ()
+    assert [modifier.name for modifier in result.modifiers] == ["infix", "infix_sep"]
+    assert result.modifiers[0].value == BackendIntrinsicLiteralFragment("ps")
+    assert result.modifiers[0].metadata_key == BackendTranslationKey(
+        "intrinsic_suffix_x86_f32"
+    )
+    assert result.modifiers[1].value == BackendIntrinsicInfixSeparator("")
+
+
+def test_m200_uses_selected_type_tag_not_backend_value_source_text() -> None:
+    field = _current_suffix_field(
+        "suffix",
+        query_source_text="value<backend>(not parseable current suffix)",
+    )
+
+    result = translate_backend_intrinsic_modifier_field_with_context(
+        field,
+        _context(backend="cpp", extension="avx2", selected_type_tag="ui64"),
+    )
+
+    assert result.diagnostics == ()
+    assert result.modifier is not None
+    assert result.modifier.value == BackendIntrinsicLiteralFragment("epu64")
+    assert result.modifier.metadata_key == BackendTranslationKey(
+        "intrinsic_suffix_x86_ui64"
+    )
+
+
+@pytest.mark.parametrize(
+    ("metadata_catalog", "expected_code"),
+    (
+        (None, "TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-MISSING-METADATA"),
+        (
+            _DEFAULT_METADATA,
+            "TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-MISSING-ENTRY",
+        ),
+    ),
+)
+def test_m200_diagnoses_missing_current_type_suffix_metadata(
+    metadata_catalog: BackendMetadataCatalog | None | object,
+    expected_code: str,
+) -> None:
+    field = _current_suffix_field("suffix")
+    catalog = (
+        _metadata_catalog_without("cpp", "intrinsic_suffix_x86_si32")
+        if metadata_catalog is _DEFAULT_METADATA
+        else metadata_catalog
     )
 
     result = translate_backend_intrinsic_modifier_field_with_context(
@@ -122,223 +163,51 @@ def test_m197_uses_metadata_value_not_a_hidden_python_suffix_map() -> None:
         _context(
             backend="cpp",
             extension="avx2",
-            metadata_catalog=custom_catalog,
+            selected_type_tag="si32",
+            metadata_catalog=catalog,
         ),
     )
 
-    assert result.diagnostics == ()
-    assert result.modifier is not None
-    assert result.modifier.value == BackendIntrinsicLiteralFragment("custom_suffix")
-    production_source = inspect.getsource(intrinsic_modifiers)
-    assert '"epi32"' not in production_source
-    assert '"epu32"' not in production_source
-    assert '"ps"' not in production_source
-    assert '"pd"' not in production_source
-
-
-def test_m197_preserves_literal_translation_without_metadata() -> None:
-    literal = _single_compose_request("intrin_compose<set, suffix=si128>(x)")
-    assert isinstance(literal, BackendIntrinsicComposeHandoffRequest)
-
-    literal_result = translate_backend_intrinsic_modifier_field(literal.modifiers[0], "cpp")
-    contextual_result = translate_backend_intrinsic_modifier_field_with_context(
-        literal.modifiers[0],
-        _context(backend="cpp", extension="avx2", metadata_catalog=None),
-    )
-
-    assert contextual_result == literal_result
-    assert contextual_result.modifier is not None
-    assert contextual_result.modifier.metadata_key is None
-    assert contextual_result.modifier.metadata_source is None
-
-
-def test_m197_preserves_modifier_order_and_metadata_provenance_in_batch() -> None:
-    type_suffix = _type_suffix_field("si32")
-    literal_post = _single_compose_request("intrin_compose<set, post=mask>(x)")
-    assert isinstance(literal_post, BackendIntrinsicComposeHandoffRequest)
-    fields_to_translate = (literal_post.modifiers[0], type_suffix)
-
-    result = translate_backend_intrinsic_modifier_fields_with_context(
-        fields_to_translate,
-        _context(backend="cpp", extension="avx2"),
-    )
-
-    assert result.diagnostics == ()
-    assert [modifier.name for modifier in result.modifiers] == ["post", "suffix"]
-    assert result.modifiers[0].value == BackendIntrinsicLiteralFragment("mask")
-    assert result.modifiers[0].metadata_key is None
-    assert result.modifiers[1].value == BackendIntrinsicLiteralFragment("epi32")
-    assert result.modifiers[1].field is type_suffix
-    assert result.modifiers[1].metadata_key == BackendTranslationKey(
-        "intrinsic_suffix_x86_si32"
-    )
-    assert result.modifiers[1].metadata_source is not None
-
-
-def test_m197_does_not_parse_type_generation_source_text() -> None:
-    field = _type_suffix_field(
-        "f64",
-        argument_source_text="not a parseable type<generation>(value",
-    )
-
-    result = translate_backend_intrinsic_modifier_field_with_context(
-        field,
-        _context(backend="cpp", extension="avx2"),
-    )
-
-    assert result.diagnostics == ()
-    assert result.modifier is not None
-    assert result.modifier.value == BackendIntrinsicLiteralFragment("pd")
+    assert result.modifier is None
+    assert _codes(result.diagnostics) == (expected_code,)
+    assert result.diagnostics[0].location == field.value_source
 
 
 @pytest.mark.parametrize(
-    ("backend", "extension", "metadata_catalog", "expected_code"),
+    ("extension", "selected_type_tag", "expected_code"),
     (
+        ("avx2", "bf16", "TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNSUPPORTED-TYPE"),
         (
-            "cpp",
-            "avx2",
-            None,
-            "TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-MISSING-METADATA",
-        ),
-        (
-            "c17",
-            "avx2",
-            _DEFAULT_METADATA,
-            "TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNSUPPORTED-BACKEND",
-        ),
-        (
-            "cpp",
-            "missing",
-            _DEFAULT_METADATA,
-            "TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNKNOWN-EXTENSION",
-        ),
-        (
-            "cpp",
             "generic",
-            _DEFAULT_METADATA,
+            "si32",
             "TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNSUPPORTED-STYLE",
         ),
     ),
 )
-def test_m197_diagnoses_missing_context_inputs(
-    backend: str,
+def test_m200_diagnoses_unsupported_current_type_inputs(
     extension: str,
-    metadata_catalog: BackendMetadataCatalog | None | object,
+    selected_type_tag: str,
     expected_code: str,
 ) -> None:
     result = translate_backend_intrinsic_modifier_field_with_context(
-        _type_suffix_field("si32"),
+        _current_suffix_field("suffix"),
         _context(
-            backend=backend,
+            backend="cpp",
             extension=extension,
-            metadata_catalog=metadata_catalog,
+            selected_type_tag=selected_type_tag,
         ),
     )
 
     assert result.modifier is None
     assert _codes(result.diagnostics) == (expected_code,)
     assert result.diagnostics[0].location is not None
-
-
-def test_m197_diagnoses_selected_extension_without_intrinsic_style() -> None:
-    catalog = _extension_catalog()
-    avx2 = _extension(catalog, "avx2")
-    without_style = replace(avx2, intrinsic_style=None)
-    context = _context(
-        backend="cpp",
-        extension="avx2",
-        extension_catalog=ExtensionCatalog((without_style,)),
-    )
-
-    result = translate_backend_intrinsic_modifier_field_with_context(
-        _type_suffix_field("si32"),
-        context,
-    )
-
-    assert result.modifier is None
-    assert _codes(result.diagnostics) == (
-        "TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-MISSING-STYLE",
-    )
-    assert result.diagnostics[0].location == without_style.source
-
-
-def test_m197_diagnoses_unsupported_type_tag_for_supported_style() -> None:
-    result = translate_backend_intrinsic_modifier_field_with_context(
-        _type_suffix_field("bf16"),
-        _context(backend="cpp", extension="avx2"),
-    )
-
-    assert result.modifier is None
-    assert _codes(result.diagnostics) == (
-        "TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNSUPPORTED-TYPE",
-    )
-    assert "bf16" in result.diagnostics[0].message
-
-
-def test_m197_diagnoses_unsupported_lowered_type_value() -> None:
-    result = translate_backend_intrinsic_modifier_field_with_context(
-        _type_suffix_field_from_value(LoweredSizeType(), argument_source_text="size_t"),
-        _context(backend="cpp", extension="avx2"),
-    )
-
-    assert result.modifier is None
-    assert _codes(result.diagnostics) == (
-        "TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNSUPPORTED-TYPE-VALUE",
-    )
-    assert "LoweredSizeType" in result.diagnostics[0].message
-
-
-def test_m197_diagnoses_missing_suffix_metadata_entry() -> None:
-    context = _context(
-        backend="cpp",
-        extension="avx2",
-        metadata_catalog=_metadata_catalog_without(
-            "cpp",
-            "intrinsic_suffix_x86_si32",
-        ),
-    )
-
-    result = translate_backend_intrinsic_modifier_field_with_context(
-        _type_suffix_field("si32"),
-        context,
-    )
-
-    assert result.modifier is None
-    assert _codes(result.diagnostics) == (
-        "TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-MISSING-ENTRY",
-    )
-
-
-def test_m197_diagnoses_suffix_metadata_placeholders() -> None:
-    context = _context(
-        backend="cpp",
-        extension="avx2",
-        metadata_catalog=_metadata_catalog_with_template(
-            "cpp",
-            "intrinsic_suffix_x86_si32",
-            "{type}",
-        ),
-    )
-
-    result = translate_backend_intrinsic_modifier_field_with_context(
-        _type_suffix_field("si32"),
-        context,
-    )
-
-    assert result.modifier is None
-    assert _codes(result.diagnostics) == (
-        "TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNRESOLVED-PLACEHOLDER",
-    )
-    assert "type" in result.diagnostics[0].message
+    message = result.diagnostics[0].message
+    assert selected_type_tag in message or extension in message
 
 
 @pytest.mark.parametrize(
     ("text", "expected_code"),
     (
-        (
-            "intrin_compose<setzero, suffix=value<backend>(intrin::suffix)>()",
-            None,
-        ),
         (
             'intrin_compose<setzero, suffix=value<backend>(intrin::suffix("stream"))>()',
             "TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-BACKEND-VALUE",
@@ -348,8 +217,12 @@ def test_m197_diagnoses_suffix_metadata_placeholders() -> None:
             "TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-BACKEND-VALUE",
         ),
         (
-            "intrin_compose<add, infix=value<backend>(intrin::suffix)>(left, right)",
-            None,
+            "intrin_compose<set1, suffix=value<backend>(intrin::suffix(si?))>(value)",
+            "TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-BACKEND-VALUE",
+        ),
+        (
+            "intrin_compose<vcvtq, infix=value<backend>(intrin::suffix(ToBase))>(data)",
+            "TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-BACKEND-VALUE",
         ),
         (
             "intrin_compose<vreinterpretq, infix=to_type_suffix>(data)",
@@ -361,59 +234,25 @@ def test_m197_diagnoses_suffix_metadata_placeholders() -> None:
         ),
     ),
 )
-def test_m197_keeps_other_semantic_modifier_families_unsupported(
+def test_m200_keeps_other_modifier_families_unsupported(
     text: str,
-    expected_code: str | None,
+    expected_code: str,
 ) -> None:
     request = _single_compose_request(text)
     assert isinstance(request, BackendIntrinsicComposeHandoffRequest)
 
     result = translate_backend_intrinsic_compose_modifiers_with_context(
         request,
-        _context(backend="cpp", extension="avx2"),
-    )
-
-    if expected_code is None:
-        assert result.diagnostics == ()
-        assert len(result.modifiers) == 1
-    else:
-        assert result.modifiers == ()
-        assert _codes(result.diagnostics) == (expected_code,)
-
-
-def test_m197_keeps_direct_intrinsic_handoff_opaque_with_context() -> None:
-    request = _single_compose_request("intrin<_mm_add_epi32>(left, right)")
-    assert isinstance(request, BackendDirectIntrinsicHandoffRequest)
-
-    result = intrinsic_modifiers.translate_backend_intrinsic_handoff_request_modifiers_with_context(
-        request,
-        _context(backend="cpp", extension="avx2"),
+        _context(backend="cpp", extension="avx2", selected_type_tag="si32"),
     )
 
     assert result.modifiers == ()
-    assert _codes(result.diagnostics) == (
-        "TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-DIRECT-INTRINSIC",
-    )
+    assert _codes(result.diagnostics) == (expected_code,)
+    assert result.diagnostics[0].location is not None
 
 
-def test_m197_public_helper_shape_is_reusable_without_implementing_prefix_infix() -> None:
-    context_fields = {field.name for field in fields(BackendIntrinsicModifierTranslationContext)}
-    rule_fields = {field.name for field in fields(BackendIntrinsicTypeSuffixTranslationRule)}
-
-    assert context_fields == {
-        "backend",
-        "selected_extension",
-        "selected_type_tag",
-        "extension_catalog",
-        "metadata_catalog",
-    }
-    assert rule_fields == {"intrinsic_style", "type_tag", "metadata_key"}
-    signature = inspect.signature(translate_backend_intrinsic_modifier_field_with_context)
-    assert tuple(signature.parameters) == ("field", "context")
-
-
-def test_m197_corpus_type_derived_suffixes_translate_and_other_families_stay_named() -> None:
-    context = _context(backend="cpp", extension="avx2")
+def test_m200_corpus_current_type_suffixes_translate_and_other_families_stay_named() -> None:
+    context = _context(backend="cpp", extension="avx2", selected_type_tag="si32")
     raw_matches = 0
     balanced_snippets = 0
     modifier_fields = 0
@@ -422,7 +261,12 @@ def test_m197_corpus_type_derived_suffixes_translate_and_other_families_stay_nam
     prefix_translated = 0
     current_suffix_translated = 0
     unsupported_families: dict[str, int] = {}
-    type_suffix_fields: list[BackendIntrinsicModifierField] = []
+    current_suffix_fields: Counter[str] = Counter()
+    unsupported_suffix_symbols: Counter[str] = Counter()
+    unsupported_infix_symbols: Counter[str] = Counter()
+    unsupported_suffix_strings: Counter[str] = Counter()
+    unsupported_semantic_infixes: Counter[str] = Counter()
+    unsupported_immediate_symbols: Counter[str] = Counter()
 
     for path in sorted((_REPO_ROOT / "tsldata" / "primitives").rglob("*.tsl")):
         text = path.read_text(encoding="utf-8")
@@ -449,17 +293,18 @@ def test_m197_corpus_type_derived_suffixes_translate_and_other_families_stay_nam
                     request.modifiers,
                     context,
                 )
-                translated_fields = {id(modifier.field): modifier for modifier in translation.modifiers}
+                translated_fields = {
+                    id(modifier.field): modifier for modifier in translation.modifiers
+                }
                 diagnostic_iter = iter(translation.diagnostics)
                 for field in request.modifiers:
                     modifier_fields += 1
-                    if _is_type_derived_suffix_field(field):
-                        type_suffix_fields.append(field)
                     if id(field) in translated_fields:
                         if _is_type_derived_suffix_field(field):
                             type_suffix_translated += 1
                         elif _is_current_suffix_field(field):
                             current_suffix_translated += 1
+                            current_suffix_fields[field.name] += 1
                         elif _is_prefix_field(field):
                             prefix_translated += 1
                         else:
@@ -467,16 +312,27 @@ def test_m197_corpus_type_derived_suffixes_translate_and_other_families_stay_nam
                         continue
                     diagnostic = next(diagnostic_iter)
                     family = _unsupported_family(field, diagnostic.code)
-                    unsupported_families[family] = unsupported_families.get(family, 0) + 1
+                    unsupported_families[family] = (
+                        unsupported_families.get(family, 0) + 1
+                    )
+                    _record_unsupported_detail(
+                        field,
+                        diagnostic.code,
+                        suffix_symbols=unsupported_suffix_symbols,
+                        infix_symbols=unsupported_infix_symbols,
+                        suffix_strings=unsupported_suffix_strings,
+                        semantic_infixes=unsupported_semantic_infixes,
+                        immediate_symbols=unsupported_immediate_symbols,
+                    )
 
     assert raw_matches == 627
     assert balanced_snippets == 619
     assert modifier_fields == 643
-    assert len(type_suffix_fields) == 181
     assert literal_translated == 335
     assert type_suffix_translated == 181
     assert prefix_translated == 9
     assert current_suffix_translated == 41
+    assert current_suffix_fields == {"suffix": 38, "infix": 3}
     assert unsupported_families == {
         "infix:backend-suffix:symbol": 13,
         "infix:semantic": 4,
@@ -484,21 +340,18 @@ def test_m197_corpus_type_derived_suffixes_translate_and_other_families_stay_nam
         "suffix:backend-suffix:symbol": 20,
         "immediate:symbol": 19,
     }
-
-    representative = type_suffix_fields[0]
-    arm_result = translate_backend_intrinsic_modifier_field_with_context(
-        representative,
-        _context(backend="cpp", extension="neon"),
-    )
-    assert arm_result.diagnostics == ()
-    assert arm_result.modifier is not None
+    assert unsupported_suffix_strings == {"stream": 21}
+    assert unsupported_suffix_symbols == {"ToBase": 19, "si?": 1}
+    assert unsupported_infix_symbols == {"ToBase": 13}
+    assert unsupported_semantic_infixes == {"to_type_suffix": 4}
+    assert unsupported_immediate_symbols == {"index": 18, "Index": 1}
 
 
 def _context(
     *,
     backend: str,
     extension: str,
-    selected_type_tag: str = "si32",
+    selected_type_tag: str,
     extension_catalog: ExtensionCatalog | None = None,
     metadata_catalog: BackendMetadataCatalog | None | object = _DEFAULT_METADATA,
 ) -> BackendIntrinsicModifierTranslationContext:
@@ -510,7 +363,7 @@ def _context(
     assert catalog is None or isinstance(catalog, BackendMetadataCatalog)
     return BackendIntrinsicModifierTranslationContext(
         backend=BackendId(backend),
-        selected_extension=ExtensionName(extension),
+        selected_extension=extension,
         selected_type_tag=TypeTag(selected_type_tag),
         extension_catalog=extension_catalog or _extension_catalog(),
         metadata_catalog=catalog,
@@ -534,35 +387,7 @@ def _metadata_catalog_without(
         translation_templates=tuple(
             template
             for template in catalog.translation_templates
-            if not (
-                str(template.backend) == backend
-                and str(template.key) == key
-            )
-        ),
-    )
-
-
-def _metadata_catalog_with_template(
-    backend: str,
-    key: str,
-    value: str,
-) -> BackendMetadataCatalog:
-    catalog = _metadata_catalog_without(backend, key)
-    return BackendMetadataCatalog(
-        type_spellings=catalog.type_spellings,
-        translation_templates=tuple(
-            sorted(
-                (
-                    *catalog.translation_templates,
-                    BackendTranslationTemplate(
-                        backend=BackendId(backend),
-                        key=BackendTranslationKey(key),
-                        template=BackendTemplateText(value),
-                        source=_location(),
-                    ),
-                ),
-                key=lambda item: (str(item.backend), str(item.key)),
-            )
+            if not (str(template.backend) == backend and str(template.key) == key)
         ),
     )
 
@@ -578,61 +403,33 @@ def _extension_catalog() -> ExtensionCatalog:
     return catalog_result.catalog.extensions
 
 
-def _extension(catalog: ExtensionCatalog, name: str) -> Extension:
-    extension = catalog.get(name)
-    assert extension is not None
-    return extension
-
-
-def _style(extension: str) -> str:
-    style = _extension(_extension_catalog(), extension).intrinsic_style
-    assert style is not None
-    return style
-
-
-def _type_suffix_field(
-    type_tag: str,
+def _current_suffix_field(
+    field_name: str,
     *,
-    argument_source_text: str | None = None,
-) -> BackendIntrinsicModifierField:
-    return _type_suffix_field_from_value(
-        LoweredScalarTypeIdentity(TypeTag(type_tag)),
-        argument_source_text=argument_source_text or type_tag,
-    )
-
-
-def _type_suffix_field_from_value(
-    value,
-    *,
-    argument_source_text: str,
+    query_source_text: str = "value<backend>(intrin::suffix)",
 ) -> BackendIntrinsicModifierField:
     source = _location()
-    query = f"value<backend>(intrin::suffix({argument_source_text}))"
     request = BackendIntrinsicSuffixValueRequest(
         backend="cpp",
-        argument=BackendValueTypeOperand(
-            value=value,
-            source_text=argument_source_text,
-            source=source,
-        ),
-        source_text=query,
+        argument=None,
+        source_text=query_source_text,
         source=source,
     )
     return BackendIntrinsicModifierField(
-        name="suffix",
-        key_text="suffix",
+        name=field_name,
+        key_text=field_name,
         value=BackendIntrinsicModifierBackendValueOperand(
             request=request,
             island=BackendValueQueryRequest(
-                query_text=f"intrin::suffix({argument_source_text})",
+                query_text="intrin::suffix",
                 query_source=source,
-                source_text=query,
+                source_text=query_source_text,
                 source=source,
             ),
-            source_text=query,
+            source_text=query_source_text,
             source=source,
         ),
-        source_text=f"suffix={query}",
+        source_text=f"{field_name}={query_source_text}",
         source=source,
         key_source=source,
         value_source=source,
@@ -774,6 +571,51 @@ def _unsupported_family(
     if isinstance(field.value, BackendIntrinsicModifierSymbolOperand):
         return f"{field.name}:symbol"
     return f"{field.name}:unknown"
+
+
+def _record_unsupported_detail(
+    field: BackendIntrinsicModifierField,
+    diagnostic_code: str,
+    *,
+    suffix_symbols: Counter[str],
+    infix_symbols: Counter[str],
+    suffix_strings: Counter[str],
+    semantic_infixes: Counter[str],
+    immediate_symbols: Counter[str],
+) -> None:
+    if isinstance(field.value, BackendIntrinsicModifierBackendValueOperand):
+        request = field.value.request
+        if isinstance(request, BackendIntrinsicSuffixValueRequest):
+            argument = request.argument
+            if field.name == "suffix" and isinstance(
+                argument,
+                BackendValueStringLiteralOperand,
+            ):
+                suffix_strings[argument.value] += 1
+            if field.name == "suffix" and isinstance(
+                argument,
+                BackendValueSymbolOperand,
+            ):
+                suffix_symbols[argument.text] += 1
+            if field.name == "infix" and isinstance(
+                argument,
+                BackendValueSymbolOperand,
+            ):
+                infix_symbols[argument.text] += 1
+        return
+
+    if (
+        diagnostic_code
+        == "TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-SEMANTIC-INFIX"
+        and isinstance(field.value, BackendIntrinsicModifierSymbolOperand)
+    ):
+        semantic_infixes[field.value.text] += 1
+    if (
+        diagnostic_code
+        == "TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-IMMEDIATE"
+        and isinstance(field.value, BackendIntrinsicModifierSymbolOperand)
+    ):
+        immediate_symbols[field.value.text] += 1
 
 
 def _skip_whitespace(text: str, position: int) -> int:

@@ -21,7 +21,7 @@ from tslgen.domain.backend_metadata import (
     BackendTranslationKey,
     BackendTranslationTemplate,
 )
-from tslgen.domain.catalog import ExtensionCatalog, ExtensionName
+from tslgen.domain.catalog import ExtensionCatalog, ExtensionName, TypeTag
 from tslgen.lowering.model import (
     BackendDirectIntrinsicHandoffRequest,
     BackendIntrinsicComposeHandoffRequest,
@@ -102,6 +102,7 @@ class BackendIntrinsicModifierTranslationBatchResult:
 class BackendIntrinsicModifierTranslationContext:
     backend: BackendId
     selected_extension: ExtensionName
+    selected_type_tag: TypeTag
     extension_catalog: ExtensionCatalog
     metadata_catalog: BackendMetadataCatalog | None
 
@@ -305,7 +306,12 @@ def _translate_metadata_backed_modifier(
             diagnostics=(_unknown_extension_diagnostic(field, context, family),),
         )
 
-    metadata_key = family.metadata_key(field, request, extension)
+    metadata_key = family.metadata_key(
+        field,
+        request,
+        extension,
+        context.selected_type_tag,
+    )
     if isinstance(metadata_key, Diagnostic):
         return BackendIntrinsicModifierTranslationResult(
             modifier=None,

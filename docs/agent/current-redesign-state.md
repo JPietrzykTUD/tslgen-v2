@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 198 is accepted.
+Milestone 200 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -191,6 +191,46 @@ the current `.tsl` corpus does not use that modifier for them. M198 leaves
 no-argument/string/symbol suffixes, backend-value infix suffixes, symbol
 immediates, `infix=to_type_suffix`, intrinsic-name assembly, rendering,
 dependency closure, and lowering changes out of scope.
+The one observed `intrin::suffix(si?)` occurrence is recorded as FTF-002 in
+`docs/redesign/flaws-to-fix.md`: treat it as source-data debt and keep it as
+an unsupported diagnostic boundary until a focused `.tsl` cleanup milestone
+replaces it with a current-base/current-type spelling such as
+`intrin::suffix(base::in)`.
+
+M199 planned the next backend intrinsic modifier slice after M198. The
+post-M198 corpus inventory has 643 total intrinsic modifier fields; 525
+translate after M198 and 118 remain unsupported. The remaining families are
+38 `suffix=value<backend>(intrin::suffix)` current-type suffix requests,
+21 `intrin::suffix("stream")` string suffix requests, 20 symbol suffix
+requests (19 actionable `ToBase` plus the one FTF-002 `si?` source flaw),
+3 `infix=value<backend>(intrin::suffix)` current-type suffix requests,
+13 `infix=value<backend>(intrin::suffix(ToBase))` destination-type suffix
+requests, 4 `infix=to_type_suffix` markers, and 19 symbol immediates. M199
+records ADR-057: no-argument `intrin::suffix` means the current selected
+implementation `TypeTag`, supplied by typed backend modifier context and
+resolved through selected extension/intrinsic-style metadata. M199 selected
+M200 to implement only the current-type no-argument suffix family for both
+`suffix` and `infix` fields.
+
+M200 added current-type no-argument intrinsic suffix translation. The backend
+intrinsic modifier context now carries an explicit selected/current `TypeTag`.
+Typed `BackendIntrinsicSuffixValueRequest(argument=None)` fields named
+`suffix` or `infix` translate through the existing metadata-backed suffix rule
+path using selected extension `intrinsic_style` plus selected type tag.
+Fragment text still comes from active C++/Rust backend metadata, and the
+source field name is preserved as a typed modifier fact. M200 does not
+assemble intrinsic names, render output, qualify Rust `core::arch::*` paths,
+change lowering, execute dependency closure, repair source, or depend on
+`frozen/` or `tslgenold`. Corpus accounting after M200: 566 of 643 modifier
+fields translate, including 335 literal modifiers, 181 type-derived suffix
+modifiers, 9 prefix modifiers, and 41 current-type no-argument suffix
+modifiers split as 38 `suffix` fields and 3 `infix` fields. The remaining 77
+unsupported fields are 21 `"stream"` string suffixes, 19 `suffix(ToBase)`
+symbol suffixes, 1 FTF-002 `suffix(si?)` source-data flaw, 13
+`infix(ToBase)` symbol suffixes, 4 `infix=to_type_suffix` markers, and 19
+symbol immediates. Architecture review accepted M200 with a non-blocking
+follow-up: current-type suffix diagnostics still reuse some "type-derived
+intrinsic suffix" wording and can be clarified later.
 
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
@@ -211,40 +251,43 @@ parsing/source-repair work that lowering must not absorb by default.
 Current required action:
 
 ```text
-Run M199 post-prefix intrinsic modifier planning prompt.
+Run M201 post-current-suffix intrinsic modifier planning prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m199-post-prefix-intrinsic-modifier-planning-prompt.md
+docs/agent/runs/m201-post-current-suffix-intrinsic-modifier-planning-prompt.md
 ```
 
 Active planning milestone:
 
 ```text
-Milestone 199: Post-Prefix Intrinsic Modifier Planning.
+Milestone 201: Post-Current-Suffix Intrinsic Modifier Planning.
 ```
 
 Latest review verdict:
 
 ```text
-M198 execution-review returned Accept. Architecture/boundary, evidence,
-validation, and documentation audits accepted the typed intrinsic prefix
-modifier translation boundary and shared metadata-backed modifier rule
-evaluator.
+M200 execution-review returned Accept With Follow-Ups. Architecture/boundary
+review accepted the typed current-suffix boundary; evidence re-review accepted
+the tightened corpus accounting; documentation audit issues were addressed in
+behavioral/domain docs, roadmap, and current state. Required validation passed:
+compileall exit 0; M200 targeted tests 16 passed; M197+M198 supplemental
+regression 59 passed; `git diff --check` exit 0; final `find __pycache__`
+check exit 0 after cleanup.
 ```
 
 Next expected action:
 
 ```text
-Run the active M199 planning prompt. Re-inventory remaining unsupported
-intrinsic modifier families after M198, identify the typed context each family
-needs, and select one next executable backend intrinsic translation milestone
-or record a stop condition. Do not implement code in M199. Preserve ADR-056:
-Rust explicit `core::arch::...` intrinsic qualification is a later renderer or
-backend call-translation concern, not modifier translation. Do not invent
-ARM/NEON/SVE `intrin::prefix` mappings not present in the `.tsl` corpus.
+Run the active M201 planning prompt. Re-inventory the remaining 77 unsupported
+intrinsic modifier fields after M200, identify the typed context each family
+needs, and select one next executable backend intrinsic modifier milestone or
+record a stop condition. Preserve ADR-056 Rust module-qualification boundary,
+ADR-057 current-type no-argument suffix binding, and FTF-002
+`intrin::suffix(si?)` source-data-debt boundary. Do not implement code in
+M201.
 ```
 
 Previous review verdict:
@@ -270,13 +313,15 @@ returned Accept and selected M194 planning. M194 planning returned Accept and
 selected M195. M195 execution-review returned Accept and selected M196
 planning. M196 planning returned Accept and selected M197. M197
 execution-review returned Accept and selected M198. M198 execution-review
-returned Accept and selected M199 planning.
+returned Accept and selected M199 planning. M199 planning returned Accept and
+selected M200. M200 execution-review returned Accept With Follow-Ups and
+selected M201 planning.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m198-intrinsic-prefix-modifier-translation-execution-review-loop-prompt.md
+docs/agent/runs/m200-current-type-intrinsic-suffix-translation-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

@@ -24862,7 +24862,7 @@ Follow-ups:
 
 Status:
 
-Selected. Planning prompt:
+Accepted. Planning prompt:
 `docs/agent/runs/m199-post-prefix-intrinsic-modifier-planning-prompt.md`.
 
 Goal:
@@ -24884,6 +24884,180 @@ Scope:
 - Preserve the M198 boundary: no Rust `core::arch::*` qualification in
   modifier translation and no invented ARM `intrin::prefix` rules.
 - Select one thin executable M200 milestone or record a stop/planner condition
+  if a prerequisite design decision is missing.
+
+Out of scope:
+
+Implementation code; generated output; rendering; dependency closure; Rust
+module qualification; source repair; broad TSIL parsing; and lowering changes
+unless the planner proves an existing accepted handoff cannot represent a
+required corpus form.
+
+Validation:
+
+```bash
+git diff --check
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M199 accepted as a planning milestone. The post-M198 corpus inventory has
+643 total intrinsic modifier fields. M198 translates 525 of them: 335 literal
+modifiers from M195, 181 type-derived suffix modifiers from M197, and 9 prefix
+modifiers from M198. The remaining 118 unsupported fields are:
+
+- 38 `suffix=value<backend>(intrin::suffix)` current-type suffix requests.
+- 21 `suffix=value<backend>(intrin::suffix("stream"))` named string suffix
+  requests.
+- 20 `suffix=value<backend>(intrin::suffix(SYMBOL))` symbol suffix requests,
+  consisting of 19 actionable `ToBase` cases plus the one FTF-002
+  `intrin::suffix(si?)` source-data flaw.
+- 3 `infix=value<backend>(intrin::suffix)` current-type suffix requests used
+  as infix fragments.
+- 13 `infix=value<backend>(intrin::suffix(ToBase))` destination-type suffix
+  requests used as infix fragments.
+- 4 `infix=to_type_suffix` semantic infix markers.
+- 19 `immediate(N)=symbol` immediate references.
+
+M199 records ADR-057: `intrin::suffix` with no argument means the suffix for
+the current selected implementation type tag. The translator must obtain that
+type tag from typed selection/backend translation context, then resolve the
+fragment through the selected extension's intrinsic style and backend
+metadata. This is not source repair, not intrinsic-name assembly, and not
+target-language parsing.
+
+Selected next milestone:
+
+### Milestone 200: Current-Type Intrinsic Suffix Translation
+
+Status:
+
+Accepted. Execution-review prompt:
+`docs/agent/runs/m200-current-type-intrinsic-suffix-translation-execution-review-loop-prompt.md`.
+
+Goal:
+
+Translate no-argument `intrin::suffix` backend modifier requests as current
+selected type suffix fragments. The executable slice should consume accepted
+M182/M181 typed handoff values for
+`suffix=value<backend>(intrin::suffix)` and
+`infix=value<backend>(intrin::suffix)`, use the selected current `TypeTag`
+from typed backend modifier context, and resolve the fragment through the
+existing metadata-backed suffix rule path.
+
+Scope:
+
+- Extend the backend intrinsic modifier translation context with an explicit
+  selected/current `TypeTag`.
+- Translate `BackendIntrinsicSuffixValueRequest(argument=None)` for `suffix`
+  and `infix` modifier fields by treating the missing argument as the selected
+  current type tag.
+- Reuse the existing typed metadata-backed suffix machinery and backend
+  metadata entries; do not add hidden suffix fragment text maps.
+- Preserve field names, source provenance, metadata provenance, modifier
+  order, and existing literal/type-derived suffix/prefix behavior.
+- Add focused tests for C++ and Rust, x86 and arm intrinsic styles,
+  no-argument suffix-as-suffix, no-argument suffix-as-infix, missing metadata,
+  unsupported type/style diagnostics, and corpus characterization.
+- The corpus characterization should show the 38 no-argument suffix fields and
+  3 no-argument infix fields newly translate, leaving 77 unsupported modifier
+  fields.
+
+Out of scope:
+
+String suffixes such as `intrin::suffix("stream")`; symbol suffixes such as
+`intrin::suffix(ToBase)`; FTF-002 `intrin::suffix(si?)`; destination/return
+type binding; `infix=to_type_suffix`; symbol immediate resolution; intrinsic
+name assembly; rendering; Rust `core::arch::*` qualification; direct
+`intrin<...>(...)` parsing; intrinsic argument payload parsing; dependency
+closure; source repair; broad TSIL or target-language parsing; lowering
+changes; generated output; and runtime dependency on `frozen/` or
+`tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m200_current_type_intrinsic_suffix_translation.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M200 accepted. It adds an explicit selected/current `TypeTag` to
+`BackendIntrinsicModifierTranslationContext` and translates no-argument
+`BackendIntrinsicSuffixValueRequest(argument=None)` fields named `suffix` or
+`infix` as current-type intrinsic suffix fragments. The implementation reuses
+the existing metadata-backed suffix rule path: Python rule records choose
+backend metadata keys from selected extension `intrinsic_style` plus selected
+type tag, and emitted suffix fragment text still comes from active C++/Rust
+backend metadata.
+
+M200 preserves the original modifier field name, so a source `suffix` field
+produces a translated `suffix` modifier and a source `infix` field produces a
+translated `infix` modifier. It does not assemble intrinsic names, parse raw
+source text, inspect intrinsic argument payloads, render C++/Rust output,
+qualify Rust `core::arch::*` paths, change lowering, execute dependency
+closure, or add runtime dependencies on `frozen/` or `tslgenold`.
+
+Corpus characterization now shows 566 translated modifier fields out of 643:
+335 literal modifiers, 181 type-derived suffix modifiers, 9 prefix modifiers,
+and 41 current-type no-argument suffix modifiers. The 41 newly translated
+current-type fields split into 38 `suffix` fields and 3 `infix` fields.
+The remaining 77 unsupported fields are 21 `"stream"` string suffixes,
+19 `suffix(ToBase)` symbol suffixes, 1 FTF-002 `suffix(si?)` source-data
+flaw, 13 `infix(ToBase)` symbol suffixes, 4 `infix=to_type_suffix` markers,
+and 19 symbol immediates (`18 index`, `1 Index`).
+
+Review verdict:
+
+Architecture/boundary review returned `Accept With Follow-Ups`. The only
+follow-up is non-blocking diagnostic wording cleanup: some current-type suffix
+failures still reuse "type-derived intrinsic suffix" wording in diagnostic
+messages even though the behavior is now shared current/type-derived suffix
+translation.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m200_current_type_intrinsic_suffix_translation.py`:
+  exit 0, `16 passed`.
+- Supplemental regression:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m197_type_derived_intrinsic_suffix_translation.py tslgen/tests/test_m198_intrinsic_prefix_modifier_translation.py`:
+  exit 0, `59 passed`.
+- `find tslgen -type d -name __pycache__ -print`: validation-created
+  `__pycache__` directories were removed; final command exited 0 with no
+  output.
+
+### Milestone 201: Post-Current-Suffix Intrinsic Modifier Planning
+
+Status:
+
+Selected. Planning prompt:
+`docs/agent/runs/m201-post-current-suffix-intrinsic-modifier-planning-prompt.md`.
+
+Goal:
+
+Plan the next executable backend intrinsic modifier translation slice after
+M200 using the remaining 77 unsupported modifier fields. The planner should
+decide whether the next slice should implement named string suffixes,
+symbol-bound suffixes, symbol-bound infix suffixes, semantic
+`infix=to_type_suffix`, symbol immediates, intrinsic-name assembly, or a
+typed context prerequisite.
+
+Scope:
+
+- Re-inventory the remaining unsupported modifier families after M200 using
+  `tsldata/primitives/**/*.tsl` and the accepted M195-M200 translation path.
+- Identify which remaining families need selected/current type, destination or
+  return-type bindings such as `ToBase`, named suffix policy such as
+  `"stream"`, immediate argument provenance, or intrinsic-name assembly.
+- Preserve ADR-056 and ADR-057, and keep FTF-002 `intrin::suffix(si?)` as
+  source-data debt rather than a supported semantic family.
+- Select one thin executable M202 milestone or record a stop/planner condition
   if a prerequisite design decision is missing.
 
 Out of scope:

@@ -275,7 +275,7 @@ def test_m198_diagnoses_prefix_metadata_placeholders() -> None:
     (
         (
             "intrin_compose<setzero, suffix=value<backend>(intrin::suffix)>()",
-            "TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-BACKEND-VALUE",
+            None,
         ),
         (
             'intrin_compose<setzero, suffix=value<backend>(intrin::suffix("stream"))>()',
@@ -286,12 +286,12 @@ def test_m198_diagnoses_prefix_metadata_placeholders() -> None:
             "TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-BACKEND-VALUE",
         ),
         (
-            "intrin_compose<set1, suffix=si?>(value)",
-            "TSL-BACKEND-INTRINSIC-MODIFIER-UNSAFE-LITERAL",
+            "intrin_compose<set1, suffix=value<backend>(intrin::suffix(si?))>(value)",
+            "TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-BACKEND-VALUE",
         ),
         (
             "intrin_compose<add, infix=value<backend>(intrin::suffix)>(left, right)",
-            "TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-BACKEND-VALUE",
+            None,
         ),
         (
             "intrin_compose<vreinterpretq, infix=to_type_suffix>(data)",
@@ -309,7 +309,7 @@ def test_m198_diagnoses_prefix_metadata_placeholders() -> None:
 )
 def test_m198_keeps_other_modifier_families_unsupported(
     text: str,
-    expected_code: str,
+    expected_code: str | None,
 ) -> None:
     request = _single_compose_request(text)
     assert isinstance(request, BackendIntrinsicComposeHandoffRequest)
@@ -319,9 +319,13 @@ def test_m198_keeps_other_modifier_families_unsupported(
         _context(backend="cpp", extension="avx2"),
     )
 
-    assert result.modifiers == ()
-    assert _codes(result.diagnostics) == (expected_code,)
-    assert result.diagnostics[0].location is not None
+    if expected_code is None:
+        assert result.diagnostics == ()
+        assert len(result.modifiers) == 1
+    else:
+        assert result.modifiers == ()
+        assert _codes(result.diagnostics) == (expected_code,)
+        assert result.diagnostics[0].location is not None
 
 
 def test_m198_keeps_direct_intrinsic_handoff_opaque_with_context() -> None:
@@ -353,6 +357,7 @@ def test_m198_corpus_prefixes_translate_and_arm_direct_names_stay_outside_prefix
     literal_translated = 0
     type_suffix_translated = 0
     prefix_translated = 0
+    current_suffix_translated = 0
     arm_direct_names = 0
     unsupported_families: dict[str, int] = {}
 
@@ -391,6 +396,8 @@ def test_m198_corpus_prefixes_translate_and_arm_direct_names_stay_outside_prefix
                     if id(field) in translated_fields:
                         if _is_type_derived_suffix_field(field):
                             type_suffix_translated += 1
+                        elif _is_current_suffix_field(field):
+                            current_suffix_translated += 1
                         elif _is_prefix_field(field):
                             prefix_translated += 1
                             assert translated_fields[
@@ -409,12 +416,11 @@ def test_m198_corpus_prefixes_translate_and_arm_direct_names_stay_outside_prefix
     assert literal_translated == 335
     assert type_suffix_translated == 181
     assert prefix_translated == 9
+    assert current_suffix_translated == 41
     assert arm_direct_names > 0
     assert unsupported_families == {
-        "infix:backend-suffix:none": 3,
         "infix:backend-suffix:symbol": 13,
         "infix:semantic": 4,
-        "suffix:backend-suffix:none": 38,
         "suffix:backend-suffix:string": 21,
         "suffix:backend-suffix:symbol": 20,
         "immediate:symbol": 19,
@@ -425,6 +431,7 @@ def _context(
     *,
     backend: str,
     extension: str,
+    selected_type_tag: str = "si32",
     extension_catalog: ExtensionCatalog | None = None,
     metadata_catalog: BackendMetadataCatalog | None | object = _DEFAULT_METADATA,
 ) -> BackendIntrinsicModifierTranslationContext:
@@ -437,6 +444,7 @@ def _context(
     return BackendIntrinsicModifierTranslationContext(
         backend=BackendId(backend),
         selected_extension=extension,
+        selected_type_tag=TypeTag(selected_type_tag),
         extension_catalog=extension_catalog or _extension_catalog(),
         metadata_catalog=catalog,
     )
@@ -657,6 +665,17 @@ def _is_type_derived_suffix_field(field: BackendIntrinsicModifierField) -> bool:
     if not isinstance(request, BackendIntrinsicSuffixValueRequest):
         return False
     return isinstance(request.argument, BackendValueTypeOperand)
+
+
+def _is_current_suffix_field(field: BackendIntrinsicModifierField) -> bool:
+    if field.name not in {"suffix", "infix"}:
+        return False
+    if not isinstance(field.value, BackendIntrinsicModifierBackendValueOperand):
+        return False
+    request = field.value.request
+    return isinstance(request, BackendIntrinsicSuffixValueRequest) and (
+        request.argument is None
+    )
 
 
 def _is_prefix_field(field: BackendIntrinsicModifierField) -> bool:

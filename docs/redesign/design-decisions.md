@@ -2759,3 +2759,42 @@ Consequences:
   intrinsic calls.
 - Future renderer milestones need a typed Rust architecture-module policy for
   x86 and ARM rather than string-rewriting rendered names.
+
+## ADR-057: No-Argument Intrinsic Suffix Uses The Current Selected Type
+
+Status: Accepted.
+
+Context:
+
+After M198, the largest remaining simple intrinsic modifier family is
+`value<backend>(intrin::suffix)` with no argument. The current corpus uses
+this form as a source/current-type suffix in `suffix` fields and, in a few
+conversion intrinsics, as an `infix` fragment. Nearby forms such as
+`intrin::suffix(ToBase)` and `infix=to_type_suffix` need destination or return
+type bindings and should not be guessed from raw source text.
+
+Decision:
+
+`intrin::suffix` with no argument means the suffix for the current selected
+implementation type tag. Backend modifier translation must obtain that type
+tag from typed selection/backend translation context, not by parsing the
+surrounding source expression or inferring from intrinsic names. The selected
+extension's intrinsic style and backend metadata continue to determine the
+actual suffix fragment text.
+
+The same current-type suffix value may be translated for both `suffix` and
+`infix` modifier fields because the field name controls placement later; the
+modifier translator only produces a typed literal fragment for the already
+identified field.
+
+Consequences:
+
+- The backend intrinsic modifier context needs an explicit selected/current
+  `TypeTag` for no-argument suffix translation.
+- M200 translates `suffix=value<backend>(intrin::suffix)` and
+  `infix=value<backend>(intrin::suffix)` through the existing metadata-backed
+  suffix rule path.
+- M200 must not translate `intrin::suffix(ToBase)`, `intrin::suffix("stream")`,
+  `intrin::suffix(si?)`, `infix=to_type_suffix`, or symbol immediates.
+- Intrinsic-name assembly and Rust `core::arch::*` qualification remain later
+  backend rendering or call-translation concerns.

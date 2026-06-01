@@ -200,7 +200,7 @@ Accepted M193 diagnostic codes include:
 - `TSL-BACKEND-VALUE-TRANSLATION-MISSING-TRANSLATION`
 - `TSL-BACKEND-VALUE-TRANSLATION-UNRESOLVED-PLACEHOLDER`
 
-### M195-M198 Intrinsic Modifier Translation Boundary
+### M195-M200 Intrinsic Modifier Translation Boundary
 
 Milestone 195 adds a typed backend translation boundary for accepted M182
 `BackendIntrinsicComposeHandoffRequest` modifier fields. It consumes typed
@@ -237,12 +237,22 @@ and `_mm512_` from active C++/Rust backend metadata. The prefix fragment is
 only an intrinsic-name fragment; Rust `core::arch::*` qualification remains a
 future renderer or backend intrinsic-call translation concern.
 
-Unsupported forms remain explicit diagnostics, including no-argument suffixes,
+Milestone 200 adds metadata-backed current-type suffix translation for
+no-argument `intrin::suffix` requests. For fields named `suffix` or `infix`,
+`value<backend>(intrin::suffix)` means the suffix for the selected current
+implementation `TypeTag` supplied by typed backend modifier context. The
+translator maps that current type plus the selected extension's
+`intrinsic_style` to a backend metadata key and takes the fragment text from
+active C++/Rust backend metadata. It preserves the source field name: a
+`suffix` field stays a suffix modifier and an `infix` field stays an infix
+modifier; final intrinsic-name assembly remains out of scope.
+
+Unsupported forms remain explicit diagnostics, including
 `intrin::suffix("stream")`, symbol-argument suffixes such as `ToBase`,
-wildcard-looking direct suffixes such as `si?`, backend-value infix suffix
-requests, semantic `infix=to_type_suffix`, symbol immediates such as `index`
-or `Index`, direct intrinsic handoff requests, unsupported selected prefix
-extensions such as `neon` and `sve`, and metadata lookup failures.
+FTF-002 `intrin::suffix(si?)`, semantic `infix=to_type_suffix`, symbol
+immediates such as `index` or `Index`, direct intrinsic handoff requests,
+unsupported selected prefix extensions such as `neon` and `sve`, and metadata
+lookup failures.
 
 Accepted M195 diagnostic codes include:
 

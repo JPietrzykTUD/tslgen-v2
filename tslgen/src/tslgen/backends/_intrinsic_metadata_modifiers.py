@@ -44,7 +44,7 @@ class MetadataBackedModifierFamily:
         Diagnostic | None,
     ]
     metadata_key: Callable[
-        [BackendIntrinsicModifierField, object, Extension],
+        [BackendIntrinsicModifierField, object, Extension, TypeTag],
         BackendTranslationKey | Diagnostic,
     ]
 
@@ -182,10 +182,19 @@ PREFIX_TRANSLATION_RULES: tuple[
 )
 
 
-def _is_type_derived_suffix_request(request: object) -> bool:
+def _is_type_or_current_suffix_request(request: object) -> bool:
     if not isinstance(request, BackendIntrinsicSuffixValueRequest):
         return False
-    return isinstance(request.argument, BackendValueTypeOperand)
+    return request.argument is None or isinstance(
+        request.argument,
+        BackendValueTypeOperand,
+    )
+
+
+def _is_current_suffix_request(request: object) -> bool:
+    if not isinstance(request, BackendIntrinsicSuffixValueRequest):
+        return False
+    return request.argument is None
 
 
 def _is_prefix_request(request: object) -> bool:
@@ -207,6 +216,8 @@ def _type_suffix_precondition_diagnostic(
     if not isinstance(request, BackendIntrinsicSuffixValueRequest):
         return None
     argument = request.argument
+    if argument is None:
+        return None
     if not isinstance(argument, BackendValueTypeOperand):
         return None
     if isinstance(argument.value, LoweredScalarTypeIdentity):
@@ -218,20 +229,21 @@ def _type_suffix_metadata_key(
     field: BackendIntrinsicModifierField,
     request: object,
     extension: Extension,
+    selected_type_tag: TypeTag,
 ) -> BackendTranslationKey | Diagnostic:
     if not isinstance(request, BackendIntrinsicSuffixValueRequest):
         return _invalid_metadata_family_request_diagnostic(field)
-    argument = request.argument
-    if not isinstance(argument, BackendValueTypeOperand):
-        return _invalid_metadata_family_request_diagnostic(field)
-    if not isinstance(argument.value, LoweredScalarTypeIdentity):
-        return _unsupported_lowered_type_diagnostic(field, argument)
+
+    type_tag_result = _type_suffix_type_tag(field, request, selected_type_tag)
+    if isinstance(type_tag_result, Diagnostic):
+        return type_tag_result
+    type_tag, type_tag_source = type_tag_result
 
     if extension.intrinsic_style is None:
         return _missing_intrinsic_style_diagnostic(field, extension.source)
 
     style = BackendIntrinsicStyle(extension.intrinsic_style)
-    rule = _type_suffix_rule(style, argument.value.type_tag)
+    rule = _type_suffix_rule(style, type_tag)
     if rule is not None:
         return rule.metadata_key
     if style not in _known_type_suffix_styles():
@@ -240,14 +252,16 @@ def _type_suffix_metadata_key(
             style,
             extension.source,
         )
-    return _unsupported_type_tag_diagnostic(field, style, argument)
+    return _unsupported_type_tag_diagnostic(field, style, type_tag, type_tag_source)
 
 
 def _prefix_metadata_key(
     field: BackendIntrinsicModifierField,
     request: object,
     extension: Extension,
+    selected_type_tag: TypeTag,
 ) -> BackendTranslationKey | Diagnostic:
+    del selected_type_tag
     if not isinstance(request, BackendIntrinsicPrefixValueRequest):
         return _invalid_metadata_family_request_diagnostic(field)
 
@@ -264,9 +278,17 @@ METADATA_BACKED_MODIFIER_FAMILIES: tuple[
 ] = (
     MetadataBackedModifierFamily(
         field_name="suffix",
-        label="type-derived intrinsic suffix",
+        label="intrinsic suffix",
         diagnostic_name="TYPE-SUFFIX",
-        request_matches=_is_type_derived_suffix_request,
+        request_matches=_is_type_or_current_suffix_request,
+        precondition_diagnostic=_type_suffix_precondition_diagnostic,
+        metadata_key=_type_suffix_metadata_key,
+    ),
+    MetadataBackedModifierFamily(
+        field_name="infix",
+        label="current-type intrinsic suffix",
+        diagnostic_name="TYPE-SUFFIX",
+        request_matches=_is_current_suffix_request,
         precondition_diagnostic=_type_suffix_precondition_diagnostic,
         metadata_key=_type_suffix_metadata_key,
     ),
@@ -291,6 +313,21 @@ def _type_suffix_rule(
         ):
             return rule
     return None
+
+
+def _type_suffix_type_tag(
+    field: BackendIntrinsicModifierField,
+    request: BackendIntrinsicSuffixValueRequest,
+    selected_type_tag: TypeTag,
+) -> tuple[TypeTag, SourceLocation] | Diagnostic:
+    argument = request.argument
+    if argument is None:
+        return selected_type_tag, field.value_source
+    if not isinstance(argument, BackendValueTypeOperand):
+        return _invalid_metadata_family_request_diagnostic(field)
+    if not isinstance(argument.value, LoweredScalarTypeIdentity):
+        return _unsupported_lowered_type_diagnostic(field, argument)
+    return argument.value.type_tag, argument.source
 
 
 def _prefix_rule(
@@ -355,7 +392,8 @@ def _unsupported_intrinsic_style_diagnostic(
 def _unsupported_type_tag_diagnostic(
     field: BackendIntrinsicModifierField,
     style: BackendIntrinsicStyle,
-    argument: BackendValueTypeOperand,
+    type_tag: TypeTag,
+    source: SourceLocation,
 ) -> Diagnostic:
     expected = ", ".join(_type_tags_for_style(style)) or "<none>"
     return Diagnostic(
@@ -363,10 +401,10 @@ def _unsupported_type_tag_diagnostic(
         code="TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNSUPPORTED-TYPE",
         message=(
             f"type-derived intrinsic suffix translation does not support type "
-            f"tag {str(argument.value.type_tag)!r} for intrinsic style "
+            f"tag {str(type_tag)!r} for intrinsic style "
             f"{str(style)!r}; expected one of: {expected}"
         ),
-        location=argument.source,
+        location=source or field.value_source,
     )
 
 

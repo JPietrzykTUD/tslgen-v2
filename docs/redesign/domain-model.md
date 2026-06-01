@@ -245,6 +245,12 @@ Invariants:
   `suffix=value<backend>(intrin::suffix(TYPE))` may be translated through
   typed extension context and backend metadata when `TYPE` has already lowered
   to a scalar type identity.
+- Current-type suffix operands
+  `suffix=value<backend>(intrin::suffix)` and
+  `infix=value<backend>(intrin::suffix)` may be translated through typed
+  selected/current `TypeTag`, selected extension context, and backend metadata.
+  The field name controls later placement; this boundary does not assemble
+  final intrinsic names.
 - Selected x86-family prefix operands
   `prefix=value<backend>(intrin::prefix)` may be translated through selected
   extension context and backend metadata for `sse`, `sse_vl`, `avx2`,
@@ -253,10 +259,10 @@ Invariants:
   keys. Fragment text comes from the backend metadata catalog, not hardcoded
   Python strings.
 - Rust `core::arch::*` intrinsic qualification, intrinsic-name assembly,
-  no-argument/string/symbol suffixes, symbol immediates, wildcard-looking
-  fragments, backend-value infix suffixes, and `infix=to_type_suffix` remain
-  unsupported diagnostics until later typed rules explicitly provide those
-  semantics.
+  string/symbol suffixes, symbol immediates, wildcard-looking fragments,
+  destination-type backend-value infix suffixes, and `infix=to_type_suffix`
+  remain unsupported diagnostics until later typed rules explicitly provide
+  those semantics.
 
 ## Primitive Model
 

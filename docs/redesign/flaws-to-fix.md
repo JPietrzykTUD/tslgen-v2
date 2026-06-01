@@ -48,3 +48,34 @@ cleanup as separate decisions.
 Until the later rendering path is implemented, do not resolve mask lane
 constants to Python booleans, integers, raw backend strings, or hardcoded
 target-language text in generation lowering.
+
+## FTF-002: `intrin::suffix(si?)` Looks Like A Type-Group Artifact
+
+Current `.tsl` contains one intrinsic modifier request with a wildcard-looking
+type-group token as the suffix operand:
+
+```text
+tsldata/primitives/load_store/construct.tsl:30
+intrin_compose<set1, suffix=value<backend>(intrin::suffix(si?))>(value)
+```
+
+This shape is suspicious source-data debt. `si?` names a signed-integer type
+group pattern, not the selected concrete input/base type in the current
+implementation context. Treating it as a valid suffix source would require the
+generator to guess the author's intent or repair source text during backend
+translation.
+
+The expected source direction is to spell the modifier in terms of the current
+selected input/base type, for example:
+
+```text
+suffix=value<backend>(intrin::suffix(base::in))
+```
+
+or the accepted equivalent if the TSL language later standardizes a different
+current-type query.
+
+Until a focused source-data cleanup milestone changes the `.tsl` corpus, keep
+`intrin::suffix(si?)` as an explicit unsupported diagnostic boundary. Do not
+add a semantic rule that interprets wildcard-looking type-group tokens as
+selected concrete suffix inputs.
