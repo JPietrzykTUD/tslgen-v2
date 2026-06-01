@@ -164,6 +164,22 @@ Python backend code may build typed render contexts and copy or render
 supplementary assets. Backend semantics must live in typed rule/evaluator
 stages before rendering, not in Jinja conditionals or other template logic.
 
+Backend/output work must preserve a clear generated-project boundary. Backend
+translation and dependency planning produce already-decided typed render
+models; templates format those models; renderers return in-memory artifacts;
+the artifact writer is the only filesystem-writing boundary; and build
+verification runs only after files have been written. Dependency sorting,
+profile selection, type spelling, intrinsic selection, feature policy, and
+source/TSIL interpretation must not be hidden in templates, renderers, or the
+artifact writer.
+
+Generated output is organized as one run-level `generated/` tree with backend
+subprojects. C++ exposes a stable public `include/tsl.hpp` entry point and
+profile-specific generated headers under `include/profiles/`. Rust exposes a
+stable `src/lib.rs` entry point and profile-specific generated modules under
+`src/profiles/`. A generation run includes only an explicit profile subset,
+defaults to `scalar`, and reserves `all` to mean all known machine profiles.
+
 ## Lowering IR Taxonomy And Complexity Guardrails
 
 Typed IR exists to make semantic boundaries explicit, not to encode every

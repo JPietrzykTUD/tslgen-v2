@@ -52,6 +52,16 @@ deferred evidence. M190 deliberately did not evaluate snippets, render code,
 replace backend emitters, change machine profiles, reopen lowering, execute
 dependency closure, or add runtime dependencies on `frozen/` or `tslgenold`.
 
+A documentation correction after M190 accepted ADR-055: backend/output work
+must pass through dependency planning, backend translation, typed render
+models, renderer/templates, an in-memory `ArtifactSet`, manifest-based
+`ArtifactWriter`, and after-write `BuildVerifier`. Generated output uses a
+run-level `generated/` tree with C++ `include/tsl.hpp` plus
+`include/profiles/*.hpp`, Rust `src/lib.rs` plus `src/profiles/*.rs`, explicit
+profile subsets defaulting to `scalar`, reserved `all` for all known profiles,
+presentation-only templates, manifest-preserving cleanup, and verification of
+every generated profile in the selected subset.
+
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
 
@@ -71,7 +81,7 @@ parsing/source-repair work that lowering must not absorb by default.
 Current required action:
 
 ```text
-Run M191 execution-review loop.
+Retarget M191 before executing implementation.
 ```
 
 Active run prompt:
@@ -83,7 +93,7 @@ docs/agent/runs/m191-execution-review-loop-prompt.md
 Active planning milestone:
 
 ```text
-Milestone 191: Backend Type Spelling Request Translation Boundary.
+Milestone 191 needs replanning against ADR-055 before execution.
 ```
 
 Latest review verdict:
@@ -98,13 +108,10 @@ removed.
 Next expected action:
 
 ```text
-Run the active M191 execution-review loop prompt. It is an implementation task:
-one write-capable executor consumes existing typed
-`BackendTypeSpellingRequest` values and the M190 backend metadata catalog to
-produce the first typed backend type spelling translation results for scalar
-type identities and `LoweredSizeType`. It must not render code, evaluate
-arbitrary templates, broaden to vector/register/mask requests, or reopen
-lowering.
+Rewrite or replace the active M191 prompt so the next milestone establishes
+the backend output architecture and build-verification boundary before further
+backend type/value translation is implemented. The stale M191 type-spelling
+translation prompt must not be executed unchanged.
 ```
 
 Previous review verdict:

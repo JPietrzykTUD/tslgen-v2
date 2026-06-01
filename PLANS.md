@@ -207,6 +207,39 @@ When the answer points toward ceremony, simplify the design before coding.
 Current M57-M104 artifacts remain evidence and regression material, but future
 milestones should not extend them by default.
 
+## Backend Output And Verification Guardrails
+
+Backend/output planning must keep semantic translation, rendering, writing,
+and verification as separate boundaries:
+
+```text
+selection
+  -> dependency planning
+  -> backend translation
+  -> typed render model
+  -> renderer/templates
+  -> ArtifactSet
+  -> ArtifactWriter
+  -> BuildVerifier
+```
+
+The typed render model contains only already-decided values. If a template,
+renderer, writer, or verifier would need to decide a type spelling, intrinsic,
+helper, feature gate, primitive implementation, dependency order, TSIL form, or
+fallback, the decision belongs earlier.
+
+Generated projects use a run-level `generated/` tree with backend
+subprojects. C++ emits one stable public header at `cpp/include/tsl.hpp` plus
+profile headers under `cpp/include/profiles/`. Rust emits one stable
+`rust/src/lib.rs` plus profile modules under `rust/src/profiles/`. Generation
+uses an explicit profile subset, defaults to `scalar`, and treats `all` as a
+reserved request for all known profiles.
+
+Writers must support manifest-based cleanup of stale generated files without
+deleting unknown user files. Verification is an after-write boundary and should
+compile/test every generated profile in the selected subset for the selected
+backend projects.
+
 ## Clean Implementation Layout
 
 Repository layout is part of the architecture contract. The pre-restart

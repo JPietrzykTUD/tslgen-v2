@@ -147,6 +147,64 @@ catalog inputs. They are promoted into typed backend metadata facts before
 backend/output stages consume them. Renderers must not parse these files, and
 the metadata catalog itself must not evaluate template placeholders.
 
+Backend/output stages use an explicit generated-project boundary:
+
+```text
+selection
+  -> dependency planning
+  -> backend translation
+  -> typed render model
+  -> renderer/templates
+  -> ArtifactSet
+  -> ArtifactWriter
+  -> BuildVerifier
+```
+
+The typed render model contains only values whose semantics have already been
+decided by selection, dependency planning, lowering, or backend translation.
+Renderers and templates may format those values, but they must not decide type
+spellings, intrinsic names, helper choices, primitive selection, dependency
+ordering, feature gates, fallback behavior, source repair, or TSIL semantics.
+
+Generated outputs are organized under one run-level `generated/` tree:
+
+```text
+generated/
+  cpp/
+    CMakeLists.txt
+    include/
+      tsl.hpp
+      profiles/
+        scalar.hpp
+        avx2.hpp
+        ...
+    tests/
+      smoke.cpp
+  rust/
+    Cargo.toml
+    src/
+      lib.rs
+      profiles/
+        scalar.rs
+        avx2.rs
+        ...
+    tests/
+      smoke.rs
+```
+
+C++ exposes `include/tsl.hpp` as the stable public entry point and stores
+profile-specific generated headers under `include/profiles/`. Rust exposes
+`src/lib.rs` as the stable public entry point and stores profile-specific
+generated modules under `src/profiles/`. Generation includes only an explicit
+profile subset, defaults to `scalar`, and reserves `all` as shorthand for all
+known machine profiles.
+
+Artifact writing is the only filesystem-writing boundary. It consumes an
+in-memory `ArtifactSet`, writes under the configured output root, rejects
+path traversal, and removes stale generated files only through a generator
+manifest so unknown user files are preserved. Build verification runs after
+writing and compiles/tests every generated profile in the selected subset.
+
 ## Dependency Direction
 
 ```mermaid

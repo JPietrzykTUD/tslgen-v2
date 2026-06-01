@@ -2577,3 +2577,143 @@ Consequences:
   responsibilities with their own typed rule boundaries.
 - The metadata catalog does not reopen lowering, dependency closure, machine
   profile handling, compiler support policy, or generated-project rendering.
+
+## ADR-055: Backend Output Uses Typed Render Models, Profile Layouts, And After-Write Verification
+
+Status: Accepted
+
+Context:
+
+M188 introduced the supplementary layout and in-memory skeleton artifact
+rendering. M189 introduced typed machine profile metadata. M190 introduced
+typed backend language and translation metadata. Before adding more backend
+translation pieces, the output architecture needs a clear boundary so the
+research prototype can generate code that is build-verified and so templates
+do not become hidden semantic engines.
+
+Decision:
+
+Backend/output work follows this boundary order:
+
+```text
+catalog and selection
+  -> dependency planning
+  -> backend translation
+  -> typed render model
+  -> renderer/templates
+  -> ArtifactSet
+  -> ArtifactWriter
+  -> BuildVerifier
+```
+
+Dependency planning owns topological primitive ordering. A backend render plan
+may contain profile-specific primitive plans such as:
+
+```text
+PrimitiveRenderPlan(
+    backend=BackendId("cpp"),
+    profile=ProfileName("avx2"),
+    primitives=(OrderedPrimitive(...), ...)
+)
+```
+
+The `primitives` sequence is already dependency ordered. Renderers and
+templates may iterate it, but they must not sort it or rediscover primitive
+dependencies.
+
+The typed render model is the last structured boundary before text rendering.
+It contains only already-decided values: selected profile names, selected
+includes/imports, already spelled types, already translated primitive bodies or
+body fragments, ordered primitive records, and fixed artifact paths. It must
+not contain unresolved lowering requests, raw `type<backend>(...)` text,
+raw `value<backend>(...)` text, TSIL snippets needing interpretation, or
+catalog objects that would let templates select semantics.
+
+Templates are presentation-only. They may use loops, optional sections,
+joining, indentation, and other formatting logic over typed render-model
+fields. They must not perform backend semantic decisions, type or intrinsic
+selection, feature gating, primitive selection, overload resolution,
+dependency closure, TSIL parsing, fallback selection, source repair, or
+compiler capability policy.
+
+Python backend/output logic owns semantic translation and render-model
+construction. Supplementary static files own fixed build scaffolding and
+hand-written helper source that is copied as-is. Supplementary templates own
+presentation of already-decided render-model fields. Buildsystem templates may
+receive selected profile names, allowed profile choices, normalized feature
+metadata, and already-prepared build option text from typed profile/build
+contexts, but they must not map raw feature names, select fallback features,
+test compiler support, or infer host capabilities.
+
+A generation run writes one run-level project tree:
+
+```text
+generated/
+  cpp/
+    CMakeLists.txt
+    include/
+      tsl.hpp
+      profiles/
+        scalar.hpp
+        avx2.hpp
+        ...
+    tests/
+      smoke.cpp
+  rust/
+    Cargo.toml
+    src/
+      lib.rs
+      profiles/
+        scalar.rs
+        avx2.rs
+        ...
+    tests/
+      smoke.rs
+```
+
+C++ exposes `include/tsl.hpp` as the stable public entry point. That header
+selects exactly one generated profile header according to build configuration.
+The CMake project uses a modern cache string such as `TSL_PROFILE` with
+declared allowed values rather than a boolean option, because profile selection
+is not true/false.
+
+Rust exposes `src/lib.rs` as the stable public entry point. It selects exactly
+one generated profile module through Cargo feature or `cfg` configuration.
+Rust target-feature flags are build/verifier configuration, not semantic
+decisions inside `lib.rs`.
+
+A generation run includes only an explicit selected profile subset. If no
+profile is requested, the subset defaults to `scalar`. The reserved profile
+selection value `all` means all known machine profiles from the machine profile
+catalog and cannot be used as a real profile name. Build configuration selects
+exactly one active profile from the generated subset.
+
+`ArtifactSet` is a deterministic in-memory collection of files to write. It
+does not know primitive dependencies, backend semantics, profile selection, or
+compiler policy. The `ArtifactWriter` is the only filesystem-writing boundary.
+It resolves paths under the configured output root, rejects absolute paths and
+path traversal, writes deterministic bytes, and supports manifest-based
+cleanup of stale generated files. Cleanup removes files previously written by
+the generator according to the manifest; it does not delete unknown user files.
+
+Build verification runs after artifact writing and verifies every generated
+profile in the selected subset for each generated backend project. The project
+may assume the maintained development container supplies modern C++ compilers,
+Rust tooling, and QEMU support for cross-machine execution. The generator still
+does not model host CPU autodetection or compiler capability as semantic input;
+verification failures are reported as build/environment failures rather than
+being used to repair generation semantics.
+
+Consequences:
+
+- Backend type, value, intrinsic, primitive-call, and source-operation
+  translation can continue, but translation results must feed typed render
+  models rather than renderer-local tables or template-side decisions.
+- The current type-spelling translation milestone should be revisited against
+  this output architecture before execution so that it contributes to a
+  build-verifiable render path.
+- Single-profile smoke output is no longer the target shape. The prototype
+  should support an explicit generated profile subset, with `scalar` as the
+  default and `all` as reserved shorthand for all known profiles.
+- Future writer milestones should implement manifest-based cleanup before
+  broad generated-output workflows rely on stale-file removal.

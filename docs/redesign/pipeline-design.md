@@ -17,10 +17,12 @@ flowchart TD
     Lower --> Plan[9 Backend Planning]
     Plan --> Render[10 Rendering]
     Render --> Write[11 Artifact Writing]
+    Write --> Verify[12 Build Verification]
 
     Validate -->|errors| Stop1[Stop With Diagnostics]
     Select -->|errors| Stop2[Stop With Diagnostics]
     Lower -->|errors| Stop3[Stop With Diagnostics]
+    Verify -->|errors| Stop4[Stop With Build Diagnostics]
 ```
 
 ## Stage 1: Source Loading
@@ -893,12 +895,16 @@ Inputs:
 Outputs:
 
 - `BackendPlan`
+- `PrimitiveRenderPlan` values grouped by backend and generated profile.
 - Optional `TestSuitePlan`
 - Planning diagnostics.
 
 Processing:
 
 - Group render jobs by template/primitive/extension/type.
+- Topologically order selected primitives before rendering.
+- Resolve the explicit generated profile subset, defaulting to `scalar` and
+  treating reserved `all` as all known machine profiles.
 - Plan primary declarations.
 - Plan specializations.
 - Plan wrappers or trait methods.
@@ -943,11 +949,19 @@ into typed backend metadata facts before backend planning or rendering consume
 them. Translation templates are cataloged as inert source data in this stage;
 placeholder evaluation belongs to later typed backend translation rules.
 
+Backend planning must produce dependency-ordered primitive plans before any
+renderer sees primitive records. A profile-specific plan may be represented as
+a `PrimitiveRenderPlan` carrying the backend id, profile name, and ordered
+primitive records. Templates and writers consume that order; they do not sort
+or rediscover call dependencies.
+
 ## Stage 10: Rendering
 
 Inputs:
 
 - Backend plan.
+- Typed render model values containing only already-decided backend/output
+  presentation data.
 - Render environment.
 
 Outputs:
@@ -961,6 +975,12 @@ Processing:
 - Copy static supplementary assets and render supplementary template assets
   from typed render contexts when the selected backend/output slice requests
   project scaffolding or helper files.
+- Render one run-level project tree with backend subprojects:
+  `generated/cpp` and `generated/rust`.
+- Render C++ with stable public entry point `cpp/include/tsl.hpp` and
+  profile-specific headers under `cpp/include/profiles/`.
+- Render Rust with stable public entry point `rust/src/lib.rs` and
+  profile-specific modules under `rust/src/profiles/`.
 - Normalize text formatting if the backend defines a formatting policy.
 - Attach artifact metadata.
 
@@ -1021,20 +1041,69 @@ Processing:
 
 - Resolve target paths.
 - Reject duplicate targets.
+- Reject absolute targets and path traversal outside the output root.
 - Compute digests.
 - Create directories.
+- Remove stale generator-owned files through the previous output manifest when
+  manifest-clean mode is requested.
 - Skip unchanged files.
 - Write changed files.
+- Write the new output manifest.
 
 Validation:
 
 - Target escapes output root.
 - Duplicate artifact target.
+- Manifest references a path outside the output root.
 - Filesystem errors.
 
 Side effects:
 
 - Writes files.
+
+Artifact writing does not know primitive dependencies, backend type rules,
+feature selection, compiler policy, source semantics, or template variables. It
+only writes already rendered artifacts and maintains generator-owned cleanup
+metadata. Manifest-based cleanup preserves unknown user files in the output
+tree.
+
+## Stage 12: Build Verification
+
+Inputs:
+
+- Written generated project root.
+- Generated backend/project descriptors.
+- Generated profile subset.
+- Verification policy.
+
+Outputs:
+
+- `BuildVerificationReport`
+- Build/test diagnostics.
+
+Processing:
+
+- Configure, build, and test each generated C++ profile, such as by using a
+  per-profile CMake build directory and `-DTSL_PROFILE=<profile>`.
+- Build and test each generated Rust profile, such as by selecting one
+  generated profile feature at a time.
+- Report compiler, linker, test-runner, and execution failures with enough
+  command context to reproduce them.
+
+Validation:
+
+- Requested verification backend project does not exist in the written output.
+- Requested verification profile was not generated.
+- Build or test command exits non-zero.
+
+Side effects:
+
+- Creates build/test output under verifier-owned build directories.
+- Runs configured build and test commands.
+
+Build verification is after-write validation. It does not repair generated
+sources, select alternative profiles, infer compiler capability, or feed
+semantic changes back into lowering, translation, rendering, or writing.
 
 ## Backend Entry Points
 
