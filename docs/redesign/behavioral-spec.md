@@ -314,6 +314,52 @@ Accepted M195 diagnostic codes include:
 - `TSL-BACKEND-INTRINSIC-MODIFIER-NAMED-SUFFIX-MISSING-ENTRY`
 - `TSL-BACKEND-INTRINSIC-MODIFIER-NAMED-SUFFIX-UNRESOLVED-PLACEHOLDER`
 
+### M213 Backend Intrinsic Invocation Assembly Boundary
+
+Milestone 213 adds a typed backend/output assembly boundary for accepted
+backend intrinsic handoff requests and translated intrinsic modifier results.
+It consumes `BackendDirectIntrinsicHandoffRequest` and
+`BackendIntrinsicComposeHandoffRequest` values only; it does not rediscover
+raw TSIL, reopen lowering, parse intrinsic argument payloads, render C++ or
+Rust syntax, qualify Rust `core::arch::*` paths, or render C++ non-type
+template arguments or Rust const generics.
+
+Direct `intrin<...>(...)` requests assemble only when the angle payload is
+already a literal backend intrinsic name. Placeholder or template-like direct
+names such as payloads containing `{{...}}` or embedded backend-value queries
+are diagnostic boundaries until a focused direct-name translation rule is
+selected.
+
+Composed `intrin_compose<...>(...)` requests assemble from source-ordered
+translated modifier results. The source `base_text` becomes the base name
+part. Literal `prefix` fragments are placed before the base; literal `infix`
+fragments after the base; literal `suffix` fragments after infix fragments;
+and literal `post` fragments after suffix fragments. `infix_sep` controls the
+separator between base and infix fragments and defaults to `_`. `_` is used
+between infix and suffix fragments, between base and suffix fragments when no
+infix exists, and before post fragments.
+
+Immediate modifier translations remain typed compile-time metadata on the
+assembled invocation. They are not spliced into the intrinsic name and are not
+rendered as language syntax in this stage. Intrinsic arguments remain one
+opaque payload string with source provenance, including nested TSIL-looking
+text.
+
+Assembly diagnoses missing modifier translations, extra translations that do
+not belong to the request, duplicate translations for one field, backend
+mismatches, unsupported translated modifier value kinds, and unsupported
+direct intrinsic names. It does not repair source data or infer missing
+translations.
+
+Accepted M213 diagnostic codes include:
+
+- `TSL-BACKEND-INTRINSIC-ASSEMBLY-UNSUPPORTED-DIRECT-NAME`
+- `TSL-BACKEND-INTRINSIC-ASSEMBLY-EXTRA-MODIFIER-TRANSLATION`
+- `TSL-BACKEND-INTRINSIC-ASSEMBLY-BACKEND-MISMATCH`
+- `TSL-BACKEND-INTRINSIC-ASSEMBLY-DUPLICATE-MODIFIER-TRANSLATION`
+- `TSL-BACKEND-INTRINSIC-ASSEMBLY-MISSING-MODIFIER-TRANSLATION`
+- `TSL-BACKEND-INTRINSIC-ASSEMBLY-UNSUPPORTED-MODIFIER-VALUE`
+
 ## Input Behavior
 
 | Input | Expected Behavior | Evidence |

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 211 is accepted.
+Milestone 213 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -404,44 +404,65 @@ opaque source tokens, backend metadata, source-authored support helpers,
 backend/output work, or broad/deferred parsing. M211 selects no further
 lowering milestone and returns the workflow to backend/output planning.
 
+M212 accepted backend intrinsic invocation assembly as the next executable
+backend/output slice. M212 did not reopen lowering. The next implementation
+should consume accepted M166/M182 intrinsic handoff requests plus M195-M210
+translated modifier results and produce typed invocation-shaped backend values
+for later rendering. Direct and composed intrinsic argument payloads remain
+opaque source text; direct intrinsic placeholders remain diagnostic boundaries;
+Rust `core::arch::*` qualification, C++ non-type template rendering, Rust const
+generic rendering, argument parsing, dependency closure, and whole generated
+project rendering remain future backend/output work.
+
+M213 added the typed backend intrinsic invocation assembly boundary. The new
+`tslgen.backends.intrinsic_invocations` module consumes accepted direct or
+composed intrinsic handoff requests plus explicit translated intrinsic
+modifiers and produces direct/composed invocation values with backend id,
+request provenance, intrinsic name text, ordered name parts for composed
+invocations, opaque argument payload text/source, and typed immediate metadata.
+M213 keeps lowering closed by current contract and does not parse intrinsic
+arguments, resolve direct placeholders, render C++ or Rust calls, qualify Rust
+`core::arch::*`, render C++ non-type templates or Rust const generics, execute
+dependency closure, or write generated output.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M212 backend output intrinsic call assembly planning prompt.
+Run M214 post-invocation assembly rendering/lowering gate planning prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m212-backend-output-intrinsic-call-assembly-planning-prompt.md
+docs/agent/runs/m214-post-invocation-assembly-rendering-lowering-gate-planning-prompt.md
 ```
 
 Active planning milestone:
 
 ```text
-Milestone 212: Backend Intrinsic Invocation Assembly Planning.
+Milestone 214: Post-Invocation Assembly Rendering/Lowering Gate Planning.
 ```
 
 Latest review verdict:
 
 ```text
-M211 planning returned Accept. Evidence, boundary/simplicity, documentation,
-and validation auditors agreed that no further lowering-owned gap remains by
-current contract after M208/M210 selected immediates. Documentation freshness
-updates were applied, and M212 was selected as the next backend/output
-planning prompt.
+M213 execution-review returned Accept after focused documentation revision.
+Architecture/boundary, evidence, test, documentation re-review, and final
+hygiene validation agreed that M213 is a typed backend/output assembly
+boundary. The only blocking review issue was stale documentation around
+selected immediate modifier values, which was fixed.
 ```
 
 Next expected action:
 
 ```text
-Run the active M212 planning prompt. Select the smallest high-value
-backend/output milestone after lowering completion, preferably the typed
-backend intrinsic invocation assembly boundary that consumes accepted
-intrinsic islands and translated modifier results. Do not reopen lowering or
-implement code in M212.
+Run the active M214 planning prompt. First verify whether rendering assembled
+intrinsic invocations is blocked by a concrete lowering-owned gap. If not,
+keep lowering closed by current contract and select the smallest backend/output
+rendering milestone that consumes M213 invocation values without parsing
+arguments or moving semantics into templates.
 ```
 
 Previous review verdict:
@@ -481,13 +502,16 @@ and selected M207 planning. M207 planning returned Accept and selected M208.
 M208 execution-review returned Accept With Follow-Ups and selected M209
 planning. M209 planning returned Accept and selected M210. M210
 execution-review returned Accept With Follow-Ups and selected M211 planning.
-M211 planning returned Accept and selected M212 planning.
+M211 planning returned Accept and selected M212 planning. M212 planning
+returned Accept and selected M213 execution-review. M213 execution-review
+returned Accept after focused documentation revision and selected M214
+planning.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m211-post-selected-immediate-lowering-completion-gate-planning-prompt.md
+docs/agent/runs/m213-backend-intrinsic-invocation-assembly-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

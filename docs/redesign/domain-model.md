@@ -229,7 +229,13 @@ class BackendTranslatedIntrinsicModifier:
     backend: BackendId
     field: BackendIntrinsicModifierField
     name: BackendIntrinsicModifierName
-    value: BackendIntrinsicLiteralFragment | BackendIntrinsicInfixSeparator | BackendIntrinsicImmediateLiteral
+    value: (
+        BackendIntrinsicLiteralFragment
+        | BackendIntrinsicInfixSeparator
+        | BackendIntrinsicImmediateLiteral
+        | BackendIntrinsicImmediateParameterReference
+        | BackendIntrinsicImmediateGenericParameterReference
+    )
     source: SourceLocation
 ```
 
@@ -275,10 +281,78 @@ Invariants:
   keys. Fragment text comes from the backend metadata catalog, not hardcoded
   Python strings.
 - Rust `core::arch::*` intrinsic qualification, intrinsic-name assembly,
-  arbitrary quoted suffixes, unresolved raw symbol suffixes, symbol
-  immediates, wildcard-looking fragments, quoted-string infix suffixes, and
-  unbound or context-free `infix=to_type_suffix` remain unsupported
+  arbitrary quoted suffixes, unresolved raw symbol suffixes, unresolved raw
+  symbol immediates, wildcard-looking fragments, quoted-string infix suffixes,
+  and unbound or context-free `infix=to_type_suffix` remain unsupported
   diagnostics until later typed rules explicitly provide those semantics.
+
+Backend intrinsic invocation assembly is a backend/output result boundary
+over accepted direct/composed intrinsic handoff requests and translated
+intrinsic modifier values:
+
+```python
+BackendIntrinsicNamePartRole = Literal["prefix", "base", "infix", "suffix", "post"]
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicInvocationArguments:
+    text: BackendIntrinsicArgumentPayloadText
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicNamePart:
+    role: BackendIntrinsicNamePartRole
+    text: BackendIntrinsicNameText
+    source: SourceLocation
+    modifier: BackendTranslatedIntrinsicModifier | None = None
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicInvocationImmediate:
+    argument_index: int
+    value: (
+        BackendIntrinsicImmediateLiteral
+        | BackendIntrinsicImmediateParameterReference
+        | BackendIntrinsicImmediateGenericParameterReference
+    )
+    source: SourceLocation
+    modifier: BackendTranslatedIntrinsicModifier
+
+@dataclass(frozen=True, slots=True)
+class BackendDirectIntrinsicInvocation:
+    backend: BackendId
+    request: BackendDirectIntrinsicHandoffRequest
+    intrinsic_name: BackendIntrinsicNameText
+    arguments: BackendIntrinsicInvocationArguments
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class BackendComposedIntrinsicInvocation:
+    backend: BackendId
+    request: BackendIntrinsicComposeHandoffRequest
+    intrinsic_name: BackendIntrinsicNameText
+    name_parts: tuple[BackendIntrinsicNamePart, ...]
+    arguments: BackendIntrinsicInvocationArguments
+    immediates: tuple[BackendIntrinsicInvocationImmediate, ...]
+    modifiers: tuple[BackendTranslatedIntrinsicModifier, ...]
+    source: SourceLocation
+```
+
+Invariants:
+
+- Assembly consumes typed handoff requests and typed translated modifiers. It
+  never parses raw `intrin<...>(...)` / `intrin_compose<...>(...)` source
+  text and never re-enters lowering.
+- Direct invocations are accepted only when the direct angle payload is already
+  a literal backend intrinsic name. Placeholder/template-like payloads are
+  diagnostics, not renderer input.
+- Composed invocation names are assembled deterministically from translated
+  `prefix`, base, `infix`, `suffix`, `post`, and `infix_sep` values.
+- Intrinsic argument payloads remain opaque source text with provenance.
+- Immediate modifier translations become typed compile-time metadata for a
+  later renderer; this boundary does not decide C++ non-type template syntax
+  or Rust const generic syntax.
+- Language renderers consume assembled invocation values. They do not decide
+  intrinsic-name assembly, suffix/prefix semantics, immediacy, or direct-name
+  placeholder resolution.
 
 ## Primitive Model
 

@@ -26076,7 +26076,7 @@ Next concrete prompt:
 
 Status:
 
-Selected. Planning prompt:
+Accepted. Planning prompt:
 `docs/agent/runs/m212-backend-output-intrinsic-call-assembly-planning-prompt.md`.
 
 Goal:
@@ -26106,6 +26106,202 @@ Production code; tests; new lowering; raw TSIL rescans for semantic facts;
 arbitrary argument parsing; primitive dependency closure; whole generated
 project rendering; template-side semantics; source repair; and runtime
 dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M212 accepted backend intrinsic invocation assembly as the next executable
+backend/output slice. Lowering remains complete by current contract; no
+lowering-owned gap was reopened.
+
+Evidence:
+
+- M166 already discovers exact `intrin<...>(...)` and
+  `intrin_compose<...>(...)` islands with opaque angle and argument payloads.
+- M182 already hands direct intrinsics to
+  `BackendDirectIntrinsicHandoffRequest` and composed intrinsics to
+  `BackendIntrinsicComposeHandoffRequest` with source-ordered modifier fields.
+- M195-M210 translate compose modifier fields into typed backend modifier
+  results, including literal fragments, infix separators, literal immediates,
+  selected `sImm` parameter immediates, and selected generic immediates.
+- The current primitive corpus still has heavy backend-intrinsic pressure:
+  737 direct `intrin<` raw occurrences, 627 raw `intrin_compose<`
+  occurrences, and the accepted balanced compose corpus has 619 compose
+  requests with 643 modifier fields.
+
+M212 selects M213 as an implementation milestone. M213 should assemble typed
+backend intrinsic invocation values from already accepted handoff requests and
+translated modifier results. It should preserve intrinsic arguments as opaque
+source text, preserve immediate operands as typed compile-time metadata, and
+diagnose missing or unsupported modifier translations. It must not parse
+arguments, resolve direct-intrinsic placeholders, render final C++ or Rust
+calls, qualify Rust `core::arch::*` paths, render C++ non-type templates or
+Rust const generics, execute dependency closure, or reopen lowering.
+
+Review/audit verdict:
+
+Accepted. Evidence, architecture/boundary, documentation, and validation
+auditors all agreed that backend intrinsic invocation assembly is the smallest
+safe next milestone and that M212 should not reopen lowering.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Next concrete prompt:
+`docs/agent/runs/m213-backend-intrinsic-invocation-assembly-execution-review-loop-prompt.md`.
+
+### Milestone 213: Backend Intrinsic Invocation Assembly
+
+Status:
+
+Accepted. Execution-review prompt:
+`docs/agent/runs/m213-backend-intrinsic-invocation-assembly-execution-review-loop-prompt.md`.
+
+Goal:
+
+Implement the typed backend/output assembly boundary that turns accepted
+backend intrinsic handoff requests plus translated intrinsic modifier results
+into invocation-shaped backend values for later rendering.
+
+Scope:
+
+- Consume `BackendDirectIntrinsicHandoffRequest` and
+  `BackendIntrinsicComposeHandoffRequest` values.
+- Consume explicit `BackendTranslatedIntrinsicModifier` values produced by
+  the accepted M195-M210 modifier translation boundary.
+- Produce compact typed invocation values with backend id, direct/composed
+  kind, already-decided intrinsic name text or name parts, opaque argument
+  payload text/source, typed immediate metadata, and request/modifier
+  provenance.
+- Assemble composed intrinsic names from translated prefix, base, infix,
+  suffix, post, and `infix_sep` values using deterministic backend-output
+  assembly rules.
+- Preserve direct intrinsic names only when they are already literal backend
+  names; diagnose unresolved placeholder/template-like direct names rather
+  than guessing.
+- Diagnose missing modifier translations, extra modifier translations, and
+  unsupported translated modifier value kinds.
+
+Out of scope:
+
+New lowering; raw TSIL rescans; arbitrary argument expression parsing or
+splitting; direct-intrinsic placeholder resolution; final C++ or Rust call
+rendering; Rust `core::arch::*` qualification; C++ non-type template rendering;
+Rust const generic rendering; primitive dependency closure; whole generated
+project rendering; template-side semantics; source repair; and runtime
+dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m213_backend_intrinsic_invocation_assembly.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M213 added `tslgen.backends.intrinsic_invocations`, a typed backend/output
+assembly boundary over accepted intrinsic handoff requests and translated
+intrinsic modifier results. It produces distinct direct and composed
+invocation values with backend id, request provenance, assembled intrinsic
+name text, ordered name parts for composed invocations, opaque argument
+payload text/source, and typed immediate metadata for later language-specific
+rendering.
+
+The implementation stays out of lowering and rendering. It does not rediscover
+raw TSIL, parse intrinsic arguments, resolve direct-name placeholders, qualify
+Rust `core::arch::*` paths, render C++ non-type template arguments or Rust
+const generics, execute dependency closure, repair source, or touch generated
+project output.
+
+Supported M213 behavior:
+
+- Direct `intrin<...>(...)` handoff requests assemble only when the angle
+  payload is already a literal backend intrinsic name.
+- Placeholder/template-like direct intrinsic payloads are diagnostics.
+- Composed `intrin_compose<...>(...)` requests assemble translated `prefix`,
+  base, `infix`, `suffix`, `post`, and `infix_sep` fragments with deterministic
+  ordering and separator rules.
+- Literal, selected-signature, and selected-generic immediate translations are
+  preserved as typed compile-time metadata rather than rendered argument
+  syntax.
+- Intrinsic arguments remain one opaque source payload string, including
+  nested TSIL-looking text.
+- Missing, extra, duplicate, backend-mismatched, and unsupported translated
+  modifier values are diagnostics.
+
+Review/audit verdict:
+
+Accepted after focused documentation revision. Architecture/boundary and
+evidence reviewers accepted the typed backend/output boundary. The test
+reviewer found the required M213 coverage present. The documentation auditor
+initially requested freshness fixes for selected immediate modifier value
+types and stale raw-symbol-immediate wording; those fixes were applied and a
+focused documentation re-review accepted them. The validation auditor
+initially found `__pycache__` directories created by read-only validation; the
+orchestrator removed them and reran the final hygiene check cleanly.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m213_backend_intrinsic_invocation_assembly.py`:
+  exit 0, `13 passed in 2.06s`.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created `__pycache__` directories.
+- After removing those directories, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Next concrete prompt:
+`docs/agent/runs/m214-post-invocation-assembly-rendering-lowering-gate-planning-prompt.md`.
+
+### Milestone 214: Post-Invocation Assembly Rendering/Lowering Gate Planning
+
+Status:
+
+Selected. Planning prompt:
+`docs/agent/runs/m214-post-invocation-assembly-rendering-lowering-gate-planning-prompt.md`.
+
+Goal:
+
+Plan the next smallest high-value milestone after M213. The expected direction
+is a typed backend intrinsic invocation rendering boundary, but the plan must
+first run a narrow lowering-readiness gate: if rendering is blocked by a
+specific lowering-owned gap, identify and select exactly that gap; otherwise
+keep lowering closed by current contract and select the backend/output
+rendering slice.
+
+Scope:
+
+- Inspect M213 invocation values, M195-M210 modifier translations, M211
+  lowering completion, and backend/output architecture docs.
+- Decide whether any concrete lowering-owned blocker remains for rendering
+  assembled intrinsic invocations.
+- If no lowering blocker is found, plan the next rendering/output boundary for
+  consuming already assembled invocation values without parsing arguments or
+  deciding backend semantics in templates.
+- Keep Rust `core::arch::*` qualification, C++ non-type template rendering,
+  Rust const generic rendering, direct placeholder resolution, and primitive
+  body/output integration as explicitly selected options rather than hidden
+  side effects.
+
+Out of scope:
+
+Production code; tests; broad lowering reopen; raw TSIL rescans; arbitrary
+argument parsing; dependency closure; whole generated project rendering;
+template-side semantics; source repair; and runtime dependency on `frozen/` or
+`tslgenold`.
 
 Validation:
 

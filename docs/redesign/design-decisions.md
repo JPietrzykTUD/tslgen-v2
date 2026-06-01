@@ -3003,3 +3003,56 @@ Consequences:
   template systems.
 - Rendering C++ non-type template parameters and Rust const generics remains a
   later backend/rendering concern.
+
+## ADR-062: Intrinsic Invocation Assembly Precedes Language Rendering
+
+Status: Accepted.
+
+Context:
+
+After M211, lowering is complete by current contract. Backend intrinsic work
+has accepted request islands for direct and composed intrinsics and accepted
+typed modifier translation results, but no stage yet turns those pieces into
+an invocation-shaped backend/output value.
+
+The generator needs a boundary between backend semantic translation and
+language rendering. Without that boundary, C++ and Rust templates would need
+to decide intrinsic name construction, immediate placement, unresolved direct
+name placeholders, or argument policy.
+
+Decision:
+
+Backend intrinsic invocation assembly is a backend/output translation stage
+before rendering. It consumes accepted intrinsic handoff requests and typed
+modifier translation results, and produces typed invocation values whose
+semantic pieces are already decided:
+
+- direct or composed intrinsic kind;
+- backend id;
+- intrinsic name text or name parts assembled from source/metadata-derived
+  typed fragments;
+- opaque argument payload text and source provenance;
+- typed immediate metadata for later language-specific rendering.
+
+Argument payloads remain opaque in this stage. Assembly must not parse
+target-language expressions, split intrinsic arguments, resolve primitive
+dependencies, repair source, or rescan raw TSIL for lowering facts. Direct
+intrinsic names that contain unresolved placeholder/template-like payloads are
+diagnostic boundaries until a focused direct-name placeholder milestone is
+selected.
+
+Language renderers remain responsible for formatting an already assembled
+invocation into C++ or Rust syntax. Rust `core::arch::*` module qualification,
+C++ non-type template argument rendering, and Rust const generic rendering are
+language rendering policies over typed invocation values, not modifier
+translation or lowering behavior.
+
+Consequences:
+
+- M213 can implement a narrow invocation assembly boundary without turning it
+  into a renderer or expression parser.
+- Templates stay presentation-only because they receive already-decided
+  invocation values rather than raw modifier fields.
+- The same assembled invocation shape can feed later C++ and Rust renderers,
+  while backend-specific metadata and typed modifier translations remain
+  explicit inputs.
