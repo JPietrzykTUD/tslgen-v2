@@ -129,6 +129,42 @@ Accepted diagnostics include:
 - `TSL-BACKEND-METADATA-UNKNOWN-TYPE-SPELLING`
 - `TSL-BACKEND-METADATA-UNKNOWN-TRANSLATION`
 
+### M192 Backend Type Spelling Translation Boundary
+
+Milestone 192 adds the first backend translation consumer for accepted
+lowering handoff values. It consumes typed `BackendTypeSpellingRequest`
+objects and the typed backend metadata catalog; it does not rediscover,
+parse, repair, or render raw `type<backend>(...)` source text.
+
+Supported requests are deliberately small:
+
+- `LoweredScalarTypeIdentity` for scalar tags `si8`, `si16`, `si32`, `si64`,
+  `ui8`, `ui16`, `ui32`, `ui64`, `f32`, and `f64`;
+- `LoweredSizeType()`.
+
+Signed and unsigned scalar source tags normalize to backend language-map keys
+before lookup: `si32` becomes `s32`, and `ui32` becomes `u32`. Float tags
+already match the language-map keys. The final scalar spelling is read from
+the active backend language map, such as C++ `s32 -> int32_t` or Rust
+`u32 -> u32`. `LoweredSizeType()` is fulfilled by the exact backend
+translation metadata entry `type_size`, such as C++ `std::size_t` or Rust
+`usize`.
+
+The result is a typed backend translated type spelling carrying the original
+request, backend ID, spelling text, metadata kind, metadata key, request
+source, and metadata source location. Collection translation preserves request
+order. Renderers and templates still receive only already-decided values and
+must not perform type lookup, scalar normalization, or metadata evaluation.
+
+Accepted M192 diagnostic codes include:
+
+- `TSL-BACKEND-TYPE-SPELLING-MISSING-METADATA`
+- `TSL-BACKEND-TYPE-SPELLING-UNSUPPORTED-BACKEND`
+- `TSL-BACKEND-TYPE-SPELLING-UNSUPPORTED-VALUE`
+- `TSL-BACKEND-TYPE-SPELLING-UNSUPPORTED-SCALAR-TAG`
+- `TSL-BACKEND-TYPE-SPELLING-MISSING-SCALAR-SPELLING`
+- `TSL-BACKEND-TYPE-SPELLING-MISSING-SIZE-TYPE`
+
 ## Input Behavior
 
 | Input | Expected Behavior | Evidence |

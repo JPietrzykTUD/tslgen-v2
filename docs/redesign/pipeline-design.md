@@ -949,6 +949,14 @@ into typed backend metadata facts before backend planning or rendering consume
 them. Translation templates are cataloged as inert source data in this stage;
 placeholder evaluation belongs to later typed backend translation rules.
 
+Milestone 192 adds the first typed backend translation consumer for backend
+type spelling requests. It consumes accepted `BackendTypeSpellingRequest`
+values from lowering plus the typed backend metadata catalog, normalizes only
+documented scalar type-tag keys, resolves `LoweredSizeType()` through the
+exact `type_size` metadata entry, and returns typed translated type spellings.
+This remains before render-model construction: renderers, templates, writers,
+and verifiers do not inspect backend metadata or decide type spellings.
+
 Backend planning must produce dependency-ordered primitive plans before any
 renderer sees primitive records. A profile-specific plan may be represented as
 a `PrimitiveRenderPlan` carrying the backend id, profile name, and ordered

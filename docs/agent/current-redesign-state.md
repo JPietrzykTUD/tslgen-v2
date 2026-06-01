@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 191 is accepted.
+Milestone 192 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -75,6 +75,18 @@ templates, map profile features to compiler target-feature options, execute
 dependency closure, change lowering, or add runtime dependencies on `frozen/`
 or `tslgenold`.
 
+M192 added `tslgen.backends.type_spelling`, a typed backend translation
+boundary that consumes accepted `BackendTypeSpellingRequest` values plus the
+M190 backend metadata catalog. It resolves scalar identity requests through
+active C++ and Rust language maps using explicit `si* -> s*` and `ui* -> u*`
+normalization, resolves `LoweredSizeType()` through the exact `type_size`
+translation metadata entry, and returns typed `BackendTranslatedTypeSpelling`
+values with request and metadata provenance. M192 did not parse raw
+`type<backend>(...)` text, render output, evaluate arbitrary templates,
+fulfill vector/register/mask/generic/extension-transform requests, change
+the generated-project skeleton/writer/verifier, execute dependency closure, or
+add runtime dependencies on `frozen/` or `tslgenold`.
+
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
 
@@ -94,41 +106,40 @@ parsing/source-repair work that lowering must not absorb by default.
 Current required action:
 
 ```text
-Run M192 execution-review loop.
+Run M193 execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m192-execution-review-loop-prompt.md
+docs/agent/runs/m193-execution-review-loop-prompt.md
 ```
 
 Active planning milestone:
 
 ```text
-Milestone 192: Backend Type Spelling Translation Feeding Render Models.
+Milestone 193: Backend Value Translation For Metadata-Only Requests.
 ```
 
 Latest review verdict:
 
 ```text
-M191 execution-review returned Accept after one write-capable executor,
-read-only architecture, evidence, documentation, and validation audits, and
-focused architecture/documentation re-review after two blocking findings were
-fixed. Validation passed and validation-created `tslgen/` cache directories
+M192 execution-review returned Accept after one write-capable executor and
+read-only architecture/boundary, evidence, documentation, and validation
+audits. Validation passed and validation-created `tslgen/` cache directories
 were removed.
 ```
 
 Next expected action:
 
 ```text
-Run the active M192 execution-review loop prompt. It is an implementation
-task: one write-capable executor consumes existing typed
-`BackendTypeSpellingRequest` values and the M190 backend metadata catalog to
-produce typed backend type spelling translation results for scalar type
-identities and `LoweredSizeType`. It must not render code, evaluate arbitrary
-templates, broaden to vector/register/mask requests, modify generated-project
-verification, or reopen lowering.
+Run the active M193 execution-review loop prompt. It is an implementation
+task: one write-capable executor consumes existing typed `BackendValueRequest`
+values and the M190 backend metadata catalog to produce typed backend value
+translation results for metadata-only uninit and constant requests. It must
+not render code, evaluate arbitrary templates, broaden to suffix/prefix or
+intrinsic composition, modify generated-project verification, or reopen
+lowering.
 ```
 
 Previous review verdict:
@@ -148,13 +159,14 @@ M189. M189 was then retargeted by planning decision to the machine feature
 profile/buildsystem option boundary before execution. M189 execution-review
 returned Accept and selected M190. M190 execution-review returned Accept and
 selected M191. M191 was then retargeted by ADR-055 planning correction before
-execution. M191 execution-review returned Accept and selected M192.
+execution. M191 execution-review returned Accept and selected M192. M192
+execution-review returned Accept and selected M193.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m191-execution-review-loop-prompt.md
+docs/agent/runs/m192-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

@@ -160,6 +160,32 @@ Invariants:
 - Raw dictionaries may exist at parse/loader boundaries only; backend/output
   stages consume typed metadata values.
 
+Backend type spelling translation is a backend/output result boundary over
+typed lowering requests and typed backend metadata:
+
+```python
+@dataclass(frozen=True, slots=True)
+class BackendTranslatedTypeSpelling:
+    request: BackendTypeSpellingRequest
+    backend: BackendId
+    spelling: BackendTypeSpellingText
+    metadata_kind: Literal["language_type", "translation_template"]
+    metadata_key: BackendTypeKey | BackendTranslationKey
+    metadata_source: SourceLocation
+    source: SourceLocation
+```
+
+Invariants:
+
+- The request is already a typed lowering handoff value; this boundary never
+  parses raw `type<backend>(...)` text.
+- Scalar spelling uses explicit `si* -> s*` and `ui* -> u*` normalization
+  before looking up active language-map metadata.
+- `LoweredSizeType()` is the only accepted translation-template-backed type
+  spelling in the first slice and resolves through `type_size`.
+- Vector, register, mask, generic, extension-transform, and arbitrary template
+  fulfillment remain unsupported until selected by a later milestone.
+
 ## Primitive Model
 
 ```python

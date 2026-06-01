@@ -24246,3 +24246,84 @@ python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m192_backend_type_spelling_translation.py
 find tslgen -type d -name __pycache__ -print
 ```
+
+Result:
+
+M192 accepted. It added `tslgen.backends.type_spelling`, a small typed backend
+translation boundary that consumes accepted `BackendTypeSpellingRequest`
+values plus the M190 `BackendMetadataCatalog`. The translator resolves scalar
+identity requests through active C++ and Rust language maps using the
+documented `si* -> s*` and `ui* -> u*` normalization rule, resolves
+`LoweredSizeType()` through the exact `type_size` translation metadata entry,
+and returns typed `BackendTranslatedTypeSpelling` values carrying request and
+metadata provenance.
+
+The boundary deliberately does not parse raw `type<backend>(...)` source,
+render output, evaluate arbitrary translation templates, fulfill vector,
+register, mask, generic, or extension-transform requests, modify the generated
+project skeleton/writer/verifier, execute dependency closure, or depend on
+`frozen/` or `tslgenold`.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m192_backend_type_spelling_translation.py`:
+  exit 0, `10 passed in 2.27s`.
+- `find tslgen -type d -name __pycache__ -print`: validation-created
+  `__pycache__` directories were removed; final command exited 0 with no
+  output.
+
+### Milestone 193: Backend Value Translation For Metadata-Only Requests
+
+Status:
+
+Selected. Execution prompt:
+`docs/agent/runs/m193-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the next backend translation boundary for existing typed
+`BackendValueRequest` values that can be fulfilled directly from M190 backend
+metadata without primitive rendering, intrinsic composition, type suffix
+solving, or source parsing.
+
+Scope:
+
+- Consume accepted typed backend value requests from the M181 lowering handoff
+  and the typed backend metadata catalog.
+- Translate `BackendUninitValueRequest(kind="array")` through
+  `value_array_uninit` only when the backend metadata template has no
+  unresolved placeholders. In the current active metadata this is expected for
+  C++; Rust `value_array_uninit` contains `{type}` and must remain diagnostic
+  until a typed type context is part of the request/rule input.
+- Translate `BackendUninitValueRequest(kind="scalar")` through `value_uninit`.
+- Translate `BackendConstantValueRequest(name="x86::mm_fround_to_zero")`
+  through `value_mm_fround_to_zero`.
+- Return typed backend translated value results with request and metadata
+  provenance.
+- Add diagnostics for missing backend metadata, unsupported backend ids,
+  missing metadata entries, unsupported request values, unsupported
+  uninit/constant selectors, and metadata templates that require unresolved
+  placeholders.
+- Cover C++ and Rust focused metadata-only cases where the active metadata
+  entry can be consumed without placeholder formatting, and preserve
+  deterministic ordering for a collection helper if introduced.
+
+Out of scope:
+
+Backend intrinsic suffix/prefix value translation, type-operand suffix
+resolution, intrinsic composition, source-operation translation, control
+translation, mask constants, primitive-call rendering, primitive body
+rendering, generated project changes, dependency closure, lowering changes,
+arbitrary template formatting, and runtime dependency on `frozen/` or
+`tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m193_backend_value_translation.py
+find tslgen -type d -name __pycache__ -print
+```
