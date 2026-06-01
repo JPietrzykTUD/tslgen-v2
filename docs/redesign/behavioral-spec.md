@@ -200,6 +200,48 @@ Accepted M193 diagnostic codes include:
 - `TSL-BACKEND-VALUE-TRANSLATION-MISSING-TRANSLATION`
 - `TSL-BACKEND-VALUE-TRANSLATION-UNRESOLVED-PLACEHOLDER`
 
+### M195 Literal Intrinsic Modifier Translation Boundary
+
+Milestone 195 adds a typed backend translation boundary for accepted M182
+`BackendIntrinsicComposeHandoffRequest` modifier fields. It consumes typed
+handoff values only; it does not rediscover or parse raw
+`intrin_compose<...>(...)` source text, direct `intrin<...>` names, or
+intrinsic argument payloads.
+
+Supported translations are final literal modifier components:
+
+- direct literal `suffix` symbol or string operands that contain no unresolved
+  wildcard marker;
+- direct literal `post` symbol or string operands;
+- direct literal `infix` symbol or string operands except the semantic marker
+  `to_type_suffix`;
+- quoted-string `infix_sep` operands;
+- integer-literal `immediate(N)` operands.
+
+The result is a typed backend intrinsic modifier value carrying the backend
+ID, original modifier field, modifier name, translated component value, and
+source provenance. Collection translation preserves modifier order and
+accumulates diagnostics.
+
+Unsupported forms remain explicit diagnostics, including backend-value
+suffix/prefix operands, no-argument suffixes, type-derived suffixes,
+`intrin::suffix("stream")`, symbol-argument suffixes such as `ToBase`,
+wildcard-looking direct suffixes such as `si?`, semantic `infix=to_type_suffix`,
+symbol immediates such as `index` or `Index`, and direct intrinsic handoff
+requests.
+
+Accepted M195 diagnostic codes include:
+
+- `TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-FIELD`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-BACKEND-VALUE`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-OPERAND`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-UNSAFE-LITERAL`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-SEMANTIC-INFIX`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-IMMEDIATE`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-MISSING-IMMEDIATE-INDEX`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-DIRECT-INTRINSIC`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-REQUEST`
+
 ## Input Behavior
 
 | Input | Expected Behavior | Evidence |

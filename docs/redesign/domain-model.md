@@ -215,6 +215,34 @@ Invariants:
   control directives, mask constants, primitive calls, and rendering remain
   unsupported until selected by later milestones.
 
+Backend intrinsic modifier translation is a backend/output result boundary
+over typed `BackendIntrinsicComposeHandoffRequest` values. It translates only
+final literal modifier components that were already accepted by lowering:
+
+```python
+@dataclass(frozen=True, slots=True)
+class BackendTranslatedIntrinsicModifier:
+    backend: BackendId
+    field: BackendIntrinsicModifierField
+    name: BackendIntrinsicModifierName
+    value: BackendIntrinsicLiteralFragment | BackendIntrinsicInfixSeparator | BackendIntrinsicImmediateLiteral
+    source: SourceLocation
+```
+
+Invariants:
+
+- The request is already a typed M182 handoff value; this boundary never parses
+  raw `intrin_compose<...>(...)` source text.
+- Translation is per modifier. It does not assemble intrinsic names, inspect
+  intrinsic arguments, validate intrinsic base tokens, render output, or read
+  backend metadata.
+- Literal `suffix`, `post`, `infix`, `infix_sep`, and integer `immediate(N)`
+  forms may be translated when they are already final fragments.
+- Backend-value suffix/prefix operands, `intrin::suffix("stream")`,
+  type-derived suffixes, symbol immediates, wildcard-looking fragments, and
+  `infix=to_type_suffix` remain unsupported diagnostics until later typed
+  rules explicitly provide those semantics.
+
 ## Primitive Model
 
 ```python

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 193 is accepted.
+Milestone 195 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -100,6 +100,44 @@ templates, fulfill intrinsic suffix/prefix requests, compose intrinsic names,
 translate source operations or control directives, execute dependency closure,
 change lowering, or add runtime dependencies on `frozen/` or `tslgenold`.
 
+M194 planned the backend intrinsic modifier translation boundary after M193.
+The `tsldata/**/*.tsl` corpus currently contains 619 observed
+`intrin_compose<...>` occurrences. Safe literal modifier fields such as
+`suffix=si128`, `suffix="epi64x"`, `post=x`, `post=mask`,
+`infix_sep=""`, and integer `immediate(N)=...` are separable from
+backend-semantic modifier requests such as
+`suffix=value<backend>(intrin::suffix...)`,
+`prefix=value<backend>(intrin::prefix)`, and
+`infix=value<backend>(intrin::suffix...)`. M194 selected M195 to translate
+only final literal M182 compose modifier handoff values into typed backend
+modifier results, leaving no-argument suffixes, type-derived suffixes,
+`intrin::suffix("stream")`, symbol-argument suffixes, prefix rules, symbol
+immediates, wildcard-looking fragments such as `si?`, and
+`infix=to_type_suffix` as explicit unsupported diagnostics until future typed
+rules are selected.
+
+M195 added `tslgen.backends.intrinsic_modifiers`, a typed backend translation
+boundary over accepted M182 `BackendIntrinsicComposeHandoffRequest` modifier
+fields. It translates only final literal modifier facts already present in the
+handoff: direct literal `suffix`, `post`, and `infix` fragments, quoted
+`infix_sep`, and integer `immediate(N)` values. It preserves modifier order
+and field provenance, and diagnoses unsupported semantic families such as
+backend-value suffix/prefix operands, `intrin::suffix("stream")`,
+type-derived suffixes, symbol-argument suffixes, `infix=to_type_suffix`,
+wildcard-looking suffixes such as `si?`, symbol immediates such as `index` or
+`Index`, unsupported fields, and direct `intrin<...>` handoff requests. M195
+does not assemble intrinsic names, parse direct intrinsic names or argument
+payloads, resolve suffix/prefix semantics, consult backend metadata, render
+output, change lowering, or add a runtime dependency on `frozen/` or
+`tslgenold`.
+
+M195's corpus test scans `tsldata/primitives/**/*.tsl`, lowers every balanced
+`intrin_compose<...>` island through the accepted M182 handoff path, and
+verifies exact-once classification for the currently observed 643 modifier
+fields: 335 translated literal modifiers, 285 unsupported backend-value
+operands, 19 unsupported symbol immediates, and 4 unsupported semantic infix
+markers.
+
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
 
@@ -119,39 +157,38 @@ parsing/source-repair work that lowering must not absorb by default.
 Current required action:
 
 ```text
-Run M194 intrinsic modifier translation planning prompt.
+Run M196 intrinsic semantic modifier translation planning prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m194-intrinsic-modifier-translation-planning-prompt.md
+docs/agent/runs/m196-intrinsic-semantic-modifier-translation-planning-prompt.md
 ```
 
 Active planning milestone:
 
 ```text
-Milestone 194: Intrinsic Modifier Translation Boundary Planning.
+Milestone 196: Intrinsic Semantic Modifier Translation Planning.
 ```
 
 Latest review verdict:
 
 ```text
-M193 execution-review returned Accept after one write-capable executor and
-read-only architecture/boundary, evidence, documentation, and validation
-audits. Validation passed and validation-created `tslgen/` cache directories
-were removed.
+M195 execution-review returned Accept after focused revision. Architecture,
+evidence/corpus, validation, and documentation review accepted the typed
+literal intrinsic modifier translation boundary.
 ```
 
 Next expected action:
 
 ```text
-Run the active M194 planning prompt. It is a documentation/planning task:
-read-only subagents should inventory intrinsic modifier forms and select the
-next executable backend translation slice for accepted M182 modifier handoff
-values. It must not implement code, render output, parse direct intrinsic
-names, format arbitrary placeholders, modify generated-project verification,
-or reopen lowering unless a true planning blocker is found.
+Run the active M196 planning prompt. Inventory the remaining semantic
+intrinsic modifier families diagnosed by M195, identify the typed inputs
+required by each family, and select exactly one next executable backend
+translation milestone. Do not implement code, assemble intrinsic names, parse
+direct intrinsic names or arguments, render output, execute dependency
+closure, or reopen lowering unless the plan finds a true blocker.
 ```
 
 Previous review verdict:
@@ -173,13 +210,15 @@ returned Accept and selected M190. M190 execution-review returned Accept and
 selected M191. M191 was then retargeted by ADR-055 planning correction before
 execution. M191 execution-review returned Accept and selected M192. M192
 execution-review returned Accept and selected M193. M193 execution-review
-returned Accept and selected M194 planning.
+returned Accept and selected M194 planning. M194 planning returned Accept and
+selected M195. M195 execution-review returned Accept and selected M196
+planning.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m193-execution-review-loop-prompt.md
+docs/agent/runs/m195-literal-intrinsic-modifier-translation-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

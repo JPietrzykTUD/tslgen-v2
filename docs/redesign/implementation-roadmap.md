@@ -24401,3 +24401,191 @@ Validation:
 git diff --check
 find tslgen -type d -name __pycache__ -print
 ```
+
+Result:
+
+M194 accepted. The `tsldata/**/*.tsl` corpus currently contains 619 observed
+`intrin_compose<...>` occurrences. The inventory separated source-authored
+literal modifier fields from backend-semantic modifier requests:
+
+- final literal fields include examples such as `suffix=si128`,
+  `suffix="epi64x"`, `post=x`, `post=z`, `post=m`, `post=mask`,
+  `infix_sep=""`, and integer `immediate(N)=...`;
+- backend-semantic fields include
+  `suffix=value<backend>(intrin::suffix)`,
+  `suffix=value<backend>(intrin::suffix(ARG))`,
+  `prefix=value<backend>(intrin::prefix)`, and
+  `infix=value<backend>(intrin::suffix...)`;
+- observed symbol immediates such as `immediate(1)=index`, wildcard-like
+  suffixes such as `suffix=si?`, and `infix=to_type_suffix` are not final
+  literal fragments because they require argument, wildcard, or type-suffix
+  semantics.
+
+The next executable slice should translate only already-final literal M182
+`BackendIntrinsicModifierField` operands into typed backend intrinsic modifier
+translation results. It must keep prefix handling, no-argument suffix handling,
+type-derived suffix handling, string-argument suffix handling such as
+`intrin::suffix("stream")`, symbol-argument suffix handling such as `ToBase`,
+symbol immediate handling such as `Index`, wildcard-looking fragments such as
+`si?`, and `infix=to_type_suffix` as explicit unsupported diagnostics until
+future typed rules are selected.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+### Milestone 195: Literal Intrinsic Modifier Translation For Compose Handoff
+
+Status:
+
+Selected. Execution-review prompt:
+`docs/agent/runs/m195-literal-intrinsic-modifier-translation-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the first backend intrinsic modifier translation boundary over accepted
+M182 `BackendIntrinsicComposeHandoffRequest` values. The slice promotes only
+final literal modifier facts that are already explicit in the handoff into
+typed translated modifier values. It does not assemble intrinsic names or
+infer backend suffix/prefix semantics.
+
+Scope:
+
+- Add a small backend translation module for compose modifier fields, consuming
+  typed `BackendIntrinsicComposeHandoffRequest` and
+  `BackendIntrinsicModifierField` values.
+- Translate final literal modifier fragments:
+  - `suffix` with direct symbol or quoted-string operands that contain no
+    unresolved wildcard marker such as `?`;
+  - `post` with direct symbol or quoted-string operands;
+  - `infix` only for direct symbol or quoted-string operands that are final
+    fragments, while diagnosing the observed semantic symbol
+    `to_type_suffix`;
+  - `infix_sep` with quoted-string operands;
+  - `immediate(N)` with integer operands.
+- Preserve modifier order and request/field provenance in the result.
+- Diagnose unsupported modifier fields or operands, including `prefix`,
+  backend-value operands, wildcard-looking fragments such as `si?`,
+  `infix=to_type_suffix`, symbol immediates such as `Index`, backend
+  suffix/prefix requests, missing immediate indices, and direct
+  `intrin<...>` handoff values if a batch helper is introduced.
+- Add positive, negative, ordering, diagnostic, and corpus characterization
+  tests. The corpus characterization test must scan `tsldata/primitives/**/*.tsl`,
+  lower every observed `intrin_compose<...>` occurrence through the accepted
+  M182 path, feed compose modifier fields into the M195 translator, and assert
+  that every modifier is either translated by the literal slice or classified
+  into a named expected unsupported family. It must not require all observed
+  occurrences to translate successfully.
+
+Out of scope:
+
+Intrinsic name assembly; rendering; direct `intrin<...>(...)` parsing;
+intrinsic argument parsing; intrinsic base-token translation; no-argument
+suffix resolution; type-derived suffix resolution; string-argument suffix
+resolution such as `intrin::suffix("stream")`; symbol-argument suffix
+resolution such as `ToBase`; prefix resolution; `infix=to_type_suffix`
+semantics; symbol immediate resolution; backend metadata lookup; arbitrary
+placeholder formatting; source repair; dependency closure; generated-project
+changes; lowering changes; and runtime dependency on `frozen/` or
+`tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m195_literal_intrinsic_modifier_translation.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M195 accepted. It added `tslgen.backends.intrinsic_modifiers`, a typed backend
+translation boundary over accepted M182 `BackendIntrinsicComposeHandoffRequest`
+modifier fields. The translator preserves modifier order and request/field
+provenance while promoting only final literal modifier facts:
+
+- direct symbol or quoted-string `suffix` fragments with no unresolved
+  wildcard marker;
+- direct symbol or quoted-string `post` fragments;
+- direct symbol or quoted-string `infix` fragments except the semantic marker
+  `to_type_suffix`;
+- quoted-string `infix_sep` values;
+- integer `immediate(N)` values.
+
+Unsupported modifier forms remain explicit diagnostics, including unsupported
+fields such as `prefix`, backend-value suffix/prefix operands, wildcard-looking
+suffixes such as `si?`, semantic `infix=to_type_suffix`, symbol immediates
+such as `index` and `Index`, missing immediate indices, and direct
+`intrin<...>` handoff requests. The boundary does not assemble intrinsic
+names, parse direct intrinsic names or argument payloads, resolve suffix/prefix
+semantics, consult backend metadata, render output, change lowering, or depend
+on `frozen/` or `tslgenold`.
+
+The corpus characterization test scans `tsldata/primitives/**/*.tsl`, extracts
+balanced `intrin_compose<...>` islands, lowers them through the accepted M182
+path, and verifies exact-once classification of each modifier field. Current
+observed counts are 627 raw `intrin_compose<` matches, 619 balanced compose
+requests, 643 modifier fields, 335 translated literal modifiers, and
+diagnostics split into 285 unsupported backend-value operands, 19 unsupported
+symbol immediates, and 4 unsupported semantic infix markers.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m195_literal_intrinsic_modifier_translation.py`:
+  exit 0, `19 passed`.
+- `find tslgen -type d -name __pycache__ -print`: validation-created
+  `__pycache__` directories were removed; final command exited 0 with no
+  output.
+
+### Milestone 196: Intrinsic Semantic Modifier Translation Planning
+
+Status:
+
+Selected. Planning prompt:
+`docs/agent/runs/m196-intrinsic-semantic-modifier-translation-planning-prompt.md`.
+
+Goal:
+
+Plan the next executable backend translation slice for the semantic intrinsic
+modifier families that M195 intentionally diagnosed. The planner should
+determine which remaining family can be translated from already accepted typed
+facts and which new typed rule input, if any, is needed before implementation.
+
+Scope:
+
+- Inventory remaining unsupported M195 modifier families in
+  `tsldata/primitives/**/*.tsl`, including backend-value suffix/prefix
+  operands, type-derived suffixes, no-argument suffixes, string-argument
+  suffixes such as `intrin::suffix("stream")`, symbol-argument suffixes such
+  as `ToBase`, backend-value `infix` suffix operands, `infix=to_type_suffix`,
+  wildcard-looking suffixes such as `si?`, and symbol immediates such as
+  `index` and `Index`.
+- Identify the typed inputs each family would require: selected backend,
+  extension, type tag, current vector/type context, return-type bindings,
+  extension metadata, backend metadata, M192 type spelling results, M193 value
+  results, or new typed intrinsic modifier rule records.
+- Select exactly one next executable milestone, preferably the largest safe
+  semantic modifier subset that can be implemented without raw source parsing,
+  intrinsic-name assembly, renderer-side inference, dependency closure, or
+  broad TSIL expression parsing.
+- Define the typed result/request shape, diagnostics, corpus tests, and
+  out-of-scope boundaries for that next executable milestone.
+
+Out of scope:
+
+Implementation code; intrinsic name assembly; rendering; direct
+`intrin<...>(...)` name parsing; intrinsic argument payload parsing; source
+repair; dependency closure; generated-project changes; broad backend metadata
+template evaluation; lowering changes unless the plan finds a true blocker;
+and runtime dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+find tslgen -type d -name __pycache__ -print
+```
