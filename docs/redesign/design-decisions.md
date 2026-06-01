@@ -2717,3 +2717,45 @@ Consequences:
   default and `all` as reserved shorthand for all known profiles.
 - Future writer milestones should implement manifest-based cleanup before
   broad generated-output workflows rely on stale-file removal.
+
+## ADR-056: Rust Intrinsic Calls Use Explicit Architecture Paths
+
+Status: Accepted.
+
+Context:
+
+Rust SIMD intrinsics live under architecture modules such as
+`core::arch::x86_64` and `core::arch::aarch64`. Intrinsic compose modifier
+translation also produces name fragments such as `_mm256_`, but those
+fragments are not complete Rust call paths.
+
+Decision:
+
+Rust backend rendering should emit intrinsic calls with explicit fully
+qualified architecture module paths, for example:
+
+```rust
+core::arch::x86_64::_mm256_add_epi32(...)
+core::arch::aarch64::vaddq_u32(...)
+```
+
+Modifier translation remains responsible only for typed intrinsic-name
+fragments. It must not prepend `core::arch::*` paths, introduce imports, or
+assemble final Rust call expressions. The Rust intrinsic-call renderer or
+backend call-translation layer owns architecture module qualification from
+typed extension/backend facts.
+
+Current corpus evidence uses `intrin::prefix` for selected x86-family forms.
+ARM/NEON/SVE intrinsic names are currently source-authored as direct names
+such as `vld1q`, `vst1q`, `svld1`, and `svst1`; do not invent ARM
+`intrin::prefix` mappings unless the `.tsl` corpus starts using that modifier.
+
+Consequences:
+
+- M198 may translate Rust prefix metadata for intrinsic-name fragments such as
+  `_mm_`, `_mm256_`, and `_mm512_`, but those fragments must not contain
+  `core::arch::*`.
+- Import-based Rust intrinsic rendering is intentionally avoided for generated
+  intrinsic calls.
+- Future renderer milestones need a typed Rust architecture-module policy for
+  x86 and ARM rather than string-rewriting rendered names.

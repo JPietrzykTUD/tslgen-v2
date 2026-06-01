@@ -24755,14 +24755,15 @@ Validation result:
 
 Status:
 
-Selected. Execution-review prompt:
+Accepted. Execution-review prompt:
 `docs/agent/runs/m198-intrinsic-prefix-modifier-translation-execution-review-loop-prompt.md`.
 
 Goal:
 
 Translate the observed typed intrinsic prefix modifier family using the M197
-context-aware modifier translation pattern. The executable slice should
-consume accepted M182/M181 lowering IR for
+context-aware modifier translation evidence while first simplifying the
+modifier translation shape instead of adding another one-off concern function.
+The executable slice consumes accepted M182/M181 lowering IR for
 `prefix=value<backend>(intrin::prefix)` and produce a typed
 `BackendTranslatedIntrinsicModifier` literal prefix fragment using explicit
 backend metadata/rule input.
@@ -24774,6 +24775,11 @@ Scope:
 - Add typed prefix metadata/rule records that map selected extension names to
   exact backend metadata keys. Prefix fragment values must come from typed
   backend metadata, not a hidden hardcoded value map.
+- Consolidate the accepted M197 type-derived suffix path and the new M198
+  prefix path behind the smallest reusable metadata-backed modifier
+  rule/evaluator shape that reduces duplicated mechanics. Splitting
+  `intrinsic_modifiers.py` is secondary and should happen only if it improves
+  ownership after that simplification.
 - Consume `BackendIntrinsicModifierField` values whose name is `prefix` and
   whose value is `BackendIntrinsicModifierBackendValueOperand` carrying
   `BackendIntrinsicPrefixValueRequest`.
@@ -24781,6 +24787,13 @@ Scope:
 - Return existing typed `BackendTranslatedIntrinsicModifier` results with
   `BackendIntrinsicLiteralFragment` values, preserving field/request/metadata
   provenance and modifier order.
+- Treat `intrin::prefix` as an intrinsic-name prefix fragment only. Rust
+  module qualification such as `core::arch::x86_64::` or
+  `core::arch::aarch64::` belongs to a later Rust intrinsic-call renderer,
+  which should use explicit qualified paths rather than import-based rendering.
+- Keep ARM/NEON/SVE outside the `intrin::prefix` rule family unless `.tsl`
+  corpus evidence starts using that modifier for ARM; current ARM forms use
+  direct intrinsic names such as `vld1q`, `vst1q`, `svld1`, and `svst1`.
 - Apply the M197 module-size follow-up before adding prefix logic.
 - Keep M195 literal translation and M197 type-derived suffix translation
   behavior intact.
@@ -24789,8 +24802,10 @@ Scope:
 
 Out of scope:
 
-Intrinsic name assembly; rendering; direct `intrin<...>(...)` parsing;
-intrinsic argument payload parsing; no-argument suffix resolution;
+Intrinsic name assembly; rendering; Rust intrinsic module qualification;
+import-based Rust intrinsic rendering; invented ARM/NEON/SVE prefix mappings;
+direct `intrin<...>(...)` parsing; intrinsic argument payload parsing;
+no-argument suffix resolution;
 `intrin::suffix("stream")`; `intrin::suffix(ToBase)`; wildcard-looking
 `intrin::suffix(si?)`; backend-value infix suffix resolution;
 `infix=to_type_suffix`; symbol immediate resolution; type spelling changes;
@@ -24804,5 +24819,83 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m198_intrinsic_prefix_modifier_translation.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M198 accepted. It added exact C++ and Rust backend metadata entries for
+selected x86-family intrinsic-name prefix fragments, translated
+`prefix=value<backend>(intrin::prefix)` through typed metadata-backed rules,
+and kept Rust `core::arch::*` qualification out of modifier translation per
+ADR-056. The implementation consolidated the accepted M197 type-derived suffix
+path and M198 prefix path behind a shared metadata-backed modifier-rule
+evaluator, then split typed metadata rule families into
+`tslgen.backends._intrinsic_metadata_modifiers` to keep
+`intrinsic_modifiers.py` below the module-size guardrail. M195 literal
+translation remains metadata-free; M197 type-derived suffix behavior remains
+intact. Corpus characterization now shows the 9 observed prefix modifier
+fields translate for selected x86 context while ARM/NEON/SVE direct intrinsic
+names remain outside the `intrin::prefix` rule family.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m198_intrinsic_prefix_modifier_translation.py`:
+  exit 0, `29 passed`.
+- `find tslgen -type d -name __pycache__ -print`: validation-created
+  `__pycache__` directories were removed; final command exited 0 with no
+  output.
+
+Follow-ups:
+
+- Remaining unsupported intrinsic modifier families include no-argument
+  suffix requests, string-argument suffix requests such as `"stream"`,
+  symbol-argument suffix requests, backend-value infix suffix requests,
+  symbol immediates, and `infix=to_type_suffix`.
+- Rust explicit intrinsic module qualification remains a future renderer or
+  backend intrinsic-call translation concern, not a modifier concern.
+
+### Milestone 199: Post-Prefix Intrinsic Modifier Planning
+
+Status:
+
+Selected. Planning prompt:
+`docs/agent/runs/m199-post-prefix-intrinsic-modifier-planning-prompt.md`.
+
+Goal:
+
+Plan the next executable backend intrinsic translation slice after M198 using
+the current typed modifier corpus, selected-context needs, and rendering
+boundaries. The planner should decide whether the next slice should address a
+remaining suffix family, backend-value infix suffixes, symbol immediates,
+`infix=to_type_suffix`, intrinsic-name assembly over already translated
+modifiers, or a narrower context/model prerequisite.
+
+Scope:
+
+- Re-inventory remaining unsupported modifier families after M198 using
+  `tsldata/primitives/**/*.tsl`.
+- Identify which families can be implemented from existing typed context and
+  which need additional selected type, selected extension, return binding, or
+  alias facts.
+- Preserve the M198 boundary: no Rust `core::arch::*` qualification in
+  modifier translation and no invented ARM `intrin::prefix` rules.
+- Select one thin executable M200 milestone or record a stop/planner condition
+  if a prerequisite design decision is missing.
+
+Out of scope:
+
+Implementation code; generated output; rendering; dependency closure; Rust
+module qualification; source repair; broad TSIL parsing; and lowering changes
+unless the planner proves an existing accepted handoff cannot represent a
+required corpus form.
+
+Validation:
+
+```bash
+git diff --check
 find tslgen -type d -name __pycache__ -print
 ```

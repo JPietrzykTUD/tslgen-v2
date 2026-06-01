@@ -52,8 +52,9 @@ Milestone 198: Intrinsic Prefix Modifier Translation
 ## Goal
 
 Translate the observed intrinsic prefix modifier family from typed lowering IR
-into typed backend modifier results using the M197 context-aware modifier
-translation pattern.
+into typed backend modifier results using a small reusable metadata-backed
+modifier translation shape shared with the accepted M197 suffix work where
+that reduces complexity.
 
 The accepted source form is already lowered before this milestone:
 
@@ -74,6 +75,36 @@ This milestone must not parse source text again. It should consume the typed
 handoff field, selected extension context, typed extension metadata, and typed
 backend metadata/rule input.
 
+## Accepted Planning Clarifications
+
+- The core prefix operation is simple. M198 should not add another one-off
+  function-per-concern path if a small reusable modifier-rule/evaluator shape
+  can cover both the accepted M197 type-derived suffix rule and the new M198
+  prefix rule.
+- The reusable shape may be object-oriented, protocol-based, or a small typed
+  evaluator. It should own only the shared mechanics: field/request matching,
+  selected-extension lookup, metadata-key resolution, metadata lookup,
+  unresolved-placeholder rejection, typed result construction, provenance, and
+  diagnostics. The family-specific part should remain the semantic key
+  resolver.
+- Splitting `tslgen/src/tslgen/backends/intrinsic_modifiers.py` is secondary.
+  Split into focused private modules only if it improves ownership after the
+  reusable shape is clear. Do not use file splitting as a substitute for
+  reducing duplicated control flow.
+- `prefix=value<backend>(intrin::prefix)` means an intrinsic-name prefix
+  fragment such as `_mm_`, `_mm256_`, or `_mm512_`. It must not include Rust
+  module qualification such as `core::arch::x86_64::`.
+- Future Rust intrinsic-call rendering should use explicit fully qualified
+  module paths, for example
+  `core::arch::x86_64::_mm256_add_epi32(...)` or
+  `core::arch::aarch64::vaddq_u32(...)`, not import-based rendering. That
+  renderer/name-qualification policy is not part of M198.
+- Current corpus evidence shows `intrin::prefix` on selected x86-family
+  intrinsic forms. Do not invent ARM/NEON/SVE `intrin::prefix` rules in M198.
+  ARM Rust module qualification remains a future renderer concern because ARM
+  intrinsics in the corpus use direct names such as `vld1q`, `vst1q`, `svld1`,
+  and `svst1` rather than the `intrin::prefix` modifier.
+
 ## Executor Scope
 
 - Add exact backend metadata entries for selected intrinsic prefix fragments in
@@ -87,6 +118,11 @@ backend metadata/rule input.
 - Add typed prefix metadata/rule records in backend code that map selected
   extension names to exact backend metadata keys. Prefix fragment values must
   come from typed backend metadata, not from a hidden Python value map.
+- Before adding prefix-specific control flow, consolidate the accepted M197
+  type-derived suffix path and the new M198 prefix path behind the smallest
+  reusable metadata-backed modifier-rule/evaluator shape that actually reduces
+  duplication. Avoid a broad registry, dispatcher framework, or new
+  request/result family.
 - Consume only `BackendIntrinsicModifierField` values with:
   - `name == "prefix"`;
   - `value` as `BackendIntrinsicModifierBackendValueOperand`;
@@ -95,14 +131,12 @@ backend metadata/rule input.
 - Return existing typed `BackendTranslatedIntrinsicModifier` values with
   `BackendIntrinsicLiteralFragment` prefix fragments, preserving
   field/request/metadata provenance and modifier order.
-- Reuse the M197 context-aware helper shape where practical. The result should
-  make later infix and string/no-argument suffix milestones easier without
-  implementing those families in M198.
 - Apply the M197 architecture review follow-up before adding prefix logic:
   `tslgen/src/tslgen/backends/intrinsic_modifiers.py` is already substantial.
-  If the prefix implementation would push it toward a catch-all module or over
-  the module-size guardrail, split typed rule-family helpers into focused
-  private modules while preserving public imports and M195/M197 behavior.
+  Prefer reducing duplicated modifier translation mechanics first. If the
+  resulting module would still become a catch-all module or remain over the
+  module-size guardrail, split typed rule-family helpers into focused private
+  modules while preserving public imports and M195/M197 behavior.
 - Keep M195 literal translation and M197 type-derived suffix translation
   behavior intact.
 - Add focused tests in
@@ -123,7 +157,8 @@ Add stable diagnostics with codes and source locations for:
   this selected typed backend-value prefix family.
 
 Diagnostics must not repair source, infer prefixes from raw text, assemble
-intrinsic names, or pass unsupported backend-value operands through as text.
+intrinsic names, prepend Rust `core::arch::*` paths, or pass unsupported
+backend-value operands through as text.
 
 ## Required Tests
 
@@ -131,11 +166,15 @@ Positive tests:
 
 - translate `prefix=value<backend>(intrin::prefix)` for `sse`, `sse_vl`,
   `avx2`, `avx2_vl`, and `avx512` through active C++ metadata;
-- translate at least one selected prefix through active Rust metadata;
+- translate at least one selected prefix through active Rust metadata and
+  assert the translated modifier is only the intrinsic-name prefix fragment,
+  not a `core::arch::*` qualified callable path;
 - preserve modifier order and metadata provenance when a compose request
   contains both an M197 type-derived suffix and an M198 prefix;
 - prove direct source text is not parsed by constructing typed requests
   directly.
+- prove the accepted M197 type-derived suffix path still works through the
+  shared metadata-backed modifier-rule/evaluator shape after consolidation.
 
 Negative tests:
 
@@ -161,6 +200,8 @@ Corpus characterization:
 - assert representative typed prefix requests from that family translate when
   supplied selected x86 extension context, extension catalog, and backend
   metadata;
+- assert ARM/NEON/SVE direct intrinsic names remain outside the
+  `intrin::prefix` rule family unless the corpus starts using that modifier;
 - assert all other unsupported families remain named unsupported families, not
   accidental successes.
 
@@ -168,6 +209,12 @@ Corpus characterization:
 
 - Intrinsic name assembly.
 - Rendering.
+- Rust intrinsic module qualification such as `core::arch::x86_64::...` or
+  `core::arch::aarch64::...`; preserve ADR-056's explicit-path renderer
+  policy but do not implement it in M198.
+- Import-based Rust intrinsic rendering.
+- Inventing ARM/NEON/SVE `intrin::prefix` mappings not present in the current
+  `.tsl` corpus.
 - Direct `intrin<...>(...)` name parsing.
 - Intrinsic argument payload parsing.
 - No-argument suffix resolution.
@@ -194,7 +241,9 @@ subagents:
 
 1. Architecture/boundary reviewer: verify typed backend translation
    boundaries, no renderer/template semantics, no raw source parsing, no
-   intrinsic-name assembly, no prefix-value hardcoding, and no lowering drift.
+   intrinsic-name assembly, no Rust path qualification inside prefix
+   fragments, no prefix-value hardcoding, no broad modifier registry, and no
+   lowering drift.
 2. Evidence auditor: compare supported and unsupported prefix families against
    representative `tsldata/primitives/**/*.tsl` cases.
 3. Validation auditor: inspect test coverage and validation output.

@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 197 is accepted.
+Milestone 198 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -174,6 +174,24 @@ prefix work would push it toward a catch-all module, split typed rule-family
 helpers into focused private modules while preserving public imports and
 M195/M197 behavior.
 
+M198 added typed intrinsic prefix modifier translation for the observed
+`prefix=value<backend>(intrin::prefix)` family. C++ and Rust prefix fragment
+text now lives in typed backend metadata entries for selected x86-family
+extensions: `sse`, `sse_vl`, `avx2`, `avx2_vl`, and `avx512`. Python backend
+code maps selected extension names to metadata keys, not hidden prefix
+fragment values. M198 also consolidated the M197 type-derived suffix path and
+the M198 prefix path behind a shared metadata-backed modifier rule/evaluator
+and moved rule-family data to
+`tslgen.backends._intrinsic_metadata_modifiers`, keeping
+`intrinsic_modifiers.py` under the module-size guardrail. Rust
+`core::arch::*` qualification remains a future renderer/call-translation
+policy per ADR-056 and is not part of modifier translation. ARM/NEON/SVE
+direct intrinsic names remain outside the `intrin::prefix` rule family because
+the current `.tsl` corpus does not use that modifier for them. M198 leaves
+no-argument/string/symbol suffixes, backend-value infix suffixes, symbol
+immediates, `infix=to_type_suffix`, intrinsic-name assembly, rendering,
+dependency closure, and lowering changes out of scope.
+
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
 
@@ -193,42 +211,40 @@ parsing/source-repair work that lowering must not absorb by default.
 Current required action:
 
 ```text
-Run M198 intrinsic prefix modifier translation execution-review loop prompt.
+Run M199 post-prefix intrinsic modifier planning prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m198-intrinsic-prefix-modifier-translation-execution-review-loop-prompt.md
+docs/agent/runs/m199-post-prefix-intrinsic-modifier-planning-prompt.md
 ```
 
-Active implementation milestone:
+Active planning milestone:
 
 ```text
-Milestone 198: Intrinsic Prefix Modifier Translation.
+Milestone 199: Post-Prefix Intrinsic Modifier Planning.
 ```
 
 Latest review verdict:
 
 ```text
-M197 execution-review returned Accept. Architecture/boundary, evidence,
-validation, and documentation audits accepted the typed type-derived intrinsic
-suffix translation boundary.
+M198 execution-review returned Accept. Architecture/boundary, evidence,
+validation, and documentation audits accepted the typed intrinsic prefix
+modifier translation boundary and shared metadata-backed modifier rule
+evaluator.
 ```
 
 Next expected action:
 
 ```text
-Run the active M198 execution-review loop. Implement only typed
-`prefix=value<backend>(intrin::prefix)` modifier translation over accepted
-M182/M181 handoff values. Consume selected extension context, typed extension
-metadata, and typed backend metadata/rule input. Do not hardcode prefix
-fragment values in Python, assemble intrinsic names, parse direct intrinsic
-names or arguments, resolve no-argument/string/symbol suffixes, resolve infix
-or symbol immediates, render output, execute dependency closure, or change
-lowering. If the accepted M182/M181 typed handoff proves insufficient, stop
-and return to planner. Apply the M197 module-size follow-up before adding
-prefix logic.
+Run the active M199 planning prompt. Re-inventory remaining unsupported
+intrinsic modifier families after M198, identify the typed context each family
+needs, and select one next executable backend intrinsic translation milestone
+or record a stop condition. Do not implement code in M199. Preserve ADR-056:
+Rust explicit `core::arch::...` intrinsic qualification is a later renderer or
+backend call-translation concern, not modifier translation. Do not invent
+ARM/NEON/SVE `intrin::prefix` mappings not present in the `.tsl` corpus.
 ```
 
 Previous review verdict:
@@ -253,13 +269,14 @@ execution-review returned Accept and selected M193. M193 execution-review
 returned Accept and selected M194 planning. M194 planning returned Accept and
 selected M195. M195 execution-review returned Accept and selected M196
 planning. M196 planning returned Accept and selected M197. M197
-execution-review returned Accept and selected M198.
+execution-review returned Accept and selected M198. M198 execution-review
+returned Accept and selected M199 planning.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m197-type-derived-intrinsic-suffix-translation-execution-review-loop-prompt.md
+docs/agent/runs/m198-intrinsic-prefix-modifier-translation-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

@@ -6,6 +6,13 @@ import re
 from dataclasses import dataclass
 from typing import Literal, NewType
 
+from tslgen.backends._intrinsic_metadata_modifiers import (
+    METADATA_BACKED_MODIFIER_FAMILIES,
+    BackendIntrinsicPrefixTranslationRule,
+    BackendIntrinsicStyle,
+    BackendIntrinsicTypeSuffixTranslationRule,
+    MetadataBackedModifierFamily,
+)
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.backend_metadata import (
     BackendId,
@@ -14,7 +21,7 @@ from tslgen.domain.backend_metadata import (
     BackendTranslationKey,
     BackendTranslationTemplate,
 )
-from tslgen.domain.catalog import ExtensionCatalog, ExtensionName, TypeTag
+from tslgen.domain.catalog import ExtensionCatalog, ExtensionName
 from tslgen.lowering.model import (
     BackendDirectIntrinsicHandoffRequest,
     BackendIntrinsicComposeHandoffRequest,
@@ -25,9 +32,6 @@ from tslgen.lowering.model import (
     BackendIntrinsicModifierName,
     BackendIntrinsicModifierStringOperand,
     BackendIntrinsicModifierSymbolOperand,
-    BackendIntrinsicSuffixValueRequest,
-    BackendValueTypeOperand,
-    LoweredScalarTypeIdentity,
 )
 
 BackendIntrinsicModifierFragmentText = NewType(
@@ -43,8 +47,6 @@ BackendIntrinsicModifierValueKind = Literal[
     "infix_separator",
     "immediate_literal",
 ]
-BackendIntrinsicStyle = NewType("BackendIntrinsicStyle", str)
-
 _FRAGMENT_MODIFIER_NAMES = frozenset({"suffix", "post", "infix"})
 _TO_TYPE_SUFFIX_SYMBOL = "to_type_suffix"
 _PLACEHOLDER_PATTERN = re.compile(r"\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)\}")
@@ -104,120 +106,6 @@ class BackendIntrinsicModifierTranslationContext:
     metadata_catalog: BackendMetadataCatalog | None
 
 
-@dataclass(frozen=True, slots=True)
-class BackendIntrinsicTypeSuffixTranslationRule:
-    intrinsic_style: BackendIntrinsicStyle
-    type_tag: TypeTag
-    metadata_key: BackendTranslationKey
-
-
-_TYPE_SUFFIX_TRANSLATION_RULES: tuple[
-    BackendIntrinsicTypeSuffixTranslationRule,
-    ...,
-] = (
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("x86"),
-        TypeTag("si8"),
-        BackendTranslationKey("intrinsic_suffix_x86_si8"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("x86"),
-        TypeTag("si16"),
-        BackendTranslationKey("intrinsic_suffix_x86_si16"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("x86"),
-        TypeTag("si32"),
-        BackendTranslationKey("intrinsic_suffix_x86_si32"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("x86"),
-        TypeTag("si64"),
-        BackendTranslationKey("intrinsic_suffix_x86_si64"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("x86"),
-        TypeTag("ui8"),
-        BackendTranslationKey("intrinsic_suffix_x86_ui8"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("x86"),
-        TypeTag("ui16"),
-        BackendTranslationKey("intrinsic_suffix_x86_ui16"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("x86"),
-        TypeTag("ui32"),
-        BackendTranslationKey("intrinsic_suffix_x86_ui32"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("x86"),
-        TypeTag("ui64"),
-        BackendTranslationKey("intrinsic_suffix_x86_ui64"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("x86"),
-        TypeTag("f32"),
-        BackendTranslationKey("intrinsic_suffix_x86_f32"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("x86"),
-        TypeTag("f64"),
-        BackendTranslationKey("intrinsic_suffix_x86_f64"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("arm"),
-        TypeTag("si8"),
-        BackendTranslationKey("intrinsic_suffix_arm_si8"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("arm"),
-        TypeTag("si16"),
-        BackendTranslationKey("intrinsic_suffix_arm_si16"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("arm"),
-        TypeTag("si32"),
-        BackendTranslationKey("intrinsic_suffix_arm_si32"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("arm"),
-        TypeTag("si64"),
-        BackendTranslationKey("intrinsic_suffix_arm_si64"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("arm"),
-        TypeTag("ui8"),
-        BackendTranslationKey("intrinsic_suffix_arm_ui8"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("arm"),
-        TypeTag("ui16"),
-        BackendTranslationKey("intrinsic_suffix_arm_ui16"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("arm"),
-        TypeTag("ui32"),
-        BackendTranslationKey("intrinsic_suffix_arm_ui32"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("arm"),
-        TypeTag("ui64"),
-        BackendTranslationKey("intrinsic_suffix_arm_ui64"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("arm"),
-        TypeTag("f32"),
-        BackendTranslationKey("intrinsic_suffix_arm_f32"),
-    ),
-    BackendIntrinsicTypeSuffixTranslationRule(
-        BackendIntrinsicStyle("arm"),
-        TypeTag("f64"),
-        BackendTranslationKey("intrinsic_suffix_arm_f64"),
-    ),
-)
-
-
 def translate_backend_intrinsic_modifier_field(
     field: BackendIntrinsicModifierField,
     backend: BackendId | str,
@@ -253,9 +141,10 @@ def translate_backend_intrinsic_modifier_field_with_context(
 ) -> BackendIntrinsicModifierTranslationResult:
     """Translate one modifier using context for selected semantic families."""
 
-    suffix_result = _translate_type_derived_suffix_modifier(field, context)
-    if suffix_result is not None:
-        return suffix_result
+    for family in METADATA_BACKED_MODIFIER_FAMILIES:
+        result = _translate_metadata_backed_modifier(field, context, family)
+        if result is not None:
+            return result
     return translate_backend_intrinsic_modifier_field(field, context.backend)
 
 
@@ -373,74 +262,68 @@ def translate_backend_intrinsic_handoff_request_modifiers(
     )
 
 
-def _translate_type_derived_suffix_modifier(
+def _translate_metadata_backed_modifier(
     field: BackendIntrinsicModifierField,
     context: BackendIntrinsicModifierTranslationContext,
+    family: MetadataBackedModifierFamily,
 ) -> BackendIntrinsicModifierTranslationResult | None:
-    if field.name != "suffix":
+    if field.name != family.field_name:
         return None
     if not isinstance(field.value, BackendIntrinsicModifierBackendValueOperand):
         return None
     request = field.value.request
-    if not isinstance(request, BackendIntrinsicSuffixValueRequest):
+    if not family.request_matches(request):
         return None
-    argument = request.argument
-    if not isinstance(argument, BackendValueTypeOperand):
-        return None
-    if not isinstance(argument.value, LoweredScalarTypeIdentity):
+
+    precondition_diagnostic = family.precondition_diagnostic(field, request)
+    if precondition_diagnostic is not None:
         return BackendIntrinsicModifierTranslationResult(
             modifier=None,
-            diagnostics=(_unsupported_lowered_type_diagnostic(field, argument),),
+            diagnostics=(precondition_diagnostic,),
         )
 
     catalog = context.metadata_catalog
     if catalog is None:
         return BackendIntrinsicModifierTranslationResult(
             modifier=None,
-            diagnostics=(_missing_metadata_diagnostic(field),),
+            diagnostics=(_missing_metadata_diagnostic(field, family),),
         )
 
     backend = BackendId(str(context.backend))
     if backend not in catalog.backends:
         return BackendIntrinsicModifierTranslationResult(
             modifier=None,
-            diagnostics=(_unsupported_backend_diagnostic(field, backend, catalog),),
+            diagnostics=(
+                _unsupported_backend_diagnostic(field, backend, catalog, family),
+            ),
         )
 
     extension = context.extension_catalog.get(str(context.selected_extension))
     if extension is None:
         return BackendIntrinsicModifierTranslationResult(
             modifier=None,
-            diagnostics=(_unknown_extension_diagnostic(field, context),),
+            diagnostics=(_unknown_extension_diagnostic(field, context, family),),
         )
 
-    if extension.intrinsic_style is None:
+    metadata_key = family.metadata_key(field, request, extension)
+    if isinstance(metadata_key, Diagnostic):
         return BackendIntrinsicModifierTranslationResult(
             modifier=None,
-            diagnostics=(_missing_intrinsic_style_diagnostic(field, extension.source),),
+            diagnostics=(metadata_key,),
         )
 
-    style = BackendIntrinsicStyle(extension.intrinsic_style)
-    rule = _type_suffix_rule(style, argument.value.type_tag)
-    if rule is None:
-        if style not in _known_type_suffix_styles():
-            diagnostic = _unsupported_intrinsic_style_diagnostic(
-                field,
-                style,
-                extension.source,
-            )
-        else:
-            diagnostic = _unsupported_type_tag_diagnostic(field, style, argument)
-        return BackendIntrinsicModifierTranslationResult(
-            modifier=None,
-            diagnostics=(diagnostic,),
-        )
-
-    lookup = catalog.translation_template(backend, rule.metadata_key)
+    lookup = catalog.translation_template(backend, metadata_key)
     if lookup.value is None or not isinstance(lookup.value, BackendTranslationTemplate):
         return BackendIntrinsicModifierTranslationResult(
             modifier=None,
-            diagnostics=(_missing_suffix_metadata_diagnostic(field, backend, rule),),
+            diagnostics=(
+                _missing_modifier_metadata_entry_diagnostic(
+                    field,
+                    backend,
+                    metadata_key,
+                    family,
+                ),
+            ),
         )
 
     template = lookup.value
@@ -449,10 +332,11 @@ def _translate_type_derived_suffix_modifier(
         return BackendIntrinsicModifierTranslationResult(
             modifier=None,
             diagnostics=(
-                _unresolved_suffix_placeholder_diagnostic(
+                _unresolved_modifier_placeholder_diagnostic(
                     field,
-                    rule,
+                    metadata_key,
                     placeholders,
+                    family,
                 ),
             ),
         )
@@ -466,36 +350,10 @@ def _translate_type_derived_suffix_modifier(
                 text=BackendIntrinsicModifierFragmentText(str(template.template)),
             ),
             source=field.source,
-            metadata_key=rule.metadata_key,
+            metadata_key=metadata_key,
             metadata_source=template.source,
         ),
         diagnostics=(),
-    )
-
-
-def _type_suffix_rule(
-    style: BackendIntrinsicStyle,
-    type_tag: TypeTag,
-) -> BackendIntrinsicTypeSuffixTranslationRule | None:
-    for rule in _TYPE_SUFFIX_TRANSLATION_RULES:
-        if str(rule.intrinsic_style) == str(style) and str(rule.type_tag) == str(
-            type_tag
-        ):
-            return rule
-    return None
-
-
-def _known_type_suffix_styles() -> frozenset[BackendIntrinsicStyle]:
-    return frozenset(rule.intrinsic_style for rule in _TYPE_SUFFIX_TRANSLATION_RULES)
-
-
-def _type_tags_for_style(style: BackendIntrinsicStyle) -> tuple[str, ...]:
-    return tuple(
-        sorted(
-            str(rule.type_tag)
-            for rule in _TYPE_SUFFIX_TRANSLATION_RULES
-            if str(rule.intrinsic_style) == str(style)
-        )
     )
 
 
@@ -623,12 +481,18 @@ def _unsupported_field_diagnostic(field: BackendIntrinsicModifierField) -> Diagn
     )
 
 
-def _missing_metadata_diagnostic(field: BackendIntrinsicModifierField) -> Diagnostic:
+def _missing_metadata_diagnostic(
+    field: BackendIntrinsicModifierField,
+    family: MetadataBackedModifierFamily,
+) -> Diagnostic:
     return Diagnostic(
         severity="error",
-        code="TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-MISSING-METADATA",
+        code=(
+            f"TSL-BACKEND-INTRINSIC-MODIFIER-"
+            f"{family.diagnostic_name}-MISSING-METADATA"
+        ),
         message=(
-            "type-derived intrinsic suffix translation requires a backend "
+            f"{family.label} translation requires a backend "
             f"metadata catalog for field {field.key_text!r}"
         ),
         location=field.value_source,
@@ -639,13 +503,17 @@ def _unsupported_backend_diagnostic(
     field: BackendIntrinsicModifierField,
     backend: BackendId,
     catalog: BackendMetadataCatalog,
+    family: MetadataBackedModifierFamily,
 ) -> Diagnostic:
     expected = ", ".join(str(item) for item in catalog.backends) or "<none>"
     return Diagnostic(
         severity="error",
-        code="TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNSUPPORTED-BACKEND",
+        code=(
+            f"TSL-BACKEND-INTRINSIC-MODIFIER-"
+            f"{family.diagnostic_name}-UNSUPPORTED-BACKEND"
+        ),
         message=(
-            f"type-derived intrinsic suffix translation does not support "
+            f"{family.label} translation does not support "
             f"backend {str(backend)!r}; expected one of: {expected}"
         ),
         location=field.value_source,
@@ -655,113 +523,58 @@ def _unsupported_backend_diagnostic(
 def _unknown_extension_diagnostic(
     field: BackendIntrinsicModifierField,
     context: BackendIntrinsicModifierTranslationContext,
+    family: MetadataBackedModifierFamily,
 ) -> Diagnostic:
     return Diagnostic(
         severity="error",
-        code="TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNKNOWN-EXTENSION",
+        code=(
+            f"TSL-BACKEND-INTRINSIC-MODIFIER-"
+            f"{family.diagnostic_name}-UNKNOWN-EXTENSION"
+        ),
         message=(
-            f"type-derived intrinsic suffix translation could not find selected "
+            f"{family.label} translation could not find selected "
             f"extension {str(context.selected_extension)!r} in the extension catalog"
         ),
         location=field.value_source,
     )
 
 
-def _missing_intrinsic_style_diagnostic(
-    field: BackendIntrinsicModifierField,
-    source: SourceLocation,
-) -> Diagnostic:
-    return Diagnostic(
-        severity="error",
-        code="TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-MISSING-STYLE",
-        message=(
-            "type-derived intrinsic suffix translation requires the selected "
-            "extension to define intrinsic_style"
-        ),
-        location=source or field.value_source,
-    )
-
-
-def _unsupported_intrinsic_style_diagnostic(
-    field: BackendIntrinsicModifierField,
-    style: BackendIntrinsicStyle,
-    source: SourceLocation,
-) -> Diagnostic:
-    expected = ", ".join(sorted(str(item) for item in _known_type_suffix_styles()))
-    return Diagnostic(
-        severity="error",
-        code="TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNSUPPORTED-STYLE",
-        message=(
-            f"type-derived intrinsic suffix translation does not support "
-            f"intrinsic style {str(style)!r}; expected one of: {expected}"
-        ),
-        location=source or field.value_source,
-    )
-
-
-def _unsupported_type_tag_diagnostic(
-    field: BackendIntrinsicModifierField,
-    style: BackendIntrinsicStyle,
-    argument: BackendValueTypeOperand,
-) -> Diagnostic:
-    expected = ", ".join(_type_tags_for_style(style)) or "<none>"
-    return Diagnostic(
-        severity="error",
-        code="TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNSUPPORTED-TYPE",
-        message=(
-            f"type-derived intrinsic suffix translation does not support type "
-            f"tag {str(argument.value.type_tag)!r} for intrinsic style "
-            f"{str(style)!r}; expected one of: {expected}"
-        ),
-        location=argument.source,
-    )
-
-
-def _unsupported_lowered_type_diagnostic(
-    field: BackendIntrinsicModifierField,
-    argument: BackendValueTypeOperand,
-) -> Diagnostic:
-    return Diagnostic(
-        severity="error",
-        code="TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNSUPPORTED-TYPE-VALUE",
-        message=(
-            "type-derived intrinsic suffix translation requires "
-            "LoweredScalarTypeIdentity, not "
-            f"{type(argument.value).__name__}"
-        ),
-        location=argument.source or field.value_source,
-    )
-
-
-def _missing_suffix_metadata_diagnostic(
+def _missing_modifier_metadata_entry_diagnostic(
     field: BackendIntrinsicModifierField,
     backend: BackendId,
-    rule: BackendIntrinsicTypeSuffixTranslationRule,
+    metadata_key: BackendTranslationKey,
+    family: MetadataBackedModifierFamily,
 ) -> Diagnostic:
     return Diagnostic(
         severity="error",
-        code="TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-MISSING-ENTRY",
+        code=(
+            f"TSL-BACKEND-INTRINSIC-MODIFIER-"
+            f"{family.diagnostic_name}-MISSING-ENTRY"
+        ),
         message=(
-            f"backend metadata has no type-derived intrinsic suffix entry for "
-            f"backend {str(backend)!r} and key {str(rule.metadata_key)!r}"
+            f"backend metadata has no {family.label} entry for backend "
+            f"{str(backend)!r} and key {str(metadata_key)!r}"
         ),
         location=field.value_source,
     )
 
 
-def _unresolved_suffix_placeholder_diagnostic(
+def _unresolved_modifier_placeholder_diagnostic(
     field: BackendIntrinsicModifierField,
-    rule: BackendIntrinsicTypeSuffixTranslationRule,
+    metadata_key: BackendTranslationKey,
     placeholders: tuple[str, ...],
+    family: MetadataBackedModifierFamily,
 ) -> Diagnostic:
     names = ", ".join(placeholders)
     return Diagnostic(
         severity="error",
-        code="TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNRESOLVED-PLACEHOLDER",
+        code=(
+            f"TSL-BACKEND-INTRINSIC-MODIFIER-"
+            f"{family.diagnostic_name}-UNRESOLVED-PLACEHOLDER"
+        ),
         message=(
-            f"type-derived intrinsic suffix metadata key "
-            f"{str(rule.metadata_key)!r} requires unresolved placeholder(s): "
-            f"{names}"
+            f"{family.label} metadata key {str(metadata_key)!r} requires "
+            f"unresolved placeholder(s): {names}"
         ),
         location=field.value_source,
     )

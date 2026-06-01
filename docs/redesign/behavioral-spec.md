@@ -200,7 +200,7 @@ Accepted M193 diagnostic codes include:
 - `TSL-BACKEND-VALUE-TRANSLATION-MISSING-TRANSLATION`
 - `TSL-BACKEND-VALUE-TRANSLATION-UNRESOLVED-PLACEHOLDER`
 
-### M195 Literal Intrinsic Modifier Translation Boundary
+### M195-M198 Intrinsic Modifier Translation Boundary
 
 Milestone 195 adds a typed backend translation boundary for accepted M182
 `BackendIntrinsicComposeHandoffRequest` modifier fields. It consumes typed
@@ -223,12 +223,26 @@ ID, original modifier field, modifier name, translated component value, and
 source provenance. Collection translation preserves modifier order and
 accumulates diagnostics.
 
-Unsupported forms remain explicit diagnostics, including backend-value
-suffix/prefix operands, no-argument suffixes, type-derived suffixes,
+Milestone 197 adds metadata-backed type-derived suffix translation for typed
+`suffix=value<backend>(intrin::suffix(TYPE))` fields whose `TYPE` argument has
+already lowered to a scalar type identity. The translator maps
+`(intrinsic_style, type_tag)` to a backend metadata key and takes the emitted
+fragment text from active C++/Rust backend metadata.
+
+Milestone 198 adds metadata-backed prefix translation for the observed typed
+`prefix=value<backend>(intrin::prefix)` family. The translator maps selected
+x86-family extensions `sse`, `sse_vl`, `avx2`, `avx2_vl`, and `avx512` to
+backend metadata keys and takes prefix fragments such as `_mm_`, `_mm256_`,
+and `_mm512_` from active C++/Rust backend metadata. The prefix fragment is
+only an intrinsic-name fragment; Rust `core::arch::*` qualification remains a
+future renderer or backend intrinsic-call translation concern.
+
+Unsupported forms remain explicit diagnostics, including no-argument suffixes,
 `intrin::suffix("stream")`, symbol-argument suffixes such as `ToBase`,
-wildcard-looking direct suffixes such as `si?`, semantic `infix=to_type_suffix`,
-symbol immediates such as `index` or `Index`, and direct intrinsic handoff
-requests.
+wildcard-looking direct suffixes such as `si?`, backend-value infix suffix
+requests, semantic `infix=to_type_suffix`, symbol immediates such as `index`
+or `Index`, direct intrinsic handoff requests, unsupported selected prefix
+extensions such as `neon` and `sve`, and metadata lookup failures.
 
 Accepted M195 diagnostic codes include:
 
@@ -241,6 +255,21 @@ Accepted M195 diagnostic codes include:
 - `TSL-BACKEND-INTRINSIC-MODIFIER-MISSING-IMMEDIATE-INDEX`
 - `TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-DIRECT-INTRINSIC`
 - `TSL-BACKEND-INTRINSIC-MODIFIER-UNSUPPORTED-REQUEST`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-MISSING-METADATA`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNSUPPORTED-BACKEND`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNKNOWN-EXTENSION`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-MISSING-STYLE`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNSUPPORTED-STYLE`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNSUPPORTED-TYPE`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNSUPPORTED-TYPE-VALUE`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-MISSING-ENTRY`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-TYPE-SUFFIX-UNRESOLVED-PLACEHOLDER`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-PREFIX-MISSING-METADATA`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-PREFIX-UNSUPPORTED-BACKEND`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-PREFIX-UNKNOWN-EXTENSION`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-PREFIX-UNSUPPORTED-EXTENSION`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-PREFIX-MISSING-ENTRY`
+- `TSL-BACKEND-INTRINSIC-MODIFIER-PREFIX-UNRESOLVED-PLACEHOLDER`
 
 ## Input Behavior
 

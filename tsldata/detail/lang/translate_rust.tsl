@@ -19,6 +19,11 @@ translation rust:
   intrinsic_suffix_arm_ui64 "u64"
   intrinsic_suffix_arm_f32 "f32"
   intrinsic_suffix_arm_f64 "f64"
+  intrinsic_prefix_sse "_mm_"
+  intrinsic_prefix_sse_vl "_mm_"
+  intrinsic_prefix_avx2 "_mm256_"
+  intrinsic_prefix_avx2_vl "_mm256_"
+  intrinsic_prefix_avx512 "_mm512_"
   preamble """  #![allow(non_upper_case_globals)]
   #![allow(unused_parens)]
   #[cfg(feature = "std")]

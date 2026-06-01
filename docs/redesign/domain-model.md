@@ -211,13 +211,17 @@ Invariants:
 - Literal braces in backend text are not placeholders. Named `{type}`-style
   fields require typed semantic inputs and are diagnostics until a later rule
   provides those inputs explicitly.
-- Intrinsic suffix/prefix requests, intrinsic composition, source operations,
-  control directives, mask constants, primitive calls, and rendering remain
-  unsupported until selected by later milestones.
+- Intrinsic composition modifiers are supported only for selected typed
+  modifier families. Literal modifier fragments, type-derived suffixes, and
+  selected x86-family prefix fragments are accepted backend translation facts.
+  Other intrinsic suffix/prefix requests, source operations, control
+  directives, mask constants, primitive calls, and rendering remain unsupported
+  until selected by later milestones.
 
 Backend intrinsic modifier translation is a backend/output result boundary
-over typed `BackendIntrinsicComposeHandoffRequest` values. It translates only
-final literal modifier components that were already accepted by lowering:
+over typed `BackendIntrinsicComposeHandoffRequest` values. It translates final
+literal modifier components that were already accepted by lowering, plus
+selected metadata-backed semantic modifier families:
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -234,14 +238,25 @@ Invariants:
 - The request is already a typed M182 handoff value; this boundary never parses
   raw `intrin_compose<...>(...)` source text.
 - Translation is per modifier. It does not assemble intrinsic names, inspect
-  intrinsic arguments, validate intrinsic base tokens, render output, or read
-  backend metadata.
+  intrinsic arguments, validate intrinsic base tokens, or render output.
 - Literal `suffix`, `post`, `infix`, `infix_sep`, and integer `immediate(N)`
   forms may be translated when they are already final fragments.
-- Backend-value suffix/prefix operands, `intrin::suffix("stream")`,
-  type-derived suffixes, symbol immediates, wildcard-looking fragments, and
-  `infix=to_type_suffix` remain unsupported diagnostics until later typed
-  rules explicitly provide those semantics.
+- Type-derived suffix operands
+  `suffix=value<backend>(intrin::suffix(TYPE))` may be translated through
+  typed extension context and backend metadata when `TYPE` has already lowered
+  to a scalar type identity.
+- Selected x86-family prefix operands
+  `prefix=value<backend>(intrin::prefix)` may be translated through selected
+  extension context and backend metadata for `sse`, `sse_vl`, `avx2`,
+  `avx2_vl`, and `avx512`.
+- Metadata-backed modifier translation maps typed facts to backend metadata
+  keys. Fragment text comes from the backend metadata catalog, not hardcoded
+  Python strings.
+- Rust `core::arch::*` intrinsic qualification, intrinsic-name assembly,
+  no-argument/string/symbol suffixes, symbol immediates, wildcard-looking
+  fragments, backend-value infix suffixes, and `infix=to_type_suffix` remain
+  unsupported diagnostics until later typed rules explicitly provide those
+  semantics.
 
 ## Primitive Model
 
