@@ -18,6 +18,7 @@ from tslgen.backends.value_translation import (
 )
 from tslgen.backends.intrinsic_modifiers import (
     BackendIntrinsicImmediateLiteral,
+    BackendIntrinsicImmediateParameterReference,
     BackendIntrinsicInfixSeparator,
     BackendIntrinsicInfixSeparatorText,
     BackendIntrinsicLiteralFragment,
@@ -44,6 +45,7 @@ from tslgen.backends.intrinsic_modifiers import (
 
 __all__ = [
     "BackendIntrinsicImmediateLiteral",
+    "BackendIntrinsicImmediateParameterReference",
     "BackendIntrinsicInfixSeparator",
     "BackendIntrinsicInfixSeparatorText",
     "BackendIntrinsicLiteralFragment",

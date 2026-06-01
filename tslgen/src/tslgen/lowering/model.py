@@ -722,6 +722,14 @@ class BackendIntrinsicModifierDestinationTypeSuffixOperand:
 
 
 @dataclass(frozen=True, slots=True)
+class LoweredSelectedSignatureImmediateParameter:
+    argument_index: int
+    parameter: SignatureParameterTerm
+    source_text: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
 class BackendIntrinsicModifierSymbolOperand:
     text: str
     source: SourceLocation
@@ -744,6 +752,7 @@ class BackendIntrinsicModifierStringOperand:
 BackendIntrinsicModifierOperand = (
     BackendIntrinsicModifierBackendValueOperand
     | BackendIntrinsicModifierDestinationTypeSuffixOperand
+    | LoweredSelectedSignatureImmediateParameter
     | BackendIntrinsicModifierIntegerOperand
     | BackendIntrinsicModifierStringOperand
     | BackendIntrinsicModifierSymbolOperand

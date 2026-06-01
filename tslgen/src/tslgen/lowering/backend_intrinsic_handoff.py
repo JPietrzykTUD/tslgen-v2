@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
+from tslgen.domain.signatures import SignatureTermKind
 from tslgen.lowering._source_islands import SourceMappedText, source_text_from_text
 from tslgen.lowering.backend_value_queries import (
     discover_backend_value_queries_in_text,
@@ -38,6 +39,7 @@ from tslgen.lowering.model import (
     BackendValueQueryDiscovery,
     BackendValueQueryHandoffRequestSegment,
     BackendValueQueryRequestSegment,
+    LoweredSelectedSignatureImmediateParameter,
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
 )
@@ -665,6 +667,14 @@ def _lower_modifier_operand(
         )
 
     if _SYMBOL_OPERAND_RE.fullmatch(value.text) is not None:
+        if key.name == "immediate" and key.immediate_index is not None:
+            selected_immediate = _lower_selected_signature_immediate_parameter(
+                context,
+                key.immediate_index,
+                value,
+            )
+            if selected_immediate is not None:
+                return selected_immediate
         return BackendIntrinsicModifierSymbolOperand(
             text=value.text,
             source=value.source,
@@ -674,6 +684,31 @@ def _lower_modifier_operand(
         value.source,
         value.text,
         "expected a backend value island, symbol, integer, or quoted string",
+    )
+
+
+def _lower_selected_signature_immediate_parameter(
+    context: SelectedImplementationLoweringContext,
+    argument_index: int,
+    value: _ModifierValue,
+) -> LoweredSelectedSignatureImmediateParameter | None:
+    matches = tuple(
+        parameter
+        for parameter in context.parameter_signature_terms
+        if parameter.name == value.text
+    )
+    if len(matches) != 1:
+        return None
+
+    parameter = matches[0]
+    if parameter.term.kind is not SignatureTermKind.SCALAR_IMMEDIATE:
+        return None
+
+    return LoweredSelectedSignatureImmediateParameter(
+        argument_index=argument_index,
+        parameter=parameter,
+        source_text=value.source_text,
+        source=value.source,
     )
 
 

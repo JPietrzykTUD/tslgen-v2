@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 206.5 is accepted.
+Milestone 209 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -331,65 +331,93 @@ the bound signature term, such as `sImm`. M206.5 did not lower
 did not broaden implementation-body parsing, and did not add runtime
 dependencies on `frozen/` or `tslgenold`.
 
+M207 planned the source-owned symbol immediate path. Corpus evidence found 19
+non-literal `immediate(N)=SYMBOL` modifier operands: 18
+`immediate(1)=index` occurrences in `conversion/repr_change.tsl` under
+`convert_up(data, index)` with signature `v:=(v,sImm)`, and 1
+`immediate(1)=Index` occurrence in `load_store/array.tsl` under
+`extract_value(a)` with signature `s:=v[idx]`. M207 selected M208 to
+implement only the signature-parameter-owned `sImm` family. `Index` remains a
+follow-up because it is not a primitive parameter; it needs a separate
+indexed-vector/generic-parameter ownership model before lowering may resolve
+it.
+
+M208 added `LoweredSelectedSignatureImmediateParameter` as the lowering-owned
+fact for `immediate(N)=SYMBOL` when the symbol resolves to exactly one selected
+primitive parameter whose signature term is `sImm`. Backend intrinsic modifier
+translation consumes that typed value directly and produces
+`BackendIntrinsicImmediateParameterReference`, a typed compile-time parameter
+reference rather than a literal integer or rendered backend syntax. M208 proves
+arbitrary `sImm` parameter names work, accepts the 18 observed
+`conversion/repr_change.tsl` `immediate(1)=index` occurrences under matching
+selected context, and keeps runtime parameters, unknown symbols, raw backend
+symbol operands, and `Index` unsupported.
+
+M209 planned the remaining indexed-vector generic immediate path. Evidence
+found nine `generic_params` blocks with exactly three observed kinds:
+`PreserveSign` as `bool` default `true`, `IndicesType` as `simd_type` with no
+default, and `N`/`Index` as `int` defaults `1`/`0`. The only observed
+indexed-vector signature term is `s:=v[idx]` on `extract_value(a)`, where
+parameter `a` is bound to `SignatureTermKind.INDEXED_VECTOR_ELEMENT`; `idx`
+is part of the signature spelling, not a source-owned identifier. After M208,
+the only remaining actionable non-literal immediate is the NEON
+`immediate(1)=Index` in `load_store/array.tsl`. M209 selected M210 to add
+typed primitive-local generic parameter facts and lower only selected integer
+generic immediates in indexed-vector contexts.
+
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
 
-The post-M187 lowering completion gate is accepted and declared lowering
-complete by current contract. The current `tsldata/**/*.tsl` corpus no longer
-shows a lowering-owned gap that must be implemented before backend/output
-planning. Remaining observed forms are already accepted typed facts, typed
-semantic values, typed request islands, typed handoff values, source-owned
-opaque tokens, catalog syntax such as `prim<...>`, accepted selector/type
-payload syntax such as `Vec<...>`, backend metadata under
-`tsldata/detail/lang/**`, source-authored `details::*` helpers,
-backend/output translation or rendering obligations, or broad/deferred
-parsing/source-repair work that lowering must not absorb by default.
+The post-M187 lowering completion gate was accepted for the broad lowering
+contract before backend/output planning. Later backend intrinsic modifier work
+exposed two narrow source-owned immediate gaps: M208 closed the selected
+`sImm` parameter family, and M209 selected M210 for the remaining
+indexed-vector generic-parameter family. This does not reopen broad TSIL
+parsing, source repair, or arbitrary expression interpretation.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M207 selected symbol immediate planning prompt.
+Run M210 indexed generic immediate execution-review loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m207-selected-symbol-immediate-planning-prompt.md
+docs/agent/runs/m210-indexed-generic-immediate-execution-review-loop-prompt.md
 ```
 
-Active planning milestone:
+Active implementation milestone:
 
 ```text
-Milestone 207: Selected Symbol Immediate Planning.
+Milestone 210: Indexed Generic Immediate Execution.
 ```
 
 Latest review verdict:
 
 ```text
-M206.5 execution-review returned Accept With Follow-Ups. The executor added
-typed signature term dataclasses/enums, parsed all observed corpus signature
-forms, exposed positional parameter-to-term bindings through the catalog and
-selected lowering context, and kept symbol immediate lowering/rendering out of
-scope. A reviewer requested a catalog-level `v:=(v,sImm)` proof; the executor
-added it before final validation. Required M206.5 validation passed:
-`git diff --check` exit 0 with no output;
-`python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no
-output; focused M206.5 pytest exit 0 with `9 passed`; regression pytest exit
-0 with `292 passed`; final `find tslgen -type d -name __pycache__ -print`
-exit 0 with no output after cleanup.
+M209 planning returned Accept. Evidence audit confirmed that `Index` is a
+primitive-local generic parameter, not a primitive parameter or generator
+keyword, and that `immediate(1)=Index` is the only remaining actionable
+non-literal immediate after M208. M209 validation passed: `git diff --check`
+exit 0 with no output; `find tslgen -type d -name __pycache__ -print` exit 0
+with no output.
 ```
 
 Next expected action:
 
 ```text
-Run the active M207 planning prompt. Focus on the remaining source-owned
-symbol immediate operands `immediate(N)=index` and `immediate(N)=Index`.
-Inventory all observed symbol immediate occurrences, identify their source
-ownership context through the M206.5 typed signature bindings, and decide the
-smallest correct typed selected-context slice before any implementation. Do
-not translate `index` or `Index` by raw spelling.
+Run the active M210 execution-review loop. Add typed primitive-local
+generic-parameter facts for observed `generic_params`, expose them through
+selected lowering context, and lower `immediate(N)=SYMBOL` only when `SYMBOL`
+is an integer generic parameter owned by the selected primitive and the
+selected signature includes an indexed-vector term. Backend translation must
+consume only the lowered generic immediate value. Preserve M208 `sImm`
+behavior; do not resolve names by spelling, evaluate test values, render
+C++/Rust compile-time parameters, assemble intrinsic names, or start a full
+generic/template system.
 ```
 
 Previous review verdict:
@@ -425,13 +453,15 @@ planning returned Accept and selected M206. M206 execution-review returned
 Accept and selected M207 planning. Post-M206 planning then inserted M206.5
 before M207 because selected symbol-immediate lowering needs typed signature
 parameter facts first. M206.5 execution-review returned Accept With Follow-Ups
-and selected M207 planning.
+and selected M207 planning. M207 planning returned Accept and selected M208.
+M208 execution-review returned Accept With Follow-Ups and selected M209
+planning. M209 planning returned Accept and selected M210.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m2065-signature-term-model-execution-review-loop-prompt.md
+docs/agent/runs/m209-indexed-vector-generic-immediate-planning-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

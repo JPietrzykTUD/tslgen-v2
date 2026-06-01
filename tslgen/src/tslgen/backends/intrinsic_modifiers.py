@@ -24,6 +24,7 @@ from tslgen.domain.backend_metadata import (
     BackendTranslationTemplate,
 )
 from tslgen.domain.catalog import ExtensionCatalog, ExtensionName, TypeTag
+from tslgen.domain.signatures import SignatureParameterTerm
 from tslgen.lowering.model import (
     BackendDirectIntrinsicHandoffRequest,
     BackendIntrinsicComposeHandoffRequest,
@@ -35,6 +36,7 @@ from tslgen.lowering.model import (
     BackendIntrinsicModifierName,
     BackendIntrinsicModifierStringOperand,
     BackendIntrinsicModifierSymbolOperand,
+    LoweredSelectedSignatureImmediateParameter,
 )
 
 BackendIntrinsicModifierFragmentText = NewType(
@@ -49,6 +51,7 @@ BackendIntrinsicModifierValueKind = Literal[
     "literal_fragment",
     "infix_separator",
     "immediate_literal",
+    "immediate_parameter_reference",
 ]
 _FRAGMENT_MODIFIER_NAMES = frozenset({"suffix", "post", "infix"})
 _TO_TYPE_SUFFIX_SYMBOL = "to_type_suffix"
@@ -71,10 +74,19 @@ class BackendIntrinsicImmediateLiteral:
     value: int
 
 
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicImmediateParameterReference:
+    argument_index: int
+    parameter: SignatureParameterTerm
+    source_text: str
+    source: SourceLocation
+
+
 BackendTranslatedIntrinsicModifierValue = (
     BackendIntrinsicLiteralFragment
     | BackendIntrinsicInfixSeparator
     | BackendIntrinsicImmediateLiteral
+    | BackendIntrinsicImmediateParameterReference
 )
 
 
@@ -131,7 +143,7 @@ def translate_backend_intrinsic_modifier_field(
         return _translate_infix_separator(field, backend_id)
 
     if field.name == "immediate":
-        return _translate_immediate_literal(field, backend_id)
+        return _translate_immediate_modifier(field, backend_id)
 
     return BackendIntrinsicModifierTranslationResult(
         modifier=None,
@@ -448,34 +460,51 @@ def _translate_infix_separator(
     )
 
 
-def _translate_immediate_literal(
+def _translate_immediate_modifier(
     field: BackendIntrinsicModifierField,
     backend: BackendId,
 ) -> BackendIntrinsicModifierTranslationResult:
+    if isinstance(field.value, LoweredSelectedSignatureImmediateParameter):
+        return BackendIntrinsicModifierTranslationResult(
+            modifier=BackendTranslatedIntrinsicModifier(
+                backend=backend,
+                field=field,
+                name=field.name,
+                value=BackendIntrinsicImmediateParameterReference(
+                    argument_index=field.value.argument_index,
+                    parameter=field.value.parameter,
+                    source_text=field.value.source_text,
+                    source=field.value.source,
+                ),
+                source=field.source,
+            ),
+            diagnostics=(),
+        )
+
     if field.immediate_index is None:
         return BackendIntrinsicModifierTranslationResult(
             modifier=None,
             diagnostics=(_missing_immediate_index_diagnostic(field),),
         )
 
-    if not isinstance(field.value, BackendIntrinsicModifierIntegerOperand):
+    if isinstance(field.value, BackendIntrinsicModifierIntegerOperand):
         return BackendIntrinsicModifierTranslationResult(
-            modifier=None,
-            diagnostics=(_unsupported_immediate_operand_diagnostic(field),),
+            modifier=BackendTranslatedIntrinsicModifier(
+                backend=backend,
+                field=field,
+                name=field.name,
+                value=BackendIntrinsicImmediateLiteral(
+                    argument_index=field.immediate_index,
+                    value=field.value.value,
+                ),
+                source=field.source,
+            ),
+            diagnostics=(),
         )
 
     return BackendIntrinsicModifierTranslationResult(
-        modifier=BackendTranslatedIntrinsicModifier(
-            backend=backend,
-            field=field,
-            name=field.name,
-            value=BackendIntrinsicImmediateLiteral(
-                argument_index=field.immediate_index,
-                value=field.value.value,
-            ),
-            source=field.source,
-        ),
-        diagnostics=(),
+        modifier=None,
+        diagnostics=(_unsupported_immediate_operand_diagnostic(field),),
     )
 
 

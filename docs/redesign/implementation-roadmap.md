@@ -25677,7 +25677,7 @@ Validation result:
 
 Status:
 
-Selected. Planning prompt:
+Accepted. Planning prompt:
 `docs/agent/runs/m207-selected-symbol-immediate-planning-prompt.md`.
 
 Goal:
@@ -25713,7 +25713,237 @@ on `frozen/` or `tslgenold`.
 
 Validation:
 
+M207 found 19 non-literal `immediate(N)=SYMBOL` intrinsic modifier operands in
+`tsldata/primitives/**/*.tsl`.
+
+- 18 are `immediate(1)=index` in
+  `tsldata/primitives/conversion/repr_change.tsl` under
+  `prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):`.
+  With the M206.5 signature model, `index` is a primitive parameter bound to
+  the `sImm` signature term.
+- 1 is `immediate(1)=Index` in
+  `tsldata/primitives/load_store/array.tsl` under
+  `prim<s:=v[idx]> extract_value(a):`. With the M206.5 signature model,
+  `a -> v[idx]`, but `Index` is not a primitive parameter. It is owned by the
+  indexed-vector/generic-parameter shape and needs a separate typed ownership
+  model before lowering may resolve it.
+- `vidx` appears in gather/scatter signatures, but it is a runtime vector-index
+  operand and is not compile-time immediate evidence.
+
+M207 selected M208 to implement only the signature-parameter-owned family:
+resolve `immediate(N)=SYMBOL` when `SYMBOL` is a selected primitive parameter
+whose signature term is `sImm`. M208 must not raw-name match `index`, must
+accept arbitrary source-owned parameter names when their term is `sImm`, and
+must keep runtime parameters, unknown symbols, and `Index` unsupported.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+### Milestone 208: Selected Signature-Parameter Immediate Execution
+
+Status:
+
+Accepted. Execution-review prompt:
+`docs/agent/runs/m208-selected-signature-immediate-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add a lowering-owned representation for source-owned symbol immediates.
+Lowering resolves a symbol only when selected context proves it is a primitive
+parameter whose typed signature term is `sImm`; backend translation consumes
+that already-lowered value.
+
+Scope:
+
+- Add a typed lowered selected-signature-immediate parameter value for backend
+  intrinsic modifier fields. The value must carry the immediate argument index,
+  the resolved parameter binding, and source provenance.
+- During lowering of backend intrinsic modifier handoff fields, resolve
+  `immediate(N)=SYMBOL` into that typed lowered value through
+  `SelectedImplementationLoweringContext.parameter_signature_terms`.
+- Backend translation must consume only the already-lowered
+  selected-signature-immediate value. It must not inspect selected signature
+  context, signature terms, primitive signatures, or raw source-owned symbol
+  names to decide whether something is immediate.
+- Backend translation of the already-lowered immediate value produces a typed
+  backend modifier result that records a compile-time parameter reference, not
+  a literal integer and not emitted backend text.
+- Prove arbitrary names work when their signature term is `sImm`.
+- Prove `index` with a runtime signature term such as `v`, unresolved symbols,
+  raw backend symbol operands, and `Index` remain unsupported.
+- Add selected-context corpus evidence for the 18 observed `index` occurrences
+  in `conversion/repr_change.tsl`.
+
+Out of scope:
+
+Generic/indexed-vector ownership for `Index`; parsing or modeling
+`generic_params`; C++ non-type template rendering; Rust const generic
+rendering; intrinsic-name assembly; backend-side signature-parameter
+resolution; argument-list rewriting; dependency closure; source repair; and
+runtime dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+M208 added `LoweredSelectedSignatureImmediateParameter` as the lowering-owned
+fact for `immediate(N)=SYMBOL` when the symbol resolves to exactly one selected
+primitive parameter whose signature term is `sImm`. Backend intrinsic modifier
+translation consumes that typed value directly and produces
+`BackendIntrinsicImmediateParameterReference`, a typed compile-time parameter
+reference rather than a literal integer or rendered backend syntax.
+
+M208 proves arbitrary parameter names work when the typed signature term is
+`sImm`, and keeps runtime parameters, unknown symbols, raw backend symbol
+operands, and `Index` unsupported. The `Index` family remains deferred because
+it is owned by `generic_params`/indexed-vector context, not primitive
+parameter-signature context.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m208_selected_signature_immediate_translation.py`:
+  exit 0, `8 passed`.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m195_literal_intrinsic_modifier_translation.py tslgen/tests/test_m206_to_type_suffix_infix_translation.py tslgen/tests/test_m2065_signature_term_model.py`:
+  exit 0, `44 passed`.
+- `find tslgen -type d -name __pycache__ -print`: validation-created
+  `__pycache__` directories were removed; final command exited 0 with no
+  output.
+
+### Milestone 209: Indexed-Vector Generic Immediate Planning
+
+Status:
+
+Accepted. Planning prompt:
+`docs/agent/runs/m209-indexed-vector-generic-immediate-planning-prompt.md`.
+
+Goal:
+
+Plan the typed ownership model needed before lowering may resolve the
+remaining observed non-literal immediate family:
+`immediate(1)=Index` in `load_store/array.tsl`.
+
+Scope:
+
+- Inventory observed `generic_params` blocks across
+  `tsldata/primitives/**/*.tsl`.
+- Inventory indexed-vector signature terms such as `v[idx]` and relate them
+  to owning primitive parameters and generic parameters.
+- Re-check remaining non-literal `immediate(N)=SYMBOL` operands after M208.
+- Decide the minimal typed catalog and selected-context facts needed for a
+  future executor to resolve integer generic parameters such as `Index`.
+- Decide whether the next executable slice should parse/model
+  `generic_params`, add selected generic-parameter facts, lower the exact
+  immediate family, or split those steps.
+
+Out of scope:
+
+Implementation code; translating `Index` by spelling; full generic/template
+system design; C++ non-type template rendering; Rust const generic rendering;
+intrinsic-name assembly; argument-list rewriting; dependency closure; source
+repair; and runtime dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+M209 found nine observed `generic_params` blocks across
+`tsldata/primitives/**/*.tsl`, with exactly three source kinds and two source
+spellings:
+
+- block style `Name:` plus `kind`/`default` child lines;
+- inline style `Name {kind ..., default ...}` or `Name {kind ...}`;
+- `PreserveSign`, kind `bool`, default `true`, owned by three
+  `shift_right` declarations in `bitwise/shifts.tsl` and one
+  `shift_right_imask` declaration in `mask/bitwise.tsl`;
+- `IndicesType`, kind `simd_type`, no default, and `N`, kind `int`,
+  default `1`, owned by four gather/scatter declarations in
+  `load_store/rnd_access.tsl`;
+- `Index`, kind `int`, default `0`, owned by `extract_value` in
+  `load_store/array.tsl`.
+
+M209 also found exactly one indexed-vector signature term in the primitive
+corpus: `prim<s:=v[idx]> extract_value(a):` in
+`load_store/array.tsl`. The existing M206.5 signature model already represents
+that term as `SignatureTermKind.INDEXED_VECTOR_ELEMENT` and binds primitive
+parameter `a` to it. The spelling `idx` is part of the signature term, not a
+user-defined identifier. The source-owned identifier is the primitive-local
+generic parameter `Index`.
+
+After applying the M208 ownership rule, the only remaining actionable
+non-literal immediate family is `immediate(1)=Index` in the NEON
+`extract_value` implementation. The 18 `immediate(1)=index` occurrences in
+`conversion/repr_change.tsl` are already owned by M208 because `index` is a
+primitive parameter bound to `sImm`.
+
+M209 selects M210 as an implementation milestone. M210 should add only the
+typed generic-parameter facts needed by this exact family:
+
+- catalog/domain facts for observed primitive-local `generic_params`
+  declarations, using a constrained kind enum for `int`, `bool`, and
+  `simd_type`, typed defaults, and source provenance;
+- selected lowering context exposure of the current primitive's generic
+  parameters;
+- lowering of `immediate(N)=SYMBOL` only when `SYMBOL` matches exactly one
+  selected primitive-local generic parameter whose kind is `int`, and the
+  selected primitive has an indexed-vector signature term such as `v[idx]`;
+- backend intrinsic modifier translation that consumes the already-lowered
+  generic immediate value, never raw names or selected context.
+
+M210 must preserve M208's `sImm` parameter immediate path and must not resolve
+`Index` by spelling, treat `N` as supported outside the indexed-vector slice,
+evaluate test-case values, render C++ non-type template parameters, render Rust
+const generics, assemble intrinsic names, rewrite argument lists, or start a
+full generic/template system.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+### Milestone 210: Indexed Generic Immediate Execution
+
+Status:
+
+Selected. Execution-review prompt:
+`docs/agent/runs/m210-indexed-generic-immediate-execution-review-loop-prompt.md`.
+
+Goal:
+
+Implement the M209-selected typed ownership path for the remaining
+`immediate(1)=Index` family without raw-name matching.
+
+Scope:
+
+- Add typed primitive-local generic parameter domain facts for the exact
+  observed `generic_params` declaration forms and kinds.
+- Promote those facts through catalog construction and selected lowering
+  context.
+- Lower `immediate(N)=SYMBOL` into a typed generic-immediate parameter value
+  only when the selected context proves `SYMBOL` is an integer generic
+  parameter owned by the selected primitive and the selected signature includes
+  an indexed-vector term.
+- Translate that lowered value as a typed compile-time immediate parameter
+  reference for backend modifier planning.
+- Preserve M208 `sImm` signature-parameter immediate behavior and unsupported
+  diagnostics for non-integer generic params, unknown symbols, raw backend
+  symbols, and integer generic parameters outside the indexed-vector slice.
+
+Out of scope:
+
+Full generic/template system design; translating arbitrary names such as
+`Index` or `N` by spelling; evaluating test-case generic values; supporting
+generic parameter uses in `if<compile>`, `call<primitive=...>`, casts, array
+subscripts, or selectors; C++ non-type template rendering; Rust const generic
+rendering; intrinsic-name assembly; argument-list rewriting; dependency
+closure; source repair; and runtime dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
 ```bash
 git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m210_indexed_generic_immediate_translation.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m208_selected_signature_immediate_translation.py tslgen/tests/test_m2065_signature_term_model.py
 find tslgen -type d -name __pycache__ -print
 ```

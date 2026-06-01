@@ -2949,3 +2949,57 @@ Consequences:
   immediate/generic-parameter value problem.
 - FTF-002 `intrin::suffix(si?)` remains source-data debt and must stay
   unsupported until a focused source-data cleanup milestone changes the input.
+
+## ADR-061: Indexed Generic Immediates Resolve Through Primitive-Local Generic Parameters
+
+Status: Accepted.
+
+Context:
+
+After M208, source-owned symbol immediates are supported when the symbol is a
+selected primitive parameter whose signature term is `sImm`. The remaining
+observed non-literal immediate is:
+
+```text
+immediate(1)=Index
+```
+
+in the NEON implementation of `extract_value`, whose primitive declares:
+
+```text
+prim<s:=v[idx]> extract_value(a):
+  generic_params:
+    Index {kind int, default 0}
+```
+
+`Index` is not a primitive parameter and must not be treated as a generator
+keyword. The spelling `idx` inside `v[idx]` is a signature-term marker, not a
+source-owned identifier.
+
+Decision:
+
+Indexed generic immediates may be lowered only through typed primitive-local
+generic parameter facts. The catalog must first represent observed
+`generic_params` declarations as typed facts with source provenance, including
+the observed kinds `int`, `bool`, and `simd_type` and typed defaults where
+present. Selected lowering context then carries the selected primitive's
+generic parameters.
+
+For the current indexed immediate slice, lowering may resolve
+`immediate(N)=SYMBOL` only when `SYMBOL` matches exactly one selected
+primitive-local generic parameter of kind `int` and the selected primitive
+signature includes an indexed-vector term such as `v[idx]`. The backend
+modifier translator must consume the resulting lowered generic-immediate
+value; it must not inspect raw symbol names, generic parameter declarations,
+or selected context to decide immediacy.
+
+Consequences:
+
+- `Index` is source-owned local data, not a global magic name.
+- M208's signature-parameter `sImm` path remains separate and unchanged.
+- Other observed generic parameters such as `PreserveSign`, `IndicesType`, and
+  `N` become catalog facts, but M210 does not lower their uses in compile-time
+  branches, primitive-call selectors, casts, array subscripts, or generic
+  template systems.
+- Rendering C++ non-type template parameters and Rust const generics remains a
+  later backend/rendering concern.
