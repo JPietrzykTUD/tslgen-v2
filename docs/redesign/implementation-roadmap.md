@@ -24327,3 +24327,77 @@ python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m193_backend_value_translation.py
 find tslgen -type d -name __pycache__ -print
 ```
+
+Result:
+
+M193 accepted. It added `tslgen.backends.value_translation`, a typed backend
+translation boundary that consumes accepted `BackendValueRequest` values plus
+the M190 `BackendMetadataCatalog`. The translator resolves metadata-only
+uninit and constant requests through exact backend translation metadata keys,
+promotes templates only when they have no unresolved named placeholders, and
+returns typed `BackendTranslatedValue` values carrying request and metadata
+provenance.
+
+The boundary deliberately diagnoses Rust `value_array_uninit` because the
+active template contains `{type}` and the accepted request does not carry a
+typed type input. It does not parse raw `value<backend>(...)` source, render
+output, format arbitrary templates, fulfill intrinsic suffix/prefix requests,
+compose intrinsic names, translate source operations or control directives,
+execute dependency closure, change lowering, or depend on `frozen/` or
+`tslgenold`.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m193_backend_value_translation.py`:
+  exit 0, `9 passed in 1.97s`.
+- `find tslgen -type d -name __pycache__ -print`: validation-created
+  `__pycache__` directories were removed; final command exited 0 with no
+  output.
+
+### Milestone 194: Intrinsic Modifier Translation Boundary Planning
+
+Status:
+
+Selected. Planning prompt:
+`docs/agent/runs/m194-intrinsic-modifier-translation-planning-prompt.md`.
+
+Goal:
+
+Plan the next executable backend translation slice for intrinsic modifier
+values after M193. The planner should decide which subset of accepted M182
+intrinsic modifier handoff values can be translated next without drifting into
+renderer-side inference, broad template evaluation, or source parsing.
+
+Scope:
+
+- Inventory current `intrin_compose<...>` modifier operands in
+  `tsldata/**/*.tsl`, especially `suffix=value<backend>(intrin::suffix...)`,
+  `prefix=value<backend>(intrin::prefix)`, literal `post`, `infix`,
+  `infix_sep`, and `immediate(N)` forms.
+- Identify which modifier families require existing extension/type context,
+  backend metadata, M192 type spelling results, M193 value results, or new
+  typed rule inputs.
+- Select exactly one narrow executable M194 or M195 implementation milestone,
+  preferably the largest safe subset that can be translated from already
+  accepted typed facts.
+- Define typed result shape, diagnostics, tests, and out-of-scope boundaries
+  for that implementation milestone.
+- Preserve the rule that direct `intrin<...>(...)` names and intrinsic
+  argument payloads stay opaque until explicitly selected.
+
+Out of scope:
+
+Implementation code; rendering; primitive body rendering; arbitrary intrinsic
+name assembly; direct intrinsic name parsing; broad TSIL expression parsing;
+source repair; dependency closure; machine profile changes; lowering changes
+unless the plan finds a true blocker; runtime dependency on `frozen/` or
+`tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+find tslgen -type d -name __pycache__ -print
+```

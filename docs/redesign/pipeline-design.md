@@ -957,6 +957,14 @@ exact `type_size` metadata entry, and returns typed translated type spellings.
 This remains before render-model construction: renderers, templates, writers,
 and verifiers do not inspect backend metadata or decide type spellings.
 
+Milestone 193 adds the matching metadata-only backend value translation
+boundary. It consumes accepted `BackendValueRequest` values from lowering plus
+the typed backend metadata catalog, resolves only uninit and selected constant
+requests whose metadata templates have no unresolved placeholders, and returns
+typed translated backend values. Placeholder-bearing templates remain
+diagnostics until a later backend translation rule supplies the needed typed
+semantic inputs.
+
 Backend planning must produce dependency-ordered primitive plans before any
 renderer sees primitive records. A profile-specific plan may be represented as
 a `PrimitiveRenderPlan` carrying the backend id, profile name, and ordered

@@ -186,6 +186,35 @@ Invariants:
 - Vector, register, mask, generic, extension-transform, and arbitrary template
   fulfillment remain unsupported until selected by a later milestone.
 
+Backend value translation is a backend/output result boundary over typed
+backend value requests and typed backend metadata:
+
+```python
+BackendValueText = NewType("BackendValueText", str)
+
+@dataclass(frozen=True, slots=True)
+class BackendTranslatedValue:
+    request: BackendValueRequest
+    backend: BackendId
+    value: BackendValueText
+    metadata_key: BackendTranslationKey
+    metadata_source: SourceLocation
+    source: SourceLocation
+```
+
+Invariants:
+
+- The request is already a typed lowering handoff value; this boundary never
+  parses raw `value<backend>(...)` text.
+- Metadata-only value requests may be fulfilled from exact backend translation
+  metadata keys when the template has no unresolved named placeholders.
+- Literal braces in backend text are not placeholders. Named `{type}`-style
+  fields require typed semantic inputs and are diagnostics until a later rule
+  provides those inputs explicitly.
+- Intrinsic suffix/prefix requests, intrinsic composition, source operations,
+  control directives, mask constants, primitive calls, and rendering remain
+  unsupported until selected by later milestones.
+
 ## Primitive Model
 
 ```python

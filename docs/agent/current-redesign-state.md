@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 192 is accepted.
+Milestone 193 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -87,6 +87,19 @@ fulfill vector/register/mask/generic/extension-transform requests, change
 the generated-project skeleton/writer/verifier, execute dependency closure, or
 add runtime dependencies on `frozen/` or `tslgenold`.
 
+M193 added `tslgen.backends.value_translation`, a typed backend translation
+boundary that consumes accepted `BackendValueRequest` values plus the M190
+backend metadata catalog. It resolves metadata-only uninit and constant
+requests through exact backend translation metadata keys, promotes templates
+only when they have no unresolved named placeholders, and returns typed
+`BackendTranslatedValue` values with request and metadata provenance. M193
+diagnoses Rust `value_array_uninit` because the active template contains
+`{type}` and the accepted request does not carry a typed type input. M193 did
+not parse raw `value<backend>(...)` text, render output, format arbitrary
+templates, fulfill intrinsic suffix/prefix requests, compose intrinsic names,
+translate source operations or control directives, execute dependency closure,
+change lowering, or add runtime dependencies on `frozen/` or `tslgenold`.
+
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
 
@@ -106,25 +119,25 @@ parsing/source-repair work that lowering must not absorb by default.
 Current required action:
 
 ```text
-Run M193 execution-review loop.
+Run M194 intrinsic modifier translation planning prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m193-execution-review-loop-prompt.md
+docs/agent/runs/m194-intrinsic-modifier-translation-planning-prompt.md
 ```
 
 Active planning milestone:
 
 ```text
-Milestone 193: Backend Value Translation For Metadata-Only Requests.
+Milestone 194: Intrinsic Modifier Translation Boundary Planning.
 ```
 
 Latest review verdict:
 
 ```text
-M192 execution-review returned Accept after one write-capable executor and
+M193 execution-review returned Accept after one write-capable executor and
 read-only architecture/boundary, evidence, documentation, and validation
 audits. Validation passed and validation-created `tslgen/` cache directories
 were removed.
@@ -133,13 +146,12 @@ were removed.
 Next expected action:
 
 ```text
-Run the active M193 execution-review loop prompt. It is an implementation
-task: one write-capable executor consumes existing typed `BackendValueRequest`
-values and the M190 backend metadata catalog to produce typed backend value
-translation results for metadata-only uninit and constant requests. It must
-not render code, evaluate arbitrary templates, broaden to suffix/prefix or
-intrinsic composition, modify generated-project verification, or reopen
-lowering.
+Run the active M194 planning prompt. It is a documentation/planning task:
+read-only subagents should inventory intrinsic modifier forms and select the
+next executable backend translation slice for accepted M182 modifier handoff
+values. It must not implement code, render output, parse direct intrinsic
+names, format arbitrary placeholders, modify generated-project verification,
+or reopen lowering unless a true planning blocker is found.
 ```
 
 Previous review verdict:
@@ -160,13 +172,14 @@ profile/buildsystem option boundary before execution. M189 execution-review
 returned Accept and selected M190. M190 execution-review returned Accept and
 selected M191. M191 was then retargeted by ADR-055 planning correction before
 execution. M191 execution-review returned Accept and selected M192. M192
-execution-review returned Accept and selected M193.
+execution-review returned Accept and selected M193. M193 execution-review
+returned Accept and selected M194 planning.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m192-execution-review-loop-prompt.md
+docs/agent/runs/m193-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
