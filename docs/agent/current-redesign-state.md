@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 195 is accepted.
+Milestone 196 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -138,6 +138,19 @@ fields: 335 translated literal modifiers, 285 unsupported backend-value
 operands, 19 unsupported symbol immediates, and 4 unsupported semantic infix
 markers.
 
+M196 planned the next semantic intrinsic modifier translation slice. The
+remaining unsupported M195 modifier families are typed IR: 181 type-derived
+suffix requests, 38 no-argument suffix requests, 21 string-argument
+`"stream"` suffix requests, 20 symbol suffix requests, 16 backend-value infix
+suffix requests, 9 prefix requests, 19 symbol immediates, and 4
+`infix=to_type_suffix` markers. M196 selected M197 to translate only the
+type-derived suffix family because it is the largest remaining typed family
+and can be handled from accepted `BackendIntrinsicSuffixValueRequest` /
+`BackendValueTypeOperand` IR plus selected extension context and backend
+metadata. M196 found no lowering change is needed for that family. M197 must
+not hardcode suffix fragment values in Python; suffix fragment text should
+come from explicit typed backend metadata or typed rule input.
+
 Post-lowering backend/output transition planning is accepted and selected M188
 as the first backend/output milestone.
 
@@ -157,38 +170,40 @@ parsing/source-repair work that lowering must not absorb by default.
 Current required action:
 
 ```text
-Run M196 intrinsic semantic modifier translation planning prompt.
+Run M197 type-derived intrinsic suffix translation execution-review loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m196-intrinsic-semantic-modifier-translation-planning-prompt.md
+docs/agent/runs/m197-type-derived-intrinsic-suffix-translation-execution-review-loop-prompt.md
 ```
 
-Active planning milestone:
+Active implementation milestone:
 
 ```text
-Milestone 196: Intrinsic Semantic Modifier Translation Planning.
+Milestone 197: Type-Derived Intrinsic Suffix Translation.
 ```
 
 Latest review verdict:
 
 ```text
-M195 execution-review returned Accept after focused revision. Architecture,
-evidence/corpus, validation, and documentation review accepted the typed
-literal intrinsic modifier translation boundary.
+M196 planning returned Accept after read-only evidence, architecture/boundary,
+and documentation audits. It selected M197 as the next executable backend
+translation slice and did not modify implementation code.
 ```
 
 Next expected action:
 
 ```text
-Run the active M196 planning prompt. Inventory the remaining semantic
-intrinsic modifier families diagnosed by M195, identify the typed inputs
-required by each family, and select exactly one next executable backend
-translation milestone. Do not implement code, assemble intrinsic names, parse
-direct intrinsic names or arguments, render output, execute dependency
-closure, or reopen lowering unless the plan finds a true blocker.
+Run the active M197 execution-review loop. Implement only type-derived
+intrinsic suffix translation over accepted M182/M181 typed handoff values.
+Consume selected extension context, typed extension metadata, and typed
+backend metadata/rule input. Do not hardcode suffix fragment values in Python,
+assemble intrinsic names, parse direct intrinsic names or arguments, resolve
+no-argument/string/symbol suffixes, resolve prefixes or symbol immediates,
+render output, execute dependency closure, or change lowering. If the accepted
+M182/M181 typed handoff proves insufficient, stop and return to planner.
 ```
 
 Previous review verdict:
@@ -212,13 +227,13 @@ execution. M191 execution-review returned Accept and selected M192. M192
 execution-review returned Accept and selected M193. M193 execution-review
 returned Accept and selected M194 planning. M194 planning returned Accept and
 selected M195. M195 execution-review returned Accept and selected M196
-planning.
+planning. M196 planning returned Accept and selected M197.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m195-literal-intrinsic-modifier-translation-execution-review-loop-prompt.md
+docs/agent/runs/m196-intrinsic-semantic-modifier-translation-planning-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

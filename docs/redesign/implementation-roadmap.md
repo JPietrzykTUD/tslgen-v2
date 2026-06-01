@@ -24589,3 +24589,118 @@ Validation:
 git diff --check
 find tslgen -type d -name __pycache__ -print
 ```
+
+Result:
+
+M196 accepted. The remaining unsupported M195 corpus families are already
+typed lowering IR, not raw source strings. The inventory over
+`tsldata/primitives/**/*.tsl` found these currently unsupported modifier
+families after M195:
+
+- 181 type-derived suffix requests:
+  `suffix=value<backend>(intrin::suffix(TYPE))`, where `TYPE` lowers to
+  `BackendValueTypeOperand(value=LoweredScalarTypeIdentity(...))`. This splits
+  into 156 `base::signed_of(base::in)` cases, 23
+  `base::unsigned_of(base::in)` cases, and 2 direct scalar type cases
+  (`si32`, `si64`).
+- 38 no-argument suffix requests:
+  `suffix=value<backend>(intrin::suffix)`.
+- 21 string-argument suffix requests:
+  `suffix=value<backend>(intrin::suffix("stream"))`.
+- 20 symbol-argument suffix requests: 19 `ToBase` cases and one `si?` case.
+- 16 backend-value infix suffix requests: 13 `ToBase` cases and 3 no-argument
+  cases.
+- 9 prefix requests: `prefix=value<backend>(intrin::prefix)`.
+- 19 symbol immediates: 18 `index` cases and one `Index` case.
+- 4 direct semantic infix markers: `infix=to_type_suffix`.
+
+The planner selected the type-derived suffix family as M197 because it is the
+largest remaining semantic modifier family and it is already represented as
+typed IR. It does not require intrinsic argument parsing, direct intrinsic
+name parsing, dependency closure, or intrinsic-name assembly. It does require
+one new backend translation input: explicit suffix-fragment metadata or typed
+rule records for `(backend, intrinsic_style, type_tag)`. Existing M192 type
+spellings are not sufficient because intrinsic suffix fragments such as
+`epi32`, `ps`, `s32`, and `f32` are not C++ or Rust type spellings. Existing
+M193 value translation deliberately leaves intrinsic suffix/prefix requests
+unsupported. The accepted extension catalog already carries
+`intrinsic_style` from `tsldata/extensions/extension.tsl`, and the active M190
+backend metadata catalog can carry exact suffix-fragment entries without
+template evaluation.
+
+M197 should therefore add exact backend metadata entries for intrinsic
+type-suffix fragments and a typed backend translator over
+`BackendIntrinsicSuffixValueRequest(argument=BackendValueTypeOperand(...))`.
+The translator must consume accepted lowering IR, selected extension context,
+the typed extension catalog, and typed backend metadata. It must not contain a
+hidden suffix-value lookup table, parse raw source text, evaluate arbitrary
+templates, assemble intrinsic names, inspect intrinsic arguments, resolve
+no-argument/string/symbol suffixes, resolve prefixes, resolve semantic infix
+markers, resolve symbol immediates, change lowering, or depend on `frozen/` or
+`tslgenold`.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+### Milestone 197: Type-Derived Intrinsic Suffix Translation
+
+Status:
+
+Selected. Execution-review prompt:
+`docs/agent/runs/m197-type-derived-intrinsic-suffix-translation-execution-review-loop-prompt.md`.
+
+Goal:
+
+Translate the typed type-derived intrinsic suffix modifier family selected by
+M196. The executable slice should consume accepted M182/M181 lowering IR for
+`suffix=value<backend>(intrin::suffix(TYPE))`, where `TYPE` has already
+lowered to `LoweredScalarTypeIdentity`, and produce a typed
+`BackendTranslatedIntrinsicModifier` literal suffix fragment using explicit
+backend metadata/rule input.
+
+Scope:
+
+- Add explicit C++ and Rust backend metadata entries for type-derived
+  intrinsic suffix fragments keyed by backend, intrinsic style, and type tag.
+- Add typed suffix metadata/rule records that map `(intrinsic_style, type_tag)`
+  to exact backend metadata keys. The translator may use a typed rule table
+  for metadata keys, but suffix fragment values must come from typed backend
+  metadata, not a hidden hardcoded value map.
+- Consume `BackendIntrinsicModifierField` values whose name is `suffix` and
+  whose value is `BackendIntrinsicModifierBackendValueOperand` carrying
+  `BackendIntrinsicSuffixValueRequest(argument=BackendValueTypeOperand(...))`.
+- Support only `BackendValueTypeOperand.value` values that are already
+  `LoweredScalarTypeIdentity`.
+- Resolve the selected extension's `intrinsic_style` through the accepted
+  `ExtensionCatalog` and the selected lowering context.
+- Return existing typed `BackendTranslatedIntrinsicModifier` results with
+  `BackendIntrinsicLiteralFragment` values, preserving field/request/metadata
+  provenance and modifier order in any batch helper.
+- Add focused tests for x86 and arm style suffixes, C++ and Rust metadata
+  entries, signed/unsigned/float type tags, metadata-missing diagnostics,
+  missing/unsupported extension style diagnostics, unsupported lowered type
+  diagnostics, and proof that raw source strings are not parsed.
+
+Out of scope:
+
+Intrinsic name assembly; rendering; direct `intrin<...>(...)` parsing;
+intrinsic argument payload parsing; no-argument suffix resolution;
+`intrin::suffix("stream")`; `intrin::suffix(ToBase)`; wildcard-looking
+`intrin::suffix(si?)`; prefix resolution; backend-value infix suffix
+resolution; `infix=to_type_suffix`; symbol immediate resolution; M192 scalar
+type spelling changes; M193 value translation changes except preserving its
+unsupported boundary; source repair; dependency closure; generated-project
+changes; lowering changes. If the accepted M182/M181 typed handoff proves
+insufficient, stop and return to planner instead of changing lowering; no
+runtime dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m197_type_derived_intrinsic_suffix_translation.py
+find tslgen -type d -name __pycache__ -print
+```
