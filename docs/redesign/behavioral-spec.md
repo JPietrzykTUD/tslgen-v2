@@ -553,6 +553,77 @@ Accepted M215 diagnostic codes include:
 - `TSL-CPP-BODY-TOKENS-BACKEND-MISMATCH`
 - `TSL-CPP-BODY-TOKENS-UNSUPPORTED-OPAQUE-TOKEN-SEGMENT`
 
+### M220 Shared/Rust Intrinsic Body Token Substitution Boundary
+
+Milestone 220 accepts a shared intrinsic body-token substitution contract
+because there are now exactly two concrete consumers: the M215 C++ intrinsic
+body-token substitution path and the M220 Rust intrinsic body-token
+substitution path. The shared contract accepts only
+`BackendIntrinsicHandoff` streams and already-rendered intrinsic call facts
+with:
+
+- backend id;
+- rendered call text;
+- the original typed handoff request object/provenance;
+- typed immediate metadata;
+- source provenance.
+
+The shared matcher preserves `BackendIntrinsicOpaqueTextSegment.text` exactly
+and in source order. It substitutes only
+`BackendIntrinsicHandoffRequestSegment` values whose typed request object is
+the same object carried by a rendered intrinsic call fact. It does not rescan
+source text, compare raw spellings, parse surrounding syntax, or substitute
+non-intrinsic token families.
+
+M220 keeps the public C++ M215 API and diagnostics stable while delegating the
+substitution algorithm to the shared contract. It adds a Rust public API:
+
+```python
+RustBodyText = NewType("RustBodyText", str)
+
+@dataclass(frozen=True, slots=True)
+class RustRenderedBodyTokens:
+    handoff: BackendIntrinsicHandoff
+    text: RustBodyText
+    calls: tuple[RustRenderedIntrinsicCall, ...]
+    immediates: tuple[BackendIntrinsicInvocationImmediate, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class RustBodyTokenRenderResult:
+    body: RustRenderedBodyTokens | None
+    diagnostics: tuple[Diagnostic, ...] = ()
+```
+
+Rust substitution consumes already-rendered `RustRenderedIntrinsicCall` values
+from M219. For example, M220 may render:
+
+```text
+Raw("return ")
++ rendered intrin<_mm_add_epi32>(left, right)
++ Raw(";")
+```
+
+as:
+
+```text
+return core::arch::x86_64::_mm_add_epi32(left, right);
+```
+
+The `return ` and `;` text remain raw source text. M220 does not parse or
+invent return statements, assignments, array indexing, operators, loops,
+braces, semicolons, `emit_return(...)`, Rust const generics, or surrounding
+Rust/C++ syntax. Opaque non-text body-token segments remain diagnostics until
+those tokens are lowered/rendered by a selected future boundary.
+
+Accepted M220 Rust diagnostic codes include:
+
+- `TSL-RUST-BODY-TOKENS-MISSING-INTRINSIC-CALL`
+- `TSL-RUST-BODY-TOKENS-EXTRA-INTRINSIC-CALL`
+- `TSL-RUST-BODY-TOKENS-DUPLICATE-INTRINSIC-CALL`
+- `TSL-RUST-BODY-TOKENS-BACKEND-MISMATCH`
+- `TSL-RUST-BODY-TOKENS-UNSUPPORTED-OPAQUE-TOKEN-SEGMENT`
+
 ## Input Behavior
 
 | Input | Expected Behavior | Evidence |

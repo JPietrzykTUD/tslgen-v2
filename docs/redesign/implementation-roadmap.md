@@ -26882,3 +26882,105 @@ python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m215_cpp_body_token_substitution_rendering.py tslgen/tests/test_m220_shared_intrinsic_body_token_substitution_parity.py
 find tslgen -type d -name __pycache__ -print
 ```
+
+Result:
+
+M220 added `tslgen.backends.body_token_contract`, the minimal shared
+intrinsic body-token substitution contract justified by two concrete
+consumers: the accepted C++ M215 body-token substitution path and the new Rust
+M220 body-token substitution path. The shared contract consumes
+`BackendIntrinsicHandoff` streams plus rendered intrinsic call facts carrying
+backend id, rendered call text, preserved typed handoff request object, typed
+immediate metadata, and source provenance. It preserves opaque text segments
+exactly and substitutes only `BackendIntrinsicHandoffRequestSegment` values by
+typed request-object identity.
+
+M220 refactored the C++ path only enough to use the shared contract while
+preserving the public M215 C++ API and accepted diagnostic codes. It added
+`tslgen.backends.rust.body_tokens`, exposing `RustBodyText`,
+`RustRenderedBodyTokens`, `RustBodyTokenRenderResult`, and
+`render_rust_body_tokens_from_intrinsic_handoff`. Rust substitution consumes
+already-rendered `RustRenderedIntrinsicCall` values from M219, preserves raw
+surrounding source text, rendered call order, handoff/source provenance, and
+flattened typed immediate metadata, and diagnoses missing, extra, duplicate,
+backend-mismatched, and opaque non-renderable token segments.
+
+M220 deliberately does not reopen lowering, rescan raw TSIL, parse
+surrounding C++/Rust syntax, render Rust const generics, substitute
+non-intrinsic token families, render whole primitive bodies, write generated
+projects, run build verification, or add template-side semantic decisions.
+
+Review/audit verdict:
+
+Accepted after completion-state documentation revision. Architecture/
+boundary, evidence, test, and validation reviewers accepted. Documentation
+review requested the standard final state, roadmap, behavioral/domain, ADR
+wording, and next-prompt updates; those were completed by the orchestrator.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m215_cpp_body_token_substitution_rendering.py tslgen/tests/test_m220_shared_intrinsic_body_token_substitution_parity.py`:
+  exit 0, `24 passed`.
+- Initial `find tslgen -type d -name __pycache__ -print` after compile/test:
+  exit 0, printed compile/test-created `__pycache__` directories.
+- After removing those directories, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Next concrete prompt:
+`docs/agent/runs/m221-non-intrinsic-body-token-substitution-parity-execution-review-loop-prompt.md`.
+
+### Milestone 221: C++/Rust Non-Intrinsic Body Token Substitution Parity
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m221-non-intrinsic-body-token-substitution-parity-execution-review-loop-prompt.md`.
+
+Goal:
+
+Extend body-token substitution beyond intrinsics only for non-intrinsic
+families that already have both accepted typed handoff streams and
+already-rendered backend values with preserved request provenance for C++ and
+Rust. Preserve the accepted body model of raw source spans plus
+rendered/lowerable islands, without turning body substitution into a raw
+source parser or semantic renderer.
+
+Scope:
+
+- Start by identifying the largest safe subset among accepted non-intrinsic
+  handoff families, currently expected to include backend type and backend
+  value query handoffs when they have already-rendered backend values with
+  typed request provenance.
+- Add the smallest shared substitution/provenance shape needed by two
+  concrete C++/Rust consumers if M220's intrinsic-only contract is not the
+  right fit for non-intrinsic values.
+- Preserve opaque text segments exactly and in source order.
+- Substitute only request segments with matching already-rendered backend
+  values by typed request-object provenance, not raw text matching.
+- Return structured diagnostics for missing, extra, duplicate, backend-
+  mismatched, and opaque non-renderable segments.
+- Preserve rendered value provenance and deterministic order for later
+  primitive body rendering.
+
+Out of scope:
+
+New lowering; raw TSIL rescans; parsing `return`, `emit_return(...)`,
+assignments, array access, loops, braces, semicolons, operators, or
+surrounding Rust/C++ syntax; source-operation backend translation if no
+accepted already-rendered source-operation values exist; direct string
+rendering invented in body substitution; primitive dependency closure; whole
+primitive body rendering; generated project rendering/writing/build
+verification; template-side semantic decisions; and runtime dependency on
+`frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m221_non_intrinsic_body_token_substitution_parity.py
+find tslgen -type d -name __pycache__ -print
+```

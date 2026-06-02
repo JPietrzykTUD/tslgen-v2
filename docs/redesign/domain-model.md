@@ -462,6 +462,65 @@ Invariants:
 - Rendered calls and flattened typed immediate metadata are preserved on the
   result for later wrapper/signature/template work.
 
+M220 adds a narrow shared intrinsic body-token substitution contract for the
+two accepted consumers only, C++ M215 and Rust M220:
+
+```python
+BodyTokenText = NewType("BodyTokenText", str)
+BodyTokenRenderedIntrinsicCallText = NewType(
+    "BodyTokenRenderedIntrinsicCallText",
+    str,
+)
+
+@dataclass(frozen=True, slots=True)
+class BodyTokenRenderedIntrinsicCall:
+    backend: BackendId
+    request: BackendIntrinsicHandoffRequest
+    text: BodyTokenRenderedIntrinsicCallText
+    immediates: tuple[BackendIntrinsicInvocationImmediate, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class RenderedIntrinsicBodyTokens:
+    handoff: BackendIntrinsicHandoff
+    text: BodyTokenText
+    calls: tuple[BodyTokenRenderedIntrinsicCall, ...]
+    immediates: tuple[BackendIntrinsicInvocationImmediate, ...]
+    source: SourceLocation
+```
+
+The shared value carries the already-rendered intrinsic call text plus the
+preserved typed handoff request object. Matching is by that request object
+identity/provenance, not by raw source text or call spelling. The contract is
+not a generic replacement registry: it accepts only `BackendIntrinsicHandoff`
+streams and intrinsic rendered-call facts.
+
+Rust body-token substitution mirrors the C++ public shape while preserving
+Rust rendered-call values:
+
+```python
+RustBodyText = NewType("RustBodyText", str)
+
+@dataclass(frozen=True, slots=True)
+class RustRenderedBodyTokens:
+    handoff: BackendIntrinsicHandoff
+    text: RustBodyText
+    calls: tuple[RustRenderedIntrinsicCall, ...]
+    immediates: tuple[BackendIntrinsicInvocationImmediate, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class RustBodyTokenRenderResult:
+    body: RustRenderedBodyTokens | None
+    diagnostics: tuple[Diagnostic, ...] = ()
+```
+
+Rust substitution consumes already-rendered `RustRenderedIntrinsicCall` values
+from the Rust intrinsic-call renderer. It preserves raw text spans, handoff
+source, call order, rendered-call provenance, and flattened typed immediate
+metadata. Missing, extra, duplicate, backend-mismatched, and opaque non-text
+segments produce structured Rust body-token diagnostics.
+
 ## Primitive Model
 
 ```python

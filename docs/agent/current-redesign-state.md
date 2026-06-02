@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 219 is accepted.
+Milestone 220 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -459,9 +459,10 @@ M216 refined the M216-M225 roadmap: M217 establishes minimal C++ and Rust
 primitive template files plus a dedicated primitive-template rendering
 boundary; M218 owns the fuller typed primitive render context for real
 selected primitive rendering; M219 restores Rust intrinsic-call parity; M220
-may introduce a shared body-token replacement/provenance contract only with
-two concrete consumers, namely accepted C++ intrinsic body-token substitution
-and Rust intrinsic body-token substitution added in that parity slice.
+introduces the shared intrinsic body-token replacement/provenance contract
+only with two concrete consumers, namely accepted C++ intrinsic body-token
+substitution and Rust intrinsic body-token substitution added in that parity
+slice.
 
 M217 added the primitive-template rendering boundary for C++ and Rust. The new
 `tslgen.rendering.primitive_templates` module defines a dedicated
@@ -511,51 +512,73 @@ substitution, render whole primitive bodies, write artifacts, run build
 verification, or reopen lowering. Later pipeline stages must supply
 `RustArchitectureModule` from typed backend/profile/extension facts.
 
+M220 added `tslgen.backends.body_token_contract`, the minimal shared
+intrinsic body-token substitution contract justified by two concrete
+consumers: the accepted C++ M215 body-token substitution path and the new Rust
+body-token substitution path. The shared contract consumes
+`BackendIntrinsicHandoff` streams plus rendered intrinsic call facts carrying
+backend id, rendered call text, the preserved typed handoff request object,
+typed immediate metadata, and source provenance. It preserves
+`BackendIntrinsicOpaqueTextSegment.text` exactly and substitutes only
+`BackendIntrinsicHandoffRequestSegment` values by typed request-object
+identity, not by raw text matching.
+
+M220 refactored the C++ body-token path only enough to use that shared
+contract while preserving the public C++ API and accepted diagnostic codes.
+It added `tslgen.backends.rust.body_tokens`, exposing `RustBodyText`,
+`RustRenderedBodyTokens`, `RustBodyTokenRenderResult`, and
+`render_rust_body_tokens_from_intrinsic_handoff`. Rust substitution consumes
+already-rendered `RustRenderedIntrinsicCall` values from M219, preserves raw
+surrounding text, call order, handoff/source provenance, and flattened typed
+immediate metadata, and diagnoses missing, extra, duplicate,
+backend-mismatched, and opaque non-renderable token segments. M220 does not
+reopen lowering, rescan raw TSIL, parse surrounding C++/Rust syntax, render
+Rust const generics, substitute non-intrinsic token families, render whole
+primitive bodies, write generated projects, run build verification, or add
+template-side semantic decisions.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M220 shared intrinsic body-token substitution parity execution-review loop prompt.
+Run M221 non-intrinsic body-token substitution parity execution-review loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m220-shared-intrinsic-body-token-substitution-parity-execution-review-loop-prompt.md
+docs/agent/runs/m221-non-intrinsic-body-token-substitution-parity-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 220: Shared Intrinsic Body Token Substitution Parity.
+Milestone 221: C++/Rust Non-Intrinsic Body Token Substitution Parity.
 ```
 
 Latest review verdict:
 
 ```text
-M219 execution-review returned Accept after focused documentation and hygiene
-revision. Architecture, evidence, and test reviewers accepted with
-follow-ups. The executor folded in two small follow-up tests before final
-validation: one proves an x86-looking intrinsic rendered with
-`RustArchitectureModule("aarch64")` still uses the explicit `aarch64` module,
-and one diagnoses non-string module names. Documentation and validation
-auditors initially requested final state/doc updates and cache cleanup; those
-were completed by the orchestrator.
+M220 execution-review returned Accept after the expected completion-state
+documentation revision. Architecture/boundary, evidence, test, and validation
+reviewers accepted the shared intrinsic substitution contract and Rust parity
+implementation. Documentation review requested the standard final state,
+roadmap, behavioral/domain, ADR wording, and next-prompt updates; those were
+completed by the orchestrator.
 ```
 
 Next expected action:
 
 ```text
-Run the active M220 execution-review loop prompt. Introduce only the minimal
-shared rendered-intrinsic-call replacement/provenance contract needed by two
-concrete consumers, the accepted C++ M215 body-token substitution path and the
-new Rust body-token substitution path. Preserve raw text spans exactly and
-substitute only already-rendered intrinsic request segments by typed request
-provenance. Do not add a broad registry/worklist, reopen lowering, rescan raw
-TSIL, parse surrounding Rust/C++ syntax, run non-intrinsic token substitution,
-render whole primitive bodies, write artifacts, run build verification, or put
-semantic decisions into templates.
+Run the active M221 execution-review loop prompt. Extend body-token
+substitution only for non-intrinsic handoff families that already have both a
+typed lowered handoff stream and explicit already-rendered backend values with
+request provenance for C++ and Rust. Preserve raw spans exactly and do not
+invent raw-string rendering for missing semantic stages. Do not reopen
+lowering, rescan raw TSIL, parse surrounding Rust/C++ syntax, render whole
+primitive bodies, write artifacts, run build verification, or put semantic
+decisions into templates.
 ```
 
 Previous review verdict:
@@ -615,13 +638,15 @@ execution-review. M218 execution-review returned Accept after focused
 documentation and hygiene revision and selected M219 Rust intrinsic invocation
 call rendering parity execution-review. M219 execution-review returned Accept
 after focused documentation and hygiene revision and selected M220 shared
-intrinsic body-token substitution parity execution-review.
+intrinsic body-token substitution parity execution-review. M220
+execution-review returned Accept after completion documentation revision and
+selected M221 non-intrinsic body-token substitution parity execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m219-rust-intrinsic-invocation-call-rendering-execution-review-loop-prompt.md
+docs/agent/runs/m220-shared-intrinsic-body-token-substitution-parity-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

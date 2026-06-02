@@ -1,4 +1,4 @@
-"""C++ body-token rendering by substituting rendered backend intrinsic islands."""
+"""Rust body-token rendering by substituting rendered backend intrinsic islands."""
 
 from __future__ import annotations
 
@@ -12,39 +12,39 @@ from tslgen.backends.body_token_contract import (
     render_intrinsic_body_tokens_from_handoff,
 )
 from tslgen.backends.intrinsic_invocations import BackendIntrinsicInvocationImmediate
-from tslgen.backends.cpp.intrinsic_calls import CppRenderedIntrinsicCall
+from tslgen.backends.rust.intrinsic_calls import RustRenderedIntrinsicCall
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.backend_metadata import BackendId
 from tslgen.lowering.model import BackendIntrinsicHandoff
 
-CppBodyText = NewType("CppBodyText", str)
+RustBodyText = NewType("RustBodyText", str)
 
-_CPP_BODY_TOKEN_POLICY = BodyTokenRenderPolicy(
-    backend=BackendId("cpp"),
-    backend_label="C++",
-    diagnostic_code_prefix="TSL-CPP-BODY-TOKENS",
+_RUST_BODY_TOKEN_POLICY = BodyTokenRenderPolicy(
+    backend=BackendId("rust"),
+    backend_label="Rust",
+    diagnostic_code_prefix="TSL-RUST-BODY-TOKENS",
 )
 
 
 @dataclass(frozen=True, slots=True)
-class CppRenderedBodyTokens:
+class RustRenderedBodyTokens:
     handoff: BackendIntrinsicHandoff
-    text: CppBodyText
-    calls: tuple[CppRenderedIntrinsicCall, ...]
+    text: RustBodyText
+    calls: tuple[RustRenderedIntrinsicCall, ...]
     immediates: tuple[BackendIntrinsicInvocationImmediate, ...]
     source: SourceLocation
 
 
 @dataclass(frozen=True, slots=True)
-class CppBodyTokenRenderResult:
-    body: CppRenderedBodyTokens | None
+class RustBodyTokenRenderResult:
+    body: RustRenderedBodyTokens | None
     diagnostics: tuple[Diagnostic, ...] = ()
 
 
-def render_cpp_body_tokens_from_intrinsic_handoff(
+def render_rust_body_tokens_from_intrinsic_handoff(
     handoff: BackendIntrinsicHandoff,
-    rendered_calls: tuple[CppRenderedIntrinsicCall, ...],
-) -> CppBodyTokenRenderResult:
+    rendered_calls: tuple[RustRenderedIntrinsicCall, ...],
+) -> RustBodyTokenRenderResult:
     """Render a body token stream by replacing intrinsic request segments."""
 
     original_by_request_id = {
@@ -53,11 +53,11 @@ def render_cpp_body_tokens_from_intrinsic_handoff(
     contract_result = render_intrinsic_body_tokens_from_handoff(
         handoff,
         tuple(_contract_call(call) for call in rendered_calls),
-        _CPP_BODY_TOKEN_POLICY,
+        _RUST_BODY_TOKEN_POLICY,
     )
 
     if contract_result.diagnostics:
-        return CppBodyTokenRenderResult(
+        return RustBodyTokenRenderResult(
             body=None,
             diagnostics=contract_result.diagnostics,
         )
@@ -66,10 +66,10 @@ def render_cpp_body_tokens_from_intrinsic_handoff(
     ordered_calls = tuple(
         original_by_request_id[id(call.request)] for call in contract_result.body.calls
     )
-    return CppBodyTokenRenderResult(
-        body=CppRenderedBodyTokens(
+    return RustBodyTokenRenderResult(
+        body=RustRenderedBodyTokens(
             handoff=handoff,
-            text=CppBodyText(str(contract_result.body.text)),
+            text=RustBodyText(str(contract_result.body.text)),
             calls=ordered_calls,
             immediates=contract_result.body.immediates,
             source=contract_result.body.source,
@@ -78,7 +78,7 @@ def render_cpp_body_tokens_from_intrinsic_handoff(
     )
 
 
-def _contract_call(call: CppRenderedIntrinsicCall) -> BodyTokenRenderedIntrinsicCall:
+def _contract_call(call: RustRenderedIntrinsicCall) -> BodyTokenRenderedIntrinsicCall:
     return BodyTokenRenderedIntrinsicCall(
         backend=call.invocation.backend,
         request=call.invocation.request,

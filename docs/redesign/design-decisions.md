@@ -3107,11 +3107,11 @@ M217 establishes the primitive-template boundary and minimal C++/Rust template
 files. It should not reuse the M188 `ProjectSkeletonRenderContext`, because
 that context and its semantic-field guard are skeleton-specific. M218 owns the
 fuller typed primitive render context needed by real selected primitive
-rendering. M219 restores Rust intrinsic-call parity. M220 may introduce a
-shared body-token replacement/provenance contract only with two concrete
-consumers: the accepted C++ intrinsic body-token substitution boundary and a
-Rust intrinsic body-token substitution boundary added in the same focused
-parity slice.
+rendering. M219 restores Rust intrinsic-call parity. M220 accepts the shared
+intrinsic body-token replacement/provenance contract because it has exactly
+two concrete consumers: the accepted C++ intrinsic body-token substitution
+boundary and the Rust intrinsic body-token substitution boundary added in the
+same focused parity slice.
 
 The template engine is a renderer detail, not the architecture. The accepted
 M188 boundary uses Python standard-library formatting. A later milestone may
