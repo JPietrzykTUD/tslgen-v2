@@ -624,6 +624,79 @@ Accepted M220 Rust diagnostic codes include:
 - `TSL-RUST-BODY-TOKENS-BACKEND-MISMATCH`
 - `TSL-RUST-BODY-TOKENS-UNSUPPORTED-OPAQUE-TOKEN-SEGMENT`
 
+### M221 Backend Type/Value Body Token Substitution Boundary
+
+Milestone 221 adds C++/Rust body-token substitution for the complete
+currently eligible backend type/value subset:
+
+- `BackendTypeQueryHandoff` plus already-translated
+  `BackendTranslatedTypeSpelling`;
+- `BackendValueQueryHandoff` plus already-translated
+  `BackendTranslatedValue`.
+
+Both families were eligible because lowering already produces handoff streams
+with opaque text/token segments and request segments, and backend translation
+already produces typed values that carry backend id, emitted text, source
+provenance, and the original request object. Matching is by that typed request
+object, not raw source spelling.
+
+M221 exposes C++ and Rust wrappers that preserve backend-specific result
+types:
+
+```python
+@dataclass(frozen=True, slots=True)
+class CppRenderedTypeQueryBodyTokens:
+    handoff: BackendTypeQueryHandoff
+    text: CppBodyText
+    spellings: tuple[BackendTranslatedTypeSpelling, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class CppRenderedValueQueryBodyTokens:
+    handoff: BackendValueQueryHandoff
+    text: CppBodyText
+    values: tuple[BackendTranslatedValue, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class RustRenderedTypeQueryBodyTokens:
+    handoff: BackendTypeQueryHandoff
+    text: RustBodyText
+    spellings: tuple[BackendTranslatedTypeSpelling, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class RustRenderedValueQueryBodyTokens:
+    handoff: BackendValueQueryHandoff
+    text: RustBodyText
+    values: tuple[BackendTranslatedValue, ...]
+    source: SourceLocation
+```
+
+For example, a backend type query handoff may render raw text plus
+`type<backend>(scalar::ui32)` to `uint32_t` for C++ or `u32` for Rust. A
+backend value query handoff may render raw text plus
+`value<backend>(uninit::scalar)` to an already-translated backend value. The
+surrounding source text remains raw. M221 does not parse statements,
+assignments, array access, operators, `emit_return(...)`, or surrounding
+C++/Rust syntax.
+
+M221 deliberately excludes source-operation handoffs, control directives,
+loops, primitive calls, signatures, intrinsic body-token substitution, and
+general body-token replacement. Those families require their own accepted
+typed rendered values or planning before they can participate in body-token
+substitution.
+
+Accepted M221 diagnostic codes include:
+
+- `TSL-CPP-TYPE-VALUE-BODY-TOKENS-MISSING-RENDERED-VALUE`
+- `TSL-CPP-TYPE-VALUE-BODY-TOKENS-EXTRA-RENDERED-VALUE`
+- `TSL-CPP-TYPE-VALUE-BODY-TOKENS-DUPLICATE-RENDERED-VALUE`
+- `TSL-CPP-TYPE-VALUE-BODY-TOKENS-BACKEND-MISMATCH`
+- `TSL-CPP-TYPE-VALUE-BODY-TOKENS-VALUE-KIND-MISMATCH`
+- `TSL-CPP-TYPE-VALUE-BODY-TOKENS-UNSUPPORTED-OPAQUE-TOKEN-SEGMENT`
+- corresponding `TSL-RUST-TYPE-VALUE-BODY-TOKENS-*` codes.
+
 ## Input Behavior
 
 | Input | Expected Behavior | Evidence |

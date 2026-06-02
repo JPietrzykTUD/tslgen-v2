@@ -1,10 +1,10 @@
-# M221 Non-Intrinsic Body Token Substitution Parity Execution Review Loop Prompt
+# M221 Backend Type/Value Body Token Substitution Parity Execution Review Loop Prompt
 
 Execute this prompt only when `docs/agent/current-redesign-state.md` points
 here and records M220 as accepted.
 
-This is an implementation task with an evidence gate. Use the executor-review
-loop:
+This is an implementation task with a narrow evidence gate. Use the
+executor-review loop:
 
 ```text
 single write-capable executor
@@ -30,16 +30,24 @@ intrinsic-only: raw text spans remained raw, request segments were matched by
 typed request-object provenance, and no surrounding target-language syntax was
 parsed.
 
-M221 extends that body-token substitution idea only where the already accepted
-pipeline has the same two ingredients:
+M221 applies that same substitution boundary to the complete currently
+eligible **backend type/value** subset, not to arbitrary remaining token
+families. The only selected candidate families are:
+
+```text
+BackendTypeQueryHandoff + BackendTranslatedTypeSpelling
+BackendValueQueryHandoff + BackendTranslatedValue
+```
+
+These families are selected because the accepted pipeline already has both:
 
 ```text
 typed lowered handoff stream
-+ explicit already-rendered backend values with request provenance
++ explicit already-rendered backend value with request provenance
 ```
 
 Do not invent raw-string backend rendering inside body substitution just to
-make a family available.
+make another family available.
 
 ## Read First
 
@@ -65,32 +73,33 @@ make a family available.
 
 ## Evidence Gate
 
-Before implementing, identify the largest safe subset of non-intrinsic
-body-token families that already have both:
+Before implementing, verify that both selected backend type/value families
+have the two accepted ingredients:
 
-- a typed lowered handoff stream with opaque text/token segments and request
-  segments; and
-- explicit already-rendered backend values carrying backend id, output text,
-  typed request provenance, and source provenance for C++ and Rust.
+- `BackendTypeQueryHandoff` has opaque text/token segments and
+  `BackendTypeQueryHandoffRequestSegment` values whose request is a
+  `BackendTypeSpellingRequest`; `BackendTranslatedTypeSpelling` carries that
+  request plus backend id, output spelling text, and source provenance.
+- `BackendValueQueryHandoff` has opaque text/token segments and
+  `BackendValueQueryHandoffRequestSegment` values whose request is a
+  `BackendValueRequest`; `BackendTranslatedValue` carries that request plus
+  backend id, output value text, and source provenance.
 
-Expected candidates are backend type query handoffs and backend value query
-handoffs, because backend type spelling and backend value translation already
-exist as typed backend translation boundaries. Source-operation handoffs are
-not eligible unless accepted already-rendered source-operation values already
-exist before M221 implementation begins.
+If either family lacks these ingredients, do not invent a placeholder
+renderer. Implement only the eligible family/families, record the exclusion in
+tests/docs, and create a follow-up or return-to-planner prompt if the missing
+family blocks useful progress.
 
-If no non-intrinsic family satisfies the evidence gate, do not implement a
-placeholder renderer. Stop, record the evidence, and create a return-to-
-planner prompt.
+Source-operation handoffs, control directives, loops, primitive calls,
+signatures, and other body-token families are not M221 candidates.
 
 ## Goal
 
-Add the smallest non-intrinsic body-token substitution parity slice for C++
-and Rust:
+Add backend type/value body-token substitution parity for C++ and Rust:
 
 ```text
 opaque/raw text segment
-+ non-intrinsic request segment with already-rendered backend value
++ backend type/value request segment with already-rendered backend value
 + opaque/raw text segment
 -> concatenated backend body text
 ```
@@ -100,33 +109,36 @@ or operators remains raw text. M221 must not invent or parse statement syntax.
 
 ## Scope
 
-Add focused implementation and tests, likely in small modules near the
-existing backend body-token code. The implementation should:
+Add focused implementation and tests near the existing backend body-token
+code. The implementation should:
 
-- consume only accepted typed handoff streams and already-rendered backend
-  values identified by the evidence gate;
+- support `BackendTypeQueryHandoff` plus
+  `BackendTranslatedTypeSpelling`;
+- support `BackendValueQueryHandoff` plus `BackendTranslatedValue`;
 - preserve opaque text segments exactly and in source order;
 - substitute request segments only with matching already-rendered backend
-  values by preserved typed request-object provenance, not raw text matching;
+  type/value values by preserved typed request-object provenance, not raw text
+  matching;
 - support any number of ordered request segments in the stream;
 - preserve rendered value provenance and deterministic substitution order for
   later primitive body rendering;
 - return structured diagnostics for missing, extra, duplicate, backend-
   mismatched, and opaque non-renderable token segments;
-- keep C++ and Rust in parity for every family implemented in M221;
-- keep the shared shape small and justified by the concrete families selected
-  by the evidence gate.
+- keep C++ and Rust in parity for type and value substitution;
+- keep the shared shape small and justified by these two concrete families.
 
 ## Guardrails
 
 - Do not add a broad registry, dispatcher, worklist, or all-token replacement
   framework.
+- Do not implement source-operation substitution or source-operation backend
+  rendering in M221.
+- Do not add control directive, loop, primitive-call, signature, intrinsic, or
+  general body-token substitution in M221.
 - Do not reopen lowering or rescan raw TSIL.
 - Do not parse `return`, `emit_return(...)`, assignments, array access, loops,
   braces, semicolons, operators, or surrounding Rust/C++ syntax.
 - Do not parse, split, normalize, or repair request payloads.
-- Do not invent source-operation backend rendering if typed rendered
-  source-operation values do not already exist.
 - Do not render Rust const generics, C++ non-type templates, primitive
   signatures, primitive dependency closure, whole primitive bodies, generated
   project files, or build verification.
@@ -135,12 +147,14 @@ existing backend body-token code. The implementation should:
 
 ## Expected Tests
 
-Add focused tests for the selected non-intrinsic family/families:
+Add focused tests for backend type/value substitution:
 
-- evidence-gate coverage documenting which families were eligible and which
-  were intentionally excluded;
-- C++ and Rust raw text preservation around rendered non-intrinsic islands;
-- multiple request segments substituted in source order;
+- evidence-gate coverage documenting that type and value are the selected
+  eligible families and that source operations/control/loops/primitive calls
+  are intentionally excluded;
+- C++ and Rust raw text preservation around rendered type islands;
+- C++ and Rust raw text preservation around rendered value islands;
+- multiple type/value request segments substituted in source order;
 - missing rendered value diagnostic for a request segment;
 - extra rendered value diagnostic for a value whose request is not in the
   handoff stream;
@@ -160,7 +174,7 @@ Run:
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m221_non_intrinsic_body_token_substitution_parity.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m221_backend_type_value_body_token_substitution_parity.py
 find tslgen -type d -name __pycache__ -print
 ```
 
@@ -171,11 +185,12 @@ and rerun the final `find` command.
 
 After implementation and validation, run read-only subagents:
 
-1. Architecture/boundary reviewer: evidence gate is honored, shared shape is
-   minimal, raw spans are preserved, and no broad token replacement framework
-   or syntax parser was introduced.
-2. Evidence reviewer: selected non-intrinsic family/families truly had typed
-   handoff streams plus already-rendered backend values before substitution.
+1. Architecture/boundary reviewer: type/value-only scope is honored, shared
+   shape is minimal, raw spans are preserved, and no broad token replacement
+   framework or syntax parser was introduced.
+2. Evidence reviewer: backend type/value families truly had typed handoff
+   streams plus already-rendered backend values before substitution, and
+   excluded families were not pulled in.
 3. Test reviewer: coverage of raw preservation, C++/Rust parity, diagnostics,
    provenance/order, and excluded families.
 4. Documentation reviewer: roadmap/state/design-doc consistency.
@@ -193,7 +208,7 @@ Before finishing:
 - update `docs/redesign/implementation-roadmap.md` with the execution result;
 - update `docs/redesign/behavioral-spec.md`, `docs/redesign/domain-model.md`,
   or `docs/redesign/design-decisions.md` if the accepted implementation adds
-  or clarifies non-intrinsic body-token render values or policy;
+  or clarifies backend type/value body-token render values or policy;
 - update `docs/agent/current-redesign-state.md`;
 - create the next concrete prompt under `docs/agent/runs/`;
 - do not start M222.

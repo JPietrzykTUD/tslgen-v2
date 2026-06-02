@@ -5,7 +5,13 @@ from tslgen.backends.rust.body_tokens import (
     RustBodyText,
     RustBodyTokenRenderResult,
     RustRenderedBodyTokens,
+    RustRenderedTypeQueryBodyTokens,
+    RustRenderedValueQueryBodyTokens,
+    RustTypeQueryBodyTokenRenderResult,
+    RustValueQueryBodyTokenRenderResult,
     render_rust_body_tokens_from_intrinsic_handoff,
+    render_rust_body_tokens_from_type_query_handoff,
+    render_rust_body_tokens_from_value_query_handoff,
 )
 from tslgen.backends.rust.intrinsic_calls import (
     RustArchitectureModule,
@@ -24,6 +30,12 @@ __all__ = [
     "RustIntrinsicCallText",
     "RustRenderedBodyTokens",
     "RustRenderedIntrinsicCall",
+    "RustRenderedTypeQueryBodyTokens",
+    "RustRenderedValueQueryBodyTokens",
+    "RustTypeQueryBodyTokenRenderResult",
+    "RustValueQueryBodyTokenRenderResult",
     "render_rust_body_tokens_from_intrinsic_handoff",
+    "render_rust_body_tokens_from_type_query_handoff",
+    "render_rust_body_tokens_from_value_query_handoff",
     "render_rust_intrinsic_invocation_call",
 ]

@@ -16431,6 +16431,96 @@ python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py
 find tslgen -type d -name __pycache__ -print
 ```
 
+Result:
+
+M221 added `tslgen.backends.type_value_body_tokens`, a focused shared
+substitution boundary for the complete currently eligible backend type/value
+subset. The evidence gate is satisfied for `BackendTypeQueryHandoff` plus
+`BackendTranslatedTypeSpelling` and for `BackendValueQueryHandoff` plus
+`BackendTranslatedValue`: both have typed lowered handoff streams and
+already-rendered backend values carrying backend id, emitted text, request
+provenance, and source provenance.
+
+M221 added C++ and Rust wrapper APIs for type query and value query body-token
+substitution. The wrappers preserve backend-specific text newtypes,
+concrete translated type/value objects, handoff/source provenance, and
+deterministic request order. They substitute only matching request segments by
+typed request-object identity, preserve opaque text segments exactly, and
+diagnose missing, extra, duplicate, backend-mismatched, kind-mismatched, and
+opaque non-renderable token segments.
+
+M221 deliberately does not reopen lowering, rescan raw TSIL, parse
+surrounding C++/Rust syntax, implement source-operation substitution, control
+directive substitution, loop substitution, primitive-call substitution,
+signature rendering, intrinsic rendering beyond M220, whole primitive body
+rendering, generated project rendering/writing/build verification, or
+template-side semantic decisions.
+
+Review/audit verdict:
+
+Accepted after executor-review loop. Architecture/boundary, evidence, test,
+documentation, and validation reviewers accepted the type/value-only scope and
+the exclusion of source operations and other body-token families.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m221_backend_type_value_body_token_substitution_parity.py`:
+  exit 0, `13 passed`.
+- Initial `find tslgen -type d -name __pycache__ -print` after compile/test:
+  exit 0, printed compile/test-created `__pycache__` directories.
+- After removing those directories, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Next concrete prompt:
+`docs/agent/runs/m222-primitive-render-plan-execution-review-loop-prompt.md`.
+
+### Milestone 222: Primitive Render Plan
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m222-primitive-render-plan-execution-review-loop-prompt.md`.
+
+Goal:
+
+Build the typed primitive render plan boundary that can gather already-decided
+selected primitive facts, profile/backend context, dependency order, signature
+presentation facts, and rendered body-token output into the M218 primitive
+render model without rendering/writing a full generated project yet.
+
+Scope:
+
+- Define a focused `PrimitiveRenderPlan`-shaped model for one backend/profile
+  containing ordered primitive render records.
+- Treat primitive order as dependency/planning order supplied to the boundary,
+  not as `PrimitiveRenderSortKey` presentation sorting.
+- Consume already-rendered declaration/definition/body text values and
+  backend/profile facts; do not parse raw TSIL or render missing body islands.
+- Adapt the plan to the M218 primitive render model for C++ and Rust in
+  parity.
+- Preserve deterministic ordering, provenance, and diagnostics for unresolved
+  or wrong-backend values.
+
+Out of scope:
+
+New lowering; raw TSIL rescans; body-token substitution; source-operation
+translation; primitive dependency closure implementation if no typed ordered
+input is supplied; generated project rendering/writing/build verification;
+compile tests; template-side semantic decisions; and runtime dependency on
+`frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m222_primitive_render_plan.py
+find tslgen -type d -name __pycache__ -print
+```
+
 Remove any validation-created `__pycache__` directories before the final cache
 check. Do not run the old `tslgenold` validation profile as proof of the clean
 product slice.
@@ -26490,9 +26580,11 @@ Provisional M216-M225 roadmap to validate:
    substitution boundary and a Rust intrinsic body-token substitution boundary
    added in the same focused parity slice. Avoid raw-text matching and a broad
    registry.
-6. **M221: C++/Rust non-intrinsic body-token substitution parity.** Use the
-   shared contract to feed rendered type/value/source-operation token islands
-   into backend body text for both backends.
+6. **M221: C++/Rust backend type/value body-token substitution parity.** Use
+   the M220 substitution model only for the complete currently eligible
+   backend type/value subset: `BackendTypeQueryHandoff` plus
+   `BackendTranslatedTypeSpelling`, and `BackendValueQueryHandoff` plus
+   `BackendTranslatedValue`.
 7. **M222: Primitive render plan.** Build a typed plan for selected primitive,
    selected profile, topologically ordered dependencies, signature facts, and
    rendered body-token output.
@@ -26930,33 +27022,33 @@ Validation result:
   `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
 
 Next concrete prompt:
-`docs/agent/runs/m221-non-intrinsic-body-token-substitution-parity-execution-review-loop-prompt.md`.
+`docs/agent/runs/m221-backend-type-value-body-token-substitution-parity-execution-review-loop-prompt.md`.
 
-### Milestone 221: C++/Rust Non-Intrinsic Body Token Substitution Parity
+### Milestone 221: C++/Rust Backend Type/Value Body Token Substitution Parity
 
 Status:
 
 Selected. Execution-review loop prompt:
-`docs/agent/runs/m221-non-intrinsic-body-token-substitution-parity-execution-review-loop-prompt.md`.
+`docs/agent/runs/m221-backend-type-value-body-token-substitution-parity-execution-review-loop-prompt.md`.
 
 Goal:
 
-Extend body-token substitution beyond intrinsics only for non-intrinsic
-families that already have both accepted typed handoff streams and
-already-rendered backend values with preserved request provenance for C++ and
-Rust. Preserve the accepted body model of raw source spans plus
-rendered/lowerable islands, without turning body substitution into a raw
+Extend body-token substitution beyond intrinsics only for the complete
+currently eligible backend type/value subset: `BackendTypeQueryHandoff` plus
+`BackendTranslatedTypeSpelling`, and `BackendValueQueryHandoff` plus
+`BackendTranslatedValue`. Preserve the accepted body model of raw source spans
+plus rendered/lowerable islands, without turning body substitution into a raw
 source parser or semantic renderer.
 
 Scope:
 
-- Start by identifying the largest safe subset among accepted non-intrinsic
-  handoff families, currently expected to include backend type and backend
-  value query handoffs when they have already-rendered backend values with
-  typed request provenance.
+- Verify the evidence gate for backend type and backend value query handoffs:
+  each must have an accepted typed handoff stream and an already-rendered
+  backend value carrying backend id, output text, request provenance, and
+  source provenance.
 - Add the smallest shared substitution/provenance shape needed by two
   concrete C++/Rust consumers if M220's intrinsic-only contract is not the
-  right fit for non-intrinsic values.
+  right fit for backend type/value values.
 - Preserve opaque text segments exactly and in source order.
 - Substitute only request segments with matching already-rendered backend
   values by typed request-object provenance, not raw text matching.
@@ -26969,18 +27061,116 @@ Out of scope:
 
 New lowering; raw TSIL rescans; parsing `return`, `emit_return(...)`,
 assignments, array access, loops, braces, semicolons, operators, or
-surrounding Rust/C++ syntax; source-operation backend translation if no
-accepted already-rendered source-operation values exist; direct string
-rendering invented in body substitution; primitive dependency closure; whole
-primitive body rendering; generated project rendering/writing/build
-verification; template-side semantic decisions; and runtime dependency on
-`frozen/` or `tslgenold`.
+surrounding Rust/C++ syntax; source-operation substitution; control directive,
+loop, primitive-call, signature, intrinsic, or general body-token
+substitution; direct string rendering invented in body substitution; primitive
+dependency closure; whole primitive body rendering; generated project
+rendering/writing/build verification; template-side semantic decisions; and
+runtime dependency on `frozen/` or `tslgenold`.
 
 Validation:
 
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m221_non_intrinsic_body_token_substitution_parity.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m221_backend_type_value_body_token_substitution_parity.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M221 added `tslgen.backends.type_value_body_tokens`, the minimal shared
+backend type/value body-token substitution contract justified by two concrete
+families: `BackendTypeQueryHandoff` plus
+`BackendTranslatedTypeSpelling`, and `BackendValueQueryHandoff` plus
+`BackendTranslatedValue`. The shared contract consumes typed handoff streams
+plus already-rendered backend values carrying backend id, rendered text,
+preserved typed request-object provenance, and source provenance. It preserves
+opaque text segments exactly and substitutes only request segments by typed
+request-object identity, not by raw text.
+
+M221 exposed C++ and Rust parity wrappers for type-query and value-query body
+token substitution. The wrappers preserve rendered value provenance,
+deterministic source order, and backend-specific body text wrappers, and they
+diagnose missing, extra, duplicate, backend-mismatched, value-kind-mismatched,
+and opaque non-renderable token segments.
+
+M221 deliberately does not reopen lowering, rescan raw TSIL, parse
+surrounding C++/Rust syntax, implement source-operation/control/loop/
+primitive-call/signature/intrinsic/general body-token substitution, render
+whole primitive bodies, write artifacts, run build verification, or put
+semantic decisions into templates.
+
+Review/audit verdict:
+
+Accepted after focused roadmap completion revision. Architecture/boundary,
+evidence, test, and validation reviewers accepted. Documentation review
+requested that the roadmap record the accepted M221 result, review verdict,
+exact validation result, and next prompt; that revision was completed by the
+orchestrator.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m221_backend_type_value_body_token_substitution_parity.py`:
+  exit 0, `13 passed in 1.94s`.
+- Initial `find tslgen -type d -name __pycache__ -print` after compile/test:
+  exit 0, printed compile/test-created `__pycache__` directories.
+- After removing those directories, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Follow-ups:
+
+No blocking follow-ups. The next milestone should consume already-rendered
+body text through a typed primitive render plan boundary instead of broadening
+body-token substitution further.
+
+Next concrete prompt:
+`docs/agent/runs/m222-primitive-render-plan-execution-review-loop-prompt.md`.
+
+### Milestone 222: Primitive Render Plan
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m222-primitive-render-plan-execution-review-loop-prompt.md`.
+
+Goal:
+
+Build a typed primitive render plan boundary for C++ and Rust that carries
+backend/profile context, ordered selected primitive render records,
+already-rendered declaration/definition/body text, and provenance into the
+accepted M218 primitive render model contexts.
+
+Scope:
+
+- Define typed primitive render plan values for one backend/profile and an
+  ordered tuple of primitive render records.
+- Preserve supplied primitive order as dependency/planning order.
+- Consume already-rendered declaration, definition, and body text values.
+- Consume backend id, profile name, artifact logical path, includes/imports,
+  namespace/module text, and source/provenance values.
+- Adapt the plan into the M218 primitive render model and then into M217
+  primitive template contexts.
+- Diagnose unsupported backend ids, wrong-backend records, duplicate plan
+  identities where modeled, unsupported raw TSIL/source sentinels, and
+  unresolved semantic sentinel values.
+
+Out of scope:
+
+New lowering; raw TSIL rescans; body-token substitution; source-operation,
+intrinsic, type-query, value-query, signature, or declaration translation;
+primitive dependency closure when no typed order is supplied; full generated
+project rendering; artifact writing; build verification; template-side
+semantic decisions; and runtime dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m222_primitive_render_plan.py
 find tslgen -type d -name __pycache__ -print
 ```

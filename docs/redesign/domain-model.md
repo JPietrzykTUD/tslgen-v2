@@ -521,6 +521,67 @@ source, call order, rendered-call provenance, and flattened typed immediate
 metadata. Missing, extra, duplicate, backend-mismatched, and opaque non-text
 segments produce structured Rust body-token diagnostics.
 
+M221 adds a second narrow body-token substitution contract for backend
+type/value query handoffs. It is selected only for the complete currently
+eligible subset:
+
+```python
+BodyTokenTypeValueKind = Literal["type", "value"]
+BodyTokenTypeValueRequest = BackendTypeSpellingRequest | BackendValueRequest
+BodyTokenTypeValueHandoff = BackendTypeQueryHandoff | BackendValueQueryHandoff
+
+@dataclass(frozen=True, slots=True)
+class BodyTokenRenderedTypeValue:
+    kind: BodyTokenTypeValueKind
+    backend: BackendId
+    request: BodyTokenTypeValueRequest
+    text: BodyTokenRenderedTypeValueText
+    source: SourceLocation
+```
+
+`BackendTranslatedTypeSpelling` becomes a rendered type value by preserving
+its request, backend id, spelling text, and source. `BackendTranslatedValue`
+becomes a rendered value by preserving its request, backend id, value text,
+and source. Matching is by request object identity/provenance; raw query text
+is not rescanned or compared.
+
+C++ and Rust wrappers preserve the concrete translated values:
+
+```python
+@dataclass(frozen=True, slots=True)
+class CppRenderedTypeQueryBodyTokens:
+    handoff: BackendTypeQueryHandoff
+    text: CppBodyText
+    spellings: tuple[BackendTranslatedTypeSpelling, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class CppRenderedValueQueryBodyTokens:
+    handoff: BackendValueQueryHandoff
+    text: CppBodyText
+    values: tuple[BackendTranslatedValue, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class RustRenderedTypeQueryBodyTokens:
+    handoff: BackendTypeQueryHandoff
+    text: RustBodyText
+    spellings: tuple[BackendTranslatedTypeSpelling, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class RustRenderedValueQueryBodyTokens:
+    handoff: BackendValueQueryHandoff
+    text: RustBodyText
+    values: tuple[BackendTranslatedValue, ...]
+    source: SourceLocation
+```
+
+This is not a general body-token replacement registry. Source operations,
+control directives, loops, primitive calls, signatures, intrinsics, and other
+families stay outside M221 unless a future milestone supplies their own typed
+rendered values and selected substitution boundary.
+
 ## Primitive Model
 
 ```python

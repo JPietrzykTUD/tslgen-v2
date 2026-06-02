@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 220 is accepted.
+Milestone 221 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -537,48 +537,66 @@ Rust const generics, substitute non-intrinsic token families, render whole
 primitive bodies, write generated projects, run build verification, or add
 template-side semantic decisions.
 
+M221 added `tslgen.backends.type_value_body_tokens`, a focused shared
+substitution boundary for the complete currently eligible backend type/value
+subset. `BackendTypeQueryHandoff` plus `BackendTranslatedTypeSpelling` and
+`BackendValueQueryHandoff` plus `BackendTranslatedValue` both satisfy the
+evidence gate because they have typed lowered handoff streams and
+already-rendered backend values carrying backend id, emitted text, request
+provenance, and source provenance.
+
+M221 added C++ and Rust wrapper APIs for type query and value query body-token
+substitution. The wrappers preserve backend-specific text newtypes,
+translated type/value objects, handoff/source provenance, and deterministic
+request order. They substitute only matching request segments by typed
+request-object identity, preserve opaque text segments exactly, and diagnose
+missing, extra, duplicate, backend-mismatched, kind-mismatched, and opaque
+non-renderable token segments. M221 does not reopen lowering, rescan raw
+TSIL, parse surrounding C++/Rust syntax, implement source-operation/control/
+loop/primitive-call/signature/general body-token substitution, render whole
+primitive bodies, write artifacts, run build verification, or put semantic
+decisions into templates.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M221 non-intrinsic body-token substitution parity execution-review loop prompt.
+Run M222 primitive render plan execution-review loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m221-non-intrinsic-body-token-substitution-parity-execution-review-loop-prompt.md
+docs/agent/runs/m222-primitive-render-plan-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 221: C++/Rust Non-Intrinsic Body Token Substitution Parity.
+Milestone 222: Primitive Render Plan.
 ```
 
 Latest review verdict:
 
 ```text
-M220 execution-review returned Accept after the expected completion-state
-documentation revision. Architecture/boundary, evidence, test, and validation
-reviewers accepted the shared intrinsic substitution contract and Rust parity
-implementation. Documentation review requested the standard final state,
-roadmap, behavioral/domain, ADR wording, and next-prompt updates; those were
-completed by the orchestrator.
+M221 execution-review returned Accept after focused roadmap completion
+revision. Architecture/boundary, evidence, test, documentation, and validation
+reviewers accepted the backend type/value-only substitution boundary and
+confirmed that source operations, controls, loops, primitive calls,
+signatures, intrinsics, and general body-token replacement remain excluded.
 ```
 
 Next expected action:
 
 ```text
-Run the active M221 execution-review loop prompt. Extend body-token
-substitution only for non-intrinsic handoff families that already have both a
-typed lowered handoff stream and explicit already-rendered backend values with
-request provenance for C++ and Rust. Preserve raw spans exactly and do not
-invent raw-string rendering for missing semantic stages. Do not reopen
-lowering, rescan raw TSIL, parse surrounding Rust/C++ syntax, render whole
-primitive bodies, write artifacts, run build verification, or put semantic
-decisions into templates.
+Run the active M222 execution-review loop prompt. Build the typed primitive
+render plan boundary that carries ordered selected primitive render records,
+backend/profile context, already-rendered declaration/definition/body text,
+and provenance into the M218 primitive render model for C++ and Rust. Do not
+reopen lowering, rescan raw TSIL, run body-token substitution, implement
+dependency closure if no typed order is supplied, write generated projects,
+run build verification, or put semantic decisions into templates.
 ```
 
 Previous review verdict:
@@ -640,13 +658,15 @@ call rendering parity execution-review. M219 execution-review returned Accept
 after focused documentation and hygiene revision and selected M220 shared
 intrinsic body-token substitution parity execution-review. M220
 execution-review returned Accept after completion documentation revision and
-selected M221 non-intrinsic body-token substitution parity execution-review.
+selected M221 backend type/value body-token substitution parity
+execution-review. M221 execution-review returned Accept after focused roadmap
+completion revision and selected M222 primitive render plan execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m220-shared-intrinsic-body-token-substitution-parity-execution-review-loop-prompt.md
+docs/agent/runs/m221-backend-type-value-body-token-substitution-parity-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
