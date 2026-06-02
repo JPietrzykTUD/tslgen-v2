@@ -103,6 +103,45 @@ full selected primitive render context, Rust intrinsic-call rendering, shared
 body-token replacement, generated-project integration, artifact writing, and
 build verification remain later backend/output work.
 
+### M218 Typed Primitive Render Context
+
+Milestone 218 adds a typed primitive render model for already-decided
+primitive presentation values. It adapts those values into the M217
+`PrimitiveTemplateRenderContext` for C++ and Rust without rendering real
+selected primitives.
+
+The accepted model uses typed wrappers for presentation text and identifiers,
+including backend id, profile name, logical artifact path, include/import
+lines, namespace/module presentation text, primitive declarations,
+definitions, body text, and deterministic primitive sort keys. These values
+mean "already rendered for presentation"; they are not raw source, raw TSIL,
+catalog selections, dependency requests, backend metadata lookups, lowering
+requests, or semantic render decisions.
+
+The M218 adapter:
+
+- supports C++ and Rust primitive render models in parity;
+- sorts backend contexts by logical artifact path;
+- sorts primitive records by explicit presentation sort key;
+- preserves rendered declaration, definition, and body text exactly except for
+  deterministic block joining;
+- rejects raw TSIL/source sentinel values with
+  `TSL-PRIMITIVE-RENDER-CONTEXT-RAW-TSIL`;
+- rejects unresolved semantic sentinel values with
+  `TSL-PRIMITIVE-RENDER-CONTEXT-UNRESOLVED-VALUE`;
+- rejects unsupported typed value shapes with
+  `TSL-PRIMITIVE-RENDER-CONTEXT-UNSUPPORTED-VALUE`;
+- rejects backend-inappropriate presentation fields with
+  `TSL-PRIMITIVE-RENDER-CONTEXT-UNSUPPORTED-BACKEND-FIELD`;
+- rejects unsupported backend ids with
+  `TSL-PRIMITIVE-RENDER-CONTEXT-UNKNOWN-BACKEND`.
+
+M218 deliberately does not perform primitive selection, dependency closure or
+topological dependency sorting, body-token substitution, Rust intrinsic-call
+rendering, source-operation rendering, generated-project integration, artifact
+writing, build verification, Jinja rendering, new lowering, raw TSIL rescans,
+or statement parsing.
+
 ### M189 Machine Feature Profile Boundary
 
 Milestone 189 adds a typed machine feature profile catalog for generated

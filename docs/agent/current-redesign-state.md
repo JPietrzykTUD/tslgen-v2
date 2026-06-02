@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 217 is accepted.
+Milestone 218 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -479,46 +479,68 @@ formatting, does not render real selected primitives, does not write artifacts,
 does not run build verification, does not change lowering, and does not add a
 Jinja dependency.
 
+M218 added `tslgen.rendering.primitive_render_model`, a typed already-decided
+primitive render model that adapts into the M217
+`PrimitiveTemplateRenderContext` for C++ and Rust. It uses typed wrappers for
+backend id, profile name, artifact logical path, include/import lines,
+namespace/module presentation text, primitive declaration/definition text,
+rendered body text, and primitive presentation sort keys. The adapter sorts
+backend contexts by logical artifact path, sorts primitive records by explicit
+presentation sort key, preserves rendered text as presentation values, and
+diagnoses raw TSIL/source sentinel values, unresolved semantic sentinel
+values, unsupported value shapes, unsupported backend ids, and
+backend-inappropriate fields.
+
+M218 deliberately does not render real selected primitives, perform dependency
+closure or topological dependency sorting, run body-token substitution, render
+Rust intrinsic calls, parse raw TSIL, write artifacts, run build verification,
+or introduce template-side semantics. `PrimitiveRenderSortKey` is
+presentation ordering only; M222 owns real dependency order.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M218 typed primitive render context execution-review loop prompt.
+Run M219 Rust intrinsic invocation call rendering execution-review loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m218-typed-primitive-render-context-execution-review-loop-prompt.md
+docs/agent/runs/m219-rust-intrinsic-invocation-call-rendering-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 218: Typed Primitive Render Context.
+Milestone 219: Rust Intrinsic Invocation Call Rendering Parity.
 ```
 
 Latest review verdict:
 
 ```text
-M217 execution-review returned Accept after hygiene revision.
-Architecture/boundary, evidence, test, and documentation reviewers accepted.
-The validation auditor reported successful functional validation and a
-temporary `__pycache__` hygiene issue after compile/test; those directories
-were removed and the final cache check passed.
+M218 execution-review returned Accept after focused documentation and hygiene
+revision. Architecture/boundary accepted. Evidence accepted with the follow-up
+that `PrimitiveRenderSortKey` remains presentation ordering only and M222 owns
+real dependency order. Test review accepted with a wrong-backend-field
+coverage follow-up; the executor folded that coverage into the M218 test
+before final validation. Documentation and validation auditors initially
+requested final state/doc updates and cache cleanup; those were completed by
+the orchestrator.
 ```
 
 Next expected action:
 
 ```text
-Run the active M218 execution-review loop prompt. Implement the typed
-already-decided primitive render model that adapts to M217
-`PrimitiveTemplateRenderContext` values for C++ and Rust. Use typed wrappers or
-dataclasses for already-rendered presentation text. Do not render real
-selected primitives, perform dependency closure, run body-token substitution,
-add Rust intrinsic-call rendering, write artifacts, run build verification,
-reopen lowering, parse raw TSIL, or put semantic decisions into templates.
+Run the active M219 execution-review loop prompt. Implement Rust intrinsic
+call rendering parity for accepted M213 invocation values using an explicit
+typed Rust architecture-module render input. Render qualified
+`core::arch::{module}::{assembled_name}(opaque_argument_payload)` call text
+only after the invocation is already assembled. Do not infer architecture
+modules from raw intrinsic names, reopen lowering, parse argument payloads,
+run body-token substitution, render whole primitive bodies, write artifacts,
+run build verification, or put semantic decisions into templates.
 ```
 
 Previous review verdict:
@@ -574,13 +596,15 @@ should progress in parity, and compile-tested real generated primitive output
 should arrive early. M216 planning returned Accept and selected M217 primitive
 template boundary execution-review. M217 execution-review returned Accept
 after hygiene revision and selected M218 typed primitive render context
-execution-review.
+execution-review. M218 execution-review returned Accept after focused
+documentation and hygiene revision and selected M219 Rust intrinsic invocation
+call rendering parity execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m217-primitive-template-boundary-execution-review-loop-prompt.md
+docs/agent/runs/m218-typed-primitive-render-context-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

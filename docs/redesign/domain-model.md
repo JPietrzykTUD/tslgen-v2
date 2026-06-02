@@ -2354,8 +2354,8 @@ Invariants:
 ## Primitive Template Render Model
 
 M217 introduces a minimal primitive-template render model for
-presentation-only template rendering. It is narrower than the full selected
-primitive render context planned for M218.
+presentation-only template rendering. M218 adds the typed already-decided
+primitive render model that feeds this context.
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -2389,6 +2389,93 @@ Invariants:
   accepted C++ and Rust primitive-template files.
 - Rendering returns an in-memory `ArtifactSet`; artifact writing and build
   verification remain later boundaries.
+
+M218 primitive render models distinguish already-rendered presentation values
+from raw source, raw TSIL, unresolved lowering/backend requests, and catalog or
+selection inputs:
+
+```python
+@dataclass(frozen=True, slots=True)
+class PrimitiveBackendId:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveProfileName:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveArtifactLogicalPath:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveRenderSortKey:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class RenderedIncludeLine:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class RenderedImportLine:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class RenderedNamespaceText:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class RenderedModuleText:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class RenderedPrimitiveDeclarationText:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class RenderedPrimitiveDefinitionText:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class RenderedPrimitiveBodyText:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveRenderRecord:
+    sort_key: PrimitiveRenderSortKey
+    declarations: tuple[RenderedPrimitiveDeclarationText, ...]
+    definitions: tuple[RenderedPrimitiveDefinitionText, ...]
+    body_text: RenderedPrimitiveBodyText | None
+
+@dataclass(frozen=True, slots=True)
+class BackendPrimitiveRenderModel:
+    backend_id: PrimitiveBackendId
+    logical_path: PrimitiveArtifactLogicalPath
+    profile_name: PrimitiveProfileName
+    includes: tuple[RenderedIncludeLine, ...]
+    imports: tuple[RenderedImportLine, ...]
+    namespace_open: RenderedNamespaceText | None
+    namespace_close: RenderedNamespaceText | None
+    module_open: RenderedModuleText | None
+    module_close: RenderedModuleText | None
+    primitives: tuple[PrimitiveRenderRecord, ...]
+```
+
+Invariants:
+
+- `PrimitiveRenderRecord.sort_key` is deterministic presentation ordering for
+  already-rendered records. It is not dependency closure or topological
+  dependency sorting; real dependency order remains a later render-plan
+  boundary.
+- C++ models consume include and namespace presentation fields. Rust models
+  consume import and module presentation fields. Backend-inappropriate
+  presentation fields are diagnostics, not silent drops.
+- The adapter produces M217 `PrimitiveTemplateRenderContext` values only after
+  rejecting raw TSIL/source sentinel values, unresolved semantic sentinel
+  values, unsupported value shapes, unsupported backend ids, and
+  backend-inappropriate fields.
+- The adapter does not parse source, lower TSIL, translate backend semantics,
+  select primitive implementations, plan dependencies, write artifacts, or run
+  build verification.
 
 ## Diagnostics Model
 

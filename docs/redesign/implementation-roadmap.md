@@ -26695,3 +26695,96 @@ python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m218_typed_primitive_render_context.py
 find tslgen -type d -name __pycache__ -print
 ```
+
+Result:
+
+M218 added `tslgen.rendering.primitive_render_model`, a typed already-decided
+primitive render model that adapts into the M217
+`PrimitiveTemplateRenderContext` for C++ and Rust. The model uses typed
+wrappers for backend id, profile name, artifact logical path, include/import
+lines, namespace/module presentation text, primitive declaration/definition
+text, rendered body text, and primitive presentation sort keys.
+
+The adapter preserves rendered declaration, definition, and body text as
+presentation values, sorts backend contexts by logical artifact path, sorts
+primitive records by explicit presentation sort key, and returns diagnostics
+for raw TSIL/source sentinel values, unresolved semantic sentinel values,
+unsupported value shapes, unsupported backend ids, and backend-inappropriate
+presentation fields. It does not render real selected primitives, perform
+dependency closure or topological sorting, run body-token substitution, render
+Rust intrinsic calls, parse raw TSIL, write artifacts, run build verification,
+or introduce template-side semantics.
+
+Review/audit verdict:
+
+Accepted after focused documentation and hygiene revision. Architecture/
+boundary accepted. Evidence accepted with the follow-up that
+`PrimitiveRenderSortKey` remains presentation ordering only and M222 owns real
+dependency order. Test review accepted with a wrong-backend-field coverage
+follow-up; the executor folded that coverage into the M218 test before final
+validation. Documentation and validation auditors initially requested final
+state/doc updates and cache cleanup; those were completed by the orchestrator.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m218_typed_primitive_render_context.py`:
+  exit 0, `9 passed in 2.64s`.
+- Initial `find tslgen -type d -name __pycache__ -print` after compile/test:
+  exit 0, printed compile/test-created `__pycache__` directories.
+- After removing those directories, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Next concrete prompt:
+`docs/agent/runs/m219-rust-intrinsic-invocation-call-rendering-execution-review-loop-prompt.md`.
+
+### Milestone 219: Rust Intrinsic Invocation Call Rendering Parity
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m219-rust-intrinsic-invocation-call-rendering-execution-review-loop-prompt.md`.
+
+Goal:
+
+Bring Rust intrinsic call rendering to parity with the M214 C++ call-rendering
+boundary by consuming already assembled M213 invocation values and an explicit
+typed Rust architecture-module render context.
+
+Scope:
+
+- Add a focused Rust intrinsic call rendering boundary, likely
+  `tslgen/src/tslgen/backends/rust/intrinsic_calls.py`.
+- Consume `BackendDirectIntrinsicInvocation` and
+  `BackendComposedIntrinsicInvocation` values whose backend is `rust`.
+- Require an explicit typed Rust architecture module value, such as
+  `x86_64` or `aarch64`, supplied by already-decided backend/profile/
+  extension context.
+- Render Rust call text as
+  `core::arch::{module}::{assembled_name}(opaque_argument_payload)`, using
+  `assembled_name()` form for empty payloads.
+- Preserve opaque argument payload text and typed immediate metadata exactly.
+- Return structured diagnostics for non-Rust invocation values, unsupported
+  invocation shapes, or invalid/missing architecture-module values.
+- Expose a small public Rust backend API if useful.
+
+Out of scope:
+
+Inferring architecture modules from intrinsic name text; inventing ARM
+`intrin::prefix` mappings; parsing or splitting argument payloads; Rust const
+generic rendering; C++ non-type template syntax; primitive dependency closure;
+whole primitive body rendering; body-token substitution; generated project
+rendering/writing/build verification; new lowering; raw TSIL rescans;
+template-side semantic decisions; and runtime dependency on `frozen/` or
+`tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m219_rust_intrinsic_invocation_call_rendering.py
+find tslgen -type d -name __pycache__ -print
+```
