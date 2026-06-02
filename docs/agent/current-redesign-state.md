@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 221 is accepted.
+Milestone 222 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -557,46 +557,66 @@ loop/primitive-call/signature/general body-token substitution, render whole
 primitive bodies, write artifacts, run build verification, or put semantic
 decisions into templates.
 
+M222 added `tslgen.rendering.primitive_render_plan`, a typed primitive
+render-plan assembly boundary over already-decided C++ and Rust presentation
+values. `PrimitiveRenderPlan` carries backend id, profile name, logical
+artifact path, backend presentation fields, ordered primitive render plan
+records, and optional plan/record provenance. The adapter converts valid
+plans into M218 `BackendPrimitiveRenderModel` values and then M217
+`PrimitiveTemplateRenderContext` values.
+
+M222 preserves the supplied primitive order as dependency/planning order. The
+existing M218 `adapt_primitive_render_models(...)` API still defaults to
+presentation sorting by `PrimitiveRenderSortKey`; M222 explicitly requests
+supplied-order adaptation and does not compute dependency closure or
+topological order. M222 diagnoses unsupported backend ids, duplicate plan
+identities, duplicate primitive record identities, backend-inappropriate plan
+fields, raw TSIL/source sentinels, and unresolved semantic sentinel values.
+M222 does not reopen lowering, rescan raw TSIL, run body-token substitution,
+translate source operations/intrinsics/type queries/value queries/signatures/
+declarations, render full generated projects, write artifacts, run build
+verification, or put semantic decisions into templates.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M222 primitive render plan execution-review loop prompt.
+Run M223 first real generated primitive execution-review loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m222-primitive-render-plan-execution-review-loop-prompt.md
+docs/agent/runs/m223-first-real-generated-primitive-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 222: Primitive Render Plan.
+Milestone 223: First Real Generated Primitive.
 ```
 
 Latest review verdict:
 
 ```text
-M221 execution-review returned Accept after focused roadmap completion
-revision. Architecture/boundary, evidence, test, documentation, and validation
-reviewers accepted the backend type/value-only substitution boundary and
-confirmed that source operations, controls, loops, primitive calls,
-signatures, intrinsics, and general body-token replacement remain excluded.
+M222 execution-review returned Accept. Architecture/boundary, evidence, test,
+documentation, and validation reviewers accepted the primitive render plan
+assembly boundary and confirmed that M222 consumes already-decided values,
+preserves supplied primitive order, does not recompute M220/M221 body-token
+output, and does not render/write/build generated projects.
 ```
 
 Next expected action:
 
 ```text
-Run the active M222 execution-review loop prompt. Build the typed primitive
-render plan boundary that carries ordered selected primitive render records,
-backend/profile context, already-rendered declaration/definition/body text,
-and provenance into the M218 primitive render model for C++ and Rust. Do not
-reopen lowering, rescan raw TSIL, run body-token substitution, implement
-dependency closure if no typed order is supplied, write generated projects,
-run build verification, or put semantic decisions into templates.
+Run the active M223 execution-review loop prompt. Render one tiny
+already-decided primitive through the accepted C++ and Rust primitive
+templates, compose those profile artifacts with the generated-project
+skeleton, write the combined artifacts, and verify scalar generated C++ and
+Rust build/test output. Do not reopen lowering, parse `.tsl`, run body-token
+substitution, implement dependency closure, broaden profiles beyond scalar,
+or put semantic decisions into templates.
 ```
 
 Previous review verdict:
@@ -661,12 +681,14 @@ execution-review returned Accept after completion documentation revision and
 selected M221 backend type/value body-token substitution parity
 execution-review. M221 execution-review returned Accept after focused roadmap
 completion revision and selected M222 primitive render plan execution-review.
+M222 execution-review returned Accept and selected M223 first real generated
+primitive execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m221-backend-type-value-body-token-substitution-parity-execution-review-loop-prompt.md
+docs/agent/runs/m222-primitive-render-plan-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

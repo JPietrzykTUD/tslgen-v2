@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import Literal, TypeVar
 
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.rendering.primitive_templates import (
@@ -98,6 +98,7 @@ PrimitiveIncludeValue = RenderedIncludeLine | PrimitiveRenderInvalidValue
 PrimitiveImportValue = RenderedImportLine | PrimitiveRenderInvalidValue
 PrimitiveNamespaceValue = RenderedNamespaceText | PrimitiveRenderInvalidValue
 PrimitiveModuleValue = RenderedModuleText | PrimitiveRenderInvalidValue
+PrimitiveRenderRecordOrder = Literal["presentation_sort_key", "supplied"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,12 +174,14 @@ def rust_primitive_render_model(
 
 def adapt_primitive_render_models(
     models: tuple[BackendPrimitiveRenderModel, ...],
+    *,
+    primitive_order: PrimitiveRenderRecordOrder = "presentation_sort_key",
 ) -> PrimitiveRenderContextAdaptationResult:
     contexts: list[PrimitiveTemplateRenderContext] = []
     diagnostics: list[Diagnostic] = []
 
     for model in sorted(models, key=lambda item: item.logical_path.text):
-        context, context_diagnostics = _adapt_model(model)
+        context, context_diagnostics = _adapt_model(model, primitive_order)
         diagnostics.extend(context_diagnostics)
         if context is not None:
             contexts.append(context)
@@ -193,12 +196,13 @@ def adapt_primitive_render_models(
 
 def _adapt_model(
     model: BackendPrimitiveRenderModel,
+    primitive_order: PrimitiveRenderRecordOrder,
 ) -> tuple[PrimitiveTemplateRenderContext | None, tuple[Diagnostic, ...]]:
     backend_id = model.backend_id.text
     if backend_id == "cpp":
-        return _adapt_cpp_model(model)
+        return _adapt_cpp_model(model, primitive_order)
     if backend_id == "rust":
-        return _adapt_rust_model(model)
+        return _adapt_rust_model(model, primitive_order)
     return (
         None,
         (
@@ -213,6 +217,7 @@ def _adapt_model(
 
 def _adapt_cpp_model(
     model: BackendPrimitiveRenderModel,
+    primitive_order: PrimitiveRenderRecordOrder,
 ) -> tuple[PrimitiveTemplateRenderContext | None, tuple[Diagnostic, ...]]:
     diagnostics: list[Diagnostic] = []
     includes = _collect_texts(
@@ -234,7 +239,7 @@ def _adapt_cpp_model(
         diagnostics,
     )
     primitive_declarations, primitive_definitions, rendered_body_text = (
-        _collect_primitive_text(model.primitives, diagnostics)
+        _collect_primitive_text(model.primitives, diagnostics, primitive_order)
     )
     diagnostics.extend(
         _unexpected_backend_fields(
@@ -262,6 +267,7 @@ def _adapt_cpp_model(
 
 def _adapt_rust_model(
     model: BackendPrimitiveRenderModel,
+    primitive_order: PrimitiveRenderRecordOrder,
 ) -> tuple[PrimitiveTemplateRenderContext | None, tuple[Diagnostic, ...]]:
     diagnostics: list[Diagnostic] = []
     imports = _collect_texts(
@@ -285,6 +291,7 @@ def _adapt_rust_model(
     _, primitive_definitions, rendered_body_text = _collect_primitive_text(
         model.primitives,
         diagnostics,
+        primitive_order,
     )
     diagnostics.extend(
         _unexpected_backend_fields(
@@ -312,12 +319,19 @@ def _adapt_rust_model(
 def _collect_primitive_text(
     primitives: tuple[PrimitiveRenderRecord, ...],
     diagnostics: list[Diagnostic],
+    primitive_order: PrimitiveRenderRecordOrder,
 ) -> tuple[tuple[str, ...], tuple[str, ...], str]:
     declarations: list[str] = []
     definitions: list[str] = []
     body_blocks: list[str] = []
 
-    for primitive in sorted(primitives, key=lambda item: item.sort_key.text):
+    ordered_primitives = primitives
+    if primitive_order == "presentation_sort_key":
+        ordered_primitives = tuple(
+            sorted(primitives, key=lambda item: item.sort_key.text)
+        )
+
+    for primitive in ordered_primitives:
         declarations.extend(
             _collect_texts(
                 primitive.declarations,

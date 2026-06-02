@@ -142,6 +142,45 @@ rendering, source-operation rendering, generated-project integration, artifact
 writing, build verification, Jinja rendering, new lowering, raw TSIL rescans,
 or statement parsing.
 
+### M222 Primitive Render Plan Boundary
+
+Milestone 222 adds a typed primitive render plan assembly boundary for C++ and
+Rust. It consumes already-decided profile/backend context, artifact path,
+include/import and namespace/module presentation text, ordered selected
+primitive records, already-rendered declaration/definition/body text, and
+plan/record provenance. It adapts those values into the accepted M218
+primitive render model and then into M217 `PrimitiveTemplateRenderContext`
+values.
+
+M222 preserves the supplied primitive record order as dependency/planning
+order. This is distinct from M218's default presentation-sort behavior:
+ordinary `adapt_primitive_render_models(...)` still sorts primitive records by
+`PrimitiveRenderSortKey`, while the M222 plan adapter explicitly requests
+supplied-order adaptation. The plan does not compute dependency closure or
+topological order; callers must supply an already-decided order.
+
+The M222 plan adapter:
+
+- supports C++ and Rust plans in parity;
+- orders multiple plan contexts deterministically by logical artifact path,
+  backend id, and profile name;
+- preserves plan and primitive-record source/provenance values on the returned
+  accepted plans;
+- rejects unsupported backend ids with
+  `TSL-PRIMITIVE-RENDER-PLAN-UNKNOWN-BACKEND`;
+- rejects duplicate plan identities with
+  `TSL-PRIMITIVE-RENDER-PLAN-DUPLICATE-PLAN`;
+- rejects duplicate primitive record identities within a plan with
+  `TSL-PRIMITIVE-RENDER-PLAN-DUPLICATE-PRIMITIVE`;
+- rejects backend-inappropriate plan fields with
+  `TSL-PRIMITIVE-RENDER-PLAN-WRONG-BACKEND-FIELD`;
+- forwards M218 raw TSIL/source and unresolved semantic sentinel diagnostics.
+
+M222 does not reopen lowering, rescan raw TSIL, run body-token substitution,
+translate source operations, intrinsics, type queries, value queries,
+signatures, or declarations, render full generated projects, write artifacts,
+run build verification, or put semantic decisions into templates.
+
 ### M189 Machine Feature Profile Boundary
 
 Milestone 189 adds a typed machine feature profile catalog for generated

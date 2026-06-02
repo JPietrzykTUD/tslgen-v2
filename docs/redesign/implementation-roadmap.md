@@ -16481,8 +16481,9 @@ Next concrete prompt:
 
 Status:
 
-Selected. Execution-review loop prompt:
-`docs/agent/runs/m222-primitive-render-plan-execution-review-loop-prompt.md`.
+Historical roadmap entry superseded by the active M222 section appended after
+M221. See the later M222 entry for the accepted execution result and selected
+M223 prompt.
 
 Goal:
 
@@ -16520,10 +16521,6 @@ python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m222_primitive_render_plan.py
 find tslgen -type d -name __pycache__ -print
 ```
-
-Remove any validation-created `__pycache__` directories before the final cache
-check. Do not run the old `tslgenold` validation profile as proof of the clean
-product slice.
 
 Review notes:
 
@@ -27028,7 +27025,7 @@ Next concrete prompt:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m221-backend-type-value-body-token-substitution-parity-execution-review-loop-prompt.md`.
 
 Goal:
@@ -27134,7 +27131,7 @@ Next concrete prompt:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m222-primitive-render-plan-execution-review-loop-prompt.md`.
 
 Goal:
@@ -27172,5 +27169,108 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m222_primitive_render_plan.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M222 added `tslgen.rendering.primitive_render_plan`, a typed primitive
+render-plan assembly boundary over already-decided C++ and Rust presentation
+values. `PrimitiveRenderPlan` carries backend id, profile name, logical
+artifact path, include/import and namespace/module presentation fields,
+ordered `PrimitiveRenderPlanRecord` values, and optional plan/record
+provenance. The plan adapter converts valid plans into M218
+`BackendPrimitiveRenderModel` values and then M217
+`PrimitiveTemplateRenderContext` values.
+
+M222 preserves the supplied primitive order as dependency/planning order. The
+existing M218 `adapt_primitive_render_models(...)` API still defaults to
+presentation sorting by `PrimitiveRenderSortKey`; M222 explicitly requests
+supplied-order adaptation and does not compute dependency closure or
+topological order.
+
+M222 diagnoses unsupported backend ids, duplicate plan identities, duplicate
+primitive record identities, backend-inappropriate plan fields, raw
+TSIL/source sentinels, and unresolved semantic sentinel values. It does not
+reopen lowering, rescan raw TSIL, run body-token substitution, translate
+source operations/intrinsics/type queries/value queries/signatures/
+declarations, render full generated projects, write artifacts, run build
+verification, or put semantic decisions into templates.
+
+Review/audit verdict:
+
+Accepted after focused roadmap placement revision. Architecture/boundary,
+evidence, test, documentation, and validation reviewers accepted the plan
+assembly boundary, confirmed that M220/M221 body-token output remains an
+input rather than being recomputed, and confirmed that M222 does not render/
+write/build generated projects.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m222_primitive_render_plan.py`:
+  exit 0, `11 passed in 2.65s`.
+- Additional regression:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m218_typed_primitive_render_context.py`:
+  exit 0, `9 passed in 2.58s`.
+- Initial `find tslgen -type d -name __pycache__ -print` after compile/test:
+  exit 0, printed compile/test-created `__pycache__` directories.
+- After removing those directories, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Follow-ups:
+
+No blocking follow-ups. The next milestone should compose one tiny selected
+primitive profile artifact with the accepted generated-project skeleton,
+write the combined artifacts through the artifact writer, and verify C++/Rust
+scalar build/test output.
+
+Next concrete prompt:
+`docs/agent/runs/m223-first-real-generated-primitive-execution-review-loop-prompt.md`.
+
+### Milestone 223: First Real Generated Primitive
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m223-first-real-generated-primitive-execution-review-loop-prompt.md`.
+
+Goal:
+
+Render one tiny already-decided primitive through the accepted C++ and Rust
+primitive templates, compose those profile artifacts with the generated
+project skeleton, write the combined artifact set, and verify the scalar
+generated C++ and Rust projects.
+
+Scope:
+
+- Use the accepted M189/M191 scalar profile selection and generated-project
+  skeleton render model.
+- Use M222 primitive render plans for one tiny already-decided C++ profile
+  header and one tiny already-decided Rust profile module.
+- Render primitive profile artifacts through the M217 primitive templates.
+- Compose skeleton and primitive artifacts deterministically, with explicit
+  duplicate logical-path diagnostics.
+- Write the combined artifacts with the manifest-clean artifact writer in a
+  temporary test output root.
+- Run the existing after-write build verifier for the scalar profile in both
+  C++ and Rust.
+
+Out of scope:
+
+New lowering; raw `.tsl` parsing; primitive selection from `tsldata`;
+body-token substitution; source-operation/intrinsic/type/value/signature/
+declaration translation; dependency closure; profile matrix expansion beyond
+scalar; renderer-side semantic decisions; template-side semantic decisions;
+modifying `frozen/` or `tslgenold`; and broad generated-corpus output.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m223_first_real_generated_primitive.py
 find tslgen -type d -name __pycache__ -print
 ```

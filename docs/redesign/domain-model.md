@@ -2625,7 +2625,7 @@ Invariants:
 
 - `PrimitiveRenderRecord.sort_key` is deterministic presentation ordering for
   already-rendered records. It is not dependency closure or topological
-  dependency sorting; real dependency order remains a later render-plan
+  dependency sorting; real dependency order is supplied by the M222 render-plan
   boundary.
 - C++ models consume include and namespace presentation fields. Rust models
   consume import and module presentation fields. Backend-inappropriate
@@ -2637,6 +2637,59 @@ Invariants:
 - The adapter does not parse source, lower TSIL, translate backend semantics,
   select primitive implementations, plan dependencies, write artifacts, or run
   build verification.
+
+M222 adds the selected primitive render-plan assembly boundary over these
+already-decided values:
+
+```python
+@dataclass(frozen=True, slots=True)
+class PrimitiveRenderPlanPrimitiveId:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveRenderPlanSource:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveRenderPlanRecord:
+    primitive_id: PrimitiveRenderPlanPrimitiveId
+    presentation_sort_key: PrimitiveRenderSortKey
+    declarations: tuple[PrimitiveDeclarationValue, ...]
+    definitions: tuple[PrimitiveDefinitionValue, ...]
+    body_text: PrimitiveBodyValue | None
+    source: PrimitiveRenderPlanSource | None
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveRenderPlan:
+    backend_id: PrimitiveBackendId
+    profile_name: PrimitiveProfileName
+    logical_path: PrimitiveArtifactLogicalPath
+    primitives: tuple[PrimitiveRenderPlanRecord, ...]
+    includes: tuple[PrimitiveIncludeValue, ...]
+    imports: tuple[PrimitiveImportValue, ...]
+    namespace_open: PrimitiveNamespaceValue | None
+    namespace_close: PrimitiveNamespaceValue | None
+    module_open: PrimitiveModuleValue | None
+    module_close: PrimitiveModuleValue | None
+    source: PrimitiveRenderPlanSource | None
+```
+
+Invariants:
+
+- `PrimitiveRenderPlan.primitives` is already-decided dependency/planning
+  order. The adapter preserves it exactly and does not sort by
+  `presentation_sort_key`.
+- `presentation_sort_key` remains available as presentation metadata for
+  future contexts, but M222 does not use it to compute dependency order.
+- Plan and primitive ids are stable diagnostic identities, not semantic
+  selector logic.
+- `PrimitiveRenderPlanSource` is provenance for diagnostics and traceability;
+  it is not emitted backend text and is not consumed by templates.
+- Plans consume already-rendered declaration, definition, and body text. Raw
+  TSIL/source and unresolved semantic sentinel values remain diagnostics.
+- The plan boundary does not select primitives, compute dependency closure,
+  run body-token substitution, translate backend semantics, render templates,
+  write artifacts, or run build verification.
 
 ## Diagnostics Model
 
