@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 214 is accepted.
+Milestone 215 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -435,34 +435,45 @@ closed and does not parse raw TSIL, split or repair argument payloads, render
 Rust calls, decide C++ non-type template syntax, render whole primitive
 bodies, write generated projects, or add another intrinsic-compose IR family.
 
+M215 added the focused C++ body-token substitution boundary for accepted
+backend-intrinsic handoff streams. The new `tslgen.backends.cpp.body_tokens`
+module consumes an ordered `BackendIntrinsicHandoff` plus explicit M214
+`CppRenderedIntrinsicCall` values, preserves opaque text segments exactly,
+substitutes matching request segments with rendered call text, preserves
+ordered rendered calls and typed immediate metadata, and diagnoses missing,
+extra, duplicate, backend-mismatched, and opaque non-renderable token
+segments. M215 keeps `return`, assignments, indexing, braces, semicolons, and
+other target-like syntax as raw source text. It does not reopen lowering,
+rescan raw TSIL, parse `emit_return(...)`, invent statement syntax, parse
+arguments, render Rust, render whole primitive bodies, write generated
+projects, or add another intrinsic-compose IR family.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M215 C++ intrinsic return statement rendering execution-review-loop prompt.
+Run M216 backend rendering roadmap planning prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m215-cpp-intrinsic-return-statement-rendering-execution-review-loop-prompt.md
+docs/agent/runs/m216-backend-rendering-roadmap-planning-prompt.md
 ```
 
-Active execution milestone:
+Active planning milestone:
 
 ```text
-Milestone 215: C++ Intrinsic Return Statement Rendering.
+Milestone 216: Backend Rendering Roadmap Planning.
 ```
 
 Latest review verdict:
 
 ```text
-M214 execution-review returned Accept after focused test and documentation
-revision. Architecture/boundary and evidence reviewers accepted the narrow
-C++ renderer over M213 typed invocation values. Focused re-review accepted the
-added unsupported-shape/public-import/non-C++ diagnostic tests and the
-domain-model result-wrapper documentation. The validation auditor only found
+M215 execution-review returned Accept. Architecture/boundary, evidence, test,
+and documentation reviewers accepted the raw-span plus rendered-token
+substitution boundary. Validation passed; the only audit issue was
 test-created `__pycache__` directories, which were removed before the final
 hygiene check.
 ```
@@ -470,12 +481,15 @@ hygiene check.
 Next expected action:
 
 ```text
-Run the active M215 execution-review-loop prompt. Implement only the smallest
-C++ body-level rendering boundary that consumes M214 rendered intrinsic call
-values and emits a typed `return {call_text};` fragment. Do not reopen
-lowering, parse `emit_return(...)`, parse arguments, add Rust rendering,
-render C++ non-type template signatures, render whole primitive bodies, write
-generated projects, or add another intrinsic-compose IR family.
+Run the active M216 planning prompt. Validate and record the ten-step
+backend/rendering roadmap from M216 through M225: template-first primitive
+rendering, C++/Rust parity for backend-facing milestones, a shared body-token
+replacement contract only when two accepted consumers need it, and early
+compile/test of real generated primitive output. Do not implement code in
+M216, reopen lowering, parse statements, parse raw TSIL, put semantic
+decisions into templates, continue C++-only rendering without an explicit
+parity reason, render whole primitive bodies, or introduce broad
+registries/dispatchers.
 ```
 
 Previous review verdict:
@@ -520,13 +534,21 @@ returned Accept and selected M213 execution-review. M213 execution-review
 returned Accept after focused documentation revision and selected M214 C++
 intrinsic invocation call rendering execution-review. M214 execution-review
 returned Accept after focused test and documentation revision and selected
-M215 C++ intrinsic return statement rendering execution-review.
+M215. M215 was then retargeted before execution to C++ body token substitution
+rendering because the accepted body model is raw spans plus
+lowerable/renderable token islands, and `return` / `;` should remain raw
+source text rather than backend-invented statement syntax. M215
+execution-review returned Accept and selected an initial M216 planning prompt.
+M216 was then retargeted by planning correction to a backend rendering roadmap
+prompt because primitive templates should move near the front, C++ and Rust
+should progress in parity, and compile-tested real generated primitive output
+should arrive early.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m214-cpp-intrinsic-invocation-call-rendering-execution-review-loop-prompt.md
+docs/agent/runs/m215-cpp-body-token-substitution-rendering-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

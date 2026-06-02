@@ -386,6 +386,41 @@ Invariants:
 - Immediate metadata is preserved for later wrapper/signature/template work.
   M214 does not render C++ non-type template syntax.
 
+C++ body-token substitution rendering is a presentation boundary over accepted
+backend-intrinsic handoff streams and already-rendered C++ intrinsic calls:
+
+```python
+CppBodyText = NewType("CppBodyText", str)
+
+@dataclass(frozen=True, slots=True)
+class CppRenderedBodyTokens:
+    handoff: BackendIntrinsicHandoff
+    text: CppBodyText
+    calls: tuple[CppRenderedIntrinsicCall, ...]
+    immediates: tuple[BackendIntrinsicInvocationImmediate, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class CppBodyTokenRenderResult:
+    body: CppRenderedBodyTokens | None
+    diagnostics: tuple[Diagnostic, ...] = ()
+```
+
+Invariants:
+
+- Rendering preserves opaque text segments exactly and in source order.
+- Rendering substitutes only `BackendIntrinsicHandoffRequestSegment` values
+  that have matching `CppRenderedIntrinsicCall` values. Matching uses the typed
+  request object preserved through the invocation/call provenance, not raw text
+  rescans.
+- Surrounding target-like syntax such as `return`, assignments, indexing,
+  braces, semicolons, and operators remains raw source text. M215 does not
+  parse or synthesize statement shapes.
+- Opaque non-text body-token segments are unsupported diagnostics until those
+  tokens are lowered/rendered by a selected future boundary.
+- Rendered calls and flattened typed immediate metadata are preserved on the
+  result for later wrapper/signature/template work.
+
 ## Primitive Model
 
 ```python

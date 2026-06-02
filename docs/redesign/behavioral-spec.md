@@ -390,6 +390,49 @@ Accepted M214 diagnostic codes include:
 - `TSL-CPP-INTRINSIC-CALL-UNSUPPORTED-BACKEND`
 - `TSL-CPP-INTRINSIC-CALL-UNSUPPORTED-INVOCATION`
 
+### M215 C++ Body Token Substitution Rendering Boundary
+
+Milestone 215 adds a typed C++ body-token substitution renderer for accepted
+backend-intrinsic handoff streams. It consumes an ordered
+`BackendIntrinsicHandoff` plus explicit `CppRenderedIntrinsicCall` values that
+were already rendered from request segments in that handoff.
+
+The renderer preserves `BackendIntrinsicOpaqueTextSegment.text` exactly and in
+source order. Each `BackendIntrinsicHandoffRequestSegment` is substituted with
+the matching rendered C++ intrinsic call text. Matching is by the typed handoff
+request object carried through M213/M214 provenance, not by rescanning source
+text or comparing raw spellings.
+
+For example, M215 may render:
+
+```text
+Raw("return ")
++ rendered intrin<_mm_add_epi32>(left, right)
++ Raw(";")
+```
+
+as:
+
+```text
+return _mm_add_epi32(left, right);
+```
+
+The `return ` and `;` text are raw source text. M215 does not parse or invent
+return statements, assignments, array indexing, operators, loops, braces,
+semicolons, `emit_return(...)`, or surrounding C++ syntax.
+
+Typed immediate metadata and call provenance are preserved on the rendered
+body-token result for later wrapper/signature/template work. Opaque non-text
+body-token segments are diagnostics rather than guessed or stringified output.
+
+Accepted M215 diagnostic codes include:
+
+- `TSL-CPP-BODY-TOKENS-MISSING-INTRINSIC-CALL`
+- `TSL-CPP-BODY-TOKENS-EXTRA-INTRINSIC-CALL`
+- `TSL-CPP-BODY-TOKENS-DUPLICATE-INTRINSIC-CALL`
+- `TSL-CPP-BODY-TOKENS-BACKEND-MISMATCH`
+- `TSL-CPP-BODY-TOKENS-UNSUPPORTED-OPAQUE-TOKEN-SEGMENT`
+
 ## Input Behavior
 
 | Input | Expected Behavior | Evidence |

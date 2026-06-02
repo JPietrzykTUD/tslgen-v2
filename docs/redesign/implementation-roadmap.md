@@ -26347,47 +26347,171 @@ Validation result:
   `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
 
 Next concrete prompt:
-`docs/agent/runs/m215-cpp-intrinsic-return-statement-rendering-execution-review-loop-prompt.md`.
+`docs/agent/runs/m215-cpp-body-token-substitution-rendering-execution-review-loop-prompt.md`.
 
-### Milestone 215: C++ Intrinsic Return Statement Rendering
+### Milestone 215: C++ Body Token Substitution Rendering
 
 Status:
 
-Selected. Execution-review prompt:
-`docs/agent/runs/m215-cpp-intrinsic-return-statement-rendering-execution-review-loop-prompt.md`.
+Accepted. Execution-review prompt:
+`docs/agent/runs/m215-cpp-body-token-substitution-rendering-execution-review-loop-prompt.md`.
 
 Goal:
 
-Implement the smallest body-level C++ rendering boundary that consumes M214
-rendered intrinsic call values and produces a typed C++ return-statement
-fragment.
+Implement the smallest body-level C++ rendering boundary that preserves raw
+body text and substitutes already-rendered C++ intrinsic calls for matching
+backend-intrinsic request segments.
 
 Scope:
 
-- Consume `CppRenderedIntrinsicCall` values produced from M213 invocations.
-- Support only one body fragment shape in M215: `return {call_text};`.
-- Preserve the rendered call value, source provenance, and typed immediate
-  metadata for later wrapper/signature/template work.
-- Return structured diagnostics for unsupported input shapes if the public API
-  accepts object-shaped defensive input.
+- Consume an accepted `BackendIntrinsicHandoff` segment stream.
+- Consume explicit `CppRenderedIntrinsicCall` values produced from request
+  segments in that handoff.
+- Preserve `BackendIntrinsicOpaqueTextSegment.text` exactly and in order.
+- Substitute each `BackendIntrinsicHandoffRequestSegment` with the matching
+  rendered C++ intrinsic call text.
+- Match rendered calls to request segments by typed request object/provenance,
+  not by rescanning source text.
+- Support any number of ordered intrinsic request segments in the stream.
+- Preserve rendered call provenance and typed immediate metadata on the body
+  render result for later wrapper/signature/template work.
+- Diagnose missing, extra, duplicate, backend-mismatched, and opaque
+  non-renderable token segments.
 - Keep the boundary presentation-level: it should not decide intrinsic names,
-  immediacy, argument payload structure, primitive selection, dependency
-  closure, or generated project layout.
+  immediacy, argument payload structure, surrounding C++ syntax, primitive
+  selection, dependency closure, or generated project layout.
 
 Out of scope:
 
-New lowering; raw TSIL rescans; `emit_return(...)` parsing; primitive body
-tokenization; argument parsing/splitting/repair; direct placeholder
+New lowering; raw TSIL rescans; parsing `return`, `emit_return(...)`,
+assignments, array access, loops, braces, semicolons, operators, or surrounding
+C++ syntax; a special return-statement renderer or assignment renderer;
+primitive body tokenization beyond consuming the accepted intrinsic handoff
+segment stream; argument parsing/splitting/repair; direct placeholder
 resolution; Rust rendering; C++ non-type template signature rendering; Rust
-const generic rendering; dependency closure; whole primitive body rendering;
-whole generated project rendering/writing/build verification; template-side
-semantics; and runtime dependency on `frozen/` or `tslgenold`.
+const generic rendering; dependency closure; whole generated project
+rendering/writing/build verification; template-side semantics; and runtime
+dependency on `frozen/` or `tslgenold`.
 
 Validation:
 
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m215_cpp_intrinsic_return_statement_rendering.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m215_cpp_body_token_substitution_rendering.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M215 added `tslgen.backends.cpp.body_tokens`, a focused C++ body-token
+substitution renderer for accepted backend-intrinsic handoff streams. It
+consumes an ordered `BackendIntrinsicHandoff` plus explicit
+`CppRenderedIntrinsicCall` values, preserves opaque text segments exactly,
+substitutes matching request segments with rendered call text, preserves
+ordered rendered calls and flattened typed immediate metadata, and diagnoses
+missing, extra, duplicate, backend-mismatched, and opaque non-renderable token
+segments.
+
+M215 deliberately does not reopen lowering, rescan raw TSIL, invent
+return-statement or assignment syntax, parse `emit_return(...)`, parse
+surrounding C++ syntax, parse intrinsic arguments, render Rust, render C++
+non-type template signatures, render whole primitive bodies, or write
+generated projects. Matching uses the in-memory typed request object preserved
+through M213/M214 provenance; later serialized or copied render plans may need
+an explicit typed request/provenance key.
+
+Review/audit verdict:
+
+Accepted. Architecture/boundary, evidence, test, and documentation reviewers
+accepted the raw-span plus rendered-token substitution boundary. The validation
+auditor found only test-created `__pycache__` directories after successful
+validation; the orchestrator removed them before the final hygiene check.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m215_cpp_body_token_substitution_rendering.py`:
+  exit 0, `12 passed in 3.14s`.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created `__pycache__` directories during validation audit.
+- After removing those directories, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Next concrete prompt:
+`docs/agent/runs/m216-backend-rendering-roadmap-planning-prompt.md`.
+
+### Milestone 216: Backend Rendering Roadmap Planning
+
+Status:
+
+Selected. Planning prompt:
+`docs/agent/runs/m216-backend-rendering-roadmap-planning-prompt.md`.
+
+Goal:
+
+Plan the next backend/rendering sequence after M215 so primitive templates move
+near the front, C++ and Rust stay in parity, and real generated primitive code
+is compile-tested early.
+
+Scope:
+
+- Validate and record the accepted ten-step M216-M225 backend/rendering
+  roadmap.
+- Keep backend-facing milestones in C++/Rust parity unless the prompt records
+  a concrete temporary exception and a nearby catch-up milestone.
+- Move primitive templates under `supplementary/templates/{cpp,rust}/` before
+  adding more backend rendering snippets that would otherwise accumulate
+  C++/Rust source text inside Python.
+- Preserve the central body model: raw source text spans plus
+  lowerable/renderable token islands. Raw spans stay raw; already
+  lowered/rendered islands are substituted; surrounding syntax is not
+  interpreted.
+- Select exactly one next executable milestone and write its concrete prompt.
+
+Provisional M216-M225 roadmap to validate:
+
+1. **M216: Backend rendering roadmap planning.** Record backend parity,
+   template-first rendering, and early compile/test gates.
+2. **M217: Primitive template boundary.** Add/define C++ and Rust primitive
+   templates under `supplementary/templates/{cpp,rust}/`, with
+   presentation-only guardrails and typed render context requirements.
+3. **M218: Typed primitive render context.** Define the already-decided values
+   primitive templates may consume, such as selected primitive name, profile,
+   signature render facts, includes/imports, and rendered body text values.
+4. **M219: Rust intrinsic call rendering parity.** Bring Rust to parity with
+   C++ M214 from typed M213 invocation IR, including explicit `core::arch::*`
+   path policy.
+5. **M220: Shared body-token substitution contract.** Introduce only the
+   minimal typed replacement/provenance contract needed by two accepted
+   consumers, avoiding raw-text matching and a broad registry.
+6. **M221: C++/Rust body-token substitution parity.** Use the shared contract
+   to feed rendered intrinsic/type/value/source-operation token islands into
+   backend body text for both backends.
+7. **M222: Primitive render plan.** Build a typed plan for selected primitive,
+   selected profile, topologically ordered dependencies, signature facts, and
+   rendered body-token output.
+8. **M223: First real generated primitive.** Render one tiny primitive through
+   C++ and Rust templates, write artifacts, and compile/test generated output.
+9. **M224: Expand primitive coverage.** Add a small dependency-bearing
+   selected subset while continuing to compile/test both backends.
+10. **M225: Profile matrix / corpus subset.** Compile/test selected profiles
+    and a broader realistic corpus slice.
+
+Out of scope:
+
+Production code; new lowering; raw TSIL rescans; statement/assignment/loop
+parsing; broad expression parsing; whole primitive body rendering; dependency
+closure; generated project rendering/writing/build verification; template-side
+semantic decisions; runtime dependency on `frozen/` or `tslgenold`; C++-only
+backend rendering without an explicit parity reason; and broad registries or
+dispatchers without two accepted concrete consumers.
+
+Validation:
+
+```bash
+git diff --check
 find tslgen -type d -name __pycache__ -print
 ```
