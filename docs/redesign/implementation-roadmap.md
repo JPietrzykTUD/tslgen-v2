@@ -26484,12 +26484,15 @@ Provisional M216-M225 roadmap to validate:
 4. **M219: Rust intrinsic call rendering parity.** Bring Rust to parity with
    C++ M214 from typed M213 invocation IR, including explicit `core::arch::*`
    path policy.
-5. **M220: Shared body-token substitution contract.** Introduce only the
-   minimal typed replacement/provenance contract needed by two accepted
-   consumers, avoiding raw-text matching and a broad registry.
-6. **M221: C++/Rust body-token substitution parity.** Use the shared contract
-   to feed rendered intrinsic/type/value/source-operation token islands into
-   backend body text for both backends.
+5. **M220: Shared intrinsic body-token substitution contract with Rust
+   parity.** Introduce only the minimal typed replacement/provenance contract
+   needed by two concrete consumers: the accepted C++ intrinsic body-token
+   substitution boundary and a Rust intrinsic body-token substitution boundary
+   added in the same focused parity slice. Avoid raw-text matching and a broad
+   registry.
+6. **M221: C++/Rust non-intrinsic body-token substitution parity.** Use the
+   shared contract to feed rendered type/value/source-operation token islands
+   into backend body text for both backends.
 7. **M222: Primitive render plan.** Build a typed plan for selected primitive,
    selected profile, topologically ordered dependencies, signature facts, and
    rendered body-token output.
@@ -26513,5 +26516,182 @@ Validation:
 
 ```bash
 git diff --check
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M216 planning accepted the ten-step backend/rendering roadmap with a
+template-first correction. Primitive templates move before more real
+backend-specific primitive rendering so C++/Rust source structure does not
+accumulate as large Python strings. Backend-facing rendering milestones should
+move C++ and Rust in parity unless a prompt records a concrete temporary
+exception and a nearby catch-up milestone.
+
+The roadmap was refined to make M220 concrete: the shared body-token
+replacement/provenance contract may be introduced only when it has two
+consumers, namely the accepted C++ intrinsic body-token substitution boundary
+and a Rust intrinsic body-token substitution boundary added in the same parity
+slice. M217 is selected as the next executable milestone. M217 establishes
+minimal primitive template files and a primitive-template rendering boundary;
+M218 owns the fuller typed primitive render context for real selected
+primitive rendering.
+
+Review/audit verdict:
+
+Accepted. Evidence, architecture/boundary, documentation, and validation
+auditors all accepted. Non-blocking cautions carried forward: M217 must not
+reuse the skeleton-specific `ProjectSkeletonRenderContext`, and M220 must keep
+the two-consumer rule explicit.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Next concrete prompt:
+`docs/agent/runs/m217-primitive-template-boundary-execution-review-loop-prompt.md`.
+
+### Milestone 217: Primitive Template Boundary
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m217-primitive-template-boundary-execution-review-loop-prompt.md`.
+
+Goal:
+
+Establish the C++ and Rust primitive template boundary under
+`supplementary/templates/{cpp,rust}/` before adding more real primitive
+rendering logic, while keeping templates presentation-only over already
+decided typed render values.
+
+Scope:
+
+- Add minimal C++ and Rust primitive template files under
+  `supplementary/templates/cpp/` and `supplementary/templates/rust/`.
+- Add a small primitive-template rendering boundary that consumes a dedicated
+  typed primitive-template context, not the M188 skeleton
+  `ProjectSkeletonRenderContext`.
+- Prove templates may format already-decided presentation values such as
+  artifact path, profile name, includes/imports, and already-rendered
+  primitive definition/body text.
+- Reject unsupported or unresolved template fields that would make templates
+  decide backend semantics, raw TSIL interpretation, primitive selection,
+  dependency closure, type/intrinsic selection, or source repair.
+- Render deterministic in-memory artifacts only; do not write files.
+- Add focused tests for C++ and Rust template rendering, field guardrails,
+  missing template diagnostics, deterministic artifact order, and no
+  skeleton-context reuse.
+
+Out of scope:
+
+Full selected primitive render context; real primitive selection; dependency
+closure; Rust intrinsic-call rendering; shared body-token replacement;
+non-intrinsic token substitution; generated project integration; artifact
+writing; build verification; Jinja2 or another template engine unless a
+selected presentation-only need is documented; new lowering; raw TSIL rescans;
+statement parsing; and runtime dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m217_primitive_template_boundary.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M217 added the primitive-template rendering boundary for C++ and Rust. The new
+`tslgen.rendering.primitive_templates` module defines a dedicated
+`PrimitiveTemplateRenderContext`, not the skeleton-specific
+`ProjectSkeletonRenderContext`, and renders deterministic in-memory
+`ArtifactSet` values from minimal templates under
+`supplementary/templates/cpp/primitive.hpp.in` and
+`supplementary/templates/rust/primitive.rs.in`.
+
+The accepted primitive-template context carries already-decided presentation
+fields only: backend id, logical artifact path, profile name,
+includes/imports, namespace/module presentation text, primitive
+declarations/definitions, and already-rendered body text. Template field
+validation rejects semantic or unresolved fields before formatting, including
+raw TSIL/source payloads, primitive selectors, dependency rules, backend
+metadata keys, type/intrinsic selection fields, fallback fields, and
+unsupported compound field shapes.
+
+M217 deliberately does not render real selected primitives, perform primitive
+selection, compute dependency closure, add Rust intrinsic-call rendering,
+introduce shared body-token replacement, integrate with generated projects,
+write artifacts, run build verification, change lowering, parse raw TSIL, add
+Jinja2, or depend on `frozen/` or `tslgenold`.
+
+Review/audit verdict:
+
+Accepted after hygiene revision. Architecture/boundary, evidence, test, and
+documentation reviewers accepted. The validation auditor reported successful
+functional validation and a temporary `__pycache__` hygiene issue after
+compile/test; the orchestrator removed those directories and reran the final
+cache check successfully.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m217_primitive_template_boundary.py`:
+  exit 0, `10 passed`.
+- Initial `find tslgen -type d -name __pycache__ -print` after compile/test:
+  exit 0, printed compile/test-created `__pycache__` directories.
+- After removing those directories, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Next concrete prompt:
+`docs/agent/runs/m218-typed-primitive-render-context-execution-review-loop-prompt.md`.
+
+### Milestone 218: Typed Primitive Render Context
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m218-typed-primitive-render-context-execution-review-loop-prompt.md`.
+
+Goal:
+
+Define the typed already-decided primitive render model that can feed the M217
+C++ and Rust primitive templates without letting templates or renderers decide
+semantics.
+
+Scope:
+
+- Add typed values for already-rendered primitive presentation facts, such as
+  primitive render records, rendered declaration/definition/body text,
+  includes/imports, namespace/module presentation text, backend id, profile
+  name, and artifact logical path.
+- Add a narrow adapter from those typed render-model values into M217
+  `PrimitiveTemplateRenderContext` values for C++ and Rust.
+- Preserve C++/Rust parity.
+- Use typed wrappers or dataclasses for text values so the model distinguishes
+  already-rendered presentation text from raw source, raw TSIL, or unresolved
+  backend requests.
+- Add focused tests proving deterministic context creation, C++/Rust parity,
+  no skeleton-context reuse, no template-side semantics, and diagnostics for
+  unsupported/unresolved values.
+
+Out of scope:
+
+Real primitive selection; dependency closure or topological sorting; body-token
+substitution; Rust intrinsic-call rendering; source-operation rendering;
+generated project integration; artifact writing; build verification; Jinja2;
+new lowering; raw TSIL rescans; statement parsing; and runtime dependency on
+`frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m218_typed_primitive_render_context.py
 find tslgen -type d -name __pycache__ -print
 ```

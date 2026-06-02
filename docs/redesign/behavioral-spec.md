@@ -59,6 +59,50 @@ static and template files are reported as
 `TSL-SUPPLEMENTARY-MISSING-STATIC-ASSET` and
 `TSL-SUPPLEMENTARY-MISSING-TEMPLATE-ASSET`.
 
+### M217 Primitive Template Boundary
+
+Milestone 217 adds a primitive-template rendering boundary for C++ and Rust
+under `supplementary/templates/cpp/` and `supplementary/templates/rust/`. This
+boundary consumes dedicated `PrimitiveTemplateRenderContext` values and returns
+an in-memory `ArtifactSet` plus diagnostics. It does not write files, render a
+generated project, compile output, select primitives, perform dependency
+closure, reopen lowering, or parse raw TSIL.
+
+The accepted M217 primitive-template renderer uses Python standard-library
+formatting only; it does not introduce a Jinja dependency. The primitive
+context is intentionally separate from the M188 `ProjectSkeletonRenderContext`
+because primitive templates need different already-decided presentation
+fields.
+
+Primitive templates may format only presentation fields that have already been
+decided before rendering, including:
+
+- `artifact_path`;
+- `backend_id`;
+- `profile_name`;
+- `includes`;
+- `imports`;
+- `namespace_open` and `namespace_close`;
+- `module_open` and `module_close`;
+- `primitive_declarations`;
+- `primitive_definitions`;
+- `rendered_body_text`.
+
+Templates that reference unresolved semantic/source fields such as raw `tsil`,
+`primitive_name`, `type_tag`, `intrinsic_name`, primitive selectors,
+dependency rules, backend metadata keys, lowering requests, fallback fields,
+or source payloads are rejected before formatting with
+`TSL-PRIMITIVE-TEMPLATE-SEMANTIC-FIELD`. Unsupported compound field syntax is
+rejected with `TSL-PRIMITIVE-TEMPLATE-UNSUPPORTED-FIELD-SHAPE`. Unknown fields
+are rejected with `TSL-PRIMITIVE-TEMPLATE-UNKNOWN-FIELD`. Missing primitive
+template files are reported as `TSL-PRIMITIVE-TEMPLATE-MISSING-TEMPLATE`.
+
+The M217 templates are minimal presentation files. They accept already-rendered
+primitive declaration/definition/body text for fixture rendering only. The
+full selected primitive render context, Rust intrinsic-call rendering, shared
+body-token replacement, generated-project integration, artifact writing, and
+build verification remain later backend/output work.
+
 ### M189 Machine Feature Profile Boundary
 
 Milestone 189 adds a typed machine feature profile catalog for generated

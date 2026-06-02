@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 215 is accepted.
+Milestone 217 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -448,48 +448,77 @@ rescan raw TSIL, parse `emit_return(...)`, invent statement syntax, parse
 arguments, render Rust, render whole primitive bodies, write generated
 projects, or add another intrinsic-compose IR family.
 
+M216 accepted the template-first backend/rendering roadmap. Primitive
+templates move before more real backend-specific primitive rendering so C++ and
+Rust source structure does not accumulate as large raw strings in Python.
+Backend-facing rendering milestones should keep C++ and Rust in parity unless
+a prompt records a concrete temporary exception and nearby catch-up milestone.
+ADR-063 records this decision.
+
+M216 refined the M216-M225 roadmap: M217 establishes minimal C++ and Rust
+primitive template files plus a dedicated primitive-template rendering
+boundary; M218 owns the fuller typed primitive render context for real
+selected primitive rendering; M219 restores Rust intrinsic-call parity; M220
+may introduce a shared body-token replacement/provenance contract only with
+two concrete consumers, namely accepted C++ intrinsic body-token substitution
+and Rust intrinsic body-token substitution added in that parity slice.
+
+M217 added the primitive-template rendering boundary for C++ and Rust. The new
+`tslgen.rendering.primitive_templates` module defines a dedicated
+`PrimitiveTemplateRenderContext`, not the skeleton-specific
+`ProjectSkeletonRenderContext`, and renders deterministic in-memory
+`ArtifactSet` values from minimal templates under
+`supplementary/templates/cpp/primitive.hpp.in` and
+`supplementary/templates/rust/primitive.rs.in`.
+
+M217 accepts only already-decided presentation fields such as backend id,
+logical artifact path, profile name, includes/imports, namespace/module
+presentation text, primitive declarations/definitions, and already-rendered
+body text. It rejects semantic or unresolved template fields before
+formatting, does not render real selected primitives, does not write artifacts,
+does not run build verification, does not change lowering, and does not add a
+Jinja dependency.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M216 backend rendering roadmap planning prompt.
+Run M218 typed primitive render context execution-review loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m216-backend-rendering-roadmap-planning-prompt.md
+docs/agent/runs/m218-typed-primitive-render-context-execution-review-loop-prompt.md
 ```
 
-Active planning milestone:
+Active execution milestone:
 
 ```text
-Milestone 216: Backend Rendering Roadmap Planning.
+Milestone 218: Typed Primitive Render Context.
 ```
 
 Latest review verdict:
 
 ```text
-M215 execution-review returned Accept. Architecture/boundary, evidence, test,
-and documentation reviewers accepted the raw-span plus rendered-token
-substitution boundary. Validation passed; the only audit issue was
-test-created `__pycache__` directories, which were removed before the final
-hygiene check.
+M217 execution-review returned Accept after hygiene revision.
+Architecture/boundary, evidence, test, and documentation reviewers accepted.
+The validation auditor reported successful functional validation and a
+temporary `__pycache__` hygiene issue after compile/test; those directories
+were removed and the final cache check passed.
 ```
 
 Next expected action:
 
 ```text
-Run the active M216 planning prompt. Validate and record the ten-step
-backend/rendering roadmap from M216 through M225: template-first primitive
-rendering, C++/Rust parity for backend-facing milestones, a shared body-token
-replacement contract only when two accepted consumers need it, and early
-compile/test of real generated primitive output. Do not implement code in
-M216, reopen lowering, parse statements, parse raw TSIL, put semantic
-decisions into templates, continue C++-only rendering without an explicit
-parity reason, render whole primitive bodies, or introduce broad
-registries/dispatchers.
+Run the active M218 execution-review loop prompt. Implement the typed
+already-decided primitive render model that adapts to M217
+`PrimitiveTemplateRenderContext` values for C++ and Rust. Use typed wrappers or
+dataclasses for already-rendered presentation text. Do not render real
+selected primitives, perform dependency closure, run body-token substitution,
+add Rust intrinsic-call rendering, write artifacts, run build verification,
+reopen lowering, parse raw TSIL, or put semantic decisions into templates.
 ```
 
 Previous review verdict:
@@ -542,13 +571,16 @@ execution-review returned Accept and selected an initial M216 planning prompt.
 M216 was then retargeted by planning correction to a backend rendering roadmap
 prompt because primitive templates should move near the front, C++ and Rust
 should progress in parity, and compile-tested real generated primitive output
-should arrive early.
+should arrive early. M216 planning returned Accept and selected M217 primitive
+template boundary execution-review. M217 execution-review returned Accept
+after hygiene revision and selected M218 typed primitive render context
+execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m215-cpp-body-token-substitution-rendering-execution-review-loop-prompt.md
+docs/agent/runs/m217-primitive-template-boundary-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

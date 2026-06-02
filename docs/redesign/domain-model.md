@@ -2351,6 +2351,45 @@ Invariants:
   only an `ArtifactSet`, not primitive dependency information or profile
   selection policy.
 
+## Primitive Template Render Model
+
+M217 introduces a minimal primitive-template render model for
+presentation-only template rendering. It is narrower than the full selected
+primitive render context planned for M218.
+
+```python
+@dataclass(frozen=True, slots=True)
+class PrimitiveTemplateRenderContext:
+    backend_id: str
+    template_path: str
+    logical_path: str
+    profile_name: str
+    media_type: str
+    includes: tuple[str, ...]
+    imports: tuple[str, ...]
+    namespace_open: str
+    namespace_close: str
+    module_open: str
+    module_close: str
+    primitive_declarations: tuple[str, ...]
+    primitive_definitions: tuple[str, ...]
+    rendered_body_text: str
+    metadata: tuple[ArtifactMetadata, ...]
+```
+
+Invariants:
+
+- The context is dedicated to primitive templates and does not reuse
+  `ProjectSkeletonRenderContext`.
+- Fields are already-decided presentation values. The context must not carry
+  raw TSIL needing interpretation, unresolved lowering requests, catalog
+  objects, primitive selectors, dependency rules, backend metadata lookup
+  keys, or type/intrinsic selection inputs.
+- Template paths resolve under `supplementary/templates/{cpp,rust}/` for the
+  accepted C++ and Rust primitive-template files.
+- Rendering returns an in-memory `ArtifactSet`; artifact writing and build
+  verification remain later boundaries.
+
 ## Diagnostics Model
 
 ```python

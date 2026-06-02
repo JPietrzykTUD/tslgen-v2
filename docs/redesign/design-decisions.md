@@ -3056,3 +3056,75 @@ Consequences:
 - The same assembled invocation shape can feed later C++ and Rust renderers,
   while backend-specific metadata and typed modifier translations remain
   explicit inputs.
+
+## ADR-063: Primitive Templates Move Before More Backend Rendering
+
+Status: Accepted.
+
+Context:
+
+After M215, the backend/output path has enough C++ rendering pieces to show a
+real risk: continuing with more backend-specific render snippets in Python
+would gradually move C++ and Rust source structure into Python strings. The
+accepted supplementary layout already reserves `supplementary/templates/cpp/`
+and `supplementary/templates/rust/`, but those primitive-template directories
+are currently empty except for `.gitkeep`. Existing generated-project
+skeleton rendering is intentionally small and already build-verified; real
+primitive rendering now needs a stronger template boundary before broadening.
+
+Decision:
+
+Primitive templates should be established before adding more real primitive
+wrapper/body artifact rendering. Backend-facing rendering milestones should
+move C++ and Rust in parity unless a prompt records a concrete temporary
+exception and a nearby catch-up milestone.
+
+Primitive template files live under:
+
+```text
+supplementary/templates/cpp/
+supplementary/templates/rust/
+```
+
+They may contain language presentation structure such as includes/imports,
+module or namespace layout, declaration/definition layout, indentation,
+optional sections, and loops over already-decided primitive records. They must
+not perform backend semantic decisions, type or intrinsic selection, feature
+gating, primitive selection, overload resolution, TSIL parsing, dependency
+closure, fallback selection, source repair, or compiler capability policy.
+
+Python backend/output code owns semantic translation and typed render-model
+construction. Templates format only already-decided typed render values such
+as artifact paths, profile names, includes/imports, rendered signatures,
+rendered body text, ordered primitive records, and translated operation text.
+Fields that carry unresolved lowering requests, raw TSIL needing
+interpretation, catalog objects, primitive selectors, dependency rules, or
+backend metadata lookups must be rejected before rendering.
+
+M217 establishes the primitive-template boundary and minimal C++/Rust template
+files. It should not reuse the M188 `ProjectSkeletonRenderContext`, because
+that context and its semantic-field guard are skeleton-specific. M218 owns the
+fuller typed primitive render context needed by real selected primitive
+rendering. M219 restores Rust intrinsic-call parity. M220 may introduce a
+shared body-token replacement/provenance contract only with two concrete
+consumers: the accepted C++ intrinsic body-token substitution boundary and a
+Rust intrinsic body-token substitution boundary added in the same focused
+parity slice.
+
+The template engine is a renderer detail, not the architecture. The accepted
+M188 boundary uses Python standard-library formatting. A later milestone may
+introduce Jinja2 or another template engine only when a selected template
+requires presentation features that the current engine cannot express, and
+the same presentation-only restrictions still apply.
+
+Consequences:
+
+- The next executable milestone after M216 is M217 primitive template
+  boundary, not another C++-only token substitution slice.
+- Real primitive artifact language structure should move into supplementary
+  templates before broad primitive rendering.
+- Small Python strings remain acceptable for typed already-decided render
+  values and focused tests, but they must not become hidden C++/Rust
+  templates or semantic engines.
+- Shared token replacement work must name concrete consumers before adding a
+  shared contract, avoiding another broad dispatcher/worklist abstraction.
