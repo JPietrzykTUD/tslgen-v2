@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 218 is accepted.
+Milestone 219 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -497,50 +497,65 @@ Rust intrinsic calls, parse raw TSIL, write artifacts, run build verification,
 or introduce template-side semantics. `PrimitiveRenderSortKey` is
 presentation ordering only; M222 owns real dependency order.
 
+M219 added `tslgen.backends.rust.intrinsic_calls`, a focused Rust
+backend/output rendering boundary over accepted M213 direct and composed
+intrinsic invocation values. It supports backend `rust` only, requires an
+explicit typed `RustArchitectureModule`, and renders `RustIntrinsicCallText`
+as `core::arch::{module}::{assembled_name}(opaque_argument_payload)`. It
+preserves opaque argument payload text, typed immediate metadata, and
+invocation/request/source provenance.
+
+M219 deliberately does not infer architecture modules from intrinsic name
+text, parse arguments, render Rust const-generic syntax, run body-token
+substitution, render whole primitive bodies, write artifacts, run build
+verification, or reopen lowering. Later pipeline stages must supply
+`RustArchitectureModule` from typed backend/profile/extension facts.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M219 Rust intrinsic invocation call rendering execution-review loop prompt.
+Run M220 shared intrinsic body-token substitution parity execution-review loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m219-rust-intrinsic-invocation-call-rendering-execution-review-loop-prompt.md
+docs/agent/runs/m220-shared-intrinsic-body-token-substitution-parity-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 219: Rust Intrinsic Invocation Call Rendering Parity.
+Milestone 220: Shared Intrinsic Body Token Substitution Parity.
 ```
 
 Latest review verdict:
 
 ```text
-M218 execution-review returned Accept after focused documentation and hygiene
-revision. Architecture/boundary accepted. Evidence accepted with the follow-up
-that `PrimitiveRenderSortKey` remains presentation ordering only and M222 owns
-real dependency order. Test review accepted with a wrong-backend-field
-coverage follow-up; the executor folded that coverage into the M218 test
-before final validation. Documentation and validation auditors initially
-requested final state/doc updates and cache cleanup; those were completed by
-the orchestrator.
+M219 execution-review returned Accept after focused documentation and hygiene
+revision. Architecture, evidence, and test reviewers accepted with
+follow-ups. The executor folded in two small follow-up tests before final
+validation: one proves an x86-looking intrinsic rendered with
+`RustArchitectureModule("aarch64")` still uses the explicit `aarch64` module,
+and one diagnoses non-string module names. Documentation and validation
+auditors initially requested final state/doc updates and cache cleanup; those
+were completed by the orchestrator.
 ```
 
 Next expected action:
 
 ```text
-Run the active M219 execution-review loop prompt. Implement Rust intrinsic
-call rendering parity for accepted M213 invocation values using an explicit
-typed Rust architecture-module render input. Render qualified
-`core::arch::{module}::{assembled_name}(opaque_argument_payload)` call text
-only after the invocation is already assembled. Do not infer architecture
-modules from raw intrinsic names, reopen lowering, parse argument payloads,
-run body-token substitution, render whole primitive bodies, write artifacts,
-run build verification, or put semantic decisions into templates.
+Run the active M220 execution-review loop prompt. Introduce only the minimal
+shared rendered-intrinsic-call replacement/provenance contract needed by two
+concrete consumers, the accepted C++ M215 body-token substitution path and the
+new Rust body-token substitution path. Preserve raw text spans exactly and
+substitute only already-rendered intrinsic request segments by typed request
+provenance. Do not add a broad registry/worklist, reopen lowering, rescan raw
+TSIL, parse surrounding Rust/C++ syntax, run non-intrinsic token substitution,
+render whole primitive bodies, write artifacts, run build verification, or put
+semantic decisions into templates.
 ```
 
 Previous review verdict:
@@ -598,13 +613,15 @@ template boundary execution-review. M217 execution-review returned Accept
 after hygiene revision and selected M218 typed primitive render context
 execution-review. M218 execution-review returned Accept after focused
 documentation and hygiene revision and selected M219 Rust intrinsic invocation
-call rendering parity execution-review.
+call rendering parity execution-review. M219 execution-review returned Accept
+after focused documentation and hygiene revision and selected M220 shared
+intrinsic body-token substitution parity execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m218-typed-primitive-render-context-execution-review-loop-prompt.md
+docs/agent/runs/m219-rust-intrinsic-invocation-call-rendering-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

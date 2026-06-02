@@ -2757,8 +2757,10 @@ Consequences:
   `core::arch::*`.
 - Import-based Rust intrinsic rendering is intentionally avoided for generated
   intrinsic calls.
-- Future renderer milestones need a typed Rust architecture-module policy for
-  x86 and ARM rather than string-rewriting rendered names.
+- M219 realizes the first typed Rust architecture-module renderer boundary:
+  Rust intrinsic-call rendering consumes an explicit `RustArchitectureModule`
+  value and never string-rewrites or infers the module from rendered intrinsic
+  names.
 
 ## ADR-057: No-Argument Intrinsic Suffix Uses The Current Selected Type
 

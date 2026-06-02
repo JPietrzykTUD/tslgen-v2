@@ -386,6 +386,47 @@ Invariants:
 - Immediate metadata is preserved for later wrapper/signature/template work.
   M214 does not render C++ non-type template syntax.
 
+Rust intrinsic call rendering is a backend/output render-result boundary over
+assembled M213 invocation values plus an explicit architecture module:
+
+```python
+@dataclass(frozen=True, slots=True)
+class RustArchitectureModule:
+    name: str
+
+RustIntrinsicCallText = NewType("RustIntrinsicCallText", str)
+
+@dataclass(frozen=True, slots=True)
+class RustRenderedIntrinsicCall:
+    invocation: BackendAssembledIntrinsicInvocation
+    architecture_module: RustArchitectureModule
+    call_text: RustIntrinsicCallText
+    immediates: tuple[BackendIntrinsicInvocationImmediate, ...]
+    source: SourceLocation
+
+@dataclass(frozen=True, slots=True)
+class RustIntrinsicCallRenderResult:
+    call: RustRenderedIntrinsicCall | None
+    diagnostics: tuple[Diagnostic, ...] = ()
+```
+
+Invariants:
+
+- Rendering consumes only assembled M213 direct/composed invocation values.
+  It does not parse raw TSIL or reassemble intrinsic names.
+- M219 supports only backend `rust`; non-Rust invocation values are
+  diagnostics.
+- The rendered call text is exactly
+  `core::arch::{module}::{assembled_name}(opaque_argument_payload)`, with
+  `core::arch::{module}::{assembled_name}()` for empty payloads.
+- `RustArchitectureModule` is an explicit typed render input. The renderer
+  never infers `x86_64`, `aarch64`, or any other module from intrinsic name
+  text.
+- Argument payload text remains opaque and is not split, normalized, repaired,
+  or recursively lowered.
+- Immediate metadata is preserved for later wrapper/signature/template work.
+  M219 does not render Rust const-generic syntax.
+
 C++ body-token substitution rendering is a presentation boundary over accepted
 backend-intrinsic handoff streams and already-rendered C++ intrinsic calls:
 

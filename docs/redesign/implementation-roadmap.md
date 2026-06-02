@@ -26788,3 +26788,97 @@ python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m219_rust_intrinsic_invocation_call_rendering.py
 find tslgen -type d -name __pycache__ -print
 ```
+
+Result:
+
+M219 added `tslgen.backends.rust.intrinsic_calls`, a focused Rust
+backend/output rendering boundary over accepted M213 direct and composed
+intrinsic invocation values. The new renderer supports backend `rust` only,
+requires an explicit typed `RustArchitectureModule`, and renders
+`RustIntrinsicCallText` as
+`core::arch::{module}::{assembled_name}(opaque_argument_payload)`.
+
+The renderer preserves opaque argument payload text and typed immediate
+metadata, preserves invocation/request/source provenance, and diagnoses
+non-Rust invocation values, unsupported invocation shapes, missing
+architecture modules, untyped architecture modules, and invalid architecture
+module names. It deliberately does not infer architecture modules from
+intrinsic name text, does not parse arguments, does not render Rust
+const-generic syntax, does not run body-token substitution, does not write
+artifacts, and does not reopen lowering.
+
+Review/audit verdict:
+
+Accepted after focused documentation and hygiene revision. Architecture,
+evidence, and test reviewers accepted with follow-ups. The executor folded in
+two small follow-up tests before final validation: one proves an x86-looking
+intrinsic rendered with `RustArchitectureModule("aarch64")` still uses the
+explicit `aarch64` module, and one diagnoses non-string module names.
+Documentation and validation auditors initially requested final state/doc
+updates and cache cleanup; those were completed by the orchestrator.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m219_rust_intrinsic_invocation_call_rendering.py`:
+  exit 0, `14 passed`.
+- Initial `find tslgen -type d -name __pycache__ -print` after compile/test:
+  exit 0, printed compile/test-created `__pycache__` directories.
+- After removing those directories, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Next concrete prompt:
+`docs/agent/runs/m220-shared-intrinsic-body-token-substitution-parity-execution-review-loop-prompt.md`.
+
+### Milestone 220: Shared Intrinsic Body Token Substitution Parity
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m220-shared-intrinsic-body-token-substitution-parity-execution-review-loop-prompt.md`.
+
+Goal:
+
+Introduce only the minimal shared rendered-intrinsic-call body-token
+replacement/provenance contract needed by two concrete consumers, then bring
+Rust intrinsic body-token substitution to parity with the accepted C++ M215
+behavior.
+
+Scope:
+
+- Add the smallest shared typed contract that lets C++ and Rust body-token
+  substitution consume rendered intrinsic calls by the preserved typed handoff
+  request/provenance, without matching raw text.
+- Refactor the existing C++ body-token substitution path only as much as
+  needed to use that shared contract while preserving M215 behavior and public
+  API.
+- Add Rust body-token substitution for `BackendIntrinsicHandoff` streams and
+  already-rendered `RustRenderedIntrinsicCall` values.
+- Preserve raw `BackendIntrinsicOpaqueTextSegment.text` exactly and in source
+  order for both backends.
+- Preserve rendered calls, typed immediate metadata, handoff/source
+  provenance, and deterministic call order.
+- Diagnose missing, extra, duplicate, backend-mismatched, and opaque
+  non-renderable token segments for Rust, with parity to C++ behavior.
+
+Out of scope:
+
+New lowering; raw TSIL rescans; parsing `return`, `emit_return(...)`,
+assignments, array access, loops, braces, semicolons, operators, or
+surrounding Rust/C++ syntax; a broad replacement registry/dispatcher/worklist;
+non-intrinsic type/value/source-operation token substitution; Rust
+const-generic rendering; C++ non-type template rendering; primitive dependency
+closure; whole primitive body rendering; generated project rendering/writing/
+build verification; template-side semantic decisions; and runtime dependency
+on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m215_cpp_body_token_substitution_rendering.py tslgen/tests/test_m220_shared_intrinsic_body_token_substitution_parity.py
+find tslgen -type d -name __pycache__ -print
+```

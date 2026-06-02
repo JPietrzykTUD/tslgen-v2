@@ -473,6 +473,43 @@ Accepted M214 diagnostic codes include:
 - `TSL-CPP-INTRINSIC-CALL-UNSUPPORTED-BACKEND`
 - `TSL-CPP-INTRINSIC-CALL-UNSUPPORTED-INVOCATION`
 
+### M219 Rust Intrinsic Invocation Call Rendering Boundary
+
+Milestone 219 adds the Rust counterpart to the M214 C++ intrinsic-call
+rendering boundary. It consumes accepted M213
+`BackendDirectIntrinsicInvocation` and `BackendComposedIntrinsicInvocation`
+values only after intrinsic-name assembly has already happened. It does not
+rediscover raw TSIL, reopen lowering, parse or split intrinsic argument
+payloads, resolve direct-name placeholders, render Rust const-generic syntax,
+perform body-token substitution, or write generated projects.
+
+The Rust call renderer supports backend `rust` only and requires an explicit
+typed `RustArchitectureModule` value. It renders one call text value as:
+
+```text
+core::arch::{module}::{assembled_name}(opaque_argument_payload)
+```
+
+An empty argument payload renders as
+`core::arch::{module}::{assembled_name}()`. Argument payload text is preserved
+byte-for-byte from the M213 invocation value, including nested TSIL-looking
+text. Typed immediate metadata from composed invocations is preserved on the
+rendered call result for later wrapper/signature/template work, but M219 does
+not rewrite call text or choose Rust const-generic syntax.
+
+The architecture module is never inferred from intrinsic name text. An
+x86-looking intrinsic rendered with `RustArchitectureModule("aarch64")` still
+uses the explicit `aarch64` module path. Later pipeline stages must supply the
+module from typed backend/profile/extension facts.
+
+Accepted M219 diagnostic codes include:
+
+- `TSL-RUST-INTRINSIC-CALL-UNSUPPORTED-BACKEND`
+- `TSL-RUST-INTRINSIC-CALL-UNSUPPORTED-INVOCATION`
+- `TSL-RUST-INTRINSIC-CALL-MISSING-ARCHITECTURE-MODULE`
+- `TSL-RUST-INTRINSIC-CALL-UNSUPPORTED-ARCHITECTURE-MODULE`
+- `TSL-RUST-INTRINSIC-CALL-INVALID-ARCHITECTURE-MODULE`
+
 ### M215 C++ Body Token Substitution Rendering Boundary
 
 Milestone 215 adds a typed C++ body-token substitution renderer for accepted
