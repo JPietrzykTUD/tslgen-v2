@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 222 is accepted.
+Milestone 223 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -577,46 +577,67 @@ translate source operations/intrinsics/type queries/value queries/signatures/
 declarations, render full generated projects, write artifacts, run build
 verification, or put semantic decisions into templates.
 
+M223 added `tslgen.rendering.generated_primitive_project`, a narrow
+composition boundary that combines already-rendered generated-project skeleton
+artifacts with already-rendered primitive profile artifacts. It accepts only
+in-memory `ArtifactSet` inputs, allows primitive artifacts to replace only the
+selected scalar profile placeholders at `cpp/include/profiles/scalar.hpp` and
+`rust/src/profiles/scalar.rs`, preserves public entry artifacts, buildsystem
+artifacts, and smoke tests, returns deterministic artifacts, and emits
+structured duplicate/collision diagnostics.
+
+M223 renders one tiny already-decided C++ and Rust scalar primitive through
+M222 primitive render plans and M217 primitive templates, composes those
+profile artifacts with the M191 generated-project skeleton, writes the
+combined artifacts through the manifest-clean writer, and verifies scalar C++
+and Rust generated projects through the existing after-write build verifier.
+M223 deliberately does not parse `.tsl`, select primitives from `tsldata`,
+reopen lowering, run body-token substitution, translate source operations/
+intrinsics/type queries/value queries/signatures/declarations, compute
+dependency closure, broaden profile selection beyond scalar, or hide semantic
+decisions in templates, renderers, the artifact writer, or the verifier.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M223 first real generated primitive execution-review loop prompt.
+Run M224 parsed tiny TSL to generated project execution-review loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m223-first-real-generated-primitive-execution-review-loop-prompt.md
+docs/agent/runs/m224-parsed-tiny-tsl-to-generated-project-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 223: First Real Generated Primitive.
+Milestone 224: Parsed Tiny TSL To Generated Project.
 ```
 
 Latest review verdict:
 
 ```text
-M222 execution-review returned Accept. Architecture/boundary, evidence, test,
-documentation, and validation reviewers accepted the primitive render plan
-assembly boundary and confirmed that M222 consumes already-decided values,
-preserves supplied primitive order, does not recompute M220/M221 body-token
-output, and does not render/write/build generated projects.
+M223 execution-review returned Accept after focused test revision.
+Architecture/boundary, evidence, documentation, validation, and focused test
+reviewers accepted the generated primitive project composition boundary. The
+initial test review requested coverage for the duplicate-skeleton diagnostic;
+the focused revision added that test and focused re-review accepted.
 ```
 
 Next expected action:
 
 ```text
-Run the active M223 execution-review loop prompt. Render one tiny
-already-decided primitive through the accepted C++ and Rust primitive
-templates, compose those profile artifacts with the generated-project
-skeleton, write the combined artifacts, and verify scalar generated C++ and
-Rust build/test output. Do not reopen lowering, parse `.tsl`, run body-token
-substitution, implement dependency closure, broaden profiles beyond scalar,
-or put semantic decisions into templates.
+Run the active M224 execution-review loop prompt. Prove that one tiny parsed
+`.tsl` source can flow through SourceDocument, TslParser, CatalogBuilder,
+Selector, accepted lowering/render facts, M222 primitive render plans, M217
+primitive templates, M223 composition, manifest-clean writing, and scalar C++
+and Rust build verification. Do not generate from the full `tsldata` corpus,
+broaden the parser, add new TSIL syntax, use old direct backend emitters as a
+shortcut, implement dependency closure, broaden profiles beyond scalar, or put
+semantic decisions into templates.
 ```
 
 Previous review verdict:
@@ -682,13 +703,15 @@ selected M221 backend type/value body-token substitution parity
 execution-review. M221 execution-review returned Accept after focused roadmap
 completion revision and selected M222 primitive render plan execution-review.
 M222 execution-review returned Accept and selected M223 first real generated
-primitive execution-review.
+primitive execution-review. M223 execution-review returned Accept after
+focused test revision and selected M224 parsed tiny TSL to generated project
+execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m222-primitive-render-plan-execution-review-loop-prompt.md
+docs/agent/runs/m223-first-real-generated-primitive-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

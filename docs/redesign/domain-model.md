@@ -2691,6 +2691,41 @@ Invariants:
   run body-token substitution, translate backend semantics, render templates,
   write artifacts, or run build verification.
 
+M223 adds a narrow generated primitive project composition boundary over
+already-rendered artifacts:
+
+```python
+@dataclass(frozen=True, slots=True)
+class GeneratedPrimitiveProjectReplacementPath:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class GeneratedPrimitiveProjectCompositionPolicy:
+    replacement_paths: tuple[GeneratedPrimitiveProjectReplacementPath, ...]
+
+@dataclass(frozen=True, slots=True)
+class GeneratedPrimitiveProjectCompositionResult:
+    artifacts: ArtifactSet
+    diagnostics: tuple[Diagnostic, ...]
+```
+
+Invariants:
+
+- Composition consumes in-memory `ArtifactSet` values from earlier rendering
+  boundaries. It does not render templates, write files, run build
+  verification, parse source, lower TSIL, translate backend semantics, select
+  primitives, or compute dependency closure.
+- `GeneratedPrimitiveProjectReplacementPath` names the exact skeleton artifact
+  paths that may be replaced by primitive profile artifacts for the selected
+  profile set. M223 accepts only the scalar C++ and Rust profile paths.
+- Duplicate logical paths inside either input artifact set are diagnostics.
+- Primitive artifacts may collide with skeleton artifacts only at accepted
+  replacement paths. Other collisions are diagnostics.
+- Successful composition returns a deterministic `ArtifactSet` that preserves
+  public entry artifacts, buildsystem artifacts, smoke tests, and unrelated
+  skeleton artifacts while replacing selected placeholder profile artifacts
+  with primitive profile artifacts.
+
 ## Diagnostics Model
 
 ```python

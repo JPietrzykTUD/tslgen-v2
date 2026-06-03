@@ -27234,7 +27234,7 @@ Next concrete prompt:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m223-first-real-generated-primitive-execution-review-loop-prompt.md`.
 
 Goal:
@@ -27272,5 +27272,101 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m223_first_real_generated_primitive.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M223 added `tslgen.rendering.generated_primitive_project`, a narrow
+composition boundary that combines already-rendered generated-project skeleton
+artifacts with already-rendered primitive profile artifacts. The boundary
+accepts in-memory `ArtifactSet` inputs, allows primitive artifacts to replace
+only the selected scalar profile placeholders at
+`cpp/include/profiles/scalar.hpp` and `rust/src/profiles/scalar.rs`, preserves
+the public entry artifacts/buildsystem/smoke tests, returns deterministic
+artifacts, and emits structured duplicate/collision diagnostics.
+
+M223 renders one tiny already-decided C++ and Rust scalar primitive through
+the accepted M222 primitive render plans and M217 primitive templates, composes
+those primitive profile artifacts with the M191 generated-project skeleton,
+writes the combined artifacts through the manifest-clean writer, and verifies
+the scalar C++ and Rust generated projects through the existing after-write
+build verifier.
+
+M223 deliberately does not parse `.tsl`, select primitives from `tsldata`,
+reopen lowering, run body-token substitution, translate source operations/
+intrinsics/type queries/value queries/signatures/declarations, compute
+dependency closure, broaden profile selection beyond scalar, or hide semantic
+decisions in templates, renderers, the artifact writer, or the verifier.
+
+Review/audit verdict:
+
+Accepted after focused test revision. Architecture/boundary, evidence,
+documentation, validation, and focused test reviewers accepted. The initial
+test review requested coverage for the duplicate-skeleton diagnostic; the
+orchestrator added that focused test and reran validation before focused
+re-review accepted.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m223_first_real_generated_primitive.py`:
+  exit 0, `8 passed in 3.50s`.
+- Initial `find tslgen -type d -name __pycache__ -print` after compile/test:
+  exit 0, printed compile/test-created `__pycache__` directories.
+- After removing those directories, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Follow-ups:
+
+No blocking follow-ups. The next milestone should prove that a tiny parsed
+`.tsl` source can feed the accepted parser/catalog/selection/lowering to
+render-plan/generated-project path, instead of hand-authoring primitive render
+plans directly in the test.
+
+Next concrete prompt:
+`docs/agent/runs/m224-parsed-tiny-tsl-to-generated-project-execution-review-loop-prompt.md`.
+
+### Milestone 224: Parsed Tiny TSL To Generated Project
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m224-parsed-tiny-tsl-to-generated-project-execution-review-loop-prompt.md`.
+
+Goal:
+
+Prove one tiny parsed `.tsl` source can feed the accepted backend/output path:
+`SourceDocument -> TslParser -> CatalogBuilder -> Selector -> accepted
+lowering/render facts -> M222 PrimitiveRenderPlan -> M217 primitive templates
+-> M223 generated primitive project composition -> manifest-clean writer ->
+BuildVerifier`.
+
+Scope:
+
+- Use one tiny fixture source accepted by the clean parser and catalog builder.
+- Select explicit scalar C++ and Rust targets only.
+- Adapt accepted lowered/rendered facts into M222 primitive render plans for
+  C++ and Rust.
+- Render through M217 templates and compose through M223.
+- Write through the manifest-clean writer and verify scalar generated C++ and
+  Rust projects.
+- Preserve deterministic artifact order and digest manifests.
+
+Out of scope:
+
+Full `tsldata` corpus generation; broad parser changes; new TSIL syntax;
+source repair; dependency closure; profile matrices; wrapper generation;
+generated test planning; direct old backend emitters that bypass M217-M223;
+template-side semantics; and runtime dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py
 find tslgen -type d -name __pycache__ -print
 ```

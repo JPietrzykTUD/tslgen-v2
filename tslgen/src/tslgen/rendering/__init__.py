@@ -5,6 +5,13 @@ from tslgen.rendering.generated_project import (
     build_generated_project_render_model,
     render_generated_project_skeleton,
 )
+from tslgen.rendering.generated_primitive_project import (
+    GeneratedPrimitiveProjectCompositionPolicy,
+    GeneratedPrimitiveProjectCompositionResult,
+    GeneratedPrimitiveProjectReplacementPath,
+    compose_generated_primitive_project_artifacts,
+    scalar_profile_replacement_policy,
+)
 from tslgen.rendering.primitive_templates import (
     CPP_PRIMITIVE_TEMPLATE_PATH,
     RUST_PRIMITIVE_TEMPLATE_PATH,
@@ -56,6 +63,9 @@ from tslgen.rendering.supplementary import (
 
 __all__ = [
     "GeneratedProjectRenderResult",
+    "GeneratedPrimitiveProjectCompositionPolicy",
+    "GeneratedPrimitiveProjectCompositionResult",
+    "GeneratedPrimitiveProjectReplacementPath",
     "CPP_PRIMITIVE_TEMPLATE_PATH",
     "ProjectSkeletonRenderContext",
     "PrimitiveTemplateRenderContext",
@@ -89,6 +99,7 @@ __all__ = [
     "adapt_primitive_render_models",
     "adapt_primitive_render_plans",
     "build_generated_project_render_model",
+    "compose_generated_primitive_project_artifacts",
     "cpp_project_skeleton_assets",
     "cpp_primitive_render_model",
     "cpp_primitive_template_context",
@@ -98,4 +109,5 @@ __all__ = [
     "rust_primitive_render_model",
     "rust_primitive_template_context",
     "rust_project_skeleton_assets",
+    "scalar_profile_replacement_policy",
 ]

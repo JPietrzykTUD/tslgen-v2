@@ -181,6 +181,38 @@ translate source operations, intrinsics, type queries, value queries,
 signatures, or declarations, render full generated projects, write artifacts,
 run build verification, or put semantic decisions into templates.
 
+### M223 First Real Generated Primitive Project
+
+Milestone 223 composes one tiny already-decided primitive profile artifact for
+C++ and one for Rust with the accepted M191 generated-project skeleton. It
+uses M222 primitive render plans and the M217 primitive templates to render
+profile artifacts, then combines those artifacts with the skeleton before the
+manifest-clean writer and build verifier run.
+
+The generated primitive project composition boundary:
+
+- consumes only in-memory `ArtifactSet` values from the skeleton renderer and
+  primitive template renderer;
+- allows primitive artifacts to replace skeleton placeholder artifacts only at
+  the exact selected scalar profile paths
+  `cpp/include/profiles/scalar.hpp` and `rust/src/profiles/scalar.rs`;
+- preserves public entry artifacts, buildsystem artifacts, smoke tests, and
+  unrelated skeleton artifacts;
+- rejects duplicate logical paths inside skeleton input with
+  `TSL-GENERATED-PRIMITIVE-PROJECT-DUPLICATE-SKELETON-ARTIFACT`;
+- rejects duplicate logical paths inside primitive input with
+  `TSL-GENERATED-PRIMITIVE-PROJECT-DUPLICATE-PRIMITIVE-ARTIFACT`;
+- rejects primitive/skeleton collisions outside allowed profile replacement
+  paths with `TSL-GENERATED-PRIMITIVE-PROJECT-DUPLICATE-LOGICAL-PATH`;
+- returns a deterministic in-memory `ArtifactSet` and diagnostics.
+
+M223 verifies that the combined scalar C++ and Rust generated projects compile
+and run their accepted smoke tests through the existing after-write build
+verifier. It does not parse `.tsl`, select primitives from `tsldata`, reopen
+lowering, run body-token substitution, perform dependency closure, broaden
+profile selection beyond scalar, or hide semantic decisions in templates,
+renderers, the artifact writer, or the build verifier.
+
 ### M189 Machine Feature Profile Boundary
 
 Milestone 189 adds a typed machine feature profile catalog for generated
