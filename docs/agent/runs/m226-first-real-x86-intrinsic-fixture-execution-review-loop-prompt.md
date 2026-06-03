@@ -63,6 +63,12 @@ Implement the smallest real x86 intrinsic fixture that proves:
   lowered typed body-token values;
 - lowered intrinsic/intrinsic-compose tokens are translated and rendered for
   both C++ and Rust without renderer-side parsing or semantic inference;
+- the selected primitive signature shape, for example `v:=(v,v)`, is used as
+  the wrapper/function-shape template selector, not ignored while Python
+  assembles the shape by hand;
+- C++/Rust language shape for the fixture is formatted from typed render
+  fields and supplementary templates, not assembled as whole function/header
+  source strings in Python;
 - generated `scalar,avx2` C++ and Rust projects write through manifest-clean
   mode and compile/test, with the `avx2` build using M225 target-feature
   flags;
@@ -84,10 +90,21 @@ this milestone:
 - no source-data flaw already recorded in `docs/redesign/flaws-to-fix.md`;
 - no need for all-profile, ARM, NEON, SVE, qemu, or host autodetection;
 - C++ and Rust can both render an actual intrinsic call from already accepted
-  lowering/body-token facts or one narrowly added exact lowering shape.
+  lowering/body-token facts or one narrowly added exact lowering shape;
+- the selected fixture has a typed primitive signature shape whose exact
+  wrapper/function-shape template can be selected or narrowly introduced under
+  `supplementary/templates/{cpp,rust}/`;
+- the selected fixture can be rendered without adding more whole C++/Rust
+  declarations, definitions, namespaces/modules, includes/imports, or intrinsic
+  calls as ad hoc Python string assembly.
 
 If no such observed fixture exists without broad TSIL/source parsing, stop and
-create a planner prompt instead of implementing.
+create a planner prompt instead of implementing. If the fixture is otherwise
+safe but the current primitive render model would force new raw C++/Rust code
+strings in Python, or if signature-shape template selection is missing and
+cannot be added narrowly for the selected shape, stop and create a focused
+render-model/template cleanup prompt instead of implementing the intrinsic
+fixture.
 
 Record the selected primitive, profile, type, backend body form, and why it is
 safe in `docs/redesign/implementation-roadmap.md`.
@@ -112,6 +129,13 @@ The implementation should:
 - keep the implementation body as a sequence of raw source text and typed
   lowerable token results;
 - let backend rendering consume typed lowered token results only;
+- use the selected primitive's typed signature shape as a template key for the
+  function/wrapper shape. For a `v:=(v,v)` fixture, the C++ and Rust template
+  path should be selected because that exact signature shape is supported;
+- introduce or reuse typed render-model fields for function signature,
+  declaration/definition shape, includes/imports, namespace/module structure,
+  and intrinsic invocation text as needed, then let supplementary templates
+  format those fields;
 - keep C++ and Rust behavior in parity for the chosen fixture;
 - use M225 generated profile build flags for the `avx2` verification path;
 - keep deterministic artifact ordering and manifest-clean writing.
@@ -121,10 +145,17 @@ The implementation should:
 - Do not implement a general TSIL expression/statement parser.
 - Do not add broad support for every `intrin_compose`, `intrin`, `call`,
   `if`, `loop`, `mem`, `io`, or `cast` shape.
+- Do not implement a broad signature/template framework in M226. Support only
+  the exact observed selected signature shape, while preserving the typed
+  signature model as the selector.
 - Do not parse or infer semantics inside templates, renderers, or the artifact
   writer.
-- Do not introduce raw C++/Rust intrinsic source strings in Python when a
-  typed lowered token or presentation model should carry the decision.
+- Do not introduce new whole C++/Rust function/header/module source strings in
+  Python. Python may build typed render records and already-translated leaf
+  text values; supplementary templates own presentation shape.
+- Do not hide this by moving semantic decisions into Jinja/stdlib-template
+  conditionals. Templates may format typed fields, loops, indentation, and
+  optional sections only.
 - Do not use `frozen/` or `tslgenold/` as runtime dependencies.
 - Do not broaden to all machine profiles, NEON/SVE/qemu, compiler capability
   detection, host autodetection, or generated benchmark/test matrices.
@@ -137,10 +168,16 @@ Add focused tests for:
 
 - the selected real `.tsl` fixture/evidence still contains the exact observed
   implementation form chosen for M226;
+- the selected primitive's normalized signature shape, such as `v:=(v,v)`,
+  selects the expected C++ and Rust supplementary primitive template shape;
+- an unsupported nearby signature shape produces a diagnostic or stops before
+  rendering instead of falling back to Python string assembly;
 - the selected non-scalar implementation lowers to typed body-token values and
   raw source tokens, not raw lowerable token passthrough;
 - rendered C++ and Rust `avx2` profile artifacts contain an actual intrinsic
   call and no raw accepted lowerable token text;
+- the new fixture path does not add new whole-function/header/module C++/Rust
+  string assembly in Python, and templates reject semantic-looking fields;
 - generated `scalar,avx2` projects write via manifest-clean mode and
   configure/build/test for C++ and Rust;
 - deterministic artifact digests across two runs;

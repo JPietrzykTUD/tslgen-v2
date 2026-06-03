@@ -670,9 +670,13 @@ Run the active M226 execution-review loop prompt. Select one exact observed
 x86 non-scalar `.tsl` implementation shape, preferably `avx2`, and prove the
 lowered body-token to backend-rendered intrinsic output path for both C++ and
 Rust. Keep the body model as raw source spans plus typed lowerable token
-results, use M225 build flags for generated `avx2` verification, and return
-to planner instead of implementing if the selected fixture would require broad
-TSIL parsing or source repair.
+results, let typed render-model fields plus supplementary templates own
+C++/Rust language shape, use the primitive signature shape such as
+`v:=(v,v)` as the wrapper/function-shape template selector, use M225 build
+flags for generated `avx2` verification, and return to planner instead of
+implementing if the selected fixture would require broad TSIL parsing, source
+repair, missing signature-shape template selection, or new whole C++/Rust
+function/header/module string assembly in Python.
 ```
 
 Previous review verdict:

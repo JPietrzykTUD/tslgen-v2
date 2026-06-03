@@ -27528,7 +27528,11 @@ build flags to prove one real observed x86 non-scalar intrinsic fixture, with
 C++ and Rust kept in parity. The selected implementation body should be
 represented as raw source spans plus typed lowerable body-token values, and
 backend rendering should consume those typed values to emit a real intrinsic
-call for an x86 profile such as `avx2`.
+call for an x86 profile such as `avx2`. C++/Rust language shape for the
+fixture must be formatted from typed render fields and supplementary templates,
+not assembled as whole function/header/module source strings in Python. The
+selected primitive signature shape, such as `v:=(v,v)`, must select the
+specific wrapper/function-shape template for the fixture.
 
 Preflight requirement:
 
@@ -27536,7 +27540,12 @@ Before implementation, inspect `tsldata/primitives/**/*.tsl` and select one
 exact observed x86 non-scalar implementation shape that can be handled without
 broad TSIL parsing, dependency closure, source repair, all-profile matrices,
 ARM/qemu coverage, or host autodetection. If no such fixture exists, return to
-planner instead of implementing.
+planner instead of implementing. If the fixture is otherwise safe but the
+current primitive render model would force new raw C++/Rust code strings in
+Python, or if exact signature-shape template selection is missing and cannot
+be added narrowly for the selected shape, create a focused
+render-model/template cleanup prompt instead of implementing the intrinsic
+fixture.
 
 Scope:
 
@@ -27544,8 +27553,13 @@ Scope:
 - Add only the exact parser/lowering/body-token support needed for the chosen
   observed fixture.
 - Keep C++ and Rust behavior in parity for the selected fixture.
+- Use the selected primitive's typed signature shape as the C++/Rust
+  wrapper/function-shape template key.
 - Render through typed lowered body-token results; do not parse or infer
   semantics in templates, renderers, the writer, or verifier.
+- Introduce or reuse typed render-model fields for language shape and let
+  supplementary templates format those fields; do not extend the pattern of
+  whole C++/Rust declarations or definitions assembled in Python.
 - Verify generated `scalar,avx2` projects through manifest-clean writing and
   C++/Rust build verification using M225 target-feature flags.
 
@@ -27553,8 +27567,10 @@ Out of scope:
 
 General TSIL expression/statement parsing; broad support for every
 `intrin_compose`, `intrin`, `call`, `if`, `loop`, `mem`, `io`, or `cast`
-shape; all-profile matrices; NEON/SVE/qemu; compiler capability detection;
-host autodetection; source repair; runtime dependency on `frozen/` or
+shape; broad signature/template framework; all-profile matrices; NEON/SVE/
+qemu; compiler capability detection; host autodetection; source repair; new
+whole-function/header/module C++/Rust string assembly in Python; semantic
+decisions in template conditionals; runtime dependency on `frozen/` or
 `tslgenold`.
 
 Validation:
