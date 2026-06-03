@@ -27333,7 +27333,7 @@ Next concrete prompt:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m224-parsed-tiny-tsl-to-generated-project-execution-review-loop-prompt.md`.
 
 Goal:
@@ -27368,5 +27368,102 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M224 added `tslgen.pipeline.generated_primitive_pipeline`, a tiny
+parsed-source-to-generated-project bridge. It consumes `SourceDocument`
+values, parses them with `TslParser`, builds a catalog with `CatalogBuilder`,
+selects explicit C++ and Rust scalar targets, lowers selected implementations
+with `Lowerer`, adapts accepted `LoweredFunction` facts into M222
+`PrimitiveRenderPlan` values, renders through M217 primitive templates,
+composes through M223 generated primitive project composition, and returns an
+in-memory artifact set plus diagnostics.
+
+The accepted bridge supports only the intentionally tiny scalar `si32` binary
+`add` slice for C++ and Rust. It preserves M224's boundary by deriving
+profile artifacts from parsed source/catalog/selection/lowering facts, not
+from hand-authored final artifact text and not from the older direct
+`Generator`/backend emitter path. Unsupported profile sets, backends, types,
+result types, expressions, and operations are diagnostics.
+
+M224 verifies that the generated C++ and Rust scalar projects can be written
+with manifest-clean mode and compile/test through the existing after-write
+build verifier. M224 deliberately does not generate from the full `tsldata`
+corpus, broaden the parser, add TSIL syntax, parse operators, repair source,
+compute dependency closure, broaden profiles beyond scalar, add generated
+tests, or hide semantic decisions in templates, renderers, the writer, or the
+verifier.
+
+Review/audit verdict:
+
+Accepted. Architecture/boundary, evidence, test, documentation, and
+validation reviewers accepted the parsed-source-to-render-plan bridge and
+confirmed that it does not use the old direct backend emitters, broaden parser
+scope, generate from the full corpus, or hide semantics in output boundaries.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py`:
+  exit 0, `6 passed in 2.89s`.
+- Initial `find tslgen -type d -name __pycache__ -print` after compile/test:
+  exit 0, printed compile/test-created `__pycache__` directories.
+- After removing those directories, final
+  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+Follow-ups:
+
+No blocking follow-ups. Before introducing real SIMD intrinsic fixtures, the
+next milestone should make selected machine profile feature flags reach the
+generated C++ and Rust build artifacts as already-decided presentation values.
+
+Next concrete prompt:
+`docs/agent/runs/m225-generated-profile-build-flags-execution-review-loop-prompt.md`.
+
+### Milestone 225: Generated Profile Build Flags
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m225-generated-profile-build-flags-execution-review-loop-prompt.md`.
+
+Goal:
+
+Add the smallest typed build-flag presentation slice needed before real
+intrinsic generation. Selected generated profiles should expose already-decided
+C++ and Rust target-feature build values; generated CMake/Cargo artifacts
+should format those values; scalar should remain no-feature; and a tiny
+`scalar,avx2` generated project should configure/build/test without real
+intrinsic code.
+
+Scope:
+
+- Derive typed C++ and Rust build-feature presentation values from selected
+  machine profile data before template rendering.
+- Keep alternative flag spelling handling explicit and deterministic.
+- Render scalar with no target-feature flags.
+- Render an x86 profile such as `avx2` into generated C++ and Rust build
+  artifacts.
+- Verify a tiny generated `scalar,avx2` profile set through manifest-clean
+  writing and C++/Rust build verification.
+
+Out of scope:
+
+Real SIMD intrinsic calls; new `.tsl` forms; broad primitive rendering;
+compiler capability detection; host autodetection; qemu/aarch64/NEON/SVE
+verification; all-profile matrices; template-side feature semantics; runtime
+dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m225_generated_profile_build_flags.py
 find tslgen -type d -name __pycache__ -print
 ```

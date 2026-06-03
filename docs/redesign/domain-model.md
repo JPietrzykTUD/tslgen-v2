@@ -2726,6 +2726,41 @@ Invariants:
   skeleton artifacts while replacing selected placeholder profile artifacts
   with primitive profile artifacts.
 
+M224 adds a parsed tiny generated-project orchestration result and a selected
+lowered-function bridge:
+
+```python
+@dataclass(frozen=True, slots=True)
+class SelectedLoweredFunction:
+    selected: SelectedImplementation
+    function: LoweredFunction
+
+@dataclass(frozen=True, slots=True)
+class ParsedTinyGeneratedProjectResult:
+    artifacts: ArtifactSet
+    diagnostics: tuple[Diagnostic, ...]
+    model: GeneratedProjectRenderModel | None
+    catalog: Catalog | None
+    selected: tuple[SelectedImplementation, ...]
+    lowered_functions: LoweredFunctionSet
+    render_plans: tuple[PrimitiveRenderPlan, ...]
+```
+
+Invariants:
+
+- `SelectedLoweredFunction` preserves the selected implementation provenance
+  beside the accepted lowered function. It is a bridge into render planning,
+  not a new lowering IR category.
+- The M224 pipeline consumes `SourceDocument`, `TslParser`, `CatalogBuilder`,
+  `Selector`, and `Lowerer` outputs before producing M222 render plans.
+- The bridge produces already-rendered presentation values only after typed
+  lowered facts are available. It does not parse raw source text, rescan TSIL,
+  invoke direct backend emitters, write files, run build verification, or make
+  template-side semantic decisions.
+- M224 accepts only the scalar generated profile and the tiny C++/Rust scalar
+  `si32` binary `add` render slice. Unsupported profile sets, backends, types,
+  result types, expressions, and operations are diagnostics.
+
 ## Diagnostics Model
 
 ```python

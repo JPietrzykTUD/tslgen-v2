@@ -213,6 +213,46 @@ lowering, run body-token substitution, perform dependency closure, broaden
 profile selection beyond scalar, or hide semantic decisions in templates,
 renderers, the artifact writer, or the build verifier.
 
+### M224 Parsed Tiny TSL To Generated Project
+
+Milestone 224 connects one tiny parsed `.tsl` source fixture to the accepted
+generated-project path:
+
+```text
+SourceDocument
+  -> TslParser
+  -> CatalogBuilder
+  -> Selector
+  -> Lowerer
+  -> PrimitiveRenderPlan
+  -> primitive templates
+  -> generated primitive project composition
+```
+
+The M224 bridge consumes accepted `LoweredFunction` values and produces M222
+`PrimitiveRenderPlan` values for the single scalar profile. It supports only
+the deliberately tiny scalar `si32` binary `add` slice for C++ and Rust. The
+bridge renders already-decided presentation text for profile artifacts and
+preserves the accepted M217-M223 output boundaries: primitive templates format
+the plan, generated-project composition combines artifacts in memory, the
+artifact writer is the filesystem boundary, and the build verifier runs after
+write.
+
+Accepted M224 diagnostics include:
+
+- `TSL-PARSED-GENERATED-PRIMITIVE-UNSUPPORTED-PROFILE-SET`
+- `TSL-PARSED-GENERATED-PRIMITIVE-UNSUPPORTED-BACKEND`
+- `TSL-PARSED-GENERATED-PRIMITIVE-UNSUPPORTED-TYPE`
+- `TSL-PARSED-GENERATED-PRIMITIVE-UNSUPPORTED-RESULT-TYPE`
+- `TSL-PARSED-GENERATED-PRIMITIVE-UNSUPPORTED-EXPRESSION`
+- `TSL-PARSED-GENERATED-PRIMITIVE-UNSUPPORTED-OPERATION`
+
+M224 deliberately does not use the older direct `Generator`/backend emitter
+path, generate from the full `tsldata` corpus, broaden the parser, add TSIL
+syntax, parse operators, repair source, compute dependency closure, broaden
+profiles beyond scalar, add generated tests, or hide semantic decisions in
+templates, renderers, the artifact writer, or the verifier.
+
 ### M189 Machine Feature Profile Boundary
 
 Milestone 189 adds a typed machine feature profile catalog for generated

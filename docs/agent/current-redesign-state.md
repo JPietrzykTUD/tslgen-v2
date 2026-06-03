@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 223 is accepted.
+Milestone 224 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -597,47 +597,66 @@ intrinsics/type queries/value queries/signatures/declarations, compute
 dependency closure, broaden profile selection beyond scalar, or hide semantic
 decisions in templates, renderers, the artifact writer, or the verifier.
 
+M224 added `tslgen.pipeline.generated_primitive_pipeline`, a tiny
+parsed-source-to-generated-project bridge. It consumes `SourceDocument`
+values, parses them with `TslParser`, builds a catalog with `CatalogBuilder`,
+selects explicit C++ and Rust scalar targets, lowers selected implementations
+with `Lowerer`, adapts accepted `LoweredFunction` facts into M222
+`PrimitiveRenderPlan` values, renders through M217 primitive templates,
+composes through M223 generated primitive project composition, and returns an
+in-memory artifact set plus diagnostics.
+
+M224 supports only the intentionally tiny scalar `si32` binary `add` slice for
+C++ and Rust. It derives profile artifacts from parsed source, catalog,
+selection, and lowering facts, not from hand-authored final artifact text and
+not from the older direct `Generator`/backend emitter path. M224 verifies that
+the generated C++ and Rust scalar projects can be written with manifest-clean
+mode and compile/test through the existing after-write build verifier. It
+does not generate from the full `tsldata` corpus, broaden the parser, add TSIL
+syntax, parse operators, repair source, compute dependency closure, broaden
+profiles beyond scalar, add generated tests, or hide semantic decisions in
+templates, renderers, the writer, or the verifier.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M224 parsed tiny TSL to generated project execution-review loop prompt.
+Run M225 generated profile build flags execution-review loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m224-parsed-tiny-tsl-to-generated-project-execution-review-loop-prompt.md
+docs/agent/runs/m225-generated-profile-build-flags-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 224: Parsed Tiny TSL To Generated Project.
+Milestone 225: Generated Profile Build Flags.
 ```
 
 Latest review verdict:
 
 ```text
-M223 execution-review returned Accept after focused test revision.
-Architecture/boundary, evidence, documentation, validation, and focused test
-reviewers accepted the generated primitive project composition boundary. The
-initial test review requested coverage for the duplicate-skeleton diagnostic;
-the focused revision added that test and focused re-review accepted.
+M224 execution-review returned Accept. Architecture/boundary, evidence, test,
+documentation, and validation reviewers accepted the parsed-source-to-render
+plan bridge and confirmed that it does not use the old direct backend emitters,
+broaden parser scope, generate from the full corpus, or hide semantics in
+output boundaries.
 ```
 
 Next expected action:
 
 ```text
-Run the active M224 execution-review loop prompt. Prove that one tiny parsed
-`.tsl` source can flow through SourceDocument, TslParser, CatalogBuilder,
-Selector, accepted lowering/render facts, M222 primitive render plans, M217
-primitive templates, M223 composition, manifest-clean writing, and scalar C++
-and Rust build verification. Do not generate from the full `tsldata` corpus,
-broaden the parser, add new TSIL syntax, use old direct backend emitters as a
-shortcut, implement dependency closure, broaden profiles beyond scalar, or put
-semantic decisions into templates.
+Run the active M225 execution-review loop prompt. Add typed generated-profile
+build flag presentation so selected machine profile flags reach generated C++
+and Rust build artifacts before real intrinsic generation begins. Keep scalar
+no-feature, prove at least `scalar,avx2` can render/write/verify with a tiny
+no-intrinsic project, and do not generate real SIMD intrinsic calls, broaden
+parser/lowering, model compiler capability, use host autodetection, or hide
+feature semantics in templates.
 ```
 
 Previous review verdict:
@@ -705,13 +724,14 @@ completion revision and selected M222 primitive render plan execution-review.
 M222 execution-review returned Accept and selected M223 first real generated
 primitive execution-review. M223 execution-review returned Accept after
 focused test revision and selected M224 parsed tiny TSL to generated project
-execution-review.
+execution-review. M224 execution-review returned Accept and selected M225
+generated profile build flags execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m223-first-real-generated-primitive-execution-review-loop-prompt.md
+docs/agent/runs/m224-parsed-tiny-tsl-to-generated-project-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
