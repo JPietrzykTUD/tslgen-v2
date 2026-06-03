@@ -38,6 +38,14 @@ def _catalog() -> MachineFeatureProfileCatalog:
     return result.catalog
 
 
+def _loaded_profile_data():
+    result = load_machine_feature_profile_catalog(_PROFILE_PATH, _FLAGS_PATH)
+    assert result.diagnostics == ()
+    assert result.catalog is not None
+    assert result.flag_catalog is not None
+    return result.catalog, result.flag_catalog
+
+
 def _render_default_scalar_project():
     selection = select_generated_profiles(_catalog())
     assert selection.diagnostics == ()
@@ -125,10 +133,14 @@ def test_m191_profile_selection_reports_ambiguous_names() -> None:
 
 
 def test_m191_rendered_project_skeleton_uses_profile_layout() -> None:
-    selection = select_generated_profiles(_catalog(), ("scalar", "avx2"))
+    catalog, flag_catalog = _loaded_profile_data()
+    selection = select_generated_profiles(catalog, ("scalar", "avx2"))
     assert selection.diagnostics == ()
     assert selection.profile_set is not None
-    model_result = build_generated_project_render_model(selection.profile_set)
+    model_result = build_generated_project_render_model(
+        selection.profile_set,
+        flag_catalog,
+    )
     assert model_result.diagnostics == ()
     assert model_result.model is not None
 
@@ -238,10 +250,14 @@ def test_m191_real_scalar_generated_project_smoke_builds(tmp_path: Path) -> None
 def test_m191_verifier_checks_every_selected_profile_with_injected_runner(
     tmp_path: Path,
 ) -> None:
-    selection = select_generated_profiles(_catalog(), ("scalar", "avx2"))
+    catalog, flag_catalog = _loaded_profile_data()
+    selection = select_generated_profiles(catalog, ("scalar", "avx2"))
     assert selection.diagnostics == ()
     assert selection.profile_set is not None
-    model_result = build_generated_project_render_model(selection.profile_set)
+    model_result = build_generated_project_render_model(
+        selection.profile_set,
+        flag_catalog,
+    )
     assert model_result.diagnostics == ()
     assert model_result.model is not None
     render_result = render_generated_project_skeleton(
@@ -285,10 +301,14 @@ def test_m191_verifier_checks_every_selected_profile_with_injected_runner(
 
 
 def test_m191_verifier_continues_after_one_profile_fails(tmp_path: Path) -> None:
-    selection = select_generated_profiles(_catalog(), ("scalar", "avx2"))
+    catalog, flag_catalog = _loaded_profile_data()
+    selection = select_generated_profiles(catalog, ("scalar", "avx2"))
     assert selection.diagnostics == ()
     assert selection.profile_set is not None
-    model_result = build_generated_project_render_model(selection.profile_set)
+    model_result = build_generated_project_render_model(
+        selection.profile_set,
+        flag_catalog,
+    )
     assert model_result.diagnostics == ()
     assert model_result.model is not None
     render_result = render_generated_project_skeleton(

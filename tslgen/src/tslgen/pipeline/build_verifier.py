@@ -3,15 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import subprocess
 from typing import Protocol
 
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.domain.generated_project import (
+    BackendProfileRenderModel,
     BackendProjectRenderModel,
     GeneratedProjectRenderModel,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class BuildCommandEnvironment:
+    key: str
+    value: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +29,7 @@ class BuildCommand:
     step: str
     argv: tuple[str, ...]
     cwd: Path
+    env: tuple[BuildCommandEnvironment, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +63,7 @@ def run_subprocess_build_command(command: BuildCommand) -> BuildCommandResult:
         capture_output=True,
         text=True,
         check=False,
+        env=_subprocess_env(command),
     )
     return BuildCommandResult(
         command=command,
@@ -181,9 +191,24 @@ def _rust_command_groups(
                     str(profile.rust_feature),
                 ),
                 cwd=root,
+                env=_rust_profile_environment(profile),
             ),
         )
         for profile in project.profiles
+    )
+
+
+def _rust_profile_environment(
+    profile: BackendProfileRenderModel,
+) -> tuple[BuildCommandEnvironment, ...]:
+    if not profile.rust_target_features:
+        return ()
+    joined_features = ",".join(str(feature) for feature in profile.rust_target_features)
+    return (
+        BuildCommandEnvironment(
+            key="RUSTFLAGS",
+            value=f"-C target-feature={joined_features}",
+        ),
     )
 
 
@@ -272,3 +297,12 @@ def _command_diagnostic(result: BuildCommandResult) -> Diagnostic:
             f"{result.returncode}: {command_text}{suffix}"
         ),
     )
+
+
+def _subprocess_env(command: BuildCommand) -> dict[str, str] | None:
+    if not command.env:
+        return None
+    environment = dict(os.environ)
+    for item in command.env:
+        environment[item.key] = item.value
+    return environment

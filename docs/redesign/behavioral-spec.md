@@ -253,6 +253,39 @@ syntax, parse operators, repair source, compute dependency closure, broaden
 profiles beyond scalar, add generated tests, or hide semantic decisions in
 templates, renderers, the artifact writer, or the verifier.
 
+### M225 Generated Profile Build Flags
+
+Milestone 225 extends the generated-project render model with already-decided
+target-feature build presentation values derived from the selected M189
+machine profile facts.
+
+Accepted M225 behavior:
+
+- `scalar` remains a no-feature profile and renders no C++ target-feature
+  compile options or Rust target-feature flags.
+- Non-scalar profiles carry typed C++ compile options and typed Rust
+  target-feature values before template rendering.
+- Non-scalar profile spellings are derived from the M189 feature flag
+  normalization catalog, with explicit machine-profile alternatives taking
+  precedence. Missing feature spelling evidence is a diagnostic boundary, not
+  a renderer-side spelling guess.
+- The generated CMake project consumes C++ profile compile options through
+  `target_compile_options` in the selected `TSL_PROFILE` branch.
+- The generated Cargo manifest records profile target-feature metadata as
+  presentation-only package metadata. Cargo features still select profile
+  modules; they do not decide target features.
+- After-write Rust verification consumes the typed Rust target-feature values
+  by setting profile-specific `RUSTFLAGS` on the generated `cargo test`
+  command.
+- A tiny generated `scalar,avx2` project can be written through
+  manifest-clean mode and configured/built/tested for C++ and Rust without
+  real intrinsic code.
+
+M225 does not generate real SIMD intrinsic calls, parse or lower new `.tsl`
+forms, broaden primitive rendering beyond the M224 tiny fixture, model
+compiler capability or host autodetection, add qemu/aarch64/NEON/SVE
+verification, or put profile feature semantics in templates.
+
 ### M189 Machine Feature Profile Boundary
 
 Milestone 189 adds a typed machine feature profile catalog for generated

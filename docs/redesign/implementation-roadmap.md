@@ -27429,7 +27429,7 @@ Next concrete prompt:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m225-generated-profile-build-flags-execution-review-loop-prompt.md`.
 
 Goal:
@@ -27465,5 +27465,103 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m225_generated_profile_build_flags.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M225 added typed generated-profile target-feature presentation values:
+`CppTargetFeatureOption` for generated CMake compile options and
+`RustTargetFeature` for generated Rust target-feature flags. These values are
+derived from the selected M189 machine profile facts plus the feature flag
+normalization catalog before template rendering, with deterministic handling
+of explicit alternative spellings and the scalar no-feature sentinel. Missing
+feature spelling evidence for non-scalar profiles is diagnosed instead of
+guessed in the renderer.
+
+The generated CMake project now applies non-scalar profile compile options in
+the selected `TSL_PROFILE` branch. The generated Cargo manifest records
+profile target-feature metadata as presentation data, while after-write Rust
+verification applies the same typed values as profile-specific `RUSTFLAGS`.
+Cargo features continue to select profile modules only.
+
+M225 tests cover scalar no-feature rendering, deterministic `avx2` C++/Rust
+target-feature values, alternative spelling handling, missing flag-catalog
+diagnostics, generated artifact contents, verifier command environments,
+duplicate/unknown profile selection diagnostics, public typed imports, and a
+real manifest-clean `scalar,avx2` C++/Rust generated-project build.
+
+Review verdict:
+
+Accepted by the M225 executor-review loop.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m225_generated_profile_build_flags.py`:
+  exit 0, 8 tests passed.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, no output after
+  cleanup.
+
+Follow-ups:
+
+No blocking follow-ups. The next milestone should use M225 profile build flags
+to prove one real x86 intrinsic fixture through the lowered body-token to
+backend-rendered output path for both C++ and Rust.
+
+Next concrete prompt:
+`docs/agent/runs/m226-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md`.
+
+### Milestone 226: First Real X86 Intrinsic Fixture
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m226-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md`.
+
+Goal:
+
+Use the accepted parsed/generated project path plus M225 generated profile
+build flags to prove one real observed x86 non-scalar intrinsic fixture, with
+C++ and Rust kept in parity. The selected implementation body should be
+represented as raw source spans plus typed lowerable body-token values, and
+backend rendering should consume those typed values to emit a real intrinsic
+call for an x86 profile such as `avx2`.
+
+Preflight requirement:
+
+Before implementation, inspect `tsldata/primitives/**/*.tsl` and select one
+exact observed x86 non-scalar implementation shape that can be handled without
+broad TSIL parsing, dependency closure, source repair, all-profile matrices,
+ARM/qemu coverage, or host autodetection. If no such fixture exists, return to
+planner instead of implementing.
+
+Scope:
+
+- Preserve the M224 parsed-source entry path where practical.
+- Add only the exact parser/lowering/body-token support needed for the chosen
+  observed fixture.
+- Keep C++ and Rust behavior in parity for the selected fixture.
+- Render through typed lowered body-token results; do not parse or infer
+  semantics in templates, renderers, the writer, or verifier.
+- Verify generated `scalar,avx2` projects through manifest-clean writing and
+  C++/Rust build verification using M225 target-feature flags.
+
+Out of scope:
+
+General TSIL expression/statement parsing; broad support for every
+`intrin_compose`, `intrin`, `call`, `if`, `loop`, `mem`, `io`, or `cast`
+shape; all-profile matrices; NEON/SVE/qemu; compiler capability detection;
+host autodetection; source repair; runtime dependency on `frozen/` or
+`tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m226_first_real_x86_intrinsic_fixture.py
 find tslgen -type d -name __pycache__ -print
 ```

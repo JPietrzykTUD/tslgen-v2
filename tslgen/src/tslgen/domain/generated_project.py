@@ -16,8 +16,10 @@ from tslgen.domain.machine_profiles import (
 
 ProfileFileStem = NewType("ProfileFileStem", str)
 CppProfileMacro = NewType("CppProfileMacro", str)
+CppTargetFeatureOption = NewType("CppTargetFeatureOption", str)
 RustProfileFeature = NewType("RustProfileFeature", str)
 RustProfileModule = NewType("RustProfileModule", str)
+RustTargetFeature = NewType("RustTargetFeature", str)
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,8 +46,10 @@ class BackendProfileRenderModel:
     alternatives: tuple[MachineFeatureAlternative, ...]
     file_stem: ProfileFileStem
     cpp_macro: CppProfileMacro
+    cpp_target_feature_options: tuple[CppTargetFeatureOption, ...]
     rust_feature: RustProfileFeature
     rust_module: RustProfileModule
+    rust_target_features: tuple[RustTargetFeature, ...]
 
 
 @dataclass(frozen=True, slots=True)

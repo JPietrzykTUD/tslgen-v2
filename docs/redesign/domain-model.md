@@ -2474,8 +2474,10 @@ class BackendProfileRenderModel:
     alternatives: tuple[MachineFeatureAlternative, ...]
     file_stem: ProfileFileStem
     cpp_macro: CppProfileMacro
+    cpp_target_feature_options: tuple[CppTargetFeatureOption, ...]
     rust_feature: RustProfileFeature
     rust_module: RustProfileModule
+    rust_target_features: tuple[RustTargetFeature, ...]
 
 @dataclass(frozen=True, slots=True)
 class BackendProjectRenderModel:
@@ -2502,9 +2504,17 @@ Invariants:
   first selected profile otherwise.
 - `BackendProjectRenderModel` is presentation data for an already-decided
   skeleton output. It may carry profile names, generated file stems, C++
-  profile macros, Rust feature names, and smoke-test paths, but it must not
-  carry raw TSIL, catalog objects, lowering requests, unresolved backend
-  metadata, primitive bodies, or compiler capability decisions.
+  profile macros, C++ target-feature compile options, Rust feature names, Rust
+  target-feature flags, and smoke-test paths, but it must not carry raw TSIL,
+  catalog objects, lowering requests, unresolved backend metadata, primitive
+  bodies, or compiler capability decisions.
+- M225 target-feature fields are typed presentation values derived from
+  selected machine profile facts and the feature flag normalization catalog
+  before templates run. Explicit profile alternatives override catalog
+  spellings. Missing spelling evidence for a non-scalar feature is diagnosed
+  before render output is accepted. These fields are not a compiler capability
+  model, host autodetection result, primitive selection policy, or
+  template-side semantic decision.
 - C++ generated projects expose `cpp/include/tsl.hpp` and profile headers under
   `cpp/include/profiles/`. Rust generated projects expose `rust/src/lib.rs`
   and profile modules under `rust/src/profiles/`.

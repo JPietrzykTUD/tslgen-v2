@@ -6,7 +6,7 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 224 is accepted.
+Milestone 225 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -617,46 +617,62 @@ syntax, parse operators, repair source, compute dependency closure, broaden
 profiles beyond scalar, add generated tests, or hide semantic decisions in
 templates, renderers, the writer, or the verifier.
 
+M225 added typed generated-profile target-feature presentation values derived
+from selected M189 machine profile facts and the feature flag normalization
+catalog. `BackendProfileRenderModel` now carries C++ target-feature compile
+options and Rust target-feature values before template rendering. Scalar
+remains no-feature, explicit profile alternatives override catalog spellings,
+and missing non-scalar spelling evidence is diagnosed instead of guessed in
+the renderer. CMake consumes C++ compile options in the selected `TSL_PROFILE`
+branch. Cargo records Rust profile target-feature metadata as presentation
+data, while the after-write build verifier applies profile-specific
+`RUSTFLAGS` from the same typed model. M225 verified a tiny `scalar,avx2`
+generated project for C++ and Rust without real intrinsic code and did not
+broaden parser/lowering, generate SIMD intrinsics, model host/compiler
+capability, add qemu/ARM coverage, or hide feature semantics in templates.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M225 generated profile build flags execution-review loop prompt.
+Run M226 first real x86 intrinsic fixture execution-review loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m225-generated-profile-build-flags-execution-review-loop-prompt.md
+docs/agent/runs/m226-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 225: Generated Profile Build Flags.
+Milestone 226: First Real X86 Intrinsic Fixture.
 ```
 
 Latest review verdict:
 
 ```text
-M224 execution-review returned Accept. Architecture/boundary, evidence, test,
-documentation, and validation reviewers accepted the parsed-source-to-render
-plan bridge and confirmed that it does not use the old direct backend emitters,
-broaden parser scope, generate from the full corpus, or hide semantics in
-output boundaries.
+M225 execution-review returned Accept. Architecture/boundary, evidence, test,
+documentation, and validation reviewers accepted the typed generated-profile
+build-flag presentation slice and confirmed that C++/Rust target-feature
+values are decided before templates, scalar remains no-feature, the verifier
+consumes Rust target features through profile-specific `RUSTFLAGS`, and no
+real intrinsic generation, parser/lowering broadening, host autodetection, or
+template-side feature semantics were introduced.
 ```
 
 Next expected action:
 
 ```text
-Run the active M225 execution-review loop prompt. Add typed generated-profile
-build flag presentation so selected machine profile flags reach generated C++
-and Rust build artifacts before real intrinsic generation begins. Keep scalar
-no-feature, prove at least `scalar,avx2` can render/write/verify with a tiny
-no-intrinsic project, and do not generate real SIMD intrinsic calls, broaden
-parser/lowering, model compiler capability, use host autodetection, or hide
-feature semantics in templates.
+Run the active M226 execution-review loop prompt. Select one exact observed
+x86 non-scalar `.tsl` implementation shape, preferably `avx2`, and prove the
+lowered body-token to backend-rendered intrinsic output path for both C++ and
+Rust. Keep the body model as raw source spans plus typed lowerable token
+results, use M225 build flags for generated `avx2` verification, and return
+to planner instead of implementing if the selected fixture would require broad
+TSIL parsing or source repair.
 ```
 
 Previous review verdict:
@@ -725,13 +741,14 @@ M222 execution-review returned Accept and selected M223 first real generated
 primitive execution-review. M223 execution-review returned Accept after
 focused test revision and selected M224 parsed tiny TSL to generated project
 execution-review. M224 execution-review returned Accept and selected M225
-generated profile build flags execution-review.
+generated profile build flags execution-review. M225 execution-review returned
+Accept and selected M226 first real x86 intrinsic fixture execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m224-parsed-tiny-tsl-to-generated-project-execution-review-loop-prompt.md
+docs/agent/runs/m225-generated-profile-build-flags-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

@@ -2682,6 +2682,13 @@ one generated profile module through Cargo feature or `cfg` configuration.
 Rust target-feature flags are build/verifier configuration, not semantic
 decisions inside `lib.rs`.
 
+M225 realizes this by deriving target-feature spellings from the M189 feature
+flag catalog and explicit profile alternatives, rendering Rust profile
+target-feature values as presentation metadata in `Cargo.toml`, and having the
+after-write verifier apply the same already-decided values as profile-specific
+`RUSTFLAGS`. This keeps Cargo features responsible only for profile-module
+selection and keeps target-feature decisions out of Rust source templates.
+
 A generation run includes only an explicit selected profile subset. If no
 profile is requested, the subset defaults to `scalar`. The reserved profile
 selection value `all` means all known machine profiles from the machine profile

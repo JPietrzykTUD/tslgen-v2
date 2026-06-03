@@ -12,14 +12,21 @@ from tslgen.domain.generated_project import (
     BackendProfileRenderModel,
     BackendProjectRenderModel,
     CppProfileMacro,
+    CppTargetFeatureOption,
     GeneratedProjectModelResult,
     GeneratedProjectRenderModel,
     GeneratedProfileSet,
     ProfileFileStem,
     RustProfileFeature,
     RustProfileModule,
+    RustTargetFeature,
 )
-from tslgen.domain.machine_profiles import MachineFeatureProfile, MachineProfileName
+from tslgen.domain.machine_profiles import (
+    FeatureFlagName,
+    FeatureFlagNormalizationCatalog,
+    MachineFeatureProfile,
+    MachineProfileName,
+)
 from tslgen.io.artifacts import Artifact, ArtifactMetadata, ArtifactSet
 
 
@@ -41,16 +48,20 @@ _ALLOWED_TEMPLATE_FIELDS = frozenset(
         "feature_entries",
         "package_name",
         "project_name",
+        "profile_metadata_entries",
     }
 )
 
 
 def build_generated_project_render_model(
     profile_set: GeneratedProfileSet,
+    flag_catalog: FeatureFlagNormalizationCatalog | None = None,
 ) -> GeneratedProjectModelResult:
     """Create already-decided C++ and Rust skeleton render models."""
 
-    profiles = tuple(_profile_render_model(profile) for profile in profile_set.profiles)
+    profiles, diagnostics = _profile_render_models(profile_set, flag_catalog)
+    if diagnostics:
+        return GeneratedProjectModelResult(model=None, diagnostics=diagnostics)
     diagnostics = _profile_identifier_diagnostics(profiles)
     if diagnostics:
         return GeneratedProjectModelResult(model=None, diagnostics=diagnostics)
@@ -134,10 +145,28 @@ def render_generated_project_skeleton(
     )
 
 
+def _profile_render_models(
+    profile_set: GeneratedProfileSet,
+    flag_catalog: FeatureFlagNormalizationCatalog | None,
+) -> tuple[tuple[BackendProfileRenderModel, ...], tuple[Diagnostic, ...]]:
+    profiles: list[BackendProfileRenderModel] = []
+    diagnostics: list[Diagnostic] = []
+    for profile in profile_set.profiles:
+        rendered, rendered_diagnostics = _profile_render_model(profile, flag_catalog)
+        diagnostics.extend(rendered_diagnostics)
+        if rendered is not None:
+            profiles.append(rendered)
+    return tuple(profiles), _sort_diagnostics(diagnostics)
+
+
 def _profile_render_model(
     profile: MachineFeatureProfile,
-) -> BackendProfileRenderModel:
+    flag_catalog: FeatureFlagNormalizationCatalog | None,
+) -> tuple[BackendProfileRenderModel | None, tuple[Diagnostic, ...]]:
     stem = _sanitize_file_stem(str(profile.name))
+    feature_spellings, diagnostics = _build_feature_spellings(profile, flag_catalog)
+    if diagnostics:
+        return None, diagnostics
     return BackendProfileRenderModel(
         family=profile.family,
         profile_name=profile.name,
@@ -145,9 +174,15 @@ def _profile_render_model(
         alternatives=profile.alternatives,
         file_stem=ProfileFileStem(stem),
         cpp_macro=CppProfileMacro(f"TSL_PROFILE_{stem.upper()}"),
+        cpp_target_feature_options=tuple(
+            CppTargetFeatureOption(f"-m{spelling}") for spelling in feature_spellings
+        ),
         rust_feature=RustProfileFeature(f"profile_{stem}"),
         rust_module=RustProfileModule(stem),
-    )
+        rust_target_features=tuple(
+            RustTargetFeature(f"+{spelling}") for spelling in feature_spellings
+        ),
+    ), ()
 
 
 def _profile_identifier_diagnostics(
@@ -232,6 +267,7 @@ def _rust_template_values(project: BackendProjectRenderModel) -> dict[str, str]:
             f'{profile.rust_feature} = []' for profile in project.profiles
         ),
         "package_name": project.project_name,
+        "profile_metadata_entries": _rust_profile_metadata_entries(project),
     }
 
 
@@ -245,6 +281,11 @@ def _cpp_profile_cases(project: BackendProjectRenderModel) -> str:
                 f"  target_compile_definitions(tsl_generated INTERFACE {profile.cpp_macro})",
             )
         )
+        if profile.cpp_target_feature_options:
+            options = " ".join(
+                str(option) for option in profile.cpp_target_feature_options
+            )
+            lines.append(f"  target_compile_options(tsl_generated INTERFACE {options})")
     lines.extend(
         (
             "else()",
@@ -252,6 +293,23 @@ def _cpp_profile_cases(project: BackendProjectRenderModel) -> str:
             "endif()",
         )
     )
+    return "\n".join(lines)
+
+
+def _rust_profile_metadata_entries(project: BackendProjectRenderModel) -> str:
+    lines: list[str] = []
+    for index, profile in enumerate(project.profiles):
+        if index > 0:
+            lines.append("")
+        lines.extend(
+            (
+                "[package.metadata.tsl.profiles."
+                f'"{_toml_escape(str(profile.profile_name))}"]',
+                f"target_features = {_toml_string_array(profile.rust_target_features)}",
+                "rustflags = "
+                f"{_toml_string_array(_rust_target_feature_rustflags(profile))}",
+            )
+        )
     return "\n".join(lines)
 
 
@@ -520,6 +578,85 @@ def _profile_by_name(
         if profile.profile_name == name:
             return profile
     raise ValueError(f"profile {name!r} is not in project {project.backend_id!r}")
+
+
+def _build_feature_spellings(
+    profile: MachineFeatureProfile,
+    flag_catalog: FeatureFlagNormalizationCatalog | None,
+) -> tuple[tuple[str, ...], tuple[Diagnostic, ...]]:
+    spellings: list[str] = []
+    diagnostics: list[Diagnostic] = []
+    for feature in profile.features:
+        spelling, diagnostic = _build_feature_spelling(profile, feature, flag_catalog)
+        if diagnostic is not None:
+            diagnostics.append(diagnostic)
+            continue
+        assert spelling is not None
+        spellings.append(spelling)
+    return tuple(spellings), tuple(diagnostics)
+
+
+def _build_feature_spelling(
+    profile: MachineFeatureProfile,
+    feature: FeatureFlagName,
+    flag_catalog: FeatureFlagNormalizationCatalog | None,
+) -> tuple[str | None, Diagnostic | None]:
+    for alternative in profile.alternatives:
+        if alternative.feature == feature:
+            return str(alternative.spelling), None
+    if flag_catalog is None:
+        return None, Diagnostic(
+            severity="error",
+            code="TSL-GENERATED-PROJECT-MISSING-FLAG-CATALOG",
+            message=(
+                f"generated profile {str(profile.name)!r} requires feature "
+                f"spelling data for {str(feature)!r}"
+            ),
+            location=profile.source,
+        )
+
+    matches = tuple(
+        entry for entry in flag_catalog.entries if entry.normalized == feature
+    )
+    if not matches:
+        return None, Diagnostic(
+            severity="error",
+            code="TSL-GENERATED-PROJECT-MISSING-FLAG-SPELLING",
+            message=(
+                f"generated profile {str(profile.name)!r} feature "
+                f"{str(feature)!r} has no spelling in the feature flag catalog"
+            ),
+            location=profile.source,
+        )
+    selected = min(
+        matches,
+        key=lambda entry: (
+            str(entry.source.path),
+            entry.source.line,
+            entry.source.column,
+            str(entry.spelling),
+        ),
+    )
+    return str(selected.spelling), None
+
+
+def _rust_target_feature_rustflags(
+    profile: BackendProfileRenderModel,
+) -> tuple[str, ...]:
+    if not profile.rust_target_features:
+        return ()
+    target_features = ",".join(str(feature) for feature in profile.rust_target_features)
+    return ("-C", f"target-feature={target_features}")
+
+
+def _toml_string_array(values: tuple[object, ...]) -> str:
+    if not values:
+        return "[]"
+    return "[" + ", ".join(f'"{_toml_escape(str(value))}"' for value in values) + "]"
+
+
+def _toml_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def _sanitize_file_stem(value: str) -> str:
