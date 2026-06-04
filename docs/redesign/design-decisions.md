@@ -3142,3 +3142,58 @@ Consequences:
   templates or semantic engines.
 - Shared token replacement work must name concrete consumers before adding a
   shared contract, avoiding another broad dispatcher/worklist abstraction.
+
+## ADR-064: M228 Restart Uses A Declaration Parser Boundary Before Real Fixture Expansion
+
+Status: Accepted.
+
+Context:
+
+The first M228 attempt was moved to the `m228-spike` branch as evidence. It
+proved that the observed `add`/`avx2` fixture is reachable, but it also
+recreated the same risk the restart is meant to avoid: parser, catalog,
+lowerer, and generated-project bridge changes grew together, with exact
+regular-expression additions and raw-body fallbacks scattered through already
+large modules.
+
+Outer `.tsl` declaration syntax is not TSIL. Primitive declarations,
+attributes, optional `return_type`, optional `generic_params`, nested `impls`
+extension/type selectors, `requires`, and `implementation` body envelopes
+should be parsed as source declarations with spans. The body payload inside
+`tsil "..."` or `tsil """..."""` remains source-owned body text that is later
+segmented into raw spans and accepted lowerable token islands.
+
+Decision:
+
+M228 restarts from the accepted M227 baseline. Before implementing the real
+x86 intrinsic fixture, it must establish or select a focused outer TSL
+declaration parser boundary. A grammar parser such as Lark is the preferred
+candidate because the redesign docs already identify `tsl_data.lark` and the
+legacy grammar is usable evidence; however, the executor may choose another
+parser only if it gives simpler typed declarations, source spans, diagnostics,
+and maintainability for the current corpus.
+
+The parser boundary must not become a broad TSIL parser. It parses declaration
+structure and preserves TSIL bodies as raw payload spans. Lowering may then use
+a separate body/token boundary to identify exact lowerable islands needed by
+the selected fixture. Because multiple TSIL keywords may carry single-line or
+multiline balanced payloads and body regions, that boundary should reuse or
+extend the accepted lexical-only helper pattern from M162.5 instead of making
+an `emit_return(...)`-only extractor. Keyword-specific lowerers still own the
+meaning, diagnostics, and accepted source forms for each recognized region.
+
+Consequences:
+
+- The `m228-spike` branch is evidence only; do not cherry-pick or copy it
+  wholesale.
+- The active M228 prompt must require a parser-choice preflight and a
+  module-size pressure check before implementation.
+- If outer declaration parser work is too large to fit beside the exact x86
+  fixture, the executor must stop and create a parser-boundary milestone before
+  rendering the fixture.
+- New support for multiline TSIL keyword islands belongs in a focused
+  source-body/token lexical boundary that can be shared by keyword lowerers,
+  not as a general raw-string repair path or an `emit_return(...)` special
+  case hidden inside `Lowerer`.
+- Existing TSIL lowerable token semantics, backend translation, templates, and
+  generated-project rendering remain separate boundaries.

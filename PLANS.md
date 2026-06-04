@@ -171,6 +171,24 @@ If the milestone would require precedence, associativity, casts, temporary
 variables, mixed expressions, or general target-language operator support, it
 is too broad for an exact lowering slice.
 
+Parser milestones must also distinguish outer TSL declarations from TSIL body
+payloads. Primitive declarations, attributes, `return_type`, `generic_params`,
+implementation selectors, `requires`, and implementation body envelopes should
+be handled by a maintainable declaration parser with spans, preferably a
+grammar parser when the selected slice broadens beyond tiny hand fixtures.
+Do not keep adding regular-expression ladders to large parser modules for
+general declaration structure. TSIL body text remains source-owned raw spans
+plus accepted lowerable token islands; parsing outer declarations must not
+silently become broad TSIL parsing or source repair.
+
+When multiple TSIL keywords need balanced single-line or multiline payload/body
+matching, prefer a shared lexical-only region scanner over one-off keyword
+regexes. Such a scanner may know about delimiters, nesting, raw spans, and
+source locations, but not keyword semantics, expression meaning, generation
+evaluation, backend translation, or source repair. Keyword-specific lowerers
+consume the lexical regions and decide whether their exact accepted source
+forms apply.
+
 ## Simplicity And End-To-End Slice Guardrails
 
 Future planning must optimize for the shortest maintainable path from source

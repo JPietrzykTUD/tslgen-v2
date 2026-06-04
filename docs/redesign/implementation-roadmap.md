@@ -27820,29 +27820,44 @@ Review verdict:
 Accepted by the M227 executor-review loop.
 
 Next concrete prompt:
-`docs/agent/runs/m228-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md`.
+`docs/agent/runs/m228-restarted-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md`.
 
-### Milestone 228: First Real X86 Intrinsic Fixture
+### Milestone 228: Restarted First Real X86 Intrinsic Fixture
 
 Status:
 
-Selected. Execution-review loop prompt:
-`docs/agent/runs/m228-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md`.
+Selected after the first M228 attempt was moved to the `m228-spike` branch as
+evidence. Restarted execution-review loop prompt:
+`docs/agent/runs/m228-restarted-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md`.
 
 Goal:
 
 Use the M227 typed function-shape render boundary to implement one exact
 observed x86 non-scalar intrinsic fixture from `tsldata/primitives/**/*.tsl`,
-with C++ and Rust kept in parity. The next slice should focus on the exact
-lowering/parser/catalog/body-token support needed for that selected fixture,
-then consume existing backend translation and rendering boundaries.
+with C++ and Rust kept in parity, but only after a mandatory parser/body
+preflight gate. The first M228 spike showed that parser/catalog/lowering/render
+bridge work can become bundled too easily. The restarted slice must first
+decide the outer `.tsl` declaration parser strategy, decide the focused
+shared lexical body-region strategy for balanced single-line and multiline
+TSIL keyword islands, and decide whether the render bridge can stay small.
 
 Scope:
 
 - Preflight-select one exact observed `v:=(v,v)` x86 fixture, preferably from
   `tsldata/primitives/arithmetic/fundamental.tsl` `add`/`avx2`.
-- Add only the exact source parsing/catalog/lowering support required for the
-  selected fixture.
+- Establish or select a maintainable outer `.tsl` declaration parser boundary
+  for the fixture's primitive header, optional declaration blocks, nested
+  `impls`, `requires`, and `implementation` body envelope. A grammar parser
+  such as Lark is preferred when it is the simplest maintainable fit, but the
+  selected parser must be justified by typed declarations, spans, diagnostics,
+  and module ownership.
+- Keep TSIL payloads raw until a focused shared lexical body-token boundary
+  extracts accepted lowerable token islands. For M228, that boundary only needs
+  enough coverage to expose the selected multiline `emit_return(PAYLOAD);`
+  region and nested `intrin_compose<...>(...)` island, but it should be
+  reusable by later keyword lowerers for balanced multiline keyword regions.
+- Add only the exact catalog/lowering/render bridge support required for the
+  selected fixture after the preflight gate passes.
 - Preserve implementation bodies as raw source spans plus typed lowerable
   token values.
 - Translate and render lowered intrinsic/intrinsic-compose body tokens through
@@ -27858,7 +27873,8 @@ Broad TSIL parsing; broad `intrin_compose` coverage; broad primitive
 selection/corpus generation; dependency closure; source repair; all-profile
 matrices; ARM/NEON/SVE/qemu; host/compiler capability modeling; new whole
 C++/Rust function assembly in Python; semantic decisions in templates; runtime
-dependency on `frozen/` or `tslgenold`; copying `new_chat_test` wholesale.
+dependency on `frozen/`, `tslgenold`, `new_chat_test`, or `m228-spike`;
+copying the spike branch wholesale.
 
 Validation:
 

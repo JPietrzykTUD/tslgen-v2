@@ -1,5 +1,12 @@
 # M228 First Real X86 Intrinsic Fixture Execution Review Loop Prompt
 
+Superseded. Do not run this prompt unless the workflow state is deliberately
+rolled back. The active restarted prompt is:
+
+```text
+docs/agent/runs/m228-restarted-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md
+```
+
 Execute this prompt only when `docs/agent/current-redesign-state.md` points
 here and records M225 and M227 as accepted, M226 as stopped by preflight, and
 M226.5 as accepted planning.

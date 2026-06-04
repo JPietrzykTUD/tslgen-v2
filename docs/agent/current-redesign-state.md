@@ -644,24 +644,33 @@ derived from the typed generated project render model. It did not implement
 the real `avx2` fixture, add intrinsic semantics, broaden TSIL parsing, or
 copy `new_chat_test`.
 
+The first M228 attempt was moved out of this worktree to the `m228-spike`
+branch as evidence. It is not accepted. ADR-064 records the restart decision:
+outer `.tsl` declaration structure needs a focused parser boundary before the
+real x86 fixture is broadened, while TSIL implementation payloads remain raw
+source spans plus accepted lowerable token islands. The active M228 prompt has
+therefore been restarted and tightened; do not run the superseded original
+M228 prompt.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M228 first real x86 intrinsic fixture execution-review loop prompt.
+Run restarted M228 first real x86 intrinsic fixture execution-review loop
+prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m228-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md
+docs/agent/runs/m228-restarted-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 228: First Real X86 Intrinsic Fixture.
+Milestone 228: Restarted First Real X86 Intrinsic Fixture.
 ```
 
 Latest review verdict:
@@ -683,14 +692,17 @@ __pycache__ -print` produced no output after cache cleanup.
 Next expected action:
 
 ```text
-Run the active M228 execution-review loop prompt. Focus on lowering/source
-support for one exact observed x86 non-scalar fixture, preferably
-`tsldata/primitives/arithmetic/fundamental.tsl` `add` with `v:=(v,v)` and an
-`avx2` implementation. Consume the accepted M227 function-shape template
-boundary and selected-profile replacement policy; do not reopen function-shape
-rendering. Keep implementation bodies as raw spans plus typed lowerable token
-values, avoid broad TSIL parsing/source repair/dependency closure, and compile
-test generated C++ and Rust `scalar,avx2` projects.
+Run the restarted active M228 execution-review loop prompt. It has a mandatory
+preflight gate: decide the outer `.tsl` declaration parser strategy, decide
+the shared lexical body-region strategy for balanced single-line and multiline
+TSIL keyword islands, and decide whether the render bridge can stay small
+before implementing the exact `tsldata/primitives/arithmetic/fundamental.tsl`
+`add`/`avx2` fixture. For M228, the shared lexical boundary only needs enough
+coverage to expose the selected multiline `emit_return(PAYLOAD);` region and
+nested `intrin_compose<...>(...)` island; keyword-specific semantics stay in
+the lowerers. If that preflight shows parser/body work is too large to fit
+safely with the fixture, stop and create a parser/body-boundary prompt instead
+of forcing M228 through. Do not run the superseded original M228 prompt.
 ```
 
 Previous review verdict:
