@@ -1165,6 +1165,9 @@ class LoweredFunctionSignature:
     parameters: tuple[LoweredParameter, ...]
     scalar_type: ScalarTypeDescriptor
     result_type: LoweredResultType = INPUT_SCALAR_RESULT_TYPE
+    # Render-planning provenance: the catalog signature model is carried so
+    # function-shape templates can be selected without reparsing source text.
+    signature_shape: PrimitiveSignature | None = None
 
 
 @dataclass(frozen=True, slots=True)

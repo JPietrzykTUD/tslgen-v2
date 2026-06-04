@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tslgen.core.diagnostics import Diagnostic
+from tslgen.domain.generated_project import GeneratedProjectRenderModel
 from tslgen.io.artifacts import Artifact, ArtifactSet
 
 
@@ -32,6 +33,26 @@ def scalar_profile_replacement_policy() -> GeneratedPrimitiveProjectCompositionP
         replacement_paths=(
             GeneratedPrimitiveProjectReplacementPath("cpp/include/profiles/scalar.hpp"),
             GeneratedPrimitiveProjectReplacementPath("rust/src/profiles/scalar.rs"),
+        )
+    )
+
+
+def selected_profile_replacement_policy(
+    model: GeneratedProjectRenderModel,
+) -> GeneratedPrimitiveProjectCompositionPolicy:
+    return GeneratedPrimitiveProjectCompositionPolicy(
+        replacement_paths=tuple(
+            GeneratedPrimitiveProjectReplacementPath(path)
+            for path in (
+                *(
+                    f"cpp/include/profiles/{profile.file_stem}.hpp"
+                    for profile in model.cpp.profiles
+                ),
+                *(
+                    f"rust/src/profiles/{profile.file_stem}.rs"
+                    for profile in model.rust.profiles
+                ),
+            )
         )
     )
 

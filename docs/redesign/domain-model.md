@@ -2701,6 +2701,14 @@ Invariants:
   run body-token substitution, translate backend semantics, render templates,
   write artifacts, or run build verification.
 
+M227 adds a focused pre-plan function-shape render value for exact `v:=(v,v)`.
+`LoweredFunctionSignature` carries the typed catalog `PrimitiveSignature` as
+render-planning provenance so the pipeline can select the exact C++/Rust shape
+template without reparsing source text. The shape renderer consumes only
+already-decided presentation fields and emits a
+`RenderedPrimitiveDefinitionText` value, which keeps the existing
+`PrimitiveRenderPlan` boundary unchanged.
+
 M223 adds a narrow generated primitive project composition boundary over
 already-rendered artifacts:
 
@@ -2727,7 +2735,10 @@ Invariants:
   primitives, or compute dependency closure.
 - `GeneratedPrimitiveProjectReplacementPath` names the exact skeleton artifact
   paths that may be replaced by primitive profile artifacts for the selected
-  profile set. M223 accepts only the scalar C++ and Rust profile paths.
+  profile set. M223 accepted only the scalar C++ and Rust profile paths; M227
+  adds selected-profile replacement paths derived from the typed generated
+  project render model file stems, including non-scalar profile placeholders
+  such as `avx2`.
 - Duplicate logical paths inside either input artifact set are diagnostics.
 - Primitive artifacts may collide with skeleton artifacts only at accepted
   replacement paths. Other collisions are diagnostics.
@@ -2735,6 +2746,9 @@ Invariants:
   public entry artifacts, buildsystem artifacts, smoke tests, and unrelated
   skeleton artifacts while replacing selected placeholder profile artifacts
   with primitive profile artifacts.
+- Selected-profile replacement derives allowed profile placeholder paths from
+  typed generated project render model file stems. It does not guess profile
+  paths from raw names in renderers or writers.
 
 M224 adds a parsed tiny generated-project orchestration result and a selected
 lowered-function bridge:

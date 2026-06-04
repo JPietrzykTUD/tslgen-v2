@@ -1,0 +1,3 @@
+pub fn {function_name}({parameters}) -> {result_type} {{
+    {body_text}
+}}

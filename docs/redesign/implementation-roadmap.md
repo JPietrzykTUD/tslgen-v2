@@ -27518,7 +27518,7 @@ Next concrete prompt:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Stopped by preflight. Execution-review loop prompt:
 `docs/agent/runs/m226-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md`.
 
 Goal:
@@ -27579,5 +27579,292 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m226_first_real_x86_intrinsic_fixture.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Preflight result:
+
+The preflight found a real observed candidate but stopped before
+implementation. `tsldata/primitives/arithmetic/fundamental.tsl` contains
+`prim<v:=(v,v)> add(left, right)` and an `avx2` body with
+`emit_return(intrin_compose<add, suffix=...>(left, right));`, with `sub` as a
+similar fallback candidate. This is enough evidence for a future real x86
+fixture.
+
+The blocker is the current primitive render boundary. The active pipeline still
+assembles whole C++ and Rust function definitions in Python and hands the
+renderer already-rendered declaration/definition blobs. The supplementary
+primitive templates paste those blobs instead of selecting a typed
+signature-shape template such as `v:=(v,v)`. Implementing M226 now would either
+extend that raw-string path or bundle signature-shape template selection,
+profile artifact replacement, intrinsic body lowering, and intrinsic rendering
+into one broad slice.
+
+The `new_chat_test` branch is recorded as negative evidence for this risk: it
+changed 20 files with 2170 insertions and combined parser/catalog widening,
+intrinsic return-body lowering, selected intrinsic prefix handling,
+shape-template rendering, generated-profile replacement, tests, and docs.
+Those ideas must not be copied wholesale into the active branch.
+
+Decision:
+
+M226 remains unaccepted. Accepted-through stays at M225. The next prompt is a
+focused planning cleanup for the signature-shape template/render-model boundary
+before the real x86 intrinsic fixture is attempted again:
+`docs/agent/runs/m2265-signature-shape-template-render-model-cleanup-planning-prompt.md`.
+
+Validation result for the stopped preflight/docs transition:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m226_first_real_x86_intrinsic_fixture.py`:
+  exit 4 because `tslgen/tests/test_m226_first_real_x86_intrinsic_fixture.py`
+  does not exist; M226 stopped before implementation/test creation and remains
+  unaccepted.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created `__pycache__` directories. After removing those
+  directories, final `find tslgen -type d -name __pycache__ -print`: exit 0,
+  no output.
+
+### Milestone 226.5: Signature-Shape Template Render-Model Cleanup Planning
+
+Status:
+
+Accepted. Planning/review prompt:
+`docs/agent/runs/m2265-signature-shape-template-render-model-cleanup-planning-prompt.md`.
+
+Goal:
+
+Plan the smallest cleanup needed so M226 can later render one real x86
+intrinsic fixture without Python assembling whole C++/Rust function,
+header/module, or wrapper strings. The cleanup must preserve the accepted body
+model: implementation bodies are raw source spans plus typed lowered token
+values, and backends substitute already-translated leaf values into
+presentation templates.
+
+Scope:
+
+- Reassess the current M217/M222/M224/M225 primitive render path and the M226
+  preflight blocker.
+- Use `new_chat_test` only as negative evidence for what not to bundle.
+- Define the next executable slice for typed primitive/function render fields,
+  exact signature-shape template selection for `v:=(v,v)`, and supplementary
+  C++/Rust shape templates.
+- Ensure the selected primitive signature shape remains a typed value from the
+  catalog/lowering path, not a raw string inferred by the renderer.
+- Keep lowered body-token and backend-translated intrinsic values as leaf
+  render inputs; templates may format them but must not parse TSIL or decide
+  semantics.
+- Include selected-profile primitive artifact replacement only if M226 cannot
+  target `avx2` profile files without it, and keep that decision explicit.
+
+Out of scope:
+
+Implementation code; real intrinsic fixture rendering; broad signature/template
+frameworks; broad TSIL parsing; source repair; all-profile matrices; ARM/qemu
+coverage; dependency closure; semantic decisions in templates; runtime
+dependency on `frozen/` or `tslgenold`; copying the `new_chat_test` branch
+wholesale.
+
+Validation:
+
+```bash
+git diff --check
+```
+
+Planning result:
+
+M226.5 accepted the pre-M226 cleanup direction. The smallest missing boundary
+is a typed primitive function-shape render boundary selected from existing
+catalog/lowering signature facts. `Primitive.signature_model` and
+`parameter_signature_terms` already exist in the catalog, and the selected
+lowering context already preserves those values, but `LoweredFunctionSignature`
+drops the signature shape before render planning. Downstream, the current
+parsed generated primitive bridge renders whole C++/Rust function definitions
+in Python and passes them as `RenderedPrimitiveDefinitionText`; the
+file-level primitive templates only paste those definition blobs.
+
+The next executable slice must therefore carry the exact `v:=(v,v)` signature
+shape as a typed render-planning value derived from catalog/lowering state,
+add exact C++ and Rust shape templates for that function form, and render those
+shape templates into `RenderedPrimitiveDefinitionText` before the existing
+file-level primitive templates compose profile artifacts. Templates may format
+already-decided presentation fields and already-rendered body-token leaf text
+only; they must not parse TSIL, inspect catalog objects, select intrinsics or
+types, choose fallbacks, or decide semantics.
+
+M226.5 also found that M226 proper will need non-scalar profile artifact
+replacement because the current generated primitive project composition policy
+allows only scalar profile placeholders. The next executable cleanup should
+include a narrow selected-profile replacement policy for selected generated
+profile files if doing so keeps the resumed M226 fixture compile-verifiable.
+
+Subagent verdicts:
+
+- Evidence auditor: Accept. Confirmed the `add` `v:=(v,v)` `avx2` fixture in
+  `tsldata/primitives/arithmetic/fundamental.tsl` and recorded
+  `new_chat_test` only as broad negative evidence.
+- Boundary auditor: Accept. Identified the missing typed
+  primitive-function-shape render boundary and confirmed that current function
+  text assembly lives in the parsed generated primitive bridge.
+- Documentation auditor: Accept. Confirmed alignment with AGENTS.md, PLANS.md,
+  ADR-063, the supplementary template boundary, and the typed render-model
+  contract.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+
+Next concrete prompt:
+`docs/agent/runs/m227-vv-function-shape-template-render-boundary-execution-review-loop-prompt.md`.
+
+### Milestone 227: V/V Function-Shape Template Render Boundary
+
+Status:
+
+Accepted. Execution-review loop prompt:
+`docs/agent/runs/m227-vv-function-shape-template-render-boundary-execution-review-loop-prompt.md`.
+
+Goal:
+
+Implement the narrow typed render cleanup selected by M226.5: exact
+`v:=(v,v)` primitive function-shape rendering for C++ and Rust through
+supplementary templates, with the signature-shape selector carried from
+catalog/lowering state into render planning. This prepares the real M226 x86
+fixture without adding intrinsic semantics or broad TSIL parsing.
+
+Scope:
+
+- Carry the selected primitive signature shape as a typed value from
+  catalog/lowering into the render-planning boundary, preferably without
+  adding a new lowering IR family.
+- Support only exact normalized `v:=(v,v)` function shape; unsupported shapes
+  must produce diagnostics instead of fallback string assembly.
+- Add minimal C++ and Rust shape templates under `supplementary/templates` for
+  one function definition using already-decided fields such as function name,
+  result type text, parameter declaration text, and rendered body text.
+- Render the shape-template result into existing
+  `RenderedPrimitiveDefinitionText` so existing file-level primitive templates
+  continue composing artifacts.
+- Replace or quarantine the current whole-function Python assembly path for
+  this exact shape.
+- Add a narrow selected-profile primitive replacement policy if needed for
+  profile-specific files such as `cpp/include/profiles/avx2.hpp` and
+  `rust/src/profiles/avx2.rs`.
+- Keep the M224/M225 scalar tiny generated project path passing.
+
+Out of scope:
+
+Real `avx2` intrinsic fixture implementation; new intrinsic semantics; broad
+signature/template framework; broad TSIL parsing; source repair; dependency
+closure; all-profile generation; ARM/qemu; host/compiler capability modeling;
+semantic decisions in templates; runtime dependency on `frozen/` or
+`tslgenold`; copying `new_chat_test` wholesale.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m227_vv_function_shape_template_render_boundary.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M227 carried the catalog/lowering signature shape into
+`LoweredFunctionSignature` as render-planning provenance. This lets rendering
+select a function-shape template from typed `PrimitiveSignature` facts instead
+of reparsing raw source text. Manual lowerer fixtures that do not carry a
+catalog signature model keep the default `None` shape.
+
+M227 added a focused primitive function-shape rendering boundary for exact
+`v:=(v,v)`. The new shape renderer consumes already-decided presentation
+values: backend id, shape key, function name text, result type text, parameter
+list text, and already-rendered body text. It renders C++ and Rust function
+definitions from supplementary templates under
+`supplementary/templates/{cpp,rust}/shapes/` and returns
+`RenderedPrimitiveDefinitionText` for the existing file-level primitive
+templates to compose. Unsupported shapes diagnose before rendering; semantic
+template fields such as `primitive_name` and `tsil` are rejected.
+
+The parsed tiny generated primitive bridge now renders the scalar
+`v:=(v,v)` function body through the shape renderer instead of assembling the
+whole function definition in Python. Existing scalar active-profile constants
+remain separate already-rendered profile presentation definitions so the
+compile-tested generated profile headers still satisfy the skeleton smoke
+tests. M227 also added a selected-profile primitive replacement policy derived
+from the typed generated project render model, covering paths such as
+`cpp/include/profiles/avx2.hpp` and `rust/src/profiles/avx2.rs` without
+guessing path strings from raw profile names.
+
+M227 did not implement the real `avx2` intrinsic fixture, add intrinsic
+semantics, broaden TSIL parsing, repair source, compute dependency closure,
+add all-profile/ARM/qemu behavior, or copy `new_chat_test`.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m227_vv_function_shape_template_render_boundary.py`:
+  exit 0, 19 tests passed.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created `__pycache__` directories. After removing those
+  directories, final `find tslgen -type d -name __pycache__ -print`: exit 0,
+  no output.
+
+Review verdict:
+
+Accepted by the M227 executor-review loop.
+
+Next concrete prompt:
+`docs/agent/runs/m228-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md`.
+
+### Milestone 228: First Real X86 Intrinsic Fixture
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m228-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md`.
+
+Goal:
+
+Use the M227 typed function-shape render boundary to implement one exact
+observed x86 non-scalar intrinsic fixture from `tsldata/primitives/**/*.tsl`,
+with C++ and Rust kept in parity. The next slice should focus on the exact
+lowering/parser/catalog/body-token support needed for that selected fixture,
+then consume existing backend translation and rendering boundaries.
+
+Scope:
+
+- Preflight-select one exact observed `v:=(v,v)` x86 fixture, preferably from
+  `tsldata/primitives/arithmetic/fundamental.tsl` `add`/`avx2`.
+- Add only the exact source parsing/catalog/lowering support required for the
+  selected fixture.
+- Preserve implementation bodies as raw source spans plus typed lowerable
+  token values.
+- Translate and render lowered intrinsic/intrinsic-compose body tokens through
+  existing backend invocation and body-token substitution boundaries.
+- Render function shape through M227 templates and write selected
+  `scalar,avx2` profile artifacts through the selected-profile replacement
+  policy.
+- Compile/test generated C++ and Rust projects for the selected profile set.
+
+Out of scope:
+
+Broad TSIL parsing; broad `intrin_compose` coverage; broad primitive
+selection/corpus generation; dependency closure; source repair; all-profile
+matrices; ARM/NEON/SVE/qemu; host/compiler capability modeling; new whole
+C++/Rust function assembly in Python; semantic decisions in templates; runtime
+dependency on `frozen/` or `tslgenold`; copying `new_chat_test` wholesale.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m227_vv_function_shape_template_render_boundary.py tslgen/tests/test_m228_first_real_x86_intrinsic_fixture.py
 find tslgen -type d -name __pycache__ -print
 ```

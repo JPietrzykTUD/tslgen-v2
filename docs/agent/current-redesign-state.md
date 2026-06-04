@@ -6,7 +6,8 @@ or accepted planning passes.
 
 ## Accepted Through
 
-Milestone 225 is accepted.
+Milestone 225 is accepted. Milestone 226.5 planning is accepted. Milestone 227
+is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -631,52 +632,65 @@ generated project for C++ and Rust without real intrinsic code and did not
 broaden parser/lowering, generate SIMD intrinsics, model host/compiler
 capability, add qemu/ARM coverage, or hide feature semantics in templates.
 
+M227 added exact `v:=(v,v)` primitive function-shape rendering for C++ and
+Rust through supplementary shape templates. `LoweredFunctionSignature` now
+carries typed catalog `PrimitiveSignature` shape provenance for render
+planning, and unsupported shapes diagnose before rendering. The shape renderer
+consumes already-decided function name, result type, parameter list, and body
+text presentation values, rejects semantic template fields, and emits
+`RenderedPrimitiveDefinitionText` for the existing file-level primitive
+templates. M227 also added selected-profile primitive replacement paths
+derived from the typed generated project render model. It did not implement
+the real `avx2` fixture, add intrinsic semantics, broaden TSIL parsing, or
+copy `new_chat_test`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M226 first real x86 intrinsic fixture execution-review loop prompt.
+Run M228 first real x86 intrinsic fixture execution-review loop prompt.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m226-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md
+docs/agent/runs/m228-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 226: First Real X86 Intrinsic Fixture.
+Milestone 228: First Real X86 Intrinsic Fixture.
 ```
 
 Latest review verdict:
 
 ```text
-M225 execution-review returned Accept. Architecture/boundary, evidence, test,
-documentation, and validation reviewers accepted the typed generated-profile
-build-flag presentation slice and confirmed that C++/Rust target-feature
-values are decided before templates, scalar remains no-feature, the verifier
-consumes Rust target features through profile-specific `RUSTFLAGS`, and no
-real intrinsic generation, parser/lowering broadening, host autodetection, or
-template-side feature semantics were introduced.
+M227 execution-review returned Accept. It carried typed `v:=(v,v)` signature
+shape provenance from catalog/lowering into render planning, added exact
+C++/Rust function-shape templates under `supplementary/templates`, rendered
+those shape templates into `RenderedPrimitiveDefinitionText`, and added a
+typed selected-profile primitive replacement policy for generated profile
+artifacts such as `avx2`. Reviewers confirmed that M227 did not implement the
+real `avx2` fixture, broaden intrinsic semantics, parse TSIL broadly, move
+semantics into templates, or copy `new_chat_test`. Validation: `git diff
+--check` exit 0 with no output; compileall exit 0 with no output; required
+pytest command exit 0 with 19 tests passed; final `find tslgen -type d -name
+__pycache__ -print` produced no output after cache cleanup.
 ```
 
 Next expected action:
 
 ```text
-Run the active M226 execution-review loop prompt. Select one exact observed
-x86 non-scalar `.tsl` implementation shape, preferably `avx2`, and prove the
-lowered body-token to backend-rendered intrinsic output path for both C++ and
-Rust. Keep the body model as raw source spans plus typed lowerable token
-results, let typed render-model fields plus supplementary templates own
-C++/Rust language shape, use the primitive signature shape such as
-`v:=(v,v)` as the wrapper/function-shape template selector, use M225 build
-flags for generated `avx2` verification, and return to planner instead of
-implementing if the selected fixture would require broad TSIL parsing, source
-repair, missing signature-shape template selection, or new whole C++/Rust
-function/header/module string assembly in Python.
+Run the active M228 execution-review loop prompt. Focus on lowering/source
+support for one exact observed x86 non-scalar fixture, preferably
+`tsldata/primitives/arithmetic/fundamental.tsl` `add` with `v:=(v,v)` and an
+`avx2` implementation. Consume the accepted M227 function-shape template
+boundary and selected-profile replacement policy; do not reopen function-shape
+rendering. Keep implementation bodies as raw spans plus typed lowerable token
+values, avoid broad TSIL parsing/source repair/dependency closure, and compile
+test generated C++ and Rust `scalar,avx2` projects.
 ```
 
 Previous review verdict:
@@ -747,12 +761,16 @@ focused test revision and selected M224 parsed tiny TSL to generated project
 execution-review. M224 execution-review returned Accept and selected M225
 generated profile build flags execution-review. M225 execution-review returned
 Accept and selected M226 first real x86 intrinsic fixture execution-review.
+M226 preflight stopped before implementation because the primitive render
+boundary still required whole C++/Rust function assembly in Python and
+selected M226.5 planning. M226.5 planning returned Accept and selected M227.
+M227 execution-review returned Accept and selected M228.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m225-generated-profile-build-flags-execution-review-loop-prompt.md
+docs/agent/runs/m227-vv-function-shape-template-render-boundary-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

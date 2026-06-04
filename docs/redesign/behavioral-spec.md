@@ -103,6 +103,25 @@ full selected primitive render context, Rust intrinsic-call rendering, shared
 body-token replacement, generated-project integration, artifact writing, and
 build verification remain later backend/output work.
 
+### M227 Primitive Function-Shape Template Boundary
+
+Milestone 227 adds a focused function-shape template boundary for exact
+`v:=(v,v)` primitive functions. The selected shape is carried from the typed
+catalog/lowering `PrimitiveSignature`, not inferred from raw source text in a
+renderer or template. Unsupported shapes diagnose before rendering.
+
+Function-shape templates live under
+`supplementary/templates/{cpp,rust}/shapes/` and may format only already
+decided presentation fields: function name text, result type text, parameter
+list text, and already-rendered body text. Shape templates reject semantic or
+source fields such as `primitive_name`, `signature_shape`, `type_tag`,
+`intrinsic_name`, and `tsil` before formatting.
+
+M227 renders the exact function definition into
+`RenderedPrimitiveDefinitionText`, which the existing file-level primitive
+templates then compose into profile artifacts. It does not add intrinsic
+semantics, broaden TSIL parsing, or implement the real x86 fixture.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

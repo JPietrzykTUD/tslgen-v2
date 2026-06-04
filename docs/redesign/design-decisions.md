@@ -3132,6 +3132,11 @@ Consequences:
   boundary, not another C++-only token substitution slice.
 - Real primitive artifact language structure should move into supplementary
   templates before broad primitive rendering.
+- M227 applies this decision to exact `v:=(v,v)` function presentation:
+  catalog/lowering carries the typed signature shape, Python builds
+  already-decided render values, and C++/Rust supplementary shape templates
+  format the function definition before later real intrinsic fixtures consume
+  that boundary.
 - Small Python strings remain acceptable for typed already-decided render
   values and focused tests, but they must not become hidden C++/Rust
   templates or semantic engines.

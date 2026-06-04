@@ -37,15 +37,22 @@ from tslgen.rendering import (
     PrimitiveRenderPlanRecord,
     PrimitiveRenderPlanSource,
     PrimitiveRenderSortKey,
+    PrimitiveFunctionBodyText,
+    PrimitiveFunctionNameText,
+    PrimitiveFunctionParameterListText,
+    PrimitiveFunctionResultTypeText,
+    PrimitiveFunctionShapeRenderContext,
     RenderedIncludeLine,
     RenderedNamespaceText,
     RenderedPrimitiveDefinitionText,
     adapt_primitive_render_plans,
     build_generated_project_render_model,
     compose_generated_primitive_project_artifacts,
+    render_primitive_function_shape,
     render_generated_project_skeleton,
     render_primitive_templates,
-    scalar_profile_replacement_policy,
+    select_primitive_function_shape,
+    selected_profile_replacement_policy,
 )
 from tslgen.syntax.parser import TslParser
 
@@ -150,6 +157,7 @@ def build_parsed_tiny_generated_project_artifacts(
 
     plans, plan_diagnostics = _render_plans_from_lowered_functions(
         selected_functions,
+        supplementary_root=supplementary_root,
     )
     diagnostics.extend(plan_diagnostics)
     if has_errors(diagnostics):
@@ -211,7 +219,7 @@ def build_parsed_tiny_generated_project_artifacts(
     composition = compose_generated_primitive_project_artifacts(
         skeleton_render.artifacts,
         primitive_render.artifacts,
-        scalar_profile_replacement_policy(),
+        selected_profile_replacement_policy(model),
     )
     diagnostics.extend(composition.diagnostics)
     return ParsedTinyGeneratedProjectResult(
@@ -261,11 +269,16 @@ def _select_and_lower(
 
 def _render_plans_from_lowered_functions(
     functions: tuple[SelectedLoweredFunction, ...],
+    *,
+    supplementary_root: Path,
 ) -> tuple[tuple[PrimitiveRenderPlan, ...], tuple[Diagnostic, ...]]:
     plans: list[PrimitiveRenderPlan] = []
     diagnostics: list[Diagnostic] = []
     for item in functions:
-        plan, plan_diagnostics = _render_plan_from_lowered_function(item)
+        plan, plan_diagnostics = _render_plan_from_lowered_function(
+            item,
+            supplementary_root=supplementary_root,
+        )
         diagnostics.extend(plan_diagnostics)
         if plan is not None:
             plans.append(plan)
@@ -274,18 +287,24 @@ def _render_plans_from_lowered_functions(
 
 def _render_plan_from_lowered_function(
     item: SelectedLoweredFunction,
+    *,
+    supplementary_root: Path,
 ) -> tuple[PrimitiveRenderPlan | None, tuple[Diagnostic, ...]]:
     backend_id = item.selected.target.backend
     function = item.function
-    definition, diagnostics = _render_function_definition(backend_id, function)
-    if diagnostics or definition is None:
+    definitions, diagnostics = _render_function_definitions(
+        backend_id,
+        function,
+        supplementary_root=supplementary_root,
+    )
+    if diagnostics:
         return None, diagnostics
 
     primitive_id = _primitive_id(function)
     record = PrimitiveRenderPlanRecord(
         primitive_id=PrimitiveRenderPlanPrimitiveId(primitive_id),
         presentation_sort_key=PrimitiveRenderSortKey(primitive_id),
-        definitions=(RenderedPrimitiveDefinitionText(definition),),
+        definitions=definitions,
         source=PrimitiveRenderPlanSource(str(function.source.path)),
     )
 
@@ -330,15 +349,24 @@ def _render_plan_from_lowered_function(
     )
 
 
-def _render_function_definition(
+def _render_function_definitions(
     backend_id: str,
     function: LoweredFunction,
-) -> tuple[str | None, tuple[Diagnostic, ...]]:
+    *,
+    supplementary_root: Path,
+) -> tuple[tuple[RenderedPrimitiveDefinitionText, ...], tuple[Diagnostic, ...]]:
     signature = function.signature
+    shape_selection = select_primitive_function_shape(
+        signature.signature_shape,
+        source=function.source,
+    )
+    if shape_selection.diagnostics or shape_selection.shape_key is None:
+        return (), shape_selection.diagnostics
+
     scalar_type = _scalar_type_spelling(backend_id, signature.scalar_type)
     if scalar_type is None:
         return (
-            None,
+            (),
             (
                 Diagnostic(
                     severity="error",
@@ -354,7 +382,7 @@ def _render_function_definition(
     result_type = _result_type_spelling(signature.result_type, scalar_type)
     if result_type is None:
         return (
-            None,
+            (),
             (
                 Diagnostic(
                     severity="error",
@@ -373,37 +401,55 @@ def _render_function_definition(
         function,
     )
     if expression_diagnostics or expression is None:
-        return None, expression_diagnostics
+        return (), expression_diagnostics
 
-    if backend_id == "cpp":
-        parameters = ", ".join(
-            f"{scalar_type} {parameter.name}" for parameter in signature.parameters
+    parameter_list, parameter_diagnostics = _function_parameter_list(
+        backend_id,
+        function,
+        scalar_type,
+    )
+    if parameter_diagnostics or parameter_list is None:
+        return (), parameter_diagnostics
+
+    render_result = render_primitive_function_shape(
+        supplementary_root,
+        PrimitiveFunctionShapeRenderContext(
+            backend_id=PrimitiveBackendId(backend_id),
+            shape_key=shape_selection.shape_key,
+            function_name=PrimitiveFunctionNameText(signature.name),
+            result_type=PrimitiveFunctionResultTypeText(result_type),
+            parameters=PrimitiveFunctionParameterListText(parameter_list),
+            body_text=PrimitiveFunctionBodyText(expression),
+        ),
+    )
+    if render_result.diagnostics or render_result.definition is None:
+        return (), render_result.diagnostics
+
+    return (
+        (
+            *_profile_definition_texts(backend_id),
+            render_result.definition,
         )
+    ), ()
+
+
+def _function_parameter_list(
+    backend_id: str,
+    function: LoweredFunction,
+    scalar_type: str,
+) -> tuple[str | None, tuple[Diagnostic, ...]]:
+    signature = function.signature
+    if backend_id == "cpp":
         return (
-            "\n".join(
-                (
-                    f'inline constexpr const char* active_profile = "{_SUPPORTED_PROFILE}";',
-                    'inline constexpr const char* active_profile_family = "generic";',
-                    f"inline {result_type} {signature.name}({parameters}) {{",
-                    f"  return {expression};",
-                    "}",
-                )
+            ", ".join(
+                f"{scalar_type} {parameter.name}" for parameter in signature.parameters
             ),
             (),
         )
     if backend_id == "rust":
-        parameters = ", ".join(
-            f"{parameter.name}: {scalar_type}" for parameter in signature.parameters
-        )
         return (
-            "\n".join(
-                (
-                    f'pub const ACTIVE_PROFILE: &str = "{_SUPPORTED_PROFILE}";',
-                    'pub const ACTIVE_PROFILE_FAMILY: &str = "generic";',
-                    f"pub fn {signature.name}({parameters}) -> {result_type} {{",
-                    f"    {expression}",
-                    "}",
-                )
+            ", ".join(
+                f"{parameter.name}: {scalar_type}" for parameter in signature.parameters
             ),
             (),
         )
@@ -421,6 +467,30 @@ def _render_function_definition(
             ),
         ),
     )
+
+
+def _profile_definition_texts(
+    backend_id: str,
+) -> tuple[RenderedPrimitiveDefinitionText, ...]:
+    if backend_id == "cpp":
+        return (
+            RenderedPrimitiveDefinitionText(
+                f'inline constexpr const char* active_profile = "{_SUPPORTED_PROFILE}";'
+            ),
+            RenderedPrimitiveDefinitionText(
+                'inline constexpr const char* active_profile_family = "generic";'
+            ),
+        )
+    if backend_id == "rust":
+        return (
+            RenderedPrimitiveDefinitionText(
+                f'pub const ACTIVE_PROFILE: &str = "{_SUPPORTED_PROFILE}";'
+            ),
+            RenderedPrimitiveDefinitionText(
+                'pub const ACTIVE_PROFILE_FAMILY: &str = "generic";'
+            ),
+        )
+    return ()
 
 
 def _render_return_expression(

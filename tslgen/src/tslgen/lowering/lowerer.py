@@ -1485,6 +1485,7 @@ def _signature(
         ),
         scalar_type=scalar_type,
         result_type=result_type,
+        signature_shape=context.signature_model,
     )
 
 
