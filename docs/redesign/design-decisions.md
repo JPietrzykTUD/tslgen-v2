@@ -3197,3 +3197,110 @@ Consequences:
   case hidden inside `Lowerer`.
 - Existing TSIL lowerable token semantics, backend translation, templates, and
   generated-project rendering remain separate boundaries.
+
+## ADR-065: Defer The First Real X86 Fixture Until Parser And Body Foundations Are Explicit
+
+Status: Accepted.
+
+Context:
+
+After ADR-064, a sideways M228.5 parser/body attempt was preserved on the
+`m2285-sideways-parser-body-attempt.patch` branch and removed from the active
+worktree. That attempt did not become accepted implementation. It confirmed
+that the first real `fundamental.tsl` `add`/`avx2` fixture is not just a small
+rendering slice. It pulls outer `.tsl` declaration parsing, nested `impls`,
+wildcard type selectors, concrete selection context, multiline TSIL body
+tokenization, lowerable token extraction, backend translation, function
+rendering, generated project writing, and build verification into one path.
+
+Decision:
+
+Do not continue directly from M227/M228 into real x86 fixture lowering or
+rendering. Before the fixture path resumes, run a planning/foundation
+milestone that decides the outer TSL declaration parser strategy and the
+source-body tokenization boundary.
+
+The foundation milestone must use `tsldata/**/*.tsl` as evidence for observed
+outer declaration forms, but it must not implement broad parser code. It must
+decide whether the next executable parser slice should use a grammar parser
+such as Lark, a smaller typed declaration parser for a selected subset, or
+another explicit inventory/foundation step.
+
+Consequences:
+
+- The `m228-spike` and `m2285-sideways-parser-body-attempt.patch` branches are
+  evidence only, not implementation to copy.
+- The active next prompt is a planning prompt, not a fixture implementation
+  prompt.
+- Future parser work must avoid regex accretion in `parser.py` and must keep
+  outer TSL declaration parsing separate from TSIL body-token lowering.
+- Real fixture rendering may resume only after the parser/catalog and
+  source-body boundaries are explicit enough to avoid bundling the fixture
+  with foundational parser work.
+
+## ADR-066: Outer TSL Declarations Get A Lark-Backed Parser Boundary Before Body Lowering Resumes
+
+Status: Accepted.
+
+Context:
+
+M228.5 planning audited the real `tsldata/**/*.tsl` corpus after the M228 and
+sideways M228.5 attempts were preserved as evidence. The observed primitive
+fixture path does not only need a TSIL body token. It first needs outer TSL
+source structure: `prim<...>` declarations with signatures and attrs,
+primitive child fields, nested `impls` selector trees, `requires` forms,
+`implementation:` entries, and inline or multiline `tsil` payload envelopes.
+Catalog/detail files also contain `types`, `flags`, `template`, `extension`,
+`lane_set`, `language`, and `translation` blocks.
+
+Primitive declaration shape is anchored by the top-level
+`prim<...> name(...):` header, but the declaration fields below that header
+are semantically order-insensitive. Fields such as `brief_description`,
+`operation`, `tests`, `generic_params`, `return_type`, `sImm_type`, and
+`impls` may occur in any order. The parser may preserve source order for
+diagnostics and provenance, but it must not require a fixed field sequence.
+
+The current clean `parser.py` is already a large regular-expression parser
+for tiny fixture shapes, and `lowerer.py` is also large. Adding another
+selected-fixture parser bridge would repeat the same accretion pattern that
+caused the M228/M228.5 resets.
+
+Decision:
+
+The next executable parser slice is a Lark-backed outer TSL declaration parser
+boundary. The target architecture already reserves
+`syntax/grammar/tsl_data.lark`, and the legacy grammar is useful compact syntax
+evidence, but the clean implementation must own its grammar, dependency, typed
+transform, spans, and diagnostics. M229 must not use a regex parser,
+hand-written parser, or alternative parser for this boundary. If using Lark
+would require an undeclared runtime dependency or grammar package-data behavior
+that cannot be made explicit in the clean package, the executor must stop and
+create a dependency/package-boundary prompt rather than adding hidden
+dependency behavior.
+
+Parsed outer TSL values exposed past parser internals must be typed
+dataclasses. They should use `@dataclass(frozen=True, slots=True)` following
+the repository convention unless a concrete local exception is documented in
+the milestone result. Parser-private dictionaries may exist inside a transform
+if useful, but raw dictionaries must not be the public parsed field model.
+
+The outer parser ends at the implementation body envelope. It may parse the
+`tsil` envelope, quote form, source location, and raw payload span, but it must
+not parse or interpret `emit_return`, `intrin_compose`, TSIL control keywords,
+expressions, operators, backend intrinsic semantics, or source-operation
+semantics. Those belong to a later shared lexical body-region layer and
+keyword-specific lowerers.
+
+Consequences:
+
+- M229 implements only the outer declaration parser/catalog boundary.
+- The first real x86 fixture remains deferred until after M229 and a focused
+  source-body lexical-region milestone.
+- Existing tiny pipeline code may continue using the old narrow parser until a
+  later integration milestone deliberately replaces it.
+- New parser work should live in focused syntax modules and grammar assets,
+  with only narrow public-surface edits to existing modules.
+- `parser.py`, `lowerer.py`, and `generated_primitive_pipeline.py` must not
+  receive new fixture-specific regex fallback logic in M229.
+- TSIL payload text remains source-owned raw text until accepted body/token
+  lowerers consume exact lexical regions.

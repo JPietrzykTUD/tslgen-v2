@@ -27884,3 +27884,278 @@ python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m227_vv_function_shape_template_render_boundary.py tslgen/tests/test_m228_first_real_x86_intrinsic_fixture.py
 find tslgen -type d -name __pycache__ -print
 ```
+
+Reset/planning correction:
+
+M228 remains stopped before implementation. The first M228 attempt was already
+moved to `m228-spike` as evidence. A later uncommitted M228.5 parser/body
+attempt was preserved on the `m2285-sideways-parser-body-attempt.patch` branch
+and removed from the active worktree. That attempt confirmed the same failure
+mode: the first real x86 fixture is premature because it pulls outer `.tsl`
+declaration parsing, nested `impls`, wildcard selection, multiline TSIL
+body-region mechanics, lowering, backend translation, rendering, and build
+verification into one path.
+
+Decision:
+
+Do not continue directly to real fixture lowering or rendering. The next
+milestone is a planning/foundation milestone for the outer TSL declaration
+parser and source-body boundary. It must decide what parser/catalog boundary
+is needed before fixture work resumes, and it must avoid growing `parser.py`,
+`lowerer.py`, or `generated_primitive_pipeline.py` by accretion.
+
+Validation result for this docs/prompt transition:
+
+- `git diff --check`: exit 0, no output.
+
+Next concrete prompt:
+`docs/agent/runs/m2285-outer-tsl-declaration-foundation-planning-prompt.md`.
+
+### Milestone 228.5: Outer TSL Declaration Foundation Planning
+
+Status:
+
+Selected. Planning prompt:
+`docs/agent/runs/m2285-outer-tsl-declaration-foundation-planning-prompt.md`.
+
+Goal:
+
+Plan the missing parser/source-body foundation that must exist before the real
+x86 fixture can resume. This is not an implementation milestone.
+
+Scope:
+
+- Inventory the outer `.tsl` declaration forms required before the first real
+  fixture path can safely resume, using `tsldata/**/*.tsl` as evidence.
+- Decide whether the next parser step should be a grammar/Lark-based outer
+  declaration parser, a smaller typed parser for a selected declaration
+  subset, or another explicit foundation slice.
+- Define the typed declaration model needed at the parser/catalog boundary.
+- Define the boundary between outer TSL declaration parsing and TSIL
+  implementation body tokenization.
+- Define what shared lexical body-region mechanics must provide before
+  keyword-specific lowerers consume multiline bodies.
+- Record module-size/accretion risks and stop conditions before implementation
+  resumes.
+
+Out of scope:
+
+Production code changes; real x86 fixture lowering/rendering; broad TSIL
+parsing; source repair; target-language parsing; backend rendering; generated
+project writing; dependency closure; all-profile generation; ARM/qemu; host or
+compiler capability modeling; runtime dependency on `frozen/`, `tslgenold`,
+`m228-spike`, or `m2285-sideways-parser-body-attempt.patch`.
+
+Validation:
+
+```bash
+git diff --check
+```
+
+Result:
+
+M228.5 planning accepted the parser/source-body foundation decision. Read-only
+audits and local corpus checks found that the real `add`/`avx2` fixture is
+blocked by outer TSL declaration parsing before TSIL lowering can safely
+resume. The required outer forms include top-level `description`,
+`prim<...>[attrs] name(params):`, `types:`, `flags:`, `template NAME:`,
+`extension NAME:`, `lane_set NAME:`, `language NAME:`, and
+`translation NAME:` declarations; primitive child fields including
+`brief_description`, `operation`, `tests`, optional `generic_params`,
+optional `return_type`, optional `sImm_type`, and nested `impls`; extension
+and type selectors including list selectors and wildcard/type-group names;
+`requires` in inline-list, block, empty, and map-like inline forms; and
+`implementation:` entries with inline or multiline `tsil` body envelopes.
+The `prim<...> name(...):` header anchors a primitive declaration, but
+primitive child fields below that header are semantically order-insensitive
+and may occur in any order. Source order is provenance, not a parser
+precondition.
+
+The planning pass chose a Lark-backed outer declaration parser boundary as the
+next executable slice. The legacy `tsl_data.lark` file is evidence only, but
+it shows that the outer syntax can be represented compactly without adding
+more regular-expression ladders to the already large clean parser. The next
+implementation must produce typed parser/catalog-boundary dataclasses with
+source spans and preserve TSIL payloads as raw body envelopes. It must not
+parse `emit_return`, `intrin_compose`, expressions, control keywords, or
+backend semantics.
+
+The shared TSIL body-region layer remains the immediate follow-up after the
+outer declaration boundary. That layer should consolidate existing lexical
+helpers for source-mapped raw body text, balanced delimiter matching, raw
+prefix/suffix preservation, and keyword-region discovery across single-line
+and multiline payloads. It is not part of M229.
+
+M228.5 also recorded the main accretion risks: do not grow
+`tslgen/src/tslgen/syntax/parser.py`, `tslgen/src/tslgen/lowering/lowerer.py`,
+or `tslgen/src/tslgen/pipeline/generated_primitive_pipeline.py` with another
+fixture-specific parser/lowering bridge; do not revive the `m228-spike` or
+`m2285-sideways-parser-body-attempt.patch` branches as implementation.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+
+Next concrete prompt:
+`docs/agent/runs/m229-outer-tsl-declaration-parser-boundary-execution-review-loop-prompt.md`.
+
+### Milestone 229: Outer TSL Declaration Parser Boundary
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m229-outer-tsl-declaration-parser-boundary-execution-review-loop-prompt.md`.
+
+Goal:
+
+Implement the parser/catalog-boundary foundation needed before the real x86
+fixture resumes: a focused Lark-backed outer TSL declaration parser that can
+parse current `.tsl` source envelopes and preserve implementation TSIL bodies
+as raw source payload spans.
+
+Scope:
+
+- Add a focused Lark-backed outer TSL parser boundary in new syntax modules
+  and grammar assets rather than by expanding the current regex-heavy
+  `parser.py`. Do not use a regex parser, hand-written parser, or alternative
+  parser for M229.
+- Produce typed syntax/parser-boundary dataclasses for parsed documents,
+  declarations, primitive headers, attrs, known primitive fields, generic
+  preserved fields, nested `impls` selector entries, `requires` values, and
+  implementation body envelopes. Use `@dataclass(frozen=True, slots=True)`
+  unless a concrete local exception is documented in the M229 result.
+- Accept primitive child fields below a `prim<...> name(...):` header in any
+  order, while preserving original source order only for diagnostics and
+  provenance.
+- Preserve inline and multiline `tsil` implementation payloads as raw source
+  spans with quote form and line/column locations.
+- Parse all current `tsldata/**/*.tsl` outer declarations in tests, including
+  primitive files and catalog/detail files, without treating declarations that
+  appear inside multiline metadata strings as real top-level declarations.
+- Keep existing tiny parser/catalog/render tests passing; existing pipeline
+  code may continue using the old narrow parser until a later integration
+  milestone replaces it.
+
+Out of scope:
+
+TSIL body-token lowering; `emit_return` or `intrin_compose` parsing; keyword
+semantics; expression parsing; wildcard selection expansion; catalog selection;
+dependency closure; backend translation; primitive rendering; generated
+project writing; build verification; fixture resumption; source repair;
+runtime dependency on `frozen/`, `tslgenold`, `m228-spike`, or
+`m2285-sideways-parser-body-attempt.patch`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m227_vv_function_shape_template_render_boundary.py tslgen/tests/test_m229_outer_tsl_declaration_parser_boundary.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M229 added a focused Lark-backed outer TSL declaration parser boundary without
+growing the existing narrow `parser.py`, `lowerer.py`, or
+`generated_primitive_pipeline.py`. The new boundary lives in
+`tslgen.syntax.outer_parser` and `tslgen.syntax.outer_ast`, loads the owned
+`tslgen.syntax.grammar/tsl_data.lark` package-data grammar through
+`importlib.resources`, and declares the Lark runtime dependency plus grammar
+package-data handling in `tslgen/pyproject.toml`.
+
+The parser emits typed parser-boundary dataclasses with source spans for
+parsed documents, top-level declarations, primitive headers, primitive attrs,
+known primitive fields, preserved generic fields, nested `impls` selector
+entries, `requires` values, and implementation body envelopes. Primitive child
+fields below the `prim<...> name(...):` header are accepted in any order, with
+source order preserved only as provenance/diagnostic data. Public parsed
+values are frozen slotted dataclasses; raw dictionaries remain out of the
+public parsed model.
+
+M229 parses all 41 current `tsldata/**/*.tsl` files with zero diagnostics and
+pins the current corpus shape in tests: 250 top-level declarations, 140
+primitives, 15 top-level descriptions, 69 templates, 12 extensions, 6 lane
+sets, 3 languages, 3 translations, one `types` block, and one `flags` block.
+Real primitive fixtures cover attrs, `return_type`, `sImm_type`, preserved
+`param_types`, nested selector paths, inline body envelopes, and multiline body
+envelopes. A synthetic multiline metadata test proves declaration-looking text
+inside multiline metadata strings is not misclassified as real top-level TSL.
+
+Implementation TSIL payloads remain raw source envelopes. The parser captures
+quote form, envelope span, payload span, and raw inner `payload_text`; escaped
+inline TSIL such as `infix_sep=\"\"` is preserved as raw source text in the
+body envelope. M229 does not parse or lower `emit_return`,
+`intrin_compose`, calls, expressions, control keywords, source operations,
+backend semantics, implementation selection, rendering, or generated projects.
+
+Review verdict:
+
+Accepted after focused revision. Architecture and complexity reviews returned
+Accept With Follow-Ups; corpus and lowering-boundary reviews initially returned
+Needs Revision and then accepted the focused fixes. Accepted follow-up: future
+body-region or lowering work must not grow `outer_parser.py`; M230 should use
+the M229 raw body envelope boundary and put shared lexical body-region logic in
+a separate focused module.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m227_vv_function_shape_template_render_boundary.py tslgen/tests/test_m229_outer_tsl_declaration_parser_boundary.py`:
+  exit 0, 28 tests passed.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created `__pycache__` directories. After removing those
+  directories, final `find tslgen -type d -name __pycache__ -print`: exit 0,
+  no output.
+
+Next concrete prompt:
+`docs/agent/runs/m230-source-body-lexical-region-boundary-execution-review-loop-prompt.md`.
+
+### Milestone 230: Source Body Lexical Region Boundary
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m230-source-body-lexical-region-boundary-execution-review-loop-prompt.md`.
+
+Goal:
+
+Implement the shared lexical body-region boundary that consumes M229 raw
+`tsil` payload envelopes and gives later keyword-specific lowerers
+source-mapped raw segments plus balanced lowerable region candidates.
+
+Scope:
+
+- Add a focused source-body lexical region module that consumes
+  `ParsedImplementationBodyEnvelope` values or equivalent raw payload/span
+  values from M229.
+- Provide source-mapped raw body text across inline and multiline payloads.
+- Reuse or consolidate existing delimiter helpers from `tsil_lexical.py` and
+  source-island span mechanics where practical, without growing
+  `outer_parser.py`.
+- Identify balanced lexical regions for configured TSIL keyword heads without
+  assigning semantics: head span, optional selector/angle span, payload/paren
+  span, optional brace-body span, and surrounding raw spans.
+- Preserve raw prefix/suffix text, source locations, and deterministic source
+  order.
+- Diagnose malformed or unbalanced regions without source repair.
+
+Out of scope:
+
+TSIL semantic lowering; `emit_return` semantics; intrinsic composition
+translation; primitive-call resolution; branch evaluation; loop lowering;
+expression parsing; operator semantics; backend translation; rendering;
+fixture resumption; outer TSL declaration parsing changes; growing
+`outer_parser.py`, `parser.py`, `lowerer.py`, or
+`generated_primitive_pipeline.py`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m229_outer_tsl_declaration_parser_boundary.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py
+find tslgen -type d -name __pycache__ -print
+```

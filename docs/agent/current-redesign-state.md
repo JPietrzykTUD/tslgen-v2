@@ -7,7 +7,7 @@ or accepted planning passes.
 ## Accepted Through
 
 Milestone 225 is accepted. Milestone 226.5 planning is accepted. Milestone 227
-is accepted.
+is accepted. Milestone 228.5 planning is accepted. Milestone 229 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -648,61 +648,80 @@ The first M228 attempt was moved out of this worktree to the `m228-spike`
 branch as evidence. It is not accepted. ADR-064 records the restart decision:
 outer `.tsl` declaration structure needs a focused parser boundary before the
 real x86 fixture is broadened, while TSIL implementation payloads remain raw
-source spans plus accepted lowerable token islands. The active M228 prompt has
-therefore been restarted and tightened; do not run the superseded original
-M228 prompt.
+source spans plus accepted lowerable token islands.
+
+M228 remains stopped before implementation. A later uncommitted M228.5
+parser/body attempt was preserved on the
+`m2285-sideways-parser-body-attempt.patch` branch as evidence and removed from
+the active worktree. That attempt confirmed the fixture is premature: it pulls
+outer `.tsl` declaration parsing, nested `impls`, wildcard selection,
+multiline TSIL body mechanics, lowering, backend translation, rendering, and
+build verification into one path.
+
+M229 added the accepted Lark-backed outer TSL declaration parser boundary. It
+parses source envelopes such as `prim<...>`, primitive child fields, nested
+`impls`, `requires`, catalog/detail blocks, and inline or multiline `tsil`
+body envelopes into typed frozen slotted parser-boundary dataclasses with
+source spans. Primitive child fields below the `prim<...> name(...):` header
+are order-insensitive. The parser stops at raw `tsil` body envelopes and does
+not parse `emit_return`, `intrin_compose`, TSIL control keywords, expressions,
+backend semantics, or fixture rendering.
+
+M229 parses all 41 current `tsldata/**/*.tsl` files with zero diagnostics and
+pins the current corpus shape in tests: 250 top-level declarations, 140
+primitives, 15 top-level descriptions, 69 templates, 12 extensions, 6 lane
+sets, 3 languages, 3 translations, one `types` block, and one `flags` block.
+Escaped inline TSIL payloads are preserved as raw inner source text in
+`ParsedImplementationBodyEnvelope.payload_text`.
+
+M229 was accepted after focused revision. The accepted follow-up is that future
+body-region or lowering work must not grow `outer_parser.py`. The next
+executable foundation is M230: a shared source-body lexical-region boundary
+over M229 raw `tsil` payload envelopes.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Run restarted M228 first real x86 intrinsic fixture execution-review loop
-prompt.
+Run M230 source body lexical region boundary execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m228-restarted-first-real-x86-intrinsic-fixture-execution-review-loop-prompt.md
+docs/agent/runs/m230-source-body-lexical-region-boundary-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 228: Restarted First Real X86 Intrinsic Fixture.
+Milestone 230: Source Body Lexical Region Boundary.
 ```
 
 Latest review verdict:
 
 ```text
-M227 execution-review returned Accept. It carried typed `v:=(v,v)` signature
-shape provenance from catalog/lowering into render planning, added exact
-C++/Rust function-shape templates under `supplementary/templates`, rendered
-those shape templates into `RenderedPrimitiveDefinitionText`, and added a
-typed selected-profile primitive replacement policy for generated profile
-artifacts such as `avx2`. Reviewers confirmed that M227 did not implement the
-real `avx2` fixture, broaden intrinsic semantics, parse TSIL broadly, move
-semantics into templates, or copy `new_chat_test`. Validation: `git diff
---check` exit 0 with no output; compileall exit 0 with no output; required
-pytest command exit 0 with 19 tests passed; final `find tslgen -type d -name
-__pycache__ -print` produced no output after cache cleanup.
+M229 execution-review returned Accept With Follow-Ups after focused revision.
+Architecture and complexity reviews accepted the parser boundary. Corpus and
+lowering-boundary reviews initially returned Needs Revision; focused fixes
+added raw escaped inline TSIL preservation, malformed-input diagnostics, total
+top-level declaration and description counts, and real primitive-shape
+coverage for attrs, `return_type`, `sImm_type`, preserved fields, and nested
+selector paths. Focused re-reviews returned Accept. Validation for M229:
+`git diff --check` exit 0 with no output; `python -B -m compileall -q
+tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest bundle
+exit 0 with 28 tests passed; final `find tslgen -type d -name __pycache__
+-print` exit 0 with no output after removing test-created caches.
 ```
 
 Next expected action:
 
 ```text
-Run the restarted active M228 execution-review loop prompt. It has a mandatory
-preflight gate: decide the outer `.tsl` declaration parser strategy, decide
-the shared lexical body-region strategy for balanced single-line and multiline
-TSIL keyword islands, and decide whether the render bridge can stay small
-before implementing the exact `tsldata/primitives/arithmetic/fundamental.tsl`
-`add`/`avx2` fixture. For M228, the shared lexical boundary only needs enough
-coverage to expose the selected multiline `emit_return(PAYLOAD);` region and
-nested `intrin_compose<...>(...)` island; keyword-specific semantics stay in
-the lowerers. If that preflight shows parser/body work is too large to fit
-safely with the fixture, stop and create a parser/body-boundary prompt instead
-of forcing M228 through. Do not run the superseded original M228 prompt.
+Run the active M230 execution-review loop prompt. Use one write-capable
+executor plus read-only reviewers. Implement only the shared lexical
+source-body region boundary over M229 raw `tsil` payload envelopes; do not
+assign TSIL semantics or resume the real x86 fixture.
 ```
 
 Previous review verdict:
@@ -776,13 +795,18 @@ Accept and selected M226 first real x86 intrinsic fixture execution-review.
 M226 preflight stopped before implementation because the primitive render
 boundary still required whole C++/Rust function assembly in Python and
 selected M226.5 planning. M226.5 planning returned Accept and selected M227.
-M227 execution-review returned Accept and selected M228.
+M227 execution-review returned Accept and selected M228. M228 stopped before
+implementation after spike evidence, and the later sideways M228.5
+parser/body attempt was preserved on an evidence branch. M228.5 planning
+returned Accept and selected M229 outer TSL declaration parser boundary. M229
+execution-review returned Accept With Follow-Ups after focused revision and
+selected M230 source body lexical region boundary.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m227-vv-function-shape-template-render-boundary-execution-review-loop-prompt.md
+docs/agent/runs/m229-outer-tsl-declaration-parser-boundary-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
