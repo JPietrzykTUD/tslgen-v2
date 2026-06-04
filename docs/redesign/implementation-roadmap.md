@@ -28159,3 +28159,118 @@ python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m229_outer_tsl_declaration_parser_boundary.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py
 find tslgen -type d -name __pycache__ -print
 ```
+
+Result:
+
+M230 added `tslgen.syntax.source_body_regions`, a focused lexical source-body
+region boundary over M229 `ParsedImplementationBodyEnvelope` payloads. It
+converts inline and multiline raw `tsil` payload text into typed source-mapped
+raw segments and balanced lexical region candidates. Public M230 values are
+frozen slotted dataclasses carrying raw spans, head spans, optional
+angle/selector spans, optional parenthesized payload spans, optional braced
+body spans, source order, and diagnostics.
+
+The scanner recognizes configured keyword heads only as lexical region
+shapes: `emit_return(...)`, `intrin_compose<...>(...)`, `call<...>(...)`,
+`if<generation>(...) { ... }`, `else<generation> { ... }`,
+`loop<range>(...) { ... }`, and `switch<compile>(...) { ... }`. It does not
+assign TSIL semantics, evaluate conditions, resolve primitive calls, lower
+intrinsics, parse expressions, render output, or repair source. Unsupported
+nearby forms such as raw target-language `if (...)` remain raw text unless a
+configured nested region is independently balanced.
+
+M230 also extended `tslgen.syntax.tsil_lexical` with quote-aware delimiter
+matching shared by the scanner. The matcher handles both ordinary quoted text
+and raw inline payload text where M229 intentionally preserves escaped outer
+string quotes such as `\"...\"`, so delimiters inside preserved quoted text do
+not create false region boundaries.
+
+Malformed configured regions emit stable diagnostics such as
+`TSL-BODY-REGION-MISSING-PAREN`, `TSL-BODY-REGION-UNBALANCED-PAREN`,
+`TSL-BODY-REGION-MISSING-BRACE`, `TSL-BODY-REGION-UNBALANCED-BRACE`, and
+`TSL-BODY-REGION-UNBALANCED-ANGLE`. After such a diagnostic the malformed
+tail remains raw and the scanner does not continue discovering nested
+candidates inside that malformed source.
+
+Real-corpus tests cover escaped inline payloads from
+`tsldata/primitives/conversion/cast.tsl`, multiline source order and loop/body
+spans from `tsldata/primitives/arithmetic/fundamental.tsl`, and recursive
+configured-head evidence across representative primitive files including
+`repr_change.tsl` and `rnd_access.tsl` for `switch<compile>`. M230 does not
+grow `outer_parser.py`, `parser.py`, `lowerer.py`, or
+`generated_primitive_pipeline.py`.
+
+Review verdict:
+
+Accepted after focused revision. Boundary review returned Accept. Complexity
+review returned Accept With Follow-Up for duplicated quote-escape logic; the
+follow-up was fixed by moving quote/escape detection into
+`tslgen.syntax.tsil_lexical`. Evidence review initially returned Needs
+Revision because real-corpus coverage did not prove every configured head; the
+focused revision added real recursive corpus coverage and re-review returned
+Accept. Diagnostics review initially returned Needs Revision for escaped
+inline quote handling and nested candidate discovery after malformed regions;
+focused fixes added quote-aware matching and no-recovery malformed-tail
+handling, and diagnostics re-review returned Accept.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m229_outer_tsl_declaration_parser_boundary.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py`:
+  exit 0, 27 tests passed.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created `__pycache__` directories.
+
+Next concrete prompt:
+`docs/agent/runs/m231-emit-return-lexical-region-lowering-execution-review-loop-prompt.md`.
+
+### Milestone 231: Emit Return Lexical Region Lowering
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m231-emit-return-lexical-region-lowering-execution-review-loop-prompt.md`.
+
+Goal:
+
+Lower only the symbolic `emit_return` keyword identity produced by the M230
+lexical region descriptor into a typed return directive/fact with a
+source-mapped raw payload span for later payload-specific lowerers.
+
+Scope:
+
+- Consume M230 `SourceBodyLexicalScanResult` or exact
+  `SourceBodyLexicalRegionCandidate` values.
+- If M230 still exposes only raw head spelling, first add a stable symbolic
+  keyword identity such as `SourceBodyKeyword.EMIT_RETURN` on the lexical
+  descriptor/region. The lowerer must consume that identity instead of
+  hardcoding the source spelling again.
+- Produce typed frozen slotted lowering values for accepted `emit_return`
+  regions, preserving full span, head span, payload span, source order, and
+  raw payload text exactly.
+- Preserve surrounding raw segments and non-`emit_return` lexical regions as
+  opaque source-owned items.
+- If the M230 scan has diagnostics, do not lower regions from the malformed
+  scan result.
+- Cover inline and multiline real `.tsl` payloads, including `emit_return`
+  whose payload contains nested `intrin_compose<...>(...)`,
+  `call<...>(...)`, or raw target-language-looking text.
+
+Out of scope:
+
+Payload semantic lowering; intrinsic composition; primitive-call resolution;
+type/value/source-operation lowering; branch evaluation; loop lowering;
+expression parsing; operator semantics; backend translation; rendering;
+fixture resumption; source repair; changes to `outer_parser.py`, `parser.py`,
+`lowerer.py`, or `generated_primitive_pipeline.py`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m229_outer_tsl_declaration_parser_boundary.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py
+find tslgen -type d -name __pycache__ -print
+```

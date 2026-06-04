@@ -45,6 +45,71 @@ def matching_close(
     return None
 
 
+def matching_close_lexical(
+    text: str,
+    open_index: int,
+    delimiter: DelimiterPair,
+) -> int | None:
+    """Return the matching close delimiter while ignoring quoted text."""
+
+    open_char, close_char = delimiter
+    if open_index < 0 or open_index >= len(text) or text[open_index] != open_char:
+        return None
+
+    depth = 1
+    index = open_index + 1
+
+    while index < len(text):
+        if starts_quoted_text(text, index):
+            quote_close = matching_quote_close(text, index)
+            if quote_close is None:
+                return None
+            index = quote_close + 1
+            continue
+
+        char = text[index]
+        if char == open_char:
+            depth += 1
+        elif char == close_char:
+            depth -= 1
+            if depth == 0:
+                return index
+        index += 1
+
+    return None
+
+
+def starts_quoted_text(text: str, index: int) -> bool:
+    return _quote_marker_at(text, index) is not None
+
+
+def matching_quote_close(text: str, quote_start: int) -> int | None:
+    """Return the close quote index for raw or outer-string-escaped quotes."""
+
+    marker = _quote_marker_at(text, quote_start)
+    if marker is None:
+        return None
+
+    quote, escaped_marker, width = marker
+    index = quote_start + width
+    while index < len(text):
+        if escaped_marker:
+            if text[index] == "\\" and index + 1 < len(text) and text[index + 1] == quote:
+                return index + 1
+            index += 1
+            continue
+
+        char = text[index]
+        if char == "\\":
+            index += 2
+            continue
+        if char == quote:
+            return index
+        index += 1
+
+    return None
+
+
 def find_top_level_char(
     text: str,
     target: str,
@@ -152,3 +217,26 @@ def _trimmed_part(payload: str, start: int, end: int) -> LexicalPart | None:
     if start >= end:
         return None
     return LexicalPart(text=payload[start:end], start=start, end=end)
+
+
+def is_escaped_at(text: str, index: int) -> bool:
+    """Return whether the character at index is escaped by backslashes."""
+
+    backslashes = 0
+    cursor = index - 1
+    while cursor >= 0 and text[cursor] == "\\":
+        backslashes += 1
+        cursor -= 1
+    return backslashes % 2 == 1
+
+
+def _quote_marker_at(text: str, index: int) -> tuple[str, bool, int] | None:
+    if index < 0 or index >= len(text):
+        return None
+
+    char = text[index]
+    if char in {"'", '"'} and not is_escaped_at(text, index):
+        return (char, False, 1)
+    if char == "\\" and index + 1 < len(text) and text[index + 1] in {"'", '"'}:
+        return (text[index + 1], True, 2)
+    return None

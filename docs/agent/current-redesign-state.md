@@ -8,6 +8,7 @@ or accepted planning passes.
 
 Milestone 225 is accepted. Milestone 226.5 planning is accepted. Milestone 227
 is accepted. Milestone 228.5 planning is accepted. Milestone 229 is accepted.
+Milestone 230 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -679,49 +680,73 @@ body-region or lowering work must not grow `outer_parser.py`. The next
 executable foundation is M230: a shared source-body lexical-region boundary
 over M229 raw `tsil` payload envelopes.
 
+M230 added the accepted shared lexical source-body region boundary in
+`tslgen.syntax.source_body_regions`. It consumes M229 raw `tsil` payload
+envelopes and produces typed frozen slotted raw segments plus balanced lexical
+region candidates for configured heads: `emit_return`, `intrin_compose`,
+`call`, `if<generation>`, `else<generation>`, `loop<range>`, and
+`switch<compile>`. M230 is lexical only: it does not assign TSIL semantics,
+lower payloads, evaluate branches, resolve primitive calls, translate
+intrinsics, render output, or repair source.
+
+M230 also added shared quote-aware delimiter matching in
+`tslgen.syntax.tsil_lexical`, including support for raw inline payload text
+where M229 preserves escaped outer string quotes such as `\"...\"`. Malformed
+configured regions emit diagnostics and keep the malformed tail raw; the
+scanner does not continue discovering nested candidates inside malformed
+source. M230 does not grow `outer_parser.py`, `parser.py`, `lowerer.py`, or
+`generated_primitive_pipeline.py`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M230 source body lexical region boundary execution-review loop.
+Run M231 emit return lexical region lowering execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m230-source-body-lexical-region-boundary-execution-review-loop-prompt.md
+docs/agent/runs/m231-emit-return-lexical-region-lowering-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 230: Source Body Lexical Region Boundary.
+Milestone 231: Emit Return Lexical Region Lowering.
 ```
 
 Latest review verdict:
 
 ```text
-M229 execution-review returned Accept With Follow-Ups after focused revision.
-Architecture and complexity reviews accepted the parser boundary. Corpus and
-lowering-boundary reviews initially returned Needs Revision; focused fixes
-added raw escaped inline TSIL preservation, malformed-input diagnostics, total
-top-level declaration and description counts, and real primitive-shape
-coverage for attrs, `return_type`, `sImm_type`, preserved fields, and nested
-selector paths. Focused re-reviews returned Accept. Validation for M229:
-`git diff --check` exit 0 with no output; `python -B -m compileall -q
-tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest bundle
-exit 0 with 28 tests passed; final `find tslgen -type d -name __pycache__
--print` exit 0 with no output after removing test-created caches.
+M230 execution-review returned Accept after focused revision. Boundary review
+returned Accept. Complexity review returned Accept With Follow-Up for
+duplicated quote-escape logic; the follow-up was fixed by moving quote/escape
+detection into `tslgen.syntax.tsil_lexical`. Evidence review initially
+returned Needs Revision because real-corpus coverage did not prove every
+configured head; focused fixes added recursive real-corpus coverage including
+`repr_change.tsl` and `rnd_access.tsl` for `switch<compile>`, and re-review
+returned Accept. Diagnostics review initially returned Needs Revision for
+escaped inline quote handling and nested candidate discovery after malformed
+regions; focused fixes added quote-aware matching and no-recovery
+malformed-tail handling, and diagnostics re-review returned Accept. Validation
+for M230: `git diff --check` exit 0 with no output; `python -B -m compileall
+-q tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest
+bundle exit 0 with 27 tests passed; required `find tslgen -type d -name
+__pycache__ -print` exit 0 and printed compile/test-created cache
+directories.
 ```
 
 Next expected action:
 
 ```text
-Run the active M230 execution-review loop prompt. Use one write-capable
-executor plus read-only reviewers. Implement only the shared lexical
-source-body region boundary over M229 raw `tsil` payload envelopes; do not
-assign TSIL semantics or resume the real x86 fixture.
+Run the active M231 execution-review loop prompt. Use one write-capable
+executor plus read-only reviewers. Implement only the `emit_return(...)`
+keyword-specific lowerer over M230 lexical regions; consume a symbolic keyword
+identity from the lexical descriptor rather than duplicating the raw spelling
+check in the lowerer. Preserve the return payload as raw source text and do
+not lower nested payload semantics.
 ```
 
 Previous review verdict:
@@ -800,13 +825,15 @@ implementation after spike evidence, and the later sideways M228.5
 parser/body attempt was preserved on an evidence branch. M228.5 planning
 returned Accept and selected M229 outer TSL declaration parser boundary. M229
 execution-review returned Accept With Follow-Ups after focused revision and
-selected M230 source body lexical region boundary.
+selected M230 source body lexical region boundary. M230 execution-review
+returned Accept after focused revision and selected M231 emit return lexical
+region lowering.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m229-outer-tsl-declaration-parser-boundary-execution-review-loop-prompt.md
+docs/agent/runs/m230-source-body-lexical-region-boundary-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
