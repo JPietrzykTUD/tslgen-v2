@@ -2044,6 +2044,22 @@ new surrounding-context consumers, expression trees, dependency scheduling,
 backend call rendering, backend type rendering, source repair, or runtime
 `tsldata`, `frozen`, or `tslgenold` dependencies.
 
+### Post-M234 Recursive Primitive-Call Payload Feeding
+
+M234 preserves the accepted exact `emit_return(call<primitive=...>(...));`
+consumer behavior, but changes how the direct payload token is produced. The
+catalog no longer uses a dedicated `emit_return + call` raw-text
+reclassification helper. Instead, `emit_return` payload text is lowered through
+the recursive M233 source-body fragment boundary, and direct `call` keyword
+fragments are adapted into the existing `PrimitiveCall` / `LowerableDirective`
+shape before M150/M151 primitive-call resolution consumes them.
+
+The accepted exact `emit_return(call<primitive=add>(left, right));` artifact
+path still folds to the existing typed add operation so current C++ and Rust
+renderers do not need primitive-call expression rendering for that legacy exact
+case. Other primitive-call expressions remain governed by the M150/M151
+resolver and the currently selected expression consumers.
+
 ### M153 Backend Helper Raw Preservation Boundary
 
 Milestone 153 locks down that `details::arith_add`,

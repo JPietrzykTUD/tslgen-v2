@@ -9,7 +9,7 @@ or accepted planning passes.
 Milestone 225 is accepted. Milestone 226.5 planning is accepted. Milestone 227
 is accepted. Milestone 228.5 planning is accepted. Milestone 229 is accepted.
 Milestone 230 is accepted. Milestone 231 is accepted. Milestone 232 is
-accepted. Milestone 233 is accepted.
+accepted. Milestone 233 is accepted. Milestone 234 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -744,52 +744,73 @@ preserved M230 spans, and does not call legacy raw-text intrinsic discovery,
 backend intrinsic handoff lowering, modifier translation, argument splitting,
 rendering, or generated-project code.
 
+M234 removed the normal lowering dependency on old pairwise `emit_return +
+call` helpers. Catalog return-payload token feeding now rescans direct
+`emit_return` payloads through the M233 recursive source-body fragment
+boundary, and direct `call` fragments adapt to the existing `PrimitiveCall` /
+`LowerableDirective` shape. The old
+`_primitive_call_expression_result_from_exact_emit_return_body` helper and the
+`emit_return` branch inside exact add-call folding were removed.
+
+M234 preserved the accepted exact
+`emit_return(call<primitive=add>(left, right));` artifact path after focused
+regression revision. Exact add-call folding now uses a generic
+single-token-sequence operation adapter over either selected body tokens or
+direct return-payload tokens, not a restored pairwise helper. M234 follow-ups:
+consolidate duplicated primitive-call selector/argument parsing between the
+recursive fragment consumer and old raw-token classifier; replace or explicitly
+quarantine the remaining standalone raw classifier; decide whether
+catalog-side payload adaptation should surface malformed `call` diagnostics
+instead of preserving malformed fragments as raw text.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M234 pairwise lowering path cleanup execution-review loop.
+Run M235 primitive-call fragment adapter consolidation execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m234-pairwise-lowering-path-cleanup-execution-review-loop-prompt.md
+docs/agent/runs/m235-primitive-call-fragment-adapter-consolidation-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 234: Pairwise Lowering Path Cleanup.
+Milestone 235: Primitive-Call Fragment Adapter Consolidation.
 ```
 
 Latest review verdict:
 
 ```text
-M233 execution-review returned Accept after one focused diagnostics revision.
-Lowering-boundary, evidence, and complexity reviewers returned Accept.
-Diagnostics review initially requested root-scan diagnostic coverage and both
-malformed `intrin_compose` adapter branches; focused tests were added and
-diagnostics re-review returned Accept. Validation for M233: `git diff --check`
+M234 execution-review returned Accept With Follow-Ups. Lowering-boundary and
+complexity reviewers accepted with follow-ups. Regression review initially
+returned Needs Revision because exact
+`emit_return(call<primitive=add>(left, right));` artifact generation regressed;
+focused revision restored the exact add-call fold through a generic token
+sequence adapter and regression re-review returned Accept. Documentation review
+accepted with closeout requirements. Validation for M234: `git diff --check`
 exit 0 with no output; `python -B -m compileall -q tslgen/src/tslgen
-tslgen/tests` exit 0 with no output; required pytest bundle exit 0 with 46
+tslgen/tests` exit 0 with no output; required pytest bundle exit 0 with 58
 tests passed; required `find tslgen -type d -name __pycache__ -print` exit 0
-and printed compile/test-created cache directories.
+and printed compile/test-created cache directories. Additional focused
+regression validation for the M107 exact add-call artifact test passed.
 ```
 
 Next expected action:
 
 ```text
-Run the active M234 execution-review loop prompt. Use one write-capable
-executor plus read-only reviewers. Remove, replace, or explicitly quarantine
-the old pairwise lowering paths now that M233 has provided the recursive
-fragment tree. Required audit targets include
-`CatalogBuilder._classify_emit_return_payload_tokens`,
-`Lowerer._primitive_call_expression_result_from_exact_emit_return_body`, and
-the `emit_return` special branch in
-`Lowerer._exact_add_primitive_call_fragment_from_body`. Do not add new
-keyword-specific semantic consumers until those pairwise paths are cleaned up.
+Run the active M235 execution-review loop prompt. Use one write-capable
+executor plus read-only reviewers. Consolidate the exact primitive-call
+fragment adapter so the M233 recursive fragment path and the remaining
+standalone raw-token classifier do not duplicate selector/argument parsing. If
+the raw classifier cannot be replaced without broadening scope, explicitly
+quarantine it with legacy/compat naming and tests. Do not add new
+primitive-call semantics, argument expression parsing, backend call rendering,
+or broad TSIL parsing.
 ```
 
 Previous review verdict:
@@ -874,13 +895,15 @@ region lowering. M231 execution-review returned Accept after focused
 follow-up revision and selected M232 return payload region rescan adapter. M232
 execution-review returned Accept and selected M233 recursive TSIL keyword
 region lowering. M233 execution-review returned Accept after focused
-diagnostics revision and selected M234 pairwise lowering path cleanup.
+diagnostics revision and selected M234 pairwise lowering path cleanup. M234
+execution-review returned Accept With Follow-Ups after focused regression
+revision and selected M235 primitive-call fragment adapter consolidation.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m233-recursive-tsil-keyword-region-lowering-execution-review-loop-prompt.md
+docs/agent/runs/m234-pairwise-lowering-path-cleanup-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

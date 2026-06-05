@@ -23,6 +23,10 @@ from tslgen.domain.signatures import (
     parse_primitive_signature,
     signature_parameter_terms,
 )
+from tslgen.lowering.source_body_fragments import (
+    lower_source_body_fragments,
+    payload_tokens_from_fragment_sequence,
+)
 from tslgen.pipeline.extension_catalog import build_extension_catalog, build_type_groups
 from tslgen.pipeline._tsil_directives import classify_tsil_directive_line
 from tslgen.pipeline._tsil_primitive_calls import (
@@ -44,6 +48,7 @@ from tslgen.syntax.ast import (
     ParsedSegmentedLine,
     ParsedTypeGroup,
 )
+from tslgen.syntax.source_body_regions import SourceBodyText
 
 M107_SIGNATURE = "v:=(v,v)"
 M107_PARAMETERS = ("left", "right")
@@ -643,7 +648,7 @@ def _build_implementation_body(body: ParsedImplementationBody) -> Implementation
     )
     if body.envelope == PARSED_TSIL_BODY_ENVELOPE:
         tokens = classify_tsil_primitive_call_tokens(tokens)
-        tokens = _classify_emit_return_payload_tokens(tokens)
+        tokens = _classify_recursive_tsil_payload_tokens(tokens)
 
     return ImplementationBody(
         tokens=tokens,
@@ -651,13 +656,13 @@ def _build_implementation_body(body: ParsedImplementationBody) -> Implementation
     )
 
 
-def _classify_emit_return_payload_tokens(
+def _classify_recursive_tsil_payload_tokens(
     tokens: tuple[BodyToken, ...],
 ) -> tuple[BodyToken, ...]:
-    return tuple(_classify_emit_return_payload_token(token) for token in tokens)
+    return tuple(_classify_recursive_tsil_payload_token(token) for token in tokens)
 
 
-def _classify_emit_return_payload_token(token: BodyToken) -> BodyToken:
+def _classify_recursive_tsil_payload_token(token: BodyToken) -> BodyToken:
     if not isinstance(token, LowerableDirective):
         return token
     if token.name != _EMIT_RETURN_DIRECTIVE:
@@ -671,9 +676,20 @@ def _classify_emit_return_payload_token(token: BodyToken) -> BodyToken:
         token.source.line,
         token.source.column + len(_EMIT_RETURN_PREFIX),
     )
-    payload_tokens = classify_tsil_primitive_call_tokens(
-        (RawStringToken(text=payload, source=payload_source),)
+    fragment_result = lower_source_body_fragments(
+        SourceBodyText(
+            path=payload_source.path,
+            line=payload_source.line,
+            column=payload_source.column,
+            text=payload,
+        )
     )
+    if fragment_result.diagnostics:
+        payload_tokens = (RawStringToken(text=payload, source=payload_source),)
+    else:
+        payload_tokens = payload_tokens_from_fragment_sequence(
+            fragment_result.sequence,
+        )
     return LowerableDirective(
         name=token.name,
         arguments=token.arguments,

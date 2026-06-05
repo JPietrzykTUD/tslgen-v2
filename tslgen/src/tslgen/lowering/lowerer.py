@@ -507,7 +507,7 @@ class Lowerer:
         body = context.implementation.body
         fragment = _operation_fragment_from_selected_body(selected, body)
         call_expression_result = (
-            _primitive_call_expression_result_from_exact_emit_return_body(
+            _primitive_call_expression_result_from_return_payload(
                 selected,
                 body,
                 catalog,
@@ -1212,46 +1212,28 @@ def _operation_fragment_from_selected_body(
     selected: SelectedImplementation,
     body: ImplementationBody,
 ) -> LowerableOperationFragment | None:
-    fragment = _operation_fragment_from_body(body)
+    fragment = _operation_fragment_from_token_sequence(selected, body.tokens)
     if fragment is not None:
         return fragment
-    return _exact_add_primitive_call_fragment_from_body(selected, body)
-
-
-def _operation_fragment_from_body(
-    body: ImplementationBody,
-) -> LowerableOperationFragment | None:
-    if len(body.tokens) != 1:
+    directive = _emit_return_directive_from_body(body)
+    if directive is None:
         return None
-    segment = body.tokens[0]
-    if not isinstance(segment, LowerableOperationFragment):
-        return None
-    return segment
+    return _operation_fragment_from_token_sequence(selected, directive.payload_tokens)
 
 
-def _exact_add_primitive_call_fragment_from_body(
+def _operation_fragment_from_token_sequence(
     selected: SelectedImplementation,
-    body: ImplementationBody,
+    tokens: Iterable[object],
 ) -> LowerableOperationFragment | None:
-    if len(body.tokens) != 1:
+    token_sequence = tuple(tokens)
+    if len(token_sequence) != 1:
         return None
-
-    segment = body.tokens[0]
-    if not isinstance(segment, LowerableDirective):
-        return None
-
-    if segment.name == "emit_return":
-        if len(segment.payload_tokens) != 1:
-            return None
-        payload_token = segment.payload_tokens[0]
-        if not isinstance(payload_token, LowerableDirective):
-            return None
-        return _exact_add_primitive_call_fragment_from_directive(
-            selected,
-            payload_token,
-        )
-
-    return _exact_add_primitive_call_fragment_from_directive(selected, segment)
+    segment = token_sequence[0]
+    if isinstance(segment, LowerableOperationFragment):
+        return segment
+    if isinstance(segment, LowerableDirective):
+        return _exact_add_primitive_call_fragment_from_directive(selected, segment)
+    return None
 
 
 def _exact_add_primitive_call_fragment_from_directive(
@@ -1298,7 +1280,7 @@ def _is_exact_add_primitive_call_directive(
     )
 
 
-def _primitive_call_expression_result_from_exact_emit_return_body(
+def _primitive_call_expression_result_from_return_payload(
     selected: SelectedImplementation,
     body: ImplementationBody,
     catalog: Catalog | None,

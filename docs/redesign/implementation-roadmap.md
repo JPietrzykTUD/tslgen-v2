@@ -28510,7 +28510,7 @@ context-independent keyword traversal.
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m234-pairwise-lowering-path-cleanup-execution-review-loop-prompt.md`.
 
 Goal:
@@ -28549,5 +28549,108 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M234 removed the named old pairwise `emit_return + call` hooks from production
+code. `CatalogBuilder._classify_emit_return_payload_tokens` was replaced by a
+recursive TSIL payload classification path that rescans direct return payloads
+through M233 source-body fragments. Direct `call` keyword fragments can now be
+adapted into the existing `PrimitiveCall` / `LowerableDirective` shape without
+depending on a surrounding parent keyword.
+
+M234 also removed
+`Lowerer._primitive_call_expression_result_from_exact_emit_return_body` and
+the `emit_return` branch inside
+`Lowerer._exact_add_primitive_call_fragment_from_body`. After focused
+regression revision, exact add-call folding is preserved by a generic
+single-token-sequence operation adapter that can consume either selected body
+tokens or direct return-payload tokens. This keeps the accepted exact
+`emit_return(call<primitive=add>(left, right));` C++/Rust artifact path
+working without restoring a pairwise helper.
+
+Tests added:
+
+- recursive `call` fragment extraction under multiple parents;
+- `emit_return` payload tokens built from recursive fragments;
+- catalog-side recursive payload token feeding;
+- exact add-call payload folding to `LoweredBinaryOperationExpression`;
+- absence of named pairwise helper functions/classes in production surfaces.
+
+Review verdict:
+
+Accepted With Follow-Ups. Lowering-boundary and complexity reviewers accepted
+with follow-ups; regression review initially returned `Needs Revision` because
+the exact add-call artifact path regressed, then accepted after the focused
+token-sequence revision and regression test; documentation review accepted
+with closeout requirements.
+
+Follow-ups:
+
+- consolidate primitive-call selector/argument parsing now duplicated between
+  the recursive fragment consumer and the old raw token classifier;
+- replace or explicitly quarantine the remaining standalone raw
+  `classify_tsil_primitive_call_tokens` path before broadening call semantics;
+- decide whether catalog-side payload token adaptation should surface malformed
+  `call` fragment diagnostics instead of preserving those fragments as raw
+  text.
+
+Accepted validation:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- Required pytest bundle: exit 0, 58 tests passed.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created `__pycache__` directories.
+
+Additional focused regression validation:
+
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py::test_m134_emit_return_exact_add_call_lowers_to_existing_add_artifacts`:
+  exit 0, 1 test passed.
+
+### Milestone 235: Primitive-Call Fragment Adapter Consolidation
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m235-primitive-call-fragment-adapter-consolidation-execution-review-loop-prompt.md`.
+
+Goal:
+
+Consolidate the primitive-call adapter shape introduced by M234 so future call
+semantics do not drift between the M233 recursive fragment path and the older
+raw-token classifier.
+
+Scope:
+
+- Audit the duplicated selector/argument parsing in
+  `tslgen.lowering.source_body_fragments` and
+  `tslgen.pipeline._tsil_primitive_calls`.
+- Extract or reuse one small typed primitive-call syntax/adapter boundary for
+  exact `call<primitive=...>(...)` fragments.
+- Update the recursive fragment consumer and the remaining standalone raw-token
+  classifier to use the shared boundary, or explicitly quarantine the raw-token
+  classifier as legacy/compat if replacing it would broaden scope.
+- Preserve M150/M151 primitive-call expression behavior, M224 generated-project
+  behavior, and the M107 exact add-call artifact regression.
+- Add tests that prevent duplicate parser drift and keep M233 recursive
+  fragments as the preferred extension point.
+
+Out of scope:
+
+Full primitive-call dependency closure changes; new selector semantics;
+argument expression parsing; recursive lowering of call arguments; backend
+call rendering; generated-project expansion; broad TSIL parsing; source
+repair; runtime dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py::test_m134_emit_return_exact_add_call_lowers_to_existing_add_artifacts tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py
 find tslgen -type d -name __pycache__ -print
 ```
