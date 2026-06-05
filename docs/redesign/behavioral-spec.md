@@ -304,6 +304,61 @@ resumes. Raw target-language text around accepted TSIL islands remains raw
 source text; M242 does not parse target-language expressions, statements, or
 operators and does not introduce pairwise keyword-combination lowering.
 
+### M243 Real Scalar Emit-Return Function Rendering
+
+Milestone 243 adds a narrow real-corpus scalar generated-project bridge for
+exact single-return bodies. The bridge consumes already-loaded
+`SourceDocument` values and parses them through the accepted `OuterTslParser`.
+It selects real primitive declaration/body envelope facts, not the older tiny
+`body add(left, right)` fixture or `TslParser` path.
+
+The accepted M243 positive slice is the unmasked
+`tsldata/primitives/arithmetic/fundamental.tsl` `add` primitive with
+signature `v:=(v,v)`, parameters `left` and `right`, selector path
+`("scalar", "arith")`, concrete type tag `si32`, and implementation payload
+`tsil "emit_return(left + right);"`.
+
+The bridge accepts only a selected body whose complete source-owned body text
+is one exact `emit_return(PAYLOAD);` lexical region plus the trailing
+semicolon. The payload must contain raw text only for M243; nested TSIL
+keyword regions inside the return payload are diagnosed rather than repaired
+or rendered. Raw payload text such as `left + right` is carried into the
+already accepted function-shape render context without parsing target-language
+operators, expression precedence, statements, casts, assignments, or indexing.
+
+C++ and Rust scalar type spellings are translated through the accepted backend
+metadata type-spelling boundary. The bridge must not fall back to local scalar
+spelling tables. Function definitions are rendered through the existing
+exact `v:=(v,v)` function-shape templates, primitive profile artifacts are
+rendered through the existing primitive-profile templates, generated project
+skeletons are composed through the accepted generated-project composition
+boundary, files are written only by `ArtifactWriter`, and C++/Rust build
+verification runs only after artifacts are written.
+
+The M243 bridge returns deterministic diagnostics for unsupported real-source
+states, including:
+
+- `TSL-REAL-SCALAR-EMIT-RETURN-MISSING-PRIMITIVE` when the requested unmasked
+  primitive is absent.
+- `TSL-REAL-SCALAR-EMIT-RETURN-AMBIGUOUS-PRIMITIVE` when the request matches
+  more than one primitive declaration.
+- `TSL-REAL-SCALAR-EMIT-RETURN-MISSING-BODY` when the selected selector path
+  has no body envelope.
+- `TSL-REAL-SCALAR-EMIT-RETURN-AMBIGUOUS-BODY` when the selected selector path
+  has more than one body envelope.
+- `TSL-REAL-SCALAR-EMIT-RETURN-UNSUPPORTED-BODY` when the body is not exactly
+  one `emit_return(PAYLOAD);` region.
+- `TSL-REAL-SCALAR-EMIT-RETURN-UNSUPPORTED-PAYLOAD` when the return payload
+  contains nested TSIL keyword regions or no raw payload text.
+- `TSL-REAL-SCALAR-EMIT-RETURN-UNSUPPORTED-PROFILE-SET` when the requested
+  generated profile set is outside the single scalar profile accepted by the
+  bridge.
+
+M243 does not add lowering semantics, target-language operator parsing,
+dependency closure, broad corpus selection, vector/intrinsic/mask/generic
+rendering, support-helper semantics, or runtime dependencies on `frozen` or
+`tslgenold`.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

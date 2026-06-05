@@ -13,6 +13,7 @@ accepted. Milestone 233 is accepted. Milestone 234 is accepted. Milestone 235
 is accepted. Milestone 236 is accepted. Milestone 237 planning is accepted.
 Milestone 238 is accepted. Milestone 239 is accepted. Milestone 240 is
 accepted. Milestone 241 is accepted. Milestone 242 is accepted.
+Milestone 243 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -865,60 +866,77 @@ render artifacts, call backend renderers, write generated projects, run build
 verification, perform dependency closure, select primitives, inspect
 `frozen`/`tslgenold`, or introduce pairwise keyword-combination lowering.
 
+M243 added `tslgen.pipeline.real_scalar_pipeline`, a narrow real-corpus scalar
+single-return generated-project bridge. It consumes real
+`tsldata/primitives/arithmetic/fundamental.tsl` source documents through
+`OuterTslParser`, selects the unmasked scalar `add` primitive at selector path
+`("scalar", "arith")` with signature `v:=(v,v)`, parameters `left`/`right`,
+and concrete type tag `si32`, accepts only an exact single
+`emit_return(PAYLOAD);` body, and carries raw payload text `left + right`
+without parsing target-language operators. It translates scalar type spelling
+through backend metadata, renders `add_scalar_si32` through the existing
+function-shape/profile templates, composes the generated project skeleton,
+writes through `ArtifactWriter`, and verifies both C++ and Rust scalar
+projects through `BuildVerifier`. M243 keeps the tiny M224 path as regression
+only and guards the real path against `TslParser`, tiny `body add` evidence,
+local scalar/operator spelling tables, `LoweredBinaryOperationExpression`,
+`frozen`, and `tslgenold`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M243 real scalar emit-return function rendering execution-review loop.
+Run M244 real scalar emit-return matrix rendering execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m243-real-scalar-emit-return-function-rendering-execution-review-loop-prompt.md
+docs/agent/runs/m244-real-scalar-emit-return-matrix-rendering-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 243: Real Scalar Emit-Return Function Rendering.
+Milestone 244: Real Scalar Emit-Return Matrix Rendering.
 ```
 
 Latest review verdict:
 
 ```text
-M242 execution-review returned Accept after focused revision and documentation
-closeout. The first review found that the initial corpus gate missed `tsl`
-body envelopes and could pass too much from static family labels. The focused
-revision included `tsl` envelopes, added `cast<saturating>` to the real
-counts, and made completeness require accepted-path validation for every
-observed family. Lowering/boundary, evidence, test, documentation, and
-validation reviews accepted. Validation for M242: `git diff --check` exit 0
-with no output; `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`
-exit 0 with no output; required pytest bundle exit 0 with 38 tests passed;
-final `find tslgen -type d -name __pycache__ -print` exit 0 with no output
-after removing compile/test-created cache directories.
+M243 execution-review returned Accept after focused test and hygiene revision
+plus documentation closeout. Architecture and evidence reviews accepted the
+real parser/body/rendering boundary. Test review requested stronger guards
+against `frozen`/`tslgenold` and alias-based `TslParser` shortcuts; validation
+audit requested local cache cleanup. The focused revision strengthened
+AST-based shortcut/dependency guard tests and removed cache directories.
+Validation for M243: `git diff --check` exit 0 with no output;
+`python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no
+output; required pytest bundle exit 0 with 30 tests passed; final
+`find tslgen -type d -name __pycache__ -print` exit 0 with no output after
+removing compile/test-created cache directories; broader cache check for
+`.pytest_cache`, `.mypy_cache`, and `.ruff_cache` exit 0 with no output.
 ```
 
 Next expected action:
 
 ```text
-Run the active M243 execution-review loop. Use one write-capable executor and
-read-only review/audit subagents. Connect the already accepted
-template-backed function/profile/project rendering stack to a real `tsldata`
-primitive implementation body whose accepted lowered body is an exact single
-`emit_return(PAYLOAD);` region, then compile the generated C++ and Rust scalar
-projects. The starting case is real scalar `add` / `si32` from
-`tsldata/primitives/arithmetic/fundamental.tsl`. Use accepted parser/body
-facts, accepted recursive body lowering, existing function-shape templates,
-existing primitive-profile templates, generated-project skeleton composition,
-`ArtifactWriter`, and build verification. Do not add new lowering semantics,
-target-language operator parsing, pairwise keyword-combination handling,
-broad real-corpus catalog selection, dependency closure, a new scalar
-renderer, production C++/Rust function strings in Python, or dependence on
-the tiny M224 parser/body shortcut and local scalar/operator spelling tables
-for the real-corpus positive path.
+Run the active M244 execution-review loop. Use one write-capable executor and
+read-only review/audit subagents. Broaden the accepted M243 real scalar bridge
+from one `add` / `si32` function to an explicit deterministic real scalar
+matrix in one generated C++ and Rust scalar project. The starting matrix is
+real unmasked `add` and `sub` from
+`tsldata/primitives/arithmetic/fundamental.tsl`, selector path
+`("scalar", "arith")`, signature `v:=(v,v)`, parameters `left`/`right`, and
+concrete type tags `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`,
+`ui64`, `f32`, and `f64`. Reuse the M243 parser/body/rendering bridge,
+backend metadata type spelling, existing templates, generated-project
+composition, `ArtifactWriter`, and build verification. Do not add new
+lowering semantics, target-language operator parsing, wildcard expansion,
+broad catalog selection, dependency closure, vector/intrinsic/mask/generic
+rendering, local scalar/operator spelling tables, or runtime dependencies on
+`frozen`/`tslgenold`.
 ```
 
 Previous review verdict:
@@ -1021,13 +1039,16 @@ execution-review. M241 execution-review returned Accept after focused test
 coverage revision and documentation closeout and selected M242 real corpus
 lowering completion gate execution-review. M242 execution-review returned
 Accept after focused revision and documentation closeout and selected M243
-real scalar emit-return function rendering execution-review.
+real scalar emit-return function rendering execution-review. M243
+execution-review returned Accept after focused test/hygiene revision and
+documentation closeout and selected M244 real scalar emit-return matrix
+rendering execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m242-real-corpus-lowering-completion-gate-execution-review-loop-prompt.md
+docs/agent/runs/m243-real-scalar-emit-return-function-rendering-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

@@ -29495,7 +29495,7 @@ primitive/profile artifact boundaries.
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m243-real-scalar-emit-return-function-rendering-execution-review-loop-prompt.md`.
 
 Goal:
@@ -29548,5 +29548,120 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m227_vv_function_shape_template_render_boundary.py tslgen/tests/test_m241_primitive_profile_artifact_presentation_boundary.py tslgen/tests/test_m242_real_corpus_lowering_completion_gate.py tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M243 added `tslgen.pipeline.real_scalar_pipeline`, a narrow real-corpus
+scalar single-return generated-project bridge. The public API exposes
+`RealScalarEmitReturnSelection`,
+`RealScalarEmitReturnGeneratedProjectResult`, and
+`build_real_scalar_emit_return_generated_project_artifacts`.
+
+The accepted positive path consumes real
+`tsldata/primitives/arithmetic/fundamental.tsl` source documents through
+`OuterTslParser`, selects the unmasked `add` primitive with signature
+`v:=(v,v)`, parameters `left`/`right`, selector path `("scalar", "arith")`,
+and concrete type tag `si32`, then requires the selected body to be an exact
+single `emit_return(PAYLOAD);` envelope. The accepted payload is raw
+`left + right` text. The bridge does not parse `+`, lower operator semantics,
+or depend on the old tiny `body add(left, right)` fixture.
+
+The bridge translates C++ and Rust scalar type spellings through the accepted
+backend metadata type-spelling boundary, renders `add_scalar_si32` through
+the existing exact `v:=(v,v)` function-shape templates, wraps the definition
+with the existing primitive profile artifact templates, composes the accepted
+generated-project skeleton, writes through `ArtifactWriter`, and verifies both
+C++ and Rust scalar generated projects through `BuildVerifier`.
+
+Tests added:
+
+- `tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py`
+  covers real `fundamental.tsl` parsing/selection, raw payload preservation,
+  C++/Rust parity rendering, deterministic artifact digests,
+  manifest-clean writing, C++/Rust build verification, unsupported real
+  multi-statement body diagnostics, backend metadata fallback rejection, and
+  guards against `TslParser`, tiny `body add` evidence, local scalar/operator
+  spelling tables, `LoweredBinaryOperationExpression`, `frozen`, and
+  `tslgenold` usage in the real path.
+
+Review verdict:
+
+Accepted after focused test and hygiene revision plus documentation closeout.
+Architecture and evidence review accepted the real parser/body/rendering
+boundary. Test review requested stronger shortcut/dependency guards; validation
+audit requested cache cleanup. The focused revision strengthened AST-based
+guard tests and removed cache directories. Documentation was then updated and
+M244 was selected.
+
+Accepted validation:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- Required pytest bundle: exit 0, 30 tests passed.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created cache directories; after cleanup, final rerun exited 0
+  with no output.
+- Broader cache check after focused hygiene revision:
+  `find . -maxdepth 2 \( -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -print`
+  exited 0 with no output.
+
+Follow-up:
+
+The next backend/rendering step should broaden the real scalar bridge over an
+explicit selected real scalar matrix before moving to vector/intrinsic bodies.
+Do not reopen lowering or introduce operator parsing; raw target-language
+payload text remains raw.
+
+### Milestone 244: Real Scalar Emit-Return Matrix Rendering
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m244-real-scalar-emit-return-matrix-rendering-execution-review-loop-prompt.md`.
+
+Goal:
+
+Broaden the accepted M243 bridge from one real scalar `add` / `si32` function
+to an explicit deterministic matrix of real scalar single-`emit_return`
+functions in one generated C++ and Rust scalar project.
+
+Scope:
+
+- Reuse `tslgen.pipeline.real_scalar_pipeline`, `OuterTslParser`, accepted
+  recursive body lowering, backend metadata type spelling, existing
+  function-shape templates, primitive profile templates, generated-project
+  skeleton composition, `ArtifactWriter`, and `BuildVerifier`.
+- Add an explicit selected matrix, not wildcard expansion or broad catalog
+  selection. The starting matrix is real unmasked `add` and `sub` from
+  `tsldata/primitives/arithmetic/fundamental.tsl`, selector path
+  `("scalar", "arith")`, signature `v:=(v,v)`, parameters `left`/`right`,
+  and concrete scalar type tags `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`,
+  `ui32`, `ui64`, `f32`, and `f64`.
+- Generate deterministic C++ and Rust scalar profile artifacts containing all
+  selected functions, for example `add_scalar_si32` and `sub_scalar_si32`,
+  with type spellings from backend metadata and raw payload text from the real
+  selected body.
+- Preserve M243's exact single-return diagnostics and add diagnostics for
+  duplicate selected function names or unsupported selected matrix entries if
+  encountered.
+- Keep the old M224 tiny path as regression only.
+
+Out of scope:
+
+New lowering semantics; target-language expression/operator parsing; wildcard
+expansion; primitive-call dependency closure; broad real-corpus catalog
+selection; vector/intrinsic/mask/generic rendering; tests metadata rendering;
+support-helper semantics; generated CLI/API changes; runtime dependency on
+`frozen` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m227_vv_function_shape_template_render_boundary.py tslgen/tests/test_m241_primitive_profile_artifact_presentation_boundary.py tslgen/tests/test_m242_real_corpus_lowering_completion_gate.py tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py
 find tslgen -type d -name __pycache__ -print
 ```
