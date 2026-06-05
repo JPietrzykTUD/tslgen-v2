@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import Enum
 from typing import NewType
 
 from tslgen.backends.intrinsic_invocations import (
@@ -27,10 +28,15 @@ class RustArchitectureModule:
         return self.name
 
 
+class RustIntrinsicNameQualification(Enum):
+    ARCHITECTURE_MODULE = "architecture_module"
+    ALREADY_QUALIFIED = "already_qualified"
+
+
 @dataclass(frozen=True, slots=True)
 class RustRenderedIntrinsicCall:
     invocation: BackendAssembledIntrinsicInvocation
-    architecture_module: RustArchitectureModule
+    architecture_module: RustArchitectureModule | None
     call_text: RustIntrinsicCallText
     immediates: tuple[BackendIntrinsicInvocationImmediate, ...]
     source: SourceLocation
@@ -45,6 +51,10 @@ class RustIntrinsicCallRenderResult:
 def render_rust_intrinsic_invocation_call(
     invocation: object,
     architecture_module: RustArchitectureModule | None,
+    *,
+    name_qualification: RustIntrinsicNameQualification = (
+        RustIntrinsicNameQualification.ARCHITECTURE_MODULE
+    ),
 ) -> RustIntrinsicCallRenderResult:
     """Render an assembled intrinsic invocation as one Rust call expression."""
 
@@ -63,14 +73,52 @@ def render_rust_intrinsic_invocation_call(
             diagnostics=(_unsupported_backend_diagnostic(invocation),),
         )
 
-    architecture_diagnostic = _architecture_module_diagnostic(
+    qualification_diagnostic = _name_qualification_diagnostic(
+        name_qualification,
+        invocation.source,
+    )
+    if qualification_diagnostic is not None:
+        return RustIntrinsicCallRenderResult(
+            call=None,
+            diagnostics=(qualification_diagnostic,),
+        )
+
+    if name_qualification == RustIntrinsicNameQualification.ALREADY_QUALIFIED:
+        if architecture_module is not None:
+            return RustIntrinsicCallRenderResult(
+                call=None,
+                diagnostics=(
+                    _already_qualified_architecture_module_diagnostic(
+                        invocation.source,
+                    ),
+                ),
+            )
+        return RustIntrinsicCallRenderResult(
+            call=RustRenderedIntrinsicCall(
+                invocation=invocation,
+                architecture_module=None,
+                call_text=RustIntrinsicCallText(
+                    f"{str(invocation.intrinsic_name)}"
+                    f"({str(invocation.arguments.text)})"
+                ),
+                immediates=(
+                    invocation.immediates
+                    if isinstance(invocation, BackendComposedIntrinsicInvocation)
+                    else ()
+                ),
+                source=invocation.source,
+            ),
+            diagnostics=(),
+        )
+
+    module_diagnostic = _architecture_module_diagnostic(
         architecture_module,
         invocation.source,
     )
-    if architecture_diagnostic is not None:
+    if module_diagnostic is not None:
         return RustIntrinsicCallRenderResult(
             call=None,
-            diagnostics=(architecture_diagnostic,),
+            diagnostics=(module_diagnostic,),
         )
 
     assert isinstance(architecture_module, RustArchitectureModule)
@@ -92,6 +140,37 @@ def render_rust_intrinsic_invocation_call(
             source=invocation.source,
         ),
         diagnostics=(),
+    )
+
+
+def _name_qualification_diagnostic(
+    name_qualification: object,
+    location: SourceLocation,
+) -> Diagnostic | None:
+    if not isinstance(name_qualification, RustIntrinsicNameQualification):
+        return Diagnostic(
+            severity="error",
+            code="TSL-RUST-INTRINSIC-CALL-UNSUPPORTED-NAME-QUALIFICATION",
+            message=(
+                "Rust intrinsic call rendering requires a typed "
+                "RustIntrinsicNameQualification value"
+            ),
+            location=location,
+        )
+    return None
+
+
+def _already_qualified_architecture_module_diagnostic(
+    location: SourceLocation,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-RUST-INTRINSIC-CALL-ALREADY-QUALIFIED-MODULE-MISUSE",
+        message=(
+            "Rust intrinsic calls rendered as already-qualified names must not "
+            "also receive an architecture module"
+        ),
+        location=location,
     )
 
 

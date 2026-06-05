@@ -15,6 +15,7 @@ from tslgen.backends.rust import (
     RustArchitectureModule,
     RustIntrinsicCallRenderResult,
     RustIntrinsicCallText,
+    RustIntrinsicNameQualification,
     RustRenderedIntrinsicCall,
     render_rust_intrinsic_invocation_call,
 )
@@ -75,6 +76,25 @@ def test_m219_uses_explicit_module_without_inferring_from_intrinsic_name() -> No
     assert result.call is not None
     assert result.call.call_text == (
         "core::arch::aarch64::_mm_add_epi32(left, right)"
+    )
+
+
+def test_m219_renders_already_qualified_rust_intrinsic_name() -> None:
+    invocation = _direct_invocation(
+        "intrin<core::arch::x86_64::_mm_add_epi32>(left, right)"
+    )
+
+    result = render_rust_intrinsic_invocation_call(
+        invocation,
+        None,
+        name_qualification=RustIntrinsicNameQualification.ALREADY_QUALIFIED,
+    )
+
+    assert result.diagnostics == ()
+    assert result.call is not None
+    assert result.call.architecture_module is None
+    assert result.call.call_text == (
+        "core::arch::x86_64::_mm_add_epi32(left, right)"
     )
 
 
@@ -242,11 +262,48 @@ def test_m219_diagnoses_untyped_architecture_module() -> None:
     assert result.diagnostics[0].location == invocation.source
 
 
+def test_m219_diagnoses_already_qualified_name_with_architecture_module() -> None:
+    invocation = _direct_invocation(
+        "intrin<core::arch::x86_64::_mm_add_epi32>(left, right)"
+    )
+
+    result = render_rust_intrinsic_invocation_call(
+        invocation,
+        RustArchitectureModule("x86_64"),
+        name_qualification=RustIntrinsicNameQualification.ALREADY_QUALIFIED,
+    )
+
+    assert result.call is None
+    assert _codes(result.diagnostics) == (
+        "TSL-RUST-INTRINSIC-CALL-ALREADY-QUALIFIED-MODULE-MISUSE",
+    )
+    assert result.diagnostics[0].severity == "error"
+    assert result.diagnostics[0].location == invocation.source
+
+
+def test_m219_diagnoses_untyped_name_qualification() -> None:
+    invocation = _direct_invocation("intrin<_mm_add_epi32>(left, right)")
+
+    result = render_rust_intrinsic_invocation_call(
+        invocation,
+        RustArchitectureModule("x86_64"),
+        name_qualification="already_qualified",
+    )
+
+    assert result.call is None
+    assert _codes(result.diagnostics) == (
+        "TSL-RUST-INTRINSIC-CALL-UNSUPPORTED-NAME-QUALIFICATION",
+    )
+    assert result.diagnostics[0].severity == "error"
+    assert result.diagnostics[0].location == invocation.source
+
+
 def test_m219_public_rust_backend_imports_are_available() -> None:
     from tslgen.backends.rust import (  # noqa: PLC0415
         RustArchitectureModule,
         RustIntrinsicCallRenderResult,
         RustIntrinsicCallText,
+        RustIntrinsicNameQualification,
         RustRenderedIntrinsicCall,
         render_rust_intrinsic_invocation_call,
     )
@@ -257,6 +314,9 @@ def test_m219_public_rust_backend_imports_are_available() -> None:
     )
     assert RustIntrinsicCallRenderResult.__name__ == "RustIntrinsicCallRenderResult"
     assert RustRenderedIntrinsicCall.__name__ == "RustRenderedIntrinsicCall"
+    assert RustIntrinsicNameQualification.ALREADY_QUALIFIED.value == (
+        "already_qualified"
+    )
     assert callable(render_rust_intrinsic_invocation_call)
 
 

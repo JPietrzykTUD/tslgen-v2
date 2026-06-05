@@ -14,7 +14,8 @@ is accepted. Milestone 236 is accepted. Milestone 237 planning is accepted.
 Milestone 238 is accepted. Milestone 239 is accepted. Milestone 240 is
 accepted. Milestone 241 is accepted. Milestone 242 is accepted.
 Milestone 243 is accepted. Milestone 244 is accepted. Milestone 244.5 is
-accepted. Milestone 245 is accepted. Milestone 246 is accepted.
+accepted. Milestone 245 is accepted. Milestone 246 is accepted. Milestone
+247 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -938,67 +939,72 @@ authoritative. Diagnostics cover malformed policy source, wildcard/group or
 unknown suffix selectors, unsupported backend, unknown extension, missing
 policy, missing backend prefix, missing type suffix, and backend mismatch.
 
+M247 added typed `SelectedImplementationRenderContext` to the intrinsic
+body-token rendering boundary. The existing bridge now receives selected
+backend, extension, type tag, and extension catalog context and uses it to
+resolve M246 default compose policy for composed intrinsic request segments.
+Default policy resolution is part-specific: only missing prefix/suffix parts
+are requested, and explicit source modifiers remain authoritative. Rust
+intrinsic call rendering now has a typed already-qualified name mode so
+extension-owned full `core::arch::*` prefixes are not double-qualified. M247
+did not add new lowering, a sibling fixture pipeline, pairwise
+`emit_return + intrin_compose` handling, template-side intrinsic naming, or a
+runtime dependency on `frozen`/`tslgenold`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M247 default compose policy body-token bridge execution-review loop.
+Run M248 generic selected primitive project intrinsic rendering execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m247-default-compose-policy-body-token-bridge-execution-review-loop-prompt.md
+docs/agent/runs/m248-generic-selected-primitive-project-intrinsic-rendering-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 247: Default Compose Policy Body-Token Bridge.
+Milestone 248: Generic Selected Primitive Project Intrinsic Rendering Integration.
 ```
 
 Latest review verdict:
 
 ```text
-M246 execution-review returned Accept with no focused revision required.
-Architecture/boundary, evidence, test, documentation, and validation
-reviewers accepted the extension-owned default compose policy slice. The test
-reviewer returned Accept With Follow-Ups, and the concrete follow-ups were
-addressed by adding partial prefix/suffix override coverage, unknown suffix
-selector coverage, backend-mismatch coverage, and M213 assembly regression
-validation. The accepted implementation stores default intrinsic compose
-prefix/suffix policy in `extension.tsl`, promotes it into typed extension
-catalog values, and lets backend intrinsic invocation assembly consume a
-resolved typed default policy only for missing prefix/suffix parts. Explicit
-source modifiers still win. The active prompt initially referenced stale test
-path `tslgen/tests/test_m195_intrinsic_modifier_translation.py`; running that
-exact path exited 4 with "file or directory not found". The prompt/roadmap
-were corrected to `tslgen/tests/test_m195_literal_intrinsic_modifier_translation.py`.
-Validation for M246 after correction: `git diff --check` exit 0 with no
-output; `python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0
-with no output; corrected required pytest bundle including M213 assembly
-regressions exit 0 with 134 tests passed in 17.94s; initial
-`find tslgen -type d -name __pycache__ -print` exit 0 and printed
-validation-created cache directories; after cleanup, final rerun exited 0
-with no output; broader cache check for `.pytest_cache`, `.mypy_cache`,
-`.ruff_cache`, and `*.pyc` exit 0 with no output. M247 default compose policy
-body-token bridge consumption is selected next.
+M247 execution-review returned Accept after focused revision. The initial
+architecture and test reviews found that the bridge resolved full default
+compose policy even when only one part was missing, and that bridge-level
+missing policy/prefix diagnostics were not covered. The revision made default
+policy resolution part-specific, added C++ explicit suffix/default prefix
+coverage, and added bridge-level missing policy and missing backend prefix
+coverage. Focused re-review returned Accept; evidence/legacy-leak review
+returned Accept; documentation/state closeout is recorded. Final validation:
+`git diff --check` exit 0 with no output; `python -B -m compileall -q
+tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest bundle
+exit 0 with 68 tests passed in 14.20s; initial cache check printed
+validation-created `__pycache__` directories; after cleanup, final
+`find tslgen -type d -name __pycache__ -print` exited 0 with no output. M248
+generic selected primitive project intrinsic rendering integration is
+selected next.
 ```
 
 Next expected action:
 
 ```text
-Run the active M247 execution-review loop. Wire M246's typed default compose
-policy into the intrinsic body-token bridge so composed intrinsic request
-segments can use selected extension/type defaults when prefix or suffix is
-absent. Preserve explicit modifier precedence, add a typed Rust qualification
-path that avoids doubled `core::arch::*`, and keep direct intrinsic requests,
-immediates, opaque argument payloads, and body-token substitution compatible.
-Do not add new lowering, pairwise `emit_return + intrin_compose` special
-cases, generated-project integration, vector signature rendering, fixture
-pipelines, template-side intrinsic naming, or runtime dependencies on
-`frozen`/`tslgenold`.
+Run the active M248 execution-review loop. Integrate M247 context-aware
+intrinsic body-token rendering into the generic
+`primitive_project_pipeline.py` for one representative real selected
+vector/intrinsic primitive such as `add` `avx2/f32` from
+`tsldata/primitives/arithmetic/fundamental.tsl`. Use typed selected extension,
+type tag, extension catalog, M245 `CurrentVector` type spelling, M247 body
+token rendering, and existing supplementary templates/artifact composition.
+Preserve scalar M243/M244 behavior. Do not add new lowering, broad TSIL
+parsing, pairwise keyword handlers, fixture-shaped sibling pipelines,
+template-side intrinsic/type decisions, Python-owned C++/Rust primitive bodies,
+or runtime dependencies on `frozen`/`tslgenold`.
 ```
 
 Previous review verdict:

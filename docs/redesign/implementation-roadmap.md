@@ -16433,6 +16433,135 @@ find tslgen -type d -name __pycache__ -print
 
 Result:
 
+M247 added `SelectedImplementationRenderContext` to the intrinsic body-token
+rendering boundary. The context carries selected backend, selected extension,
+selected type tag, and the extension catalog as typed data. The existing
+`intrinsic_body_token_bridge` now uses that context to resolve M246 default
+compose policy for composed intrinsic request segments; no sibling fixture
+pipeline or pairwise `emit_return + intrin_compose` path was added.
+
+Default compose-policy resolution is part-specific at the bridge boundary. The
+bridge requests only the missing default parts: explicit prefix and suffix
+modifiers require no default policy, explicit suffix plus missing prefix
+requires only the default prefix, and explicit prefix plus missing suffix
+requires only the default suffix. This preserves source modifier precedence and
+prevents diagnostics for default policy parts that source text already
+overrode.
+
+Rust intrinsic call rendering now exposes a typed
+`RustIntrinsicNameQualification` mode. Existing direct/unqualified Rust
+intrinsic calls still use a typed `RustArchitectureModule`; names assembled
+from full `core::arch::*` extension policy prefixes are rendered through the
+already-qualified mode so they are not double-qualified. The renderer does not
+infer this from name text.
+
+Tests added/updated:
+
+- `tslgen/tests/test_m247_selected_implementation_render_context.py` covers
+  C++ selected-context default compose rendering, C++ explicit suffix/default
+  prefix partial override, Rust already-qualified default compose rendering,
+  Rust explicit modifier compatibility, missing selected context, missing
+  extension catalog, missing default policy, missing backend prefix, missing
+  type suffix, unknown extension, and backend mismatch diagnostics.
+- `tslgen/tests/test_m219_rust_intrinsic_invocation_call_rendering.py` covers
+  typed already-qualified Rust intrinsic call rendering and misuse
+  diagnostics.
+- `tslgen/tests/test_m239_backend_intrinsic_body_token_render_bridge.py` keeps
+  the bridge guardrail focused on no parser/lowerer access while allowing the
+  typed extension catalog values required by selected render context.
+
+Review verdict:
+
+The initial architecture and test reviewers returned `Needs Revision` because
+the bridge requested full default policy even when only one name part was
+missing, and because bridge-level missing policy/prefix diagnostics were not
+covered. The focused revision added part-specific default policy resolution and
+the missing tests. Focused re-review returned Accept. Evidence/legacy-leak
+review returned Accept. Documentation/state review required closeout updates,
+which are recorded in the M247 completion docs and M248 prompt.
+
+Accepted validation:
+
+- `git diff --check`: exit 0 with no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
+  no output.
+- Required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m214_cpp_intrinsic_invocation_call_rendering.py tslgen/tests/test_m219_rust_intrinsic_invocation_call_rendering.py tslgen/tests/test_m220_shared_intrinsic_body_token_substitution_parity.py tslgen/tests/test_m239_backend_intrinsic_body_token_render_bridge.py tslgen/tests/test_m246_extension_default_intrin_compose_policy.py tslgen/tests/test_m247_selected_implementation_render_context.py`
+  exited 0 with 68 tests passed in 14.20s during final validation.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and printed
+  validation-created `__pycache__` directories. After cleanup, the final rerun
+  exited 0 with no output.
+
+Follow-up:
+
+M248 is selected to connect the M247 context-aware intrinsic body-token
+rendering path into the generic selected primitive project pipeline for a
+representative real selected primitive/profile. This should use existing
+selected entry data, `ExtensionCatalog`, M245 vector register type spelling,
+M247 body-token rendering, existing shape/profile templates, and in-memory
+artifact composition. It must not create a fixture-shaped sibling pipeline,
+another `intrin_compose` micro-milestone, template-side intrinsic naming, or
+new lowering.
+
+### Milestone 248: Generic Selected Primitive Project Intrinsic Rendering Integration
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m248-generic-selected-primitive-project-intrinsic-rendering-execution-review-loop-prompt.md`.
+
+Goal:
+
+Integrate the accepted M247 context-aware intrinsic body-token rendering into
+`tslgen.pipeline.primitive_project_pipeline` so one representative real
+selected vector/intrinsic primitive can render through the generic selected
+project pipeline in C++ and Rust parity.
+
+Scope:
+
+- Use the existing generic selected primitive project pipeline; do not add a
+  sibling real-avx2, real-intrinsic, or fixture pipeline.
+- Carry selected extension/profile and type tag into the pipeline as typed
+  selected data. Use an explicit `ExtensionCatalog` input or another direct
+  typed project context; do not make rendering parse `extension.tsl`.
+- For non-scalar selected extensions, translate function result/parameter type
+  spellings through the accepted M245 `CurrentVector(extension, type_tag)`
+  backend type-spelling path. Preserve scalar behavior for scalar selections.
+- For selected implementation bodies whose exact accepted shape is
+  `emit_return(PAYLOAD);`, lower/render payload body tokens through the
+  existing intrinsic discovery/lowering/handoff path and M247 bridge when the
+  payload contains backend intrinsic request islands. Do not add pairwise
+  parent/child keyword combinations; this is recursive token/handoff
+  consumption of already accepted lowering output.
+- Render a representative real `tsldata/primitives/arithmetic/fundamental.tsl`
+  selected implementation such as `add`, selector `("avx2", "f?")`, type
+  `f32`, requested profile `avx2`, for both C++ and Rust. Expected C++ should
+  use extension register type spelling and `_mm256_add_ps`; expected Rust
+  should use extension register type spelling and a non-doubled
+  `core::arch::x86_64::_mm256_add_ps` call.
+- Preserve M243/M244 scalar add/sub behavior and deterministic artifact
+  composition.
+
+Out of scope:
+
+New lowering semantics; broad TSIL parsing; dependency closure;
+primitive-call expansion; mask/generic/SVE bodies; real AVX/NEON build
+verification if target-feature/unsafe wrapper policy is not already present;
+template-side type/intrinsic decisions; Python raw C++/Rust primitive bodies;
+extending `generated_primitive_pipeline.py`; runtime dependencies on
+`frozen` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py tslgen/tests/test_m244_5_real_primitive_project_pipeline_consolidation.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py tslgen/tests/test_m247_selected_implementation_render_context.py tslgen/tests/test_m248_generic_selected_primitive_project_intrinsic_rendering.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
 M221 added `tslgen.backends.type_value_body_tokens`, a focused shared
 substitution boundary for the complete currently eligible backend type/value
 subset. The evidence gate is satisfied for `BackendTypeQueryHandoff` plus
@@ -30092,35 +30221,42 @@ Accepted validation after correction:
 
 Follow-up:
 
-M247 is selected to consume M246's typed default compose policy in the
-intrinsic body-token bridge. The next slice should resolve extension/type
-defaults for any composed intrinsic request missing a prefix or suffix, avoid
-double Rust `core::arch::*` qualification through a typed renderer policy, and
-preserve all explicit modifier behavior. It must not create pairwise
-`emit_return + intrin_compose` special cases, add new lowering, extend
-fixture-shaped pipelines, or move intrinsic naming decisions into templates.
+M247 is selected to propagate selected implementation render context into
+body-token rendering. M246's typed default compose policy is the acceptance
+test proving that selected backend/extension/type/catalog context reaches
+intrinsic assembly, but the milestone is not another specialized
+`intrin_compose` slice. It must not create pairwise `emit_return +
+intrin_compose` special cases, add new lowering, extend fixture-shaped
+pipelines, or move intrinsic naming decisions into templates. After M247, the
+next milestone should move toward the generic selected primitive project
+pipeline rendering a representative real primitive unless M247 uncovers a
+concrete blocker.
 
-### Milestone 247: Default Compose Policy Body-Token Bridge
+### Milestone 247: Selected Implementation Render Context Propagation
 
 Status:
 
 Selected. Execution-review loop prompt:
-`docs/agent/runs/m247-default-compose-policy-body-token-bridge-execution-review-loop-prompt.md`.
+`docs/agent/runs/m247-selected-implementation-render-context-propagation-execution-review-loop-prompt.md`.
 
 Goal:
 
-Wire M246's typed default compose policy into the intrinsic body-token bridge
-so already-lowered composed intrinsic request segments can render C++ and Rust
-body-token text from selected backend/extension/type context without pairwise
-source-shape special cases.
+Make selected backend, extension, type tag, and extension catalog explicit in
+the body-token rendering context. Use M246 default compose policy rendering as
+the proof that this selected implementation context reaches backend intrinsic
+assembly.
 
 Scope:
 
-- Extend the intrinsic body-token bridge context, or a narrow adjacent typed
-  context, with selected `ExtensionName`, selected `TypeTag`, and
-  `ExtensionCatalog` data needed to resolve default compose policy.
+- Add or reuse one obvious typed selected implementation render context that
+  carries selected backend, selected `ExtensionName`, selected `TypeTag`, and
+  `ExtensionCatalog` data. Keep it direct; do not add a request/result/worklist
+  family.
+- Thread that context through the existing intrinsic body-token bridge instead
+  of adding a sibling fixture pipeline or backend-specific bridge.
 - Resolve and pass `BackendIntrinsicComposeDefaultPolicy` to invocation
-  assembly for any composed intrinsic request missing a prefix and/or suffix.
+  assembly when a composed intrinsic request needs selected default
+  prefix/suffix policy.
 - Preserve explicit source modifier precedence. A request with translated
   source prefix and suffix must not require extension default policy only to
   render.
@@ -30129,25 +30265,27 @@ Scope:
 - Add a typed Rust call-rendering qualification path so names assembled from
   full `core::arch::*` extension metadata are not double-qualified, while
   existing unqualified Rust call-rendering behavior remains compatible.
-- Cover C++ and Rust representative bridge rendering, explicit override
-  behavior, no-default-needed behavior, diagnostics, and guardrails against
-  Python/template spelling tables or parent/child keyword combinations.
+- Cover the typed context model, C++ and Rust representative bridge rendering,
+  explicit override behavior, no-default-needed behavior, diagnostics, and
+  guardrails against Python/template spelling tables or parent/child keyword
+  combinations.
 
 Out of scope:
 
-Generated-project integration through `primitive_project_pipeline.py`;
-vector/register type spelling in function signatures; build verification of
-real AVX/NEON generated projects; primitive selection; dependency closure; new
-lowering; pairwise `emit_return + intrin_compose` handling; target-language
-expression parsing; moving intrinsic naming decisions into templates; extending
-`generated_primitive_pipeline.py`; runtime dependencies on `frozen` or
-`tslgenold`.
+Full generated-project integration through `primitive_project_pipeline.py`
+beyond minimal call-site/context plumbing if an existing call-site already
+needs it; vector/register type spelling in function signatures; build
+verification of real AVX/NEON generated projects; primitive selection;
+dependency closure; new lowering; pairwise `emit_return + intrin_compose`
+handling; target-language expression parsing; moving intrinsic naming
+decisions into templates; extending `generated_primitive_pipeline.py`; runtime
+dependencies on `frozen` or `tslgenold`.
 
 Validation:
 
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m214_cpp_intrinsic_invocation_call_rendering.py tslgen/tests/test_m219_rust_intrinsic_invocation_call_rendering.py tslgen/tests/test_m220_shared_intrinsic_body_token_substitution_parity.py tslgen/tests/test_m239_backend_intrinsic_body_token_render_bridge.py tslgen/tests/test_m246_extension_default_intrin_compose_policy.py tslgen/tests/test_m247_default_compose_policy_body_token_bridge.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m214_cpp_intrinsic_invocation_call_rendering.py tslgen/tests/test_m219_rust_intrinsic_invocation_call_rendering.py tslgen/tests/test_m220_shared_intrinsic_body_token_substitution_parity.py tslgen/tests/test_m239_backend_intrinsic_body_token_render_bridge.py tslgen/tests/test_m246_extension_default_intrin_compose_policy.py tslgen/tests/test_m247_selected_implementation_render_context.py
 find tslgen -type d -name __pycache__ -print
 ```

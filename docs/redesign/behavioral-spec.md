@@ -507,6 +507,45 @@ semantics, add dependency closure, parse target-language expressions, repair
 source, move intrinsic-name decisions into templates, or extend
 `generated_primitive_pipeline.py`.
 
+### M247 Selected Implementation Render Context Propagation
+
+Milestone 247 makes selected implementation context explicit at the intrinsic
+body-token rendering boundary. The context is typed data carrying selected
+backend id, selected `ExtensionName`, selected `TypeTag`, and the
+`ExtensionCatalog`. It is supplied to the existing intrinsic body-token bridge;
+the renderer does not rediscover context from source text, create a sibling
+fixture pipeline, or move intrinsic naming decisions into templates.
+
+For each composed intrinsic request, the bridge resolves M246 default compose
+policy only for the prefix or suffix parts that are missing from translated
+source modifiers. If the source provides both prefix and suffix, no extension
+default policy is required for that request. If the source provides an explicit
+suffix but not a prefix, a missing default suffix is not diagnosed because the
+suffix is already source-owned.
+
+Rust intrinsic call rendering now has an explicit typed qualification mode.
+Calls whose assembled intrinsic name is already fully qualified by extension
+metadata are rendered as-is; direct or explicitly unqualified names still use
+the existing typed `RustArchitectureModule` qualification path. The renderer
+does not infer this mode by inspecting or repairing intrinsic-name text.
+
+M247 diagnostics include:
+
+- `TSL-INTRINSIC-BODY-TOKEN-BRIDGE-MISSING-SELECTED-IMPLEMENTATION-CONTEXT`
+- `TSL-INTRINSIC-BODY-TOKEN-BRIDGE-MISSING-EXTENSION-CATALOG`
+- `TSL-INTRINSIC-BODY-TOKEN-BRIDGE-SELECTED-CONTEXT-BACKEND-MISMATCH`
+- `TSL-RUST-INTRINSIC-CALL-UNSUPPORTED-NAME-QUALIFICATION`
+- `TSL-RUST-INTRINSIC-CALL-ALREADY-QUALIFIED-MODULE-MISUSE`
+- `TSL-BACKEND-INTRINSIC-COMPOSE-DEFAULT-INCOMPLETE-POLICY`
+
+M247 preserves direct intrinsic requests, immediate metadata, opaque argument
+payloads, body-token substitution behavior, explicit modifier precedence, and
+M246 default-policy diagnostics. It does not add new lowering, pairwise
+`emit_return + intrin_compose` special cases, primitive selection, dependency
+closure, vector/register function-signature rendering in the project pipeline,
+real AVX/NEON build verification, or runtime dependencies on `frozen` or
+`tslgenold`.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

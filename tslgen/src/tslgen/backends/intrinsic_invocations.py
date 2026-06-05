@@ -61,10 +61,10 @@ class BackendIntrinsicComposeDefaultPolicy:
     backend: BackendId
     extension: ExtensionName
     type_tag: TypeTag
-    prefix: BackendIntrinsicNameText
-    prefix_source: SourceLocation
-    suffix: BackendIntrinsicNameText
-    suffix_source: SourceLocation
+    prefix: BackendIntrinsicNameText | None
+    prefix_source: SourceLocation | None
+    suffix: BackendIntrinsicNameText | None
+    suffix_source: SourceLocation | None
     source: SourceLocation
 
 
@@ -120,6 +120,9 @@ def resolve_backend_intrinsic_compose_default_policy(
     extension: ExtensionName | str,
     type_tag: TypeTag | str,
     source: SourceLocation,
+    *,
+    needs_prefix: bool = True,
+    needs_suffix: bool = True,
 ) -> BackendIntrinsicComposeDefaultPolicyResult:
     """Resolve default compose prefix/suffix metadata for a selected target."""
 
@@ -161,7 +164,7 @@ def resolve_backend_intrinsic_compose_default_policy(
         ),
         None,
     )
-    if prefix is None:
+    if needs_prefix and prefix is None:
         return BackendIntrinsicComposeDefaultPolicyResult(
             policy=None,
             diagnostics=(
@@ -181,7 +184,7 @@ def resolve_backend_intrinsic_compose_default_policy(
         ),
         None,
     )
-    if suffix is None:
+    if needs_suffix and suffix is None:
         return BackendIntrinsicComposeDefaultPolicyResult(
             policy=None,
             diagnostics=(
@@ -198,10 +201,18 @@ def resolve_backend_intrinsic_compose_default_policy(
             backend=backend_id,
             extension=extension_name,
             type_tag=selected_type_tag,
-            prefix=BackendIntrinsicNameText(prefix.spelling),
-            prefix_source=prefix.source,
-            suffix=BackendIntrinsicNameText(suffix.suffix),
-            suffix_source=suffix.source,
+            prefix=(
+                BackendIntrinsicNameText(prefix.spelling)
+                if prefix is not None
+                else None
+            ),
+            prefix_source=prefix.source if prefix is not None else None,
+            suffix=(
+                BackendIntrinsicNameText(suffix.suffix)
+                if suffix is not None
+                else None
+            ),
+            suffix_source=suffix.source if suffix is not None else None,
             source=policy.source,
         ),
         diagnostics=(),
@@ -375,24 +386,46 @@ def _assemble_composed_invocation(
     }
     if default_compose_policy is not None:
         if "prefix" not in explicit_name_parts:
-            prefix_parts.insert(
-                0,
-                BackendIntrinsicNamePart(
-                    role="prefix",
-                    text=default_compose_policy.prefix,
-                    source=default_compose_policy.prefix_source,
-                    modifier=None,
-                ),
-            )
-        if "suffix" not in explicit_name_parts:
-            suffix_parts.append(
-                BackendIntrinsicNamePart(
-                    role="suffix",
-                    text=default_compose_policy.suffix,
-                    source=default_compose_policy.suffix_source,
-                    modifier=None,
+            if (
+                default_compose_policy.prefix is None
+                or default_compose_policy.prefix_source is None
+            ):
+                diagnostics.append(
+                    _incomplete_default_policy_part_diagnostic(
+                        default_compose_policy,
+                        "prefix",
+                    )
                 )
-            )
+            else:
+                prefix_parts.insert(
+                    0,
+                    BackendIntrinsicNamePart(
+                        role="prefix",
+                        text=default_compose_policy.prefix,
+                        source=default_compose_policy.prefix_source,
+                        modifier=None,
+                    ),
+                )
+        if "suffix" not in explicit_name_parts:
+            if (
+                default_compose_policy.suffix is None
+                or default_compose_policy.suffix_source is None
+            ):
+                diagnostics.append(
+                    _incomplete_default_policy_part_diagnostic(
+                        default_compose_policy,
+                        "suffix",
+                    )
+                )
+            else:
+                suffix_parts.append(
+                    BackendIntrinsicNamePart(
+                        role="suffix",
+                        text=default_compose_policy.suffix,
+                        source=default_compose_policy.suffix_source,
+                        modifier=None,
+                    )
+                )
 
     if diagnostics:
         return BackendIntrinsicInvocationAssemblyResult(
@@ -699,6 +732,22 @@ def _default_policy_backend_mismatch_diagnostic(
             "default intrinsic compose policy backend "
             f"{str(policy.backend)!r} does not match invocation backend "
             f"{str(backend)!r}"
+        ),
+        location=policy.source,
+    )
+
+
+def _incomplete_default_policy_part_diagnostic(
+    policy: BackendIntrinsicComposeDefaultPolicy,
+    part: BackendIntrinsicNamePartRole,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-BACKEND-INTRINSIC-COMPOSE-DEFAULT-INCOMPLETE-POLICY",
+        message=(
+            "default intrinsic compose policy for extension "
+            f"{str(policy.extension)!r} type {str(policy.type_tag)!r} "
+            f"does not carry required {part!r} metadata"
         ),
         location=policy.source,
     )

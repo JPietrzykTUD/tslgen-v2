@@ -17,6 +17,7 @@ from tslgen.backends.rust.intrinsic_calls import (
     RustArchitectureModule,
     RustIntrinsicCallRenderResult,
     RustIntrinsicCallText,
+    RustIntrinsicNameQualification,
     RustRenderedIntrinsicCall,
     render_rust_intrinsic_invocation_call,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "RustBackend",
     "RustIntrinsicCallRenderResult",
     "RustIntrinsicCallText",
+    "RustIntrinsicNameQualification",
     "RustRenderedBodyTokens",
     "RustRenderedIntrinsicCall",
     "RustRenderedTypeQueryBodyTokens",

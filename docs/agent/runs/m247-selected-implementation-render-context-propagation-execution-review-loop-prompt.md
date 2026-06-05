@@ -1,11 +1,12 @@
-# M247 Default Compose Policy Body-Token Bridge Execution Review Loop Prompt
+# M247 Selected Implementation Render Context Propagation Execution Review Loop Prompt
 
 Execute this prompt only when `docs/agent/current-redesign-state.md` points
 here and records M246 as accepted.
 
-This is an implementation task focused on consuming extension-owned default
-`intrin_compose` policy in the existing intrinsic body-token bridge. Use the
-executor-review loop:
+This is an implementation task focused on propagating selected implementation
+render context into body-token rendering. `intrin_compose` default-policy
+rendering is the proof that the context reaches the bridge; it is not a new
+specialized `intrin_compose` milestone. Use the executor-review loop:
 
 ```text
 single write-capable executor
@@ -33,11 +34,25 @@ source modifiers still override defaults.
 
 ## Goal
 
-Wire M246's typed default compose policy into the intrinsic body-token bridge
-so any already-lowered composed intrinsic request can use selected
-extension/type defaults when a prefix or suffix is absent:
+Make the selected implementation context explicit at the body-token rendering
+boundary. A selected primitive implementation already has a backend,
+extension, type tag, and catalog context; the renderer must receive that
+context as typed data instead of rediscovering it, omitting it, or baking it
+into fixture-specific code.
+
+Use M246's typed default compose policy as the acceptance test for that
+context propagation:
 
 ```text
+SelectedImplementationRenderContext
+  + backend
+  + selected extension
+  + selected type tag
+  + ExtensionCatalog
+  + already-lowered body tokens / handoff
+  -> body-token rendering
+  -> backend intrinsic assembly/rendering can consume selected context
+
 BackendIntrinsicComposeHandoffRequest
   + selected backend
   + selected extension
@@ -47,21 +62,25 @@ BackendIntrinsicComposeHandoffRequest
   -> rendered C++ or Rust body token text
 ```
 
-This should make the bridge ready for real vector project rendering without
-creating pairwise source-shape combinations such as
-`emit_return + intrin_compose`.
+This closes a simple integration gap. It should make the bridge ready for the
+next real primitive-rendering step without creating pairwise source-shape
+combinations such as `emit_return + intrin_compose`.
 
 ## Scope
 
-Implement the smallest coherent bridge slice:
+Implement the smallest coherent context propagation slice:
 
-- Extend `IntrinsicBodyTokenProfileRenderContext` or a narrow adjacent typed
-  context with selected `ExtensionName`, selected `TypeTag`, and
-  `ExtensionCatalog` data needed to resolve default compose policy.
+- Add or reuse one obvious typed selected implementation render context that
+  carries selected backend, selected `ExtensionName`, selected `TypeTag`, and
+  `ExtensionCatalog` data to body-token rendering. Prefer a small dataclass
+  or similarly direct object. Do not create a new request/result/worklist
+  family.
+- Thread that context through the existing intrinsic body-token bridge instead
+  of adding a sibling fixture pipeline or backend-specific bridge.
 - For every `BackendIntrinsicComposeHandoffRequest` segment, resolve and pass
   a `BackendIntrinsicComposeDefaultPolicy` to
-  `assemble_backend_intrinsic_invocation(...)` only when the request is missing
-  a prefix and/or suffix default that assembly may need.
+  `assemble_backend_intrinsic_invocation(...)` when the request needs selected
+  default prefix/suffix policy.
 - Preserve explicit source modifier behavior. If the source has a translated
   `prefix` or `suffix`, that part must override the extension default. If the
   source has both prefix and suffix, the bridge must not require extension
@@ -77,9 +96,15 @@ Implement the smallest coherent bridge slice:
   semantic decisions into templates. If a small typed flag/value is needed,
   keep it attached to backend invocation/render context and cover it with
   tests.
-- Emit stable diagnostics for missing extension catalog/context, missing
-  default policy, missing backend prefix, missing type suffix, unknown
-  extension, unsupported backend, and Rust qualification misuse.
+- Emit stable diagnostics for missing selected render context, missing
+  extension catalog, missing default policy, missing backend prefix, missing
+  type suffix, unknown extension, unsupported backend, and Rust qualification
+  misuse.
+- Keep the path aimed at real progress: after this milestone, the next
+  milestone should integrate this context-aware body rendering into the
+  generic selected primitive project pipeline for a representative real
+  primitive. Do not plan another `intrin_compose` micro-milestone unless this
+  milestone uncovers a concrete blocker.
 
 ## Expected Tests
 
@@ -87,11 +112,13 @@ Add or update focused tests, likely in:
 
 ```text
 tslgen/tests/test_m239_backend_intrinsic_body_token_render_bridge.py
-tslgen/tests/test_m247_default_compose_policy_body_token_bridge.py
+tslgen/tests/test_m247_selected_implementation_render_context.py
 ```
 
 Cover:
 
+- The selected render context is explicit typed data, not loose dicts or
+  fixture-specific globals.
 - C++ bridge rendering of a no-modifier composed request such as
   `intrin_compose<add>(left, right)` for selected `avx2/f32` using M246
   extension policy.
@@ -111,7 +138,9 @@ Cover:
 
 ## Out Of Scope
 
-- Generated-project integration through `primitive_project_pipeline.py`.
+- Full generated-project integration through `primitive_project_pipeline.py`
+  beyond the minimal call-site/context plumbing needed to pass selected
+  context into body-token rendering, if that call-site already exists.
 - Vector/register type spelling in function signatures.
 - Build verification of real AVX/NEON generated projects.
 - Primitive selection, dependency closure, or candidate expansion.
@@ -129,7 +158,7 @@ Run:
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m214_cpp_intrinsic_invocation_call_rendering.py tslgen/tests/test_m219_rust_intrinsic_invocation_call_rendering.py tslgen/tests/test_m220_shared_intrinsic_body_token_substitution_parity.py tslgen/tests/test_m239_backend_intrinsic_body_token_render_bridge.py tslgen/tests/test_m246_extension_default_intrin_compose_policy.py tslgen/tests/test_m247_default_compose_policy_body_token_bridge.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m214_cpp_intrinsic_invocation_call_rendering.py tslgen/tests/test_m219_rust_intrinsic_invocation_call_rendering.py tslgen/tests/test_m220_shared_intrinsic_body_token_substitution_parity.py tslgen/tests/test_m239_backend_intrinsic_body_token_render_bridge.py tslgen/tests/test_m246_extension_default_intrin_compose_policy.py tslgen/tests/test_m247_selected_implementation_render_context.py
 find tslgen -type d -name __pycache__ -print
 ```
 
@@ -141,9 +170,9 @@ and rerun the final `find` command. Also remove local `.pytest_cache`,
 
 After implementation and validation, run read-only subagents:
 
-1. Architecture/boundary reviewer: bridge consumes typed extension policy and
-   does not add pairwise source-shape special cases, fixture pipelines, or
-   renderer/template semantic inference.
+1. Architecture/boundary reviewer: selected implementation context is typed,
+   propagated to body-token rendering, and does not add pairwise source-shape
+   special cases, fixture pipelines, or renderer/template semantic inference.
 2. Evidence reviewer: selected examples reflect real `extension.tsl` policy
    and observed `intrin_compose` source needs; no spellings come from
    `frozen`, `tslgenold`, Python tables, or templates.
@@ -174,7 +203,7 @@ Before finishing:
 Report:
 
 1. Implementation summary.
-2. Default-policy bridge behavior.
+2. Selected context propagation behavior.
 3. Rust qualification behavior.
 4. Review/audit verdicts.
 5. Validation commands and exact results.

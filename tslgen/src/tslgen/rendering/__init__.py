@@ -16,6 +16,7 @@ from tslgen.rendering.generated_primitive_project import (
 from tslgen.rendering.intrinsic_body_token_bridge import (
     IntrinsicBodyTokenProfileRenderContext,
     IntrinsicBodyTokenProfileRenderResult,
+    SelectedImplementationRenderContext,
     render_intrinsic_body_token_profile_artifact,
 )
 from tslgen.rendering.primitive_templates import (
@@ -153,6 +154,7 @@ __all__ = [
     "RenderedPrimitiveDeclarationText",
     "RenderedPrimitiveDefinitionText",
     "RustPrimitiveProfileImport",
+    "SelectedImplementationRenderContext",
     "SupplementaryRenderResult",
     "SupplementaryStaticAsset",
     "SupplementaryTemplateAsset",

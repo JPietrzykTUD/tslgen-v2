@@ -173,7 +173,8 @@ def test_m239_bridge_does_not_access_parser_or_lowerer() -> None:
 
     assert "tslgen.lowering.model" in imported_modules
     assert not any(name.startswith("tslgen.syntax") for name in imported_modules)
-    assert not any(name.startswith("tslgen.domain.catalog") for name in imported_modules)
+    assert "tslgen.domain.catalog" in imported_modules
+    assert not any(name.startswith("tslgen.pipeline") for name in imported_modules)
     assert "Lowerer" not in imported_names
     assert "discover_backend_intrinsic_requests_in_text" not in imported_names
 

@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tslgen.backends import (
+    BackendIntrinsicComposeDefaultPolicy,
     BackendTranslatedIntrinsicModifier,
     assemble_backend_intrinsic_invocation,
+    resolve_backend_intrinsic_compose_default_policy,
 )
 from tslgen.backends.cpp import (
     CppRenderedBodyTokens,
@@ -17,12 +19,14 @@ from tslgen.backends.cpp import (
 )
 from tslgen.backends.rust import (
     RustArchitectureModule,
+    RustIntrinsicNameQualification,
     RustRenderedBodyTokens,
     RustRenderedIntrinsicCall,
     render_rust_body_tokens_from_intrinsic_handoff,
     render_rust_intrinsic_invocation_call,
 )
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
+from tslgen.domain.catalog import ExtensionCatalog, ExtensionName, TypeTag
 from tslgen.domain.generated_project import BackendProfileRenderModel
 from tslgen.io.artifacts import ArtifactSet
 from tslgen.lowering.model import (
@@ -66,6 +70,14 @@ from tslgen.rendering.primitive_templates import (
 
 
 @dataclass(frozen=True, slots=True)
+class SelectedImplementationRenderContext:
+    backend_id: PrimitiveBackendId
+    extension: ExtensionName
+    type_tag: TypeTag
+    extension_catalog: ExtensionCatalog | None
+
+
+@dataclass(frozen=True, slots=True)
 class IntrinsicBodyTokenProfileRenderContext:
     backend_id: PrimitiveBackendId
     logical_path: PrimitiveArtifactLogicalPath
@@ -86,6 +98,7 @@ class IntrinsicBodyTokenProfileRenderContext:
     module_open: RenderedModuleText | None = None
     module_close: RenderedModuleText | None = None
     rust_architecture_module: RustArchitectureModule | None = None
+    selected_implementation: SelectedImplementationRenderContext | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,10 +220,18 @@ def _render_cpp_calls(
     for segment in request_segments:
         modifiers = _modifiers_for_request(segment, context.translated_modifiers)
         used_modifiers.update(id(modifier) for modifier in modifiers)
+        default_policy, default_diagnostics, _ = _default_compose_policy_for_request(
+            context,
+            segment.request,
+        )
+        diagnostics.extend(default_diagnostics)
+        if default_diagnostics:
+            continue
         assembly = assemble_backend_intrinsic_invocation(
             segment.request,
             context.backend_id.text,
             modifiers,
+            default_compose_policy=default_policy,
         )
         diagnostics.extend(assembly.diagnostics)
         if assembly.invocation is None:
@@ -235,17 +256,35 @@ def _render_rust_calls(
     for segment in request_segments:
         modifiers = _modifiers_for_request(segment, context.translated_modifiers)
         used_modifiers.update(id(modifier) for modifier in modifiers)
+        (
+            default_policy,
+            default_diagnostics,
+            name_qualification,
+        ) = _default_compose_policy_for_request(
+            context,
+            segment.request,
+        )
+        diagnostics.extend(default_diagnostics)
+        if default_diagnostics:
+            continue
         assembly = assemble_backend_intrinsic_invocation(
             segment.request,
             context.backend_id.text,
             modifiers,
+            default_compose_policy=default_policy,
         )
         diagnostics.extend(assembly.diagnostics)
         if assembly.invocation is None:
             continue
         call_result = render_rust_intrinsic_invocation_call(
             assembly.invocation,
-            context.rust_architecture_module,
+            (
+                None
+                if name_qualification
+                == RustIntrinsicNameQualification.ALREADY_QUALIFIED
+                else context.rust_architecture_module
+            ),
+            name_qualification=name_qualification,
         )
         diagnostics.extend(call_result.diagnostics)
         if call_result.call is not None:
@@ -327,6 +366,64 @@ def _modifiers_for_request(
     return tuple(modifier for modifier in modifiers if id(modifier.field) in field_ids)
 
 
+def _default_compose_policy_for_request(
+    context: IntrinsicBodyTokenProfileRenderContext,
+    request: object,
+) -> tuple[
+    BackendIntrinsicComposeDefaultPolicy | None,
+    tuple[Diagnostic, ...],
+    RustIntrinsicNameQualification,
+]:
+    name_qualification = RustIntrinsicNameQualification.ARCHITECTURE_MODULE
+    if not isinstance(request, BackendIntrinsicComposeHandoffRequest):
+        return None, (), name_qualification
+
+    explicit_names = _explicit_compose_modifier_names(request)
+    if {"prefix", "suffix"}.issubset(explicit_names):
+        return None, (), name_qualification
+
+    selected = context.selected_implementation
+    if selected is None:
+        return (
+            None,
+            (_missing_selected_context_diagnostic(request.source),),
+            name_qualification,
+        )
+    if selected.backend_id.text != context.backend_id.text:
+        return (
+            None,
+            (_selected_context_backend_mismatch_diagnostic(context, selected),),
+            name_qualification,
+        )
+    if selected.extension_catalog is None:
+        return (
+            None,
+            (_missing_extension_catalog_diagnostic(request.source),),
+            name_qualification,
+        )
+
+    result = resolve_backend_intrinsic_compose_default_policy(
+        selected.extension_catalog,
+        selected.backend_id.text,
+        selected.extension,
+        selected.type_tag,
+        request.source,
+        needs_prefix="prefix" not in explicit_names,
+        needs_suffix="suffix" not in explicit_names,
+    )
+    if result.policy is not None and (
+        selected.backend_id.text == "rust" and "prefix" not in explicit_names
+    ):
+        name_qualification = RustIntrinsicNameQualification.ALREADY_QUALIFIED
+    return result.policy, result.diagnostics, name_qualification
+
+
+def _explicit_compose_modifier_names(
+    request: BackendIntrinsicComposeHandoffRequest,
+) -> frozenset[str]:
+    return frozenset(field.name for field in request.modifiers)
+
+
 def _unused_modifier_diagnostics(
     context: IntrinsicBodyTokenProfileRenderContext,
     used_modifiers: set[int],
@@ -343,6 +440,48 @@ def _unused_modifier_diagnostics(
         )
         for modifier in context.translated_modifiers
         if id(modifier) not in used_modifiers
+    )
+
+
+def _missing_selected_context_diagnostic(location: SourceLocation) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code=(
+            "TSL-INTRINSIC-BODY-TOKEN-BRIDGE-MISSING-SELECTED-IMPLEMENTATION-CONTEXT"
+        ),
+        message=(
+            "intrin_compose default prefix/suffix policy requires the selected "
+            "implementation backend, extension, type tag, and extension catalog"
+        ),
+        location=location,
+    )
+
+
+def _selected_context_backend_mismatch_diagnostic(
+    context: IntrinsicBodyTokenProfileRenderContext,
+    selected: SelectedImplementationRenderContext,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-INTRINSIC-BODY-TOKEN-BRIDGE-SELECTED-CONTEXT-BACKEND-MISMATCH",
+        message=(
+            "selected implementation render context backend "
+            f"{selected.backend_id.text!r} does not match profile backend "
+            f"{context.backend_id.text!r}"
+        ),
+        location=context.handoff.source,
+    )
+
+
+def _missing_extension_catalog_diagnostic(location: SourceLocation) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-INTRINSIC-BODY-TOKEN-BRIDGE-MISSING-EXTENSION-CATALOG",
+        message=(
+            "selected implementation render context must include the extension "
+            "catalog before intrin_compose default policy can be resolved"
+        ),
+        location=location,
     )
 
 

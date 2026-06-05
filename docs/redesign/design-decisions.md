@@ -3489,3 +3489,51 @@ Consequences:
 - Real vector/intrinsic generated-project rendering can consume this policy in
   a later milestone without embedding intrinsic naming rules in templates or
   fixture-specific pipelines.
+
+## ADR-070: Selected Implementation Context At Body-Token Render Boundary
+
+Status: Accepted.
+
+Context:
+
+M246 made default `intrin_compose` naming policy extension-owned, but body-token
+rendering still needed selected backend, extension, type tag, and extension
+catalog context to consume that policy. That context already exists at selected
+implementation/project-pipeline boundaries; rendering must receive it as typed
+data instead of rediscovering it from TSIL source text, fixture names, or
+template conditionals.
+
+Rust adds one extra boundary concern: extension metadata may provide a full
+`core::arch::*` prefix, while older direct Rust intrinsic rendering prepends a
+typed architecture module. The renderer needs an explicit typed mode for
+already-qualified intrinsic names so policy-owned Rust prefixes are not
+double-qualified.
+
+Decision:
+
+Selected implementation context at body-token rendering is represented as a
+direct typed value carrying backend id, selected `ExtensionName`, selected
+`TypeTag`, and `ExtensionCatalog`. The existing intrinsic body-token bridge
+consumes that context and resolves default compose policy only when a composed
+request is missing a source-provided prefix or suffix.
+
+Default policy resolution is part-specific. If only the prefix is needed, the
+bridge requests only the prefix; if only the suffix is needed, it requests only
+the suffix. Explicit source modifiers remain authoritative and do not force
+diagnostics for default parts they already replace.
+
+Rust intrinsic call rendering uses a typed `RustIntrinsicNameQualification`
+value. `ARCHITECTURE_MODULE` preserves the existing unqualified-name path, and
+`ALREADY_QUALIFIED` renders the assembled name without adding a module. This
+mode is chosen by the typed render context/default-policy path, not by
+inspecting intrinsic-name strings.
+
+Consequences:
+
+- M247 propagates selected implementation context through the existing
+  intrinsic body-token bridge; it does not add a sibling fixture bridge.
+- M246 extension-owned policy can now drive C++ and Rust body-token rendering
+  without Python intrinsic spelling tables or template-side semantic logic.
+- The next project-pipeline milestone can connect real selected primitive
+  rendering to this bridge, using the same selected context and existing type
+  spelling boundaries.
