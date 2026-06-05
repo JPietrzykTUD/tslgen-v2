@@ -359,6 +359,77 @@ dependency closure, broad corpus selection, vector/intrinsic/mask/generic
 rendering, support-helper semantics, or runtime dependencies on `frozen` or
 `tslgenold`.
 
+### M244 Real Scalar Emit-Return Matrix Rendering
+
+Milestone 244 broadens the M243 real-corpus scalar bridge from one selected
+function to an explicit deterministic selected matrix. The public API adds
+`RealScalarEmitReturnMatrixEntry`,
+`DEFAULT_REAL_SCALAR_EMIT_RETURN_MATRIX`, and
+`build_real_scalar_emit_return_matrix_generated_project_artifacts`, while the
+M243 single-selection function remains as a convenience wrapper over the
+matrix path.
+
+The accepted default matrix is unmasked `add` and `sub` from
+`tsldata/primitives/arithmetic/fundamental.tsl`, selector path
+`("scalar", "arith")`, signature `v:=(v,v)`, parameters `left` and `right`,
+and concrete type tags `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`,
+`ui64`, `f32`, and `f64`. The matrix produces 20 deterministic selected
+functions, such as `add_scalar_si32` and `sub_scalar_si32`, in both the C++
+and Rust scalar profile artifacts.
+
+Each selected body still passes the M243 exact
+`emit_return(PAYLOAD);` boundary. Payload text remains raw source-owned text;
+`left + right` and `left - right` are not parsed as target-language operators
+or lowered as expression semantics. C++ and Rust scalar type spellings still
+come from the accepted backend metadata type-spelling boundary. Artifacts are
+composed through the generated-project skeleton, written through
+`ArtifactWriter` in manifest-clean mode, and verified through the C++ and
+Rust build verifier after writing.
+
+M244 adds deterministic duplicate-selection diagnostics before artifact
+composition:
+
+- `TSL-REAL-SCALAR-EMIT-RETURN-DUPLICATE-FUNCTION`
+- `TSL-REAL-SCALAR-EMIT-RETURN-DUPLICATE-PRIMITIVE`
+
+M244 does not add lowering semantics, target-language operator parsing,
+wildcard expansion, broad corpus selection, dependency closure, vector or
+intrinsic rendering, real primitive test metadata rendering, support-helper
+semantics, or runtime dependencies on `frozen` or `tslgenold`.
+
+### M244.5 Real Primitive Project Pipeline Consolidation
+
+Milestone 244.5 preserves the M243/M244 real selected scalar behavior while
+renaming the production bridge around durable generator ownership. The real
+selected primitive project bridge lives in
+`tslgen.pipeline.primitive_project_pipeline`; the previous
+`real_scalar_pipeline.py` module is retired because `scalar` is selected TSL
+source data, not a pipeline owner.
+
+The public real-pipeline API uses generic selected-primitive project names:
+
+- `SelectedPrimitiveBodyRenderEntry`
+- `SelectedPrimitiveBodyRenderSelection`
+- `SelectedPrimitiveProjectResult`
+- `build_primitive_project_artifacts_from_selected_body`
+- `build_primitive_project_artifacts_from_selected_bodies`
+
+The scalar/add/sub/type-tag facts accepted by M243/M244 are now explicit
+selected-entry data. The exact single-`emit_return(PAYLOAD);` body boundary,
+raw payload preservation, backend metadata scalar type spelling, duplicate
+selection diagnostics, deterministic artifact output, manifest-clean writing,
+and C++/Rust build verification remain unchanged.
+
+`tslgen.pipeline.generated_primitive_pipeline` is labelled as the M224
+tiny/regression-only parsed-source generated project path. It is not the real
+selected primitive project pipeline and remains a deletion candidate once the
+generic real path covers its regression value.
+
+M244.5 does not add vector/register type spelling, vector or intrinsic
+rendering, new lowering semantics, broad primitive selection, dependency
+closure, target-language parsing, source repair, fixture-shaped sibling
+pipelines, or runtime dependencies on `frozen` or `tslgenold`.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

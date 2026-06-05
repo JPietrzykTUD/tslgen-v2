@@ -1,4 +1,4 @@
-"""Real-corpus scalar single-return generated project bridge."""
+"""Real selected primitive implementation to generated project bridge."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ from tslgen.syntax.source_body_regions import SourceBodyKeyword, SourceBodyText
 
 
 @dataclass(frozen=True, slots=True)
-class RealScalarEmitReturnSelection:
+class SelectedPrimitiveBodyRenderSelection:
     primitive: ParsedPrimitiveDeclaration
     body_envelope: ParsedImplementationBodyEnvelope
     signature: PrimitiveSignature
@@ -76,12 +76,22 @@ class RealScalarEmitReturnSelection:
 
 
 @dataclass(frozen=True, slots=True)
-class RealScalarEmitReturnGeneratedProjectResult:
+class SelectedPrimitiveBodyRenderEntry:
+    primitive_name: str
+    selector_path: tuple[str, ...]
+    type_tag: str
+    function_name: str
+    parameters: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SelectedPrimitiveProjectResult:
     artifacts: ArtifactSet
     diagnostics: tuple[Diagnostic, ...]
     model: GeneratedProjectRenderModel | None = None
     documents: tuple[ParsedOuterTslDocument, ...] = ()
-    selection: RealScalarEmitReturnSelection | None = None
+    selection: SelectedPrimitiveBodyRenderSelection | None = None
+    selections: tuple[SelectedPrimitiveBodyRenderSelection, ...] = ()
     render_plans: tuple[PrimitiveRenderPlan, ...] = ()
 
 
@@ -90,18 +100,37 @@ _CPP_SCALAR_PROFILE_PATH = "cpp/include/profiles/scalar.hpp"
 _RUST_SCALAR_PROFILE_PATH = "rust/src/profiles/scalar.rs"
 
 
-def build_real_scalar_emit_return_generated_project_artifacts(
+def build_primitive_project_artifacts_from_selected_body(
     *,
     supplementary_root: Path,
     source_documents: tuple[SourceDocument, ...],
     machine_profiles: MachineFeatureProfileCatalog,
     backend_metadata: BackendMetadataCatalog | None,
-    primitive_name: str = "add",
-    selector_path: tuple[str, ...] = ("scalar", "arith"),
-    type_tag: str = "si32",
+    selected_entry: SelectedPrimitiveBodyRenderEntry,
     requested_profiles: tuple[str, ...] | None = None,
-) -> RealScalarEmitReturnGeneratedProjectResult:
-    """Build generated artifacts from one real scalar single-return body."""
+) -> SelectedPrimitiveProjectResult:
+    """Build generated artifacts from one selected real primitive body."""
+
+    return build_primitive_project_artifacts_from_selected_bodies(
+        supplementary_root=supplementary_root,
+        source_documents=source_documents,
+        machine_profiles=machine_profiles,
+        backend_metadata=backend_metadata,
+        selected_entries=(selected_entry,),
+        requested_profiles=requested_profiles,
+    )
+
+
+def build_primitive_project_artifacts_from_selected_bodies(
+    *,
+    supplementary_root: Path,
+    source_documents: tuple[SourceDocument, ...],
+    machine_profiles: MachineFeatureProfileCatalog,
+    backend_metadata: BackendMetadataCatalog | None,
+    selected_entries: tuple[SelectedPrimitiveBodyRenderEntry, ...],
+    requested_profiles: tuple[str, ...] | None = None,
+) -> SelectedPrimitiveProjectResult:
+    """Build artifacts from explicit selected real primitive bodies."""
 
     diagnostics: list[Diagnostic] = []
 
@@ -123,18 +152,17 @@ def build_real_scalar_emit_return_generated_project_artifacts(
     if diagnostics:
         return _result(diagnostics, model=model, documents=parse_result.documents)
 
-    selection, selection_diagnostics = _select_real_scalar_emit_return(
+    selections, selection_diagnostics = _select_primitive_body_render_entries(
         parse_result.documents,
-        primitive_name=primitive_name,
-        selector_path=selector_path,
-        type_tag=TypeTag(type_tag),
+        selected_entries,
     )
     diagnostics.extend(selection_diagnostics)
-    if diagnostics or selection is None:
+    diagnostics.extend(_duplicate_selection_diagnostics(selections))
+    if diagnostics or not selections:
         return _result(diagnostics, model=model, documents=parse_result.documents)
 
-    plans, plan_diagnostics = _render_plans_from_selection(
-        selection,
+    plans, plan_diagnostics = _render_plans_from_selections(
+        selections,
         model,
         supplementary_root=supplementary_root,
         backend_metadata=backend_metadata,
@@ -145,7 +173,7 @@ def build_real_scalar_emit_return_generated_project_artifacts(
             diagnostics,
             model=model,
             documents=parse_result.documents,
-            selection=selection,
+            selections=selections,
             render_plans=plans,
         )
 
@@ -156,7 +184,7 @@ def build_real_scalar_emit_return_generated_project_artifacts(
             diagnostics,
             model=model,
             documents=parse_result.documents,
-            selection=selection,
+            selections=selections,
             render_plans=plans,
         )
 
@@ -170,7 +198,7 @@ def build_real_scalar_emit_return_generated_project_artifacts(
             diagnostics,
             model=model,
             documents=parse_result.documents,
-            selection=selection,
+            selections=selections,
             render_plans=plans,
         )
 
@@ -184,7 +212,7 @@ def build_real_scalar_emit_return_generated_project_artifacts(
             diagnostics,
             model=model,
             documents=parse_result.documents,
-            selection=selection,
+            selections=selections,
             render_plans=plans,
         )
 
@@ -195,7 +223,7 @@ def build_real_scalar_emit_return_generated_project_artifacts(
             diagnostics,
             model=model,
             documents=parse_result.documents,
-            selection=selection,
+            selections=selections,
             render_plans=plans,
         )
 
@@ -205,34 +233,52 @@ def build_real_scalar_emit_return_generated_project_artifacts(
         selected_profile_replacement_policy(model),
     )
     diagnostics.extend(composition.diagnostics)
-    return RealScalarEmitReturnGeneratedProjectResult(
+    return SelectedPrimitiveProjectResult(
         artifacts=composition.artifacts if not diagnostics else ArtifactSet.create(()),
         diagnostics=tuple(diagnostics),
         model=model,
         documents=parse_result.documents,
-        selection=selection,
+        selection=selections[0],
+        selections=selections,
         render_plans=plans,
     )
 
 
-def _select_real_scalar_emit_return(
+def _select_primitive_body_render_entries(
+    documents: tuple[ParsedOuterTslDocument, ...],
+    selected_entries: tuple[SelectedPrimitiveBodyRenderEntry, ...],
+) -> tuple[tuple[SelectedPrimitiveBodyRenderSelection, ...], tuple[Diagnostic, ...]]:
+    selections: list[SelectedPrimitiveBodyRenderSelection] = []
+    diagnostics: list[Diagnostic] = []
+
+    for entry in selected_entries:
+        selection, selection_diagnostics = _select_primitive_body_render_entry(
+            documents,
+            entry=entry,
+        )
+        diagnostics.extend(selection_diagnostics)
+        if selection is not None:
+            selections.append(selection)
+
+    return tuple(selections), _sort_diagnostics(diagnostics)
+
+
+def _select_primitive_body_render_entry(
     documents: tuple[ParsedOuterTslDocument, ...],
     *,
-    primitive_name: str,
-    selector_path: tuple[str, ...],
-    type_tag: TypeTag,
-) -> tuple[RealScalarEmitReturnSelection | None, tuple[Diagnostic, ...]]:
+    entry: SelectedPrimitiveBodyRenderEntry,
+) -> tuple[SelectedPrimitiveBodyRenderSelection | None, tuple[Diagnostic, ...]]:
     diagnostics: list[Diagnostic] = []
     primitives = tuple(
         primitive
         for document in documents
         for primitive in document.primitives
-        if primitive.name == primitive_name
+        if primitive.name == entry.primitive_name
         and primitive.attributes == ()
-        and primitive.parameters == ("left", "right")
+        and primitive.parameters == entry.parameters
     )
     if not primitives:
-        return None, (_missing_primitive_diagnostic(primitive_name),)
+        return None, (_missing_primitive_diagnostic(entry),)
     if len(primitives) > 1:
         return None, (_ambiguous_primitive_diagnostic(primitives),)
 
@@ -256,10 +302,10 @@ def _select_real_scalar_emit_return(
     envelopes = tuple(
         envelope
         for envelope in primitive.body_envelopes
-        if envelope.selector_path == selector_path
+        if envelope.selector_path == entry.selector_path
     )
     if not envelopes:
-        return None, (_missing_body_diagnostic(primitive, selector_path),)
+        return None, (_missing_body_diagnostic(primitive, entry.selector_path),)
     if len(envelopes) > 1:
         return None, (_ambiguous_body_diagnostic(envelopes),)
 
@@ -268,13 +314,13 @@ def _select_real_scalar_emit_return(
         return None, body_diagnostics
 
     return (
-        RealScalarEmitReturnSelection(
+        SelectedPrimitiveBodyRenderSelection(
             primitive=primitive,
             body_envelope=envelopes[0],
             signature=signature_result.signature,
-            type_tag=type_tag,
+            type_tag=TypeTag(entry.type_tag),
             payload_text=payload_text,
-            function_name=f"{primitive.name}_scalar_{str(type_tag)}",
+            function_name=entry.function_name,
         ),
         (),
     )
@@ -322,8 +368,48 @@ def _exact_single_emit_return_payload(
     return payload_text.strip(), ()
 
 
-def _render_plans_from_selection(
-    selection: RealScalarEmitReturnSelection,
+def _duplicate_selection_diagnostics(
+    selections: tuple[SelectedPrimitiveBodyRenderSelection, ...],
+) -> tuple[Diagnostic, ...]:
+    function_counts: dict[str, int] = {}
+    primitive_counts: dict[str, int] = {}
+    for selection in selections:
+        function_counts[selection.function_name] = (
+            function_counts.get(selection.function_name, 0) + 1
+        )
+        primitive_id = _primitive_id(selection)
+        primitive_counts[primitive_id] = primitive_counts.get(primitive_id, 0) + 1
+
+    diagnostics: list[Diagnostic] = []
+    diagnostics.extend(
+        Diagnostic(
+            severity="error",
+            code="TSL-REAL-SCALAR-EMIT-RETURN-DUPLICATE-FUNCTION",
+            message=(
+                "real scalar emit-return matrix selected duplicate function "
+                f"name {function_name!r}"
+            ),
+        )
+        for function_name, count in function_counts.items()
+        if count > 1
+    )
+    diagnostics.extend(
+        Diagnostic(
+            severity="error",
+            code="TSL-REAL-SCALAR-EMIT-RETURN-DUPLICATE-PRIMITIVE",
+            message=(
+                "real scalar emit-return matrix selected duplicate primitive "
+                f"render record {primitive_id!r}"
+            ),
+        )
+        for primitive_id, count in primitive_counts.items()
+        if count > 1
+    )
+    return _sort_diagnostics(diagnostics)
+
+
+def _render_plans_from_selections(
+    selections: tuple[SelectedPrimitiveBodyRenderSelection, ...],
     model: GeneratedProjectRenderModel,
     *,
     supplementary_root: Path,
@@ -333,7 +419,7 @@ def _render_plans_from_selection(
     diagnostics: list[Diagnostic] = []
     for backend_id in ("cpp", "rust"):
         plan, plan_diagnostics = _render_plan_for_backend(
-            selection,
+            selections,
             model,
             backend_id,
             supplementary_root=supplementary_root,
@@ -346,7 +432,7 @@ def _render_plans_from_selection(
 
 
 def _render_plan_for_backend(
-    selection: RealScalarEmitReturnSelection,
+    selections: tuple[SelectedPrimitiveBodyRenderSelection, ...],
     model: GeneratedProjectRenderModel,
     backend_id: str,
     *,
@@ -357,25 +443,29 @@ def _render_plan_for_backend(
     if profile is None:
         return None, (_missing_profile_diagnostic(backend_id),)
 
-    definition, diagnostics = _render_function_definition(
-        selection,
-        backend_id,
-        supplementary_root=supplementary_root,
-        backend_metadata=backend_metadata,
-    )
-    if diagnostics or definition is None:
-        return None, diagnostics
-
-    primitive_id = (
-        f"{selection.primitive.name}.{str(selection.type_tag)}."
-        f"{selection.function_name}"
-    )
-    record = PrimitiveRenderPlanRecord(
-        primitive_id=PrimitiveRenderPlanPrimitiveId(primitive_id),
-        presentation_sort_key=PrimitiveRenderSortKey(primitive_id),
-        definitions=(definition,),
-        source=PrimitiveRenderPlanSource(str(selection.primitive.source.path)),
-    )
+    records: list[PrimitiveRenderPlanRecord] = []
+    diagnostics: list[Diagnostic] = []
+    for selection in selections:
+        definition, definition_diagnostics = _render_function_definition(
+            selection,
+            backend_id,
+            supplementary_root=supplementary_root,
+            backend_metadata=backend_metadata,
+        )
+        diagnostics.extend(definition_diagnostics)
+        if definition is None:
+            continue
+        primitive_id = _primitive_id(selection)
+        records.append(
+            PrimitiveRenderPlanRecord(
+                primitive_id=PrimitiveRenderPlanPrimitiveId(primitive_id),
+                presentation_sort_key=PrimitiveRenderSortKey(primitive_id),
+                definitions=(definition,),
+                source=PrimitiveRenderPlanSource(str(selection.primitive.source.path)),
+            )
+        )
+    if diagnostics:
+        return None, _sort_diagnostics(diagnostics)
 
     if backend_id == "cpp":
         return (
@@ -383,8 +473,8 @@ def _render_plan_for_backend(
                 backend_id=PrimitiveBackendId("cpp"),
                 profile_name=PrimitiveProfileName(_SUPPORTED_PROFILE),
                 logical_path=PrimitiveArtifactLogicalPath(_CPP_SCALAR_PROFILE_PATH),
-                primitives=(record,),
-                source=PrimitiveRenderPlanSource(str(selection.primitive.source.path)),
+                primitives=tuple(records),
+                source=_plan_source(selections),
             ),
             (),
         )
@@ -394,8 +484,8 @@ def _render_plan_for_backend(
                 backend_id=PrimitiveBackendId("rust"),
                 profile_name=PrimitiveProfileName(_SUPPORTED_PROFILE),
                 logical_path=PrimitiveArtifactLogicalPath(_RUST_SCALAR_PROFILE_PATH),
-                primitives=(record,),
-                source=PrimitiveRenderPlanSource(str(selection.primitive.source.path)),
+                primitives=tuple(records),
+                source=_plan_source(selections),
             ),
             (),
         )
@@ -403,7 +493,7 @@ def _render_plan_for_backend(
 
 
 def _render_function_definition(
-    selection: RealScalarEmitReturnSelection,
+    selection: SelectedPrimitiveBodyRenderSelection,
     backend_id: str,
     *,
     supplementary_root: Path,
@@ -441,7 +531,7 @@ def _render_function_definition(
 
 
 def _scalar_type_spelling(
-    selection: RealScalarEmitReturnSelection,
+    selection: SelectedPrimitiveBodyRenderSelection,
     backend_id: str,
     backend_metadata: BackendMetadataCatalog | None,
 ) -> str | Diagnostic:
@@ -459,7 +549,7 @@ def _scalar_type_spelling(
 
 def _parameter_list(
     backend_id: str,
-    selection: RealScalarEmitReturnSelection,
+    selection: SelectedPrimitiveBodyRenderSelection,
     scalar_type: str,
 ) -> str | Diagnostic:
     if backend_id == "cpp":
@@ -467,6 +557,22 @@ def _parameter_list(
     if backend_id == "rust":
         return ", ".join(f"{name}: {scalar_type}" for name in selection.primitive.parameters)
     return _unsupported_backend_diagnostic(backend_id)
+
+
+def _primitive_id(selection: SelectedPrimitiveBodyRenderSelection) -> str:
+    return (
+        f"{selection.primitive.name}.{str(selection.type_tag)}."
+        f"{selection.function_name}"
+    )
+
+
+def _plan_source(
+    selections: tuple[SelectedPrimitiveBodyRenderSelection, ...],
+) -> PrimitiveRenderPlanSource | None:
+    if not selections:
+        return None
+    paths = tuple(sorted({str(selection.primitive.source.path) for selection in selections}))
+    return PrimitiveRenderPlanSource(",".join(paths))
 
 
 def _profile_artifact_contexts(
@@ -543,13 +649,14 @@ def _unsupported_profile_diagnostics(
     )
 
 
-def _missing_primitive_diagnostic(primitive_name: str) -> Diagnostic:
+def _missing_primitive_diagnostic(entry: SelectedPrimitiveBodyRenderEntry) -> Diagnostic:
     return Diagnostic(
         severity="error",
         code="TSL-REAL-SCALAR-EMIT-RETURN-MISSING-PRIMITIVE",
         message=(
-            "real scalar emit-return project bridge could not find unmasked "
-            f"primitive {primitive_name!r} with parameters ('left', 'right')"
+            "selected primitive project bridge could not find unmasked "
+            f"primitive {entry.primitive_name!r} with parameters "
+            f"{entry.parameters!r}"
         ),
     )
 
@@ -654,15 +761,17 @@ def _result(
     *,
     model: GeneratedProjectRenderModel | None = None,
     documents: tuple[ParsedOuterTslDocument, ...] = (),
-    selection: RealScalarEmitReturnSelection | None = None,
+    selection: SelectedPrimitiveBodyRenderSelection | None = None,
+    selections: tuple[SelectedPrimitiveBodyRenderSelection, ...] = (),
     render_plans: tuple[PrimitiveRenderPlan, ...] = (),
-) -> RealScalarEmitReturnGeneratedProjectResult:
-    return RealScalarEmitReturnGeneratedProjectResult(
+) -> SelectedPrimitiveProjectResult:
+    return SelectedPrimitiveProjectResult(
         artifacts=ArtifactSet.create(()),
         diagnostics=tuple(diagnostics),
         model=model,
         documents=documents,
-        selection=selection,
+        selection=selection if selection is not None else (selections[0] if selections else None),
+        selections=selections,
         render_plans=render_plans,
     )
 

@@ -29619,7 +29619,7 @@ payload text remains raw.
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m244-real-scalar-emit-return-matrix-rendering-execution-review-loop-prompt.md`.
 
 Goal:
@@ -29662,6 +29662,239 @@ Validation:
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m227_vv_function_shape_template_render_boundary.py tslgen/tests/test_m241_primitive_profile_artifact_presentation_boundary.py tslgen/tests/test_m242_real_corpus_lowering_completion_gate.py tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m227_vv_function_shape_template_render_boundary.py tslgen/tests/test_m241_primitive_profile_artifact_presentation_boundary.py tslgen/tests/test_m242_real_corpus_lowering_completion_gate.py tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py tslgen/tests/test_m244_5_real_primitive_project_pipeline_consolidation.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M244 added an explicit real scalar matrix API on top of the M243 bridge:
+`RealScalarEmitReturnMatrixEntry`,
+`DEFAULT_REAL_SCALAR_EMIT_RETURN_MATRIX`, and
+`build_real_scalar_emit_return_matrix_generated_project_artifacts`.
+The M243 single-case API now delegates to the matrix API as a convenience
+wrapper.
+
+The accepted positive path consumes real
+`tsldata/primitives/arithmetic/fundamental.tsl` through `OuterTslParser` and
+selects 20 unmasked scalar functions: `add` and `sub` at selector path
+`("scalar", "arith")`, signature `v:=(v,v)`, parameters `left`/`right`, and
+type tags `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`,
+`f32`, and `f64`. It renders all selected functions into one C++ scalar
+profile artifact and one Rust scalar profile artifact, composes the generated
+project skeleton, writes through `ArtifactWriter`, and verifies both generated
+projects through `BuildVerifier`.
+
+The selected payloads remain raw source text: `left + right` and
+`left - right` are not parsed as target-language operators or lowered into
+expression semantics. Scalar type spelling still goes through the accepted
+backend metadata type-spelling boundary. Duplicate selected function names and
+duplicate primitive render records are diagnosed before artifact composition.
+
+Tests added:
+
+- `tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py` covers
+  the real add/sub x ten-type matrix, C++/Rust parity, deterministic profile
+  artifacts, representative backend metadata type spellings, raw payload
+  preservation, manifest-clean writing, C++/Rust build verification,
+  duplicate diagnostics, unsupported selected body diagnostics, public import
+  stability, and guards against `TslParser`, tiny `body add` evidence, local
+  scalar/operator spelling tables, `LoweredBinaryOperationExpression`,
+  `frozen`, and `tslgenold`.
+
+Review verdict:
+
+Accepted. Architecture/boundary, evidence, test, documentation, and validation
+auditors all returned Accept. No focused revision was required. Documentation
+closeout recorded the M244 behavior and selected M245.
+
+Accepted validation:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- Required pytest bundle: exit 0, 36 tests passed in 19.17s.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created cache directories. After cleanup, final rerun exited 0
+  with no output.
+- Broader cache check:
+  `find . -maxdepth 2 \( -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -print`
+  exited 0 with no output.
+
+Follow-up:
+
+The next backend/rendering step still needs vector register type spellings
+from the accepted typed extension metadata before a real vector/intrinsic
+generated project can be rendered cleanly. However, M244 also revealed a
+fixture-to-architecture smell: `real_scalar_pipeline.py` names a production
+pipeline after selected source data. Insert M244.5 before M245 to consolidate
+the real primitive project bridge and keep the tiny M224 path regression-only.
+ADR-068 records the accepted fixture-to-architecture guardrail.
+Do not hardcode `__m128`/`__m256`/Rust `core::arch::*` register spellings in
+Python and do not move type selection into templates.
+
+### Milestone 244.5: Real Primitive Project Pipeline Consolidation
+
+Status:
+
+Accepted. Execution-review loop prompt:
+`docs/agent/runs/m244-5-real-primitive-project-pipeline-consolidation-execution-review-loop-prompt.md`.
+
+Goal:
+
+Consolidate the M243/M244 real-corpus scalar bridge into a generically named
+real selected primitive project pipeline before further backend feature work
+uses it. The accepted behavior stays the same, but production module/API names
+must describe the durable generator boundary rather than the selected
+`scalar`/`emit_return` fixture, following ADR-068.
+
+Scope:
+
+- Replace `tslgen/src/tslgen/pipeline/real_scalar_pipeline.py` with a generic
+  real selected primitive project bridge module, for example
+  `primitive_project_pipeline.py`.
+- Rename public models/functions so `scalar`, `emit_return`, and `matrix` are
+  selected-entry/body-boundary facts rather than the pipeline identity.
+- Preserve M243/M244 behavior, diagnostics, deterministic artifact output,
+  generated C++/Rust scalar build verification, and public regression coverage.
+- Keep `generated_primitive_pipeline.py` as M224 tiny/regression-only, label
+  it honestly in code/docs/tests, and record that it should be deleted once
+  the generic real pipeline covers its regression value.
+- Add guard tests that no production pipeline module is named after selected
+  source data such as extension/profile names, primitive names, type tags, or
+  exact body shapes.
+- Update docs and public imports to make the generic real primitive project
+  pipeline the path future M245+ work should extend.
+
+Out of scope:
+
+Vector/register type spelling; real vector/intrinsic rendering; new
+lowering semantics; new primitive selection/dependency closure; broad catalog
+selection; source repair; target-language operator parsing; adding sibling
+pipelines for specific extensions/primitives/body forms; runtime dependencies
+on `frozen` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m227_vv_function_shape_template_render_boundary.py tslgen/tests/test_m241_primitive_profile_artifact_presentation_boundary.py tslgen/tests/test_m242_real_corpus_lowering_completion_gate.py tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py tslgen/tests/test_m244_5_real_primitive_project_pipeline_consolidation.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M244.5 replaced the fixture-shaped production module
+`tslgen.pipeline.real_scalar_pipeline` with
+`tslgen.pipeline.primitive_project_pipeline`, a generic real selected
+primitive project bridge. The public real-pipeline API now uses durable
+ownership names:
+
+- `SelectedPrimitiveBodyRenderEntry`
+- `SelectedPrimitiveBodyRenderSelection`
+- `SelectedPrimitiveProjectResult`
+- `build_primitive_project_artifacts_from_selected_body`
+- `build_primitive_project_artifacts_from_selected_bodies`
+
+The accepted M243/M244 behavior is preserved by passing explicit selected
+entry values into the generic bridge. Source-data facts such as `scalar`,
+`add`, `sub`, concrete type tags, selected function names, selector paths, and
+parameter names live in selected-entry test data rather than module/class/API
+ownership. The existing exact single-`emit_return(PAYLOAD);` body boundary,
+diagnostics, deterministic artifact output, manifest-clean writing, and C++
+and Rust build verification are unchanged.
+
+`tslgen.pipeline.generated_primitive_pipeline` is now explicitly labelled as
+the M224 tiny/regression-only parsed-source generated project pipeline. It is
+not the real selected primitive project generation path and should be deleted
+once the generic real pipeline covers its remaining regression value.
+
+Tests updated or added:
+
+- `tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py`
+  now exercises the M243 single selected real primitive through
+  `primitive_project_pipeline.py`.
+- `tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py`
+  now exercises the M244 add/sub x ten-type selected matrix through explicit
+  `SelectedPrimitiveBodyRenderEntry` values.
+- `tslgen/tests/test_m244_5_real_primitive_project_pipeline_consolidation.py`
+  guards that `real_scalar_pipeline.py` is gone, public pipeline exports use
+  generic names, the M224 tiny path is labelled regression-only, and no
+  sibling fixture-shaped production pipeline names are introduced.
+
+Review verdict:
+
+Accepted. Architecture/boundary, evidence, test, documentation, and
+validation auditors all returned Accept. No focused revision was required.
+M245 was selected again after M244.5 acceptance.
+
+Accepted validation:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- Required pytest bundle: exit 0, 41 tests passed in 31.23s.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compileall-created cache directories. After cleanup, final rerun exited 0
+  with no output.
+- Broader cache check:
+  `find . -maxdepth 3 -type d \( -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -print`
+  exited 0 with no output.
+
+Follow-up:
+
+Delete the M224 tiny/regression-only `generated_primitive_pipeline.py` path
+once the generic real selected primitive project pipeline covers the remaining
+regression value. Future backend/rendering work must extend
+`primitive_project_pipeline.py` or lower-level generic boundaries, not create
+fixture-shaped sibling pipelines for specific extensions, primitives, type
+tags, signatures, or body forms.
+
+### Milestone 245: Extension Register Type Spelling Boundary
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m245-extension-register-type-spelling-boundary-execution-review-loop-prompt.md`.
+
+Goal:
+
+Teach the backend type-spelling boundary to translate already-lowered current
+vector/register type requests through the typed `extension.tsl` metadata so
+real vector/intrinsic rendering can use C++ and Rust register types without
+hardcoded backend spelling tables in Python.
+
+Scope:
+
+- Consume typed extension catalog metadata already parsed from
+  `tsldata/extensions/extension.tsl`, especially
+  `Extension.resolved_vector_register_types`.
+- Support exact backend type spelling for `CurrentVector(extension, type_tag)`
+  and `LoweredVectorMemberType(member="register", extension, type_tag)` for
+  C++ and Rust when the selected extension metadata provides a resolved vector
+  register spelling.
+- Cover all resolved fixed-width register entries currently present in
+  `extension.tsl` for C++ and Rust, including representative x86 and ARM
+  entries where metadata exists.
+- Preserve M192 scalar and size-type behavior and diagnostics.
+- Return typed translation results with request/source metadata and stable
+  diagnostics for missing extension catalog, unknown extension, unsupported
+  member, unsupported backend, or missing register spelling.
+
+Out of scope:
+
+Real vector/intrinsic generated-project rendering; intrinsic name assembly;
+primitive selection; dependency closure; mask/integral-mask type spelling;
+generic/runtime-sized register policies; CMake/Cargo changes; Rust unsafe
+policy changes; target-language operator parsing; lowering changes; runtime
+dependencies on `frozen` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m192_backend_type_spelling_translation.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py
 find tslgen -type d -name __pycache__ -print
 ```

@@ -234,6 +234,30 @@ When the answer points toward ceremony, simplify the design before coding.
 Current M57-M104 artifacts remain evidence and regression material, but future
 milestones should not extend them by default.
 
+## Fixture-To-Architecture Guardrails
+
+Narrow milestones may use selected fixtures, but fixture details must not
+become production module, class, or pipeline ownership. Source-data concepts
+such as primitive names, extension/profile names, type tags, signature shapes,
+and exact body forms are selected data. They should be represented in typed
+selection/render inputs, not encoded in pipeline names.
+
+Before planning a new pipeline module or public pipeline API, apply this check:
+
+- Is the proposed name derived from a selected primitive, extension/profile,
+  type tag, signature, or exact body syntax?
+- Would adding the next selected extension or primitive imply another sibling
+  module with the same shape?
+- Does an existing generic pipeline boundary already have the right ownership,
+  even if it needs renaming or consolidation?
+- Is a tiny/demo/regression path being mistaken for product architecture?
+
+If yes, the next milestone must be a consolidation/renaming slice, not more
+feature work. Demo or regression-only paths must be labelled with honest names
+such as `tiny_*` or documented as regression-only, and each must have an
+explicit deletion/replacement follow-up once the real generic pipeline covers
+its value.
+
 ## Backend Output And Verification Guardrails
 
 Backend/output planning must keep semantic translation, rendering, writing,

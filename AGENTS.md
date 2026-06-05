@@ -60,6 +60,35 @@ accepted stages need to share that concept. The first restart implementation
 slice should prove an end-to-end path on a tiny fixture before reintroducing
 broad lowering machinery.
 
+## Fixture-To-Architecture Guardrail
+
+Thin fixtures and selected source slices are allowed to prove behavior, but
+their names and constraints must not become production architecture. Source
+data concepts such as primitive names (`add`, `sub`), extension/profile names
+(`scalar`, `sse`, `avx2`, `neon`), type tags (`si32`, `f32`), signatures
+(`v:=(v,v)`), and exact body forms (`emit_return(PAYLOAD);`) must flow as
+typed selected data through generic boundaries. They must not define package,
+module, class, or pipeline ownership unless the concept is genuinely part of
+the generator architecture rather than one selected fixture.
+
+Before adding or naming a pipeline module, agents must perform a fixture-name
+pressure check:
+
+- Is this name a selected primitive, extension, profile, type tag, signature,
+  or exact implementation-body shape?
+- Would the next similar feature naturally create a sibling such as
+  `real_avx2_pipeline.py`, `real_neon_pipeline.py`, or
+  `real_add_pipeline.py`?
+- Is an existing generic pipeline boundary being bypassed because the fixture
+  is easier to wire directly?
+- Should the existing module be renamed or consolidated instead of adding a
+  new sibling?
+
+If the answer to any of these is yes, stop and plan a consolidation or
+renaming milestone before adding more feature work. Regression/demo paths must
+be named honestly, documented as regression-only, excluded from real generator
+architecture, and given an explicit deletion or replacement follow-up.
+
 ## Old Implementation Quarantine And Repository Layout Policy
 
 The pre-restart top-level `tslgen/` tree has been moved wholesale to

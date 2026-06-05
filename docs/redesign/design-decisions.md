@@ -3369,3 +3369,59 @@ Consequences:
 - The first real x86 fixture can now reuse the profile artifact wrapper
   boundary instead of rediscovering profile scaffolding in a fixture-specific
   pipeline.
+
+## ADR-068: Fixture Names Must Not Become Pipeline Architecture
+
+Status: Accepted.
+
+Context:
+
+M243 and M244 proved an important end-to-end backend/rendering behavior from
+real `tsldata` evidence: a selected real primitive implementation can be
+parsed, accepted through a narrow exact body boundary, rendered through C++
+and Rust templates, written through `ArtifactWriter`, and build verified.
+However, the implementation named that bridge
+`tslgen.pipeline.real_scalar_pipeline`. The selected `scalar` profile is
+source data from TSL files, not a durable pipeline owner.
+
+The same problem exists from the other direction with
+`generated_primitive_pipeline.py`: its name sounds generic, but it is the M224
+tiny regression/demo path built around `TslParser`, tiny fixtures, local
+scalar/operator spelling tables, and `LoweredBinaryOperationExpression`.
+
+If selected fixture details become module or public API ownership, future work
+will naturally grow sibling paths such as `real_avx2_pipeline.py`,
+`real_neon_pipeline.py`, or `real_add_pipeline.py`. That repeats the
+unmaintainable special-case architecture the redesign is meant to avoid.
+
+Decision:
+
+Fixture details may appear in tests, selected-entry defaults, exact body
+adapters, and documentation of supported slices, but not as production
+pipeline ownership. Primitive names, extension/profile names, type tags,
+signature spellings, and exact implementation-body shapes must flow as typed
+selected data through generic generator boundaries.
+
+Production pipeline modules and public APIs should be named after stable
+responsibilities such as selected primitive project generation, catalog
+building, backend translation, render planning, artifact writing, and build
+verification. A module whose name is derived from a selected primitive,
+extension/profile, type tag, signature, or exact body form requires a
+fixture-name pressure check. If another similar feature would imply a sibling
+module with the same shape, the next milestone must consolidate or rename the
+boundary before adding feature work.
+
+Regression/demo paths must be labelled honestly and isolated from real
+generator architecture. They must carry an explicit deletion or replacement
+follow-up once the generic real path covers their regression value.
+
+Consequences:
+
+- M244.5 is inserted before M245 to replace `real_scalar_pipeline.py` with a
+  generic real selected primitive project bridge.
+- `generated_primitive_pipeline.py` remains M224 tiny/regression-only and must
+  be labelled as such until it is deleted.
+- M245 vector register type spelling remains useful, but is deferred until the
+  generic real primitive project bridge exists.
+- Future milestones must not add sibling fixture pipelines for specific
+  extensions, primitives, type tags, signatures, or exact body forms.

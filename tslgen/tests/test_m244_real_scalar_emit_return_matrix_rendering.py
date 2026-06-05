@@ -6,9 +6,9 @@ from pathlib import Path
 from tslgen.io.artifact_writer import ArtifactWriter
 from tslgen.io.sources import SourceLoader
 from tslgen.pipeline import (
-    SelectedPrimitiveBodyRenderEntry,
     SelectedPrimitiveProjectResult,
-    build_primitive_project_artifacts_from_selected_body,
+    SelectedPrimitiveBodyRenderEntry,
+    build_primitive_project_artifacts_from_selected_bodies,
 )
 from tslgen.pipeline.backend_metadata import load_active_backend_metadata_catalog
 from tslgen.pipeline.build_verifier import (
@@ -27,59 +27,98 @@ _FUNDAMENTAL_PATH = _REPO_ROOT / "tsldata" / "primitives" / "arithmetic" / "fund
 _PRIMITIVE_PROJECT_PIPELINE = (
     _REPO_ROOT / "tslgen" / "src" / "tslgen" / "pipeline" / "primitive_project_pipeline.py"
 )
-_SELECTED_ADD_SI32 = SelectedPrimitiveBodyRenderEntry(
-    primitive_name="add",
-    selector_path=("scalar", "arith"),
-    type_tag="si32",
-    function_name="add_scalar_si32",
-    parameters=("left", "right"),
+_TYPE_TAGS = (
+    "si8",
+    "si16",
+    "si32",
+    "si64",
+    "ui8",
+    "ui16",
+    "ui32",
+    "ui64",
+    "f32",
+    "f64",
+)
+_FUNCTION_NAMES = tuple(
+    f"{primitive}_scalar_{type_tag}"
+    for primitive in ("add", "sub")
+    for type_tag in _TYPE_TAGS
+)
+_SELECTED_MATRIX = tuple(
+    SelectedPrimitiveBodyRenderEntry(
+        primitive_name=primitive,
+        selector_path=("scalar", "arith"),
+        type_tag=type_tag,
+        function_name=f"{primitive}_scalar_{type_tag}",
+        parameters=("left", "right"),
+    )
+    for primitive in ("add", "sub")
+    for type_tag in _TYPE_TAGS
 )
 
 
-def test_m243_real_scalar_add_from_fundamental_tsl_renders_cpp_and_rust() -> None:
-    result = _build_real_scalar_add()
+def test_m244_real_add_sub_scalar_matrix_renders_cpp_and_rust() -> None:
+    result = _build_real_scalar_matrix()
 
     assert result.diagnostics == ()
-    assert result.selection is not None
-    assert result.selection.primitive.name == "add"
-    assert result.selection.primitive.signature == "v:=(v,v)"
-    assert result.selection.primitive.parameters == ("left", "right")
-    assert result.selection.body_envelope.selector_path == ("scalar", "arith")
-    assert result.selection.payload_text == "left + right"
-    assert result.selection.function_name == "add_scalar_si32"
-    assert tuple(plan.logical_path.text for plan in result.render_plans) == (
-        "cpp/include/profiles/scalar.hpp",
-        "rust/src/profiles/scalar.rs",
+    assert len(result.selections) == 20
+    assert tuple(selection.function_name for selection in result.selections) == (
+        _FUNCTION_NAMES
+    )
+    assert {selection.primitive.name for selection in result.selections} == {
+        "add",
+        "sub",
+    }
+    assert {str(selection.type_tag) for selection in result.selections} == set(_TYPE_TAGS)
+    assert {
+        selection.body_envelope.selector_path for selection in result.selections
+    } == {("scalar", "arith")}
+    assert {
+        selection.payload_text
+        for selection in result.selections
+        if selection.primitive.name == "add"
+    } == {"left + right"}
+    assert {
+        selection.payload_text
+        for selection in result.selections
+        if selection.primitive.name == "sub"
+    } == {"left - right"}
+
+    assert tuple(
+        (plan.logical_path.text, len(plan.primitives)) for plan in result.render_plans
+    ) == (
+        ("cpp/include/profiles/scalar.hpp", 20),
+        ("rust/src/profiles/scalar.rs", 20),
     )
 
     by_path = _artifact_content_by_path(result)
-    assert tuple(by_path) == (
-        "cpp/CMakeLists.txt",
-        "cpp/include/profiles/scalar.hpp",
-        "cpp/include/tsl.hpp",
-        "cpp/tests/smoke.cpp",
-        "rust/Cargo.toml",
-        "rust/src/lib.rs",
-        "rust/src/profiles/scalar.rs",
-        "rust/tests/smoke.rs",
+    cpp_profile = by_path["cpp/include/profiles/scalar.hpp"]
+    rust_profile = by_path["rust/src/profiles/scalar.rs"]
+    for function_name in _FUNCTION_NAMES:
+        assert cpp_profile.count(function_name) == 1
+        assert rust_profile.count(function_name) == 1
+
+    assert "inline int8_t add_scalar_si8(int8_t left, int8_t right)" in cpp_profile
+    assert "inline uint64_t add_scalar_ui64(uint64_t left, uint64_t right)" in (
+        cpp_profile
     )
-    assert "inline int32_t add_scalar_si32(int32_t left, int32_t right)" in (
-        by_path["cpp/include/profiles/scalar.hpp"]
-    )
-    assert "  return left + right;" in by_path["cpp/include/profiles/scalar.hpp"]
-    assert "pub fn add_scalar_si32(left: i32, right: i32) -> i32" in (
-        by_path["rust/src/profiles/scalar.rs"]
-    )
-    assert "    left + right" in by_path["rust/src/profiles/scalar.rs"]
-    assert "body add(left, right)" not in by_path["cpp/include/profiles/scalar.hpp"]
-    assert "body add(left, right)" not in by_path["rust/src/profiles/scalar.rs"]
+    assert "inline float sub_scalar_f32(float left, float right)" in cpp_profile
+    assert "inline double sub_scalar_f64(double left, double right)" in cpp_profile
+    assert "pub fn add_scalar_si8(left: i8, right: i8) -> i8" in rust_profile
+    assert "pub fn add_scalar_ui64(left: u64, right: u64) -> u64" in rust_profile
+    assert "pub fn sub_scalar_f32(left: f32, right: f32) -> f32" in rust_profile
+    assert "pub fn sub_scalar_f64(left: f64, right: f64) -> f64" in rust_profile
+    assert "  return left + right;" in cpp_profile
+    assert "  return left - right;" in cpp_profile
+    assert "    left + right" in rust_profile
+    assert "    left - right" in rust_profile
 
 
-def test_m243_real_scalar_add_generated_project_is_deterministic_and_builds(
+def test_m244_matrix_artifacts_are_deterministic_and_build(
     tmp_path: Path,
 ) -> None:
-    first = _build_real_scalar_add()
-    second = _build_real_scalar_add()
+    first = _build_real_scalar_matrix()
+    second = _build_real_scalar_matrix()
 
     assert first.diagnostics == ()
     assert second.diagnostics == ()
@@ -116,18 +155,43 @@ def test_m243_real_scalar_add_generated_project_is_deterministic_and_builds(
     assert all(command.returncode == 0 for command in report.commands)
 
 
-def test_m243_rejects_real_non_single_return_body() -> None:
-    result = build_primitive_project_artifacts_from_selected_body(
+def test_m244_duplicate_selected_function_names_are_diagnostics() -> None:
+    duplicate = SelectedPrimitiveBodyRenderEntry(
+        primitive_name="add",
+        selector_path=("scalar", "arith"),
+        type_tag="si32",
+        function_name="add_scalar_si32",
+        parameters=("left", "right"),
+    )
+    result = build_primitive_project_artifacts_from_selected_bodies(
         supplementary_root=_SUPPLEMENTARY_ROOT,
         source_documents=_source_documents(),
         machine_profiles=_machine_profiles(),
         backend_metadata=_backend_metadata(),
-        selected_entry=SelectedPrimitiveBodyRenderEntry(
-            primitive_name="add",
-            selector_path=("[generic, oneAPIfpga, oneAPIfpgaRTL]", "arith"),
-            type_tag="si32",
-            function_name="add_scalar_si32",
-            parameters=("left", "right"),
+        selected_entries=(duplicate, duplicate),
+    )
+
+    assert result.artifacts.artifacts == ()
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [
+        "TSL-REAL-SCALAR-EMIT-RETURN-DUPLICATE-FUNCTION",
+        "TSL-REAL-SCALAR-EMIT-RETURN-DUPLICATE-PRIMITIVE",
+    ]
+
+
+def test_m244_unsupported_selected_matrix_entry_is_diagnostic() -> None:
+    result = build_primitive_project_artifacts_from_selected_bodies(
+        supplementary_root=_SUPPLEMENTARY_ROOT,
+        source_documents=_source_documents(),
+        machine_profiles=_machine_profiles(),
+        backend_metadata=_backend_metadata(),
+        selected_entries=(
+            SelectedPrimitiveBodyRenderEntry(
+                primitive_name="add",
+                selector_path=("[generic, oneAPIfpga, oneAPIfpgaRTL]", "arith"),
+                type_tag="si32",
+                function_name="add_scalar_si32",
+                parameters=("left", "right"),
+            ),
         ),
     )
 
@@ -135,26 +199,9 @@ def test_m243_rejects_real_non_single_return_body() -> None:
     assert [diagnostic.code for diagnostic in result.diagnostics] == [
         "TSL-REAL-SCALAR-EMIT-RETURN-UNSUPPORTED-BODY",
     ]
-    assert "exact single `emit_return(PAYLOAD);`" in result.diagnostics[0].message
 
 
-def test_m243_missing_backend_metadata_does_not_fall_back_to_local_type_tables() -> None:
-    result = build_primitive_project_artifacts_from_selected_body(
-        supplementary_root=_SUPPLEMENTARY_ROOT,
-        source_documents=_source_documents(),
-        machine_profiles=_machine_profiles(),
-        backend_metadata=None,
-        selected_entry=_SELECTED_ADD_SI32,
-    )
-
-    assert result.artifacts.artifacts == ()
-    assert [diagnostic.code for diagnostic in result.diagnostics] == [
-        "TSL-BACKEND-TYPE-SPELLING-MISSING-METADATA",
-        "TSL-BACKEND-TYPE-SPELLING-MISSING-METADATA",
-    ]
-
-
-def test_m243_real_path_does_not_use_tiny_parser_or_operator_shortcut() -> None:
+def test_m244_matrix_path_does_not_use_tiny_parser_or_operator_shortcut() -> None:
     source = _PRIMITIVE_PROJECT_PIPELINE.read_text(encoding="utf-8")
     tree = ast.parse(source)
 
@@ -191,34 +238,25 @@ def test_m243_real_path_does_not_use_tiny_parser_or_operator_shortcut() -> None:
     )
     assert '"frozen/' not in source
     assert '"tslgenold/' not in source
-    assert "std::int32_t" not in source
-    assert "return left + right" not in source
-    assert "pub fn add_scalar_si32" not in source
 
 
-def test_m243_public_pipeline_imports_are_stable() -> None:
+def test_m244_public_pipeline_imports_are_stable() -> None:
     from tslgen.pipeline import (  # noqa: PLC0415
-        SelectedPrimitiveProjectResult,
-        SelectedPrimitiveBodyRenderSelection,
         SelectedPrimitiveBodyRenderEntry,
-        build_primitive_project_artifacts_from_selected_body,
+        build_primitive_project_artifacts_from_selected_bodies,
     )
 
-    assert SelectedPrimitiveProjectResult.__name__ == (
-        "SelectedPrimitiveProjectResult"
-    )
-    assert SelectedPrimitiveBodyRenderSelection.__name__ == "SelectedPrimitiveBodyRenderSelection"
     assert SelectedPrimitiveBodyRenderEntry.__name__ == "SelectedPrimitiveBodyRenderEntry"
-    assert callable(build_primitive_project_artifacts_from_selected_body)
+    assert callable(build_primitive_project_artifacts_from_selected_bodies)
 
 
-def _build_real_scalar_add() -> SelectedPrimitiveProjectResult:
-    return build_primitive_project_artifacts_from_selected_body(
+def _build_real_scalar_matrix() -> SelectedPrimitiveProjectResult:
+    return build_primitive_project_artifacts_from_selected_bodies(
         supplementary_root=_SUPPLEMENTARY_ROOT,
         source_documents=_source_documents(),
         machine_profiles=_machine_profiles(),
         backend_metadata=_backend_metadata(),
-        selected_entry=_SELECTED_ADD_SI32,
+        selected_entries=_SELECTED_MATRIX,
     )
 
 

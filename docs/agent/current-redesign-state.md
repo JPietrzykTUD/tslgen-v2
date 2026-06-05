@@ -13,7 +13,8 @@ accepted. Milestone 233 is accepted. Milestone 234 is accepted. Milestone 235
 is accepted. Milestone 236 is accepted. Milestone 237 planning is accepted.
 Milestone 238 is accepted. Milestone 239 is accepted. Milestone 240 is
 accepted. Milestone 241 is accepted. Milestone 242 is accepted.
-Milestone 243 is accepted.
+Milestone 243 is accepted. Milestone 244 is accepted. Milestone 244.5 is
+accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -882,61 +883,94 @@ only and guards the real path against `TslParser`, tiny `body add` evidence,
 local scalar/operator spelling tables, `LoweredBinaryOperationExpression`,
 `frozen`, and `tslgenold`.
 
+M244 broadened the M243 real scalar bridge to an explicit deterministic
+matrix over real unmasked `add` and `sub` from
+`tsldata/primitives/arithmetic/fundamental.tsl`, selector path
+`("scalar", "arith")`, signature `v:=(v,v)`, parameters `left`/`right`, and
+type tags `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`,
+`f32`, and `f64`. It added
+`RealScalarEmitReturnMatrixEntry`,
+`DEFAULT_REAL_SCALAR_EMIT_RETURN_MATRIX`, and
+`build_real_scalar_emit_return_matrix_generated_project_artifacts`, while the
+M243 single-case API remains as a convenience wrapper. The matrix renders 20
+C++ and Rust scalar profile functions, keeps payloads such as `left + right`
+and `left - right` raw without operator parsing, translates scalar type
+spellings through backend metadata, writes generated projects manifest-clean,
+and verifies C++ and Rust builds. It also diagnoses duplicate selected
+function names and primitive render records before artifact composition.
+
+M244.5 replaced the fixture-shaped production module
+`tslgen.pipeline.real_scalar_pipeline` with
+`tslgen.pipeline.primitive_project_pipeline`, a generic real selected
+primitive project bridge. Public real-pipeline names now describe durable
+ownership: `SelectedPrimitiveBodyRenderEntry`,
+`SelectedPrimitiveBodyRenderSelection`, `SelectedPrimitiveProjectResult`,
+`build_primitive_project_artifacts_from_selected_body`, and
+`build_primitive_project_artifacts_from_selected_bodies`. Selected facts such
+as `scalar`, `add`, `sub`, type tags, selector paths, function names, and
+parameter names are explicit selected-entry data, not module/API identity.
+M243/M244 behavior, diagnostics, raw payload preservation, deterministic
+artifacts, manifest-clean writing, and C++/Rust build verification are
+preserved. `tslgen.pipeline.generated_primitive_pipeline` is labelled M224
+tiny/regression-only and remains a deletion candidate once the generic real
+pipeline covers its regression value.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M244 real scalar emit-return matrix rendering execution-review loop.
+Run M245 extension register type spelling boundary execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m244-real-scalar-emit-return-matrix-rendering-execution-review-loop-prompt.md
+docs/agent/runs/m245-extension-register-type-spelling-boundary-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 244: Real Scalar Emit-Return Matrix Rendering.
+Milestone 245: Extension Register Type Spelling Boundary.
 ```
 
 Latest review verdict:
 
 ```text
-M243 execution-review returned Accept after focused test and hygiene revision
-plus documentation closeout. Architecture and evidence reviews accepted the
-real parser/body/rendering boundary. Test review requested stronger guards
-against `frozen`/`tslgenold` and alias-based `TslParser` shortcuts; validation
-audit requested local cache cleanup. The focused revision strengthened
-AST-based shortcut/dependency guard tests and removed cache directories.
-Validation for M243: `git diff --check` exit 0 with no output;
+M244.5 execution-review returned Accept with no focused revision required.
+Architecture/boundary, evidence, test, documentation, and validation
+reviewers all accepted the consolidation. The accepted implementation replaces
+`tslgen.pipeline.real_scalar_pipeline` with the generic
+`tslgen.pipeline.primitive_project_pipeline`, removes the old real-scalar
+public pipeline names, keeps selected scalar/add/sub/type/function facts in
+explicit selected-entry data, and labels `generated_primitive_pipeline.py` as
+M224 tiny/regression-only. M243/M244 real-corpus scalar behavior,
+diagnostics, raw payload preservation, deterministic artifacts,
+manifest-clean writing, and C++/Rust build verification are preserved.
+Validation for M244.5: `git diff --check` exit 0 with no output;
 `python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no
-output; required pytest bundle exit 0 with 30 tests passed; final
-`find tslgen -type d -name __pycache__ -print` exit 0 with no output after
-removing compile/test-created cache directories; broader cache check for
-`.pytest_cache`, `.mypy_cache`, and `.ruff_cache` exit 0 with no output.
+output; required pytest bundle exit 0 with 41 tests passed in 31.23s; initial
+`find tslgen -type d -name __pycache__ -print` exit 0 and printed
+compileall-created cache directories; after cleanup, final rerun exited 0
+with no output; broader cache check for `.pytest_cache`, `.mypy_cache`, and
+`.ruff_cache` exit 0 with no output. M245 extension register type spelling is
+selected again now that M244.5 is accepted.
 ```
 
 Next expected action:
 
 ```text
-Run the active M244 execution-review loop. Use one write-capable executor and
-read-only review/audit subagents. Broaden the accepted M243 real scalar bridge
-from one `add` / `si32` function to an explicit deterministic real scalar
-matrix in one generated C++ and Rust scalar project. The starting matrix is
-real unmasked `add` and `sub` from
-`tsldata/primitives/arithmetic/fundamental.tsl`, selector path
-`("scalar", "arith")`, signature `v:=(v,v)`, parameters `left`/`right`, and
-concrete type tags `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`,
-`ui64`, `f32`, and `f64`. Reuse the M243 parser/body/rendering bridge,
-backend metadata type spelling, existing templates, generated-project
-composition, `ArtifactWriter`, and build verification. Do not add new
-lowering semantics, target-language operator parsing, wildcard expansion,
-broad catalog selection, dependency closure, vector/intrinsic/mask/generic
-rendering, local scalar/operator spelling tables, or runtime dependencies on
-`frozen`/`tslgenold`.
+Run the active M245 execution-review loop. Use one write-capable executor and
+read-only review/audit subagents. Teach the backend type-spelling boundary to
+translate already-lowered current vector/register type values through typed
+`extension.tsl` metadata for C++ and Rust. Extend the generic
+`primitive_project_pipeline.py` path only if the milestone needs pipeline
+integration context; do not resurrect fixture-shaped pipelines. Do not render
+real vector/intrinsic generated projects, add new lowering, broaden primitive
+selection or dependency closure, parse target-language expressions, move type
+selection into templates, or introduce runtime dependencies on `frozen` or
+`tslgenold`.
 ```
 
 Previous review verdict:
@@ -1042,13 +1076,19 @@ Accept after focused revision and documentation closeout and selected M243
 real scalar emit-return function rendering execution-review. M243
 execution-review returned Accept after focused test/hygiene revision and
 documentation closeout and selected M244 real scalar emit-return matrix
-rendering execution-review.
+rendering execution-review. M244 execution-review returned Accept after
+documentation closeout and selected M245 extension register type spelling
+boundary execution-review. Post-M244 workflow correction then deferred M245
+and inserted M244.5 real primitive project pipeline consolidation before M245
+to remove fixture-shaped pipeline ownership. M244.5 execution-review returned
+Accept with no focused revision required and selected M245 extension register
+type spelling boundary execution-review again.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m243-real-scalar-emit-return-function-rendering-execution-review-loop-prompt.md
+docs/agent/runs/m244-5-real-primitive-project-pipeline-consolidation-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

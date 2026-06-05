@@ -1,4 +1,8 @@
-"""Tiny parsed-source to generated primitive project pipeline."""
+"""M224 tiny/regression-only parsed-source generated project pipeline.
+
+This module preserves the old tiny fixture path for regression coverage only.
+It is not the real selected primitive project generation pipeline.
+"""
 
 from __future__ import annotations
 
