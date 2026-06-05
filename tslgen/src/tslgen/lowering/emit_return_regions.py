@@ -13,6 +13,7 @@ from tslgen.syntax.source_body_regions import (
     SourceBodySpan,
     SourceBodyText,
     SourceBodyKeyword,
+    scan_source_body_text,
 )
 
 
@@ -69,6 +70,47 @@ class EmitReturnLexicalRegionLoweringResult:
         return tuple(item for item in self.items if isinstance(item, EmitReturnOpaqueRegion))
 
 
+@dataclass(frozen=True, slots=True)
+class EmitReturnPayloadRawSegmentAdapter:
+    source_order: int
+    return_directive: LoweredEmitReturnDirective
+    segment: SourceBodyRawSegment
+
+
+@dataclass(frozen=True, slots=True)
+class EmitReturnPayloadRegionAdapter:
+    source_order: int
+    return_directive: LoweredEmitReturnDirective
+    region: SourceBodyLexicalRegionCandidate
+
+
+EmitReturnPayloadRescanItem: TypeAlias = (
+    EmitReturnPayloadRawSegmentAdapter | EmitReturnPayloadRegionAdapter
+)
+
+
+@dataclass(frozen=True, slots=True)
+class EmitReturnPayloadRescanResult:
+    return_directive: LoweredEmitReturnDirective
+    source_text: SourceBodyText
+    items: tuple[EmitReturnPayloadRescanItem, ...]
+    diagnostics: tuple[Diagnostic, ...]
+
+    @property
+    def raw_segments(self) -> tuple[EmitReturnPayloadRawSegmentAdapter, ...]:
+        return tuple(
+            item
+            for item in self.items
+            if isinstance(item, EmitReturnPayloadRawSegmentAdapter)
+        )
+
+    @property
+    def regions(self) -> tuple[EmitReturnPayloadRegionAdapter, ...]:
+        return tuple(
+            item for item in self.items if isinstance(item, EmitReturnPayloadRegionAdapter)
+        )
+
+
 def lower_emit_return_regions(
     scan_result: SourceBodyLexicalScanResult,
 ) -> EmitReturnLexicalRegionLoweringResult:
@@ -106,6 +148,46 @@ def lower_emit_return_regions(
         source_text=scan_result.source_text,
         items=tuple(items),
         diagnostics=tuple(diagnostics),
+    )
+
+
+def rescan_emit_return_payload(
+    return_directive: LoweredEmitReturnDirective,
+) -> EmitReturnPayloadRescanResult:
+    source_text = SourceBodyText.from_span(return_directive.payload_span)
+    scan_result = scan_source_body_text(source_text)
+    if scan_result.diagnostics:
+        return EmitReturnPayloadRescanResult(
+            return_directive=return_directive,
+            source_text=source_text,
+            items=(),
+            diagnostics=scan_result.diagnostics,
+        )
+
+    items: list[EmitReturnPayloadRescanItem] = []
+    for item in scan_result.items:
+        if isinstance(item, SourceBodyRawSegment):
+            items.append(
+                EmitReturnPayloadRawSegmentAdapter(
+                    source_order=item.source_order,
+                    return_directive=return_directive,
+                    segment=item,
+                )
+            )
+            continue
+        items.append(
+            EmitReturnPayloadRegionAdapter(
+                source_order=item.source_order,
+                return_directive=return_directive,
+                region=item,
+            )
+        )
+
+    return EmitReturnPayloadRescanResult(
+        return_directive=return_directive,
+        source_text=source_text,
+        items=tuple(items),
+        diagnostics=(),
     )
 
 

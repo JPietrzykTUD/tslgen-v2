@@ -28364,3 +28364,98 @@ python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m229_outer_tsl_declaration_parser_boundary.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py tslgen/tests/test_m232_return_payload_region_rescan_adapter.py
 find tslgen -type d -name __pycache__ -print
 ```
+
+Result:
+
+M232 extended `tslgen.lowering.emit_return_regions` with a thin return-payload
+region rescan adapter. The adapter consumes an M231 `LoweredEmitReturnDirective`,
+constructs `SourceBodyText.from_span(return_directive.payload_span)`, delegates
+to the accepted M230 `scan_source_body_text` scanner, and wraps the resulting
+M230 raw segments and lexical region candidates with return-directive
+provenance.
+
+M232 added only frozen slotted adapter/result dataclasses:
+`EmitReturnPayloadRawSegmentAdapter`,
+`EmitReturnPayloadRegionAdapter`, and `EmitReturnPayloadRescanResult`. It did
+not add a payload parser, payload-token taxonomy, expression model, recursive
+semantic dispatcher, backend translation, rendering, or generated-project
+work. Malformed nested scans propagate M230 diagnostics unchanged and emit no
+adapter items.
+
+Tests cover real `.tsl` return payloads for raw scalar `left + right`,
+multiline `intrin_compose<...>(...)`, `call<primitive=...>(...)`, and raw
+`*ptr`. Negative tests cover malformed nested lexical regions and prove that
+nested text such as `intrin_compose<...>` inside a `call<...>(...)` payload is
+preserved inside the M230 lexical region payload rather than recursively
+lowered.
+
+Review verdict:
+
+Accepted. Lowering-boundary, evidence, complexity, and diagnostics reviewers
+all returned Accept. Reviewers confirmed M232 is an adapter over M230 scanning,
+not a new payload parser or token language, and that no parser/lowerer/generated
+pipeline modules grew.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m229_outer_tsl_declaration_parser_boundary.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py tslgen/tests/test_m232_return_payload_region_rescan_adapter.py`:
+  exit 0, 44 tests passed.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created `__pycache__` directories.
+
+Next concrete prompt:
+`docs/agent/runs/m233-recursive-tsil-keyword-region-lowering-execution-review-loop-prompt.md`.
+
+### Milestone 233: Recursive TSIL Keyword Region Lowering
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m233-recursive-tsil-keyword-region-lowering-execution-review-loop-prompt.md`.
+
+Goal:
+
+Introduce a shared recursive lowering boundary over M230 lexical regions so
+composed TSIL keywords are handled by structure rather than by pairwise
+context-combination milestones. Raw source spans remain raw; recognized keyword
+regions become nested keyword fragments; keyword-specific consumers can later
+operate on every matching fragment regardless of ancestor context.
+
+Scope:
+
+- Consume `SourceBodyText` or M230 `SourceBodyLexicalScanResult` values.
+- Convert M230 raw segments into raw source fragments preserving spans exactly.
+- Convert M230 lexical region candidates into keyword-region fragments
+  preserving the original region as provenance.
+- Recursively rescan every present M230 child span: selector payload,
+  parenthesized payload, and braced body.
+- Propagate root and child M230 diagnostics without source repair.
+- Add a context-independent extraction/adaptation helper for
+  `SourceBodyKeyword.INTRIN_COMPOSE` fragments that builds existing
+  `BackendIntrinsicRequest(intrinsic_kind="intrin_compose", ...)` values from
+  preserved M230 selector, payload, full-span, and source spans.
+- Cover `intrin_compose` under multiple parents, including `emit_return`,
+  `call`, and a braced control body, to prove the helper is not an
+  `emit_return + intrin_compose` special case.
+
+Out of scope:
+
+Backend intrinsic handoff lowering; modifier semantics; backend value/type
+query lowering; argument splitting; primitive-call resolution; generation or
+control-flow evaluation; direct `intrin<...>(...)` unless accepted by M230
+first; adding new keyword heads beyond accepted M230 heads; expression parsing;
+operator parsing; rendering; generated-project work; changes to
+`outer_parser.py`, `parser.py`, `lowerer.py`, or
+`generated_primitive_pipeline.py`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py tslgen/tests/test_m232_return_payload_region_rescan_adapter.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py
+find tslgen -type d -name __pycache__ -print
+```

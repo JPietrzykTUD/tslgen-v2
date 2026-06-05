@@ -8,7 +8,8 @@ or accepted planning passes.
 
 Milestone 225 is accepted. Milestone 226.5 planning is accepted. Milestone 227
 is accepted. Milestone 228.5 planning is accepted. Milestone 229 is accepted.
-Milestone 230 is accepted. Milestone 231 is accepted.
+Milestone 230 is accepted. Milestone 231 is accepted. Milestone 232 is
+accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -713,38 +714,50 @@ lexical spelling, `.head.name` remains a compatibility spelling property, and
 does not lower `intrin_compose`, primitive calls, casts, operators,
 assignments, backend semantics, rendering, or generated projects.
 
+M232 added the accepted return-payload rescan adapter in
+`tslgen.lowering.emit_return_regions`. It consumes an M231
+`LoweredEmitReturnDirective`, constructs `SourceBodyText.from_span(...)` from
+the raw return payload span, delegates to the existing M230
+`scan_source_body_text` scanner, and wraps the resulting M230 raw segments and
+lexical region candidates with return-directive provenance.
+
+M232 added only thin frozen slotted adapter/result dataclasses:
+`EmitReturnPayloadRawSegmentAdapter`, `EmitReturnPayloadRegionAdapter`, and
+`EmitReturnPayloadRescanResult`. It does not add a payload parser,
+payload-token taxonomy, recursive semantic dispatcher, backend translation,
+rendering, or generated-project behavior. Malformed nested scans propagate M230
+diagnostics unchanged and produce no adapter items.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M232 return payload region rescan adapter execution-review loop.
+Run M233 recursive TSIL keyword region lowering execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m232-return-payload-region-rescan-adapter-execution-review-loop-prompt.md
+docs/agent/runs/m233-recursive-tsil-keyword-region-lowering-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 232: Return Payload Region Rescan Adapter.
+Milestone 233: Recursive TSIL Keyword Region Lowering.
 ```
 
 Latest review verdict:
 
 ```text
-M231 execution-review returned Accept after focused follow-up revision.
-Lowering-boundary review returned Accept. Diagnostics review returned Accept.
-Evidence and complexity reviews initially returned Accept With Follow-Up for
-keyword spelling coupling and custom-head configurability; focused fixes made
-`SourceBodyKeyword` symbolic, made spelling descriptor-owned, added
-`SourceBodyRegionHead.custom(...)`, and both focused rechecks returned Accept.
-Validation for M231: `git diff --check` exit 0 with no output; `python -B -m
+M232 execution-review returned Accept. Lowering-boundary, evidence,
+complexity, and diagnostics reviewers all returned Accept. Reviewers confirmed
+M232 is a thin adapter over M230 scanning, not a new payload parser/token
+language, and that parser/lowerer/generated pipeline modules did not grow.
+Validation for M232: `git diff --check` exit 0 with no output; `python -B -m
 compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no output; required
-pytest bundle exit 0 with 37 tests passed; required `find tslgen -type d -name
+pytest bundle exit 0 with 44 tests passed; required `find tslgen -type d -name
 __pycache__ -print` exit 0 and printed compile/test-created cache
 directories.
 ```
@@ -752,12 +765,14 @@ directories.
 Next expected action:
 
 ```text
-Run the active M232 execution-review loop prompt. Use one write-capable
-executor plus read-only reviewers. Implement only a thin adapter that rescans
-M231 `LoweredEmitReturnDirective.payload_span` values with the existing M230
-scanner and wraps the M230 raw segments/lexical regions with return
-provenance. Preserve raw payload text exactly and do not lower nested payload
-semantics or introduce a new payload parser/token language.
+Run the active M233 execution-review loop prompt. Use one write-capable
+executor plus read-only reviewers. Implement the shared recursive
+keyword-region lowering boundary over M230 lexical regions: raw fragments stay
+raw, keyword regions become recursively nested keyword fragments, and
+`intrin_compose` requests are extracted/adapted wherever they appear in that
+tree. Do not special-case `emit_return + intrin_compose`, run text
+rediscovery, parse expressions, translate modifiers, split arguments, lower
+backend handoff semantics, or render output.
 ```
 
 Previous review verdict:
@@ -839,13 +854,15 @@ execution-review returned Accept With Follow-Ups after focused revision and
 selected M230 source body lexical region boundary. M230 execution-review
 returned Accept after focused revision and selected M231 emit return lexical
 region lowering. M231 execution-review returned Accept after focused
-follow-up revision and selected M232 return payload region rescan adapter.
+follow-up revision and selected M232 return payload region rescan adapter. M232
+execution-review returned Accept and selected M233 recursive TSIL keyword
+region lowering.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m231-emit-return-lexical-region-lowering-execution-review-loop-prompt.md
+docs/agent/runs/m232-return-payload-region-rescan-adapter-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

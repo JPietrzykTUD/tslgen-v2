@@ -1896,6 +1896,12 @@ Consequences:
 - Unknown or unsupported source text should be preserved or diagnosed at the
   documented boundary; it must not be silently repaired, normalized, reordered,
   or guessed.
+- Nested lowerable islands must be handled by recursive token-stream
+  composition, not by adding pairwise context-combination handlers. For
+  example, `intrin_compose` inside `emit_return`, `call`, or a control body is
+  still just an `intrin_compose` island found inside another source-owned span.
+  Future keyword semantics should consume matching keyword tokens wherever they
+  appear in the recursive stream.
 - Earlier exact whole-body prototypes remain evidence, but future work should
   avoid extending that shape-proliferation pattern without a clear product
   reason.
