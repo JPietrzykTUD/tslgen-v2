@@ -28812,7 +28812,7 @@ prompt returns to backend/generated-output work.
 
 Status:
 
-Selected. Planning prompt:
+Accepted. Planning prompt:
 `docs/agent/runs/m237-backend-generated-output-resumption-planning-prompt.md`.
 
 Goal:
@@ -28847,5 +28847,93 @@ Validation:
 
 ```bash
 git diff --check
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M237 audited the accepted generated-output path after the M229-M236
+parser/body/lowering detour. The tiny generated project path works today for a
+narrow scalar `.tsl` fixture: parsed source feeds catalog construction,
+selection, lowering, primitive render plans, primitive templates, generated
+project composition, artifact writing, and after-write C++/Rust build
+verification. The accepted M229-M236 work removed the earlier body-region and
+recursive keyword-discovery blockers, but it did not make the full real
+`fundamental.tsl` x86 intrinsic fixture a safe next slice.
+
+Remaining blockers before compile-tested real intrinsic output include the
+scalar-shaped generated pipeline, old tiny parser bridge, scalar-only render
+adaptation, non-scalar signature/type/header/import/unsafe-body policy, and
+the need to connect already-lowered backend intrinsic body-token results into
+primitive render plans without hiding semantics in templates or Python
+strings.
+
+Planning selected the generated-project source skeleton template boundary as
+the next executable backend/output slice. CMake and Cargo buildsystem files are
+already rendered through supplementary templates, and primitive function/file
+templates are already in place, but `generated_project.py` still assembles
+public headers, profile modules, and smoke tests from C++/Rust source strings
+in Python. M238 should move that remaining generated-project source
+presentation into supplementary templates or template partials while preserving
+the current scalar/profile build verification behavior.
+
+Review verdict:
+
+Accepted With Follow-Ups. Evidence, architecture/boundary, and documentation
+audits accepted with follow-ups. Validation audit initially reported existing
+ignored cache directories; the orchestrator removed those generated cache
+artifacts before final validation. No production code or tests changed in
+M237.
+
+Accepted validation:
+
+- `git diff --check`: exit 0, no output.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+
+### Milestone 238: Generated Project Source Template Boundary
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m238-generated-project-source-template-boundary-execution-review-loop-prompt.md`.
+
+Goal:
+
+Move the remaining generated-project source skeleton presentation out of
+Python and into supplementary C++/Rust templates or template partials, without
+changing backend semantics, lowering, selection, primitive rendering, artifact
+paths, or build verification behavior.
+
+Scope:
+
+- Add C++ and Rust supplementary templates or partial templates for the
+  generated public entry files, profile source files, and smoke tests:
+  `cpp/include/tsl.hpp`, `cpp/include/profiles/*.hpp`,
+  `cpp/tests/smoke.cpp`, `rust/src/lib.rs`, `rust/src/profiles/*.rs`, and
+  `rust/tests/smoke.rs`.
+- Update generated-project rendering so Python builds typed already-decided
+  render values and renders/join template outputs, rather than assembling full
+  C++/Rust headers/modules/tests from raw source-line lists.
+- Preserve existing CMake/Cargo template behavior, profile flags, artifact
+  paths, metadata, deterministic artifact ordering, manifest-clean writing,
+  and scalar/profile compile/test verification.
+- Add focused diagnostics for missing or invalid generated-project source
+  templates and semantic/unresolved template fields.
+- Keep C++ and Rust in parity.
+
+Out of scope:
+
+Lowering changes; parser/catalog/selector changes; real x86 intrinsic fixture;
+intrinsic translation/render bridge; primitive-call semantics; dependency
+closure; broad template engine redesign; backend semantic decisions in
+templates; source repair; target-language parsing; runtime dependency on
+`frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m191_generated_project_smoke_boundary.py tslgen/tests/test_m217_primitive_template_boundary.py tslgen/tests/test_m223_first_real_generated_primitive.py tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m238_generated_project_source_template_boundary.py
 find tslgen -type d -name __pycache__ -print
 ```

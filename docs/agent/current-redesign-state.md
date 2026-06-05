@@ -794,45 +794,44 @@ planning.
 Current required action:
 
 ```text
-Run M237 backend generated-output resumption planning.
+Run M238 generated-project source template boundary execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m237-backend-generated-output-resumption-planning-prompt.md
+docs/agent/runs/m238-generated-project-source-template-boundary-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 237: Backend Generated-Output Resumption Planning.
+Milestone 238: Generated Project Source Template Boundary.
 ```
 
 Latest review verdict:
 
 ```text
-M236 execution-review returned Accept With Follow-Ups. Lowering-boundary and
-complexity reviews accepted with no findings. Regression review accepted with
-one closeout follow-up to record the changed diagnostic behavior in the
-behavioral spec; the Post-M236 note was added. Documentation review accepted
-after state, roadmap, behavioral spec, and M237 prompt closeout. Validation for
-M236: `git diff --check` exit 0 with no output; `python -B -m compileall -q
-tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest bundle
-exit 0 with 60 tests passed; required
-`find tslgen -type d -name __pycache__ -print` exit 0 and printed
-compile/test-created cache directories.
+M237 planning returned Accept With Follow-Ups. Evidence, architecture/boundary,
+and documentation audits accepted with follow-ups. Validation audit initially
+reported existing ignored cache directories; the orchestrator removed those
+generated cache artifacts before final validation. M237 changed only roadmap,
+state, and next-prompt documentation. Validation for M237: `git diff --check`
+exit 0 with no output; required
+`find tslgen -type d -name __pycache__ -print` exit 0 with no output.
 ```
 
 Next expected action:
 
 ```text
-Run the active M237 planning prompt. Use read-only subagents. Reassess the
-accepted backend/generated-output path after the M229-M236 parser/body/lowering
-detour, decide whether the real x86 intrinsic fixture can resume, and select
-exactly one next executable backend/output slice. Do not implement code in
-M237 and do not create another primitive-call cleanup prompt unless the
-planning review finds a concrete backend-output blocker caused by M236.
+Run the active M238 execution-review loop. Use one write-capable executor and
+read-only review/audit subagents. Move generated-project source skeleton
+presentation for C++ and Rust public entries, profile files, and smoke tests
+out of raw Python source assembly and into supplementary templates or
+presentation-only partials. Preserve current scalar/profile generated project
+artifacts, artifact writing, and build verification. Do not reopen lowering,
+do not implement the real x86 intrinsic fixture, and do not add an intrinsic
+translation/render bridge in M238.
 ```
 
 Previous review verdict:
@@ -923,12 +922,14 @@ revision and selected M235 primitive-call fragment adapter consolidation. M235
 execution-review returned Accept With Follow-Ups and selected M236 recursive
 payload fragment diagnostic propagation. M236 execution-review returned Accept
 With Follow-Ups and selected M237 backend generated-output resumption planning.
+M237 planning returned Accept With Follow-Ups and selected M238
+generated-project source template boundary execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m236-recursive-payload-fragment-diagnostic-propagation-execution-review-loop-prompt.md
+docs/agent/runs/m237-backend-generated-output-resumption-planning-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
