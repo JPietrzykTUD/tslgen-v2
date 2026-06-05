@@ -3314,3 +3314,58 @@ Consequences:
   receive new fixture-specific regex fallback logic in M229.
 - TSIL payload text remains source-owned raw text until accepted body/token
   lowerers consume exact lexical regions.
+
+## ADR-067: Primitive Profile Artifact Wrappers Are Template-Backed Presentation
+
+Status: Accepted.
+
+Context:
+
+M240 proved that synthetic already-lowered intrinsic handoff values can render
+primitive profile artifacts, compose into the generated project skeleton, write
+through the artifact writer, and verify through C++/Rust build commands. That
+path exposed one remaining presentation leak: primitive replacement artifacts
+must carry the profile-file wrapper expected by generated smoke tests, but
+accepted tests and the tiny generated pipeline still supplied pieces of that
+wrapper as C++/Rust strings in Python.
+
+The wrapper is broader than the active-profile constants. It includes C++
+include lines, namespace/profile metadata, root active-profile constants,
+Rust imports, Rust profile constants, and the placement of already-rendered
+primitive declarations/definitions inside the profile file.
+
+Decision:
+
+Primitive profile artifact wrappers are a backend/output presentation boundary.
+They live under:
+
+```text
+supplementary/templates/cpp/primitive_profile/
+supplementary/templates/rust/primitive_profile/
+```
+
+Python supplies typed generated-profile render values and already-rendered
+primitive presentation values. The primitive-profile templates format wrapper
+presentation only. They do not select primitives, compute dependencies,
+evaluate TSIL, choose intrinsic/type spellings, inspect catalog objects, or
+repair source. Template fields that look like unresolved semantic/source data
+must be rejected before rendering.
+
+The existing primitive-template renderer remains the final file formatter for
+profile artifacts where useful; the new primitive-profile boundary prepares
+the wrapper values that feed it. Existing renderer bridges may delegate to the
+primitive-profile boundary when they have a selected typed profile model, but
+they must not grow into selection, parsing, dependency planning, or generated
+project orchestration.
+
+Consequences:
+
+- M241 moves active-profile constants and profile-file wrapper text out of the
+  tiny generated pipeline and focused intrinsic verification fixtures.
+- Future primitive profile artifacts should be built from typed profile facts
+  plus already-rendered primitive declarations/definitions, not ad hoc
+  namespace/module/include/import strings in Python.
+- C++ and Rust profile wrapper behavior stays in parity.
+- The first real x86 fixture can now reuse the profile artifact wrapper
+  boundary instead of rediscovering profile scaffolding in a fixture-specific
+  pipeline.

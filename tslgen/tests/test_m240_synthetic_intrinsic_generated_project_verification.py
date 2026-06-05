@@ -23,6 +23,7 @@ from tslgen.pipeline.build_verifier import (
 from tslgen.pipeline.generated_profiles import select_generated_profiles
 from tslgen.pipeline.machine_profiles import load_machine_feature_profile_catalog
 from tslgen.rendering import (
+    CppPrimitiveProfileInclude,
     IntrinsicBodyTokenProfileRenderContext,
     PrimitiveArtifactLogicalPath,
     PrimitiveBackendId,
@@ -30,9 +31,6 @@ from tslgen.rendering import (
     PrimitiveFunctionParameterListText,
     PrimitiveFunctionResultTypeText,
     PrimitiveProfileName,
-    RenderedIncludeLine,
-    RenderedModuleText,
-    RenderedNamespaceText,
     build_generated_project_render_model,
     compose_generated_primitive_project_artifacts,
     render_generated_project_skeleton,
@@ -153,11 +151,11 @@ def _composed_synthetic_intrinsic_project(model) -> ArtifactSet:
 
     cpp = render_intrinsic_body_token_profile_artifact(
         _SUPPLEMENTARY_ROOT,
-        _cpp_context(),
+        _cpp_context(model),
     )
     rust = render_intrinsic_body_token_profile_artifact(
         _SUPPLEMENTARY_ROOT,
-        _rust_context(),
+        _rust_context(model),
     )
     assert cpp.diagnostics == ()
     assert rust.diagnostics == ()
@@ -174,47 +172,32 @@ def _composed_synthetic_intrinsic_project(model) -> ArtifactSet:
     return composed.artifacts
 
 
-def _cpp_context() -> IntrinsicBodyTokenProfileRenderContext:
+def _cpp_context(model) -> IntrinsicBodyTokenProfileRenderContext:
     return IntrinsicBodyTokenProfileRenderContext(
         backend_id=PrimitiveBackendId("cpp"),
         logical_path=PrimitiveArtifactLogicalPath("cpp/include/profiles/sse2.hpp"),
         profile_name=PrimitiveProfileName(_PROFILE),
+        profile=model.cpp.profiles[0],
         handoff=_handoff(),
         function_name=PrimitiveFunctionNameText("add_sse2_si32"),
         result_type=PrimitiveFunctionResultTypeText("__m128i"),
         parameters=PrimitiveFunctionParameterListText("__m128i left, __m128i right"),
-        includes=(RenderedIncludeLine("#include <immintrin.h>"),),
-        namespace_open=RenderedNamespaceText(
-            "namespace tsl::profiles::sse2 {\n"
-            'inline constexpr const char* name = "sse2";\n'
-            'inline constexpr const char* family = "x86";'
-        ),
-        namespace_close=RenderedNamespaceText(
-            "}  // namespace tsl::profiles::sse2\n\n"
-            "namespace tsl {\n"
-            "inline constexpr const char* active_profile = profiles::sse2::name;\n"
-            "inline constexpr const char* active_profile_family = "
-            "profiles::sse2::family;\n"
-            "}  // namespace tsl"
-        ),
+        cpp_profile_includes=(CppPrimitiveProfileInclude("immintrin.h"),),
     )
 
 
-def _rust_context() -> IntrinsicBodyTokenProfileRenderContext:
+def _rust_context(model) -> IntrinsicBodyTokenProfileRenderContext:
     return IntrinsicBodyTokenProfileRenderContext(
         backend_id=PrimitiveBackendId("rust"),
         logical_path=PrimitiveArtifactLogicalPath("rust/src/profiles/sse2.rs"),
         profile_name=PrimitiveProfileName(_PROFILE),
+        profile=model.rust.profiles[0],
         handoff=_handoff(prefix="unsafe { ", suffix=" }"),
         function_name=PrimitiveFunctionNameText("add_sse2_si32"),
         result_type=PrimitiveFunctionResultTypeText("core::arch::x86_64::__m128i"),
         parameters=PrimitiveFunctionParameterListText(
             "left: core::arch::x86_64::__m128i, "
             "right: core::arch::x86_64::__m128i"
-        ),
-        module_open=RenderedModuleText(
-            'pub const ACTIVE_PROFILE: &str = "sse2";\n'
-            'pub const ACTIVE_PROFILE_FAMILY: &str = "x86";'
         ),
         rust_architecture_module=RustArchitectureModule("x86_64"),
     )

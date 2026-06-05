@@ -12,7 +12,7 @@ Milestone 230 is accepted. Milestone 231 is accepted. Milestone 232 is
 accepted. Milestone 233 is accepted. Milestone 234 is accepted. Milestone 235
 is accepted. Milestone 236 is accepted. Milestone 237 planning is accepted.
 Milestone 238 is accepted. Milestone 239 is accepted. Milestone 240 is
-accepted.
+accepted. Milestone 241 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -833,55 +833,75 @@ intrinsic handoffs for both backends. M240 is test-only over accepted
 backend/output boundaries; it does not parse `.tsl`, call `Lowerer`, select
 real corpus primitives, execute dependency closure, reopen TSIL keyword
 handling, or inspect `frozen/` / `tslgenold`. M240 follow-up: primitive
-profile artifacts that replace skeleton profile files still need active-profile
-prelude presentation, currently supplied by ad hoc strings in tests and the
-tiny pipeline; M241 should move that prelude into a typed template-backed
-boundary.
+profile artifacts that replace skeleton profile files still need a
+template-backed profile artifact wrapper, currently supplied in pieces by ad
+hoc strings in tests and the tiny pipeline; M241 should move that wrapper into
+a typed template-backed boundary.
+
+M241 added `tslgen.rendering.primitive_profile_artifacts`, a focused primitive
+profile artifact presentation boundary. It consumes typed generated-profile
+render values plus already-rendered primitive presentation and renders C++ and
+Rust profile wrapper presentation through supplementary templates under
+`supplementary/templates/{cpp,rust}/primitive_profile/`. The accepted tiny
+parsed generated pipeline and synthetic intrinsic generated-project
+verification path now get active-profile/profile wrapper presentation from
+that boundary instead of hand-built namespace/module/include/import strings.
+M241 did not reopen lowering, parser/catalog/selector work, dependency
+closure, real corpus selection, generated-project composition, artifact
+writing, or build verification.
 
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M241 primitive profile prelude template boundary execution-review loop.
+Run M242 real corpus lowering completion gate execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m241-primitive-profile-prelude-template-boundary-execution-review-loop-prompt.md
+docs/agent/runs/m242-real-corpus-lowering-completion-gate-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 241: Primitive Profile Prelude Template Boundary.
+Milestone 242: Real Corpus Lowering Completion Gate.
 ```
 
 Latest review verdict:
 
 ```text
-M240 execution-review returned Accept after documentation closeout.
-Architecture, evidence, test, and validation reviews accepted. Documentation
-review first requested the normal roadmap/state/next-prompt closeout; those
-updates were completed. Reviewers confirmed M240 is test-only over accepted
-boundaries, stays synthetic, keeps C++ and Rust in parity, and does not reopen
-lowering or real corpus selection. Validation for M240: `git diff --check`
-exit 0 with no output; `python -B -m compileall -q tslgen/src/tslgen
-tslgen/tests` exit 0 with no output; required pytest bundle exit 0 with 28
-tests passed; final `find tslgen -type d -name __pycache__ -print` exit 0 with
-no output after removing compile/test-created cache directories.
+M241 execution-review returned Accept after focused test coverage revision and
+documentation closeout. Architecture, evidence, validation, and focused test
+re-review accepted. Documentation review first requested the normal roadmap,
+behavioral spec, design decision, state, and next-prompt closeout; those
+updates were completed. Test review first requested explicit C++
+`active_profile_family` coverage and Rust missing/invalid template diagnostic
+coverage; focused revision added those checks. Validation for M241:
+`git diff --check` exit 0 with no output; `python -B -m compileall -q
+tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest bundle
+exit 0 with 34 tests passed; final `find tslgen -type d -name __pycache__
+-print` exit 0 with no output after removing compile/test-created cache
+directories.
 ```
 
 Next expected action:
 
 ```text
-Run the active M241 execution-review loop. Use one write-capable executor and
-read-only review/audit subagents. Move the active-profile prelude required by
-primitive profile replacement artifacts into a typed supplementary-template
-boundary for C++ and Rust. Do not reopen lowering, parser/catalog/selector
-work, TSIL keyword handling, primitive-call semantics, dependency closure, or
-the full real x86 corpus fixture.
+Run the active M242 execution-review loop. Use one write-capable executor and
+read-only review/audit subagents. Run one real-corpus lowering completion gate
+over `tsldata/primitives/**/*.tsl`: parse real primitive files, discover
+generation-relevant TSIL keyword islands through accepted lexical/recursive
+lowering boundaries, lower supported islands into typed facts/handoffs or
+diagnostics, and produce deterministic characterization counts with source
+provenance. Do not render artifacts, assemble backend intrinsic names, write
+generated projects, run build verification, implement dependency closure,
+perform primitive selection, or add pairwise keyword-combination special cases.
+If the gate passes, the next prompt must pivot to backend/rendering; if it
+finds a missing generation-relevant TSIL family, the next prompt must be one
+focused lowering follow-up for that family.
 ```
 
 Previous review verdict:
@@ -979,14 +999,16 @@ selected M239 backend intrinsic body-token render bridge execution-review.
 M239 execution-review returned Accept With Follow-Ups after focused test
 revision and selected M240 synthetic intrinsic generated-project verification
 execution-review. M240 execution-review returned Accept after documentation
-closeout and selected M241 primitive profile prelude template boundary
-execution-review.
+closeout and selected M241 primitive profile artifact presentation boundary
+execution-review. M241 execution-review returned Accept after focused test
+coverage revision and documentation closeout and selected M242 real corpus
+lowering completion gate execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m240-synthetic-intrinsic-generated-project-verification-execution-review-loop-prompt.md
+docs/agent/runs/m241-primitive-profile-artifact-presentation-boundary-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

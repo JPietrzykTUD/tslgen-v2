@@ -11,6 +11,8 @@ from tslgen.pipeline.build_verifier import (
 from tslgen.pipeline.generated_profiles import select_generated_profiles
 from tslgen.pipeline.machine_profiles import load_machine_feature_profile_catalog
 from tslgen.rendering import (
+    CppPrimitiveProfileInclude,
+    PrimitiveProfileArtifactRenderContext,
     PrimitiveArtifactLogicalPath,
     PrimitiveBackendId,
     PrimitiveProfileName,
@@ -18,14 +20,12 @@ from tslgen.rendering import (
     PrimitiveRenderPlanPrimitiveId,
     PrimitiveRenderPlanRecord,
     PrimitiveRenderSortKey,
-    RenderedIncludeLine,
-    RenderedNamespaceText,
     RenderedPrimitiveDefinitionText,
     adapt_primitive_render_plans,
     build_generated_project_render_model,
     compose_generated_primitive_project_artifacts,
     render_generated_project_skeleton,
-    render_primitive_templates,
+    render_primitive_profile_artifacts,
     scalar_profile_replacement_policy,
 )
 
@@ -45,9 +45,9 @@ def test_m223_renders_tiny_cpp_and_rust_primitive_profile_artifacts() -> None:
         "cpp/include/profiles/scalar.hpp",
         "rust/src/profiles/scalar.rs",
     )
-    assert "inline constexpr const char* active_profile = \"scalar\";" in by_path[
-        "cpp/include/profiles/scalar.hpp"
-    ]
+    assert "inline constexpr const char* active_profile = profiles::scalar::name;" in (
+        by_path["cpp/include/profiles/scalar.hpp"]
+    )
     assert "inline std::int32_t add_one(std::int32_t value)" in by_path[
         "cpp/include/profiles/scalar.hpp"
     ]
@@ -296,12 +296,7 @@ def _composed_tiny_project_artifacts():
 
 
 def _render_scalar_skeleton():
-    selection = select_generated_profiles(_catalog())
-    assert selection.diagnostics == ()
-    assert selection.profile_set is not None
-    model_result = build_generated_project_render_model(selection.profile_set)
-    assert model_result.diagnostics == ()
-    assert model_result.model is not None
+    model_result = _scalar_model()
     render_result = render_generated_project_skeleton(
         _SUPPLEMENTARY_ROOT,
         model_result.model,
@@ -310,17 +305,54 @@ def _render_scalar_skeleton():
     return model_result.model, render_result.artifacts
 
 
+def _scalar_model():
+    selection = select_generated_profiles(_catalog())
+    assert selection.diagnostics == ()
+    assert selection.profile_set is not None
+    model_result = build_generated_project_render_model(selection.profile_set)
+    assert model_result.diagnostics == ()
+    assert model_result.model is not None
+    return model_result
+
+
 def _render_tiny_primitive_artifacts() -> ArtifactSet:
     plan_result = adapt_primitive_render_plans(
         (_tiny_cpp_scalar_plan(), _tiny_rust_scalar_plan())
     )
     assert plan_result.diagnostics == ()
-    render_result = render_primitive_templates(
+    model = _scalar_model().model
+    assert model is not None
+    render_result = render_primitive_profile_artifacts(
         _SUPPLEMENTARY_ROOT,
-        plan_result.contexts,
+        tuple(_profile_context_from_plan(model, plan) for plan in plan_result.plans),
     )
     assert render_result.diagnostics == ()
     return render_result.artifacts
+
+
+def _profile_context_from_plan(model, plan) -> PrimitiveProfileArtifactRenderContext:
+    if plan.backend_id.text == "cpp":
+        return PrimitiveProfileArtifactRenderContext(
+            backend_id=plan.backend_id,
+            profile_name=plan.profile_name,
+            logical_path=plan.logical_path,
+            profile=model.cpp.profiles[0],
+            cpp_includes=(CppPrimitiveProfileInclude("cstdint"),),
+            primitive_definitions=tuple(
+                definition
+                for record in plan.primitives
+                for definition in record.definitions
+            ),
+        )
+    return PrimitiveProfileArtifactRenderContext(
+        backend_id=plan.backend_id,
+        profile_name=plan.profile_name,
+        logical_path=plan.logical_path,
+        profile=model.rust.profiles[0],
+        primitive_definitions=tuple(
+            definition for record in plan.primitives for definition in record.definitions
+        ),
+    )
 
 
 def _tiny_cpp_scalar_plan() -> PrimitiveRenderPlan:
@@ -328,18 +360,12 @@ def _tiny_cpp_scalar_plan() -> PrimitiveRenderPlan:
         backend_id=PrimitiveBackendId("cpp"),
         profile_name=PrimitiveProfileName("scalar"),
         logical_path=PrimitiveArtifactLogicalPath("cpp/include/profiles/scalar.hpp"),
-        includes=(RenderedIncludeLine("#include <cstdint>"),),
-        namespace_open=RenderedNamespaceText("namespace tsl {"),
-        namespace_close=RenderedNamespaceText("}  // namespace tsl"),
         primitives=(
             PrimitiveRenderPlanRecord(
                 primitive_id=PrimitiveRenderPlanPrimitiveId("add_one.si32"),
                 presentation_sort_key=PrimitiveRenderSortKey("add_one.si32"),
                 definitions=(
                     RenderedPrimitiveDefinitionText(
-                        'inline constexpr const char* active_profile = "scalar";\n'
-                        "inline constexpr const char* active_profile_family = "
-                        '"generic";\n'
                         "inline std::int32_t add_one(std::int32_t value) {\n"
                         "  return value + 1;\n"
                         "}"
@@ -361,8 +387,6 @@ def _tiny_rust_scalar_plan() -> PrimitiveRenderPlan:
                 presentation_sort_key=PrimitiveRenderSortKey("add_one.si32"),
                 definitions=(
                     RenderedPrimitiveDefinitionText(
-                        'pub const ACTIVE_PROFILE: &str = "scalar";\n'
-                        'pub const ACTIVE_PROFILE_FAMILY: &str = "generic";\n'
                         "pub fn add_one(value: i32) -> i32 {\n"
                         "    value + 1\n"
                         "}"

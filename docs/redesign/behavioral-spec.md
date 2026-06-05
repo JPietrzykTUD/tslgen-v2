@@ -214,6 +214,56 @@ the full `fundamental.tsl` x86 fixture, generated-project composition,
 artifact writing, build verification, lowering changes, parser changes, or new
 backend semantics.
 
+### M241 Primitive Profile Artifact Presentation Boundary
+
+Milestone 241 adds a focused primitive profile artifact presentation boundary.
+The boundary consumes already-decided generated profile render values plus
+already-rendered primitive declarations, definitions, and optional body text.
+It renders C++ and Rust profile-file wrapper presentation through
+supplementary templates under:
+
+```text
+supplementary/templates/cpp/primitive_profile/
+supplementary/templates/rust/primitive_profile/
+```
+
+The boundary owns profile-file wrapper presentation for primitive replacement
+artifacts:
+
+- C++ include lines, profile namespace open/close text,
+  `tsl::active_profile`, `tsl::active_profile_family`, and already-rendered
+  primitive declarations/definitions.
+- Rust import lines, profile module prelude text, `ACTIVE_PROFILE`,
+  `ACTIVE_PROFILE_FAMILY`, and already-rendered primitive definitions.
+
+Templates may format only already-decided profile presentation fields such as
+profile name, family, namespace/file stem, Rust module, include target, import
+path, and already-rendered primitive text. They must not decide primitive
+selection, dependency closure, feature gating, type/intrinsic selection,
+backend translation, TSIL parsing, lowering, or source repair.
+
+M241 reports invalid primitive-profile templates before returning artifacts:
+
+- `TSL-PRIMITIVE-PROFILE-MISSING-TEMPLATE` for a missing required
+  primitive-profile template.
+- `TSL-PRIMITIVE-PROFILE-SEMANTIC-FIELD` for template fields that look like
+  unresolved semantic/source data.
+- `TSL-PRIMITIVE-PROFILE-UNKNOWN-FIELD` for unsupported template fields.
+- `TSL-PRIMITIVE-PROFILE-UNSUPPORTED-FIELD-SHAPE` for compound formatting
+  forms such as dotted or indexed fields.
+- `TSL-PRIMITIVE-PROFILE-WRONG-BACKEND-FIELD` when C++ contexts carry Rust
+  imports or Rust contexts carry C++ includes.
+- `TSL-PRIMITIVE-PROFILE-UNSUPPORTED-BACKEND` for non-C++/Rust primitive
+  profile artifact contexts.
+
+M241 updates the accepted tiny scalar generated pipeline and the synthetic
+intrinsic generated-project verification path so their profile replacement
+artifacts get wrapper presentation from the new boundary instead of ad hoc
+C++/Rust namespace, module, include, import, or active-profile strings. It
+does not reopen lowering, parser/catalog/selector work, primitive-call
+semantics, dependency closure, real corpus selection, generated-project
+composition policy, artifact writing, or build verification.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

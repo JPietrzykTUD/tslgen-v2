@@ -1,4 +1,4 @@
-# M241 Primitive Profile Prelude Template Boundary Execution Review Loop Prompt
+# M241 Primitive Profile Artifact Presentation Boundary Execution Review Loop Prompt
 
 Execute this prompt only when `docs/agent/current-redesign-state.md` points
 here and records M240 as accepted.
@@ -30,13 +30,13 @@ verifier. It stayed synthetic and did not reopen lowering or real corpus
 selection.
 
 M240 also exposed a concrete profile-artifact presentation boundary: primitive
-profile artifacts replace skeleton profile files, so they must carry the
-active-profile prelude expected by generated smoke tests. Today that prelude is
-still duplicated as ad hoc C++/Rust presentation text in focused tests and the
-tiny generated pipeline.
+profile artifacts replace skeleton profile files, so they must own the full
+profile-file presentation wrapper expected by generated smoke tests. Today
+parts of that wrapper are still duplicated as ad hoc C++/Rust presentation text
+in focused tests and the tiny generated pipeline.
 
 Do not reopen lowering in M241. The task is a backend/rendering presentation
-boundary cleanup.
+boundary cleanup for the primitive profile artifact wrapper.
 
 ## Read First
 
@@ -63,32 +63,39 @@ boundary cleanup.
 
 ## Goal
 
-Move primitive profile active-profile prelude presentation into a focused,
-typed, template-backed boundary:
+Move primitive profile artifact presentation into a focused, typed,
+template-backed boundary:
 
 ```text
 already-decided generated profile render values
--> C++/Rust primitive profile prelude templates
--> RenderedNamespaceText / RenderedModuleText
++ already-rendered primitive declarations/definitions/body text
+-> C++/Rust primitive profile artifact templates
+-> primitive profile ArtifactSet
+   or RenderedNamespaceText / RenderedModuleText used by the existing templates
 -> existing primitive profile templates
 ```
 
 This removes duplicated C++/Rust profile-scaffolding strings from tests and
 the tiny generated pipeline while preserving the accepted generated project
-behavior.
+behavior. The milestone should be broader than just the active-profile
+constants: it should own the small wrapper around primitive profile files.
 
 ## Scope
 
-Implement the smallest boundary that proves:
+Implement the smallest boundary that proves primitive profile replacement
+artifacts have a single template-backed presentation owner:
 
-- C++ primitive profile artifacts can get their profile namespace metadata and
-  root `tsl::active_profile` / `tsl::active_profile_family` prelude from
-  supplementary templates or template partials.
-- Rust primitive profile artifacts can get `ACTIVE_PROFILE` and
-  `ACTIVE_PROFILE_FAMILY` from supplementary templates or template partials.
+- C++ primitive profile artifacts can get their profile includes, namespace
+  open/close text, profile namespace metadata, root `tsl::active_profile` /
+  `tsl::active_profile_family` constants, and primitive declarations/
+  definitions from supplementary templates or template partials.
+- Rust primitive profile artifacts can get their imports, module wrapper,
+  `ACTIVE_PROFILE` / `ACTIVE_PROFILE_FAMILY` constants, and primitive
+  definitions from supplementary templates or template partials.
 - The helper consumes already-decided typed generated-profile render values,
-  not raw `.tsl`, source-body text, selected primitive objects, or backend
-  semantic requests.
+  already-rendered primitive presentation values, and explicit artifact paths;
+  it does not consume raw `.tsl`, source-body text, selected primitive objects,
+  or backend semantic requests.
 - Existing M223/M224/M240 generated outputs and write/build verification
   behavior remain compatible.
 - C++ and Rust stay in parity.
@@ -105,13 +112,16 @@ supplementary/templates/rust/primitive_profile/
 
 - Add a small rendering helper that accepts typed profile presentation values
   already present in generated-project render models, such as profile name,
-  family, file stem / namespace, and Rust module/profile feature values.
-- Return existing typed presentation wrappers (`RenderedNamespaceText`,
-  `RenderedModuleText`) or a small typed result around those wrappers plus
-  diagnostics.
+  family, file stem / namespace, Rust module/profile feature values, and
+  already-rendered primitive presentation text.
+- Return either primitive profile `ArtifactSet` values directly, or existing
+  typed presentation wrappers (`RenderedNamespaceText`, `RenderedModuleText`)
+  feeding the existing primitive profile templates. Pick the smaller shape that
+  removes duplicated wrapper text without changing semantic boundaries.
 
 If another shape is clearly smaller, keep the same boundary: typed profile
-facts in, template-rendered presentation wrappers out.
+facts plus already-rendered primitive presentation in, template-rendered
+profile artifacts or wrappers out.
 
 ## Guardrails
 
@@ -125,12 +135,13 @@ facts in, template-rendered presentation wrappers out.
 - Do not change generated-project composition policy unless a blocking bug in
   the existing replacement contract is proven. The expected slice should use
   the existing replacement contract.
-- Do not add C++/Rust profile-prelude source strings to Python production code.
-  Tests may assert expected output strings, but production presentation should
-  come from supplementary templates.
+- Do not add C++/Rust primitive profile wrapper source strings to Python
+  production code. Tests may assert expected output strings, but production
+  presentation should come from supplementary templates.
 - Do not hide semantic decisions in templates. Templates may format already
-  decided profile names, family names, namespaces/modules, and active-profile
-  constants only.
+  decided profile names, family names, namespaces/modules, includes/imports,
+  active-profile constants, and already-rendered primitive declarations/
+  definitions only.
 - Do not parse target-language expressions, statements, returns, assignments,
   braces, semicolons, or operators in renderers.
 - Do not grow `tslgen.rendering.intrinsic_body_token_bridge` into this helper.
@@ -141,25 +152,27 @@ facts in, template-rendered presentation wrappers out.
 Add focused tests, likely in:
 
 ```text
-tslgen/tests/test_m241_primitive_profile_prelude_template_boundary.py
+tslgen/tests/test_m241_primitive_profile_artifact_presentation_boundary.py
 ```
 
 Cover:
 
-- C++ prelude rendering from typed profile values through supplementary
-  templates.
-- Rust prelude rendering from typed profile values through supplementary
-  templates.
-- Missing prelude template diagnostics.
-- Unknown/semantic field diagnostics for prelude templates, consistent with
-  existing template-boundary policy.
-- M223/M224/M240 behavior no longer relies on ad hoc active-profile prelude
-  strings in tests or `generated_primitive_pipeline.py`.
+- C++ primitive profile artifact rendering from typed profile values and
+  already-rendered primitive presentation through supplementary templates.
+- Rust primitive profile artifact rendering from typed profile values and
+  already-rendered primitive presentation through supplementary templates.
+- Missing primitive-profile template diagnostics.
+- Unknown/semantic field diagnostics for primitive-profile templates,
+  consistent with existing template-boundary policy.
+- M223/M224/M240 behavior no longer relies on ad hoc active-profile prelude,
+  namespace/module wrapper, include/import, or profile scaffolding strings in
+  tests or `generated_primitive_pipeline.py`.
 - Existing generated project write/build verification still passes for the
   tiny scalar project and the synthetic `sse2` intrinsic project.
 
-Keep the slice narrow. Do not convert unrelated primitive rendering or
-generated-project template behavior.
+Keep the slice bounded to primitive profile artifact presentation. Do not
+convert unrelated generated-project skeleton behavior, buildsystem behavior, or
+backend semantic translation.
 
 ## Out Of Scope
 
@@ -179,7 +192,7 @@ Run:
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m223_first_real_generated_primitive.py tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m238_generated_project_source_template_boundary.py tslgen/tests/test_m240_synthetic_intrinsic_generated_project_verification.py tslgen/tests/test_m241_primitive_profile_prelude_template_boundary.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m223_first_real_generated_primitive.py tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m238_generated_project_source_template_boundary.py tslgen/tests/test_m240_synthetic_intrinsic_generated_project_verification.py tslgen/tests/test_m241_primitive_profile_artifact_presentation_boundary.py
 find tslgen -type d -name __pycache__ -print
 ```
 
@@ -190,14 +203,14 @@ and rerun the final `find` command.
 
 After implementation and validation, run read-only subagents:
 
-1. Architecture/boundary reviewer: profile prelude presentation is template
-   backed, typed, and does not reopen lowering/parser/catalog/selection or
-   template-side semantics.
+1. Architecture/boundary reviewer: primitive profile artifact presentation is
+   template backed, typed, and does not reopen lowering/parser/catalog/
+   selection or template-side semantics.
 2. Evidence reviewer: M241 stays compatible with M223/M224/M238/M240 behavior
    and does not implement the full real x86 corpus fixture.
 3. Test reviewer: C++/Rust parity, missing/invalid template diagnostics,
-   removal of ad hoc prelude strings, deterministic output, and write/verify
-   coverage are adequate.
+   removal of ad hoc profile wrapper strings, deterministic output, and
+   write/verify coverage are adequate.
 4. Documentation reviewer: roadmap/state/design-doc consistency and follow-ups
    are accurate.
 5. Validation auditor: exact validation results and workspace hygiene.

@@ -29247,38 +29247,44 @@ Follow-up:
 
 M240 exposed a concrete presentation boundary that should be cleaned up before
 the next real corpus fixture attempt: profile replacement artifacts must carry
-the active-profile prelude expected by the generated smoke tests. Existing
-accepted tests and the tiny generated pipeline currently supply those C++/Rust
-profile constants with ad hoc presentation strings. The next slice should move
-that active-profile prelude into a typed, template-backed primitive profile
-prelude boundary so future primitive artifacts do not duplicate C++/Rust
-profile scaffolding in Python.
+the primitive profile wrapper expected by the generated smoke tests. Existing
+accepted tests and the tiny generated pipeline currently supply pieces of that
+C++/Rust profile scaffolding with ad hoc presentation strings. The next slice
+should move the primitive profile artifact wrapper into a typed,
+template-backed boundary so future primitive artifacts do not duplicate
+C++/Rust profile scaffolding in Python.
 
-### Milestone 241: Primitive Profile Prelude Template Boundary
+### Milestone 241: Primitive Profile Artifact Presentation Boundary
 
 Status:
 
-Selected. Execution-review loop prompt:
-`docs/agent/runs/m241-primitive-profile-prelude-template-boundary-execution-review-loop-prompt.md`.
+Accepted. Execution-review loop prompt:
+`docs/agent/runs/m241-primitive-profile-artifact-presentation-boundary-execution-review-loop-prompt.md`.
 
 Goal:
 
-Move the active-profile prelude required by primitive profile replacement
-artifacts into a focused typed/template boundary for C++ and Rust, preserving
-M223/M224/M240 behavior while removing ad hoc C++/Rust profile-scaffolding
-strings from tests and the tiny generated pipeline.
+Move the primitive profile artifact wrapper required by primitive profile
+replacement artifacts into a focused typed/template boundary for C++ and Rust,
+preserving M223/M224/M240 behavior while removing ad hoc C++/Rust
+profile-scaffolding strings from tests and the tiny generated pipeline.
 
 Scope:
 
 - Add C++ and Rust supplementary template or partial-template assets for the
-  primitive profile prelude required when primitive artifacts replace generated
-  skeleton profile files.
+  primitive profile artifact wrapper required when primitive artifacts replace
+  generated skeleton profile files.
+- Cover C++ includes, namespace/profile wrapper text, `tsl::active_profile`,
+  `tsl::active_profile_family`, and primitive declarations/definitions.
+- Cover Rust imports, module/profile wrapper text, `ACTIVE_PROFILE`,
+  `ACTIVE_PROFILE_FAMILY`, and primitive definitions.
 - Add a small typed helper that consumes already-decided generated profile
   render values, such as profile name, family, C++ namespace/file stem, and
-  Rust module/profile feature values, and produces `RenderedNamespaceText` /
-  `RenderedModuleText` values suitable for primitive profile rendering.
+  Rust module/profile feature values, plus already-rendered primitive
+  presentation values, and produces primitive profile artifacts or
+  `RenderedNamespaceText` / `RenderedModuleText` values suitable for primitive
+  profile rendering.
 - Update the accepted tiny generated pipeline and focused tests to use the
-  helper instead of ad hoc active-profile C++/Rust strings.
+  helper instead of ad hoc primitive profile wrapper strings.
 - Preserve C++ and Rust parity, deterministic output, artifact paths, and
   existing write/build verification behavior.
 
@@ -29294,6 +29300,134 @@ Validation:
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m223_first_real_generated_primitive.py tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m238_generated_project_source_template_boundary.py tslgen/tests/test_m240_synthetic_intrinsic_generated_project_verification.py tslgen/tests/test_m241_primitive_profile_prelude_template_boundary.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m223_first_real_generated_primitive.py tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m238_generated_project_source_template_boundary.py tslgen/tests/test_m240_synthetic_intrinsic_generated_project_verification.py tslgen/tests/test_m241_primitive_profile_artifact_presentation_boundary.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M241 added a focused primitive profile artifact presentation boundary under
+`tslgen.rendering.primitive_profile_artifacts`. The boundary consumes typed
+generated-profile render values plus already-rendered primitive declarations,
+definitions, and optional body text. It renders C++ and Rust profile wrapper
+presentation through supplementary templates under:
+
+```text
+supplementary/templates/cpp/primitive_profile/
+supplementary/templates/rust/primitive_profile/
+```
+
+The new boundary owns the C++ include/profile namespace/active-profile wrapper
+and the Rust import/profile constant wrapper for primitive profile replacement
+artifacts. It returns primitive profile artifacts through the accepted
+primitive-template renderer, preserving the existing profile artifact paths and
+generated-project composition policy.
+
+M241 updated the accepted tiny parsed generated pipeline and the synthetic
+intrinsic generated-project verification path so their primitive profile
+artifacts no longer hand-build namespace/module/include/import or
+active-profile wrapper strings. The M239 bridge may now delegate profile
+wrapper rendering to the M241 boundary when callers provide an already-selected
+typed `BackendProfileRenderModel`; its previous direct primitive-template path
+remains available for older focused bridge tests.
+
+Tests added:
+
+- C++ primitive profile artifact rendering from typed profile values and
+  supplementary templates.
+- Rust primitive profile artifact rendering from typed profile values and
+  supplementary templates.
+- C++ and Rust missing primitive-profile template diagnostics.
+- C++ and Rust semantic/unknown primitive-profile template field diagnostics.
+- Guards that accepted M223/M224/M240 paths no longer hand-build profile
+  wrapper values via `RenderedNamespaceText`, `RenderedModuleText`,
+  `RenderedIncludeLine`, or inline active-profile constants.
+- Existing tiny scalar project and synthetic `sse2` intrinsic project still
+  write and build-verify through the required validation bundle.
+
+Review verdict:
+
+Accepted after focused test coverage revision and documentation closeout.
+Architecture, evidence, validation, and focused test re-review accepted. The
+test review first requested explicit C++ `active_profile_family` coverage and
+Rust missing/invalid template diagnostics; the focused revision added those
+checks and the M241 test passed with 7 tests.
+
+Accepted validation:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- Required pytest bundle: exit 0, 34 tests passed.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created cache directories; after cleanup, final rerun exited 0
+  with no output.
+
+Follow-up:
+
+The profile artifact wrapper is now clean enough to run one final
+lowering-confidence gate against the real primitive corpus. The next milestone
+should not broaden generated output yet; it should make the accepted lowering
+completion claim airtight across observed generation-relevant TSIL keyword
+families, then pivot to backend/rendering unless it finds a concrete missing
+lowering family.
+
+### Milestone 242: Real Corpus Lowering Completion Gate
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m242-real-corpus-lowering-completion-gate-execution-review-loop-prompt.md`.
+
+Goal:
+
+Prove, in one real-corpus lowering capstone, that accepted lowering supports
+the generation-relevant TSIL keyword surface currently observed in
+`tsldata/primitives/**/*.tsl`, or produce a precise bounded list of remaining
+unsupported generation-relevant families.
+
+Scope:
+
+- Scan all real `tsldata/primitives/**/*.tsl` files deterministically.
+- Obtain implementation body regions through accepted parser/body boundaries,
+  not regex ladders over outer declarations.
+- Discover observed generation-relevant TSIL keyword islands through the
+  accepted lexical region and recursive token machinery.
+- Lower supported islands into accepted typed facts, typed backend/source
+  handoff requests, or typed diagnostics.
+- Classify unsupported islands by TSIL keyword family and exact source shape,
+  with source path, line, and column provenance.
+- Prove at least one real nested body, such as
+  `emit_return(intrin_compose<...>(...));`, lowers through recursion rather
+  than a pairwise keyword-combination special case.
+- Produce deterministic corpus characterization counts for primitive files,
+  implementation bodies, observed keyword families, supported lowered
+  families, and unsupported/deferred families.
+
+Out of scope:
+
+Generated artifacts; primitive profile rendering; backend intrinsic name
+assembly; C++/Rust call rendering; build verification; dependency closure;
+primitive selection; wildcard expansion for generation; source repair;
+target-language parsing; new backend semantics; runtime dependency on
+`frozen/` or `tslgenold`.
+
+Exit criteria:
+
+M242 may declare lowering complete enough to proceed to backend/rendering only
+if all observed generation-relevant TSIL keyword islands lower through
+accepted typed paths, or any remaining unsupported islands are explicitly
+non-generation-relevant raw target-language text, recorded source-data flaws,
+or deferred backend-only helpers. If M242 finds a real missing
+generation-relevant TSIL family, the next prompt must be one focused lowering
+follow-up for that family. Otherwise, the next prompt must pivot to
+backend/rendering.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m229_outer_tsl_declaration_parser_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py tslgen/tests/test_m236_recursive_payload_fragment_diagnostic_propagation.py tslgen/tests/test_m242_real_corpus_lowering_completion_gate.py
 find tslgen -type d -name __pycache__ -print
 ```

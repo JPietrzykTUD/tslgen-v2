@@ -23,6 +23,7 @@ from tslgen.backends.rust import (
     render_rust_intrinsic_invocation_call,
 )
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
+from tslgen.domain.generated_project import BackendProfileRenderModel
 from tslgen.io.artifacts import ArtifactSet
 from tslgen.lowering.model import (
     BackendIntrinsicComposeHandoffRequest,
@@ -50,6 +51,12 @@ from tslgen.rendering.primitive_render_model import (
     RenderedPrimitiveBodyText,
     RenderedPrimitiveDefinitionText,
 )
+from tslgen.rendering.primitive_profile_artifacts import (
+    CppPrimitiveProfileInclude,
+    PrimitiveProfileArtifactRenderContext,
+    RustPrimitiveProfileImport,
+    render_primitive_profile_artifacts,
+)
 from tslgen.rendering.primitive_templates import (
     PrimitiveTemplateRenderContext,
     cpp_primitive_template_context,
@@ -69,6 +76,9 @@ class IntrinsicBodyTokenProfileRenderContext:
     parameters: PrimitiveFunctionParameterListText
     translated_modifiers: tuple[BackendTranslatedIntrinsicModifier, ...] = ()
     shape_key: PrimitiveFunctionShapeKey = V_ASSIGN_V_V_FUNCTION_SHAPE
+    profile: BackendProfileRenderModel | None = None
+    cpp_profile_includes: tuple[CppPrimitiveProfileInclude, ...] = ()
+    rust_profile_imports: tuple[RustPrimitiveProfileImport, ...] = ()
     includes: tuple[RenderedIncludeLine, ...] = ()
     imports: tuple[RenderedImportLine, ...] = ()
     namespace_open: RenderedNamespaceText | None = None
@@ -123,10 +133,16 @@ def render_intrinsic_body_token_profile_artifact(
         )
 
     assert shape_result.definition is not None
-    template_result = render_primitive_templates(
-        supplementary_root,
-        (_template_context(context, shape_result.definition),),
-    )
+    if context.profile is not None:
+        template_result = render_primitive_profile_artifacts(
+            supplementary_root,
+            (_profile_context(context, shape_result.definition),),
+        )
+    else:
+        template_result = render_primitive_templates(
+            supplementary_root,
+            (_template_context(context, shape_result.definition),),
+        )
     if template_result.diagnostics:
         return IntrinsicBodyTokenProfileRenderResult(
             artifacts=ArtifactSet.create(()),
@@ -140,6 +156,22 @@ def render_intrinsic_body_token_profile_artifact(
         body_text=body_text,
         definition=shape_result.definition,
         diagnostics=(),
+    )
+
+
+def _profile_context(
+    context: IntrinsicBodyTokenProfileRenderContext,
+    definition: RenderedPrimitiveDefinitionText,
+) -> PrimitiveProfileArtifactRenderContext:
+    assert context.profile is not None
+    return PrimitiveProfileArtifactRenderContext(
+        backend_id=context.backend_id,
+        logical_path=context.logical_path,
+        profile_name=context.profile_name,
+        profile=context.profile,
+        cpp_includes=context.cpp_profile_includes,
+        rust_imports=context.rust_profile_imports,
+        primitive_definitions=(definition,),
     )
 
 

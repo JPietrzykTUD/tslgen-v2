@@ -9,6 +9,8 @@ from tslgen.analysis.selection import SelectedImplementation, Selector, Target
 from tslgen.core.diagnostics import Diagnostic, has_errors
 from tslgen.domain.catalog import Catalog
 from tslgen.domain.generated_project import (
+    BackendProfileRenderModel,
+    BackendProjectRenderModel,
     GeneratedProfileSet,
     GeneratedProjectRenderModel,
 )
@@ -29,6 +31,7 @@ from tslgen.lowering.scalar_types import ScalarTypeDescriptor
 from tslgen.pipeline.catalog_builder import CatalogBuilder
 from tslgen.pipeline.generated_profiles import select_generated_profiles
 from tslgen.rendering import (
+    CppPrimitiveProfileInclude,
     PrimitiveArtifactLogicalPath,
     PrimitiveBackendId,
     PrimitiveProfileName,
@@ -42,15 +45,14 @@ from tslgen.rendering import (
     PrimitiveFunctionParameterListText,
     PrimitiveFunctionResultTypeText,
     PrimitiveFunctionShapeRenderContext,
-    RenderedIncludeLine,
-    RenderedNamespaceText,
+    PrimitiveProfileArtifactRenderContext,
     RenderedPrimitiveDefinitionText,
     adapt_primitive_render_plans,
     build_generated_project_render_model,
     compose_generated_primitive_project_artifacts,
     render_primitive_function_shape,
     render_generated_project_skeleton,
-    render_primitive_templates,
+    render_primitive_profile_artifacts,
     select_primitive_function_shape,
     selected_profile_replacement_policy,
 )
@@ -185,9 +187,26 @@ def build_parsed_tiny_generated_project_artifacts(
             render_plans=plans,
         )
 
-    primitive_render = render_primitive_templates(
+    profile_contexts, profile_context_diagnostics = _profile_artifact_contexts(
+        model,
+        plan_result.plans,
+    )
+    diagnostics.extend(profile_context_diagnostics)
+    if has_errors(diagnostics):
+        return _result(
+            diagnostics,
+            model=model,
+            catalog=catalog,
+            selected=tuple(item.selected for item in selected_functions),
+            lowered_functions=LoweredFunctionSet(
+                tuple(item.function for item in selected_functions)
+            ),
+            render_plans=plans,
+        )
+
+    primitive_render = render_primitive_profile_artifacts(
         supplementary_root,
-        plan_result.contexts,
+        profile_contexts,
     )
     diagnostics.extend(primitive_render.diagnostics)
     if has_errors(diagnostics):
@@ -267,6 +286,94 @@ def _select_and_lower(
     return tuple(selected_functions), tuple(diagnostics)
 
 
+def _profile_artifact_contexts(
+    model: GeneratedProjectRenderModel,
+    plans: tuple[PrimitiveRenderPlan, ...],
+) -> tuple[tuple[PrimitiveProfileArtifactRenderContext, ...], tuple[Diagnostic, ...]]:
+    contexts: list[PrimitiveProfileArtifactRenderContext] = []
+    diagnostics: list[Diagnostic] = []
+    for plan in plans:
+        profile = _profile_for_plan(model, plan)
+        if profile is None:
+            diagnostics.append(_missing_profile_diagnostic(plan))
+            continue
+        contexts.append(_profile_artifact_context(plan, profile))
+    return tuple(contexts), tuple(sorted(diagnostics, key=_diagnostic_sort_key))
+
+
+def _profile_artifact_context(
+    plan: PrimitiveRenderPlan,
+    profile: BackendProfileRenderModel,
+) -> PrimitiveProfileArtifactRenderContext:
+    return PrimitiveProfileArtifactRenderContext(
+        backend_id=plan.backend_id,
+        logical_path=plan.logical_path,
+        profile_name=plan.profile_name,
+        profile=profile,
+        cpp_includes=_cpp_profile_includes(plan),
+        primitive_declarations=tuple(
+            declaration
+            for record in plan.primitives
+            for declaration in record.declarations
+        ),
+        primitive_definitions=tuple(
+            definition
+            for record in plan.primitives
+            for definition in record.definitions
+        ),
+    )
+
+
+def _cpp_profile_includes(
+    plan: PrimitiveRenderPlan,
+) -> tuple[CppPrimitiveProfileInclude, ...]:
+    if plan.backend_id.text != "cpp":
+        return ()
+    return (CppPrimitiveProfileInclude("cstdint"),)
+
+
+def _profile_for_plan(
+    model: GeneratedProjectRenderModel,
+    plan: PrimitiveRenderPlan,
+) -> BackendProfileRenderModel | None:
+    project = _project_for_backend(model, plan.backend_id.text)
+    if project is None:
+        return None
+    return _profile_by_name(project, plan.profile_name.text)
+
+
+def _project_for_backend(
+    model: GeneratedProjectRenderModel,
+    backend_id: str,
+) -> BackendProjectRenderModel | None:
+    if backend_id == "cpp":
+        return model.cpp
+    if backend_id == "rust":
+        return model.rust
+    return None
+
+
+def _profile_by_name(
+    project: BackendProjectRenderModel,
+    profile_name: str,
+) -> BackendProfileRenderModel | None:
+    for profile in project.profiles:
+        if str(profile.profile_name) == profile_name:
+            return profile
+    return None
+
+
+def _missing_profile_diagnostic(plan: PrimitiveRenderPlan) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-PARSED-GENERATED-PRIMITIVE-MISSING-PROFILE",
+        message=(
+            "parsed generated primitive bridge cannot find generated profile "
+            f"{plan.profile_name.text!r} for backend {plan.backend_id.text!r}"
+        ),
+    )
+
+
 def _render_plans_from_lowered_functions(
     functions: tuple[SelectedLoweredFunction, ...],
     *,
@@ -314,9 +421,6 @@ def _render_plan_from_lowered_function(
                 backend_id=PrimitiveBackendId("cpp"),
                 profile_name=PrimitiveProfileName(_SUPPORTED_PROFILE),
                 logical_path=PrimitiveArtifactLogicalPath(_CPP_SCALAR_PROFILE_PATH),
-                includes=(RenderedIncludeLine("#include <cstdint>"),),
-                namespace_open=RenderedNamespaceText("namespace tsl {"),
-                namespace_close=RenderedNamespaceText("}  // namespace tsl"),
                 primitives=(record,),
                 source=PrimitiveRenderPlanSource(str(function.source.path)),
             ),
@@ -425,12 +529,7 @@ def _render_function_definitions(
     if render_result.diagnostics or render_result.definition is None:
         return (), render_result.diagnostics
 
-    return (
-        (
-            *_profile_definition_texts(backend_id),
-            render_result.definition,
-        )
-    ), ()
+    return (render_result.definition,), ()
 
 
 def _function_parameter_list(
@@ -467,30 +566,6 @@ def _function_parameter_list(
             ),
         ),
     )
-
-
-def _profile_definition_texts(
-    backend_id: str,
-) -> tuple[RenderedPrimitiveDefinitionText, ...]:
-    if backend_id == "cpp":
-        return (
-            RenderedPrimitiveDefinitionText(
-                f'inline constexpr const char* active_profile = "{_SUPPORTED_PROFILE}";'
-            ),
-            RenderedPrimitiveDefinitionText(
-                'inline constexpr const char* active_profile_family = "generic";'
-            ),
-        )
-    if backend_id == "rust":
-        return (
-            RenderedPrimitiveDefinitionText(
-                f'pub const ACTIVE_PROFILE: &str = "{_SUPPORTED_PROFILE}";'
-            ),
-            RenderedPrimitiveDefinitionText(
-                'pub const ACTIVE_PROFILE_FAMILY: &str = "generic";'
-            ),
-        )
-    return ()
 
 
 def _render_return_expression(
