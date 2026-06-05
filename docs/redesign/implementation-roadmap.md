@@ -28894,7 +28894,7 @@ Accepted validation:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m238-generated-project-source-template-boundary-execution-review-loop-prompt.md`.
 
 Goal:
@@ -28935,5 +28935,124 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m191_generated_project_smoke_boundary.py tslgen/tests/test_m217_primitive_template_boundary.py tslgen/tests/test_m223_first_real_generated_primitive.py tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m238_generated_project_source_template_boundary.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M238 moved generated-project source skeleton presentation for both C++ and
+Rust into supplementary templates and partials under:
+
+```text
+supplementary/templates/cpp/generated_project/
+supplementary/templates/rust/generated_project/
+```
+
+The generated-project renderer now loads C++/Rust public entry, profile
+source, smoke-test, and supporting partial templates alongside the existing
+CMake/Cargo templates. Python supplies typed already-decided values such as
+profile macros, file stems, profile names, families, Rust feature/module
+names, crate names, and already-rendered partial joins. The old whole-source
+helper functions for generated C++/Rust public headers, profile files, and
+smoke tests were removed.
+
+M238 added diagnostics for generated-project source templates that reference
+semantic fields:
+`TSL-GENERATED-PROJECT-TEMPLATE-SEMANTIC-FIELD`. Existing missing-template,
+unknown-field, and unsupported-field-shape diagnostics now cover the new
+source templates as well.
+
+Preserved behavior:
+
+- artifact paths, media types, metadata, and deterministic ordering;
+- existing CMake/Cargo buildsystem template behavior;
+- scalar and scalar+`avx2` generated profile flags;
+- manifest-clean writing behavior;
+- after-write C++/Rust build verification for the existing generated project
+  slices;
+- no lowering, parser, catalog, selector, primitive-call, TSIL, intrinsic
+  translation, or real x86 fixture changes.
+
+Tests added:
+
+- C++ and Rust generated-project source artifacts render through
+  supplementary templates/partials;
+- template edits drive rendered artifacts;
+- deterministic source artifact output;
+- missing C++ and Rust generated-project source template diagnostics;
+- unknown, compound, and semantic source-template field diagnostics;
+- focused guard that old whole-source skeleton assembly helpers are not
+  retained.
+
+Review verdict:
+
+Accepted after focused architecture revision. Evidence and test reviews
+accepted. Architecture review first found two presentation-boundary leaks:
+Python selected `#if`/`#elif` text and built Rust `feature = "..."` condition
+fragments. The focused revision moved those source fragments into separate
+C++ first/next partial templates and a Rust feature-condition partial; focused
+architecture re-review accepted. Documentation review requested the normal
+closeout updates to roadmap, state, behavioral spec, design decisions, and the
+next prompt; those updates were completed.
+
+Accepted validation:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- Required pytest bundle: exit 0, 49 tests passed.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created cache directories; after cleanup, final rerun exited 0
+  with no output.
+
+Follow-up:
+
+`tslgen/src/tslgen/rendering/generated_project.py` is now close to the module
+size guardrail. M238 stays accepted because it removed source-template leakage
+inside the selected slice and the architecture re-review accepted the result,
+but future generated-project responsibilities should first split focused
+source-template/buildsystem rendering helpers instead of adding more behavior
+to that file.
+
+### Milestone 239: Backend Intrinsic Body-Token Render Bridge
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m239-backend-intrinsic-body-token-render-bridge-execution-review-loop-prompt.md`.
+
+Goal:
+
+Connect already-lowered backend intrinsic handoff/body-token values to the
+accepted C++/Rust intrinsic call renderers and existing `v:=(v,v)` function
+shape/profile templates, producing deterministic primitive profile artifacts
+without reopening lowering or implementing the full real x86 fixture.
+
+Scope:
+
+- Consume one explicit already-lowered/typed backend intrinsic invocation
+  handoff fixture for C++ and Rust.
+- Render C++ and Rust intrinsic call body text through existing backend
+  intrinsic invocation/call rendering boundaries.
+- Substitute that rendered body-token result into the existing function-shape
+  and primitive profile template path.
+- Preserve C++ and Rust parity and deterministic artifacts.
+- Add diagnostics for unsupported/missing already-lowered intrinsic handoff
+  inputs before rendering.
+
+Out of scope:
+
+Lowering changes; parser/catalog/selector changes; full `fundamental.tsl`
+selection; wildcard expansion; real x86 compile-tested fixture; Rust
+architecture-module policy beyond existing intrinsic-call renderer behavior;
+vector/register type spelling expansion; dependency closure; template
+semantics; source repair; target-language parsing.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m213_backend_intrinsic_invocation_assembly.py tslgen/tests/test_m214_cpp_intrinsic_invocation_call_rendering.py tslgen/tests/test_m219_rust_intrinsic_invocation_call_rendering.py tslgen/tests/test_m220_shared_intrinsic_body_token_substitution_parity.py tslgen/tests/test_m227_vv_function_shape_template_render_boundary.py tslgen/tests/test_m238_generated_project_source_template_boundary.py tslgen/tests/test_m239_backend_intrinsic_body_token_render_bridge.py
 find tslgen -type d -name __pycache__ -print
 ```

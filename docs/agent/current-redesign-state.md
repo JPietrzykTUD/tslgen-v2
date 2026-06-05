@@ -10,7 +10,8 @@ Milestone 225 is accepted. Milestone 226.5 planning is accepted. Milestone 227
 is accepted. Milestone 228.5 planning is accepted. Milestone 229 is accepted.
 Milestone 230 is accepted. Milestone 231 is accepted. Milestone 232 is
 accepted. Milestone 233 is accepted. Milestone 234 is accepted. Milestone 235
-is accepted. Milestone 236 is accepted.
+is accepted. Milestone 236 is accepted. Milestone 237 planning is accepted.
+Milestone 238 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -789,49 +790,71 @@ repair, or a new primitive-call cleanup path. M236 completed the closeout
 lowering cleanup, so the next prompt returns to backend/generated-output
 planning.
 
+M237 planning accepted the backend/generated-output resumption path after the
+M229-M236 parser/body/lowering detour. It found that the scalar generated
+project path is accepted and compile-tested, that full real x86 intrinsic
+output is still too broad, and that generated-project source skeleton
+presentation should be cleaned up before adding more backend intrinsic output.
+
+M238 moved generated-project source skeleton presentation for C++ and Rust
+public entry files, profile files, and smoke tests into supplementary
+templates/partials under `supplementary/templates/{cpp,rust}/generated_project/`.
+It added semantic-field diagnostics for generated-project templates, preserved
+existing scalar/profile generated project artifact paths and build
+verification, and did not reopen lowering, parser/catalog/selector code,
+primitive-call semantics, intrinsic translation, or the real x86 fixture.
+M238 follow-up: `tslgen/src/tslgen/rendering/generated_project.py` is near the
+module-size guardrail, so future generated-project responsibilities should
+first split focused source-template/buildsystem helpers instead of extending
+that file.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M238 generated-project source template boundary execution-review loop.
+Run M239 backend intrinsic body-token render bridge execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m238-generated-project-source-template-boundary-execution-review-loop-prompt.md
+docs/agent/runs/m239-backend-intrinsic-body-token-render-bridge-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 238: Generated Project Source Template Boundary.
+Milestone 239: Backend Intrinsic Body-Token Render Bridge.
 ```
 
 Latest review verdict:
 
 ```text
-M237 planning returned Accept With Follow-Ups. Evidence, architecture/boundary,
-and documentation audits accepted with follow-ups. Validation audit initially
-reported existing ignored cache directories; the orchestrator removed those
-generated cache artifacts before final validation. M237 changed only roadmap,
-state, and next-prompt documentation. Validation for M237: `git diff --check`
-exit 0 with no output; required
-`find tslgen -type d -name __pycache__ -print` exit 0 with no output.
+M238 execution-review returned Accept after focused architecture revision.
+Evidence and test reviews accepted. Architecture review first found two
+presentation-boundary leaks; focused revision moved the C++ `#if`/`#elif`
+profile-case syntax and Rust `feature = "..."` condition syntax into
+supplementary partial templates, and focused architecture re-review accepted.
+Documentation review requested normal closeout updates to roadmap, behavioral
+spec, design decisions, state, and next prompt; those updates were completed.
+Validation for M238: `git diff --check` exit 0 with no output;
+`python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no
+output; required pytest bundle exit 0 with 49 tests passed; final
+`find tslgen -type d -name __pycache__ -print` exit 0 with no output after
+removing compile/test-created cache directories.
 ```
 
 Next expected action:
 
 ```text
-Run the active M238 execution-review loop. Use one write-capable executor and
-read-only review/audit subagents. Move generated-project source skeleton
-presentation for C++ and Rust public entries, profile files, and smoke tests
-out of raw Python source assembly and into supplementary templates or
-presentation-only partials. Preserve current scalar/profile generated project
-artifacts, artifact writing, and build verification. Do not reopen lowering,
-do not implement the real x86 intrinsic fixture, and do not add an intrinsic
-translation/render bridge in M238.
+Run the active M239 execution-review loop. Use one write-capable executor and
+read-only review/audit subagents. Consume already-lowered typed backend
+intrinsic handoff/body-token values, render C++ and Rust intrinsic body text
+through existing backend intrinsic call/body-token boundaries, and feed the
+result into the accepted `v:=(v,v)` function-shape and primitive profile
+template path. Do not reopen lowering, parser/catalog/selector work, TSIL
+keyword handling, primitive-call semantics, or the full real x86 fixture.
 ```
 
 Previous review verdict:
@@ -923,13 +946,15 @@ execution-review returned Accept With Follow-Ups and selected M236 recursive
 payload fragment diagnostic propagation. M236 execution-review returned Accept
 With Follow-Ups and selected M237 backend generated-output resumption planning.
 M237 planning returned Accept With Follow-Ups and selected M238
-generated-project source template boundary execution-review.
+generated-project source template boundary execution-review. M238
+execution-review returned Accept after focused architecture revision and
+selected M239 backend intrinsic body-token render bridge execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m237-backend-generated-output-resumption-planning-prompt.md
+docs/agent/runs/m238-generated-project-source-template-boundary-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

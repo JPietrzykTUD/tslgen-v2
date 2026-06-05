@@ -122,6 +122,53 @@ M227 renders the exact function definition into
 templates then compose into profile artifacts. It does not add intrinsic
 semantics, broaden TSIL parsing, or implement the real x86 fixture.
 
+### M238 Generated-Project Source Template Boundary
+
+Milestone 238 applies the presentation-only template boundary to the remaining
+generated-project source skeleton artifacts. CMake and Cargo buildsystem
+templates remain under `supplementary/buildsystem/**/templates/`; generated
+C++/Rust public/profile/test source presentation now lives under:
+
+```text
+supplementary/templates/cpp/generated_project/
+supplementary/templates/rust/generated_project/
+```
+
+The boundary renders:
+
+- `cpp/include/tsl.hpp`;
+- `cpp/include/profiles/{profile}.hpp`;
+- `cpp/tests/smoke.cpp`;
+- `rust/src/lib.rs`;
+- `rust/src/profiles/{profile}.rs`;
+- `rust/tests/smoke.rs`.
+
+Python generated-project code supplies already-decided presentation values
+such as profile macros, profile file stems, profile names, machine families,
+Rust feature names, Rust module names, crate/package names, and already
+rendered partial joins. Python may select a first/subsequent presentation
+partial and join rendered partial fragments deterministically, but it must not
+assemble whole generated C++/Rust public headers, profile files, or smoke
+tests from language-line lists.
+
+Generated-project source templates reject unresolved semantic/source fields
+such as raw `tsil`, `primitive_name`, `type_tag`, `intrinsic_name`,
+primitive selectors, dependency rules, backend metadata keys, lowering
+requests, fallback fields, and source payloads before formatting with
+`TSL-GENERATED-PROJECT-TEMPLATE-SEMANTIC-FIELD`. Unsupported compound field
+syntax is rejected with
+`TSL-GENERATED-PROJECT-TEMPLATE-UNSUPPORTED-FIELD-SHAPE`. Unknown or
+unsupported fields are rejected with
+`TSL-GENERATED-PROJECT-TEMPLATE-UNKNOWN-FIELD`. Missing generated-project
+templates are reported as `TSL-GENERATED-PROJECT-MISSING-TEMPLATE`.
+
+M238 preserves the existing artifact paths, media types, metadata,
+deterministic ordering, manifest-clean writing behavior, scalar and
+scalar+`avx2` profile build flags, and after-write C++/Rust build
+verification. It does not reopen lowering, parse `.tsl` bodies, implement the
+real x86 intrinsic fixture, add intrinsic translation/rendering, or change
+primitive selection.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided
@@ -4295,6 +4342,7 @@ Accepted M191 diagnostic codes include:
 - `TSL-GENERATED-PROJECT-DUPLICATE-RUST-PROFILE-FEATURE`
 - `TSL-GENERATED-PROJECT-DUPLICATE-RUST-PROFILE-MODULE`
 - `TSL-GENERATED-PROJECT-MISSING-TEMPLATE`
+- `TSL-GENERATED-PROJECT-TEMPLATE-SEMANTIC-FIELD`
 - `TSL-GENERATED-PROJECT-TEMPLATE-UNSUPPORTED-FIELD-SHAPE`
 - `TSL-GENERATED-PROJECT-TEMPLATE-UNKNOWN-FIELD`
 - `TSL-WRITE-OUTPUT-ROOT-NOT-DIRECTORY`

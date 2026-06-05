@@ -1,0 +1,7 @@
+#pragma once
+
+{profile_include_cases}
+#else
+#error "No supported TSL profile selected"
+#endif
+

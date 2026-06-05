@@ -1,0 +1,2 @@
+#elif defined({cpp_macro})
+#include "profiles/{file_stem}.hpp"

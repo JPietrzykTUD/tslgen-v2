@@ -3143,6 +3143,10 @@ Consequences:
   already-decided render values, and C++/Rust supplementary shape templates
   format the function definition before later real intrinsic fixtures consume
   that boundary.
+- M238 applies the same presentation-only rule to generated-project public
+  entry files, profile source files, and smoke tests. Python may compute typed
+  values and join already-rendered supplementary partials, but it must not
+  assemble whole generated C++/Rust source skeletons from language-line lists.
 - Small Python strings remain acceptable for typed already-decided render
   values and focused tests, but they must not become hidden C++/Rust
   templates or semantic engines.
