@@ -29855,7 +29855,7 @@ tags, signatures, or body forms.
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m245-extension-register-type-spelling-boundary-execution-review-loop-prompt.md`.
 
 Goal:
@@ -29896,5 +29896,113 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m192_backend_type_spelling_translation.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M245 extended `tslgen.backends.type_spelling` so already-lowered vector
+register type values can be translated through the typed extension catalog.
+`CurrentVector(extension, type_tag)` and
+`LoweredVectorMemberType(member="register", extension, type_tag)` now resolve
+for C++ and Rust from `Extension.resolved_vector_register_types`, preserving
+request provenance and the source location of the resolved extension metadata.
+
+The public backend export adds `BackendExtensionRegisterTypeKey`, a typed
+metadata key for translated extension register spellings. Existing M192 scalar
+identity and `LoweredSizeType` behavior remain compatible. Existing callers
+can still use the two-argument type-spelling API for scalar/size requests;
+vector/register requests require the optional typed `extension_catalog`
+argument.
+
+M245 diagnostics cover missing extension catalog metadata, unknown extension,
+unsupported vector member, unsupported backend, and missing register spelling
+for a known backend/type pair. For example, known SVE C++ register entries
+translate from `extension.tsl`, while missing Rust SVE register spellings
+remain explicit diagnostics.
+
+Tests added or updated:
+
+- `tslgen/tests/test_m245_extension_register_type_spelling_boundary.py`
+  covers representative C++/Rust x86 register spellings, a vector member
+  register request, representative NEON spelling, every resolved fixed
+  register fact in `extension.tsl`, diagnostics, and guard coverage against a
+  Python-local register spelling table.
+- `tslgen/tests/test_m192_backend_type_spelling_translation.py` now records
+  that vector requests require extension catalog metadata rather than being
+  unsupported values.
+
+Review verdict:
+
+Accepted. Architecture/boundary, evidence, test, documentation, and
+validation auditors all returned Accept. No focused revision was required.
+M246 planning was selected to prevent the next real vector/intrinsic rendering
+step from assuming unsupported `intrin_compose` name semantics.
+
+Accepted validation:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- Required pytest bundle: exit 0, 30 tests passed in 9.24s.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compileall-created cache directories. After cleanup, final rerun exited 0
+  with no output.
+- Broader cache check:
+  `find . -maxdepth 3 -type d \( -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -print`
+  exited 0 with no output.
+
+Follow-up:
+
+Before rendering a real vector/intrinsic generated project, the next milestone
+must identify which real `intrin_compose<...>` source forms can already be
+lowered and assembled with accepted modifier translation, and which require a
+typed backend compose-name policy such as default prefix/current-type suffix
+semantics. Do not special-case a single surrounding keyword or inject backend
+intrinsic spellings in Python/templates.
+
+### Milestone 246: Real Vector Intrinsic Rendering Readiness Planning
+
+Status:
+
+Selected. Planning prompt:
+`docs/agent/runs/m246-real-vector-intrinsic-rendering-readiness-planning-prompt.md`.
+
+Goal:
+
+Plan the next executable real vector/intrinsic rendering slice after M245
+without sliding back into pairwise keyword combinations or hardcoded backend
+intrinsic names.
+
+Scope:
+
+- Inventory the real `tsldata/primitives/arithmetic/fundamental.tsl` unmasked
+  vector `add`/`sub` implementation bodies that are plausible first rendering
+  candidates for C++ and Rust.
+- For each plausible candidate, identify whether the body can already pass
+  through accepted recursive TSIL keyword lowering, backend intrinsic handoff,
+  intrinsic modifier translation, intrinsic invocation assembly, M245 register
+  type spelling, primitive function templates, generated project composition,
+  artifact writing, and build verification.
+- Determine whether `intrin_compose<add>(...)`,
+  `intrin_compose<add, suffix=...>(...)`, NEON `intrin_compose<vaddq>(...)`,
+  and SVE forms need an explicit typed backend compose-name policy before a
+  real vector implementation can render correctly.
+- Select the largest safe M247 executor slice that can be implemented without
+  source repair, target-language parsing, broad primitive selection,
+  dependency closure, or fixture-shaped pipeline ownership.
+
+Out of scope:
+
+Implementation code changes; new lowering semantics; backend intrinsic name
+hardcoding; vector/mask/generic register policies beyond M245; real primitive
+test metadata rendering; dependency closure; broad generated project
+selection; runtime dependencies on `frozen` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 find tslgen -type d -name __pycache__ -print
 ```

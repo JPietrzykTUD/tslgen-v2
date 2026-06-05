@@ -430,6 +430,42 @@ rendering, new lowering semantics, broad primitive selection, dependency
 closure, target-language parsing, source repair, fixture-shaped sibling
 pipelines, or runtime dependencies on `frozen` or `tslgenold`.
 
+### M245 Extension Register Type Spelling Boundary
+
+Milestone 245 extends the backend type-spelling boundary for already-lowered
+vector register type values. A `BackendTypeSpellingRequest` whose value is
+`CurrentVector(extension, type_tag)` or
+`LoweredVectorMemberType(member="register", extension, type_tag)` may be
+translated when the caller supplies the typed `ExtensionCatalog` built from
+`tsldata/extensions/extension.tsl`.
+
+Successful vector/register type translations use
+`Extension.resolved_vector_register_types` only. The translated spelling
+preserves the original request, backend id, spelling text, request source
+location, resolved extension metadata source location, and a typed
+`BackendExtensionRegisterTypeKey(extension, type_tag, member="register")`.
+C++ and Rust spellings include both x86 and ARM entries when those entries are
+present in the resolved extension metadata.
+
+The existing scalar identity and size-type behavior from M192 remains
+compatible. Scalar and size requests do not need an extension catalog.
+Vector/register requests without extension metadata are diagnosed instead of
+being guessed or hardcoded.
+
+M245 diagnostics include:
+
+- `TSL-BACKEND-TYPE-SPELLING-MISSING-EXTENSION-CATALOG`
+- `TSL-BACKEND-TYPE-SPELLING-UNKNOWN-EXTENSION`
+- `TSL-BACKEND-TYPE-SPELLING-UNSUPPORTED-VECTOR-MEMBER`
+- `TSL-BACKEND-TYPE-SPELLING-UNSUPPORTED-BACKEND`
+- `TSL-BACKEND-TYPE-SPELLING-MISSING-VECTOR-REGISTER-SPELLING`
+
+M245 does not parse raw `type<backend>(...)` text, add lowering semantics,
+render real vector/intrinsic generated projects, add mask or integral-mask
+type spelling, implement generic/runtime-sized register policies, move type
+selection into templates, or introduce runtime dependencies on `frozen` or
+`tslgenold`.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

@@ -16,15 +16,29 @@ from tslgen.domain.backend_metadata import (
     BackendTypeKey,
     BackendTypeSpellingText,
 )
+from tslgen.domain.catalog import ExtensionCatalog, ExtensionName, TypeTag
 from tslgen.lowering.model import (
     BackendTypeSpellingRequest,
+    CurrentVector,
     LoweredScalarTypeIdentity,
     LoweredSizeType,
+    LoweredVectorMemberType,
 )
 
-BackendTypeSpellingMetadataKind = Literal["language_type", "translation_template"]
+BackendTypeSpellingMetadataKind = Literal[
+    "language_type",
+    "translation_template",
+    "extension_register_type",
+]
 
 _SIZE_TYPE_TRANSLATION_KEY = BackendTranslationKey("type_size")
+
+
+@dataclass(frozen=True, slots=True)
+class BackendExtensionRegisterTypeKey:
+    extension: ExtensionName
+    type_tag: TypeTag
+    member: Literal["register"] = "register"
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,7 +47,9 @@ class BackendTranslatedTypeSpelling:
     backend: BackendId
     spelling: BackendTypeSpellingText
     metadata_kind: BackendTypeSpellingMetadataKind
-    metadata_key: BackendTypeKey | BackendTranslationKey
+    metadata_key: (
+        BackendTypeKey | BackendTranslationKey | BackendExtensionRegisterTypeKey
+    )
     metadata_source: SourceLocation
     source: SourceLocation
 
@@ -53,6 +69,8 @@ class BackendTypeSpellingTranslationBatchResult:
 def translate_backend_type_spelling_request(
     request: BackendTypeSpellingRequest,
     catalog: BackendMetadataCatalog | None,
+    *,
+    extension_catalog: ExtensionCatalog | None = None,
 ) -> BackendTypeSpellingTranslationResult:
     """Translate one backend type spelling request through typed metadata."""
 
@@ -74,6 +92,20 @@ def translate_backend_type_spelling_request(
         return _translate_scalar_type_identity(request, catalog, backend, value)
     if isinstance(value, LoweredSizeType):
         return _translate_size_type(request, catalog, backend)
+    if isinstance(value, CurrentVector):
+        return _translate_current_vector_register_type(
+            request,
+            extension_catalog,
+            backend,
+            value,
+        )
+    if isinstance(value, LoweredVectorMemberType):
+        return _translate_vector_member_type(
+            request,
+            extension_catalog,
+            backend,
+            value,
+        )
 
     return BackendTypeSpellingTranslationResult(
         spelling=None,
@@ -84,6 +116,8 @@ def translate_backend_type_spelling_request(
 def translate_backend_type_spelling_requests(
     requests: tuple[BackendTypeSpellingRequest, ...],
     catalog: BackendMetadataCatalog | None,
+    *,
+    extension_catalog: ExtensionCatalog | None = None,
 ) -> BackendTypeSpellingTranslationBatchResult:
     """Translate requests in source/input order and accumulate diagnostics."""
 
@@ -91,7 +125,11 @@ def translate_backend_type_spelling_requests(
     diagnostics: list[Diagnostic] = []
 
     for request in requests:
-        result = translate_backend_type_spelling_request(request, catalog)
+        result = translate_backend_type_spelling_request(
+            request,
+            catalog,
+            extension_catalog=extension_catalog,
+        )
         diagnostics.extend(result.diagnostics)
         if result.spelling is not None:
             spellings.append(result.spelling)
@@ -173,6 +211,94 @@ def _translate_size_type(
             source=request.source,
         ),
         diagnostics=(),
+    )
+
+
+def _translate_current_vector_register_type(
+    request: BackendTypeSpellingRequest,
+    extension_catalog: ExtensionCatalog | None,
+    backend: BackendId,
+    value: CurrentVector,
+) -> BackendTypeSpellingTranslationResult:
+    return _translate_resolved_vector_register_type(
+        request=request,
+        extension_catalog=extension_catalog,
+        backend=backend,
+        extension=value.extension,
+        type_tag=value.type_tag,
+    )
+
+
+def _translate_vector_member_type(
+    request: BackendTypeSpellingRequest,
+    extension_catalog: ExtensionCatalog | None,
+    backend: BackendId,
+    value: LoweredVectorMemberType,
+) -> BackendTypeSpellingTranslationResult:
+    if value.member != "register":
+        return BackendTypeSpellingTranslationResult(
+            spelling=None,
+            diagnostics=(_unsupported_vector_member_diagnostic(request, value),),
+        )
+    return _translate_resolved_vector_register_type(
+        request=request,
+        extension_catalog=extension_catalog,
+        backend=backend,
+        extension=value.extension,
+        type_tag=value.type_tag,
+    )
+
+
+def _translate_resolved_vector_register_type(
+    *,
+    request: BackendTypeSpellingRequest,
+    extension_catalog: ExtensionCatalog | None,
+    backend: BackendId,
+    extension: ExtensionName,
+    type_tag: TypeTag,
+) -> BackendTypeSpellingTranslationResult:
+    if extension_catalog is None:
+        return BackendTypeSpellingTranslationResult(
+            spelling=None,
+            diagnostics=(_missing_extension_catalog_diagnostic(request),),
+        )
+
+    extension_metadata = extension_catalog.get(str(extension))
+    if extension_metadata is None:
+        return BackendTypeSpellingTranslationResult(
+            spelling=None,
+            diagnostics=(_unknown_extension_diagnostic(request, extension),),
+        )
+
+    backend_text = str(backend)
+    type_tag_text = str(type_tag)
+    for resolved in extension_metadata.resolved_vector_register_types:
+        if resolved.backend == backend_text and resolved.type_tag == type_tag_text:
+            return BackendTypeSpellingTranslationResult(
+                spelling=BackendTranslatedTypeSpelling(
+                    request=request,
+                    backend=backend,
+                    spelling=BackendTypeSpellingText(resolved.spelling),
+                    metadata_kind="extension_register_type",
+                    metadata_key=BackendExtensionRegisterTypeKey(
+                        extension=extension,
+                        type_tag=type_tag,
+                    ),
+                    metadata_source=resolved.source,
+                    source=request.source,
+                ),
+                diagnostics=(),
+            )
+
+    return BackendTypeSpellingTranslationResult(
+        spelling=None,
+        diagnostics=(
+            _missing_vector_register_spelling_diagnostic(
+                request,
+                extension,
+                type_tag,
+            ),
+        ),
     )
 
 
@@ -269,6 +395,67 @@ def _missing_size_type_diagnostic(request: BackendTypeSpellingRequest) -> Diagno
         message=(
             f"backend metadata has no {_SIZE_TYPE_TRANSLATION_KEY!s} translation "
             f"for backend {request.backend!r}"
+        ),
+        location=request.source,
+    )
+
+
+def _missing_extension_catalog_diagnostic(
+    request: BackendTypeSpellingRequest,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-BACKEND-TYPE-SPELLING-MISSING-EXTENSION-CATALOG",
+        message=(
+            "backend vector register type spelling requires typed extension "
+            f"catalog metadata for request {request.source_text!r}"
+        ),
+        location=request.source,
+    )
+
+
+def _unknown_extension_diagnostic(
+    request: BackendTypeSpellingRequest,
+    extension: ExtensionName,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-BACKEND-TYPE-SPELLING-UNKNOWN-EXTENSION",
+        message=(
+            "backend vector register type spelling cannot find extension "
+            f"{str(extension)!r} in the typed extension catalog"
+        ),
+        location=request.source,
+    )
+
+
+def _unsupported_vector_member_diagnostic(
+    request: BackendTypeSpellingRequest,
+    value: LoweredVectorMemberType,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-BACKEND-TYPE-SPELLING-UNSUPPORTED-VECTOR-MEMBER",
+        message=(
+            "backend type spelling translation only supports vector member "
+            f"'register' in M245; got {value.member!r}"
+        ),
+        location=request.source,
+    )
+
+
+def _missing_vector_register_spelling_diagnostic(
+    request: BackendTypeSpellingRequest,
+    extension: ExtensionName,
+    type_tag: TypeTag,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-BACKEND-TYPE-SPELLING-MISSING-VECTOR-REGISTER-SPELLING",
+        message=(
+            "extension metadata has no resolved vector register spelling for "
+            f"backend {request.backend!r}, extension {str(extension)!r}, and "
+            f"type tag {str(type_tag)!r}"
         ),
         location=request.source,
     )

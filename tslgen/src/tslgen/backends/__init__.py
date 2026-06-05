@@ -1,6 +1,7 @@
 """Backend emitters and translation helpers for the clean restart generator."""
 
 from tslgen.backends.type_spelling import (
+    BackendExtensionRegisterTypeKey,
     BackendTranslatedTypeSpelling,
     BackendTypeSpellingMetadataKind,
     BackendTypeSpellingTranslationBatchResult,
@@ -85,6 +86,7 @@ __all__ = [
     "BackendIntrinsicPrefixTranslationRule",
     "BackendIntrinsicStyle",
     "BackendIntrinsicTypeSuffixTranslationRule",
+    "BackendExtensionRegisterTypeKey",
     "BackendTranslatedTypeSpelling",
     "BackendTranslatedIntrinsicModifier",
     "BackendTranslatedIntrinsicModifierValue",

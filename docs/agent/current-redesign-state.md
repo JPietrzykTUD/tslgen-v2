@@ -14,7 +14,7 @@ is accepted. Milestone 236 is accepted. Milestone 237 planning is accepted.
 Milestone 238 is accepted. Milestone 239 is accepted. Milestone 240 is
 accepted. Milestone 241 is accepted. Milestone 242 is accepted.
 Milestone 243 is accepted. Milestone 244 is accepted. Milestone 244.5 is
-accepted.
+accepted. Milestone 245 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -915,62 +915,74 @@ preserved. `tslgen.pipeline.generated_primitive_pipeline` is labelled M224
 tiny/regression-only and remains a deletion candidate once the generic real
 pipeline covers its regression value.
 
+M245 extended the backend type-spelling boundary so already-lowered
+`CurrentVector(extension, type_tag)` and
+`LoweredVectorMemberType(member="register", extension, type_tag)` values
+translate through typed `Extension.resolved_vector_register_types` metadata
+from `tsldata/extensions/extension.tsl`. C++ and Rust register spellings now
+come from the extension catalog, not Python spelling tables or templates.
+The public backend export adds `BackendExtensionRegisterTypeKey` as typed
+metadata provenance. M192 scalar identity and `LoweredSizeType` behavior
+remain compatible. Vector/register diagnostics cover missing extension
+catalog metadata, unknown extension, unsupported vector member, unsupported
+backend, and missing register spelling for a known backend/type pair.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M245 extension register type spelling boundary execution-review loop.
+Run M246 real vector intrinsic rendering readiness planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m245-extension-register-type-spelling-boundary-execution-review-loop-prompt.md
+docs/agent/runs/m246-real-vector-intrinsic-rendering-readiness-planning-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 245: Extension Register Type Spelling Boundary.
+Milestone 246: Real Vector Intrinsic Rendering Readiness Planning.
 ```
 
 Latest review verdict:
 
 ```text
-M244.5 execution-review returned Accept with no focused revision required.
+M245 execution-review returned Accept with no focused revision required.
 Architecture/boundary, evidence, test, documentation, and validation
-reviewers all accepted the consolidation. The accepted implementation replaces
-`tslgen.pipeline.real_scalar_pipeline` with the generic
-`tslgen.pipeline.primitive_project_pipeline`, removes the old real-scalar
-public pipeline names, keeps selected scalar/add/sub/type/function facts in
-explicit selected-entry data, and labels `generated_primitive_pipeline.py` as
-M224 tiny/regression-only. M243/M244 real-corpus scalar behavior,
-diagnostics, raw payload preservation, deterministic artifacts,
-manifest-clean writing, and C++/Rust build verification are preserved.
-Validation for M244.5: `git diff --check` exit 0 with no output;
+reviewers all accepted the type-spelling boundary extension. The accepted
+implementation translates already-lowered `CurrentVector` and
+`LoweredVectorMemberType(member="register")` values through
+`Extension.resolved_vector_register_types` supplied by the typed extension
+catalog, preserves M192 scalar/size behavior, and diagnoses missing extension
+catalog metadata, unknown extensions, unsupported vector members, unsupported
+backends, and missing register spellings. Validation for M245:
+`git diff --check` exit 0 with no output;
 `python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no
-output; required pytest bundle exit 0 with 41 tests passed in 31.23s; initial
+output; required pytest bundle exit 0 with 30 tests passed in 9.24s; initial
 `find tslgen -type d -name __pycache__ -print` exit 0 and printed
 compileall-created cache directories; after cleanup, final rerun exited 0
 with no output; broader cache check for `.pytest_cache`, `.mypy_cache`, and
-`.ruff_cache` exit 0 with no output. M245 extension register type spelling is
-selected again now that M244.5 is accepted.
+`.ruff_cache` exit 0 with no output. M246 real vector intrinsic rendering
+readiness planning is selected next to avoid assuming unsupported
+`intrin_compose` backend name semantics.
 ```
 
 Next expected action:
 
 ```text
-Run the active M245 execution-review loop. Use one write-capable executor and
-read-only review/audit subagents. Teach the backend type-spelling boundary to
-translate already-lowered current vector/register type values through typed
-`extension.tsl` metadata for C++ and Rust. Extend the generic
-`primitive_project_pipeline.py` path only if the milestone needs pipeline
-integration context; do not resurrect fixture-shaped pipelines. Do not render
-real vector/intrinsic generated projects, add new lowering, broaden primitive
-selection or dependency closure, parse target-language expressions, move type
-selection into templates, or introduce runtime dependencies on `frozen` or
-`tslgenold`.
+Run the active M246 planning prompt. Use read-only evidence,
+lowering/boundary, backend/rendering, test, and documentation auditors. Do not
+implement production code. Inventory real unmasked vector `add`/`sub` bodies
+from `fundamental.tsl`, classify which can pass through accepted recursive
+TSIL lowering and backend rendering boundaries, identify any missing typed
+`intrin_compose` compose-name policy, and create the next M247 executor prompt.
+Do not create pairwise keyword combinations, hardcode intrinsic names, extend
+`generated_primitive_pipeline.py`, add fixture-shaped pipelines, broaden
+selection/dependency closure, or introduce runtime dependencies on
+`frozen`/`tslgenold`.
 ```
 
 Previous review verdict:
@@ -1082,13 +1094,15 @@ boundary execution-review. Post-M244 workflow correction then deferred M245
 and inserted M244.5 real primitive project pipeline consolidation before M245
 to remove fixture-shaped pipeline ownership. M244.5 execution-review returned
 Accept with no focused revision required and selected M245 extension register
-type spelling boundary execution-review again.
+type spelling boundary execution-review again. M245 execution-review returned
+Accept with no focused revision required and selected M246 real vector
+intrinsic rendering readiness planning.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m244-5-real-primitive-project-pipeline-consolidation-execution-review-loop-prompt.md
+docs/agent/runs/m245-extension-register-type-spelling-boundary-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

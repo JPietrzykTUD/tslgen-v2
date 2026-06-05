@@ -193,7 +193,7 @@ def test_m192_reports_missing_size_type_translation_in_backend_metadata() -> Non
     assert "type_size" in result.diagnostics[0].message
 
 
-def test_m192_rejects_vector_requests_without_broadening_type_spelling() -> None:
+def test_m192_vector_requests_require_extension_catalog_metadata() -> None:
     result = translate_backend_type_spelling_request(
         _request(
             "cpp",
@@ -205,9 +205,9 @@ def test_m192_rejects_vector_requests_without_broadening_type_spelling() -> None
 
     assert result.spelling is None
     assert _codes(result.diagnostics) == (
-        "TSL-BACKEND-TYPE-SPELLING-UNSUPPORTED-VALUE",
+        "TSL-BACKEND-TYPE-SPELLING-MISSING-EXTENSION-CATALOG",
     )
-    assert "CurrentVector" in result.diagnostics[0].message
+    assert "extension catalog" in result.diagnostics[0].message
 
 
 def _active_catalog() -> BackendMetadataCatalog:
