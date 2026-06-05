@@ -2073,6 +2073,20 @@ contiguous raw-token runs. It must not grow separate primitive-call selector
 semantics, argument semantics, dependency lookup, backend rendering, recursive
 argument lowering, or source repair.
 
+### Post-M236 Recursive Payload Diagnostic Propagation
+
+M236 keeps the M235 primitive-call adapter behavior but changes catalog-side
+diagnostic visibility for recursive `emit_return(...)` payload token feeding.
+When a known payload fragment such as `call<...>(...)` is recognized by the
+recursive fragment boundary but cannot be adapted to the accepted typed fact,
+the malformed-fragment diagnostic is propagated into catalog construction.
+
+Malformed known fragments remain source-owned raw payload tokens for local token
+preservation, but they are no longer silent catalog-success fallbacks when the
+catalog boundary can observe the diagnostic. M236 does not add new
+primitive-call selector semantics, argument expression parsing, dependency
+closure, backend rendering, broad TSIL parsing, or source repair.
+
 ### M153 Backend Helper Raw Preservation Boundary
 
 Milestone 153 locks down that `details::arith_add`,

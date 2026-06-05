@@ -103,6 +103,12 @@ class PrimitiveCallKeywordDirectiveExtractionResult:
     diagnostics: tuple[Diagnostic, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class PayloadTokenFragmentSequenceResult:
+    tokens: tuple[RawStringToken | LowerableDirective, ...]
+    diagnostics: tuple[Diagnostic, ...]
+
+
 def lower_source_body_fragments(
     source: SourceBodyText | SourceBodyLexicalScanResult,
 ) -> SourceBodyFragmentLoweringResult:
@@ -119,7 +125,14 @@ def lower_source_body_fragments(
 def payload_tokens_from_fragment_sequence(
     sequence: SourceBodyFragmentSequence,
 ) -> tuple[RawStringToken | LowerableDirective, ...]:
+    return payload_token_result_from_fragment_sequence(sequence).tokens
+
+
+def payload_token_result_from_fragment_sequence(
+    sequence: SourceBodyFragmentSequence,
+) -> PayloadTokenFragmentSequenceResult:
     tokens: list[RawStringToken | LowerableDirective] = []
+    diagnostics: list[Diagnostic] = []
     for fragment in sequence.fragments:
         if isinstance(fragment, RawSourceFragment):
             tokens.append(
@@ -132,6 +145,7 @@ def payload_tokens_from_fragment_sequence(
             if result.directive is not None:
                 tokens.append(result.directive)
                 continue
+            diagnostics.extend(result.diagnostics)
 
         tokens.append(
             RawStringToken(
@@ -139,7 +153,10 @@ def payload_tokens_from_fragment_sequence(
                 source=fragment.source_region.full_span.start,
             )
         )
-    return tuple(tokens)
+    return PayloadTokenFragmentSequenceResult(
+        tokens=tuple(tokens),
+        diagnostics=tuple(diagnostics),
+    )
 
 
 def extract_primitive_call_directives(

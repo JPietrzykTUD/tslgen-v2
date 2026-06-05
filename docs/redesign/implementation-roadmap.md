@@ -28711,14 +28711,15 @@ Accepted validation:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m236-recursive-payload-fragment-diagnostic-propagation-execution-review-loop-prompt.md`.
 
 Goal:
 
 Propagate diagnostics produced while adapting recursive `emit_return` payload
 fragments into catalog construction so malformed exact TSIL keyword fragments
-do not silently degrade into raw payload text.
+do not silently degrade into raw payload text. This is a lowering closeout
+cleanup, not a new primitive-call feature.
 
 Scope:
 
@@ -28738,7 +28739,14 @@ Out of scope:
 New primitive-call selector semantics; dependency closure changes; recursive
 lowering of primitive-call arguments; backend call rendering; generated
 artifact expansion; broad TSIL parsing; source repair; replacing the raw-token
-classifier beyond consuming the shared M235 adapter.
+classifier beyond consuming the shared M235 adapter; any follow-up
+primitive-call cleanup prompt unless M236 review identifies a concrete blocker.
+
+Exit rule:
+
+After M236 acceptance, the next selected prompt should return to
+backend/generated-output work unless review records a concrete blocking
+diagnostic issue that must be fixed first.
 
 Validation:
 
@@ -28746,5 +28754,98 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py::test_m134_emit_return_exact_add_call_lowers_to_existing_add_artifacts tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py tslgen/tests/test_m236_recursive_payload_fragment_diagnostic_propagation.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M236 added `PayloadTokenFragmentSequenceResult`, a small frozen slotted result
+for recursive payload-token adaptation. It carries the payload tokens plus
+diagnostics emitted while adapting known keyword fragments. The existing
+token-only `payload_tokens_from_fragment_sequence(...)` remains as a
+compatibility convenience that delegates to the result-producing helper.
+
+Catalog-side recursive `emit_return` payload token feeding now appends both
+M233 recursive scan diagnostics and M236 payload adaptation diagnostics to the
+catalog diagnostic accumulator. Malformed known fragments such as
+`call<target=sub>(...)` therefore become visible catalog errors instead of a
+silent successful catalog build with raw fallback. Successful exact
+`call<primitive=...>(...)` payload feeding, the exact add-call artifact fold,
+M150/M151 primitive-call resolver behavior, and M224 generated-project
+behavior remain covered.
+
+M236 did not add new primitive-call selector semantics, dependency closure,
+recursive argument lowering, backend call rendering, broad TSIL parsing, source
+repair, or a new primitive-call cleanup path.
+
+Tests added:
+
+- payload token result values are frozen/slotted dataclasses;
+- malformed `call` fragments inside `emit_return(...)` produce the shared
+  malformed-fragment diagnostic at helper level;
+- catalog construction surfaces malformed recursive payload diagnostics and
+  returns no catalog.
+
+Review verdict:
+
+Accepted With Follow-Ups. Lowering-boundary and complexity reviews accepted
+with no findings. Regression review accepted with one closeout follow-up:
+record the changed diagnostic behavior in the behavioral spec; that note was
+added under "Post-M236 Recursive Payload Diagnostic Propagation".
+
+Accepted validation:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- Required pytest bundle: exit 0, 60 tests passed.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created `__pycache__` directories.
+
+Exit decision:
+
+M236 completed the closeout lowering cleanup and review did not identify a
+concrete blocking diagnostic issue. Per the M236 exit rule, the next selected
+prompt returns to backend/generated-output work.
+
+### Milestone 237: Backend Generated-Output Resumption Planning
+
+Status:
+
+Selected. Planning prompt:
+`docs/agent/runs/m237-backend-generated-output-resumption-planning-prompt.md`.
+
+Goal:
+
+Plan the next backend/generated-output milestone after the M228-M236 parser and
+lowering detour. The plan must re-check the accepted M217/M218/M222/M223/M224/
+M225/M227 render/template path, decide whether the real x86 intrinsic fixture
+can resume now, and choose exactly one next executable backend/output slice.
+
+Scope:
+
+- Audit the current generated-output path from parsed `.tsl` through selection,
+  lowering, typed render plans, supplementary templates, generated project
+  composition, artifact writing, and build verification.
+- Reassess the stopped M228 real x86 intrinsic fixture against the accepted
+  parser/body/lowering work now in place.
+- Identify the smallest backend/output slice that gets closer to compile-tested
+  generated C++ and Rust artifacts without adding raw language code to Python.
+- Keep C++ and Rust in parity unless the plan records a concrete temporary
+  reason and nearby catch-up.
+- Preserve presentation-only templates and already-decided typed render
+  values.
+
+Out of scope:
+
+Production code changes; new lowering cleanup; primitive-call semantics;
+backend semantic decisions in templates; broad renderer registries/worklists;
+source repair; target-language parsing; host CPU autodetection; compiler
+capability modeling; runtime dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
 find tslgen -type d -name __pycache__ -print
 ```

@@ -25,7 +25,7 @@ from tslgen.domain.signatures import (
 )
 from tslgen.lowering.source_body_fragments import (
     lower_source_body_fragments,
-    payload_tokens_from_fragment_sequence,
+    payload_token_result_from_fragment_sequence,
 )
 from tslgen.pipeline.extension_catalog import build_extension_catalog, build_type_groups
 from tslgen.pipeline._tsil_directives import classify_tsil_directive_line
@@ -299,7 +299,7 @@ class CatalogBuilder:
         return Implementation(
             extension=parsed.extension,
             type_tag=parsed.type_tag,
-            body=_build_body(parsed, shape),
+            body=_build_body(parsed, shape, diagnostics),
             source=parsed.source,
         )
 
@@ -607,9 +607,10 @@ def _duplicate_implementation_key_diagnostics(
 def _build_body(
     parsed: ParsedImplementation,
     shape: _SourceShape | None,
+    diagnostics: list[Diagnostic],
 ) -> ImplementationBody:
     del shape
-    return _build_implementation_body(parsed.body)
+    return _build_implementation_body(parsed.body, diagnostics)
 
 
 def _single_operation_fragment(
@@ -635,7 +636,10 @@ def _is_parsed_tsil_raw_body(body: ParsedImplementationBody) -> bool:
     )
 
 
-def _build_implementation_body(body: ParsedImplementationBody) -> ImplementationBody:
+def _build_implementation_body(
+    body: ParsedImplementationBody,
+    diagnostics: list[Diagnostic],
+) -> ImplementationBody:
     tokens = tuple(
         token
         for line in body.lines
@@ -648,7 +652,7 @@ def _build_implementation_body(body: ParsedImplementationBody) -> Implementation
     )
     if body.envelope == PARSED_TSIL_BODY_ENVELOPE:
         tokens = classify_tsil_primitive_call_tokens(tokens)
-        tokens = _classify_recursive_tsil_payload_tokens(tokens)
+        tokens = _classify_recursive_tsil_payload_tokens(tokens, diagnostics)
 
     return ImplementationBody(
         tokens=tokens,
@@ -658,11 +662,17 @@ def _build_implementation_body(body: ParsedImplementationBody) -> Implementation
 
 def _classify_recursive_tsil_payload_tokens(
     tokens: tuple[BodyToken, ...],
+    diagnostics: list[Diagnostic],
 ) -> tuple[BodyToken, ...]:
-    return tuple(_classify_recursive_tsil_payload_token(token) for token in tokens)
+    return tuple(
+        _classify_recursive_tsil_payload_token(token, diagnostics) for token in tokens
+    )
 
 
-def _classify_recursive_tsil_payload_token(token: BodyToken) -> BodyToken:
+def _classify_recursive_tsil_payload_token(
+    token: BodyToken,
+    diagnostics: list[Diagnostic],
+) -> BodyToken:
     if not isinstance(token, LowerableDirective):
         return token
     if token.name != _EMIT_RETURN_DIRECTIVE:
@@ -685,11 +695,14 @@ def _classify_recursive_tsil_payload_token(token: BodyToken) -> BodyToken:
         )
     )
     if fragment_result.diagnostics:
+        diagnostics.extend(fragment_result.diagnostics)
         payload_tokens = (RawStringToken(text=payload, source=payload_source),)
     else:
-        payload_tokens = payload_tokens_from_fragment_sequence(
+        payload_result = payload_token_result_from_fragment_sequence(
             fragment_result.sequence,
         )
+        diagnostics.extend(payload_result.diagnostics)
+        payload_tokens = payload_result.tokens
     return LowerableDirective(
         name=token.name,
         arguments=token.arguments,

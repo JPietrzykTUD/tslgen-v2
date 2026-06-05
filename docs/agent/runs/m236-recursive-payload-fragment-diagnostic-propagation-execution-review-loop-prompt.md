@@ -3,12 +3,16 @@
 Execute this prompt only when `docs/agent/current-redesign-state.md` points
 here and records M235 as accepted.
 
-This prompt selects a lowering implementation milestone. Use the
+This prompt selects a closeout lowering implementation milestone. Use the
 executor-review loop specified below. M235 consolidated exact primitive-call
 fragment adaptation, but catalog-side `emit_return` payload token feeding still
 uses a token-only helper. That means malformed exact `call` fragments inside an
 `emit_return(...)` payload can be preserved as raw payload text instead of
 surfacing the shared malformed-fragment diagnostic.
+
+M236 is an exit-ramp cleanup, not a new primitive-call feature. After M236 is
+accepted, the next prompt must return to backend/generated-output work unless
+review finds a concrete blocking diagnostic issue that must be fixed first.
 
 ## Accepted State
 
@@ -94,6 +98,8 @@ Implement the smallest maintainable slice that:
 - Broad TSIL parser machinery, registries, worklists, or source repair.
 - Replacing or broadening the standalone raw-token classifier beyond consuming
   the shared M235 adapter.
+- Any follow-up primitive-call cleanup prompt unless M236 review identifies a
+  concrete blocker.
 - Runtime dependency on `frozen/` or `tslgenold`.
 
 ## Required Anti-Regression Checks
@@ -159,7 +165,9 @@ Before finishing:
 - Create the next concrete prompt under `docs/agent/runs/`.
 - Update `docs/agent/current-redesign-state.md` to point at the next prompt.
 
-Do not start a new primitive-call semantic expansion in M236.
+Do not start a new primitive-call semantic expansion in M236. After acceptance,
+create a backend/generated-output prompt as the next active prompt unless review
+records a concrete blocking diagnostic issue.
 
 ## Final Report
 

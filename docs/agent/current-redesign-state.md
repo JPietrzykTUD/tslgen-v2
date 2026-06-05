@@ -10,7 +10,7 @@ Milestone 225 is accepted. Milestone 226.5 planning is accepted. Milestone 227
 is accepted. Milestone 228.5 planning is accepted. Milestone 229 is accepted.
 Milestone 230 is accepted. Milestone 231 is accepted. Milestone 232 is
 accepted. Milestone 233 is accepted. Milestone 234 is accepted. Milestone 235
-is accepted.
+is accepted. Milestone 236 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -777,39 +777,49 @@ selector identifier character policy; keep behavior-level drift tests primary
 over source-text ownership checks; surface malformed primitive-call fragment
 diagnostics from catalog-side `emit_return` payload token adaptation.
 
+M236 added `PayloadTokenFragmentSequenceResult`, a small frozen slotted result
+that carries recursive payload tokens plus diagnostics emitted while adapting
+known keyword fragments. Catalog-side recursive `emit_return` payload token
+feeding now propagates M233 recursive scan diagnostics and M236 payload
+adaptation diagnostics into catalog construction. Malformed known fragments
+such as `call<target=sub>(...)` are no longer silent successful catalog raw
+fallbacks. M236 did not add primitive-call semantics, dependency closure,
+recursive argument lowering, backend rendering, broad TSIL parsing, source
+repair, or a new primitive-call cleanup path. M236 completed the closeout
+lowering cleanup, so the next prompt returns to backend/generated-output
+planning.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M236 recursive payload fragment diagnostic propagation execution-review
-loop.
+Run M237 backend generated-output resumption planning.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m236-recursive-payload-fragment-diagnostic-propagation-execution-review-loop-prompt.md
+docs/agent/runs/m237-backend-generated-output-resumption-planning-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 236: Recursive Payload Fragment Diagnostic Propagation.
+Milestone 237: Backend Generated-Output Resumption Planning.
 ```
 
 Latest review verdict:
 
 ```text
-M235 execution-review returned Accept With Follow-Ups. Lowering-boundary
-review accepted with no blockers. Regression and complexity reviews accepted
-with follow-ups: pin or document the primitive-call selector identifier
-character policy, and keep behavior-level drift tests primary over the
-source-text ownership guard. Documentation review accepted after state,
-roadmap, behavioral spec, and M236 prompt closeout. Validation for M235:
-`git diff --check` exit 0 with no output; `python -B -m compileall -q
+M236 execution-review returned Accept With Follow-Ups. Lowering-boundary and
+complexity reviews accepted with no findings. Regression review accepted with
+one closeout follow-up to record the changed diagnostic behavior in the
+behavioral spec; the Post-M236 note was added. Documentation review accepted
+after state, roadmap, behavioral spec, and M237 prompt closeout. Validation for
+M236: `git diff --check` exit 0 with no output; `python -B -m compileall -q
 tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest bundle
-exit 0 with 57 tests passed; required
+exit 0 with 60 tests passed; required
 `find tslgen -type d -name __pycache__ -print` exit 0 and printed
 compile/test-created cache directories.
 ```
@@ -817,12 +827,12 @@ compile/test-created cache directories.
 Next expected action:
 
 ```text
-Run the active M236 execution-review loop prompt. Use one write-capable
-executor plus read-only reviewers. Propagate diagnostics emitted while adapting
-recursive `emit_return` payload fragments into catalog construction so
-malformed known keyword fragments do not silently degrade into raw payload
-text. Do not add new primitive-call semantics, argument expression parsing,
-backend call rendering, source repair, or broad TSIL parsing.
+Run the active M237 planning prompt. Use read-only subagents. Reassess the
+accepted backend/generated-output path after the M229-M236 parser/body/lowering
+detour, decide whether the real x86 intrinsic fixture can resume, and select
+exactly one next executable backend/output slice. Do not implement code in
+M237 and do not create another primitive-call cleanup prompt unless the
+planning review finds a concrete backend-output blocker caused by M236.
 ```
 
 Previous review verdict:
@@ -911,13 +921,14 @@ diagnostics revision and selected M234 pairwise lowering path cleanup. M234
 execution-review returned Accept With Follow-Ups after focused regression
 revision and selected M235 primitive-call fragment adapter consolidation. M235
 execution-review returned Accept With Follow-Ups and selected M236 recursive
-payload fragment diagnostic propagation.
+payload fragment diagnostic propagation. M236 execution-review returned Accept
+With Follow-Ups and selected M237 backend generated-output resumption planning.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m235-primitive-call-fragment-adapter-consolidation-execution-review-loop-prompt.md
+docs/agent/runs/m236-recursive-payload-fragment-diagnostic-propagation-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
