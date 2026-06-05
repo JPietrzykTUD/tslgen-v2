@@ -11,7 +11,8 @@ is accepted. Milestone 228.5 planning is accepted. Milestone 229 is accepted.
 Milestone 230 is accepted. Milestone 231 is accepted. Milestone 232 is
 accepted. Milestone 233 is accepted. Milestone 234 is accepted. Milestone 235
 is accepted. Milestone 236 is accepted. Milestone 237 planning is accepted.
-Milestone 238 is accepted. Milestone 239 is accepted.
+Milestone 238 is accepted. Milestone 239 is accepted. Milestone 240 is
+accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -823,57 +824,64 @@ adapter, but future write/verify or generated-project orchestration should
 live in pipeline/output code or tests over existing boundaries rather than
 growing `rendering.intrinsic_body_token_bridge` into a broad orchestrator.
 
+M240 added a focused integration test that proves synthetic already-lowered
+typed intrinsic handoff values can render M239 primitive profile artifacts,
+compose into the generated project skeleton, write through `ArtifactWriter`,
+and verify through the existing C++ and Rust build verifier. The synthetic
+fixture uses the selected `sse2` profile and direct x86 `_mm_add_epi32`
+intrinsic handoffs for both backends. M240 is test-only over accepted
+backend/output boundaries; it does not parse `.tsl`, call `Lowerer`, select
+real corpus primitives, execute dependency closure, reopen TSIL keyword
+handling, or inspect `frozen/` / `tslgenold`. M240 follow-up: primitive
+profile artifacts that replace skeleton profile files still need active-profile
+prelude presentation, currently supplied by ad hoc strings in tests and the
+tiny pipeline; M241 should move that prelude into a typed template-backed
+boundary.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M240 synthetic intrinsic generated-project verification execution-review loop.
+Run M241 primitive profile prelude template boundary execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m240-synthetic-intrinsic-generated-project-verification-execution-review-loop-prompt.md
+docs/agent/runs/m241-primitive-profile-prelude-template-boundary-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 240: Synthetic Intrinsic Generated-Project Verification.
+Milestone 241: Primitive Profile Prelude Template Boundary.
 ```
 
 Latest review verdict:
 
 ```text
-M239 execution-review returned Accept With Follow-Ups after focused test
-revision. Evidence and validation reviews accepted. Architecture review
-accepted with a follow-up that the focused rendering bridge must not grow into
-a broad backend/output orchestrator inside `rendering`; future composition,
-write, or build-verification orchestration should use a pipeline/output
-boundary or focused tests over existing boundaries. Test review first requested
-unsupported typed request coverage, Rust determinism coverage, and a stronger
-no-parser/lowerer/catalog guard; focused revision added those checks and
-revalidation passed. Documentation review requested normal closeout updates to
-roadmap, behavioral spec, state, and next prompt; those updates were
-completed. Validation for M239: `git diff --check` exit 0 with no output;
-`python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no
-output; required pytest bundle exit 0 with 68 tests passed; final
-`find tslgen -type d -name __pycache__ -print` exit 0 with no output after
-removing compile/test-created cache directories. After documentation closeout,
-`git diff --check` was rerun and exited 0 with no output.
+M240 execution-review returned Accept after documentation closeout.
+Architecture, evidence, test, and validation reviews accepted. Documentation
+review first requested the normal roadmap/state/next-prompt closeout; those
+updates were completed. Reviewers confirmed M240 is test-only over accepted
+boundaries, stays synthetic, keeps C++ and Rust in parity, and does not reopen
+lowering or real corpus selection. Validation for M240: `git diff --check`
+exit 0 with no output; `python -B -m compileall -q tslgen/src/tslgen
+tslgen/tests` exit 0 with no output; required pytest bundle exit 0 with 28
+tests passed; final `find tslgen -type d -name __pycache__ -print` exit 0 with
+no output after removing compile/test-created cache directories.
 ```
 
 Next expected action:
 
 ```text
-Run the active M240 execution-review loop. Use one write-capable executor and
-read-only review/audit subagents. Use synthetic already-lowered typed intrinsic
-handoff fixtures to render M239 primitive profile artifacts, compose them into
-the generated-project skeleton, write them through `ArtifactWriter`, and run
-the existing build verifier for C++ and Rust. Do not reopen lowering,
-parser/catalog/selector work, TSIL keyword handling, primitive-call semantics,
-dependency closure, or the full real x86 corpus fixture.
+Run the active M241 execution-review loop. Use one write-capable executor and
+read-only review/audit subagents. Move the active-profile prelude required by
+primitive profile replacement artifacts into a typed supplementary-template
+boundary for C++ and Rust. Do not reopen lowering, parser/catalog/selector
+work, TSIL keyword handling, primitive-call semantics, dependency closure, or
+the full real x86 corpus fixture.
 ```
 
 Previous review verdict:
@@ -970,13 +978,15 @@ execution-review returned Accept after focused architecture revision and
 selected M239 backend intrinsic body-token render bridge execution-review.
 M239 execution-review returned Accept With Follow-Ups after focused test
 revision and selected M240 synthetic intrinsic generated-project verification
+execution-review. M240 execution-review returned Accept after documentation
+closeout and selected M241 primitive profile prelude template boundary
 execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m239-backend-intrinsic-body-token-render-bridge-execution-review-loop-prompt.md
+docs/agent/runs/m240-synthetic-intrinsic-generated-project-verification-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

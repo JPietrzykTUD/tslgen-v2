@@ -29139,7 +29139,7 @@ selection, parsing, dependency planning, or source interpretation.
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m240-synthetic-intrinsic-generated-project-verification-execution-review-loop-prompt.md`.
 
 Goal:
@@ -29180,5 +29180,120 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m238_generated_project_source_template_boundary.py tslgen/tests/test_m239_backend_intrinsic_body_token_render_bridge.py tslgen/tests/test_m240_synthetic_intrinsic_generated_project_verification.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M240 added a focused integration test that proves a synthetic already-lowered
+typed intrinsic handoff can travel through the accepted backend/output path
+without parsing `.tsl` source or selecting real corpus primitives:
+
+```text
+typed intrinsic handoff
+-> M239 primitive profile artifacts
+-> generated-project skeleton artifacts
+-> selected-profile primitive replacement
+-> ArtifactWriter
+-> BuildVerifier
+```
+
+The test uses the existing `sse2` generated profile and a direct x86 intrinsic
+fixture, `_mm_add_epi32`, for both C++ and Rust. It renders C++ and Rust
+primitive profile artifacts through the M239 bridge, composes them into the
+generated project skeleton with the accepted selected-profile replacement
+policy, writes the composed project through `ArtifactWriter`, and verifies the
+written C++ and Rust projects with the existing build verifier.
+
+M240 intentionally remains synthetic. It constructs typed
+`BackendIntrinsicHandoff` values directly, uses only the accepted generated
+machine-profile selection boundary, and does not parse `tsldata`, call
+`Lowerer`, run real primitive selection, execute dependency closure, or inspect
+`frozen/` or `tslgenold`.
+
+Tests added:
+
+- C++ and Rust synthetic intrinsic profile artifacts compose into the generated
+  project for profile `sse2`.
+- Written output verifies through the existing C++/Rust build verifier.
+- Existing selected-profile C++ `-msse -msse2` options, Rust
+  `+sse,+sse2` target features, and verifier `RUSTFLAGS` are asserted.
+- Repeated render/compose output is deterministic by digest manifest and
+  content.
+- Verifier command ordering is asserted for the selected profile.
+- The fixture guards against parser, catalog, `Lowerer`, raw intrinsic
+  discovery, `frozen`, and `tslgenold` access.
+
+Review verdict:
+
+Accepted after documentation closeout. Architecture, evidence, test, and
+validation reviews accepted. Documentation review first requested the normal
+roadmap/state/next-prompt closeout; those updates were completed. Reviewers
+confirmed M240 is test-only over accepted boundaries, stays synthetic, keeps
+C++ and Rust in parity, and does not reopen lowering or real corpus
+selection.
+
+Accepted validation:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- Required pytest bundle: exit 0, 28 tests passed.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created cache directories; after cleanup, final rerun exited 0
+  with no output.
+
+Follow-up:
+
+M240 exposed a concrete presentation boundary that should be cleaned up before
+the next real corpus fixture attempt: profile replacement artifacts must carry
+the active-profile prelude expected by the generated smoke tests. Existing
+accepted tests and the tiny generated pipeline currently supply those C++/Rust
+profile constants with ad hoc presentation strings. The next slice should move
+that active-profile prelude into a typed, template-backed primitive profile
+prelude boundary so future primitive artifacts do not duplicate C++/Rust
+profile scaffolding in Python.
+
+### Milestone 241: Primitive Profile Prelude Template Boundary
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m241-primitive-profile-prelude-template-boundary-execution-review-loop-prompt.md`.
+
+Goal:
+
+Move the active-profile prelude required by primitive profile replacement
+artifacts into a focused typed/template boundary for C++ and Rust, preserving
+M223/M224/M240 behavior while removing ad hoc C++/Rust profile-scaffolding
+strings from tests and the tiny generated pipeline.
+
+Scope:
+
+- Add C++ and Rust supplementary template or partial-template assets for the
+  primitive profile prelude required when primitive artifacts replace generated
+  skeleton profile files.
+- Add a small typed helper that consumes already-decided generated profile
+  render values, such as profile name, family, C++ namespace/file stem, and
+  Rust module/profile feature values, and produces `RenderedNamespaceText` /
+  `RenderedModuleText` values suitable for primitive profile rendering.
+- Update the accepted tiny generated pipeline and focused tests to use the
+  helper instead of ad hoc active-profile C++/Rust strings.
+- Preserve C++ and Rust parity, deterministic output, artifact paths, and
+  existing write/build verification behavior.
+
+Out of scope:
+
+Lowering changes; parser/catalog/selector changes; real corpus primitive
+selection; dependency closure; intrinsic/type/source-operation semantics;
+generated-project composition policy changes; new CLI/API behavior; host CPU
+autodetection; runtime dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m223_first_real_generated_primitive.py tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m238_generated_project_source_template_boundary.py tslgen/tests/test_m240_synthetic_intrinsic_generated_project_verification.py tslgen/tests/test_m241_primitive_profile_prelude_template_boundary.py
 find tslgen -type d -name __pycache__ -print
 ```
