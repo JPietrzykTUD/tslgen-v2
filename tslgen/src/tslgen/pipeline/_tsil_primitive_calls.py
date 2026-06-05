@@ -1,51 +1,37 @@
 """Exact TSIL primitive-call island classification for raw body tokens."""
 
-import re
 from dataclasses import dataclass
 
 from tslgen.core.diagnostics import SourceLocation
 from tslgen.domain.catalog import (
     BodyToken,
     LowerableDirective,
-    NamedPrimitiveReference,
-    PrimitiveCall,
-    PrimitiveCallArgument,
-    PrimitiveCallSelector,
     RawStringToken,
-    SelfPrimitiveReference,
+)
+from tslgen.lowering.primitive_call_fragments import (
+    ExactPrimitiveCallFragment,
+    PrimitiveCallFragmentAdaptationResult,
+    PrimitiveCallFragmentText,
+    adapt_exact_primitive_call_fragment,
 )
 from tslgen.syntax.tsil_lexical import (
     BRACKET_DELIMITER,
     PAREN_DELIMITER,
-    LexicalPart,
     find_top_level_char,
     matching_close,
-    split_top_level_parts,
 )
 
 _CALL_PREFIX = "call<primitive="
-_SELF_SELECTOR = "@self"
-_ATTRS_PREFIX = "attrs["
-_PRIMITIVE_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 @dataclass(frozen=True, slots=True)
 class _PrimitiveCallMatch:
-    selector: str
-    selector_parts: "_PrimitiveCallSelectorParts"
+    selector_payload: str
     payload: str
-    argument_parts: tuple[LexicalPart, ...]
     start: int
-    selector_start: int
+    selector_payload_start: int
+    argument_payload_start: int
     end: int
-
-
-@dataclass(frozen=True, slots=True)
-class _PrimitiveCallSelectorParts:
-    target_kind: str
-    target_name: str | None
-    specialization: str | None
-    attrs: str | None
 
 
 def classify_tsil_primitive_call_tokens(
@@ -90,15 +76,13 @@ def _classify_raw_run(tokens: tuple[RawStringToken, ...]) -> tuple[BodyToken, ..
             classified.extend(_raw_token(joined, position, len(joined.text)))
             break
 
+        adaptation = _adapt_match(joined, match)
+        if adaptation.directive is None:
+            classified.extend(_raw_token(joined, position, len(joined.text)))
+            break
+
         classified.extend(_raw_token(joined, position, match.start))
-        classified.append(
-            LowerableDirective(
-                name="call",
-                arguments=("primitive", match.selector, match.payload),
-                source=joined.source_at(match.start),
-                primitive_call=_primitive_call_from_match(joined, match),
-            )
-        )
+        classified.append(adaptation.directive)
         position = match.end
 
     return tuple(classified)
@@ -124,16 +108,9 @@ def _match_primitive_call(text: str, start: int) -> _PrimitiveCallMatch | None:
     if not text.startswith(_CALL_PREFIX, start):
         return None
 
-    selector_start = start + len(_CALL_PREFIX)
-    selector_end = _matching_call_selector_end(text, selector_start)
+    selector_payload_start = start + len("call<")
+    selector_end = _matching_call_selector_end(text, selector_payload_start)
     if selector_end is None:
-        return None
-
-    selector = text[selector_start:selector_end]
-    if not selector:
-        return None
-    selector_parts = _parse_primitive_call_selector(selector)
-    if selector_parts is None:
         return None
 
     open_index = selector_end + 1
@@ -143,21 +120,13 @@ def _match_primitive_call(text: str, start: int) -> _PrimitiveCallMatch | None:
     close_index = matching_close(text, open_index, PAREN_DELIMITER)
     if close_index is None:
         return None
-    argument_parts = _split_call_argument_parts(
-        text,
-        open_index + 1,
-        close_index,
-    )
-    if argument_parts is None:
-        return None
 
     return _PrimitiveCallMatch(
-        selector=selector,
-        selector_parts=selector_parts,
+        selector_payload=text[selector_payload_start:selector_end],
         payload=text[open_index + 1 : close_index],
-        argument_parts=argument_parts,
         start=start,
-        selector_start=selector_start,
+        selector_payload_start=selector_payload_start,
+        argument_payload_start=open_index + 1,
         end=close_index + 1,
     )
 
@@ -171,114 +140,22 @@ def _matching_call_selector_end(text: str, start: int) -> int | None:
     )
 
 
-def _parse_primitive_call_selector(
-    selector: str,
-) -> _PrimitiveCallSelectorParts | None:
-    if selector != selector.strip():
-        return None
-
-    index = 0
-    if selector.startswith(_SELF_SELECTOR):
-        target_kind = "self"
-        target_name = None
-        index = len(_SELF_SELECTOR)
-    else:
-        name_match = _PRIMITIVE_NAME_RE.match(selector)
-        if name_match is None:
-            return None
-        target_kind = "named"
-        target_name = name_match.group(0)
-        index = name_match.end()
-
-    specialization: str | None = None
-    if index < len(selector) and selector[index] == "[":
-        close_index = matching_close(selector, index, BRACKET_DELIMITER)
-        if close_index is None:
-            return None
-        specialization = selector[index + 1 : close_index]
-        index = close_index + 1
-
-    attrs: str | None = None
-    if index < len(selector):
-        whitespace_start = index
-        while index < len(selector) and selector[index].isspace():
-            index += 1
-        if index == whitespace_start:
-            return None
-        if not selector.startswith(_ATTRS_PREFIX, index):
-            return None
-        attrs_open_index = index + len("attrs")
-        close_index = matching_close(selector, attrs_open_index, BRACKET_DELIMITER)
-        if close_index is None:
-            return None
-        attrs = selector[attrs_open_index + 1 : close_index]
-        index = close_index + 1
-
-    if index != len(selector):
-        return None
-
-    return _PrimitiveCallSelectorParts(
-        target_kind=target_kind,
-        target_name=target_name,
-        specialization=specialization,
-        attrs=attrs,
-    )
-
-
-def _primitive_call_from_match(
+def _adapt_match(
     joined: "_JoinedRawTokens",
     match: _PrimitiveCallMatch,
-) -> PrimitiveCall:
-    selector_source = joined.source_at(match.selector_start)
-    parts = match.selector_parts
-    if parts.target_kind == "self":
-        target = SelfPrimitiveReference(source=selector_source)
-    else:
-        assert parts.target_name is not None
-        target = NamedPrimitiveReference(
-            name=parts.target_name,
-            source=selector_source,
+) -> PrimitiveCallFragmentAdaptationResult:
+    return adapt_exact_primitive_call_fragment(
+        ExactPrimitiveCallFragment(
+            source=joined.source_at(match.start),
+            selector_payload=PrimitiveCallFragmentText.from_source(
+                match.selector_payload,
+                joined.source_at(match.selector_payload_start),
+            ),
+            argument_payload=PrimitiveCallFragmentText.from_source(
+                match.payload,
+                joined.source_at(match.argument_payload_start),
+            ),
         )
-
-    return PrimitiveCall(
-        selector=PrimitiveCallSelector(
-            target=target,
-            specialization=parts.specialization,
-            attrs=parts.attrs,
-            source_text=match.selector,
-            source=selector_source,
-        ),
-        payload=match.payload,
-        source=joined.source_at(match.start),
-        arguments=tuple(
-            PrimitiveCallArgument(
-                text=argument.text,
-                source=joined.source_at(argument.start),
-            )
-            for argument in match.argument_parts
-        ),
-    )
-
-
-def _split_call_argument_parts(
-    text: str,
-    start: int,
-    end: int,
-) -> tuple[LexicalPart, ...] | None:
-    parts = split_top_level_parts(
-        text[start:end],
-        delimiters=(PAREN_DELIMITER, BRACKET_DELIMITER),
-        allow_empty_payload=True,
-    )
-    if parts is None:
-        return None
-    return tuple(
-        LexicalPart(
-            text=part.text,
-            start=start + part.start,
-            end=start + part.end,
-        )
-        for part in parts
     )
 
 

@@ -28615,7 +28615,7 @@ Additional focused regression validation:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m235-primitive-call-fragment-adapter-consolidation-execution-review-loop-prompt.md`.
 
 Goal:
@@ -28652,5 +28652,99 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py::test_m134_emit_return_exact_add_call_lowers_to_existing_add_artifacts tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M235 added `tslgen.lowering.primitive_call_fragments`, a focused exact
+primitive-call fragment adapter. The adapter owns the exact
+`call<primitive=...>(...)` selector prefix check, primitive selector parsing,
+top-level argument splitting, argument source locations, and malformed fragment
+diagnostics, and it produces the existing `PrimitiveCall` /
+`LowerableDirective(name="call", ...)` facts.
+
+The M233 recursive source-body fragment consumer and the remaining standalone
+raw-token classifier both now delegate to that shared adapter. The raw-token
+classifier still performs only lexical island discovery over contiguous raw
+token runs; it no longer owns duplicate selector or argument semantic parsing.
+M235 did not add new primitive-call selector semantics, dependency closure,
+argument expression parsing, recursive call-argument lowering, backend call
+rendering, broad TSIL parsing, or source repair.
+
+Tests added:
+
+- shared adapter value objects are frozen/slotted dataclasses;
+- exact named and `@self` primitive-call fragments adapt to typed facts;
+- recursive fragment token feeding and raw-token classification produce
+  equivalent primitive-call facts for the same exact source;
+- malformed selector-prefix fragments report the shared malformed-fragment
+  diagnostic through recursive extraction;
+- selector/argument parser ownership remains centralized in the shared module.
+
+Review verdict:
+
+Accepted With Follow-Ups. Lowering-boundary review accepted with no blockers.
+Regression and complexity reviews accepted with follow-ups.
+
+Follow-ups:
+
+- Pin or document the primitive-call selector identifier character policy,
+  because the shared helper currently uses Python `isalpha()` / `isalnum()`
+  while outer parser/catalog identifier policies are ASCII-regex based.
+- Prefer behavior-level drift tests as the primary safety net; the M235
+  source-text ownership test is useful but intentionally brittle.
+- Surface malformed primitive-call fragment diagnostics from catalog-side
+  `emit_return` payload token adaptation instead of silently preserving those
+  malformed payload fragments as raw text.
+
+Accepted validation:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- Required pytest bundle: exit 0, 57 tests passed.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created `__pycache__` directories.
+
+### Milestone 236: Recursive Payload Fragment Diagnostic Propagation
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m236-recursive-payload-fragment-diagnostic-propagation-execution-review-loop-prompt.md`.
+
+Goal:
+
+Propagate diagnostics produced while adapting recursive `emit_return` payload
+fragments into catalog construction so malformed exact TSIL keyword fragments
+do not silently degrade into raw payload text.
+
+Scope:
+
+- Replace or extend `payload_tokens_from_fragment_sequence(...)` with a small
+  typed result that carries both payload tokens and diagnostics.
+- Update catalog-side recursive `emit_return` payload token feeding to append
+  those diagnostics to catalog diagnostics.
+- Preserve the existing no-source-repair behavior: malformed payload fragments
+  should not be normalized, completed, guessed, or semantically interpreted.
+- Keep successful exact `call<primitive=...>(...)` payload feeding behavior and
+  the exact add-call artifact regression intact.
+- Add focused diagnostics coverage for malformed `call` fragments inside
+  `emit_return(...)`.
+
+Out of scope:
+
+New primitive-call selector semantics; dependency closure changes; recursive
+lowering of primitive-call arguments; backend call rendering; generated
+artifact expansion; broad TSIL parsing; source repair; replacing the raw-token
+classifier beyond consuming the shared M235 adapter.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py::test_m134_emit_return_exact_add_call_lowers_to_existing_add_artifacts tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py tslgen/tests/test_m236_recursive_payload_fragment_diagnostic_propagation.py
 find tslgen -type d -name __pycache__ -print
 ```

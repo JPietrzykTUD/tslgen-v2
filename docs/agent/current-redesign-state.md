@@ -9,7 +9,8 @@ or accepted planning passes.
 Milestone 225 is accepted. Milestone 226.5 planning is accepted. Milestone 227
 is accepted. Milestone 228.5 planning is accepted. Milestone 229 is accepted.
 Milestone 230 is accepted. Milestone 231 is accepted. Milestone 232 is
-accepted. Milestone 233 is accepted. Milestone 234 is accepted.
+accepted. Milestone 233 is accepted. Milestone 234 is accepted. Milestone 235
+is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -763,54 +764,65 @@ quarantine the remaining standalone raw classifier; decide whether
 catalog-side payload adaptation should surface malformed `call` diagnostics
 instead of preserving malformed fragments as raw text.
 
+M235 added `tslgen.lowering.primitive_call_fragments` as the shared exact
+primitive-call fragment adapter. It owns exact `call<primitive=...>(...)`
+selector prefix validation, selector parsing, top-level argument splitting,
+argument source locations, and malformed-fragment diagnostics, and produces
+the existing `PrimitiveCall` / `LowerableDirective(name="call", ...)` facts.
+Both the M233 recursive fragment consumer and the remaining standalone raw
+token classifier now delegate to that helper. M235 did not add new selector
+semantics, dependency closure, recursive argument lowering, backend rendering,
+broad TSIL parsing, or source repair. M235 follow-ups: pin or document the
+selector identifier character policy; keep behavior-level drift tests primary
+over source-text ownership checks; surface malformed primitive-call fragment
+diagnostics from catalog-side `emit_return` payload token adaptation.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M235 primitive-call fragment adapter consolidation execution-review loop.
+Run M236 recursive payload fragment diagnostic propagation execution-review
+loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m235-primitive-call-fragment-adapter-consolidation-execution-review-loop-prompt.md
+docs/agent/runs/m236-recursive-payload-fragment-diagnostic-propagation-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 235: Primitive-Call Fragment Adapter Consolidation.
+Milestone 236: Recursive Payload Fragment Diagnostic Propagation.
 ```
 
 Latest review verdict:
 
 ```text
-M234 execution-review returned Accept With Follow-Ups. Lowering-boundary and
-complexity reviewers accepted with follow-ups. Regression review initially
-returned Needs Revision because exact
-`emit_return(call<primitive=add>(left, right));` artifact generation regressed;
-focused revision restored the exact add-call fold through a generic token
-sequence adapter and regression re-review returned Accept. Documentation review
-accepted with closeout requirements. Validation for M234: `git diff --check`
-exit 0 with no output; `python -B -m compileall -q tslgen/src/tslgen
-tslgen/tests` exit 0 with no output; required pytest bundle exit 0 with 58
-tests passed; required `find tslgen -type d -name __pycache__ -print` exit 0
-and printed compile/test-created cache directories. Additional focused
-regression validation for the M107 exact add-call artifact test passed.
+M235 execution-review returned Accept With Follow-Ups. Lowering-boundary
+review accepted with no blockers. Regression and complexity reviews accepted
+with follow-ups: pin or document the primitive-call selector identifier
+character policy, and keep behavior-level drift tests primary over the
+source-text ownership guard. Documentation review accepted after state,
+roadmap, behavioral spec, and M236 prompt closeout. Validation for M235:
+`git diff --check` exit 0 with no output; `python -B -m compileall -q
+tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest bundle
+exit 0 with 57 tests passed; required
+`find tslgen -type d -name __pycache__ -print` exit 0 and printed
+compile/test-created cache directories.
 ```
 
 Next expected action:
 
 ```text
-Run the active M235 execution-review loop prompt. Use one write-capable
-executor plus read-only reviewers. Consolidate the exact primitive-call
-fragment adapter so the M233 recursive fragment path and the remaining
-standalone raw-token classifier do not duplicate selector/argument parsing. If
-the raw classifier cannot be replaced without broadening scope, explicitly
-quarantine it with legacy/compat naming and tests. Do not add new
-primitive-call semantics, argument expression parsing, backend call rendering,
-or broad TSIL parsing.
+Run the active M236 execution-review loop prompt. Use one write-capable
+executor plus read-only reviewers. Propagate diagnostics emitted while adapting
+recursive `emit_return` payload fragments into catalog construction so
+malformed known keyword fragments do not silently degrade into raw payload
+text. Do not add new primitive-call semantics, argument expression parsing,
+backend call rendering, source repair, or broad TSIL parsing.
 ```
 
 Previous review verdict:
@@ -897,13 +909,15 @@ execution-review returned Accept and selected M233 recursive TSIL keyword
 region lowering. M233 execution-review returned Accept after focused
 diagnostics revision and selected M234 pairwise lowering path cleanup. M234
 execution-review returned Accept With Follow-Ups after focused regression
-revision and selected M235 primitive-call fragment adapter consolidation.
+revision and selected M235 primitive-call fragment adapter consolidation. M235
+execution-review returned Accept With Follow-Ups and selected M236 recursive
+payload fragment diagnostic propagation.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m234-pairwise-lowering-path-cleanup-execution-review-loop-prompt.md
+docs/agent/runs/m235-primitive-call-fragment-adapter-consolidation-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

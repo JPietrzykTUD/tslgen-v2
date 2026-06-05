@@ -2060,6 +2060,19 @@ renderers do not need primitive-call expression rendering for that legacy exact
 case. Other primitive-call expressions remain governed by the M150/M151
 resolver and the currently selected expression consumers.
 
+### Post-M235 Primitive-Call Fragment Adapter Consolidation
+
+M235 keeps the M234 behavior but consolidates exact primitive-call fragment
+adaptation into one shared lowering helper. Both the recursive M233 source-body
+fragment consumer and the remaining standalone raw-token classifier use that
+helper for exact `call<primitive=...>(...)` selector adaptation, top-level
+argument splitting, source locations, and malformed-fragment diagnostics.
+
+The raw-token classifier remains only a lexical compatibility classifier for
+contiguous raw-token runs. It must not grow separate primitive-call selector
+semantics, argument semantics, dependency lookup, backend rendering, recursive
+argument lowering, or source repair.
+
 ### M153 Backend Helper Raw Preservation Boundary
 
 Milestone 153 locks down that `details::arith_add`,
