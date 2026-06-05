@@ -264,6 +264,46 @@ does not reopen lowering, parser/catalog/selector work, primitive-call
 semantics, dependency closure, real corpus selection, generated-project
 composition policy, artifact writing, or build verification.
 
+### M242 Real Corpus Lowering Completion Gate
+
+Milestone 242 adds an audit-only real-corpus lowering characterization
+boundary. It is not a generation pipeline stage and must not render artifacts,
+write files, build generated projects, select primitives, execute dependency
+closure, or call backend renderers.
+
+The accepted boundary consumes already-loaded `SourceDocument` values and uses
+the accepted Lark-backed `OuterTslParser` plus source-body envelope extraction
+to inspect real `tsldata/primitives/**/*.tsl` primitive implementation bodies.
+Both `tsil` and `tsl` implementation body payloads are included. The body text
+then flows through the accepted recursive source-body fragment lowering and
+existing family-specific discovery/directive boundaries.
+
+The characterization reports deterministic, typed facts:
+
+- primitive file count;
+- parsed document count;
+- primitive declaration count;
+- implementation body envelope count;
+- observed TSIL/source-island family counts;
+- validated family counts;
+- recursive keyword family counts;
+- representative source locations and source text;
+- diagnostics.
+
+`is_complete_for_backend_rendering` is true only when there are no diagnostics,
+no unsupported generation-relevant observed families, and every observed family
+count is validated through accepted recursive lowering or an accepted
+representative discovery/directive boundary. Static family labels alone are
+not enough to pass the gate.
+
+M242's accepted real-corpus snapshot covers 30 primitive files, 30 parsed
+documents, 140 primitive declarations, and 1331 implementation body envelopes.
+It includes the `tsl`-only `cast<saturating>` family and finds no remaining
+lowering-owned generation-relevant TSIL family before backend/rendering
+resumes. Raw target-language text around accepted TSIL islands remains raw
+source text; M242 does not parse target-language expressions, statements, or
+operators and does not introduce pairwise keyword-combination lowering.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

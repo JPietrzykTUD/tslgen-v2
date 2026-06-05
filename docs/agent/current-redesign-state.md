@@ -12,7 +12,7 @@ Milestone 230 is accepted. Milestone 231 is accepted. Milestone 232 is
 accepted. Milestone 233 is accepted. Milestone 234 is accepted. Milestone 235
 is accepted. Milestone 236 is accepted. Milestone 237 planning is accepted.
 Milestone 238 is accepted. Milestone 239 is accepted. Milestone 240 is
-accepted. Milestone 241 is accepted.
+accepted. Milestone 241 is accepted. Milestone 242 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -850,58 +850,75 @@ M241 did not reopen lowering, parser/catalog/selector work, dependency
 closure, real corpus selection, generated-project composition, artifact
 writing, or build verification.
 
+M242 added an audit-only real-corpus lowering characterization helper under
+`tslgen.lowering.corpus_completion` and a focused real-corpus gate test. The
+gate consumes already-loaded `SourceDocument` values, parses them through the
+accepted Lark-backed `OuterTslParser`, includes both `tsil` and `tsl`
+implementation payloads, lowers body text through accepted recursive
+source-body fragment lowering, and validates observed TSIL/source-island
+family counts through accepted recursive, discovery, or directive boundaries.
+The accepted corpus snapshot is 30 primitive files, 30 parsed documents, 140
+primitive declarations, and 1331 implementation body envelopes, with no
+diagnostics, no unsupported generation-relevant family, and
+`validated_families` exactly matching `observed_families`. M242 did not
+render artifacts, call backend renderers, write generated projects, run build
+verification, perform dependency closure, select primitives, inspect
+`frozen`/`tslgenold`, or introduce pairwise keyword-combination lowering.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M242 real corpus lowering completion gate execution-review loop.
+Run M243 real scalar emit-return function rendering execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m242-real-corpus-lowering-completion-gate-execution-review-loop-prompt.md
+docs/agent/runs/m243-real-scalar-emit-return-function-rendering-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 242: Real Corpus Lowering Completion Gate.
+Milestone 243: Real Scalar Emit-Return Function Rendering.
 ```
 
 Latest review verdict:
 
 ```text
-M241 execution-review returned Accept after focused test coverage revision and
-documentation closeout. Architecture, evidence, validation, and focused test
-re-review accepted. Documentation review first requested the normal roadmap,
-behavioral spec, design decision, state, and next-prompt closeout; those
-updates were completed. Test review first requested explicit C++
-`active_profile_family` coverage and Rust missing/invalid template diagnostic
-coverage; focused revision added those checks. Validation for M241:
-`git diff --check` exit 0 with no output; `python -B -m compileall -q
-tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest bundle
-exit 0 with 34 tests passed; final `find tslgen -type d -name __pycache__
--print` exit 0 with no output after removing compile/test-created cache
-directories.
+M242 execution-review returned Accept after focused revision and documentation
+closeout. The first review found that the initial corpus gate missed `tsl`
+body envelopes and could pass too much from static family labels. The focused
+revision included `tsl` envelopes, added `cast<saturating>` to the real
+counts, and made completeness require accepted-path validation for every
+observed family. Lowering/boundary, evidence, test, documentation, and
+validation reviews accepted. Validation for M242: `git diff --check` exit 0
+with no output; `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`
+exit 0 with no output; required pytest bundle exit 0 with 38 tests passed;
+final `find tslgen -type d -name __pycache__ -print` exit 0 with no output
+after removing compile/test-created cache directories.
 ```
 
 Next expected action:
 
 ```text
-Run the active M242 execution-review loop. Use one write-capable executor and
-read-only review/audit subagents. Run one real-corpus lowering completion gate
-over `tsldata/primitives/**/*.tsl`: parse real primitive files, discover
-generation-relevant TSIL keyword islands through accepted lexical/recursive
-lowering boundaries, lower supported islands into typed facts/handoffs or
-diagnostics, and produce deterministic characterization counts with source
-provenance. Do not render artifacts, assemble backend intrinsic names, write
-generated projects, run build verification, implement dependency closure,
-perform primitive selection, or add pairwise keyword-combination special cases.
-If the gate passes, the next prompt must pivot to backend/rendering; if it
-finds a missing generation-relevant TSIL family, the next prompt must be one
-focused lowering follow-up for that family.
+Run the active M243 execution-review loop. Use one write-capable executor and
+read-only review/audit subagents. Connect the already accepted
+template-backed function/profile/project rendering stack to a real `tsldata`
+primitive implementation body whose accepted lowered body is an exact single
+`emit_return(PAYLOAD);` region, then compile the generated C++ and Rust scalar
+projects. The starting case is real scalar `add` / `si32` from
+`tsldata/primitives/arithmetic/fundamental.tsl`. Use accepted parser/body
+facts, accepted recursive body lowering, existing function-shape templates,
+existing primitive-profile templates, generated-project skeleton composition,
+`ArtifactWriter`, and build verification. Do not add new lowering semantics,
+target-language operator parsing, pairwise keyword-combination handling,
+broad real-corpus catalog selection, dependency closure, a new scalar
+renderer, production C++/Rust function strings in Python, or dependence on
+the tiny M224 parser/body shortcut and local scalar/operator spelling tables
+for the real-corpus positive path.
 ```
 
 Previous review verdict:
@@ -1002,13 +1019,15 @@ execution-review. M240 execution-review returned Accept after documentation
 closeout and selected M241 primitive profile artifact presentation boundary
 execution-review. M241 execution-review returned Accept after focused test
 coverage revision and documentation closeout and selected M242 real corpus
-lowering completion gate execution-review.
+lowering completion gate execution-review. M242 execution-review returned
+Accept after focused revision and documentation closeout and selected M243
+real scalar emit-return function rendering execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m241-primitive-profile-artifact-presentation-boundary-execution-review-loop-prompt.md
+docs/agent/runs/m242-real-corpus-lowering-completion-gate-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

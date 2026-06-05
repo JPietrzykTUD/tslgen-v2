@@ -29376,7 +29376,7 @@ lowering family.
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m242-real-corpus-lowering-completion-gate-execution-review-loop-prompt.md`.
 
 Goal:
@@ -29429,5 +29429,124 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m229_outer_tsl_declaration_parser_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py tslgen/tests/test_m236_recursive_payload_fragment_diagnostic_propagation.py tslgen/tests/test_m242_real_corpus_lowering_completion_gate.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M242 added an audit-only real-corpus lowering characterization helper under
+`tslgen.lowering.corpus_completion` and a focused real-corpus gate test. The
+helper consumes already-loaded `SourceDocument` values, parses them through the
+accepted Lark-backed `OuterTslParser`, obtains primitive implementation body
+envelopes through accepted parser/body boundaries, lowers body text through
+the accepted recursive source-body fragment boundary, and reports deterministic
+observed/validated TSIL keyword-family counts with source provenance.
+
+M242 also corrected the outer parser body-envelope extraction so both `tsil`
+and `tsl` implementation body payloads are included. The real primitive
+corpus gate now covers:
+
+- 30 primitive `.tsl` files;
+- 30 parsed documents;
+- 140 primitive declarations;
+- 1331 implementation body envelopes;
+- all observed generation-relevant TSIL/source-island families, including the
+  `tsl`-only `cast<saturating>` occurrence.
+
+The observed family characterization has no diagnostics, no unsupported
+generation-relevant families, and `validated_families` exactly matching
+`observed_families`. Recursive full-count proof covers `emit_return`,
+`call<primitive>`, `if<generation>`, `else<generation>`, `loop<range>`,
+`switch<compile>`, and `intrin_compose`. The remaining handoff/source-island
+families are validated through their accepted representative discovery or
+directive boundaries. M242 does not render artifacts, call backend renderers,
+write generated projects, run build verification, perform dependency closure,
+select primitives, inspect `frozen/` or `tslgenold`, or introduce pairwise
+keyword-combination lowering.
+
+Review verdict:
+
+Accepted after focused revision. The first review found that the initial gate
+missed `tsl` body envelopes and could pass too much from static family labels.
+The focused revision included `tsl` envelopes, added `cast<saturating>` to the
+real counts, and made completeness require accepted-path validation for every
+observed family. Lowering/boundary, evidence, test, documentation, and
+validation reviews accepted after documentation closeout.
+
+Accepted validation:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- Required pytest bundle: exit 0, 38 tests passed.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created cache directories; after cleanup, final rerun exited 0
+  with no output.
+
+Follow-up:
+
+Lowering is complete enough to proceed to backend/rendering by the accepted
+current contract. The next milestone must not add another lowering-confidence
+slice. It should use accepted real-corpus parser/body/lowering facts to render
+real `.tsl` primitive bodies through the template-backed C++ and Rust
+primitive/profile artifact boundaries.
+
+### Milestone 243: Real Scalar Emit-Return Function Rendering
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m243-real-scalar-emit-return-function-rendering-execution-review-loop-prompt.md`.
+
+Goal:
+
+Render a backend-verified C++ and Rust generated project from a real
+`tsldata` scalar primitive implementation body whose accepted lowered body is
+an exact single `emit_return(PAYLOAD);` region, using the already accepted
+template-backed function/profile/project stack rather than inventing a new
+scalar renderer or hardcoding C++/Rust function text in Python.
+
+Scope:
+
+- Use the accepted `OuterTslParser` real-corpus declaration/body envelopes for
+  selected primitive data, not the old tiny source parser or synthetic
+  `body add(left, right)` fixture as the evidence source.
+- Select a safe real scalar `v:=(v,v)` implementation subset whose body is an
+  exact single `emit_return(PAYLOAD);` and whose payload contains raw
+  target-language-compatible expression text plus already accepted lowerable
+  islands only if they can be rendered by existing backend token renderers.
+- Start with the real scalar `add` / `si32` slice from
+  `tsldata/primitives/arithmetic/fundamental.tsl`; broaden within the
+  milestone only to other real scalar single-return bodies that share the same
+  already-supported function shape, type spelling, and body rendering
+  boundaries.
+- Feed already-decided typed render values into the existing C++ and Rust
+  function-shape templates and primitive profile artifact templates.
+- The real-corpus positive path must not depend on the tiny M224 parser/body
+  shortcut, local scalar/operator spelling tables, or
+  `LoweredBinaryOperationExpression` rendering. The tiny path may remain only
+  as regression coverage while M243 connects real `tsldata` evidence to the
+  accepted rendering stack.
+- Compose with the accepted generated-project skeleton, write through the
+  accepted `ArtifactWriter`, and verify both generated C++ and Rust projects
+  for the selected scalar profile.
+- Keep raw payload text raw when it is not a TSIL keyword island; do not parse
+  or model target-language operators.
+
+Out of scope:
+
+New lowering semantics; target-language expression/operator parsing; pairwise
+keyword-combination handling; intrinsic-name assembly beyond accepted
+translated handoff values; dependency closure; broad real-corpus catalog
+selection; vector/intrinsic/mask/generic profile rendering; tests from real
+primitive `tests:` metadata; support-helper semantics; buildsystem layout
+changes; runtime dependency on `frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m227_vv_function_shape_template_render_boundary.py tslgen/tests/test_m241_primitive_profile_artifact_presentation_boundary.py tslgen/tests/test_m242_real_corpus_lowering_completion_gate.py tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py
 find tslgen -type d -name __pycache__ -print
 ```

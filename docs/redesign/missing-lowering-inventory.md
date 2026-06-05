@@ -12,7 +12,7 @@ typed redesign contracts, explicit evidence, diagnostics, and tests.
 
 ## Current Baseline
 
-Accepted through M211:
+Accepted through M242:
 
 - Generation-time lowering handles only the accepted typed helper/predicate
   forms from M38, M41-M43, M48, M51-M59, and M67-M72.
@@ -126,8 +126,17 @@ the one selected indexed-vector generic-parameter occurrence spelled
 `immediate(1)=Index`. The primitive-local `generic_params` declarations are
 now catalog/domain facts for compile-time/template parameters, not runtime
 primitive parameters. The accepted observed kinds are `int`, `bool`, and
-`simd_type`, with typed defaults where present. No additional lowering-owned
-gap is selected after M211.
+`simd_type`, with typed defaults where present.
+
+M242 rechecked the complete current `tsldata/primitives/**/*.tsl` primitive
+corpus through accepted parser/body and recursive lowering boundaries. The
+gate considered 30 primitive files, 30 parsed documents, 140 primitive
+declarations, and 1331 implementation body envelopes, including both `tsil`
+and `tsl` implementation payloads. It found no parser/body/lowering
+diagnostics, no unsupported generation-relevant family, and validated every
+observed family count through accepted recursive lowering or accepted
+representative discovery/directive boundaries. No additional lowering-owned
+gap is selected after M242.
 
 ## Post-M152 Clean Restart Lowering Paths
 
@@ -149,7 +158,7 @@ to implement several lanes in one milestone.
 | Backend/output source-island family | `assume_aligned<...>(...)`, `array_type<...>`, `pack<...>(...)` | Backend/output stages need structured request identity for source forms that must not remain anonymous raw text, while their semantics remain backend/rendering-owned. | M187 accepts exact island discovery for all three forms with opaque payload preservation. Alignment, array layout/type, pack semantics, argument splitting, nested payload lowering, and rendering remain out of scope. |
 | Body-token rendering policy | Raw target-language text plus accepted lowerable TSIL islands | Generated artifacts need a way to emit raw source text around lowered islands without turning lowering into a C++/Rust parser. | Backend rendering/output integration consumes typed lowering results and source-owned raw tokens. This is not helper-call substitution or source repair. |
 
-As of the post-M211 completion gate, the paths above are either accepted
+As of the post-M242 completion gate, the paths above are either accepted
 lowering boundaries or backend/output handoff points. This inventory remains
 useful for backend/output planning, but it should not be read as a request for
 another lowering milestone unless new `.tsl` source data introduces a concrete

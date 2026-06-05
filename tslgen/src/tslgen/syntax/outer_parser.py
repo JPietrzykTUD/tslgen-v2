@@ -226,7 +226,7 @@ class _DocumentTransformer:
     ) -> tuple[ParsedImplementationBodyEnvelope, ...]:
         envelopes: list[ParsedImplementationBodyEnvelope] = []
         for child in field.children:
-            if child.key.text != "tsil" or not isinstance(
+            if child.key.text not in {"tsil", "tsl"} or not isinstance(
                 child.value,
                 ParsedTslScalarValue,
             ):

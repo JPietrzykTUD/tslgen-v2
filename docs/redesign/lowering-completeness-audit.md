@@ -310,3 +310,39 @@ M211 therefore selects no further lowering milestone. The next workflow step
 returns to backend/output planning, where render and translation stages should
 consume accepted typed lowering facts and backend modifier translation results
 without rescanning raw source text for new lowering facts.
+
+## M242 Real Corpus Completion Gate Result
+
+M242 re-ran the lowering completion claim as an executable real-corpus gate
+after the backend/rendering restart work had exposed several integration
+risks. The gate uses all current `tsldata/primitives/**/*.tsl` files as ground
+truth and obtains implementation bodies through the accepted outer parser/body
+envelope boundary. It includes both `tsil` and `tsl` implementation payloads.
+
+The accepted corpus snapshot is:
+
+- 30 primitive files considered;
+- 30 parsed primitive documents;
+- 140 primitive declarations;
+- 1331 implementation body envelopes;
+- no parser/body/lowering diagnostics;
+- no unsupported generation-relevant TSIL/source-island family.
+
+The gate validates observed family counts through accepted recursive lowering
+or accepted representative discovery/directive boundaries. Recursive full
+coverage is proven for `emit_return`, `call<primitive>`, `if<generation>`,
+`else<generation>`, `loop<range>`, `switch<compile>`, and
+`intrin_compose`. Handoff/source-island families such as `intrin`,
+`type<backend>`, `value<backend>`, `cast<...>`, `mem<...>`, `io<...>`,
+`mask<...>`, `mask::lane::*`, `array_type`, `assume_aligned`, `pack`,
+`let<type>`, `loop<unroll>`, backend compile-control directives, and
+`var<...>` are validated through their accepted exact discovery/directive
+boundaries with opaque payload preservation where that is the contract.
+
+M242 therefore reconfirms lowering complete enough to proceed to
+backend/rendering by the current contract. The next milestones should consume
+accepted typed facts, handoff requests, recursive body fragments, and raw
+source text around lowerable islands. They should not reopen broad lowering,
+invent pairwise keyword combinations, parse target-language operators or
+statements, or treat source-authored `details::*` helper calls as lowering
+semantics.
