@@ -13,6 +13,11 @@ from tslgen.rendering.generated_primitive_project import (
     scalar_profile_replacement_policy,
     selected_profile_replacement_policy,
 )
+from tslgen.rendering.intrinsic_body_token_bridge import (
+    IntrinsicBodyTokenProfileRenderContext,
+    IntrinsicBodyTokenProfileRenderResult,
+    render_intrinsic_body_token_profile_artifact,
+)
 from tslgen.rendering.primitive_templates import (
     CPP_PRIMITIVE_TEMPLATE_PATH,
     RUST_PRIMITIVE_TEMPLATE_PATH,
@@ -84,6 +89,8 @@ __all__ = [
     "GeneratedPrimitiveProjectReplacementPath",
     "CPP_PRIMITIVE_TEMPLATE_PATH",
     "CPP_V_ASSIGN_V_V_FUNCTION_TEMPLATE_PATH",
+    "IntrinsicBodyTokenProfileRenderContext",
+    "IntrinsicBodyTokenProfileRenderResult",
     "ProjectSkeletonRenderContext",
     "PrimitiveFunctionBodyText",
     "PrimitiveFunctionNameText",
@@ -133,6 +140,7 @@ __all__ = [
     "render_primitive_function_shape",
     "render_primitive_templates",
     "render_generated_project_skeleton",
+    "render_intrinsic_body_token_profile_artifact",
     "render_supplementary_assets",
     "rust_primitive_render_model",
     "rust_primitive_template_context",

@@ -29018,7 +29018,7 @@ to that file.
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m239-backend-intrinsic-body-token-render-bridge-execution-review-loop-prompt.md`.
 
 Goal:
@@ -29054,5 +29054,131 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m213_backend_intrinsic_invocation_assembly.py tslgen/tests/test_m214_cpp_intrinsic_invocation_call_rendering.py tslgen/tests/test_m219_rust_intrinsic_invocation_call_rendering.py tslgen/tests/test_m220_shared_intrinsic_body_token_substitution_parity.py tslgen/tests/test_m227_vv_function_shape_template_render_boundary.py tslgen/tests/test_m238_generated_project_source_template_boundary.py tslgen/tests/test_m239_backend_intrinsic_body_token_render_bridge.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M239 added `tslgen.rendering.intrinsic_body_token_bridge`, a focused bridge
+from already-lowered typed backend intrinsic handoff/body-token streams to
+primitive profile artifacts. The bridge accepts typed render values, delegates
+intrinsic invocation assembly to the accepted M213 boundary, delegates C++ and
+Rust intrinsic call rendering to M214/M219, delegates body-token substitution
+to M220, then feeds rendered body expression text into the accepted M227
+`v:=(v,v)` function-shape templates and M217 primitive profile templates.
+
+The bridge deliberately does not discover, parse, rescan, or lower source
+text. Tests construct synthetic typed `BackendIntrinsicHandoff` fixtures
+directly, including C++ and Rust parity cases. The Rust fixture supplies the
+accepted typed `RustArchitectureModule` and keeps the unsafe expression text as
+already-decided body-token presentation around the rendered intrinsic call.
+
+Diagnostics added:
+
+- `TSL-INTRINSIC-BODY-TOKEN-BRIDGE-MISSING-HANDOFF-REQUEST` when profile
+  artifact rendering is asked to proceed without an already-lowered backend
+  intrinsic request segment.
+- `TSL-INTRINSIC-BODY-TOKEN-BRIDGE-UNSUPPORTED-BACKEND` for non-C++/Rust
+  bridge contexts.
+- `TSL-INTRINSIC-BODY-TOKEN-BRIDGE-UNUSED-MODIFIER-TRANSLATION` for translated
+  compose modifiers that do not belong to any request segment in the handoff.
+
+Existing downstream diagnostics from intrinsic assembly, call rendering,
+body-token rendering, function-shape rendering, and primitive templates are
+preserved and stop artifact rendering before partial artifacts are returned.
+
+Tests added:
+
+- C++ typed direct intrinsic handoff to rendered body text, function
+  definition, and profile artifact.
+- Rust parity through explicit `core::arch::*` call rendering and body-token
+  substitution.
+- Deterministic repeated artifacts for both C++ and Rust bridge paths.
+- Missing already-lowered request diagnostic before body/function/artifact
+  rendering.
+- Unsupported backend diagnostic before body/function/artifact rendering.
+- Present but unsupported typed direct intrinsic request diagnostic from the
+  accepted intrinsic assembly boundary before body/function/artifact rendering.
+- Guard that the bridge does not import parser modules, catalog modules,
+  `Lowerer`, or raw intrinsic discovery; it may import accepted typed lowering
+  model values.
+
+Review verdict:
+
+Accepted With Follow-Ups. Evidence and validation reviews accepted. The test
+review initially requested stronger unsupported-request, Rust determinism, and
+no-parser/lowerer coverage; focused revision added those tests and revalidation
+passed. Architecture review accepted with a follow-up that this focused bridge
+is acceptable for M239, but if the orchestration grows it should move toward a
+backend/output or pipeline boundary instead of turning `rendering` into a broad
+backend orchestration layer. Documentation review requested normal closeout
+updates to roadmap, behavioral spec, state, and next prompt; those updates
+were completed.
+
+Accepted validation:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- Required pytest bundle: exit 0, 68 tests passed.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created cache directories; after cleanup, final rerun exited 0
+  with no output.
+
+Follow-up:
+
+M239 intentionally places a small bridge in `rendering` to connect accepted
+typed backend/body-token and primitive-template boundaries. Future work must
+not grow that module into a broad orchestration layer. If the next slice needs
+generated-project composition, artifact writing, or build verification around
+the bridge output, put that orchestration in pipeline/output code or focused
+tests over existing pipeline boundaries, not by expanding the bridge into
+selection, parsing, dependency planning, or source interpretation.
+
+### Milestone 240: Synthetic Intrinsic Generated-Project Verification
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m240-synthetic-intrinsic-generated-project-verification-execution-review-loop-prompt.md`.
+
+Goal:
+
+Prove the M239 synthetic typed intrinsic primitive profile artifacts can be
+composed into the accepted generated-project skeleton, written through the
+artifact writer, and build-verified for C++ and Rust without parsing `.tsl`,
+selecting real corpus primitives, or reopening lowering.
+
+Scope:
+
+- Use explicit synthetic already-lowered typed intrinsic handoff fixtures,
+  preferably an x86 `sse2` direct intrinsic such as `_mm_add_epi32`, so the
+  selected profile build flags exercise real intrinsic compilation without
+  corpus selection.
+- Render C++ and Rust primitive profile artifacts through the M239 bridge.
+- Render generated-project skeleton artifacts for the same selected profile
+  set through the accepted generated-project templates.
+- Compose primitive artifacts into the skeleton with the accepted
+  selected-profile replacement policy.
+- Write the composed artifacts to a temporary output directory through
+  `ArtifactWriter`.
+- Run the existing build verifier for every selected profile and both
+  backends.
+- Keep C++ and Rust in parity.
+
+Out of scope:
+
+Lowering changes; parser/catalog/selector changes; full `fundamental.tsl`
+selection; wildcard expansion; dependency closure; real primitive-call
+dependency planning; new intrinsic semantics; new type spelling semantics;
+new buildsystem templates; source repair; target-language parsing; host CPU
+autodetection.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m238_generated_project_source_template_boundary.py tslgen/tests/test_m239_backend_intrinsic_body_token_render_bridge.py tslgen/tests/test_m240_synthetic_intrinsic_generated_project_verification.py
 find tslgen -type d -name __pycache__ -print
 ```

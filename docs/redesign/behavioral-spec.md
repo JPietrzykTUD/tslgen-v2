@@ -169,6 +169,51 @@ verification. It does not reopen lowering, parse `.tsl` bodies, implement the
 real x86 intrinsic fixture, add intrinsic translation/rendering, or change
 primitive selection.
 
+### M239 Backend Intrinsic Body-Token Render Bridge
+
+Milestone 239 adds a focused backend/rendering bridge for already-lowered
+typed intrinsic body-token streams. The bridge consumes typed
+`BackendIntrinsicHandoff` values plus already-decided primitive presentation
+values. It does not parse, discover, rescan, or lower source text.
+
+The accepted M239 bridge performs this side-effect-free sequence:
+
+```text
+typed backend intrinsic handoff
+-> accepted backend intrinsic invocation assembly
+-> accepted C++ or Rust intrinsic call rendering
+-> accepted body-token substitution
+-> accepted v:=(v,v) function-shape template
+-> accepted primitive profile template
+-> in-memory ArtifactSet
+```
+
+C++ and Rust are handled in parity. Rust architecture-module selection is not
+inferred by the bridge; callers supply the existing typed
+`RustArchitectureModule`. Any raw text surrounding the intrinsic request in
+the handoff is treated as already-decided body-token presentation, not as
+target-language syntax to parse or repair.
+
+The bridge stops before returning artifacts when typed inputs are missing or
+unsupported. It adds:
+
+- `TSL-INTRINSIC-BODY-TOKEN-BRIDGE-MISSING-HANDOFF-REQUEST` when the handoff
+  has no already-lowered backend intrinsic request segment.
+- `TSL-INTRINSIC-BODY-TOKEN-BRIDGE-UNSUPPORTED-BACKEND` for bridge contexts
+  whose backend is not `cpp` or `rust`.
+- `TSL-INTRINSIC-BODY-TOKEN-BRIDGE-UNUSED-MODIFIER-TRANSLATION` when a
+  translated compose modifier does not belong to any intrinsic compose request
+  segment in the handoff.
+
+Diagnostics from the accepted intrinsic assembly, call rendering, body-token
+rendering, function-shape rendering, and primitive-template boundaries are
+preserved and likewise prevent partial artifact output.
+
+M239 does not implement real corpus primitive selection, dependency closure,
+the full `fundamental.tsl` x86 fixture, generated-project composition,
+artifact writing, build verification, lowering changes, parser changes, or new
+backend semantics.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

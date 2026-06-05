@@ -11,7 +11,7 @@ is accepted. Milestone 228.5 planning is accepted. Milestone 229 is accepted.
 Milestone 230 is accepted. Milestone 231 is accepted. Milestone 232 is
 accepted. Milestone 233 is accepted. Milestone 234 is accepted. Milestone 235
 is accepted. Milestone 236 is accepted. Milestone 237 planning is accepted.
-Milestone 238 is accepted.
+Milestone 238 is accepted. Milestone 239 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -808,53 +808,72 @@ module-size guardrail, so future generated-project responsibilities should
 first split focused source-template/buildsystem helpers instead of extending
 that file.
 
+M239 added `tslgen.rendering.intrinsic_body_token_bridge`, a focused bridge
+from already-lowered typed backend intrinsic handoff/body-token streams to
+primitive profile artifacts. It delegates intrinsic invocation assembly,
+C++/Rust intrinsic call rendering, body-token substitution, exact `v:=(v,v)`
+function-shape rendering, and primitive profile template rendering to the
+accepted M213/M214/M219/M220/M227/M217 boundaries. It does not discover,
+parse, rescan, or lower source text, and it does not implement real corpus
+selection, dependency closure, artifact writing, build verification, or the
+full x86 fixture. M239 diagnostics cover missing intrinsic request segments,
+unsupported bridge backends, and unused translated compose modifiers before
+artifact output. M239 follow-up: the bridge is acceptable as a focused M239
+adapter, but future write/verify or generated-project orchestration should
+live in pipeline/output code or tests over existing boundaries rather than
+growing `rendering.intrinsic_body_token_bridge` into a broad orchestrator.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M239 backend intrinsic body-token render bridge execution-review loop.
+Run M240 synthetic intrinsic generated-project verification execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m239-backend-intrinsic-body-token-render-bridge-execution-review-loop-prompt.md
+docs/agent/runs/m240-synthetic-intrinsic-generated-project-verification-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 239: Backend Intrinsic Body-Token Render Bridge.
+Milestone 240: Synthetic Intrinsic Generated-Project Verification.
 ```
 
 Latest review verdict:
 
 ```text
-M238 execution-review returned Accept after focused architecture revision.
-Evidence and test reviews accepted. Architecture review first found two
-presentation-boundary leaks; focused revision moved the C++ `#if`/`#elif`
-profile-case syntax and Rust `feature = "..."` condition syntax into
-supplementary partial templates, and focused architecture re-review accepted.
-Documentation review requested normal closeout updates to roadmap, behavioral
-spec, design decisions, state, and next prompt; those updates were completed.
-Validation for M238: `git diff --check` exit 0 with no output;
+M239 execution-review returned Accept With Follow-Ups after focused test
+revision. Evidence and validation reviews accepted. Architecture review
+accepted with a follow-up that the focused rendering bridge must not grow into
+a broad backend/output orchestrator inside `rendering`; future composition,
+write, or build-verification orchestration should use a pipeline/output
+boundary or focused tests over existing boundaries. Test review first requested
+unsupported typed request coverage, Rust determinism coverage, and a stronger
+no-parser/lowerer/catalog guard; focused revision added those checks and
+revalidation passed. Documentation review requested normal closeout updates to
+roadmap, behavioral spec, state, and next prompt; those updates were
+completed. Validation for M239: `git diff --check` exit 0 with no output;
 `python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no
-output; required pytest bundle exit 0 with 49 tests passed; final
+output; required pytest bundle exit 0 with 68 tests passed; final
 `find tslgen -type d -name __pycache__ -print` exit 0 with no output after
-removing compile/test-created cache directories.
+removing compile/test-created cache directories. After documentation closeout,
+`git diff --check` was rerun and exited 0 with no output.
 ```
 
 Next expected action:
 
 ```text
-Run the active M239 execution-review loop. Use one write-capable executor and
-read-only review/audit subagents. Consume already-lowered typed backend
-intrinsic handoff/body-token values, render C++ and Rust intrinsic body text
-through existing backend intrinsic call/body-token boundaries, and feed the
-result into the accepted `v:=(v,v)` function-shape and primitive profile
-template path. Do not reopen lowering, parser/catalog/selector work, TSIL
-keyword handling, primitive-call semantics, or the full real x86 fixture.
+Run the active M240 execution-review loop. Use one write-capable executor and
+read-only review/audit subagents. Use synthetic already-lowered typed intrinsic
+handoff fixtures to render M239 primitive profile artifacts, compose them into
+the generated-project skeleton, write them through `ArtifactWriter`, and run
+the existing build verifier for C++ and Rust. Do not reopen lowering,
+parser/catalog/selector work, TSIL keyword handling, primitive-call semantics,
+dependency closure, or the full real x86 corpus fixture.
 ```
 
 Previous review verdict:
@@ -949,12 +968,15 @@ M237 planning returned Accept With Follow-Ups and selected M238
 generated-project source template boundary execution-review. M238
 execution-review returned Accept after focused architecture revision and
 selected M239 backend intrinsic body-token render bridge execution-review.
+M239 execution-review returned Accept With Follow-Ups after focused test
+revision and selected M240 synthetic intrinsic generated-project verification
+execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m238-generated-project-source-template-boundary-execution-review-loop-prompt.md
+docs/agent/runs/m239-backend-intrinsic-body-token-render-bridge-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
