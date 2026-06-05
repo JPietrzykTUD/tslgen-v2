@@ -211,13 +211,26 @@ Before finishing:
   the accepted parser/body/lowering boundary.
 - Update `docs/redesign/open-questions.md` if a lowering issue cannot be
   resolved from evidence.
-- Create the next concrete prompt under `docs/agent/runs/`.
+- Create the next concrete prompt under `docs/agent/runs/`. If M233 is
+  accepted, that prompt must be M234 pairwise lowering path cleanup/refactor.
 - Update `docs/agent/current-redesign-state.md` to point at the next prompt.
 
-The likely next milestone after M233 is a keyword-specific semantic consumer
-over the recursive fragment tree, for example consuming all `call` keyword
-fragments or all `intrin_compose` fragments without caring about ancestor
-context. Do not start it in M233.
+The required next milestone after accepted M233 is M234 pairwise lowering path
+cleanup/refactor. M234 must remove, quarantine, or replace the old
+context-combination paths with consumers over the recursive fragment tree,
+including at least:
+
+- `CatalogBuilder._classify_emit_return_payload_tokens`;
+- `Lowerer._primitive_call_expression_result_from_exact_emit_return_body`;
+- the `emit_return` special branch in
+  `Lowerer._exact_add_primitive_call_fragment_from_body`;
+- any tests that only protect `emit_return + call` or
+  `emit_return + intrin_compose` instead of context-independent keyword
+  traversal.
+
+Do not select a keyword-specific semantic consumer milestone after M233 until
+M234 has removed or explicitly quarantined those pairwise paths.
+Do not start M234 in M233.
 
 ## Final Report
 

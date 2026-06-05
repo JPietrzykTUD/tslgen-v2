@@ -9,7 +9,7 @@ or accepted planning passes.
 Milestone 225 is accepted. Milestone 226.5 planning is accepted. Milestone 227
 is accepted. Milestone 228.5 planning is accepted. Milestone 229 is accepted.
 Milestone 230 is accepted. Milestone 231 is accepted. Milestone 232 is
-accepted.
+accepted. Milestone 233 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -728,51 +728,68 @@ payload-token taxonomy, recursive semantic dispatcher, backend translation,
 rendering, or generated-project behavior. Malformed nested scans propagate M230
 diagnostics unchanged and produce no adapter items.
 
+M233 added the accepted recursive source-body fragment boundary in
+`tslgen.lowering.source_body_fragments`. It consumes `SourceBodyText` or M230
+`SourceBodyLexicalScanResult` values, converts M230 raw segments into
+`RawSourceFragment` values, converts M230 keyword regions into
+`KeywordRegionFragment` values, and recursively scans selector, payload, and
+body spans already identified by M230. It propagates root and child M230
+diagnostics without source repair.
+
+M233 also added context-independent `intrin_compose` request extraction over
+the recursive fragment tree. The extractor walks all keyword fragments,
+adapts only `SourceBodyKeyword.INTRIN_COMPOSE` fragments to existing
+`BackendIntrinsicRequest(intrinsic_kind="intrin_compose", ...)` values from
+preserved M230 spans, and does not call legacy raw-text intrinsic discovery,
+backend intrinsic handoff lowering, modifier translation, argument splitting,
+rendering, or generated-project code.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M233 recursive TSIL keyword region lowering execution-review loop.
+Run M234 pairwise lowering path cleanup execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m233-recursive-tsil-keyword-region-lowering-execution-review-loop-prompt.md
+docs/agent/runs/m234-pairwise-lowering-path-cleanup-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 233: Recursive TSIL Keyword Region Lowering.
+Milestone 234: Pairwise Lowering Path Cleanup.
 ```
 
 Latest review verdict:
 
 ```text
-M232 execution-review returned Accept. Lowering-boundary, evidence,
-complexity, and diagnostics reviewers all returned Accept. Reviewers confirmed
-M232 is a thin adapter over M230 scanning, not a new payload parser/token
-language, and that parser/lowerer/generated pipeline modules did not grow.
-Validation for M232: `git diff --check` exit 0 with no output; `python -B -m
-compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no output; required
-pytest bundle exit 0 with 44 tests passed; required `find tslgen -type d -name
-__pycache__ -print` exit 0 and printed compile/test-created cache
-directories.
+M233 execution-review returned Accept after one focused diagnostics revision.
+Lowering-boundary, evidence, and complexity reviewers returned Accept.
+Diagnostics review initially requested root-scan diagnostic coverage and both
+malformed `intrin_compose` adapter branches; focused tests were added and
+diagnostics re-review returned Accept. Validation for M233: `git diff --check`
+exit 0 with no output; `python -B -m compileall -q tslgen/src/tslgen
+tslgen/tests` exit 0 with no output; required pytest bundle exit 0 with 46
+tests passed; required `find tslgen -type d -name __pycache__ -print` exit 0
+and printed compile/test-created cache directories.
 ```
 
 Next expected action:
 
 ```text
-Run the active M233 execution-review loop prompt. Use one write-capable
-executor plus read-only reviewers. Implement the shared recursive
-keyword-region lowering boundary over M230 lexical regions: raw fragments stay
-raw, keyword regions become recursively nested keyword fragments, and
-`intrin_compose` requests are extracted/adapted wherever they appear in that
-tree. Do not special-case `emit_return + intrin_compose`, run text
-rediscovery, parse expressions, translate modifiers, split arguments, lower
-backend handoff semantics, or render output.
+Run the active M234 execution-review loop prompt. Use one write-capable
+executor plus read-only reviewers. Remove, replace, or explicitly quarantine
+the old pairwise lowering paths now that M233 has provided the recursive
+fragment tree. Required audit targets include
+`CatalogBuilder._classify_emit_return_payload_tokens`,
+`Lowerer._primitive_call_expression_result_from_exact_emit_return_body`, and
+the `emit_return` special branch in
+`Lowerer._exact_add_primitive_call_fragment_from_body`. Do not add new
+keyword-specific semantic consumers until those pairwise paths are cleaned up.
 ```
 
 Previous review verdict:
@@ -856,13 +873,14 @@ returned Accept after focused revision and selected M231 emit return lexical
 region lowering. M231 execution-review returned Accept after focused
 follow-up revision and selected M232 return payload region rescan adapter. M232
 execution-review returned Accept and selected M233 recursive TSIL keyword
-region lowering.
+region lowering. M233 execution-review returned Accept after focused
+diagnostics revision and selected M234 pairwise lowering path cleanup.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m232-return-payload-region-rescan-adapter-execution-review-loop-prompt.md
+docs/agent/runs/m233-recursive-tsil-keyword-region-lowering-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

@@ -28413,7 +28413,7 @@ Next concrete prompt:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m233-recursive-tsil-keyword-region-lowering-execution-review-loop-prompt.md`.
 
 Goal:
@@ -28457,5 +28457,97 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py tslgen/tests/test_m232_return_payload_region_rescan_adapter.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M233 added `tslgen.lowering.source_body_fragments`, a recursive fragment
+boundary over M230 lexical regions. Raw M230 segments become
+`RawSourceFragment` values, M230 keyword candidates become
+`KeywordRegionFragment` values, and selector, parenthesized payload, and braced
+body spans are recursively rescanned through M230. Root and child diagnostics
+are propagated without source repair.
+
+M233 also added context-independent `intrin_compose` request extraction over
+the fragment tree. The extractor walks all fragments and adapts only
+`SourceBodyKeyword.INTRIN_COMPOSE` fragments to existing
+`BackendIntrinsicRequest(intrinsic_kind="intrin_compose", ...)` values from
+preserved M230 spans. It does not use legacy raw-text intrinsic discovery,
+backend intrinsic handoff lowering, modifier translation, argument splitting,
+rendering, or generated-project code.
+
+Review verdict:
+
+Accepted after one focused diagnostics revision. Lowering-boundary, evidence,
+and complexity reviewers accepted the first implementation. Diagnostics review
+requested root-scan diagnostic coverage and both malformed `intrin_compose`
+adapter branches; focused tests were added and diagnostics re-review accepted.
+
+Accepted validation:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- Required pytest bundle: exit 0, 46 tests passed.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created `__pycache__` directories.
+
+Required next milestone after acceptance:
+
+M234 pairwise lowering path cleanup/refactor. It must remove, quarantine, or
+replace old context-combination paths with consumers over the recursive
+fragment tree before any new keyword-specific semantic consumer milestone is
+selected. The required audit targets include
+`CatalogBuilder._classify_emit_return_payload_tokens`,
+`Lowerer._primitive_call_expression_result_from_exact_emit_return_body`, the
+`emit_return` special branch in
+`Lowerer._exact_add_primitive_call_fragment_from_body`, and tests that protect
+only `emit_return + call` or `emit_return + intrin_compose` instead of
+context-independent keyword traversal.
+
+### Milestone 234: Pairwise Lowering Path Cleanup
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m234-pairwise-lowering-path-cleanup-execution-review-loop-prompt.md`.
+
+Goal:
+
+Remove the normal lowering dependency on pairwise context-combination handling
+now that M233 provides recursive source-body fragments. Accepted behavior
+should flow through M230 lexical regions, M233 recursive fragments, and
+keyword-specific semantic consumers over matching fragments. If a legacy path
+cannot be deleted in this slice, quarantine it behind an explicitly named
+compatibility boundary with tests and a documented TODO.
+
+Scope:
+
+- Audit and update `CatalogBuilder._classify_emit_return_payload_tokens`.
+- Audit and update
+  `Lowerer._primitive_call_expression_result_from_exact_emit_return_body`.
+- Audit and update the `emit_return` special branch in
+  `Lowerer._exact_add_primitive_call_fragment_from_body`.
+- Audit tests whose only purpose is protecting `emit_return + call` or
+  `emit_return + intrin_compose` as special combinations.
+- Add regression coverage proving M233 recursive fragments are the preferred
+  nested-keyword path and no new pairwise parent/child handler names were
+  introduced.
+
+Out of scope:
+
+New keyword semantic consumers beyond cleanup needs; full primitive-call
+selector or argument semantics; backend intrinsic handoff lowering; intrinsic
+modifier translation; rendering; generated artifact changes; build
+verification; broad TSIL parsing; source repair; runtime dependency on
+`frozen/` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m150_primitive_call_expression.py tslgen/tests/test_m151_primitive_call_consolidation.py tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m224_parsed_tiny_tsl_to_generated_project.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py
 find tslgen -type d -name __pycache__ -print
 ```
