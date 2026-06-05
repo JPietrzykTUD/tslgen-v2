@@ -3425,3 +3425,67 @@ Consequences:
   generic real primitive project bridge exists.
 - Future milestones must not add sibling fixture pipelines for specific
   extensions, primitives, type tags, signatures, or exact body forms.
+
+## ADR-069: Extension-Owned Default Intrin Compose Naming Policy
+
+Status: Accepted.
+
+Context:
+
+`intrin_compose<BASE>(...)` is intended to express backend intrinsic names
+that follow regular extension-specific patterns such as backend prefix plus
+base operation plus type suffix. Explicit modifier fields such as
+`prefix=...`, `infix=...`, and `suffix=...` are already typed source facts,
+but unqualified forms such as `intrin_compose<add>(left, right)` need a
+default naming policy.
+
+That default policy is extension metadata. It must not be inferred in the
+renderer, hardcoded in Python lookup tables, or recovered from legacy code.
+
+Decision:
+
+`tsldata/extensions/extension.tsl` owns default `intrin_compose` naming policy
+using this source shape:
+
+```tsl
+intrinsic_compose:
+  prefix:
+    cpp "_mm256_"
+    rust "core::arch::x86_64::_mm256_"
+  suffix:
+    by_type:
+      f32 "ps"
+      f64 "pd"
+      si8 "epi8"
+      si16 "epi16"
+      si32 "epi32"
+      si64 "epi64"
+      ui8 "epu8"
+      ui16 "epu16"
+      ui32 "epu32"
+      ui64 "epu64"
+```
+
+Suffix entries are concrete per `TypeTag`, not wildcard or type-group rules.
+Rust module qualification remains in the backend-specific `prefix` metadata,
+for example `core::arch::x86_64::_mm256_`.
+
+Source-provided modifiers always override defaults. If a source
+`intrin_compose` request provides `prefix`, `infix`, or `suffix`, the backend
+uses the translated source modifier for that name part and does not apply the
+extension default for the same part.
+
+Missing default policy, missing backend prefix, missing type suffix, unknown
+extension, unsupported backend, and malformed policy source are diagnostic
+boundaries. The generator must not guess backend intrinsic names.
+
+Consequences:
+
+- M246 implements typed parsing/promotion of extension-owned default compose
+  policy and backend invocation assembly support for missing default
+  prefix/suffix parts.
+- Explicit modifier translation from earlier milestones remains authoritative
+  and override-capable.
+- Real vector/intrinsic generated-project rendering can consume this policy in
+  a later milestone without embedding intrinsic naming rules in templates or
+  fixture-specific pipelines.

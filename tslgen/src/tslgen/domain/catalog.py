@@ -182,6 +182,20 @@ class VectorRegisterTypeEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class IntrinsicComposeTypeSuffix:
+    type_tag: TypeTag
+    suffix: str
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
+class IntrinsicComposePolicy:
+    prefixes: tuple[BackendTypeSpelling, ...]
+    suffixes: tuple[IntrinsicComposeTypeSuffix, ...]
+    source: SourceLocation
+
+
+@dataclass(frozen=True, slots=True)
 class ResolvedVectorRegisterType:
     extension: str
     type_tag: str
@@ -249,6 +263,7 @@ class Extension:
     mask_type_policy: ExtensionTypePolicy | None
     integral_mask_type_policy: ExtensionTypePolicy | None
     source: SourceLocation
+    intrinsic_compose_policy: IntrinsicComposePolicy | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -29936,8 +29936,9 @@ Review verdict:
 
 Accepted. Architecture/boundary, evidence, test, documentation, and
 validation auditors all returned Accept. No focused revision was required.
-M246 planning was selected to prevent the next real vector/intrinsic rendering
-step from assuming unsupported `intrin_compose` name semantics.
+M246 extension-owned default `intrin_compose` policy was selected so the next
+backend intrinsic-name step is driven by `extension.tsl` metadata instead of
+Python tables, templates, or renderer-side guesses.
 
 Accepted validation:
 
@@ -29955,54 +29956,198 @@ Accepted validation:
 Follow-up:
 
 Before rendering a real vector/intrinsic generated project, the next milestone
-must identify which real `intrin_compose<...>` source forms can already be
-lowered and assembled with accepted modifier translation, and which require a
-typed backend compose-name policy such as default prefix/current-type suffix
-semantics. Do not special-case a single surrounding keyword or inject backend
-intrinsic spellings in Python/templates.
+must add extension-owned default `intrin_compose` naming policy. The policy
+uses backend-specific prefixes and concrete per-`TypeTag` suffixes from
+`extension.tsl`; explicit source `prefix`/`infix`/`suffix` modifiers always
+override defaults. Do not special-case a single surrounding keyword or inject
+backend intrinsic spellings in Python/templates.
 
-### Milestone 246: Real Vector Intrinsic Rendering Readiness Planning
+### Milestone 246: Extension-Owned Default Intrin Compose Policy
 
 Status:
 
-Selected. Planning prompt:
-`docs/agent/runs/m246-real-vector-intrinsic-rendering-readiness-planning-prompt.md`.
+Accepted. Execution-review loop prompt:
+`docs/agent/runs/m246-extension-owned-default-intrin-compose-policy-execution-review-loop-prompt.md`.
 
 Goal:
 
-Plan the next executable real vector/intrinsic rendering slice after M245
-without sliding back into pairwise keyword combinations or hardcoded backend
-intrinsic names.
+Implement extension-owned default backend intrinsic compose naming policy so
+`intrin_compose<BASE>(...)` can derive default prefix and suffix parts from
+typed `extension.tsl` metadata instead of Python tables, templates, or
+renderer-side guesses.
 
 Scope:
 
-- Inventory the real `tsldata/primitives/arithmetic/fundamental.tsl` unmasked
-  vector `add`/`sub` implementation bodies that are plausible first rendering
-  candidates for C++ and Rust.
-- For each plausible candidate, identify whether the body can already pass
-  through accepted recursive TSIL keyword lowering, backend intrinsic handoff,
-  intrinsic modifier translation, intrinsic invocation assembly, M245 register
-  type spelling, primitive function templates, generated project composition,
-  artifact writing, and build verification.
-- Determine whether `intrin_compose<add>(...)`,
-  `intrin_compose<add, suffix=...>(...)`, NEON `intrin_compose<vaddq>(...)`,
-  and SVE forms need an explicit typed backend compose-name policy before a
-  real vector implementation can render correctly.
-- Select the largest safe M247 executor slice that can be implemented without
-  source repair, target-language parsing, broad primitive selection,
-  dependency closure, or fixture-shaped pipeline ownership.
+- Add `intrinsic_compose` metadata blocks to `tsldata/extensions/extension.tsl`
+  using this source shape:
+
+  ```tsl
+  intrinsic_compose:
+    prefix:
+      cpp "_mm256_"
+      rust "core::arch::x86_64::_mm256_"
+    suffix:
+      by_type:
+        f32 "ps"
+        f64 "pd"
+        si8 "epi8"
+        si16 "epi16"
+        si32 "epi32"
+        si64 "epi64"
+        ui8 "epu8"
+        ui16 "epu16"
+        ui32 "epu32"
+        ui64 "epu64"
+  ```
+
+- Use concrete per-`TypeTag` suffixes, not wildcard or type-group suffixes.
+- Keep Rust `core::arch::*` qualification in the backend-specific prefix
+  metadata.
+- Parse/promote the policy into typed extension catalog values with source
+  provenance and inheritance where appropriate.
+- Add a typed default compose-name policy consumed by backend intrinsic
+  invocation assembly or a narrow adjacent backend translation boundary.
+- Apply default prefix/suffix only when the source `intrin_compose` request
+  does not provide that name part explicitly.
+- Preserve all accepted explicit modifier behavior; source `prefix`, `infix`,
+  and `suffix` always override extension defaults.
+- Emit stable diagnostics for missing policy, missing backend prefix, missing
+  type suffix, unknown extension, unsupported backend, and malformed policy
+  source.
 
 Out of scope:
 
-Implementation code changes; new lowering semantics; backend intrinsic name
-hardcoding; vector/mask/generic register policies beyond M245; real primitive
-test metadata rendering; dependency closure; broad generated project
-selection; runtime dependencies on `frozen` or `tslgenold`.
+Real vector/intrinsic generated-project rendering; primitive selection;
+dependency closure; new lowering semantics; pairwise
+`emit_return + intrin_compose` handling; mask/generic/SVE dependency-call
+rendering; target-language parsing; backend intrinsic name hardcoding; moving
+intrinsic-name decisions into templates; extending
+`generated_primitive_pipeline.py`; fixture-shaped pipelines; runtime
+dependencies on `frozen` or `tslgenold`.
 
 Validation:
 
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m195_literal_intrinsic_modifier_translation.py tslgen/tests/test_m198_intrinsic_prefix_modifier_translation.py tslgen/tests/test_m200_current_type_intrinsic_suffix_translation.py tslgen/tests/test_m213_backend_intrinsic_invocation_assembly.py tslgen/tests/test_m214_cpp_intrinsic_invocation_call_rendering.py tslgen/tests/test_m219_rust_intrinsic_invocation_call_rendering.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py tslgen/tests/test_m246_extension_default_intrin_compose_policy.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M246 added extension-owned default `intrin_compose` policy to
+`tsldata/extensions/extension.tsl` for `sse`, `avx2`, `avx512`, and `neon`.
+The x86 policies provide backend-specific C++ and Rust prefixes plus concrete
+per-`TypeTag` suffixes; the NEON policy uses an empty C++ prefix and full
+`core::arch::aarch64::` Rust prefix. `sse_vl` and `avx2_vl` inherit parent
+policies through the existing extension inheritance path.
+
+The typed catalog now promotes this metadata into `IntrinsicComposePolicy`
+and `IntrinsicComposeTypeSuffix` values attached to `Extension`.
+`IntrinsicComposeTypeSuffix.type_tag` is a typed `TypeTag`; suffix selector
+validation allows concrete known type tags and rejects wildcard/type-group
+selectors or unknown tags with stable diagnostics.
+
+The backend intrinsic invocation assembly boundary now exposes
+`resolve_backend_intrinsic_compose_default_policy(...)` and consumes an
+optional typed `BackendIntrinsicComposeDefaultPolicy` for composed requests.
+When supplied, default prefix/suffix parts are applied only when the source
+request did not provide the same part explicitly. Explicit source modifier
+translations from M195-M214 remain authoritative and continue to override
+defaults.
+
+Tests added:
+
+- `tslgen/tests/test_m246_extension_default_intrin_compose_policy.py`
+  covers extension metadata parsing, inheritance, representative C++ x86
+  assembly, Rust fully-qualified x86 assembly, NEON assembly, explicit
+  prefix/suffix override behavior, resolver diagnostics, malformed catalog
+  diagnostics, wildcard/group rejection, and guardrails against local Python
+  intrinsic spelling tables.
+
+Validation note:
+
+The first run of the active prompt's pytest command failed before collection
+because the prompt used stale path
+`tslgen/tests/test_m195_intrinsic_modifier_translation.py`. The accepted test
+file is `tslgen/tests/test_m195_literal_intrinsic_modifier_translation.py`;
+the prompt and roadmap validation command were corrected before final
+validation.
+
+Accepted validation after correction:
+
+- `git diff --check`: exit 0 with no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
+  no output.
+- Corrected required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m143_1_extension_catalog.py tslgen/tests/test_m195_literal_intrinsic_modifier_translation.py tslgen/tests/test_m198_intrinsic_prefix_modifier_translation.py tslgen/tests/test_m200_current_type_intrinsic_suffix_translation.py tslgen/tests/test_m213_backend_intrinsic_invocation_assembly.py tslgen/tests/test_m214_cpp_intrinsic_invocation_call_rendering.py tslgen/tests/test_m219_rust_intrinsic_invocation_call_rendering.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py tslgen/tests/test_m246_extension_default_intrin_compose_policy.py`
+  exited 0 with 134 tests passed in 17.94s during final validation.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and printed
+  validation-created `__pycache__` directories. After cleanup, the final rerun
+  exited 0 with no output.
+- Broader cache check:
+  `find . -maxdepth 3 -type d \( -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -print`
+  exited 0 with no output.
+
+Follow-up:
+
+M247 is selected to consume M246's typed default compose policy in the
+intrinsic body-token bridge. The next slice should resolve extension/type
+defaults for any composed intrinsic request missing a prefix or suffix, avoid
+double Rust `core::arch::*` qualification through a typed renderer policy, and
+preserve all explicit modifier behavior. It must not create pairwise
+`emit_return + intrin_compose` special cases, add new lowering, extend
+fixture-shaped pipelines, or move intrinsic naming decisions into templates.
+
+### Milestone 247: Default Compose Policy Body-Token Bridge
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m247-default-compose-policy-body-token-bridge-execution-review-loop-prompt.md`.
+
+Goal:
+
+Wire M246's typed default compose policy into the intrinsic body-token bridge
+so already-lowered composed intrinsic request segments can render C++ and Rust
+body-token text from selected backend/extension/type context without pairwise
+source-shape special cases.
+
+Scope:
+
+- Extend the intrinsic body-token bridge context, or a narrow adjacent typed
+  context, with selected `ExtensionName`, selected `TypeTag`, and
+  `ExtensionCatalog` data needed to resolve default compose policy.
+- Resolve and pass `BackendIntrinsicComposeDefaultPolicy` to invocation
+  assembly for any composed intrinsic request missing a prefix and/or suffix.
+- Preserve explicit source modifier precedence. A request with translated
+  source prefix and suffix must not require extension default policy only to
+  render.
+- Preserve direct intrinsic requests, immediate metadata, opaque argument
+  payloads, and accepted body-token substitution behavior.
+- Add a typed Rust call-rendering qualification path so names assembled from
+  full `core::arch::*` extension metadata are not double-qualified, while
+  existing unqualified Rust call-rendering behavior remains compatible.
+- Cover C++ and Rust representative bridge rendering, explicit override
+  behavior, no-default-needed behavior, diagnostics, and guardrails against
+  Python/template spelling tables or parent/child keyword combinations.
+
+Out of scope:
+
+Generated-project integration through `primitive_project_pipeline.py`;
+vector/register type spelling in function signatures; build verification of
+real AVX/NEON generated projects; primitive selection; dependency closure; new
+lowering; pairwise `emit_return + intrin_compose` handling; target-language
+expression parsing; moving intrinsic naming decisions into templates; extending
+`generated_primitive_pipeline.py`; runtime dependencies on `frozen` or
+`tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m214_cpp_intrinsic_invocation_call_rendering.py tslgen/tests/test_m219_rust_intrinsic_invocation_call_rendering.py tslgen/tests/test_m220_shared_intrinsic_body_token_substitution_parity.py tslgen/tests/test_m239_backend_intrinsic_body_token_render_bridge.py tslgen/tests/test_m246_extension_default_intrin_compose_policy.py tslgen/tests/test_m247_default_compose_policy_body_token_bridge.py
 find tslgen -type d -name __pycache__ -print
 ```

@@ -466,6 +466,47 @@ type spelling, implement generic/runtime-sized register policies, move type
 selection into templates, or introduce runtime dependencies on `frozen` or
 `tslgenold`.
 
+### M246 Extension-Owned Default Intrin Compose Policy
+
+Milestone 246 adds typed extension metadata for default
+`intrin_compose<BASE>(...)` naming policy. The metadata lives in
+`tsldata/extensions/extension.tsl` under an `intrinsic_compose` block with
+backend-specific `prefix` spellings and concrete per-`TypeTag`
+`suffix.by_type` spellings. Rust full `core::arch::*` qualification is stored
+in the Rust prefix metadata.
+
+The typed extension catalog promotes this metadata into
+`IntrinsicComposePolicy` values attached to `Extension`. Inherited extensions
+may inherit the policy from their parent. Suffix entries must name concrete
+known type tags; wildcard selectors and type-group selectors are diagnostic
+boundaries.
+
+Backend intrinsic invocation assembly can consume an already-resolved
+`BackendIntrinsicComposeDefaultPolicy`. For composed requests it applies the
+default prefix only when no source prefix modifier was translated, and applies
+the default suffix only when no source suffix modifier was translated.
+Explicit source modifiers remain authoritative; source `prefix`, `infix`,
+`suffix`, `post`, `infix_sep`, and immediate behavior accepted by M195-M214
+is preserved.
+
+M246 diagnostics include:
+
+- `TSL-CATALOG-MALFORMED-INTRINSIC-COMPOSE-POLICY`
+- `TSL-CATALOG-UNSUPPORTED-INTRINSIC-COMPOSE-SUFFIX-TYPE`
+- `TSL-CATALOG-UNKNOWN-INTRINSIC-COMPOSE-SUFFIX-TYPE`
+- `TSL-BACKEND-INTRINSIC-COMPOSE-DEFAULT-UNSUPPORTED-BACKEND`
+- `TSL-BACKEND-INTRINSIC-COMPOSE-DEFAULT-UNKNOWN-EXTENSION`
+- `TSL-BACKEND-INTRINSIC-COMPOSE-DEFAULT-MISSING-POLICY`
+- `TSL-BACKEND-INTRINSIC-COMPOSE-DEFAULT-MISSING-BACKEND-PREFIX`
+- `TSL-BACKEND-INTRINSIC-COMPOSE-DEFAULT-MISSING-TYPE-SUFFIX`
+- `TSL-BACKEND-INTRINSIC-COMPOSE-DEFAULT-BACKEND-MISMATCH`
+
+M246 does not render real vector/intrinsic generated projects, integrate the
+default policy into the body-token bridge or project pipeline, add new lowering
+semantics, add dependency closure, parse target-language expressions, repair
+source, move intrinsic-name decisions into templates, or extend
+`generated_primitive_pipeline.py`.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

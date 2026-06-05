@@ -11,7 +11,10 @@ from tslgen.domain.catalog import (
     ExtensionCatalog,
     ExtensionSizeParameter,
     ExtensionTypePolicy,
+    IntrinsicComposePolicy,
+    IntrinsicComposeTypeSuffix,
     ResolvedVectorRegisterType,
+    TypeTag,
     TypeGroup,
     VectorRegisterTypeEntry,
 )
@@ -73,7 +76,7 @@ def build_extension_catalog(
     diagnostics: list[Diagnostic],
 ) -> ExtensionCatalog:
     extensions = tuple(
-        _build_extension(parsed, diagnostics)
+        _build_extension(parsed, type_groups, diagnostics)
         for parsed in sorted(
             parsed_extensions,
             key=lambda item: (item.name, item.source.path.as_posix()),
@@ -121,6 +124,7 @@ def build_extension_catalog(
 
 def _build_extension(
     parsed: ParsedExtension,
+    type_groups: tuple[TypeGroup, ...],
     diagnostics: list[Diagnostic],
 ) -> Extension:
     fields = parsed.fields
@@ -181,6 +185,11 @@ def _build_extension(
             diagnostics,
         ),
         source=parsed.source,
+        intrinsic_compose_policy=_optional_intrinsic_compose_policy(
+            fields,
+            type_groups,
+            diagnostics,
+        ),
     )
 
 
@@ -258,6 +267,10 @@ def _resolve_extension(
         integral_mask_type_policy=(
             extension.integral_mask_type_policy
             or (parent.integral_mask_type_policy if parent is not None else None)
+        ),
+        intrinsic_compose_policy=(
+            extension.intrinsic_compose_policy
+            or (parent.intrinsic_compose_policy if parent is not None else None)
         ),
         resolved_vector_register_types=_resolve_vector_register_types(
             extension.name,
@@ -444,6 +457,107 @@ def _optional_policy_field(
         width=_optional_string_field(field.children, "width", diagnostics),
         spellings=_backend_spellings_from_fields(field.children, diagnostics),
         lane_spellings=_lane_spellings_from_fields(field.children, diagnostics),
+    )
+
+
+def _optional_intrinsic_compose_policy(
+    fields: tuple[ParsedExtensionField, ...],
+    type_groups: tuple[TypeGroup, ...],
+    diagnostics: list[Diagnostic],
+) -> IntrinsicComposePolicy | None:
+    field = _field_by_key(fields, "intrinsic_compose")
+    if field is None:
+        return None
+
+    prefix_field = _field_by_key(field.children, "prefix")
+    suffix_field = _field_by_key(field.children, "suffix")
+    if prefix_field is None or suffix_field is None:
+        diagnostics.append(
+            _malformed_intrinsic_compose_policy_diagnostic(
+                field,
+                "expected prefix and suffix blocks",
+            )
+        )
+        return None
+
+    by_type_field = _field_by_key(suffix_field.children, "by_type")
+    if by_type_field is None:
+        diagnostics.append(
+            _malformed_intrinsic_compose_policy_diagnostic(
+                suffix_field,
+                "expected suffix.by_type block",
+            )
+        )
+        return None
+
+    prefixes = _backend_spellings_from_fields(prefix_field.children, diagnostics)
+    if not prefixes:
+        diagnostics.append(
+            _malformed_intrinsic_compose_policy_diagnostic(
+                prefix_field,
+                "expected at least one backend prefix spelling",
+            )
+        )
+
+    known_type_tags = {
+        type_tag
+        for group in type_groups
+        for type_tag in group.type_tags
+    }
+    group_names = {group.name for group in type_groups}
+    suffixes: list[IntrinsicComposeTypeSuffix] = []
+    for suffix_entry in by_type_field.children:
+        if suffix_entry.key in known_type_tags:
+            suffix = _string_value(suffix_entry, diagnostics)
+            if suffix is None:
+                continue
+            suffixes.append(
+                IntrinsicComposeTypeSuffix(
+                    type_tag=TypeTag(suffix_entry.key),
+                    suffix=suffix,
+                    source=suffix_entry.source,
+                )
+            )
+            continue
+        if suffix_entry.key in group_names or "?" in suffix_entry.key:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-CATALOG-UNSUPPORTED-INTRINSIC-COMPOSE-SUFFIX-TYPE",
+                    message=(
+                        "intrinsic_compose suffix entries must use concrete "
+                        f"type tags, not selector {suffix_entry.key!r}"
+                    ),
+                    location=suffix_entry.source,
+                )
+            )
+            continue
+        if suffix_entry.key not in known_type_tags:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-CATALOG-UNKNOWN-INTRINSIC-COMPOSE-SUFFIX-TYPE",
+                    message=(
+                        "intrinsic_compose suffix entry names unknown type tag "
+                        f"{suffix_entry.key!r}"
+                    ),
+                    location=suffix_entry.source,
+                )
+            )
+            continue
+
+    if not suffixes:
+        diagnostics.append(
+            _malformed_intrinsic_compose_policy_diagnostic(
+                by_type_field,
+                "expected at least one concrete type suffix spelling",
+            )
+        )
+
+    return IntrinsicComposePolicy(
+        prefixes=prefixes,
+        suffixes=tuple(sorted(suffixes, key=lambda item: item.type_tag)),
+        source=field.source,
     )
 
 
@@ -735,5 +849,17 @@ def _malformed_metadata_diagnostic(
         severity="error",
         code="TSL-CATALOG-MALFORMED-EXTENSION-METADATA",
         message=f"extension metadata field {field.key!r} is malformed: {reason}",
+        location=field.source,
+    )
+
+
+def _malformed_intrinsic_compose_policy_diagnostic(
+    field: ParsedExtensionField,
+    reason: str,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-CATALOG-MALFORMED-INTRINSIC-COMPOSE-POLICY",
+        message=f"intrinsic_compose policy is malformed: {reason}",
         location=field.source,
     )

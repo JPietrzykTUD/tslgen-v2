@@ -16,6 +16,7 @@ from tslgen.backends.intrinsic_modifiers import (
 )
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.backend_metadata import BackendId
+from tslgen.domain.catalog import ExtensionCatalog, ExtensionName, TypeTag
 from tslgen.lowering.model import (
     BackendDirectIntrinsicHandoffRequest,
     BackendIntrinsicComposeHandoffRequest,
@@ -53,6 +54,18 @@ class BackendIntrinsicNamePart:
     text: BackendIntrinsicNameText
     source: SourceLocation
     modifier: BackendTranslatedIntrinsicModifier | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicComposeDefaultPolicy:
+    backend: BackendId
+    extension: ExtensionName
+    type_tag: TypeTag
+    prefix: BackendIntrinsicNameText
+    prefix_source: SourceLocation
+    suffix: BackendIntrinsicNameText
+    suffix_source: SourceLocation
+    source: SourceLocation
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,10 +108,112 @@ class BackendIntrinsicInvocationAssemblyResult:
     diagnostics: tuple[Diagnostic, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class BackendIntrinsicComposeDefaultPolicyResult:
+    policy: BackendIntrinsicComposeDefaultPolicy | None
+    diagnostics: tuple[Diagnostic, ...] = ()
+
+
+def resolve_backend_intrinsic_compose_default_policy(
+    extension_catalog: ExtensionCatalog,
+    backend: BackendId | str,
+    extension: ExtensionName | str,
+    type_tag: TypeTag | str,
+    source: SourceLocation,
+) -> BackendIntrinsicComposeDefaultPolicyResult:
+    """Resolve default compose prefix/suffix metadata for a selected target."""
+
+    backend_id = BackendId(str(backend))
+    extension_name = ExtensionName(str(extension))
+    selected_type_tag = TypeTag(str(type_tag))
+
+    if str(backend_id) not in {"cpp", "rust"}:
+        return BackendIntrinsicComposeDefaultPolicyResult(
+            policy=None,
+            diagnostics=(
+                _unsupported_default_policy_backend_diagnostic(backend_id, source),
+            ),
+        )
+
+    selected_extension = extension_catalog.get(str(extension_name))
+    if selected_extension is None:
+        return BackendIntrinsicComposeDefaultPolicyResult(
+            policy=None,
+            diagnostics=(
+                _unknown_default_policy_extension_diagnostic(extension_name, source),
+            ),
+        )
+
+    policy = selected_extension.intrinsic_compose_policy
+    if policy is None:
+        return BackendIntrinsicComposeDefaultPolicyResult(
+            policy=None,
+            diagnostics=(
+                _missing_default_policy_diagnostic(extension_name, source),
+            ),
+        )
+
+    prefix = next(
+        (
+            item
+            for item in policy.prefixes
+            if item.backend == str(backend_id)
+        ),
+        None,
+    )
+    if prefix is None:
+        return BackendIntrinsicComposeDefaultPolicyResult(
+            policy=None,
+            diagnostics=(
+                _missing_default_policy_backend_prefix_diagnostic(
+                    backend_id,
+                    extension_name,
+                    policy.source,
+                ),
+            ),
+        )
+
+    suffix = next(
+        (
+            item
+            for item in policy.suffixes
+            if item.type_tag == selected_type_tag
+        ),
+        None,
+    )
+    if suffix is None:
+        return BackendIntrinsicComposeDefaultPolicyResult(
+            policy=None,
+            diagnostics=(
+                _missing_default_policy_type_suffix_diagnostic(
+                    extension_name,
+                    selected_type_tag,
+                    policy.source,
+                ),
+            ),
+        )
+
+    return BackendIntrinsicComposeDefaultPolicyResult(
+        policy=BackendIntrinsicComposeDefaultPolicy(
+            backend=backend_id,
+            extension=extension_name,
+            type_tag=selected_type_tag,
+            prefix=BackendIntrinsicNameText(prefix.spelling),
+            prefix_source=prefix.source,
+            suffix=BackendIntrinsicNameText(suffix.suffix),
+            suffix_source=suffix.source,
+            source=policy.source,
+        ),
+        diagnostics=(),
+    )
+
+
 def assemble_backend_intrinsic_invocation(
     request: BackendIntrinsicHandoffRequest,
     backend: BackendId | str,
     translated_modifiers: tuple[BackendTranslatedIntrinsicModifier, ...] = (),
+    *,
+    default_compose_policy: BackendIntrinsicComposeDefaultPolicy | None = None,
 ) -> BackendIntrinsicInvocationAssemblyResult:
     """Assemble one backend intrinsic handoff request into an invocation value."""
 
@@ -106,7 +221,12 @@ def assemble_backend_intrinsic_invocation(
     if isinstance(request, BackendDirectIntrinsicHandoffRequest):
         return _assemble_direct_invocation(request, backend_id, translated_modifiers)
     if isinstance(request, BackendIntrinsicComposeHandoffRequest):
-        return _assemble_composed_invocation(request, backend_id, translated_modifiers)
+        return _assemble_composed_invocation(
+            request,
+            backend_id,
+            translated_modifiers,
+            default_compose_policy,
+        )
     raise AssertionError("unreachable backend intrinsic handoff request type")
 
 
@@ -146,7 +266,22 @@ def _assemble_composed_invocation(
     request: BackendIntrinsicComposeHandoffRequest,
     backend: BackendId,
     translated_modifiers: tuple[BackendTranslatedIntrinsicModifier, ...],
+    default_compose_policy: BackendIntrinsicComposeDefaultPolicy | None,
 ) -> BackendIntrinsicInvocationAssemblyResult:
+    if (
+        default_compose_policy is not None
+        and default_compose_policy.backend != backend
+    ):
+        return BackendIntrinsicInvocationAssemblyResult(
+            invocation=None,
+            diagnostics=(
+                _default_policy_backend_mismatch_diagnostic(
+                    default_compose_policy,
+                    backend,
+                ),
+            ),
+        )
+
     matched = _matched_modifiers(request, backend, translated_modifiers)
     if matched.diagnostics:
         return BackendIntrinsicInvocationAssemblyResult(
@@ -232,6 +367,32 @@ def _assemble_composed_invocation(
                 "prefix, infix, suffix, post, infix_sep, or immediate",
             )
         )
+
+    explicit_name_parts = {
+        modifier.name
+        for modifier in matched.modifiers
+        if modifier.name in {"prefix", "infix", "suffix", "post"}
+    }
+    if default_compose_policy is not None:
+        if "prefix" not in explicit_name_parts:
+            prefix_parts.insert(
+                0,
+                BackendIntrinsicNamePart(
+                    role="prefix",
+                    text=default_compose_policy.prefix,
+                    source=default_compose_policy.prefix_source,
+                    modifier=None,
+                ),
+            )
+        if "suffix" not in explicit_name_parts:
+            suffix_parts.append(
+                BackendIntrinsicNamePart(
+                    role="suffix",
+                    text=default_compose_policy.suffix,
+                    source=default_compose_policy.suffix_source,
+                    modifier=None,
+                )
+            )
 
     if diagnostics:
         return BackendIntrinsicInvocationAssemblyResult(
@@ -445,4 +606,99 @@ def _unsupported_modifier_value_diagnostic(
             f"unsupported value for invocation assembly; expected {expected}"
         ),
         location=modifier.source,
+    )
+
+
+def _unsupported_default_policy_backend_diagnostic(
+    backend: BackendId,
+    source: SourceLocation,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-BACKEND-INTRINSIC-COMPOSE-DEFAULT-UNSUPPORTED-BACKEND",
+        message=(
+            "default intrinsic compose policy supports only backend 'cpp' or "
+            f"'rust', not {str(backend)!r}"
+        ),
+        location=source,
+    )
+
+
+def _unknown_default_policy_extension_diagnostic(
+    extension: ExtensionName,
+    source: SourceLocation,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-BACKEND-INTRINSIC-COMPOSE-DEFAULT-UNKNOWN-EXTENSION",
+        message=(
+            "default intrinsic compose policy requested unknown extension "
+            f"{str(extension)!r}"
+        ),
+        location=source,
+    )
+
+
+def _missing_default_policy_diagnostic(
+    extension: ExtensionName,
+    source: SourceLocation,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-BACKEND-INTRINSIC-COMPOSE-DEFAULT-MISSING-POLICY",
+        message=(
+            "extension "
+            f"{str(extension)!r} has no intrinsic_compose default policy"
+        ),
+        location=source,
+    )
+
+
+def _missing_default_policy_backend_prefix_diagnostic(
+    backend: BackendId,
+    extension: ExtensionName,
+    source: SourceLocation,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-BACKEND-INTRINSIC-COMPOSE-DEFAULT-MISSING-BACKEND-PREFIX",
+        message=(
+            "extension "
+            f"{str(extension)!r} intrinsic_compose policy has no default "
+            f"prefix for backend {str(backend)!r}"
+        ),
+        location=source,
+    )
+
+
+def _missing_default_policy_type_suffix_diagnostic(
+    extension: ExtensionName,
+    type_tag: TypeTag,
+    source: SourceLocation,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-BACKEND-INTRINSIC-COMPOSE-DEFAULT-MISSING-TYPE-SUFFIX",
+        message=(
+            "extension "
+            f"{str(extension)!r} intrinsic_compose policy has no default "
+            f"suffix for type tag {str(type_tag)!r}"
+        ),
+        location=source,
+    )
+
+
+def _default_policy_backend_mismatch_diagnostic(
+    policy: BackendIntrinsicComposeDefaultPolicy,
+    backend: BackendId,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-BACKEND-INTRINSIC-COMPOSE-DEFAULT-BACKEND-MISMATCH",
+        message=(
+            "default intrinsic compose policy backend "
+            f"{str(policy.backend)!r} does not match invocation backend "
+            f"{str(backend)!r}"
+        ),
+        location=policy.source,
     )

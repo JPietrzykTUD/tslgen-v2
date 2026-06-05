@@ -49,6 +49,8 @@ from tslgen.backends.intrinsic_invocations import (
     BackendComposedIntrinsicInvocation,
     BackendDirectIntrinsicInvocation,
     BackendIntrinsicArgumentPayloadText,
+    BackendIntrinsicComposeDefaultPolicy,
+    BackendIntrinsicComposeDefaultPolicyResult,
     BackendIntrinsicInvocationArguments,
     BackendIntrinsicInvocationAssemblyResult,
     BackendIntrinsicInvocationImmediate,
@@ -57,6 +59,7 @@ from tslgen.backends.intrinsic_invocations import (
     BackendIntrinsicNamePartRole,
     BackendIntrinsicNameText,
     assemble_backend_intrinsic_invocation,
+    resolve_backend_intrinsic_compose_default_policy,
 )
 
 __all__ = [
@@ -67,6 +70,8 @@ __all__ = [
     "BackendComposedIntrinsicInvocation",
     "BackendDirectIntrinsicInvocation",
     "BackendIntrinsicArgumentPayloadText",
+    "BackendIntrinsicComposeDefaultPolicy",
+    "BackendIntrinsicComposeDefaultPolicyResult",
     "BackendIntrinsicInvocationArguments",
     "BackendIntrinsicInvocationAssemblyResult",
     "BackendIntrinsicInvocationImmediate",
@@ -98,6 +103,7 @@ __all__ = [
     "BackendValueTranslationBatchResult",
     "BackendValueTranslationResult",
     "assemble_backend_intrinsic_invocation",
+    "resolve_backend_intrinsic_compose_default_policy",
     "translate_backend_intrinsic_compose_modifiers",
     "translate_backend_intrinsic_compose_modifiers_with_context",
     "translate_backend_intrinsic_handoff_request_modifiers",

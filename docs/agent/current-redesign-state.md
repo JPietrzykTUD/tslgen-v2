@@ -14,7 +14,7 @@ is accepted. Milestone 236 is accepted. Milestone 237 planning is accepted.
 Milestone 238 is accepted. Milestone 239 is accepted. Milestone 240 is
 accepted. Milestone 241 is accepted. Milestone 242 is accepted.
 Milestone 243 is accepted. Milestone 244 is accepted. Milestone 244.5 is
-accepted. Milestone 245 is accepted.
+accepted. Milestone 245 is accepted. Milestone 246 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -927,61 +927,77 @@ remain compatible. Vector/register diagnostics cover missing extension
 catalog metadata, unknown extension, unsupported vector member, unsupported
 backend, and missing register spelling for a known backend/type pair.
 
+M246 added extension-owned default `intrin_compose` policy to
+`tsldata/extensions/extension.tsl` for `sse`, `avx2`, `avx512`, and `neon`,
+promoted that policy into typed `IntrinsicComposePolicy` catalog values with
+concrete per-`TypeTag` suffix entries, and added
+`resolve_backend_intrinsic_compose_default_policy(...)` plus optional typed
+default-policy consumption in backend intrinsic invocation assembly. Defaults
+apply only for missing prefix/suffix parts; explicit source modifiers remain
+authoritative. Diagnostics cover malformed policy source, wildcard/group or
+unknown suffix selectors, unsupported backend, unknown extension, missing
+policy, missing backend prefix, missing type suffix, and backend mismatch.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M246 real vector intrinsic rendering readiness planning.
+Run M247 default compose policy body-token bridge execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m246-real-vector-intrinsic-rendering-readiness-planning-prompt.md
+docs/agent/runs/m247-default-compose-policy-body-token-bridge-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 246: Real Vector Intrinsic Rendering Readiness Planning.
+Milestone 247: Default Compose Policy Body-Token Bridge.
 ```
 
 Latest review verdict:
 
 ```text
-M245 execution-review returned Accept with no focused revision required.
+M246 execution-review returned Accept with no focused revision required.
 Architecture/boundary, evidence, test, documentation, and validation
-reviewers all accepted the type-spelling boundary extension. The accepted
-implementation translates already-lowered `CurrentVector` and
-`LoweredVectorMemberType(member="register")` values through
-`Extension.resolved_vector_register_types` supplied by the typed extension
-catalog, preserves M192 scalar/size behavior, and diagnoses missing extension
-catalog metadata, unknown extensions, unsupported vector members, unsupported
-backends, and missing register spellings. Validation for M245:
-`git diff --check` exit 0 with no output;
-`python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no
-output; required pytest bundle exit 0 with 30 tests passed in 9.24s; initial
+reviewers accepted the extension-owned default compose policy slice. The test
+reviewer returned Accept With Follow-Ups, and the concrete follow-ups were
+addressed by adding partial prefix/suffix override coverage, unknown suffix
+selector coverage, backend-mismatch coverage, and M213 assembly regression
+validation. The accepted implementation stores default intrinsic compose
+prefix/suffix policy in `extension.tsl`, promotes it into typed extension
+catalog values, and lets backend intrinsic invocation assembly consume a
+resolved typed default policy only for missing prefix/suffix parts. Explicit
+source modifiers still win. The active prompt initially referenced stale test
+path `tslgen/tests/test_m195_intrinsic_modifier_translation.py`; running that
+exact path exited 4 with "file or directory not found". The prompt/roadmap
+were corrected to `tslgen/tests/test_m195_literal_intrinsic_modifier_translation.py`.
+Validation for M246 after correction: `git diff --check` exit 0 with no
+output; `python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0
+with no output; corrected required pytest bundle including M213 assembly
+regressions exit 0 with 134 tests passed in 17.94s; initial
 `find tslgen -type d -name __pycache__ -print` exit 0 and printed
-compileall-created cache directories; after cleanup, final rerun exited 0
-with no output; broader cache check for `.pytest_cache`, `.mypy_cache`, and
-`.ruff_cache` exit 0 with no output. M246 real vector intrinsic rendering
-readiness planning is selected next to avoid assuming unsupported
-`intrin_compose` backend name semantics.
+validation-created cache directories; after cleanup, final rerun exited 0
+with no output; broader cache check for `.pytest_cache`, `.mypy_cache`,
+`.ruff_cache`, and `*.pyc` exit 0 with no output. M247 default compose policy
+body-token bridge consumption is selected next.
 ```
 
 Next expected action:
 
 ```text
-Run the active M246 planning prompt. Use read-only evidence,
-lowering/boundary, backend/rendering, test, and documentation auditors. Do not
-implement production code. Inventory real unmasked vector `add`/`sub` bodies
-from `fundamental.tsl`, classify which can pass through accepted recursive
-TSIL lowering and backend rendering boundaries, identify any missing typed
-`intrin_compose` compose-name policy, and create the next M247 executor prompt.
-Do not create pairwise keyword combinations, hardcode intrinsic names, extend
-`generated_primitive_pipeline.py`, add fixture-shaped pipelines, broaden
-selection/dependency closure, or introduce runtime dependencies on
+Run the active M247 execution-review loop. Wire M246's typed default compose
+policy into the intrinsic body-token bridge so composed intrinsic request
+segments can use selected extension/type defaults when prefix or suffix is
+absent. Preserve explicit modifier precedence, add a typed Rust qualification
+path that avoids doubled `core::arch::*`, and keep direct intrinsic requests,
+immediates, opaque argument payloads, and body-token substitution compatible.
+Do not add new lowering, pairwise `emit_return + intrin_compose` special
+cases, generated-project integration, vector signature rendering, fixture
+pipelines, template-side intrinsic naming, or runtime dependencies on
 `frozen`/`tslgenold`.
 ```
 
@@ -1095,8 +1111,8 @@ and inserted M244.5 real primitive project pipeline consolidation before M245
 to remove fixture-shaped pipeline ownership. M244.5 execution-review returned
 Accept with no focused revision required and selected M245 extension register
 type spelling boundary execution-review again. M245 execution-review returned
-Accept with no focused revision required and selected M246 real vector
-intrinsic rendering readiness planning.
+Accept with no focused revision required and selected M246 extension-owned
+default intrin compose policy execution-review.
 ```
 
 Completed prompt:

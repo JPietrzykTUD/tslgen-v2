@@ -31,6 +31,22 @@ extension avx512:
     f64:
       cpp "__m512d"
       rust "core::arch::x86_64::__m512d"
+  intrinsic_compose:
+    prefix:
+      cpp "_mm512_"
+      rust "core::arch::x86_64::_mm512_"
+    suffix:
+      by_type:
+        f32 "ps"
+        f64 "pd"
+        si8 "epi8"
+        si16 "epi16"
+        si32 "epi32"
+        si64 "epi64"
+        ui8 "epu8"
+        ui16 "epu16"
+        ui32 "epu32"
+        ui64 "epu64"
   mask_type_policy:
     kind "native_predicate_by_lanes"
     cpp_by_lanes:
@@ -79,6 +95,22 @@ extension avx2:
     f64:
       cpp "__m256d"
       rust "core::arch::x86_64::__m256d"
+  intrinsic_compose:
+    prefix:
+      cpp "_mm256_"
+      rust "core::arch::x86_64::_mm256_"
+    suffix:
+      by_type:
+        f32 "ps"
+        f64 "pd"
+        si8 "epi8"
+        si16 "epi16"
+        si32 "epi32"
+        si64 "epi64"
+        ui8 "epu8"
+        ui16 "epu16"
+        ui32 "epu32"
+        ui64 "epu64"
   mask_type_policy:
     kind "lane_bitmask"
     width "lanes"
@@ -158,6 +190,22 @@ extension sse:
     f64:
       cpp "__m128d"
       rust "core::arch::x86_64::__m128d"
+  intrinsic_compose:
+    prefix:
+      cpp "_mm_"
+      rust "core::arch::x86_64::_mm_"
+    suffix:
+      by_type:
+        f32 "ps"
+        f64 "pd"
+        si8 "epi8"
+        si16 "epi16"
+        si32 "epi32"
+        si64 "epi64"
+        ui8 "epu8"
+        ui16 "epu16"
+        ui32 "epu32"
+        ui64 "epu64"
   mask_type_policy:
     kind "lane_bitmask"
     width "lanes"
@@ -308,6 +356,22 @@ extension neon:
     f64:
       cpp "float64x2_t"
       rust "core::arch::aarch64::float64x2_t"
+  intrinsic_compose:
+    prefix:
+      cpp ""
+      rust "core::arch::aarch64::"
+    suffix:
+      by_type:
+        f32 "f32"
+        f64 "f64"
+        si8 "s8"
+        si16 "s16"
+        si32 "s32"
+        si64 "s64"
+        ui8 "u8"
+        ui16 "u16"
+        ui32 "u32"
+        ui64 "u64"
   mask_type_policy:
     kind "lane_bitmask"
     width "lanes"
