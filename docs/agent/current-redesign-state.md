@@ -8,7 +8,7 @@ or accepted planning passes.
 
 Milestone 225 is accepted. Milestone 226.5 planning is accepted. Milestone 227
 is accepted. Milestone 228.5 planning is accepted. Milestone 229 is accepted.
-Milestone 230 is accepted.
+Milestone 230 is accepted. Milestone 231 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -697,43 +697,54 @@ scanner does not continue discovering nested candidates inside malformed
 source. M230 does not grow `outer_parser.py`, `parser.py`, `lowerer.py`, or
 `generated_primitive_pipeline.py`.
 
+M231 added the accepted `tslgen.lowering.emit_return_regions` boundary. It
+consumes M230 lexical scan results and lowers only symbolic
+`SourceBodyKeyword.EMIT_RETURN` regions into typed
+`LoweredEmitReturnDirective` values carrying full span, head span, raw payload
+span, source order, and source-region provenance. Payload text remains raw and
+exactly source-owned. Surrounding raw segments and non-return lexical regions
+remain opaque ordered items. Malformed M230 scan results propagate their
+diagnostics and lower no return directives.
+
+M231 also separated M230 keyword identity from source spelling:
+`SourceBodyKeyword` is symbolic, `SourceBodyRegionHead.spelling` owns the
+lexical spelling, `.head.name` remains a compatibility spelling property, and
+`SourceBodyRegionHead.custom(...)` preserves configurable lexical heads. M231
+does not lower `intrin_compose`, primitive calls, casts, operators,
+assignments, backend semantics, rendering, or generated projects.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M231 emit return lexical region lowering execution-review loop.
+Run M232 return payload region rescan adapter execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m231-emit-return-lexical-region-lowering-execution-review-loop-prompt.md
+docs/agent/runs/m232-return-payload-region-rescan-adapter-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 231: Emit Return Lexical Region Lowering.
+Milestone 232: Return Payload Region Rescan Adapter.
 ```
 
 Latest review verdict:
 
 ```text
-M230 execution-review returned Accept after focused revision. Boundary review
-returned Accept. Complexity review returned Accept With Follow-Up for
-duplicated quote-escape logic; the follow-up was fixed by moving quote/escape
-detection into `tslgen.syntax.tsil_lexical`. Evidence review initially
-returned Needs Revision because real-corpus coverage did not prove every
-configured head; focused fixes added recursive real-corpus coverage including
-`repr_change.tsl` and `rnd_access.tsl` for `switch<compile>`, and re-review
-returned Accept. Diagnostics review initially returned Needs Revision for
-escaped inline quote handling and nested candidate discovery after malformed
-regions; focused fixes added quote-aware matching and no-recovery
-malformed-tail handling, and diagnostics re-review returned Accept. Validation
-for M230: `git diff --check` exit 0 with no output; `python -B -m compileall
--q tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest
-bundle exit 0 with 27 tests passed; required `find tslgen -type d -name
+M231 execution-review returned Accept after focused follow-up revision.
+Lowering-boundary review returned Accept. Diagnostics review returned Accept.
+Evidence and complexity reviews initially returned Accept With Follow-Up for
+keyword spelling coupling and custom-head configurability; focused fixes made
+`SourceBodyKeyword` symbolic, made spelling descriptor-owned, added
+`SourceBodyRegionHead.custom(...)`, and both focused rechecks returned Accept.
+Validation for M231: `git diff --check` exit 0 with no output; `python -B -m
+compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no output; required
+pytest bundle exit 0 with 37 tests passed; required `find tslgen -type d -name
 __pycache__ -print` exit 0 and printed compile/test-created cache
 directories.
 ```
@@ -741,12 +752,12 @@ directories.
 Next expected action:
 
 ```text
-Run the active M231 execution-review loop prompt. Use one write-capable
-executor plus read-only reviewers. Implement only the `emit_return(...)`
-keyword-specific lowerer over M230 lexical regions; consume a symbolic keyword
-identity from the lexical descriptor rather than duplicating the raw spelling
-check in the lowerer. Preserve the return payload as raw source text and do
-not lower nested payload semantics.
+Run the active M232 execution-review loop prompt. Use one write-capable
+executor plus read-only reviewers. Implement only a thin adapter that rescans
+M231 `LoweredEmitReturnDirective.payload_span` values with the existing M230
+scanner and wraps the M230 raw segments/lexical regions with return
+provenance. Preserve raw payload text exactly and do not lower nested payload
+semantics or introduce a new payload parser/token language.
 ```
 
 Previous review verdict:
@@ -827,13 +838,14 @@ returned Accept and selected M229 outer TSL declaration parser boundary. M229
 execution-review returned Accept With Follow-Ups after focused revision and
 selected M230 source body lexical region boundary. M230 execution-review
 returned Accept after focused revision and selected M231 emit return lexical
-region lowering.
+region lowering. M231 execution-review returned Accept after focused
+follow-up revision and selected M232 return payload region rescan adapter.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m230-source-body-lexical-region-boundary-execution-review-loop-prompt.md
+docs/agent/runs/m231-emit-return-lexical-region-lowering-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

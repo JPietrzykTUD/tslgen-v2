@@ -28274,3 +28274,93 @@ python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m229_outer_tsl_declaration_parser_boundary.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py
 find tslgen -type d -name __pycache__ -print
 ```
+
+Result:
+
+M231 added a focused `tslgen.lowering.emit_return_regions` boundary that
+consumes M230 `SourceBodyLexicalScanResult` values and lowers only symbolic
+`SourceBodyKeyword.EMIT_RETURN` regions into typed
+`LoweredEmitReturnDirective` values. The directive preserves the full return
+region span, head span, raw payload span, source order, and source-region
+provenance. Payload text remains exactly source-owned raw text.
+
+M231 also tightened M230 lexical descriptors so keyword identity and source
+spelling are separate: `SourceBodyKeyword` is symbolic, while
+`SourceBodyRegionHead.spelling` owns the actual spelling. Existing `.head.name`
+compatibility remains as a spelling property, and `SourceBodyRegionHead.custom`
+keeps the scanner configurable for future lexical heads that have no built-in
+semantic identity.
+
+Surrounding raw segments and non-return lexical regions are preserved as
+opaque ordered items. Malformed M230 scan results propagate their diagnostics
+and lower no return directives. Unsupported return-region shapes diagnose as
+`TSL-EMIT-RETURN-UNSUPPORTED-REGION` with the return head source location.
+
+Tests cover real `.tsl` payloads for inline scalar `emit_return(left + right)`,
+multiline `emit_return(intrin_compose<...>(...))`,
+`emit_return(call<primitive=...>(...))`, and raw target-language-looking
+`emit_return(*ptr)`. Nested payload text remains raw; M231 does not lower
+`intrin_compose`, primitive calls, casts, operators, assignments, backend
+semantics, rendering, or generated projects.
+
+Review verdict:
+
+Accepted. Lowering-boundary and diagnostics reviews returned Accept. Evidence
+and complexity reviews initially returned Accept With Follow-Up for spelling
+coupling and custom-head configurability; a focused revision made the keyword
+enum symbolic, made spelling descriptor-owned, added `SourceBodyRegionHead`
+custom-head construction, and both focused rechecks returned Accept.
+
+Validation result:
+
+- `git diff --check`: exit 0, no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
+  output.
+- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m229_outer_tsl_declaration_parser_boundary.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py`:
+  exit 0, 37 tests passed.
+- `find tslgen -type d -name __pycache__ -print`: exit 0, printed
+  compile/test-created `__pycache__` directories.
+
+Next concrete prompt:
+`docs/agent/runs/m232-return-payload-region-rescan-adapter-execution-review-loop-prompt.md`.
+
+### Milestone 232: Return Payload Region Rescan Adapter
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m232-return-payload-region-rescan-adapter-execution-review-loop-prompt.md`.
+
+Goal:
+
+Consume M231 `LoweredEmitReturnDirective` payload spans, rescan them with the
+existing M230 lexical scanner, and wrap the resulting M230 raw segments and
+lexical region candidates with return-directive provenance.
+
+Scope:
+
+- Reuse M230 lexical scanning over `SourceBodyText.from_span(payload_span)`.
+- Produce only thin frozen slotted adapter/result dataclasses carrying M230
+  raw segments, M230 lexical region candidates, return-directive provenance,
+  and propagated diagnostics.
+- Preserve raw text exactly and keep nested regions lexical only.
+- Propagate nested-scan diagnostics without source repair.
+- Cover real raw-only, multiline intrinsic-compose, primitive-call, and raw
+  `*ptr` return payloads.
+
+Out of scope:
+
+Payload semantic lowering; `intrin_compose` lowering; primitive-call
+resolution; value/type/source-operation lowering; expression parsing;
+operators; a new payload parser or token language; backend translation;
+rendering; generated-project work; changes to `outer_parser.py`, `parser.py`,
+`lowerer.py`, or `generated_primitive_pipeline.py`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m1625_tsil_lexical.py tslgen/tests/test_m229_outer_tsl_declaration_parser_boundary.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py tslgen/tests/test_m232_return_payload_region_rescan_adapter.py
+find tslgen -type d -name __pycache__ -print
+```

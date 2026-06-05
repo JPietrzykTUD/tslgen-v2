@@ -9,9 +9,11 @@ from tslgen.syntax.outer_ast import ParsedImplementationBodyEnvelope
 from tslgen.syntax.outer_parser import OuterTslParser
 from tslgen.syntax.source_body_regions import (
     SourceBodyDelimitedSpan,
+    SourceBodyKeyword,
     SourceBodyLexicalRegionCandidate,
     SourceBodyLexicalRegionScanner,
     SourceBodyRawSegment,
+    SourceBodyRegionHead,
     SourceBodySpan,
     SourceBodyText,
     scan_source_body_envelope,
@@ -29,6 +31,7 @@ def test_m230_public_values_are_frozen_slotted_dataclasses() -> None:
         SourceBodyDelimitedSpan,
         SourceBodyLexicalRegionCandidate,
         SourceBodyRawSegment,
+        SourceBodyRegionHead,
         SourceBodySpan,
         SourceBodyText,
     )
@@ -77,6 +80,7 @@ def test_m230_inline_envelope_preserves_escaped_payload_and_finds_nested_region(
     assert tuple(segment.span.text for segment in result.raw_segments) == (";",)
 
     emit_return = result.regions[0]
+    assert emit_return.head.keyword is SourceBodyKeyword.EMIT_RETURN
     assert emit_return.payload is not None
     nested = scan_source_body_text(SourceBodyText.from_span(emit_return.payload.payload_span))
     assert nested.diagnostics == ()
@@ -165,6 +169,27 @@ def test_m230_raw_target_language_if_is_not_a_generation_region() -> None:
     assert result.diagnostics == ()
     assert _region_heads(result) == ("emit_return",)
     assert result.regions[0].head_span.column == 13
+
+
+def test_m230_custom_region_heads_remain_configurable() -> None:
+    custom_head = SourceBodyRegionHead.custom("custom_kw", expects_selector=True)
+    source_text = SourceBodyText(
+        path=Path("fixture.tsl"),
+        line=1,
+        column=1,
+        text="custom_kw<selector>(payload);",
+    )
+
+    result = SourceBodyLexicalRegionScanner((custom_head,)).scan(source_text)
+
+    assert result.diagnostics == ()
+    assert len(result.regions) == 1
+    assert result.regions[0].head.keyword is SourceBodyKeyword.CUSTOM
+    assert result.regions[0].head.name == "custom_kw"
+    assert result.regions[0].selector is not None
+    assert result.regions[0].selector.payload_span.text == "selector"
+    assert result.regions[0].payload is not None
+    assert result.regions[0].payload.payload_span.text == "payload"
 
 
 def test_m230_malformed_configured_regions_report_source_locations() -> None:

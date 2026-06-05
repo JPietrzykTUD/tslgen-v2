@@ -8,6 +8,7 @@ conditions, primitive calls, or backend behavior.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum, auto
 from pathlib import Path
 from typing import Literal
 
@@ -115,13 +116,48 @@ class SourceBodyDelimitedSpan:
     payload_span: SourceBodySpan
 
 
+class SourceBodyKeyword(Enum):
+    INTRIN_COMPOSE = auto()
+    EMIT_RETURN = auto()
+    CALL = auto()
+    IF = auto()
+    ELSE = auto()
+    LOOP = auto()
+    SWITCH = auto()
+    CUSTOM = auto()
+
+
 @dataclass(frozen=True, slots=True)
 class SourceBodyRegionHead:
-    name: str
+    keyword: SourceBodyKeyword
+    spelling: str
     selector_text: str | None = None
     expects_selector: bool = False
     expects_payload: bool = True
     expects_body: bool = False
+
+    @classmethod
+    def custom(
+        cls,
+        spelling: str,
+        *,
+        selector_text: str | None = None,
+        expects_selector: bool = False,
+        expects_payload: bool = True,
+        expects_body: bool = False,
+    ) -> "SourceBodyRegionHead":
+        return cls(
+            keyword=SourceBodyKeyword.CUSTOM,
+            spelling=spelling,
+            selector_text=selector_text,
+            expects_selector=expects_selector,
+            expects_payload=expects_payload,
+            expects_body=expects_body,
+        )
+
+    @property
+    def name(self) -> str:
+        return self.spelling
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,16 +202,29 @@ class SourceBodyLexicalScanResult:
 
 
 DEFAULT_SOURCE_BODY_REGION_HEADS: tuple[SourceBodyRegionHead, ...] = (
-    SourceBodyRegionHead("intrin_compose", expects_selector=True),
-    SourceBodyRegionHead("emit_return"),
-    SourceBodyRegionHead("call", expects_selector=True),
     SourceBodyRegionHead(
+        SourceBodyKeyword.INTRIN_COMPOSE,
+        "intrin_compose",
+        expects_selector=True,
+    ),
+    SourceBodyRegionHead(
+        SourceBodyKeyword.EMIT_RETURN,
+        "emit_return",
+    ),
+    SourceBodyRegionHead(
+        SourceBodyKeyword.CALL,
+        "call",
+        expects_selector=True,
+    ),
+    SourceBodyRegionHead(
+        SourceBodyKeyword.IF,
         "if",
         selector_text="generation",
         expects_selector=True,
         expects_body=True,
     ),
     SourceBodyRegionHead(
+        SourceBodyKeyword.ELSE,
         "else",
         selector_text="generation",
         expects_selector=True,
@@ -183,12 +232,14 @@ DEFAULT_SOURCE_BODY_REGION_HEADS: tuple[SourceBodyRegionHead, ...] = (
         expects_body=True,
     ),
     SourceBodyRegionHead(
+        SourceBodyKeyword.LOOP,
         "loop",
         selector_text="range",
         expects_selector=True,
         expects_body=True,
     ),
     SourceBodyRegionHead(
+        SourceBodyKeyword.SWITCH,
         "switch",
         selector_text="compile",
         expects_selector=True,
