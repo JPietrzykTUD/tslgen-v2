@@ -576,6 +576,34 @@ pipelines, Python-owned C++/Rust primitive bodies, template-side type or
 intrinsic decisions, real vector build verification, or runtime dependencies on
 `frozen` or `tslgenold`.
 
+### M249 Real AVX2 Selected Primitive Build Verification
+
+Milestone 249 verifies that the M248 real selected `add` `avx2/f32` generated
+project compiles through the accepted after-write generated-project
+verification boundary for both C++ and Rust. The selected source remains the
+real `tsldata/primitives/arithmetic/fundamental.tsl` implementation for
+selector `("avx2", "f?")`, selected extension `avx2`, selected type `f32`, and
+requested profile `avx2`.
+
+The generated C++ profile contains extension-owned vector type spelling,
+extension-owned header presentation, and the extension/default-policy intrinsic
+call. Verification runs C++ configure, build, and test for profile `avx2`.
+
+The generated Rust profile contains extension-owned vector type spelling and
+exactly one fully-qualified Rust intrinsic call path. Rust target-feature
+intrinsics are rendered inside an already-decided unsafe body boundary selected
+by typed render context. The unsafe boundary is applied after intrinsic
+body-token lowering/rendering has produced an accepted Rust body text value; it
+is not inferred from `_mm*`, `core::arch::*`, source-body text, templates, or
+host/compiler probing. Verification runs Rust test for profile `avx2` with the
+accepted target-feature build flags.
+
+M249 does not add new lowering semantics, broaden TSIL parsing, expand
+primitive calls, change dependency closure, add fixture-specific pipelines,
+move backend semantic decisions into templates, introduce Python-owned
+intrinsic spelling tables, model host/compiler capability, or add runtime
+dependencies on `frozen` or `tslgenold`.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

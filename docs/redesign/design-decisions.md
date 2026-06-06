@@ -3537,3 +3537,46 @@ Consequences:
 - M248 connects real selected primitive rendering to this bridge through the
   generic selected primitive project pipeline, using the same selected context
   and M245 type spelling boundaries.
+
+## ADR-071: Rust Intrinsic Unsafe Body Boundary Is Typed Render Context
+
+Status: Accepted.
+
+Context:
+
+M249 proved the real selected `add` `avx2/f32` generated project through
+after-write C++ and Rust build verification. The generated Rust profile uses
+the correct extension-owned `core::arch::x86_64::__m256` type spelling and
+fully-qualified `core::arch::x86_64::_mm256_add_ps(left, right)` intrinsic
+call. Rust still requires target-feature intrinsic calls to occur inside an
+unsafe call boundary even when build verification supplies target-feature
+flags through `RUSTFLAGS`.
+
+That safety presentation is a backend render concern over already-lowered
+intrinsic body-token output. It must not be inferred by inspecting intrinsic
+name strings such as `_mm256`, by looking for `core::arch::*` text, by
+repairing source bodies, or by pushing safety decisions into templates.
+
+Decision:
+
+Rust intrinsic body safety is represented by a typed render-context value. The
+intrinsic body-token bridge can render an accepted Rust body token stream as
+plain body text or wrap it in an unsafe block when the caller supplies the
+typed unsafe policy. The generic selected primitive project pipeline requests
+the unsafe policy for Rust already-lowered intrinsic body-token output in the
+selected real project path.
+
+Templates may format the already-decided body text they receive, but they do
+not decide whether an intrinsic call is unsafe. The policy does not change
+lowering, intrinsic name assembly, Rust module qualification, target-feature
+build flag selection, or host/compiler capability modeling.
+
+Consequences:
+
+- M249 keeps Rust AVX2 intrinsic build verification in parity with C++ without
+  introducing intrinsic-name heuristics or template-side semantics.
+- Future Rust backend slices can reuse the same typed safety boundary for
+  already-lowered intrinsic body-token output.
+- Broader Rust safety policy, target-feature attributes, or function-level
+  unsafe presentation remain future explicitly selected backend/render work if
+  real generated shapes require them.

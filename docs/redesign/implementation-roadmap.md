@@ -16633,7 +16633,7 @@ Next concrete prompt:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m249-real-avx2-selected-primitive-build-verification-execution-review-loop-prompt.md`.
 
 Goal:
@@ -16668,6 +16668,141 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py tslgen/tests/test_m244_5_real_primitive_project_pipeline_consolidation.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py tslgen/tests/test_m247_selected_implementation_render_context.py tslgen/tests/test_m248_generic_selected_primitive_project_intrinsic_rendering.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M249 made the M248 real selected `add` `avx2/f32` generated project compile
+through the accepted after-write verification path for both C++ and Rust. The
+same generic selected primitive project pipeline renders the real
+`tsldata/primitives/arithmetic/fundamental.tsl` selected body, writes the
+run-level generated artifacts through `ArtifactWriter`, and verifies the
+selected `avx2` profile through `verify_generated_project`.
+
+The generated C++ profile uses the extension-owned `__m256` type spelling,
+`<immintrin.h>` include, and `_mm256_add_ps(left, right)` intrinsic spelling.
+The generated Rust profile uses the extension-owned
+`core::arch::x86_64::__m256` type spelling and exactly one
+`core::arch::x86_64::_mm256_add_ps(left, right)` call path without double
+qualification.
+
+Rust x86 target-feature intrinsics require an unsafe call boundary even when
+verification supplies `RUSTFLAGS=-C target-feature=...`. M249 added a small
+typed `RustIntrinsicBodySafety` render policy to the existing intrinsic
+body-token bridge. The generic selected primitive project pipeline requests
+`UNSAFE_BLOCK` only for already-lowered Rust intrinsic body-token output; C++
+and raw scalar payloads remain unchanged. The policy is explicit typed render
+context, not `_mm256`/`core::arch` string matching, template-side safety
+selection, or source-lowering repair.
+
+Tests added:
+
+- `tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py`
+  covers real `add` `avx2/f32` artifact rendering, manifest-clean writing,
+  C++ configure/build/test plus Rust test for profile `avx2`, generated C++
+  and Rust output shape, Rust unsafe wrapping, and guardrails against fixture
+  pipelines, local intrinsic spelling tables, or runtime `frozen`/`tslgenold`
+  dependencies.
+- `tslgen/tests/test_m247_selected_implementation_render_context.py` gained a
+  focused Rust safety-policy bridge test proving that unsafe wrapping is
+  selected by typed render context over already-lowered intrinsic body-token
+  output.
+
+Review/audit verdict:
+
+Accepted after executor-review loop. Architecture/boundary review returned
+Accept and found no fixture pipeline, pairwise keyword special case, template
+semantic inference, local intrinsic spelling table, or runtime legacy
+dependency. Evidence review returned Accept and confirmed that the selected
+fixture, type/header/intrinsic policy, profile, and target-feature facts come
+from real `tsldata`, extension, backend metadata, and machine-profile catalogs.
+Test review returned Accept. Validation audit returned Accept. Documentation
+audit returned Needs Revision only for final closeout/state/spec/decision/next
+prompt updates; this roadmap entry is part of that closeout.
+
+Accepted validation:
+
+- `git diff --check`: exit 0 with no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
+  no output.
+- Required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py tslgen/tests/test_m244_5_real_primitive_project_pipeline_consolidation.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py tslgen/tests/test_m247_selected_implementation_render_context.py tslgen/tests/test_m248_generic_selected_primitive_project_intrinsic_rendering.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py`
+  exited 0 with 43 tests passed in 34.03s.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and printed
+  validation-created `__pycache__` directories. After cleanup, the final rerun
+  exited 0 with no output.
+- Broader cache check:
+  `find . -maxdepth 3 \( -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -print`
+  exited 0 with no output.
+
+Follow-up:
+
+M250 is selected to exercise the real AVX2 integer `add` implementation shape.
+That body uses nested accepted lowering facts for a source-provided
+`intrin_compose` suffix modifier:
+`value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))`.
+The next slice should pass already-lowered typed modifier results through the
+generic selected primitive project pipeline and build-verify the selected
+integer matrix. It must not add new lowering semantics, match exact raw source
+strings, add Python suffix/intrinsic tables, or specialize the pipeline for
+AVX2/add.
+
+Next concrete prompt:
+`docs/agent/runs/m250-real-avx2-integer-modifier-lowering-build-verification-execution-review-loop-prompt.md`.
+
+### Milestone 250: Real AVX2 Integer Modifier Lowering Build Verification
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m250-real-avx2-integer-modifier-lowering-build-verification-execution-review-loop-prompt.md`.
+
+Goal:
+
+Make the real `add` `avx2/?i?` selected implementation matrix compile through
+the same C++ and Rust generated-project verification path as M249, while
+proving that source-provided, already-lowered intrinsic modifier facts flow
+through the generic selected primitive project pipeline.
+
+Scope:
+
+- Render the real `add` selected entries for selector path `("avx2", "?i?")`,
+  selected extension `avx2`, requested profile `avx2`, parameters
+  `("left", "right")`, and concrete type tags `si8`, `si16`, `si32`, `si64`,
+  `ui8`, `ui16`, `ui32`, and `ui64`.
+- Preserve selected concrete `TypeTag` context; do not render wildcard text.
+- Use the existing lowering/discovery/handoff path for the multiline
+  `emit_return(...)` body and the source-provided `suffix=value<backend>(...)`
+  modifier. If implementation work is needed, it should only connect already
+  lowered typed modifier facts to the accepted backend modifier translation
+  boundary before invoking the M247/M249 body-token bridge.
+- Use existing extension/catalog/backend metadata for register type spelling,
+  default prefix policy, and suffix fragment translation. In particular,
+  unsigned integer selected types still use the source-requested signed
+  intrinsic suffix family when the lowered source modifier asks for
+  `base::signed_of(base::in)`.
+- Write artifacts through `ArtifactWriter` and verify C++ configure/build/test
+  plus Rust test for profile `avx2`.
+- Preserve M249 `add avx2/f32` build verification and M243/M244 scalar build
+  behavior.
+
+Out of scope:
+
+New lowering semantics; broad TSIL parsing; exact raw string matching of the
+modifier expression; Python-owned suffix/intrinsic/type tables; template-side
+modifier/type/intrinsic decisions; dependency closure; primitive-call
+expansion; mask/generic/SVE/NEON/AVX512 build verification; generated semantic
+vector tests; fixture-shaped sibling pipelines; extending
+`generated_primitive_pipeline.py`; runtime dependencies on `frozen` or
+`tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m197_type_derived_intrinsic_suffix_translation.py tslgen/tests/test_m200_current_type_intrinsic_suffix_translation.py tslgen/tests/test_m213_backend_intrinsic_invocation_assembly.py tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py tslgen/tests/test_m247_selected_implementation_render_context.py tslgen/tests/test_m248_generic_selected_primitive_project_intrinsic_rendering.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py tslgen/tests/test_m250_real_avx2_integer_modifier_lowering_build_verification.py
 find tslgen -type d -name __pycache__ -print
 ```
 

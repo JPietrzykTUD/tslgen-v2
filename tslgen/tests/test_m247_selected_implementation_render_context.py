@@ -39,6 +39,7 @@ from tslgen.rendering import (
     PrimitiveProfileName,
     RenderedIncludeLine,
     RenderedNamespaceText,
+    RustIntrinsicBodySafety,
     SelectedImplementationRenderContext,
     render_intrinsic_body_token_profile_artifact,
 )
@@ -107,6 +108,24 @@ def test_m247_rust_bridge_uses_full_policy_prefix_without_double_qualification()
     )
     assert result.definition is not None
     assert "core::arch::x86_64::core::arch::x86_64" not in result.definition.text
+
+
+def test_m247_rust_body_safety_policy_wraps_lowered_intrinsic_call() -> None:
+    context = _rust_context(
+        "intrin_compose<add>(left, right)",
+        rust_body_safety=RustIntrinsicBodySafety.UNSAFE_BLOCK,
+    )
+
+    result = render_intrinsic_body_token_profile_artifact(
+        SUPPLEMENTARY_ROOT,
+        context,
+    )
+
+    assert result.diagnostics == ()
+    assert result.body_text is not None
+    assert result.body_text.text == (
+        "unsafe { core::arch::x86_64::_mm256_add_ps(left, right) }"
+    )
 
 
 def test_m247_explicit_rust_modifiers_keep_architecture_module_qualification() -> None:
@@ -337,6 +356,7 @@ def _rust_context(
         _DEFAULT_SELECTED_CONTEXT
     ),
     rust_architecture_module: RustArchitectureModule | None = None,
+    rust_body_safety: RustIntrinsicBodySafety = RustIntrinsicBodySafety.PLAIN,
     translated_modifiers: tuple[BackendTranslatedIntrinsicModifier, ...] = (),
 ) -> IntrinsicBodyTokenProfileRenderContext:
     selected = (
@@ -361,6 +381,7 @@ def _rust_context(
         ),
         translated_modifiers=translated_modifiers,
         rust_architecture_module=rust_architecture_module,
+        rust_body_safety=rust_body_safety,
         selected_implementation=selected,
     )
 

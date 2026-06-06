@@ -67,6 +67,7 @@ from tslgen.rendering import (
     PrimitiveRenderPlanSource,
     PrimitiveRenderSortKey,
     RenderedPrimitiveDefinitionText,
+    RustIntrinsicBodySafety,
     SelectedImplementationRenderContext,
     adapt_primitive_render_plans,
     build_generated_project_render_model,
@@ -646,6 +647,7 @@ def _render_intrinsic_payload_definition(
             result_type=PrimitiveFunctionResultTypeText(result_type),
             parameters=PrimitiveFunctionParameterListText(parameters),
             shape_key=shape_key,
+            rust_body_safety=_rust_intrinsic_body_safety(backend_id),
             selected_implementation=SelectedImplementationRenderContext(
                 backend_id=PrimitiveBackendId(backend_id),
                 extension=selection.extension,
@@ -657,6 +659,12 @@ def _render_intrinsic_payload_definition(
     if render.diagnostics or render.definition is None:
         return render.diagnostics
     return render.definition
+
+
+def _rust_intrinsic_body_safety(backend_id: str) -> RustIntrinsicBodySafety:
+    if backend_id == "rust":
+        return RustIntrinsicBodySafety.UNSAFE_BLOCK
+    return RustIntrinsicBodySafety.PLAIN
 
 
 def _render_raw_payload_definition(

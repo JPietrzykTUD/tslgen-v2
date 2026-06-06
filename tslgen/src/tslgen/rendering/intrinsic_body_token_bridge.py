@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 from tslgen.backends import (
@@ -77,6 +78,11 @@ class SelectedImplementationRenderContext:
     extension_catalog: ExtensionCatalog | None
 
 
+class RustIntrinsicBodySafety(Enum):
+    PLAIN = "plain"
+    UNSAFE_BLOCK = "unsafe_block"
+
+
 @dataclass(frozen=True, slots=True)
 class IntrinsicBodyTokenProfileRenderContext:
     backend_id: PrimitiveBackendId
@@ -98,6 +104,7 @@ class IntrinsicBodyTokenProfileRenderContext:
     module_open: RenderedModuleText | None = None
     module_close: RenderedModuleText | None = None
     rust_architecture_module: RustArchitectureModule | None = None
+    rust_body_safety: RustIntrinsicBodySafety = RustIntrinsicBodySafety.PLAIN
     selected_implementation: SelectedImplementationRenderContext | None = None
 
 
@@ -126,7 +133,7 @@ def render_intrinsic_body_token_profile_artifact(
         return _diagnostic_result(diagnostics)
 
     assert rendered_body is not None
-    body_text = RenderedPrimitiveBodyText(str(rendered_body.text))
+    body_text = _primitive_body_text(context, rendered_body)
     shape_result = render_primitive_function_shape(
         supplementary_root,
         PrimitiveFunctionShapeRenderContext(
@@ -207,6 +214,19 @@ def _render_body_tokens(
             return None, diagnostics
         return _rust_body(context.handoff, calls)
     return None, (_unsupported_backend_diagnostic(context),)
+
+
+def _primitive_body_text(
+    context: IntrinsicBodyTokenProfileRenderContext,
+    rendered_body: CppRenderedBodyTokens | RustRenderedBodyTokens,
+) -> RenderedPrimitiveBodyText:
+    body = str(rendered_body.text)
+    if (
+        context.backend_id.text == "rust"
+        and context.rust_body_safety is RustIntrinsicBodySafety.UNSAFE_BLOCK
+    ):
+        body = f"unsafe {{ {body} }}"
+    return RenderedPrimitiveBodyText(body)
 
 
 def _render_cpp_calls(

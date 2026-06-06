@@ -15,7 +15,7 @@ Milestone 238 is accepted. Milestone 239 is accepted. Milestone 240 is
 accepted. Milestone 241 is accepted. Milestone 242 is accepted.
 Milestone 243 is accepted. Milestone 244 is accepted. Milestone 244.5 is
 accepted. Milestone 245 is accepted. Milestone 246 is accepted. Milestone
-247 is accepted. Milestone 248 is accepted.
+247 is accepted. Milestone 248 is accepted. Milestone 249 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -967,59 +967,77 @@ not add new source lowering, a sibling fixture pipeline, pairwise
 closure, template-side type/intrinsic decisions, Python-owned C++/Rust
 primitive bodies, or runtime dependencies on `frozen`/`tslgenold`.
 
+M249 made the M248 real selected `add` `avx2/f32` generated project compile
+through the accepted after-write verification path for both C++ and Rust. The
+generic selected primitive project pipeline renders the real selected body,
+writes artifacts through `ArtifactWriter`, and verifies the selected `avx2`
+profile through `verify_generated_project`. The generated C++ profile uses
+extension-owned `__m256`, `<immintrin.h>`, and `_mm256_add_ps(left, right)`.
+The generated Rust profile uses extension-owned `core::arch::x86_64::__m256`
+and exactly one `core::arch::x86_64::_mm256_add_ps(left, right)` call path.
+M249 added typed `RustIntrinsicBodySafety` render policy so already-lowered
+Rust intrinsic body-token output can be wrapped in an unsafe block without
+string matching intrinsic names or moving safety decisions into templates.
+M249 did not add new lowering semantics, broad TSIL parsing, fixture-shaped
+pipelines, template-side semantic decisions, host/compiler modeling, or
+runtime dependencies on `frozen`/`tslgenold`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M249 real AVX2 selected primitive build verification execution-review loop.
+Run M250 real AVX2 integer modifier lowering build verification execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m249-real-avx2-selected-primitive-build-verification-execution-review-loop-prompt.md
+docs/agent/runs/m250-real-avx2-integer-modifier-lowering-build-verification-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 249: Real AVX2 Selected Primitive Build Verification.
+Milestone 250: Real AVX2 Integer Modifier Lowering Build Verification.
 ```
 
 Latest review verdict:
 
 ```text
-M248 execution-review returned Accept With Follow-Ups after closeout revision.
-Architecture/boundary review returned Accept With Follow-Ups and noted that
-selected extension should eventually be required explicitly instead of inferred
-from selector path for scalar compatibility. Evidence review returned Accept.
-Test review returned Accept With Follow-Ups and noted that Rust AVX2 text
-rendering is covered but Rust vector compile viability remains the next real
-risk. Documentation and validation auditors initially returned Needs Revision
-for state/roadmap/behavioral-spec/next-prompt and cache hygiene only; the
-closeout updated those docs and removed validation-created caches. Final
-validation: `git diff --check` exit 0 with no output; `python -B -m compileall
--q tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest
-bundle exit 0 with 40 tests passed in 22.18s; initial cache check printed
+M249 execution-review returned Accept after closeout documentation revision.
+Architecture/boundary review returned Accept and confirmed that typed
+`RustIntrinsicBodySafety` is context-driven, with no fixture sibling pipeline,
+pairwise keyword handler, template-side semantic inference, or runtime
+`frozen`/`tslgenold` dependency. Evidence review returned Accept and confirmed
+that the selected fixture and type/header/intrinsic/profile/target-feature
+facts come from real `tsldata` and accepted catalogs/models. Test review
+returned Accept. Validation audit returned Accept and confirmed validation
+scope and cache hygiene. Documentation audit returned Needs Revision only for
+state/roadmap/behavioral-spec/design-decision/next-prompt closeout; the
+closeout updated those docs and created the M250 prompt. Final validation:
+`git diff --check` exit 0 with no output; `python -B -m compileall -q
+tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest bundle
+exit 0 with 43 tests passed in 34.03s; initial cache check printed
 validation-created `__pycache__` directories; after cleanup, final
 `find tslgen -type d -name __pycache__ -print` exited 0 with no output.
-M249 real AVX2 selected primitive build verification is selected next.
+Broader cache check for `.pytest_cache`, `.mypy_cache`, and `.ruff_cache`
+exited 0 with no output. M250 real AVX2 integer modifier lowering build
+verification is selected next.
 ```
 
 Next expected action:
 
 ```text
-Run the active M249 execution-review loop. Use the M248 generic selected
-project pipeline to render the real `add` `avx2/f32` project, write artifacts
-through `ArtifactWriter`, and verify the generated C++ and Rust projects
-through `verify_generated_project` for requested profile `avx2`. If Rust
-requires an unsafe call boundary or target-feature presentation for the
-already-lowered intrinsic call, add only the smallest typed backend rendering
-policy needed. Do not reopen source lowering, add broad TSIL parsing, add
-pairwise keyword handlers, create fixture-shaped sibling pipelines, move
-semantic decisions into templates, or add runtime dependencies on
-`frozen`/`tslgenold`.
+Run the active M250 execution-review loop. Use the generic selected primitive
+project pipeline to render the real `add` `avx2/?i?` matrix for concrete
+integer type tags and requested profile `avx2`. The key work is to connect
+already-lowered source-provided intrinsic modifier facts, especially
+`suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(...))))`,
+to the accepted typed backend modifier translation boundary before rendering.
+Do not add new lowering semantics, match exact raw source strings, create
+fixture-shaped sibling pipelines, put semantic decisions in templates, or add
+runtime dependencies on `frozen`/`tslgenold`.
 ```
 
 Previous review verdict:
@@ -1140,13 +1158,15 @@ Accept after focused revision and selected M248 generic selected primitive
 project intrinsic rendering integration execution-review. M248
 execution-review returned Accept With Follow-Ups after closeout revision and
 selected M249 real AVX2 selected primitive build verification
-execution-review.
+execution-review. M249 execution-review returned Accept after documentation
+closeout and selected M250 real AVX2 integer modifier lowering build
+verification execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m248-generic-selected-primitive-project-intrinsic-rendering-execution-review-loop-prompt.md
+docs/agent/runs/m249-real-avx2-selected-primitive-build-verification-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
