@@ -17,7 +17,7 @@ Milestone 243 is accepted. Milestone 244 is accepted. Milestone 244.5 is
 accepted. Milestone 245 is accepted. Milestone 246 is accepted. Milestone
 247 is accepted. Milestone 248 is accepted. Milestone 249 is accepted.
 Milestone 250 is accepted. Milestone 251 is accepted. Milestone 252 is
-accepted. Milestone 253 is accepted.
+accepted. Milestone 253 is accepted. Milestone 254 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -1045,68 +1045,78 @@ lowering semantics, fixture-shaped pipelines, template-side semantic
 decisions, Python-owned intrinsic/type/suffix tables, compiler capability
 modeling, host autodetection, or runtime dependencies on `frozen`/`tslgenold`.
 
+M254 extended the shared recursive source-body keyword scanner over the real
+generic unmasked `add` and `sub` bodies in
+`tsldata/primitives/arithmetic/fundamental.tsl`. The recursive fragment tree
+now recognizes exact `var<init_register>`, `loop<unroll>`,
+`loop<range>`, nested `value<generation>(vector::length)`, nested
+`call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(...)`,
+nested `type<backend>(vector::as_extension(scalar))`, and
+`emit_return(result)` islands. Assignment/indexing text such as
+`result[i] = ` and `left[i], right[i]` remains raw source-owned text. The
+corpus completion audit now reports `loop<range>`, `loop<unroll>`,
+`type<backend>`, `value<generation>`, and `var<init_register>` as exact
+recursive families. M254 did not add backend rendering/build verification,
+primitive-call dependency closure, semantic `@self` resolution, assignment or
+index expression parsing, pairwise keyword-combination paths, source repair,
+fixture-shaped pipelines, template-side semantic decisions, or runtime
+dependencies on `frozen`/`tslgenold`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M254 real generic unmasked binary arithmetic body lowering execution-review loop.
+Run M255 real generic self-call selector specialization lowering execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m254-real-generic-unmasked-binary-arithmetic-body-lowering-execution-review-loop-prompt.md
+docs/agent/runs/m255-real-generic-self-call-selector-specialization-lowering-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 254: Real Generic Unmasked Binary Arithmetic Body Lowering.
+Milestone 255: Real Generic Self-Call Selector Specialization Lowering.
 ```
 
 Latest review verdict:
 
 ```text
-M253 execution-review returned Accept after focused test revision.
-Architecture/boundary review returned Accept and confirmed the implementation
-stays at the typed feature-option boundary plus generic selected project
-pipeline, with no new TSIL lowering, fixture pipeline, compiler capability
-model, broad flag database, or runtime `frozen`/`tslgenold` dependency.
-Evidence review returned Accept and confirmed feature spellings come from
-`tsldata/detail/flags.tsl` and typed profile alternatives, while selected
-AVX512 source bodies, headers, register spellings, and compose policy come
-from real `tsldata` and accepted catalogs. Test review initially returned
-Needs Revision because AVX512 alias rejection covered only `skylake`; focused
-revision added canonical flag entries for the remaining observed AVX512
-features and cross-profile no-`avx3` coverage, and focused re-review returned
-Accept. Validation audit returned Accept. Final validation: `git diff
---check` exit 0 with no output; `python -B -m compileall -q
-tslgen/src/tslgen tslgen/tests` exit 0 with no output; corrected required
-pytest bundle exit 0 with 42 tests passed in 40.31s after final closeout
-validation; initial cache check printed validation-created `__pycache__`
+M254 execution-review returned Accept. Architecture/boundary review returned
+Accept and confirmed the implementation stayed in the shared recursive
+source-body keyword boundary without backend rendering, dependency closure,
+assignment/index parsing, pairwise keyword-combination paths, source repair,
+fixture-shaped pipelines, or runtime `frozen`/`tslgenold` dependency.
+Evidence review returned Accept and confirmed the selected bodies come from
+real `tsldata/primitives/arithmetic/fundamental.tsl`, with raw spans matching
+the corpus. Test review returned Accept. Documentation review returned Accept.
+Validation audit returned Accept. Final validation: `git diff --check` exit 0
+with no output; `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`
+exit 0 with no output; required pytest bundle exit 0 with 71 tests passed in
+12.82s. Initial cache check printed validation-created `__pycache__`
 directories; after cleanup, final
 `find tslgen -type d -name __pycache__ -print` exited 0 with no output.
 Broader cache check for `.pytest_cache`, `.mypy_cache`, and `.ruff_cache`
-exited 0 with no output. M254 real generic unmasked binary arithmetic body
+exited 0 with no output. M255 real generic self-call selector specialization
 lowering is selected next.
 ```
 
 Next expected action:
 
 ```text
-Run the active M254 execution-review loop. Focus on lowering the real generic
-unmasked `add` and `sub` body shape from
-`tsldata/primitives/arithmetic/fundamental.tsl` through the accepted recursive
-TSIL token/region boundary. Recognize lowerable islands such as
-`var<init_register>`, `loop<unroll>`, `loop<range>`, nested
-`value<generation>(vector::length)`, nested `call<primitive=...>`, nested
-`type<backend>(...)`, and `emit_return(result);`, while preserving
-non-lowerable assignment/indexing punctuation as raw source-owned tokens. Do
-not add backend rendering/build verification, primitive-call dependency
-closure, semantic `@self` resolution, broad assignment/indexed expression
-parsing, pairwise keyword-combination paths, source repair, fixture-shaped
-pipelines, or runtime dependencies on `frozen`/`tslgenold`.
+Run the active M255 execution-review loop. Focus on lowering the real generic
+body's nested
+`call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i])`
+selector payload into accepted typed primitive-call selector/type facts for
+representative concrete selected contexts. Preserve `@self` as unresolved,
+preserve indexed argument text as raw argument facts, and do not add dependency
+closure, backend rendering/build verification, generic loop code generation,
+assignment/index expression parsing, pairwise keyword-combination paths,
+fixture-shaped pipelines, source repair, template-side semantic decisions, or
+runtime dependencies on `frozen`/`tslgenold`.
 ```
 
 Previous review verdict:
@@ -1239,13 +1249,14 @@ Follow-Up after closeout revision and selected M253 AVX512 feature option
 spelling and unmasked binary arithmetic matrix build verification
 execution-review. M253 execution-review returned Accept after focused test
 revision and selected M254 real generic unmasked binary arithmetic body
-lowering execution-review.
+lowering execution-review. M254 execution-review returned Accept and selected
+M255 real generic self-call selector specialization lowering execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m253-avx512-feature-option-spelling-and-unmasked-binary-arithmetic-matrix-build-verification-execution-review-loop-prompt.md
+docs/agent/runs/m254-real-generic-unmasked-binary-arithmetic-body-lowering-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

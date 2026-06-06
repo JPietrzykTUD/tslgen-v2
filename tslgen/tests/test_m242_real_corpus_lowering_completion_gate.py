@@ -74,7 +74,11 @@ _EXPECTED_RECURSIVE_COUNTS = {
     "if<generation>": ("accepted_lowering", 109),
     "intrin_compose": ("accepted_handoff", 627),
     "loop<range>": ("accepted_lowering", 214),
+    "loop<unroll>": ("accepted_lowering", 77),
     "switch<compile>": ("accepted_handoff", 45),
+    "type<backend>": ("accepted_handoff", 212),
+    "value<generation>": ("accepted_lowering", 597),
+    "var<init_register>": ("accepted_handoff", 33),
 }
 
 

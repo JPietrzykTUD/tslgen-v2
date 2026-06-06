@@ -734,6 +734,41 @@ fixture-specific pipelines, move backend decisions into templates, introduce
 Python-owned intrinsic/type/suffix tables, model host/compiler capability, or
 add runtime dependencies on `frozen` or `tslgenold`.
 
+### M254 Real Generic Unmasked Binary Arithmetic Body Lowering
+
+Milestone 254 extends the shared recursive source-body keyword scanner over
+the real generic unmasked `add` and `sub` bodies in
+`tsldata/primitives/arithmetic/fundamental.tsl`.
+
+The scanner recognizes these exact TSIL keyword regions through the same
+balanced delimiter and recursive child-fragment path used by the accepted
+source-body boundary:
+
+- `var<init_register>(result)`;
+- `loop<unroll>(value<generation>(vector::length))`;
+- `loop<range>(i, 0, value<generation>(vector::length), 1) { ... }`;
+- nested `value<generation>(vector::length)` islands in loop payloads;
+- nested `call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(...)`
+  in the loop body;
+- nested `type<backend>(vector::as_extension(scalar))` in the call selector;
+- `emit_return(result)`.
+
+Non-lowerable source text around those islands remains raw source-owned text.
+In particular, `result[i] = `, the loop-body semicolon/newline text, and the
+indexed call arguments `left[i], right[i]` are not parsed as assignment,
+indexing, or target-language expression semantics.
+
+The recursive corpus completion audit now reports exact recursive families for
+`loop<range>`, `loop<unroll>`, `type<backend>`, `value<generation>`, and
+`var<init_register>` instead of collapsing all loop regions into
+`loop<range>`.
+
+M254 does not add backend rendering, generated-project build verification,
+primitive-call dependency closure, semantic `@self` resolution, broad
+assignment/index expression parsing, source repair, pairwise surrounding-keyword
+special cases, fixture-shaped pipelines, template-side semantic decisions, or
+runtime dependencies on `frozen` or `tslgenold`.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

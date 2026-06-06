@@ -17259,7 +17259,7 @@ Next concrete prompt:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m254-real-generic-unmasked-binary-arithmetic-body-lowering-execution-review-loop-prompt.md`.
 
 Goal:
@@ -17302,6 +17302,120 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py tslgen/tests/test_m232_return_payload_region_rescan_adapter.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py tslgen/tests/test_m236_recursive_payload_fragment_diagnostic_propagation.py tslgen/tests/test_m242_real_corpus_lowering_completion_gate.py tslgen/tests/test_m254_real_generic_unmasked_binary_arithmetic_body_lowering.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M254 extended the shared recursive source-body keyword scanner to recognize the
+exact additional TSIL keyword heads needed by the real generic unmasked
+`add`/`sub` body shape from
+`tsldata/primitives/arithmetic/fundamental.tsl`: `var<init_register>`,
+`loop<unroll>`, `value<generation>`, and `type<backend>`. Existing heads for
+`loop<range>`, `call<primitive>`, and `emit_return` remain on the same
+recursive path.
+
+The real generic `add` and `sub` bodies now lower into a deterministic
+recursive fragment tree with root regions `var`, `loop<unroll>`,
+`loop<range>`, and `emit_return`. The `loop<unroll>` and `loop<range>`
+payloads expose nested `value<generation>(vector::length)` regions. The loop
+body preserves `result[i] = ` and the trailing semicolon/newline text as raw
+source fragments while exposing the nested `call<primitive=...>` region. The
+call selector exposes nested `type<backend>(vector::as_extension(scalar))`,
+and the call payload preserves `left[i], right[i]` as raw source text.
+
+Primitive-call extraction over the same fragment tree produces the accepted
+typed `LowerableDirective`/`PrimitiveCall` structure with an unresolved
+`SelfPrimitiveReference`, specialization text
+`type<backend>(vector::as_extension(scalar))`, no attrs, and raw indexed
+arguments `left[i]` and `right[i]`. M254 deliberately does not resolve `@self`,
+compute dependency closure, evaluate generic loop lengths, render backend code,
+or parse assignment/index expressions.
+
+The corpus completion audit now distinguishes recursive loop selector
+families, reporting `loop<range>` and `loop<unroll>` separately, and records
+recursive coverage for `type<backend>`, `value<generation>`, and
+`var<init_register>`.
+
+Tests added/updated:
+
+- `tslgen/tests/test_m254_real_generic_unmasked_binary_arithmetic_body_lowering.py`
+  covers real `add`/`sub` generic body loading from `fundamental.tsl`,
+  recursive island recognition, raw assignment/index preservation, structured
+  unresolved self primitive-call extraction, and guardrails against pairwise
+  keyword-combination paths or fixture-shaped production code.
+- `tslgen/tests/test_m230_source_body_lexical_region_boundary.py` now records
+  the broader exact keyword recognition in the same real multiline
+  fundamental body.
+- `tslgen/tests/test_m242_real_corpus_lowering_completion_gate.py` now records
+  the exact expanded recursive corpus families.
+
+Accepted validation:
+
+- `git diff --check`: exit 0 with no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
+  no output.
+- Required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py tslgen/tests/test_m232_return_payload_region_rescan_adapter.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py tslgen/tests/test_m236_recursive_payload_fragment_diagnostic_propagation.py tslgen/tests/test_m242_real_corpus_lowering_completion_gate.py tslgen/tests/test_m254_real_generic_unmasked_binary_arithmetic_body_lowering.py`
+  exited 0 with 71 tests passed in 12.82s.
+
+Follow-up:
+
+M255 is selected to keep moving on lowering without jumping into backend
+rendering prematurely. It should lower the real generic body's unresolved
+`@self[type<backend>(vector::as_extension(scalar))]` primitive-call selector
+specialization into accepted typed selector/type facts for concrete selected
+contexts. M255 must not resolve `@self`, compute dependency closure, render
+generic loops, parse assignments/indexing, or add pairwise keyword
+combinations.
+
+Next concrete prompt:
+`docs/agent/runs/m255-real-generic-self-call-selector-specialization-lowering-execution-review-loop-prompt.md`.
+
+### Milestone 255: Real Generic Self-Call Selector Specialization Lowering
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m255-real-generic-self-call-selector-specialization-lowering-execution-review-loop-prompt.md`.
+
+Goal:
+
+Lower the real generic body's nested
+`call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i])`
+selector payload into accepted typed primitive-call selector facts, while
+leaving `@self` dependency resolution and backend rendering out of scope.
+
+Scope:
+
+- Reuse the real generic `add` and `sub` body envelopes from
+  `tsldata/primitives/arithmetic/fundamental.tsl`.
+- Reuse the M254 recursive fragment path to extract the nested primitive-call
+  directive; do not rescan by exact raw source string.
+- For representative concrete selected contexts, lower the selector
+  specialization `type<backend>(vector::as_extension(scalar))` through the
+  accepted selector/type lowering boundary into typed values. The target must
+  remain an unresolved `@self` reference.
+- Preserve indexed argument text as raw argument facts; do not parse
+  `left[i]` or `right[i]`.
+- If existing lowering already supports this path, add tests/docs only. If
+  implementation is needed, keep changes inside the shared selector/type
+  lowering path.
+
+Out of scope:
+
+Semantic `@self` resolution; primitive-call dependency closure; backend
+rendering/build verification; generic loop code generation; assignment/index
+expression parsing; source repair; pairwise keyword-combination paths;
+fixture-shaped pipelines; template-side semantic decisions; runtime
+dependencies on `frozen` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m170_selector_payload_selected_bindings.py tslgen/tests/test_m179_backend_type_queries.py tslgen/tests/test_m180_backend_type_query_handoff.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py tslgen/tests/test_m254_real_generic_unmasked_binary_arithmetic_body_lowering.py tslgen/tests/test_m255_real_generic_self_call_selector_specialization_lowering.py
 find tslgen -type d -name __pycache__ -print
 ```
 

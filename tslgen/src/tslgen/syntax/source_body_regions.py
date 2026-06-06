@@ -120,6 +120,9 @@ class SourceBodyKeyword(Enum):
     INTRIN_COMPOSE = auto()
     EMIT_RETURN = auto()
     CALL = auto()
+    TYPE = auto()
+    VALUE = auto()
+    VAR = auto()
     IF = auto()
     ELSE = auto()
     LOOP = auto()
@@ -217,6 +220,24 @@ DEFAULT_SOURCE_BODY_REGION_HEADS: tuple[SourceBodyRegionHead, ...] = (
         expects_selector=True,
     ),
     SourceBodyRegionHead(
+        SourceBodyKeyword.TYPE,
+        "type",
+        selector_text="backend",
+        expects_selector=True,
+    ),
+    SourceBodyRegionHead(
+        SourceBodyKeyword.VALUE,
+        "value",
+        selector_text="generation",
+        expects_selector=True,
+    ),
+    SourceBodyRegionHead(
+        SourceBodyKeyword.VAR,
+        "var",
+        selector_text="init_register",
+        expects_selector=True,
+    ),
+    SourceBodyRegionHead(
         SourceBodyKeyword.IF,
         "if",
         selector_text="generation",
@@ -230,6 +251,12 @@ DEFAULT_SOURCE_BODY_REGION_HEADS: tuple[SourceBodyRegionHead, ...] = (
         expects_selector=True,
         expects_payload=False,
         expects_body=True,
+    ),
+    SourceBodyRegionHead(
+        SourceBodyKeyword.LOOP,
+        "loop",
+        selector_text="unroll",
+        expects_selector=True,
     ),
     SourceBodyRegionHead(
         SourceBodyKeyword.LOOP,

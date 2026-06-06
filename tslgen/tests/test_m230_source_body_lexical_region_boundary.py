@@ -99,12 +99,26 @@ def test_m230_multiline_envelope_preserves_spans_and_top_level_source_order() ->
     result = scan_source_body_envelope(envelope)
 
     assert result.diagnostics == ()
-    assert _region_heads(result) == ("loop", "emit_return")
-    assert tuple(region.source_order for region in result.regions) == (1, 3)
-    assert tuple(segment.source_order for segment in result.raw_segments) == (0, 2, 4)
+    assert _region_heads(result) == ("var", "loop", "loop", "emit_return")
+    assert tuple(region.source_order for region in result.regions) == (1, 3, 5, 7)
+    assert tuple(segment.source_order for segment in result.raw_segments) == (0, 2, 4, 6, 8)
     assert result.source_text.text == envelope.payload_text
 
-    loop = result.regions[0]
+    init_register = result.regions[0]
+    assert init_register.head.keyword is SourceBodyKeyword.VAR
+    assert init_register.selector is not None
+    assert init_register.selector.payload_span.text == "init_register"
+    assert init_register.payload is not None
+    assert init_register.payload.payload_span.text == "result"
+
+    unroll = result.regions[1]
+    assert unroll.head.keyword is SourceBodyKeyword.LOOP
+    assert unroll.selector is not None
+    assert unroll.selector.payload_span.text == "unroll"
+    assert unroll.payload is not None
+    assert unroll.payload.payload_span.text == "value<generation>(vector::length)"
+
+    loop = result.regions[2]
     assert loop.head_span.line == 42
     assert loop.head_span.column == 13
     assert loop.selector is not None

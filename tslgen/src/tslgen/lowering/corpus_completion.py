@@ -28,6 +28,7 @@ from tslgen.lowering.mask_lane_constants import (
 from tslgen.lowering.source_operation_handoff import lower_source_operation_discovery
 from tslgen.lowering.source_operations import discover_source_operation_requests_in_text
 from tslgen.lowering.source_body_fragments import (
+    KeywordRegionFragment,
     RawSourceFragment,
     SourceBodyFragmentSequence,
     extract_intrin_compose_requests,
@@ -249,7 +250,7 @@ def _recursive_keyword_family_counts(
         if isinstance(fragment, RawSourceFragment):
             continue
 
-        family = _recursive_family(fragment.source_region.head.keyword)
+        family = _recursive_family(fragment)
         if family is not None:
             counts[family] += 1
 
@@ -263,7 +264,8 @@ def _recursive_keyword_family_counts(
     return counts
 
 
-def _recursive_family(keyword: SourceBodyKeyword) -> str | None:
+def _recursive_family(fragment: KeywordRegionFragment) -> str | None:
+    keyword = fragment.source_region.head.keyword
     if keyword is SourceBodyKeyword.CALL:
         return "call<primitive>"
     if keyword is SourceBodyKeyword.EMIT_RETURN:
@@ -275,10 +277,26 @@ def _recursive_family(keyword: SourceBodyKeyword) -> str | None:
     if keyword is SourceBodyKeyword.INTRIN_COMPOSE:
         return "intrin_compose"
     if keyword is SourceBodyKeyword.LOOP:
-        return "loop<range>"
+        selector = _fragment_selector_text(fragment)
+        if selector in {"range", "unroll"}:
+            return f"loop<{selector}>"
+        return None
     if keyword is SourceBodyKeyword.SWITCH:
         return "switch<compile>"
+    if keyword is SourceBodyKeyword.TYPE and _fragment_selector_text(fragment) == "backend":
+        return "type<backend>"
+    if keyword is SourceBodyKeyword.VALUE and _fragment_selector_text(fragment) == "generation":
+        return "value<generation>"
+    if keyword is SourceBodyKeyword.VAR and _fragment_selector_text(fragment) == "init_register":
+        return "var<init_register>"
     return None
+
+
+def _fragment_selector_text(fragment: KeywordRegionFragment) -> str | None:
+    selector = fragment.source_region.selector
+    if selector is None:
+        return None
+    return selector.payload_span.text.strip()
 
 
 def _scan_observed_keyword_islands(
