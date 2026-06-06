@@ -669,6 +669,37 @@ pipelines, move backend decisions into templates, introduce Python-owned
 intrinsic/type/suffix tables, model host/compiler capability, or add runtime
 dependencies on `frozen` or `tslgenold`.
 
+### M252 Real SSE/SSE2 Unmasked Binary Arithmetic Matrix Build Verification
+
+Milestone 252 verifies that the existing generic selected primitive project
+pipeline also renders and build-verifies the real SSE/SSE2 unmasked binary
+arithmetic subset without production-code changes. The selected source is the
+real `add` and `sub` definitions in
+`tsldata/primitives/arithmetic/fundamental.tsl`.
+
+The accepted matrix covers selector path `("sse", "?i?")` for concrete
+integer type tags `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, and
+`ui64`, plus separate selector paths `("sse", "f32")` and `("sse", "f64")`.
+Wildcard selector text remains selection evidence only; generated profiles use
+the selected concrete type tags. The selected implementation extension is
+`sse`, while the generated profile is `sse2`.
+
+Integer entries for both `add` and `sub` use the source-provided signed suffix
+modifier behavior accepted in M250. Floating entries for both primitives use
+extension-owned default `intrin_compose` prefix/suffix policy. C++ and Rust
+function signatures use extension-owned SSE register type spelling, and Rust
+intrinsic bodies use the accepted typed unsafe body policy.
+
+Generated C++ and Rust projects are written through the accepted artifact
+writer and verified through the accepted generated-project build verifier.
+C++ configure/build/test and Rust test run for requested profile `sse2`.
+
+M252 does not add new lowering semantics, broaden TSIL parsing, repair source,
+expand primitive calls, change dependency closure, add fixture-specific
+pipelines, move backend decisions into templates, introduce Python-owned
+intrinsic/type/suffix tables, model host/compiler capability, or add runtime
+dependencies on `frozen` or `tslgenold`.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

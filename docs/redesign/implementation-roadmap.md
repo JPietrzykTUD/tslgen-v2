@@ -16996,7 +16996,7 @@ Next concrete prompt:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m252-real-sse-unmasked-binary-arithmetic-matrix-build-verification-execution-review-loop-prompt.md`.
 
 Goal:
@@ -17036,6 +17036,140 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m197_type_derived_intrinsic_suffix_translation.py tslgen/tests/test_m200_current_type_intrinsic_suffix_translation.py tslgen/tests/test_m213_backend_intrinsic_invocation_assembly.py tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py tslgen/tests/test_m247_selected_implementation_render_context.py tslgen/tests/test_m248_generic_selected_primitive_project_intrinsic_rendering.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py tslgen/tests/test_m250_real_avx2_integer_modifier_lowering_build_verification.py tslgen/tests/test_m251_real_avx2_unmasked_binary_arithmetic_matrix_build_verification.py tslgen/tests/test_m252_real_sse_unmasked_binary_arithmetic_matrix_build_verification.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M252 broadened the real generated-project proof over the generic selected
+primitive project pipeline without production-code changes. The existing path
+already renders and build-verifies the real unmasked `add` and `sub` SSE/SSE2
+matrix for integer selector `("sse", "?i?")` and floating selectors
+`("sse", "f32")` and `("sse", "f64")` from
+`tsldata/primitives/arithmetic/fundamental.tsl`.
+
+The selected matrix covers concrete type tags `si8`, `si16`, `si32`, `si64`,
+`ui8`, `ui16`, `ui32`, `ui64`, `f32`, and `f64` for both C++ and Rust. The
+selected implementation extension is `sse`; the requested generated profile is
+`sse2`. Integer entries exercise source-provided signed suffix modifier
+behavior for both `add` and `sub`, including unsigned selected types rendering
+the source-requested signed x86 suffix family. Floating entries exercise
+extension-owned default `intrin_compose` suffix policy. The generated profile
+uses extension-owned register type spellings and headers, typed Rust unsafe
+body policy, manifest-clean artifact writing, and generated-project build
+verification.
+
+Tests added:
+
+- `tslgen/tests/test_m252_real_sse_unmasked_binary_arithmetic_matrix_build_verification.py`
+  covers the full real `add`/`sub` SSE/SSE2 matrix, per-function C++ and Rust
+  register/call assertions, unsigned-to-signed integer suffix behavior,
+  default floating suffix behavior, deterministic artifact digests,
+  manifest-clean writing, C++ configure/build/test plus Rust test, and
+  guardrails against fixture-shaped pipelines, local intrinsic/suffix tables,
+  exact source-string matching, and runtime `frozen`/`tslgenold` dependencies.
+
+Review/audit verdict:
+
+Accepted. Architecture/boundary review returned Accept and confirmed that the
+diff adds the M252 test plus documentation only, with no production code,
+templates, parser, lowering, or pipeline changes. Evidence review returned
+Accept and confirmed that selected source bodies, suffix behavior, type
+spellings, headers, profile flags, and target features come from real
+`tsldata` and accepted catalogs/models. Test review returned Accept and
+confirmed matrix coverage, C++/Rust build parity, determinism, and guardrails.
+Documentation review returned Accept after closeout. Validation audit returned
+Pass and confirmed validation scope and cache hygiene. This roadmap entry,
+behavioral-spec update, state update, and M253 prompt are the documentation
+closeout.
+
+Accepted validation:
+
+- `git diff --check`: exit 0 with no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
+  no output.
+- Required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m197_type_derived_intrinsic_suffix_translation.py tslgen/tests/test_m200_current_type_intrinsic_suffix_translation.py tslgen/tests/test_m213_backend_intrinsic_invocation_assembly.py tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py tslgen/tests/test_m247_selected_implementation_render_context.py tslgen/tests/test_m248_generic_selected_primitive_project_intrinsic_rendering.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py tslgen/tests/test_m250_real_avx2_integer_modifier_lowering_build_verification.py tslgen/tests/test_m251_real_avx2_unmasked_binary_arithmetic_matrix_build_verification.py tslgen/tests/test_m252_real_sse_unmasked_binary_arithmetic_matrix_build_verification.py`
+  exited 0 with 109 tests passed in 40.94s after final closeout validation.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and printed
+  validation-created `__pycache__` directories. After cleanup, the final rerun
+  exited 0 with no output.
+- Broader cache check:
+  `find . -maxdepth 2 \( -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -print`
+  exited 0 with no output.
+
+Follow-up:
+
+M253 is selected to expand confidence to AVX512 without creating a new
+primitive-specific path. Preflight evidence shows the generic selected project
+path can render AVX512-shaped artifacts, but the generated C++ build currently
+risks invalid compiler feature options such as `-mavx3f` when aliases from
+`tsldata/detail/flags.tsl` are chosen as output spellings. M253 must fix the
+typed machine-profile feature-to-backend-build-option spelling boundary, then
+use the same real unmasked `add`/`sub` matrix style to build-verify AVX512
+under a selected AVX512 profile. It must not add AVX512-specific primitive
+logic, new lowering semantics, source repair, fixture-shaped pipelines,
+template-side semantic logic, or Python-owned intrinsic/type tables.
+
+Next concrete prompt:
+`docs/agent/runs/m253-avx512-feature-option-spelling-and-unmasked-binary-arithmetic-matrix-build-verification-execution-review-loop-prompt.md`.
+
+### Milestone 253: AVX512 Feature Option Spelling And Unmasked Binary Arithmetic Matrix Build Verification
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m253-avx512-feature-option-spelling-and-unmasked-binary-arithmetic-matrix-build-verification-execution-review-loop-prompt.md`.
+
+Goal:
+
+Make machine-profile feature lowering to generated C++ and Rust build options
+canonical enough for AVX512 profiles, then render and build-verify the real
+unmasked `add` and `sub` AVX512 matrix through the generic selected primitive
+project pipeline.
+
+Scope:
+
+- Keep `tsldata/detail/flags.tsl` aliases as input normalization evidence, but
+  do not use legacy alias spellings such as `avx3f` as default generated
+  compiler options.
+- Add or adjust a typed feature-option spelling boundary so generated C++
+  profile options use canonical normalized feature names by default, for
+  example `-mavx512f`, `-mavx512cd`, `-mavx512vl`, `-mavx512dq`, and
+  `-mavx512bw`.
+- Preserve explicit machine-profile alternatives as deliberate output spelling
+  overrides, for example `avx512_vpclmulqdq=vpclmulqdq`,
+  `avx512_gfni=gfni`, and `avx512_vaes=vaes`.
+- Keep Rust target features typed and canonical, with explicit alternatives
+  applied by the same already-decided build-option model.
+- Select real unmasked `add` and `sub` primitives from
+  `tsldata/primitives/arithmetic/fundamental.tsl`.
+- Render selector path `("avx512", "?i?")` for concrete integer type tags
+  `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, and `ui64`.
+- Render selector path `("avx512", "f?")` for concrete floating type tags
+  `f32` and `f64`.
+- Use selected extension `avx512`, requested generated profile `skylake`,
+  parameters `("left", "right")`, and unique deterministic function names.
+- Reuse the accepted selected project pipeline, type spelling, default
+  `intrin_compose` policy, source-provided modifier translation, Rust unsafe
+  body policy, artifact writer, and generated-project verifier.
+
+Out of scope:
+
+Compiler capability modeling; host CPU autodetection; broad compiler-specific
+flag databases; AVX512 masks; SVE/NEON; generic loop bodies; primitive-call
+expansion; dependency closure; semantic vector runtime tests beyond the
+accepted smoke test harness; generated test-source production; CLI workflow;
+fixture-shaped sibling pipelines; exact raw source-string matching;
+Python-owned intrinsic/type/suffix tables; template-side semantic decisions;
+new lowering semantics; runtime dependencies on `frozen` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m189_machine_feature_profiles.py tslgen/tests/test_m191_generated_profile_project_skeleton.py tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py tslgen/tests/test_m251_real_avx2_unmasked_binary_arithmetic_matrix_build_verification.py tslgen/tests/test_m252_real_sse_unmasked_binary_arithmetic_matrix_build_verification.py tslgen/tests/test_m253_avx512_feature_option_spelling_and_unmasked_binary_arithmetic_matrix_build_verification.py
 find tslgen -type d -name __pycache__ -print
 ```
 
