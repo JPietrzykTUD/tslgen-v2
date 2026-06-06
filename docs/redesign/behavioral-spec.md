@@ -639,6 +639,36 @@ template-side semantic decisions, Python-owned intrinsic/type/suffix tables,
 host/compiler capability modeling, or runtime dependencies on `frozen` or
 `tslgenold`.
 
+### M251 Real AVX2 Unmasked Binary Arithmetic Matrix Build Verification
+
+Milestone 251 verifies that the existing generic selected primitive project
+pipeline can render and build-verify a broader real AVX2 unmasked binary
+arithmetic subset without production-code changes. The selected source is the
+real `add` and `sub` definitions in
+`tsldata/primitives/arithmetic/fundamental.tsl`.
+
+The accepted matrix covers selector path `("avx2", "?i?")` for concrete
+integer type tags `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, and
+`ui64`, plus selector path `("avx2", "f?")` for concrete floating type tags
+`f32` and `f64`. Wildcard selector text remains selection evidence only; the
+generated profiles use concrete selected type tags.
+
+Integer entries for both `add` and `sub` use the source-provided signed suffix
+modifier behavior accepted in M250. Floating entries for both primitives use
+extension-owned default `intrin_compose` prefix/suffix policy. C++ and Rust
+function signatures use extension-owned AVX2 register type spelling, and Rust
+intrinsic bodies use the accepted typed unsafe body policy.
+
+Generated C++ and Rust projects are written through the accepted artifact
+writer and verified through the accepted generated-project build verifier.
+C++ configure/build/test and Rust test run for requested profile `avx2`.
+
+M251 does not add new lowering semantics, broaden TSIL parsing, repair source,
+expand primitive calls, change dependency closure, add fixture-specific
+pipelines, move backend decisions into templates, introduce Python-owned
+intrinsic/type/suffix tables, model host/compiler capability, or add runtime
+dependencies on `frozen` or `tslgenold`.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided
